@@ -1,0 +1,44 @@
+{
+  "lookup": {
+    "rules": {
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"set_category\"}}]": "action_set_category",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"set_category\"}}, {\"prev_action\": {\"action_name\": \"action_set_category\"}, \"user\": {\"intent\": \"set_category\"}}]": "action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}]": "action_session_start",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"action_session_start\"}, \"user\": {\"intent\": \"introduce\"}}]": "utter_introduce",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"action_session_start\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"utter_introduce\"}, \"user\": {\"intent\": \"introduce\"}}]": "action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"bot_challenge\"}}]": "action_respond_to_challenge",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"bot_challenge\"}}, {\"prev_action\": {\"action_name\": \"action_respond_to_challenge\"}, \"user\": {\"intent\": \"bot_challenge\"}}]": "action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}]": "action_submit_grievance_as_is",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}, {\"prev_action\": {\"action_name\": \"action_submit_grievance_as_is\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}]": "action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"goodbye\"}}]": "utter_goodbye",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"goodbye\"}}, {\"prev_action\": {\"action_name\": \"utter_goodbye\"}, \"user\": {\"intent\": \"goodbye\"}}]": "action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"mood_great\"}}]": "action_handle_mood_great",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"mood_great\"}}, {\"prev_action\": {\"action_name\": \"action_handle_mood_great\"}, \"user\": {\"intent\": \"mood_great\"}}]": "action_listen"
+    },
+    "rule_only_slots": [],
+    "rule_only_loops": [],
+    "rules_for_loop_unhappy_path": {},
+    "rules_not_in_stories": [
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}, {\"prev_action\": {\"action_name\": \"action_submit_grievance_as_is\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"goodbye\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"submit_grievance_as_is\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"set_category\"}}]",
+      "handling active loops and forms - location_form - action_listen",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"action_session_start\"}, \"user\": {\"intent\": \"introduce\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"goodbye\"}}, {\"prev_action\": {\"action_name\": \"utter_goodbye\"}, \"user\": {\"intent\": \"goodbye\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"bot_challenge\"}}, {\"prev_action\": {\"action_name\": \"action_respond_to_challenge\"}, \"user\": {\"intent\": \"bot_challenge\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"bot_challenge\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"set_category\"}}, {\"prev_action\": {\"action_name\": \"action_set_category\"}, \"user\": {\"intent\": \"set_category\"}}]",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"action_session_start\"}, \"user\": {\"intent\": \"introduce\"}}, {\"prev_action\": {\"action_name\": \"utter_introduce\"}, \"user\": {\"intent\": \"introduce\"}}]",
+      "predicting default action with intent session_start",
+      "handling active loops and forms - contact_form - action_listen",
+      "handling active loops and forms - location_form",
+      "predicting default action with intent back",
+      "handling active loops and forms - contact_form",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"mood_great\"}}, {\"prev_action\": {\"action_name\": \"action_handle_mood_great\"}, \"user\": {\"intent\": \"mood_great\"}}]",
+      "predicting default action with intent restart",
+      "[{\"prev_action\": {\"action_name\": \"action_listen\"}, \"user\": {\"intent\": \"mood_great\"}}]"
+    ]
+  }
+}

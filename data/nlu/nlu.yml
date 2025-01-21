@@ -8,17 +8,6 @@ nlu:
     - What can you do?
     - Tell me about yourself
     - How can you help me?
-
-- intent: bot_challenge
-  examples: |
-    - are you a bot?
-    - are you a human?
-    - am I talking to a bot?
-    - am I talking to a human?
-
-#greetings
-- intent: greet
-  examples: |
     - hey
     - hello
     - hi
@@ -32,6 +21,30 @@ nlu:
     - goodmorning
     - goodevening
     - good afternoon
+
+- intent: bot_challenge
+  examples: |
+    - are you a bot?
+    - are you a human?
+    - am I talking to a bot?
+    - am I talking to a human?
+
+#greetings
+# - intent: greet
+#   examples: |
+#     - hey
+#     - hello
+#     - hi
+#     - hello there
+#     - good morning
+#     - good evening
+#     - moin
+#     - hey there
+#     - let's go
+#     - hey dude
+#     - goodmorning
+#     - goodevening
+#     - good afternoon
 
 - intent: goodbye
   examples: |
@@ -142,12 +155,15 @@ nlu:
   examples: |
     - I want to file a grievance
     - I need to submit a complaint
-    - I have an issue to report
+    - I have an issue
     - I want to complain
     - I complain about
     - How can I complain
     - My problem is
     - I have a problem
+    - I am complaining
+    - I have a problem
+
 
 - intent: file_grievance_as_is
   examples: |
@@ -200,3 +216,14 @@ nlu:
     - I want to quit
     - I want to abandon
     - I want to cancel
+
+
+#forms
+- intent: set_category
+  examples: |
+    - /set_category{"grievance_category": "Health"}
+    - /set_category{"grievance_category": "Education"}
+    - /set_category{"grievance_category": "Infrastructure"}
+    - /set_category{"grievance_category": "Education"}
+    - /set_category{"grievance_category": "Other"}
+    - /skip

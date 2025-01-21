@@ -1,20 +1,18 @@
 version: "3.1"
-
+#Main story: User files a grievance with optional location and contact details
+     # Ensure the bot starts this flow with a trigger or welcome intent
+      # - intent: introduce
+      # - action: action_session_start  # Custom action to welcome the user or provide context
+      # - action: utter_introduce  # Prompt for the grievance process
 stories:
   - story: User files a grievance with optional location and contact details
     steps:
-      # Step 1: User submits the grievance with free text
       - intent: start_grievance_process
       - action: action_start_grievance_process
       - action: action_capture_grievance_text
-
-      # Step 2: Confirm or edit the grievance category
       - action: action_validate_category
-
-      # Step 3: Confirm or edit the grievance summary
       - action: action_validate_summary
       - intent: validate_summary
-
       - action: utter_ask_location # Move to Step 4 if the user agrees to provide location details
 
   #step 4: Collect location

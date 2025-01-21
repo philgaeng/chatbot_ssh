@@ -9,12 +9,12 @@ stories:
     - intent: restart_story
     - action: action_restart_story
  
-- story: unhappy user files grievance
-  steps:
-    - intent: mood_unhappy
-    - action: utter_mood_unhappy
-    - intent: start_grievance_process
-    - action: action_submit_grievance  # Optional: Save data and file grievance
+# - story: unhappy user files grievance
+#   steps:
+#     - intent: mood_unhappy
+#     - action: utter_mood_unhappy
+#     - intent: start_grievance_process
+#     - action: action_submit_grievance  # Optional: Save data and file grievance
 
 - story: unhappy user exits
   steps:

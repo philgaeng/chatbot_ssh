@@ -74,6 +74,7 @@ actions:
   - action_submit_grievance
   - action_restart_grievance
   - action_generate_grievance_id
+  - action_set_category
 
   # in button
   # - action_go_back #already defined

@@ -1,15 +1,24 @@
 version: "3.1"
 
 rules:
-  - rule: Ask grievance on session start
-    steps:
-      - action: action_session_start
-      - action: utter_introduce
+  # - rule: Ask grievance on session start
+  #   steps:
+  #     - action: action_session_start
+  #     - action: utter_introduce
 
-  - rule: Reply to user greeting
+  - rule : Introduce the bot on session start and ask grievance
     steps:
-      - intent: greet
-      - action: utter_introduce
+      # Ensure the bot starts this flow with a trigger or welcome intent
+      - intent: introduce
+      - action: action_session_start  # Custom action to welcome the user or provide context
+      - action: utter_introduce  # Prompt for the grievance process
+
+  # - rule: Start grievance process
+  #   steps:
+  #     - intent: start_grievance_process
+  #     - action: action_start_grievance_process
+  #     - action: action_capture_grievance_text  # Align with the story's next step
+
 
   - rule: Say goodbye anytime the user says goodbye
     steps:
@@ -26,12 +35,22 @@ rules:
       - intent: mood_great
       - action: action_handle_mood_great
 
-
-
   - rule: User files the grievance as is
     steps:
       - intent: submit_grievance_as_is
       - action: action_submit_grievance_as_is
+
+  - rule: Set grievance category
+    steps:
+      - intent: set_category
+      - action: action_set_category
+
+  # - rule: Activate grievance form
+  #   steps:
+  #   - intent: start_grievance_process
+  #   - action: grievance_form
+  #   - active_loop: grievance_form
+
 
 
   # - rule: Go back to main menu

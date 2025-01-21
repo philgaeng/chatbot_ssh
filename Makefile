@@ -71,3 +71,6 @@ run-local:
 # Clean up temporary files locally
 clean:
 	rm -rf $(PROJECT_NAME).tar.gz
+
+kill_action_server:
+	pkill -f "rasa run actions"

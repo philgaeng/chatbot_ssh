@@ -290,3 +290,11 @@ class ActionSubmitGrievanceAsIs(Action):
         else:
             dispatcher.utter_message(response="utter_grievance_submitted_no_details_as_is")
         return []
+
+class ActionSetCategory(Action):
+    def name(self) -> str:
+        return "action_set_category"
+
+    async def run(self, dispatcher, tracker, domain):
+        grievance_category = tracker.get_slot("grievance_category")
+        return [SlotSet("grievance_category", grievance_category)]

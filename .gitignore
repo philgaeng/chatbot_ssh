@@ -17,6 +17,7 @@ venv/
 .python-version
 pip-log.txt
 pip-delete-this-directory.txt
+rasa-env/
 
 # Data files
 *.db

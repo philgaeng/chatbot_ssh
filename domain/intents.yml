@@ -33,6 +33,7 @@ intents:
 
   #grievance
   - start_grievance_process #refers to the process of filing a grievance
+  - set_category
   - restart_grievance
   # - submit_grievance #refers to the act of submitting the grievance during the normal process (complete grievance)
   - submit_grievance_as_is #refers to the act of submitting the grievance as is (incomplete grievance)
