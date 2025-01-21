@@ -217,6 +217,23 @@ nlu:
     - I want to abandon
     - I want to cancel
 
+- intent: validate_summary
+  examples: |
+    - That summary looks good
+    - it's ok
+    - Yes, that's the correct summary
+
+- intent: edit_grievance_summary
+  examples: |
+    - No, let me update the summary
+    - I want to change it
+    - I need to correct it
+    - Lets edit it
+    - I want to edit
+    - modify
+
+
+
 
 #forms
 - intent: set_category

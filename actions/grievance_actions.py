@@ -10,6 +10,7 @@
 # from typing import Any, Text, Dict, List
 #
 import os
+from dotenv import load_dotenv
 import openai
 from typing import Any, Text, Dict, List
 from random import randint
@@ -18,9 +19,10 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction
 from datetime import datetime
 
-
 # Set up the OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Load from environment variable
+load_dotenv('/home/ubuntu/nepal_project/.env')
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 # File to store the last grievance ID
 COUNTER_FILE = "grievance_counter.txt"
 
@@ -92,7 +94,7 @@ class ActionCaptureGrievanceText(Action):
 
         # Step 2: Call OpenAI API for summarization and categorization
         try:
-            response = openai.ChatCompletion.create(
+            response = openai.ChatCompletion.acreate(  # Use `acreate` for asynchronous calls in v1.0+
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are an assistant helping to summarize and categorize grievances."},
@@ -127,13 +129,17 @@ class ActionCaptureGrievanceText(Action):
             print(f"OpenAI API Error: {e}")
             return []
 
-    def parse_summary_and_category(self, result: str) -> (str, str):
-        # Simple parsing logic to split the summary and category (can be improved)
+    def parse_summary_and_category(self, result: str):
+        """
+        Parse the result from OpenAI to extract the summary and category.
+        You may need to modify this function based on the format of OpenAI's response.
+        """
+        # Example parsing logic: Adjust based on your OpenAI response format
         lines = result.split("\n")
-        summary = lines[0].strip()
-        category = lines[1].strip() if len(lines) > 1 else "General"
-
+        summary = lines[0].strip()  # First line as summary
+        category = lines[1].strip() if len(lines) > 1 else "Uncategorized"  # Second line as category
         return summary, category
+
 
 
 class ActionValidateCategory(Action):
