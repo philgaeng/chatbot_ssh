@@ -135,6 +135,13 @@ slots:
       - type: from_entity
         entity: grievance_category
 
+  grievance_summary:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+
+
   grievance_id:
     type: text
     influence_conversation: false
@@ -162,10 +169,5 @@ slots:
     mappings:
       - type: custom
 
-  grievance_id:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: from_text
 
   

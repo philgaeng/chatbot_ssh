@@ -165,11 +165,14 @@ nlu:
     - I have a problem
 
 
-- intent: file_grievance_as_is
+- intent: submit_grievance_as_is
   examples: |
     - File the grievance as is
     - Just submit it
     - Submit without more details
+    - Submit now
+    - File now
+    - No more changes, file
 
 - intent: restart_story
   examples: |

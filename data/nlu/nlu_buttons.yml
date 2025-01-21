@@ -16,7 +16,7 @@ nlu:
     - redo the grievance
     - begin the grievance process from scratch
 
-- intent: file_grievance
+- intent: submit_grievance
   examples: |
     - file the grievance
     - submit the complaint

@@ -9,7 +9,9 @@ stories:
     steps:
       - intent: start_grievance_process
       - action: action_start_grievance_process
+      - action: action_listen
       - action: action_capture_grievance_text
+      - action: action_listen
       - action: action_validate_category
       - action: action_validate_summary
       - intent: validate_summary

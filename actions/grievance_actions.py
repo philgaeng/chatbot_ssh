@@ -94,7 +94,7 @@ class ActionCaptureGrievanceText(Action):
 
         # Step 2: Call OpenAI API for summarization and categorization
         try:
-            response = openai.ChatCompletion.acreate(  # Use `acreate` for asynchronous calls in v1.0+
+            response = openai.ChatCompletion.create(  # Use `create` for synchronous calls in v1.0+
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are an assistant helping to summarize and categorize grievances."},
@@ -102,6 +102,7 @@ class ActionCaptureGrievanceText(Action):
                 ]
             )
 
+            # Extract the result
             result = response['choices'][0]['message']['content']
             summary, category = self.parse_summary_and_category(result)
 
