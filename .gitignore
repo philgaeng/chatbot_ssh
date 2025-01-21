@@ -1,0 +1,61 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Logs and runtime files
+*.log
+*.pid
+*.out
+*.err
+.bash_history
+
+# Environment and dependency folders
+.env
+venv/
+.venv/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Data files
+*.db
+db.sqlite3
+instance/
+.mypy_cache/
+.pytest_cache/
+
+# Rasa-specific
+models/          # Trained model files
+results/         # Test results
+*.rasa           # Rasa files created during training
+events.log       # Rasa server logs
+rasa.db          # SQLite database used by tracker store (if applicable)
+
+# Docker-specific
+docker-compose.override.yml
+.dockerignore
+*.tar
+docker_images/
+
+# IDE-specific files
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Temporary files
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Other large files
+*.csv
+*.xlsx
+*.pkl
+*.tar.gz
+*.tar

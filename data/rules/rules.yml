@@ -1,0 +1,76 @@
+version: "3.1"
+
+rules:
+  - rule: Ask grievance on session start
+    steps:
+      - action: action_session_start
+      - action: utter_introduce
+
+  - rule: Reply to user greeting
+    steps:
+      - intent: greet
+      - action: utter_introduce
+
+  - rule: Say goodbye anytime the user says goodbye
+    steps:
+    - intent: goodbye
+    - action: utter_goodbye
+
+  - rule: Respond to user challenge
+    steps:
+      - intent: bot_challenge
+      - action: action_respond_to_challenge
+
+  - rule: Respond to user stating his great mood
+    steps:
+      - intent: mood_great
+      - action: action_handle_mood_great
+
+
+
+  - rule: User files the grievance as is
+    steps:
+      - intent: submit_grievance_as_is
+      - action: action_submit_grievance_as_is
+
+
+  # - rule: Go back to main menu
+  #   steps:
+  #     - intent: main_menu
+  #     - action: utter_main_menu
+
+  # - rule: User restarts the process or story
+  #   steps:
+  #     - intent: restart_story
+  #     - action: action_restart_story
+
+  # - rule: User agrees to provide location details
+  #   steps:
+  #     - intent: agree
+  #     - action: utter_ask_location
+  #     - action: location_form
+  #     - active_loop: location_form
+
+  # - rule: User denies providing location details
+  #   steps:
+  #     - intent: deny
+  #     - action: utter_skip_location
+
+  # - rule: User agrees to provide contact details
+  #   steps:
+  #     - intent: agree
+  #     - action: utter_ask_optional_details
+  #     - action: contact_form
+  #     - active_loop: contact_form
+
+  # - rule: User denies providing contact details
+  #   steps:
+  #     - intent: deny
+  #     - action: utter_skip_contact
+
+  # - rule: User skips a follow-up question
+  #   steps:
+  #     - intent: skip
+  #     - action: action_handle_skip
+  #     - action: action_capture_grievance_text
+

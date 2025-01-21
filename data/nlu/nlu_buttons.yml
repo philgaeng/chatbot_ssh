@@ -1,0 +1,31 @@
+version: "3.1"
+
+#buttons
+nlu:
+- intent: go_back
+  examples: |
+    - go back
+    - I want to go back
+    - return to the previous step
+    - let's go back
+
+- intent: restart_grievance
+  examples: |
+    - restart the grievance process
+    - start the grievance again
+    - redo the grievance
+    - begin the grievance process from scratch
+
+- intent: file_grievance
+  examples: |
+    - file the grievance
+    - submit the complaint
+    - I want to file my grievance
+    - proceed with the grievance filing
+
+- intent: exit_without_filing
+  examples: |
+    - exit without filing
+    - I want to leave
+    - cancel the process
+    - don't file the grievance

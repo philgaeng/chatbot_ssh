@@ -1,0 +1,87 @@
+version: "3.1"
+
+forms:
+  location_form:
+    required_slots:
+      - province
+      - district
+      - municipality
+      - ward
+      - village
+      - address
+  contact_form:
+    required_slots:
+      - user_full_name
+      - user_honorific_prefix
+      - user_contact_phone
+      - user_contact_email
+      
+actions:
+# reseved actions
+
+  - action_session_start
+  # - action_listen
+  # - action_deactivate_loop
+  # - action_revert_fallback_events
+  # - action_default_fallback
+## not defined in a .py file
+  #navigation
+  - action_back_to_previous_step
+  - action_exit_without_filing
+  - action_continue
+  - action_main_menu
+  # - utter_ask_location
+  # - utter_ask_contact_consent
+  # - utter_skip_summary
+  # - utter_skip_location
+  # - utter_skip_contact
+  - utter_introduce
+  # - utter_grievance_submission_complete
+  #mood
+  - action_handle_mood_unhappy
+
+## in generic_actions.py
+  # navigation
+
+  - action_set_current_process
+  - action_go_back
+  - action_restart_story
+  - action_show_current_story
+  - action_handle_skip
+
+  #mood
+  - action_handle_mood_great
+  - action_respond_to_challenge
+
+  # in contact_actions.py
+  - action_send_otp
+  - action_verify_otp
+  - validate_contact_form
+
+  # in location_actions.py
+  - validate_location_form
+
+
+  # in grievance_actions.py
+  - action_start_grievance_process
+
+  - action_submit_grievance_as_is
+  - action_capture_grievance_text
+  - action_select_alternate_category
+  - action_validate_category
+  - action_validate_summary
+  - action_edit_grievance_summary
+  - action_submit_grievance
+  - action_restart_grievance
+  - action_generate_grievance_id
+
+  # in button
+  # - action_go_back #already defined
+  # - action_restart_story #already defined
+  # - action_back_to_previous_step #already defined
+  # - action_exit_without_filing #already defined
+
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true

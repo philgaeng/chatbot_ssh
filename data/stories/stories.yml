@@ -1,0 +1,75 @@
+version: "3.1"
+
+stories:
+  - story: User files a grievance with optional location and contact details
+    steps:
+      # Step 1: User submits the grievance with free text
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - action: action_capture_grievance_text
+
+      # Step 2: Confirm or edit the grievance category
+      - action: action_validate_category
+
+      # Step 3: Confirm or edit the grievance summary
+      - action: action_validate_summary
+      - intent: validate_summary
+
+      - action: utter_ask_location # Move to Step 4 if the user agrees to provide location details
+
+  #step 4: Collect location
+  - story: Collect location details
+    steps:
+      - action: utter_ask_location
+      - intent: agree
+      - action: location_form
+      - active_loop: location_form
+      - active_loop: null
+      - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details
+
+  #Step 5: Collect contact details
+  - story: Collect contact details
+    steps:
+      - action: utter_ask_contact_consent
+      - intent: agree
+      - action: location_form
+      - active_loop: location_form
+      - active_loop: null
+      - action: action_submit_grievance
+
+  #Step 3: alternate 1 - User edits the category of the grievance
+  - story: User edits the summary of the grievance
+    steps:
+      - intent: edit_grievance_summary
+      - action: action_edit_grievance_summary
+      - intent: provide_updated_summary
+      - action: utter_ask_location
+
+  #Step 3: alternate 2 - User edits the category of the grievance
+  - story: User edits the summary of the grievance
+    steps:
+      - intent: skip_summary
+      - action: utter_skip_summary
+      - action: utter_ask_location
+
+  #Step 4 : altenate - User skips providing location details
+  - story: User skips providing location details
+    steps:
+      - action: utter_ask_location
+      - or:
+          - intent: skip
+          - intent: deny
+      - action: utter_skip_location
+      - action: utter_ask_contact_consent
+
+
+  #Step 5: alternate - User skips providing contact details
+  - story: User skips providing contact details
+    steps:
+      - action: utter_ask_contact_consent
+      - or:
+        - intent: skip
+        - intent: deny
+      - action: utter_skip_contact
+      - action: action_submit_grievance
+

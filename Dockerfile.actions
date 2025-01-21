@@ -1,0 +1,29 @@
+FROM rasa/rasa-sdk:latest
+
+# Switch to root user for installation
+USER root
+
+# Set working directory
+WORKDIR /app
+
+# Copy action requirements
+COPY requirements.txt /app/requirements.txt
+
+# Ensure proper permissions for the virtual environment directory
+RUN chmod -R u+w /opt/venv
+
+# Install dependencies
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy custom actions
+COPY actions /app/actions
+
+# Expose action server port
+EXPOSE 5055
+
+# Revert to non-root user for runtime
+USER 1001
+
+# Default command
+CMD ["rasa", "run", "actions", "--actions", "actions", "--port", "5055"]
+

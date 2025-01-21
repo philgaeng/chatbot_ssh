@@ -1,0 +1,33 @@
+# The config recipe.
+recipe: default.v1
+
+# The assistant project unique identifier
+assistant_id: 20241128-101605-happy-jail
+
+# Configuration for Rasa NLU.
+language: en
+
+pipeline:
+- name: SpacyNLP
+  model: "en_core_web_md"
+- name: SpacyTokenizer
+- name: SpacyFeaturizer
+- name: RegexFeaturizer
+- name: DIETClassifier
+  epochs: 100
+  constrain_similarities: true
+- name: EntitySynonymMapper
+- name: FallbackClassifier
+  threshold: 0.3
+  ambiguity_threshold: 0.1
+
+# Configuration for Rasa Core.
+policies:
+  - name: MemoizationPolicy
+  - name: RulePolicy
+  - name: TEDPolicy
+    max_history: 5
+    epochs: 100
+    constrain_similarities: true
+  - name: "actions.custom_policy.PreviousStatePolicy"
+

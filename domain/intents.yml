@@ -1,0 +1,42 @@
+version: "3.1"
+
+intents:
+  #greetings
+  - introduce
+  - greet
+  # - greet_proactive
+  - goodbye
+
+  # generic
+  - agree
+  - deny
+  # navigation
+  - launch_chatbot
+  # - continue
+  - skip
+  - go_back
+  - restart_story
+  - main_menu
+  - exit_without_filing   #refers to the act of abandoning the grievance process
+  # - follow_up
+  # - explore
+
+   #mood
+  - bot_challenge
+  - mood_great
+  - mood_unhappy
+
+  #contact
+  - provide_location
+  - provide_phone
+  - provide_optional
+
+  #grievance
+  - start_grievance_process #refers to the process of filing a grievance
+  - restart_grievance
+  # - submit_grievance #refers to the act of submitting the grievance during the normal process (complete grievance)
+  - submit_grievance_as_is #refers to the act of submitting the grievance as is (incomplete grievance)
+  - validate_summary
+  - edit_grievance_summary
+  - provide_updated_summary
+  - skip_summary

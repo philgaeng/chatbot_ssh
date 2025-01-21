@@ -1,0 +1,19 @@
+sqlalchemy<2.0
+rasa==3.6.20
+rasa-sdk==3.6.2
+spacy==3.5.3
+en-core-web-md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.5.0/en_core_web_md-3.5.0-py3-none-any.whl#sha256=b492fd2dfeee931dd60232fd1a122bb5c3542ebcd5d614f11844647050aa539e
+tensorflow==2.12.0
+tensorboard==2.12.3
+tensorflow-estimator==2.12.0
+tensorflow-hub==0.13.0
+tensorflow-io-gcs-filesystem==0.32
+numpy==1.23.5
+requests==2.32.3
+psycopg2-binary==2.9.10
+redis==4.6.0
+twilio==8.2.2
+regex==2022.10.31
+pandas
+openai==1.57.0
+aio-pika==8.2.3  # Ensure the version is compatible with Rasa and Python 3.8

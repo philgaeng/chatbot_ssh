@@ -1,0 +1,24 @@
+version: "3.1"
+
+stories:
+
+- story: unhappy user restarts story
+  steps:
+    - intent: mood_unhappy
+    - action: utter_mood_unhappy
+    - intent: restart_story
+    - action: action_restart_story
+ 
+- story: unhappy user files grievance
+  steps:
+    - intent: mood_unhappy
+    - action: utter_mood_unhappy
+    - intent: start_grievance_process
+    - action: action_submit_grievance  # Optional: Save data and file grievance
+
+- story: unhappy user exits
+  steps:
+    - intent: mood_unhappy
+    - action: utter_mood_unhappy
+    - intent: exit_without_filing
+    - action: utter_exit_without_filing

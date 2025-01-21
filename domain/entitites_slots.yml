@@ -1,0 +1,119 @@
+version: "3.1"
+
+entities:
+  - qr_code
+  - district
+  - municipality
+  - ward
+  - village
+  - address
+  - grievance_details
+  - otp
+  - user_contact_phone
+  - first_name
+  - last_name
+  - user_contact_email
+
+slots:
+#navigation
+  current_process:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  previous_state:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  current_story:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  restart_type:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: restart_type
+#location
+  province:
+    type: text
+    mappings:
+      - type: from_text
+  district:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  municipality:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  ward:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  village:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  address:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: location_form
+            requested_slot: address
+#contact
+  user_contact_phone:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  user_contact_email:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+  user_full_name:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  user_honorific_prefix:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+
+  #grievance
+  grievance_id:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  grievance_details:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+  detailed_grievance_completed:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: from_intent
+        intent: agree
+        value: true
+
+  skip_count:
+    type: float
+    initial_value: 0
+    influence_conversation: false
+    mappings:
+      - type: custom
