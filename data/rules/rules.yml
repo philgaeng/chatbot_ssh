@@ -1,36 +1,39 @@
 version: "3.1"
 
 rules:
+  # Ask grievance on session start
+  # Uncomment if needed
   # - rule: Ask grievance on session start
   #   steps:
   #     - action: action_session_start
   #     - action: utter_introduce
 
-  - rule : Introduce the bot on session start and ask grievance
+  - rule: Introduce the bot on session start and ask grievance
     steps:
       # Ensure the bot starts this flow with a trigger or welcome intent
       - intent: introduce
       - action: action_session_start  # Custom action to welcome the user or provide context
-      - action: utter_introduce  # Prompt for the grievance process
+      # Uncomment below if a separate action is required
+      # - action: utter_introduce
 
+  # Uncomment if required in stories
   # - rule: Start grievance process
   #   steps:
   #     - intent: start_grievance_process
   #     - action: action_start_grievance_process
   #     - action: action_capture_grievance_text  # Align with the story's next step
 
-
   - rule: Say goodbye anytime the user says goodbye
     steps:
-    - intent: goodbye
-    - action: utter_goodbye
+      - intent: goodbye
+      - action: utter_goodbye
 
   - rule: Respond to user challenge
     steps:
       - intent: bot_challenge
       - action: action_respond_to_challenge
 
-  - rule: Respond to user stating his great mood
+  - rule: Respond to user stating their great mood
     steps:
       - intent: mood_great
       - action: action_handle_mood_great
@@ -45,24 +48,30 @@ rules:
       - intent: set_category
       - action: action_set_category
 
+  # Activate grievance form
+  # Uncomment if needed
   # - rule: Activate grievance form
   #   steps:
-  #   - intent: start_grievance_process
-  #   - action: grievance_form
-  #   - active_loop: grievance_form
+  #     - intent: start_grievance_process
+  #     - action: grievance_form
+  #     - active_loop: grievance_form
 
-
-
+  # Go back to main menu
+  # Uncomment if needed
   # - rule: Go back to main menu
   #   steps:
   #     - intent: main_menu
   #     - action: utter_main_menu
 
+  # User restarts the process or story
+  # Uncomment if needed
   # - rule: User restarts the process or story
   #   steps:
   #     - intent: restart_story
   #     - action: action_restart_story
 
+  # User agrees to provide location details
+  # Uncomment if needed
   # - rule: User agrees to provide location details
   #   steps:
   #     - intent: agree
@@ -70,11 +79,15 @@ rules:
   #     - action: location_form
   #     - active_loop: location_form
 
+  # User denies providing location details
+  # Uncomment if needed
   # - rule: User denies providing location details
   #   steps:
   #     - intent: deny
   #     - action: utter_skip_location
 
+  # User agrees to provide contact details
+  # Uncomment if needed
   # - rule: User agrees to provide contact details
   #   steps:
   #     - intent: agree
@@ -82,14 +95,17 @@ rules:
   #     - action: contact_form
   #     - active_loop: contact_form
 
+  # User denies providing contact details
+  # Uncomment if needed
   # - rule: User denies providing contact details
   #   steps:
   #     - intent: deny
   #     - action: utter_skip_contact
 
+  # User skips a follow-up question
+  # Uncomment if needed
   # - rule: User skips a follow-up question
   #   steps:
   #     - intent: skip
   #     - action: action_handle_skip
   #     - action: action_capture_grievance_text
-

@@ -9,6 +9,7 @@
 
 # from typing import Any, Text, Dict, List
 #
+import logging
 from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
@@ -19,15 +20,18 @@ from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from rasa_sdk.events import UserUtteranceReverted, Restarted
 
+logger = logging.getLogger(__name__)
 
-# Action to start the session
 class ActionSessionStart(Action):
     def name(self) -> str:
         return "action_session_start"
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        logger.info("ActionSessionStart triggered")
         events = [SessionStarted(), ActionExecuted("action_listen")]
-        dispatcher.utter_message(response="utter_session_start")
+        logger.info("Dispatcher is sending response: utter_introduce")  # Debugging line
+        dispatcher.utter_message(response="utter_introduce")
+        logger.info("utter_introduce sent")  # Debugging line
         return events
 
 

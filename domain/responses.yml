@@ -1,6 +1,179 @@
 version: "3.1"
 
 responses:
+  #greeting
+  utter_introduce:
+    - text: "Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?"
+  utter_explain_bot_purpose:
+    - text: "I can help you submit a grievance, check its status, or provide more information. How can I assist you today?"
+  utter_goodbye:
+    - text: "Goodbye! If you need further assistance, feel free to ask."
+  utter_ask_file_grievance:
+    - text: "Would you like to file a grievance?"
+
+  utter_ask_location:
+    - text: "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it."
+  utter_ask_contact_consent:
+    - text: "Do you consent to providing your contact details for follow-up on your grievance? This is optional, your grievance can be filed without it.."
+  utter_skip_location:
+    - text: "Skipping location details. Don't worry, you can file your grievance without it."
+  utter_skip_contact:
+    - text: "Skipping contact details. Don't worry, you can file your grievance without it."
+  utter_skip_summary:
+    - text: "Skipping grievance summary. Don't worry, you can file your grievance without it."
+  # #bot challenge and #removed for redundancy
+  # utter_respond_to_challenge:
+  #   - text: "Yes, I am a bot. I am designed to assist you filing your grievance?"
+  # utter_main_menu:
+  #   - text: "You are now at the main menu. Do you like to file a grievance or check its status?"
+
+  #mood
+
+  utter_mood_unhappy:
+    - text: >
+        I'm sorry to hear that you're not satisfied. How can I help you address that?
+        Please choose one of the following options:
+      buttons:
+        - title: "Go back to the previous step"
+          payload: /go_back
+        - title: "Restart the current process ({current_process})"
+          payload: /restart_story
+        # - title: "Restart grievance from the beginning"
+        #   payload: /restart_grievance
+        - title: "File grievance as is"
+          payload: /submit_grievance_as_is
+        - title: "Exit without filing"
+          payload: /exit_without_filing
+
+  utter_exit_without_filing:
+    - text: "Thank you for your time. If you change your mind, feel free to start the grievance process again."
+
+##location_actions
+  # # Prepopulate Location Responses
+  # utter_prepopulate_location_success:
+  #   - text: "We’ve identified your district as {district} and municipality as {municipality}. Please confirm or add more details."
+
+  # utter_prepopulate_location_failure:
+  #   - text: "We could not prepopulate your location. \nPlease provide your district and municipality."
+
+# Skip Responses for Location Form
+  utter_skip_province:
+    - text: "Skipping province."
+
+  utter_skip_municipality:
+    - text: "Skipping municipality."
+
+  utter_skip_ward:
+    - text: "Skipping ward."
+
+  utter_skip_village:
+    - text: "Skipping village."
+
+  utter_skip_address:
+    - text: "Skipping address."
+
+##contact_actions
+  # OTP Responses
+  utter_send_otp:
+    - text: "Sending OTP to {phone_number}."
+
+  utter_send_otp_failure:
+    - text: "Failed to send OTP: {error}"
+
+  utter_otp_verified_success:
+    - text: "OTP verified successfully."
+
+  utter_otp_verified_failure:
+    - text: "Incorrect OTP. Please try again."
+
+  # Skip Responses for Contact Form
+  utter_skip_full_name:
+    - text: "Skipping full name."
+
+  utter_skip_phone_number:
+    - text: "Skipping phone number."
+
+  utter_skip_email_address:
+    - text: "Skipping email address."
+
+## generic_actions
+  # Session Start
+  # utter_session_start:
+  #   - text: "Hello! Welcome to the Grievance Management Chatbot. \nHow can I help you today?"
+
+  # Set Current Process
+  utter_set_current_process:
+    - text: "You are now in the '{current_story}' process."
+
+  # Handle Mood Great
+  utter_mood_great_continue:
+    - text: "That's fantastic to hear! Let's continue where we left off."
+
+  utter_mood_great_next_step:
+    - text: "I'm glad you're feeling great! Let's figure out what to do next."
+
+  # Respond to Challenge
+  utter_respond_to_challenge:
+    - text: "I am a bot, here to assist you with your grievance management!"
+
+  # Go Back
+  utter_go_back:
+    - text: "Alright, going back to the previous step."
+
+  # Show Current Story
+  utter_show_current_story:
+    - text: "You are currently in the '{current_story}' story."
+
+  utter_show_current_story_unknown:
+    - text: "I'm not sure which story we are in right now."
+
+  # Restart Story
+  utter_restart_story:
+    - text: "Where would you like to restart?"
+
+##grievance_actions
+  # Grievance Process
+  utter_start_grievance_process:
+    - text: "Great! Let's start by understanding your grievance."
+
+  # utter_grievance_summary:
+  #   - text: "Got it! Here's what I understood: {summary}"
+
+  utter_grievance_processing_error:
+    - text: "Sorry, there was an issue processing your grievance. Please try again."
+
+  # utter_ask_location_details:
+  #   - text: "Where did this happen? You can skip this question if you're unsure."
+
+  # Skip Handling
+  utter_ask_file_as_is:
+    - text: "It seems you're skipping the questions. Would you like to file your grievance as is?"
+
+  utter_skip_confirmation:
+    - text: "Okay, skipping this question."
+
+  # # Grievance ID Generation
+  # utter_grievance_id_generated:
+  #   - text: "Your grievance has been filed. Your grievance ID is {grievance_id}."
+
+  # # Restart Grievance Process
+  # utter_restart_grievance_process:
+  #   - text: "Restarting the grievance process. Let's begin again."
+
+  # # Submit Grievance
+  # utter_grievance_submitted:
+  #   - text: "Your grievance '{grievance_details}' has been filed. Our team will review it shortly."
+
+  # utter_grievance_submitted_no_details:
+  #   - text: "Your grievance has been filed. Our team will review it shortly."
+
+  # Submit Grievance As-Is
+  utter_grievance_submitted_as_is:
+    - text: "Your grievance '{grievance_details}' has been filed as is. Our team will review it shortly and contact you for more information if needed."
+
+  utter_grievance_submitted_no_details_as_is:
+    - text: "Your grievance has been filed. Our team will review it shortly and contact you for more information if needed."
+  
   # utter_ask_municipality:
   #   - text: "Please provide the name of the municipality."
 
@@ -59,52 +232,3 @@ responses:
   #       - Grievance Details: {grievance_details}.
   #       - Contact Number: {user_contact_phone}.
   #       Does this look correct?"
-  
-  #greeting
-  utter_introduce:
-    - text: "Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?"
-  utter_explain_bot_purpose:
-    - text: "I can help you submit a grievance, check its status, or provide more information. How can I assist you today?"
-  # utter_introduce:
-  #   - text: "Hello, I am here to help you file a grievance or check its status. What would you like to do?"
-  utter_goodbye:
-    - text: "Goodbye! If you need further assistance, feel free to ask."
-  utter_ask_file_grievance:
-    - text: "Would you like to file a grievance?"
-
-  utter_ask_location:
-    - text: "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it."
-  utter_ask_contact_consent:
-    - text: "Do you consent to providing your contact details for follow-up on your grievance? This is optional, your grievance can be filed without it.."
-  utter_skip_location:
-    - text: "Skipping location details. Don't worry, you can file your grievance without it."
-  utter_skip_contact:
-    - text: "Skipping contact details. Don't worry, you can file your grievance without it."
-  utter_skip_summary:
-    - text: "Skipping grievance summary. Don't worry, you can file your grievance without it."
-  # #bot challenge and #removed for redundancy
-  # utter_respond_to_challenge:
-  #   - text: "Yes, I am a bot. I am designed to assist you filing your grievance?"
-  # utter_main_menu:
-  #   - text: "You are now at the main menu. Do you like to file a grievance or check its status?"
-
-  #mood
-
-  utter_mood_unhappy:
-    - text: >
-        I'm sorry to hear that you're not satisfied. How can I help you address that?
-        Please choose one of the following options:
-      buttons:
-        - title: "Go back to the previous step"
-          payload: /go_back
-        - title: "Restart the current process ({current_process})"
-          payload: /restart_story
-        # - title: "Restart grievance from the beginning"
-        #   payload: /restart_grievance
-        - title: "File grievance as is"
-          payload: /submit_grievance_as_is
-        - title: "Exit without filing"
-          payload: /exit_without_filing
-
-  utter_exit_without_filing:
-    - text: "Thank you for your time. If you change your mind, feel free to start the grievance process again."

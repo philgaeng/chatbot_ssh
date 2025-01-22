@@ -3,7 +3,7 @@ version: "3.1"
 intents:
   #greetings
   - introduce
-  - greet
+  # - greet
   # - greet_proactive
   - goodbye
 
