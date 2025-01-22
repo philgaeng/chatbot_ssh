@@ -30,7 +30,8 @@ class ActionSessionStart(Action):
         logger.info("ActionSessionStart triggered")
         events = [SessionStarted(), ActionExecuted("action_listen")]
         logger.info("Dispatcher is sending response: utter_introduce")  # Debugging line
-        dispatcher.utter_message(response="utter_introduce")
+        # dispatcher.utter_message(response="utter_introduce")
+        dispatcher.utter_message(text="Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?")
         logger.info("utter_introduce sent")  # Debugging line
         return events
 

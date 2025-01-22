@@ -16,13 +16,6 @@ rules:
       # Uncomment below if a separate action is required
       # - action: utter_introduce
 
-  # Uncomment if required in stories
-  # - rule: Start grievance process
-  #   steps:
-  #     - intent: start_grievance_process
-  #     - action: action_start_grievance_process
-  #     - action: action_capture_grievance_text  # Align with the story's next step
-
   - rule: Say goodbye anytime the user says goodbye
     steps:
       - intent: goodbye
@@ -47,6 +40,13 @@ rules:
     steps:
       - intent: set_category
       - action: action_set_category
+
+  # Uncomment if required in stories
+  # - rule: Start grievance process
+  #   steps:
+  #     - intent: start_grievance_process
+  #     - action: action_start_grievance_process
+  #     - action: action_capture_grievance_text  # Align with the story's next step
 
   # Activate grievance form
   # Uncomment if needed
