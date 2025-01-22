@@ -7,9 +7,12 @@ version: "3.1"
 stories:
   - story: User files a grievance with optional location and contact details
     steps:
+      - intent: introduce
+      - action: utter_introduce
       - intent: start_grievance_process
       - action: action_start_grievance_process
       - action: action_listen
+      - intent: decribe_complain
       - action: action_capture_grievance_text
       - action: action_listen
       - action: action_validate_category

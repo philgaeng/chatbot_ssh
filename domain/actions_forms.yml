@@ -17,9 +17,9 @@ forms:
       - user_contact_email
       
 actions:
-# reseved actions
+# reserved actions
 
-  - action_session_start
+  # - action_session_start
   # - action_listen
   # - action_deactivate_loop
   # - action_revert_fallback_events

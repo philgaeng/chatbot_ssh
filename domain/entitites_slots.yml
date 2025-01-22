@@ -70,7 +70,10 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_text
+      - type: from_entity
+        entity: municipality
+        conditions:
+          - active_loop: location_form
   village:
     type: text
     influence_conversation: false
@@ -130,29 +133,30 @@ slots:
   #grievance
   grievance_category:
     type: text
-    influence_conversation: true
+    influence_conversation: false
     mappings:
-      - type: from_entity
-        entity: grievance_category
+    - type: from_text
 
   grievance_summary:
     type: text
-    influence_conversation: true
+    influence_conversation: false
     mappings:
-      - type: from_text
+    - type: from_text
 
 
   grievance_id:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_text
+    - type: from_text
+
 
   grievance_details:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_text
+    - type: from_text
+
 
   detailed_grievance_completed:
     type: bool

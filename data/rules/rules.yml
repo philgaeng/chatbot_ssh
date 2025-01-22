@@ -8,13 +8,11 @@ rules:
   #     - action: action_session_start
   #     - action: utter_introduce
 
-  - rule: Introduce the bot on session start and ask grievance
-    steps:
-      # Ensure the bot starts this flow with a trigger or welcome intent
-      - intent: introduce
-      - action: action_session_start  # Custom action to welcome the user or provide context
-      # Uncomment below if a separate action is required
-      # - action: utter_introduce
+  # - rule: Introduce the bot on session start and ask grievance
+  #   steps:
+  #     # Ensure the bot starts this flow with a trigger or welcome intent
+  #     - intent: introduce
+  #     - action: utter_introduce # Custom action to welcome the user or provide context
 
   - rule: Say goodbye anytime the user says goodbye
     steps:

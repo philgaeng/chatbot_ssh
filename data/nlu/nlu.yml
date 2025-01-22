@@ -235,7 +235,39 @@ nlu:
     - I want to edit
     - modify
 
-
+- intent: describe_complain
+  examples: |
+    - my field is flooded
+    - they stole
+    - my wife got hurt
+    - my daughter got injured
+    - I can't find a job
+    - they ruined my field
+    - they eat my chicken
+    - they stole my eggs
+    - they stole my farm equipment
+    - the birds have disappeared
+    - the water is spoiled
+    - my well is spoiled
+    - the electricity is off
+    - no more power
+    - the road is damaged
+    - my crops were destroyed
+    - the bridge collapsed
+    - my livestock is missing
+    - they set my house on fire
+    - the school is closed
+    - there is no doctor in the area
+    - the shop is out of food
+    - they blocked my road
+    - there are too many mosquitoes
+    - they cut down my trees
+    - my roof is leaking
+    - the water pump is broken
+    - my fence was destroyed
+    - the hospital is too far
+    - my phone was stolen
+    - I was harassed
 
 
 #forms
