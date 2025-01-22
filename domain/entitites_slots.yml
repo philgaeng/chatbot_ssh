@@ -134,28 +134,24 @@ slots:
   grievance_category:
     type: text
     influence_conversation: false
-    mappings:
-    - type: from_text
+    mappings: []
 
   grievance_summary:
     type: text
     influence_conversation: false
-    mappings:
-    - type: from_text
+    mappings: []
 
 
   grievance_id:
     type: text
     influence_conversation: false
-    mappings:
-    - type: from_text
+    mappings: []
 
 
   grievance_details:
     type: text
     influence_conversation: false
-    mappings:
-    - type: from_text
+    mappings: []
 
 
   detailed_grievance_completed:
