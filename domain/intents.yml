@@ -27,9 +27,10 @@ intents:
   - mood_unhappy
 
   #contact
-  - provide_location
+  - provide_contact
   - provide_phone
   - provide_optional
+  - provide_location
 
   #grievance
   - start_grievance_process #refers to the process of filing a grievance

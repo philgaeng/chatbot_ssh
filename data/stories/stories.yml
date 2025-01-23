@@ -23,6 +23,7 @@ stories:
   #step 4: Collect location
   - story: Collect location details
     steps:
+      - intent: provide_location
       - action: utter_ask_location
       - intent: agree
       - action: location_form
@@ -33,12 +34,13 @@ stories:
   #Step 5: Collect contact details
   - story: Collect contact details
     steps:
-      - action: utter_ask_contact_consent
-      - intent: agree
-      - action: location_form
-      - active_loop: location_form
-      - active_loop: null
-      - action: action_submit_grievance
+      - intent: provide_contact  # User provides contact information intent
+      - action: contact_form  # Activates the contact form
+      - active_loop: contact_form  # Keeps the form active
+      - action: validate_contact_form  # Executes the validation logic
+      - active_loop: null  # Ends the form after validation
+      - action: action_submit_grievance  # Submits the grievance after contact details are collected
+
 
   #Step 3: alternate 1 - User edits the category of the grievance
   - story: User edits the summary of the grievance

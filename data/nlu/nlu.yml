@@ -279,3 +279,39 @@ nlu:
     - /set_category{"grievance_category": "Education"}
     - /set_category{"grievance_category": "Other"}
     - /skip
+
+- intent: provide_contact
+  examples: |
+    - my name is
+    - I am Muhammad
+    - here is my contact info
+    - I am Mr. Suri
+    - my contact is
+    - you can reach me at
+    - call me on
+    - my phone number is
+    - my email is
+    - I go by the name of
+    - people call me
+    - I am known as
+    - reach out to me at
+    - my full name is
+    - here are my details
+
+- intent: provide_location
+  examples: |
+    - I live in
+    - my city is
+    - my province is
+    - my municipality is
+    - my village
+    - I am from
+    - I reside in
+    - my hometown is
+    - I stay at
+    - I am based in
+    - my location is
+    - the place I live in is
+    - I am currently in
+    - I belong to
+    - my address is
