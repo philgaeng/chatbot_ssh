@@ -75,8 +75,7 @@ nlu:
     - great
     - right
     - sounds good
-    - amazing
-    - wonderful
+    - affirm
 
 - intent: deny
   examples: |

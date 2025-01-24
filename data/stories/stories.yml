@@ -12,7 +12,7 @@ stories:
       - intent: start_grievance_process
       - action: action_start_grievance_process
       - action: action_listen
-      - intent: decribe_complain
+      - intent: describe_complain
       - action: action_capture_grievance_text
       - action: action_listen
       - action: action_validate_category
@@ -23,7 +23,7 @@ stories:
   #step 4: Collect location
   - story: Collect location details
     steps:
-      - intent: provide_location
+      # - intent: provide_location
       - action: utter_ask_location
       - intent: agree
       - action: location_form
@@ -34,7 +34,7 @@ stories:
   #Step 5: Collect contact details
   - story: Collect contact details
     steps:
-      - intent: provide_contact  # User provides contact information intent
+      # - intent: provide_contact  # User provides contact information intent
       - action: contact_form  # Activates the contact form
       - active_loop: contact_form  # Keeps the form active
       - action: validate_contact_form  # Executes the validation logic
@@ -78,3 +78,23 @@ stories:
       - action: utter_skip_contact
       - action: action_submit_grievance
 
+  #User naturally provides contact
+  - story: User starts by providing details
+    steps:
+      - intent: provide_contact  # User provides contact information intent
+      - action: contact_form  # Activates the contact form
+      - active_loop: contact_form  # Keeps the form active
+      - action: validate_contact_form  # Executes the validation logic
+      - active_loop: null  # Ends the form after validation
+      - action: action_submit_grievance  # Submits the grievance after contact details are collected
+
+  #User naturally provides location
+  - story: Collect location details
+    steps:
+      - intent: provide_location
+      - action: utter_ask_location
+      - intent: agree
+      - action: location_form
+      - active_loop: location_form
+      - active_loop: null
+      - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details      

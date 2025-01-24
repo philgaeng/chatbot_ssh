@@ -1,4 +1,4 @@
-const PUBLIC_IP = "54.255.177.143"; // Replace with your server's current public IP
+const PUBLIC_IP = "46.137.193.137"; // Replace with your server's current public IP
 
 const CONFIG = {
   RASA_SERVER_URL: `http://${PUBLIC_IP}:5005`, // Use the public IP dynamically

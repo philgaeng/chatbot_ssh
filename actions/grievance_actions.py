@@ -12,6 +12,7 @@
 import os
 from dotenv import load_dotenv
 import openai
+from openai import OpenAI
 from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
@@ -21,7 +22,13 @@ from datetime import datetime
 
 # Set up the OpenAI API key
 load_dotenv('/home/ubuntu/nepal_project/.env')
-openai.api_key = os.getenv("OPENAI_API_KEY")
+open_ai_key = "sk-dYC9WOxrv5jVpqfvWeNMT3BlbkFJ95VEhfhz3jRMMpcc"
+# openai.api_key = open_ai_key
+# open_ai_key = os.getenv("OPENAI_API_KEY")
+# openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
+
 
 # File to store the last grievance ID
 COUNTER_FILE = "grievance_counter.txt"
@@ -88,27 +95,47 @@ class ActionCaptureGrievanceText(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         user_input = tracker.latest_message.get("text")
-
+        print(user_input)
         # Step 1: Save the free text grievance details
         grievance_details = user_input
 
         # Step 2: Call OpenAI API for summarization and categorization
         try:
-            response = openai.ChatCompletion.create(  # Use `create` for synchronous calls in v1.0+
-                model="gpt-4",
+            # response = openai.ChatCompletion.create(  # Use `create` for synchronous calls in v1.0+
+            #     model="gpt-4",
+            #     messages=[
+            #         {"role": "system", "content": "You are an assistant helping to summarize and categorize grievances."},
+            #         {"role": "user", "content": f"Summarize and categorize this grievance: {grievance_details}"}
+            #     ]
+            # )
+            try:
+                print(open_ai_key[0:4])
+            except:
+                print("issue with openai key")    
+            
+            client = OpenAI(
+                api_key= open_ai_key,  # This is the default and can be omitted
+            )
+
+            response = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "You are an assistant helping to summarize and categorize grievances."},
-                    {"role": "user", "content": f"Summarize and categorize this grievance: {grievance_details}"}
-                ]
+                    {
+                        "role": "system", "content": "You are an assistant helping to summarize and categorize grievances.",
+                        "role": "user", "content": f"Summarize and categorize this grievance: {grievance_details}"
+                    }
+                ],
+                model="gpt-4",
             )
 
             # Extract the result
-            result = response['choices'][0]['message']['content']
+            result = response.choices[0].message.content
+            # result = response['choices'][0]['message']['content']
+            print(result)
             summary, category = self.parse_summary_and_category(result)
-
+            print(summary, category)
             # Step 3: Validate category with the user
             buttons = [
-                {"title": "Yes", "payload": "/affirm"},
+                {"title": "Yes", "payload": "/agree"},
                 {"title": "No, choose another category", "payload": "/deny"},
                 {"title": "Exit", "payload": "/exit_grievance_process"}
             ]
@@ -137,8 +164,14 @@ class ActionCaptureGrievanceText(Action):
         """
         # Example parsing logic: Adjust based on your OpenAI response format
         lines = result.split("\n")
-        summary = lines[0].strip()  # First line as summary
-        category = lines[1].strip() if len(lines) > 1 else "Uncategorized"  # Second line as category
+        print(lines)
+        summary, category = "","Uncategorized"
+        for idx,line in enumerate(lines):
+            if line.strip():
+                if idx == 0:
+                    summary = line.strip()
+                else:
+                    category = line.strip()
         return summary, category
 
 
@@ -159,7 +192,7 @@ class ActionValidateCategory(Action):
             dispatcher.utter_message(
                 text=f"The current category for your grievance is '{current_category}'. Is this correct?",
                 buttons=[
-                    {"title": "Yes", "payload": "/affirm"},
+                    {"title": "Yes", "payload": "/agree"},
                     {"title": "No", "payload": "/deny"},
                     {"title": "Skip", "payload": "/skip"}
                 ]
@@ -189,7 +222,7 @@ class ActionValidateSummary(Action):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         # Retrieve the grievance summary from the slot
         grievance_summary = tracker.get_slot("grievance_summary")
-
+        print(grievance_summary)
         # Default message if no summary exists
         if not grievance_summary:
             dispatcher.utter_message(text="No summary has been provided yet.")
