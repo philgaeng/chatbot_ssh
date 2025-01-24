@@ -22,7 +22,7 @@ from datetime import datetime
 
 # Set up the OpenAI API key
 load_dotenv('/home/ubuntu/nepal_project/.env')
-open_ai_key = "sk-dYC9WOxrv5jVpqfvWeNMT3BlbkFJ95VEhfhz3jRMMpcc"
+open_ai_key = "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"
 # openai.api_key = open_ai_key
 # open_ai_key = os.getenv("OPENAI_API_KEY")
 # openai.api_key = os.getenv("OPENAI_API_KEY")
