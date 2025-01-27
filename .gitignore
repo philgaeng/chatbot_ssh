@@ -32,6 +32,7 @@ results/         # Test results
 *.rasa           # Rasa files created during training
 events.log       # Rasa server logs
 rasa.db          # SQLite database used by tracker store (if applicable)
+.rasa/cache/
 
 # Docker-specific
 docker-compose.override.yml
