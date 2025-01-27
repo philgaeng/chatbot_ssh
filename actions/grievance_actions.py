@@ -21,14 +21,17 @@ from rasa_sdk.events import SlotSet, Restarted, FollowupAction
 from datetime import datetime
 
 # Set up the OpenAI API key
-load_dotenv('/home/ubuntu/nepal_project/.env')
-open_ai_key = "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"
-# openai.api_key = open_ai_key
-# open_ai_key = os.getenv("OPENAI_API_KEY")
-# openai.api_key = os.getenv("OPENAI_API_KEY")
+load_dotenv('/home/ubuntu/nepal_chatbot/.env')
+open_ai_key = os.getenv("OPENAI_API_KEY")
 
-
-
+try:
+    if open_ai_key:
+        print("OpenAI key is loaded")
+    else:
+        raise ValueError("OpenAI key is not set")
+except Exception as e:
+    print(f"Error loading OpenAI API key: {e}")
+ 
 
 # File to store the last grievance ID
 COUNTER_FILE = "grievance_counter.txt"
