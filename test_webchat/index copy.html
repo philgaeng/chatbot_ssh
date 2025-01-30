@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rasa Web Chat</title>
+
+    <!-- Add a Favicon -->
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+
+    <!-- Import Roboto font -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Import the Configuration File -->
+    <script src="config.js?cachebuster=<?= time(); ?>"></script>
+
+    <!-- Import the websocket configuration -->
+    <!-- <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/rasa-webchat/lib/index.js"></script> -->
+
+
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #007bff;
+        }
+
+        p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .version {
+            font-size: 0.9em;
+            font-weight: 500;
+            color: #555;
+            margin-top: 20px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5em;
+            }
+
+            p {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to the Grievance Management Chatbot</h1>
+        <p>
+            This is the testing page of our chatbot. <br>
+            Click on the blue widget at the bottom right to initiate your process.
+        </p>
+        <p class="version">Version 0.x</p>
+    </div>
+
+    <!-- Rasa WebChat Script -->
+    <script>
+        (function () {
+            let chatWidgetScript = document.createElement("script");
+            chatWidgetScript.src = "https://cdn.jsdelivr.net/npm/rasa-webchat/lib/index.min.js";
+;
+            chatWidgetScript.async = true;
+            chatWidgetScript.onload = () => {
+                 // Log the CONFIG object to the console for debugging
+                console.log("Widget configuration: ", CONFIG);
+
+                window.WebChat.default(
+                    {
+                        customData: { language: "en" }, // You can add custom data here
+                        socketUrl: CONFIG.RASA_SERVER_URL, // Use the value from config.js
+                        socketPath: CONFIG.SOCKET_PATH, // Default Socket.IO path
+                        title: CONFIG.TITLE, // Custom widget title
+                        initPayload: CONFIG.INIT_PAYLOAD, // Trigger the 'greet' intent when chat opens
+                        showMessageDate: CONFIG.SHOW_MESSAGE_DATE, // Show message timestamps
+                        params: { storage: CONFIG.STORAGE }, // Persist chat session
+                        showMessageDate: CONFIG.SHOW_MESSAGE_DATE,
+                        onSocketEvent: (eventName, eventData) => {
+                            console.log(`Socket event: ${eventName}`, eventData);
+
+                        },
+                    },
+                    null
+                );
+            };
+            document.head.appendChild(chatWidgetScript);
+        })();
+    </script>
+</body>
+</html>

@@ -105,3 +105,4 @@ class ValidateLocationForm(FormValidationAction):
 
         return []
 
+

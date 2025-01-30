@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grievance Management Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #0066ff;
+            margin-top: 20px;
+        }
+
+        p {
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+
+    <!-- Set WebSocket Variables **BEFORE** Loading Scripts -->
+    <script>
+        const SERVER_HOST = "13.250.126.179"; // Change if necessary
+        const SERVER_PORT = "5005"; // Set to "" if using NGINX without a port
+
+        // Generate WebSocket URL
+        const RASA_SERVER_URL = SERVER_PORT ? `http://${SERVER_HOST}:${SERVER_PORT}` : `http://${SERVER_HOST}`;
+
+        console.log("🔄 Connecting to Rasa at:", RASA_SERVER_URL);
+
+        // Ensure `data-websocket-url` is set before loading the widget
+        document.addEventListener("DOMContentLoaded", function () {
+            const chatWidget = document.getElementById("rasa-chat-widget");
+            chatWidget.setAttribute("data-websocket-url", RASA_SERVER_URL);
+            console.log("✅ data-websocket-url set:", chatWidget.getAttribute("data-websocket-url"));
+
+            // Dynamically load Rasa Chat Widget **AFTER** setting `data-websocket-url`
+            const script = document.createElement("script");
+            script.src = "https://unpkg.com/@rasahq/rasa-chat";
+            script.type = "application/javascript";
+            document.body.appendChild(script);
+            console.log("✅ Rasa Chat Widget script loaded.");
+        });
+    </script>
+</head>
+<body>
+    <h1>Welcome to the Grievance Management Chatbot</h1>
+    <p>Click on the chat widget at the bottom right to start.</p>
+    <p>Version 0.x</p>
+
+    <!-- Rasa Chat Widget -->
+    <div id="rasa-chat-widget"></div>
+
+    <!-- Load Socket.IO First -->
+    <script src="https://cdn.socket.io/4.5.3/socket.io.min.js"></script>
+
+    <!-- Initialize Chat Widget & WebSocket -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            console.log("🎬 Widget is loading...");
+
+            // Initialize WebSocket connection for debugging
+            const socket = io(RASA_SERVER_URL, {
+                path: "/socket.io/",
+                transports: ["websocket"],
+                forceNew: true,
+            });
+
+            socket.on("connect", () => {
+                console.log("✅ WebSocket connected with session ID:", socket.id);
+            });
+
+            socket.on("disconnect", (reason) => {
+                console.warn("⚠️ WebSocket disconnected:", reason);
+            });
+
+            socket.on("error", (error) => {
+                console.error("❌ WebSocket error:", error);
+            });
+
+            socket.onAny((event, ...args) => {
+                console.log(`📩 Received event: ${event}`, args);
+            });
+
+            // Emit a test message
+            const testMessage = {
+                message: "hello",
+                metadata: { language: "en" },
+                session_id: "test-session-123",
+            };
+
+            socket.emit("user_uttered", testMessage);
+            console.log("📤 Test message sent to server:", testMessage);
+        });
+    </script>
+</body>
+</html>
