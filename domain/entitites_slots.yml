@@ -39,13 +39,66 @@ slots:
     mappings:
       - type: from_entity
         entity: restart_type
-#location
+
+#location with entity detection
+  # province:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: province
+  #     conditions:
+  #     - active_loop: location_form
+
+  # district:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: district
+  #     conditions:
+  #     - active_loop: location_form
+
+  # municipality:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #     - type: from_entity
+  #       entity: municipality
+  #       conditions:
+  #         - active_loop: location_form
+  # ward:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #     - type: from_entity
+  #       entity: ward
+  #       conditions:
+  #         - active_loop: location_form
+  # village:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: village
+  #     conditions:
+  #     - active_loop: location_form
+
+  # address:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #     - type: from_entity
+  #       entity: address
+  #       conditions:
+  #         - active_loop: location_form
+
+# location simple
   province:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_entity
-      entity: province
+    - type: from_text
       conditions:
       - active_loop: location_form
 
@@ -53,8 +106,7 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_entity
-      entity: district
+    - type: from_text
       conditions:
       - active_loop: location_form
 
@@ -70,16 +122,14 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_entity
-        entity: municipality
+      - type: from_text
         conditions:
           - active_loop: location_form
   village:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_entity
-      entity: village
+    - type: from_text
       conditions:
       - active_loop: location_form
 
@@ -87,11 +137,9 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_entity
-        entity: address
+      - type: from_text
         conditions:
           - active_loop: location_form
-            requested_slot: address
 
 #contact
   user_contact_phone:

@@ -16,6 +16,7 @@ stories:
       - action: action_capture_grievance_text
       - action: action_listen
       - action: action_validate_category
+      - intent: agree
       - action: action_validate_summary
       - intent: validate_summary
       - action: utter_ask_location # Move to Step 4 if the user agrees to provide location details
@@ -26,9 +27,11 @@ stories:
       # - intent: provide_location
       - action: utter_ask_location
       - intent: agree
+      - action : action_reset_location_slots
       - action: location_form
       - active_loop: location_form
       - active_loop: null
+      - action : action_confirm_location
       - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details
 
   #Step 5: Collect contact details
@@ -94,6 +97,7 @@ stories:
       - intent: provide_location
       - action: utter_ask_location
       - intent: agree
+      - action: action_reset_location_slots
       - action: location_form
       - active_loop: location_form
       - active_loop: null

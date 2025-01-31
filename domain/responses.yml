@@ -175,23 +175,18 @@ responses:
     - text: "Your grievance has been filed. Our team will review it shortly and contact you for more information if needed."
   
   # Location prompts
-  # utter_ask_municipality:
-  #   - text: "Please provide the name of the municipality."
-
-  # utter_ask_ward:
-  #   - text: "What is the ward number?"
-
-  # utter_ask_village:
-  #   - text: "What is the name of the village?"
-
-  # utter_confirm_location:
-  #   - text: |
-  #       "Thank you for providing the location details:
-  #       - Province: {province if province else 'Not provided'}
-  #       - Municipality: {municipality if municipality else 'Not provided'}
-  #       - Ward: {ward if ward else 'Not provided'}
-  #       - Village: {village if village else 'Not provided'}
-  #       - Address: {address if address else 'Not provided'}."
+  utter_ask_province: 
+    - text: "Please provide the name of your province or type Skip to skip"
+  utter_ask_district:
+    - text: "then, the name of the district  or type Skip"
+  utter_ask_municipality:
+    - text: "then, the name of the municipality or type Skip."
+  utter_ask_ward:
+    - text: "What is the ward number  or type Skip"
+  utter_ask_village:
+    - text: "What is the name of the village or type Skip"
+  utter_ask_address:
+    - text: "Can you provide address details or type Skip"
 
 # Contact details collection prompts
   # utter_ask_optional_details:

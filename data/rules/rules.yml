@@ -39,6 +39,21 @@ rules:
       - intent: set_category
       - action: action_set_category
 
+  # - rule: Activate location form
+  #   steps:
+  #   - intent: provide_location
+  #   - action: location_form
+  #   - active_loop: location_form
+
+  # - rule: Submit location form
+  #   condition:
+  #   - active_loop: location_form
+  #   steps:
+  #   - action: location_form
+  #   - active_loop: null
+  #   - action: action_confirm_location
+
+
   # Uncomment if required in stories
   # - rule: Start grievance process
   #   steps:

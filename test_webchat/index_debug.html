@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grievance Management Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #0066ff;
+            margin-top: 20px;
+        }
+
+        p {
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to the Grievance Management Chatbot</h1>
+    <p>Click on the chat widget at the bottom right to start.</p>
+    <p>Version 0.1.x</p>
+
+    <!-- Rasa Chat Widget -->
+    <div id="rasa-chat-widget" data-websocket-url="ws://113.212.186.75:5005"></div>
+    <script src="https://unpkg.com/@rasahq/rasa-chat" type="application/javascript"></script>
+
+    <!-- Debugging Script -->
+    <script>
+        console.log("Widget is loading...");
+        const widgetElement = document.getElementById("rasa-chat-widget");
+        widgetElement.addEventListener("rasa_error", (e) => {
+            console.error("WebChat error:", e.detail);
+        });
+        widgetElement.addEventListener("rasa_connected", (e) => {
+            console.log("WebChat connected successfully:", e.detail);
+        });
+    </script>
+
+    <!-- Include Socket.IO v4.5.3 (Compatible with python-socketio 5.12.1) -->
+    <script src="https://cdn.socket.io/4.5.3/socket.io.js"></script>
+
+    <!-- WebSocket Debugging Script -->
+    <script>
+        const CONFIG = {
+          RASA_SERVER_URL: "http://113.212.186.75", // Correct IP
+          SOCKET_PATH: "/socket.io/",
+        };
+
+        (function () {
+          const socket = io(CONFIG.RASA_SERVER_URL, {
+            path: CONFIG.SOCKET_PATH,
+            transports: ["websocket"], // Force WebSocket to avoid polling issues
+            reconnection: true,  
+            reconnectionAttempts: 5, 
+            reconnectionDelay: 2000,
+          });
+
+          // Debugging logs for WebSocket events
+          socket.on("connect", () => {
+            console.log("✅ WebSocket connected with session ID:", socket.id);
+          });
+
+          socket.on("connect_error", (error) => {
+            console.error("❌ Connection Error:", error);
+          });
+
+          socket.on("disconnect", (reason) => {
+            console.warn("⚠️ Disconnected:", reason);
+          });
+
+          socket.on("bot_uttered", (response) => {
+            console.log("🤖 Bot response received:", response);
+          });
+
+          socket.on("user_uttered", (message) => {
+            console.log("📩 User message sent:", message);
+          });
+
+          // Log all events received from the server
+          socket.onAny((event, ...args) => {
+              console.log(`📡 Received event: ${event}`, args);
+          });
+
+         
+        })();
+    </script>
+</body>
+</html>

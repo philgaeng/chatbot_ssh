@@ -60,6 +60,8 @@ actions:
 
   # in location_actions.py
   - validate_location_form
+  - action_confirm_location
+  - action_reset_location_slots
 
 
   # in grievance_actions.py
