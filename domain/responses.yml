@@ -15,7 +15,7 @@ responses:
     - text: "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it."
   utter_ask_contact_consent:
     - text: "Do you consent to providing your contact details for follow-up on your grievance? This is optional, your grievance can be filed without it.."
-  utter_skip_location:
+  utter_skip_municipality:
     - text: "Skipping location details. Don't worry, you can file your grievance without it."
   utter_skip_contact:
     - text: "Skipping contact details. Don't worry, you can file your grievance without it."
@@ -57,17 +57,17 @@ responses:
   #   - text: "We could not prepopulate your location. \nPlease provide your district and municipality."
 
 # Skip Responses for Location Form
-  utter_skip_province:
-    - text: "Skipping province."
+  # utter_skip_province:
+  #   - text: "Skipping province."
 
-  utter_skip_municipality:
-    - text: "Skipping municipality."
+  # utter_skip_municipality:
+  #   - text: "Skipping municipality."
 
-  utter_skip_ward:
-    - text: "Skipping ward."
+  # utter_skip_ward:
+  #   - text: "Skipping ward."
 
-  utter_skip_village:
-    - text: "Skipping village."
+  # utter_skip_village:
+  #   - text: "Skipping village."
 
   utter_skip_address:
     - text: "Skipping address."
@@ -175,17 +175,17 @@ responses:
     - text: "Your grievance has been filed. Our team will review it shortly and contact you for more information if needed."
   
   # Location prompts
-  utter_ask_province: 
-    - text: "Please provide the name of your province or type Skip to skip"
-  utter_ask_district:
-    - text: "then, the name of the district  or type Skip"
-  utter_ask_municipality:
-    - text: "then, the name of the municipality or type Skip."
-  utter_ask_ward:
-    - text: "What is the ward number  or type Skip"
-  utter_ask_village:
+  # utter_ask_municipality_form_province: 
+  #   - text: "Please provide the name of your province or type Skip to skip"
+  # utter_ask_location_form_district:
+  #   - text: "then, the name of the district  or type Skip"
+  utter_ask_municipality_form_municipality:
+    - text: "Please provide the name of the municipality or type Skip."
+  # utter_ask_location_form_ward:
+  #   - text: "What is the ward number  or type Skip"
+  utter_ask_address_form_village:
     - text: "What is the name of the village or type Skip"
-  utter_ask_address:
+  utter_ask_address_form_address:
     - text: "Can you provide address details or type Skip"
 
 # Contact details collection prompts

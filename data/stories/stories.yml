@@ -8,18 +8,45 @@ stories:
   - story: User files a grievance with optional location and contact details
     steps:
       - intent: introduce
-      - action: utter_introduce
+      - action: action_introduce
       - intent: start_grievance_process
       - action: action_start_grievance_process
       - action: action_listen
       - intent: describe_complain
       - action: action_capture_grievance_text
-      - action: action_listen
-      - action: action_validate_category
+      # - action: action_listen
+      - action: action_confirm_categories
       - intent: agree
       - action: action_validate_summary
-      - intent: validate_summary
+      - intent: agree
       - action: utter_ask_location # Move to Step 4 if the user agrees to provide location details
+
+  #Step 3: alternate 1 - User deletes one category of the grievance
+  - story: User edits the category of the grievance
+    steps:
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: delete_category
+      - action: action_delete_category
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+
+  #Step 3: alternate 2 - User changes one category of the grievance
+  - story: User edits the category of the grievance
+    steps:
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: change_category
+      - action: action_change_category
+      - intent: modify_categories
+      - action: action_ask_for_category_modification    
+
 
   #step 4: Collect location
   - story: Collect location details
@@ -27,25 +54,35 @@ stories:
       # - intent: provide_location
       - action: utter_ask_location
       - intent: agree
-      - action : action_reset_location_slots
-      - action: location_form
-      - active_loop: location_form
+      - action : action_reset_municipality_slots
+      - action: municipality_form
+      - active_loop: municipality_form
       - active_loop: null
-      - action : action_confirm_location
+      - action : action_confirm_municipality
+      - intent : agree
+      - action : address_form
+      - active_loop: address_form
+      - active_loop: null
+      - action : action_confirm_address
+      - intent : agree
       - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details
 
   #Step 5: Collect contact details
   - story: Collect contact details
     steps:
       # - intent: provide_contact  # User provides contact information intent
+      - action: utter_ask_contact_consent
+      - intent: agree
       - action: contact_form  # Activates the contact form
       - active_loop: contact_form  # Keeps the form active
       - action: validate_contact_form  # Executes the validation logic
       - active_loop: null  # Ends the form after validation
+      # - action : action_confirm_address
+      # - intent : agree
       - action: action_submit_grievance  # Submits the grievance after contact details are collected
 
 
-  #Step 3: alternate 1 - User edits the category of the grievance
+  #Step xx: alternate 1 - User edits the summary of the grievance
   - story: User edits the summary of the grievance
     steps:
       - intent: edit_grievance_summary
@@ -53,21 +90,40 @@ stories:
       - intent: provide_updated_summary
       - action: utter_ask_location
 
-  #Step 3: alternate 2 - User edits the category of the grievance
-  - story: User edits the summary of the grievance
+  #Step 3: alternate 1 - User deletes one category of the grievance
+  - story: User edits the category of the grievance
     steps:
-      - intent: skip_summary
-      - action: utter_skip_summary
-      - action: utter_ask_location
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: delete_category
+      - action: action_delete_category
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+
+  #Step 3: alternate 2 - User changes one category of the grievance
+  - story: User edits the category of the grievance
+    steps:
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: change_category
+      - action: action_change_category
+      - intent: modify_categories
+      - action: action_ask_for_category_modification    
 
   #Step 4 : altenate - User skips providing location details
   - story: User skips providing location details
     steps:
-      - action: utter_ask_location
+      - action: utter_ask_municipality
       - or:
           - intent: skip
           - intent: deny
-      - action: utter_skip_location
+      - action: utter_skip_municipality
       - action: utter_ask_contact_consent
 
 
@@ -94,11 +150,14 @@ stories:
   #User naturally provides location
   - story: Collect location details
     steps:
-      - intent: provide_location
-      - action: utter_ask_location
-      - intent: agree
-      - action: action_reset_location_slots
-      - action: location_form
-      - active_loop: location_form
+      - intent: provide_municipality
+      - action : action_reset_municipality_slots
+      - action: municipality_form
+      - active_loop: municipality_form
       - active_loop: null
-      - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details      
+      - action : action_confirm_municipality
+      - intent : agree
+      - action : address_form
+      - active_loop: address_form
+      - active_loop: null
+      - action : action_confirm_address 

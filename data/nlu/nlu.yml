@@ -149,6 +149,10 @@ nlu:
     - I do not have that
     - I do not want to provide that
     - I do not want to say
+    - skp
+    - sp
+    - skiip
+    - skp
 
 - intent: start_grievance_process
   examples: |
@@ -162,6 +166,15 @@ nlu:
     - I have a problem
     - I am complaining
     - I have a problem
+    - I complain
+    - we complain
+    - we want to say
+    - we have problem
+    - I problem
+    - I complain
+    - I compain
+    - we cmpain
+    
 
 
 - intent: submit_grievance_as_is
@@ -297,20 +310,71 @@ nlu:
     - my full name is
     - here are my details
 
-- intent: provide_location
+- intent: provide_municipality
   examples: |
-    - I live in
-    - my city is
-    - my province is
-    - my municipality is
-    - my village
-    - I am from
-    - I reside in
-    - my hometown is
-    - I stay at
-    - I am based in
-    - my location is
-    - the place I live in is
-    - I am currently in
-    - I belong to
-    - my address is
+    - I live in [Kathmandu](municipality)
+    - My municipality is [Bharatpur](municipality)
+    - [Pokhara](municipality) is where I live
+    - I am from [Lalitpur](municipality)
+    - [Gorkha](municipality) is my hometown
+    - I currently live in [Janakpur](municipality)
+    - [Dhulikhel](municipality) is my municipality
+    - [Hetauda](municipality) is my current location
+    - My city is [Biratnagar](municipality)
+    - The place I live in is [Tulsipur](municipality)
+    - I stay in [Itahari](municipality)
+    - [Nepalgunj](municipality) is my municipality
+    - My location is [Damak](municipality)
+    - I am in [Butwal](municipality)
+    - [Chitwan](municipality) is my home
+    - [Chitwan](municipality)
+    - [Damak](municipality)
+    - [Kathmandu](municipality)
+    - [Bharatpur](municipality)
+    - [Pokhara](municipality)
+    - [Lalitpur](municipality)
+    - [Gorkha](municipality)
+    - [Janakpur](municipality)
+    - [Dhulikhel](municipality)
+    - [Hetauda](municipality)
+    - [Biratnagar](municipality)
+    - [Tulsipur](municipality)
+    - [Itahari](municipality)
+    - [Nepalgunj](municipality)
+    - [Damak](municipality)
+    - [Butwal](municipality)
+    - [Chitwan](municipality)
+
+- intent: provide_address
+  examples: |
+    - The village I am from is [Sundarijal](village)
+    - I live in [Panauti](village)
+    - My village is [Chisapani](village)
+    - [Bandipur](village) is my home
+    - I am from [Balthali](village)
+    - My village name is [Syangja](village)
+    - [Kirtipur](village) is where I am from
+    - [Bhojpur](village) is my home village
+    - I currently live in [Ilam](village)
+    - My village is [Jumla](village)
+    - The village I live in is [Taplejung](village)
+    - I stay in [Mugu](village)
+    - [Phidim](village) is my native place
+    - [Rukum](village)
+    - [Besisahar](village)
+    - [Phidim](village)
+    - [Sundarijal](village)
+    - [Panauti](village)
+    - [Chisapani](village)
+    - [Bandipur](village)
+    - [Balthali](village)
+    - [Syangja](village)
+    - [Kirtipur](village)
+    - [Bhojpur](village)
+    - [Ilam](village)
+    - [Jumla](village)
+    - [Taplejung](village)
+    - [Mugu](village)
+    - [Phidim](village)
+    - [Rukum](village)
+    - [Besisahar](village)
