@@ -50,6 +50,20 @@ class ActionPrepopulateLocation(Action):
             SlotSet("municipality", prepopulated.get("municipality")),
         ]
 
+class ActionAskLocation(Action):
+    def name(self) -> str:
+        return "action_ask_location"
+
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        dispatcher.utter_message(
+            response="utter_ask_location",
+            buttons=[
+                {"title": "Yes", "payload": "/start_location_process"},
+                {"title": "Skip", "payload": "/ask_contact_details"},
+                {"title": "Exit", "payload": "/goodbye"}
+            ]
+        )
+        return []
 
 
 # class ValidateLocationForm(FormValidationAction):

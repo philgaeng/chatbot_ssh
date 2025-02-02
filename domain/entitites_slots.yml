@@ -183,12 +183,6 @@ slots:
     influence_conversation: false
     mappings: []
 
-  grievance_summary:
-    type: text
-    influence_conversation: false
-    mappings: []
-
-
   grievance_id:
     type: text
     influence_conversation: false
@@ -219,13 +213,23 @@ slots:
   temp_categories:
     type: list
     influence_conversation: false
+    mappings: []
   
   category_modify:
     type: text
-    influence_conversation: false
+    mappings:
+      - type: from_entity
+        entity: category_modify
 
   new_category:
     type: text
     influence_conversation: false
-
-  
+    mappings: []
+    
+  grievance_summary:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: edit_summary_form  # Only accept user input when this form is active

@@ -37,6 +37,11 @@ forms:
       - agree
       - deny
 
+  edit_summary_form:
+    required_slots:
+      - grievance_summary
+
+
 actions:
   - action_introduce
   - action_back_to_previous_step
@@ -55,6 +60,7 @@ actions:
   - action_send_otp
   - action_verify_otp
   - validate_contact_form
+  - action_ask_location
   - validate_address_form
   - validate_municipality_form
   - action_confirm_address
@@ -65,14 +71,18 @@ actions:
   - action_submit_grievance_as_is
   - action_capture_grievance_text
   - action_select_alternate_category
+  - action_set_category
   - action_validate_category
   - action_validate_summary
+  - action_ask_summary
+  - action_ask_for_user_summary
   - action_edit_grievance_summary
   - action_submit_grievance
   - action_restart_grievance
   - action_generate_grievance_id
   # - action_set_category
   - action_ask_for_category_modification
+  - action_set_category_to_modify
   - action_modify_or_delete_category
   - action_delete_category
   - action_change_category

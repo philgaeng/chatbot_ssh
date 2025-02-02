@@ -14,16 +14,15 @@ stories:
       - action: action_listen
       - intent: describe_complain
       - action: action_capture_grievance_text
-      # - action: action_listen
-      - action: action_confirm_categories
-      - intent: agree
+      - intent: submit_category
       - action: action_validate_summary
-      - intent: agree
-      - action: utter_ask_location # Move to Step 4 if the user agrees to provide location details
+      - intent: validate_summary
+      - action: action_ask_location # Move to Step 4 if the user agrees to provide location details
 
   #Step 3: alternate 1 - User deletes one category of the grievance
   - story: User edits the category of the grievance
     steps:
+      - action: action_confirm_categories
       - intent: modify_categories
       - action: action_ask_for_category_modification
       - intent: modify_category
@@ -31,12 +30,12 @@ stories:
       - action: action_modify_or_delete_category
       - intent: delete_category
       - action: action_delete_category
-      - intent: modify_categories
-      - action: action_ask_for_category_modification
+      - action: action_confirm_categories
 
   #Step 3: alternate 2 - User changes one category of the grievance
   - story: User edits the category of the grievance
     steps:
+      - action: action_confirm_categories
       - intent: modify_categories
       - action: action_ask_for_category_modification
       - intent: modify_category
@@ -44,18 +43,32 @@ stories:
       - action: action_modify_or_delete_category
       - intent: change_category
       - action: action_change_category
-      - intent: modify_categories
-      - action: action_ask_for_category_modification    
+      - action: action_apply_category_change
+      - action: action_confirm_categories
 
+  #Step 3: Close modification loop
+  - story: User edits the category of the grievance
+    steps:
+      - action: action_confirm_categories
+      - intent: finalize_categories
+      - action: action_validate_summary
+
+#Step 3: alternate b - User edits the summary of the grievance
+  - story: User edits the summary of the grievance
+    steps:
+      - intent: edit_grievance_summary
+      - action: action_ask_for_user_summary
+      - active_loop: edit_summary_form
+      - action: action_edit_grievance_summary
+      - action: action_ask_location
 
   #step 4: Collect location
   - story: Collect location details
     steps:
       # - intent: provide_location
-      - action: utter_ask_location
-      - intent: agree
+      - action: action_ask_location
+      - intent: start_location_process
       - action : action_reset_municipality_slots
-      - action: municipality_form
       - active_loop: municipality_form
       - active_loop: null
       - action : action_confirm_municipality
@@ -82,39 +95,8 @@ stories:
       - action: action_submit_grievance  # Submits the grievance after contact details are collected
 
 
-  #Step xx: alternate 1 - User edits the summary of the grievance
-  - story: User edits the summary of the grievance
-    steps:
-      - intent: edit_grievance_summary
-      - action: action_edit_grievance_summary
-      - intent: provide_updated_summary
-      - action: utter_ask_location
 
-  #Step 3: alternate 1 - User deletes one category of the grievance
-  - story: User edits the category of the grievance
-    steps:
-      - intent: modify_categories
-      - action: action_ask_for_category_modification
-      - intent: modify_category
-      - action: action_set_category_to_modify
-      - action: action_modify_or_delete_category
-      - intent: delete_category
-      - action: action_delete_category
-      - intent: modify_categories
-      - action: action_ask_for_category_modification
 
-  #Step 3: alternate 2 - User changes one category of the grievance
-  - story: User edits the category of the grievance
-    steps:
-      - intent: modify_categories
-      - action: action_ask_for_category_modification
-      - intent: modify_category
-      - action: action_set_category_to_modify
-      - action: action_modify_or_delete_category
-      - intent: change_category
-      - action: action_change_category
-      - intent: modify_categories
-      - action: action_ask_for_category_modification    
 
   #Step 4 : altenate - User skips providing location details
   - story: User skips providing location details

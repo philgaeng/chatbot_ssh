@@ -18,7 +18,7 @@ from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, Restarted, FollowupAction
+from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from datetime import datetime
 import csv
 import traceback
@@ -191,7 +191,7 @@ class ActionCaptureGrievanceText(Action):
             #Step 2 : parse the results and fill the slots
             
             result_dict = self.parse_summary_and_category(result)
-            
+            print(result_dict)
             temp_categories = [v for k, v in result_dict.items() if "category" in k.lower()]
             slots = [
                 SlotSet("grievance_details", grievance_details),
@@ -201,7 +201,7 @@ class ActionCaptureGrievanceText(Action):
 
             # Step 3: Validate category with the user
             buttons = [
-                {"title": "Yes", "payload": "/agree"},
+                {"title": "Yes", "payload": "/submit_category"},
                 {"title": "Modify", "payload": "/modify_categories"},
                 {"title": "Exit", "payload": "/exit_grievance_process"}
             ]
@@ -213,7 +213,7 @@ class ActionCaptureGrievanceText(Action):
             
             dispatcher.utter_message(text= response_message,
                                      buttons=buttons)
-
+            print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
             # Save the grievance details and initial category suggestion
             return slots
 
@@ -283,25 +283,49 @@ class ActionValidateSummary(Action):
 
         return []
     
+
+class ActionAskForSummary(Action):
+    def name(self) -> Text:
+        return "action_ask_for_summary"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """Step 1: Ask the user to provide a summary"""
+
+        current_summary = tracker.get_slot("grievance_summary")
+
+        if current_summary:
+            dispatcher.utter_message(
+                text=f"Here is the current summary:\n\n'{current_summary}'\n\nPlease type a new summary or type 'skip' to keep it."
+            )
+        else:
+            dispatcher.utter_message(
+                text="There is no summary yet. Please type a new summary for your grievance or type 'skip' to proceed without a summary."
+            )
+
+        # Activate form so Rasa expects `grievance_summary`
+        return [ActiveLoop("edit_summary_form")]
+
+    
+
 class ActionEditGrievanceSummary(Action):
     def name(self) -> Text:
         return "action_edit_grievance_summary"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        # Retrieve the current grievance summary from the slot
-        current_summary = tracker.get_slot("grievance_summary")
+        """Step 2: Handle the user's response and update the slot"""
 
-        # Provide the current summary if available
-        if current_summary:
-            dispatcher.utter_message(
-                text=f"Here is the current summary:\n\n'{current_summary}'\n\nPlease provide the updated summary or type 'skip' to proceed without updating."
-            )
-        else:
-            dispatcher.utter_message(
-                text="There is no summary yet. Please provide a new summary for your grievance or type 'skip' to proceed without a summary."
-            )
+        new_summary = tracker.get_slot("grievance_summary")
 
+        if new_summary and new_summary.lower() != "skip":
+            dispatcher.utter_message(text=f"✅ Your grievance summary has been updated to:\n\n'{new_summary}'")
+            return [SlotSet("grievance_summary", new_summary), ActiveLoop(None)]  # Deactivate form
+        
+        elif new_summary and new_summary.lower() == "skip":
+            dispatcher.utter_message(text="✅ Keeping the existing grievance summary.")
+            return [ActiveLoop(None)]  # Deactivate form
+        
         return []
+
 
 
 class ActionSubmitGrievance(Action):
@@ -418,7 +442,8 @@ class ActionSetCategoryToModify(Action):
             return []
 
         # Set the category_to_modify slot
-        return [SlotSet("category_to_modify", selected_category), FollowupAction("action_modify_or_delete_category")]
+        print("category_to_modify", selected_category)
+        return [SlotSet("category_to_modify", selected_category)]
 
 
 class ActionModifyOrDeleteCategory(Action):
@@ -427,7 +452,10 @@ class ActionModifyOrDeleteCategory(Action):
 
     def run(self, dispatcher, tracker, domain):
         category_to_modify = tracker.get_slot("category_modify")
-
+        try:
+            print("category_to_modify", category_to_modify)
+        except: 
+            pass
         if not category_to_modify:
             dispatcher.utter_message(text="No category selected for modification.")
             return []
@@ -512,7 +540,7 @@ class ActionConfirmCategories(Action):
 
         buttons = [
             {"title": "✅ Confirm & Continue", "payload": "/finalize_categories"},
-            {"title": "Modify Again", "payload": "/modify_categories"}
+            {"title": "Modify", "payload": "/modify_categories"}
         ]
 
         dispatcher.utter_message(

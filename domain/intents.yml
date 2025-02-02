@@ -44,6 +44,7 @@ intents:
   - edit_grievance_summary
   - provide_updated_summary
   - skip_summary
+  - modify_categories
   - modify_category
   - delete_category
   - change_category

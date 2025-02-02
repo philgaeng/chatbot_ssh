@@ -156,6 +156,7 @@ nlu:
 
 - intent: start_grievance_process
   examples: |
+    - start_grievance_process
     - I want to file a grievance
     - I need to submit a complaint
     - I have an issue
@@ -235,17 +236,44 @@ nlu:
 - intent: validate_summary
   examples: |
     - That summary looks good
-    - it's ok
     - Yes, that's the correct summary
+    - validate_summary
 
 - intent: edit_grievance_summary
   examples: |
+    - edit_grievance_summary
     - No, let me update the summary
-    - I want to change it
-    - I need to correct it
-    - Lets edit it
-    - I want to edit
-    - modify
+    - I want to change the summary
+    - I need to correct the summary
+
+
+- intent: modify_categories
+  examples: |
+    - modify_categories
+
+- intent: delete_category
+  examples: |
+    - delete_category
+
+- intent: modify_category
+  examples: |
+    - modify_category
+
+- intent: change_category
+  examples: |
+    - change_category
+
+- intent: finalize_categories
+  examples: |
+    - finalize_categories
+
+- intent: submit_category
+  examples: |
+    - submit_category
+
+- intent: start_location_process
+  examples: |
+    - start_location_process
 
 - intent: describe_complain
   examples: |
