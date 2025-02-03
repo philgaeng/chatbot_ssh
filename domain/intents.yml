@@ -48,6 +48,11 @@ intents:
   - modify_category
   - delete_category
   - change_category
-  - new_category
+  - set_new_category
   - finalize_categories
   - confirm_selection_category
+  - cancel_modification_category
+  - skip_category
+  - submit_category
+  - start_location_process
+

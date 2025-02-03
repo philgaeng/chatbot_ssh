@@ -14,6 +14,7 @@ entities:
   - last_name
   - user_contact_email
   - grievance_category
+  - category
   
 
 slots:
@@ -219,7 +220,7 @@ slots:
     type: text
     mappings:
       - type: from_entity
-        entity: category_modify
+        entity: category
 
   new_category:
     type: text
@@ -233,3 +234,14 @@ slots:
       - type: from_text
         conditions:
           - active_loop: edit_summary_form  # Only accept user input when this form is active
+
+  dismissed_categories:
+    type: list
+    mappings:
+      - type: custom
+
+  old_category:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: category

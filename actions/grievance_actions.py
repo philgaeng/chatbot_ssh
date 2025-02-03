@@ -22,14 +22,16 @@ from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from datetime import datetime
 import csv
 import traceback
+from actions.helpers import load_classification_data, load_categories_from_lookup
 
 #define and load variables
 
 load_dotenv('/home/ubuntu/nepal_chatbot/.env')
 open_ai_key = os.getenv("OPENAI_API_KEY")
 
-#Path where to find the categories
-cat_path = '/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv'
+#load the categories
+classification_data = load_classification_data()
+list_categories_global = load_categories_from_lookup()
 
 # File to store the last grievance ID
 COUNTER_FILE = "grievance_counter.txt"
@@ -108,18 +110,29 @@ class ActionCaptureGrievanceText(Action):
     def name(self) -> Text:
         return "action_capture_grievance_text"
     
-    def load_classification_data(self):
-        """Loads grievance classification data from CSV into a dictionary"""
-        categories = []
-        try:
-            with open(cat_path, "r", encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    categories.append(row["Classification"].title() + " - " + row["Generic Grievance Name"].title())  # Normalize case
-        except Exception as e:
-            print(f"Error loading CSV file: {e}")
-            traceback.print_exc()
-        return list(set(categories))
+    # def load_classification_data(self):
+    #     """Loads grievance classification data from CSV into a dictionary"""
+    #     categories = []
+    #     try:
+    #         with open(cat_path, "r", encoding="utf-8") as csvfile:
+    #             reader = csv.DictReader(csvfile)
+    #             for row in reader:
+    #                 categories.append(row["Classification"].title() + " - " + row["Generic Grievance Name"].title())  # Normalize case
+                    
+    #         # Remove duplicates
+    #         unique_categories = list(set(categories))
+
+    #         # Save to lookup table
+    #         lookup_file_path = "data/lookup_tables/list_category.txt"
+    #         with open(lookup_file_path, "w", encoding="utf-8") as lookup_file:
+    #             lookup_file.write("\n".join(unique_categories))
+
+    #         print(f"✅ Lookup table updated: {lookup_file_path}")
+            
+    #     except Exception as e:
+    #         print(f"Error loading CSV file: {e}")
+    #         traceback.print_exc()
+    #     return list(set(categories))
     
     def parse_summary_and_category(self, result: str):
         """
@@ -158,7 +171,7 @@ class ActionCaptureGrievanceText(Action):
         grievance_details = user_input
 
         # Step 1: use OpenAI but restrict the category choices
-        predefined_categories = self.load_classification_data()# Extract unique categories
+        predefined_categories = classification_data# Extract unique categories
         category_list_str = "\n".join(f"- {c}" for c in predefined_categories)  # Format as list
         
         try:
@@ -200,22 +213,33 @@ class ActionCaptureGrievanceText(Action):
             ]
 
             # Step 3: Validate category with the user
-            buttons = [
-                {"title": "Yes", "payload": "/submit_category"},
-                {"title": "Modify", "payload": "/modify_categories"},
-                {"title": "Exit", "payload": "/exit_grievance_process"}
-            ]
             
             #prepare the response message
             # Format category display
-            category_text = "\n".join([f"- {v}" for v in temp_categories])
-            response_message = f"I have identified {len(temp_categories)} categories \n " + category_text + "\n Does this seem correct?"
             
-            dispatcher.utter_message(text= response_message,
-                                     buttons=buttons)
-            print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
-            # Save the grievance details and initial category suggestion
-            return slots
+            n = len(temp_categories)
+            
+            if n>0:
+                category_text = "\n".join([f"- {v}" for v in temp_categories])
+                response_message = f"I have identified {len(temp_categories)} categories \n " + category_text + "\n Does this seem correct?"
+                
+                dispatcher.utter_message(text= response_message,
+                                        buttons= [
+                    {"title": "Yes", "payload": "/submit_category"},
+                    {"title": "Modify", "payload": "/modify_categories"},
+                    {"title": "Exit", "payload": "/exit_grievance_process"}
+                ])
+                
+                print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
+                # Save the grievance details and initial category suggestion
+                return slots
+            else:
+                dispatcher.utter_message(text= "I have not identified any category",
+                                        buttons= [
+                    {"title": "Process without category", "payload": "/submit_category"},
+                    {"title": "Edit category", "payload": "/change_category"},
+                    {"title": "Exit", "payload": "/exit_grievance_process"}
+                ])
 
         except Exception as e:
             dispatcher.utter_message(text=f"Sorry, there was an issue processing your grievance. Please try again.\n openAI response \n {result} \n result_dict: {str(result_dict)}")
@@ -266,7 +290,12 @@ class ActionValidateSummary(Action):
         print(grievance_summary)
         # Default message if no summary exists
         if not grievance_summary:
-            dispatcher.utter_message(text="No summary has been provided yet.")
+            dispatcher.utter_message(text="No summary has been provided yet.",
+            buttons = [
+            {"title": "No, let me edit", "payload": "/edit_grievance_summary"},
+            {"title": "Skip", "payload": "/skip_summary"}
+            ]
+            )
             return []
 
         # Ask the user to confirm the summary with dynamic buttons
@@ -435,15 +464,26 @@ class ActionSetCategoryToModify(Action):
         return "action_set_category_to_modify"
 
     def run(self, dispatcher, tracker, domain):
-        selected_category = tracker.get_slot("category_modify")  # Extract from intent payload
-
+        # selected_category = tracker.get_slot("category_modify")  # Extract from intent payload
+        # print("ActionSetCagoryToModify - from slot :", selected_category)
+        
+        # if not selected_category:
+            #extract from message
+            # Load categories from the lookup table
+        category_list = list_categories_global #load the categories
+        
+        for c in category_list:
+            if c in tracker.latest_message.get("text"):
+                selected_category = c
+                print("c extracted from message : " , c)
+                
         if not selected_category:
             dispatcher.utter_message(text="No category selected.")
             return []
 
         # Set the category_to_modify slot
-        print("category_to_modify", selected_category)
-        return [SlotSet("category_to_modify", selected_category)]
+        print("category_modify", selected_category)
+        return [SlotSet("category_modify", selected_category)]
 
 
 class ActionModifyOrDeleteCategory(Action):
@@ -451,12 +491,12 @@ class ActionModifyOrDeleteCategory(Action):
         return "action_modify_or_delete_category"
 
     def run(self, dispatcher, tracker, domain):
-        category_to_modify = tracker.get_slot("category_modify")
+        category_modify = tracker.get_slot("category_modify")
         try:
-            print("category_to_modify", category_to_modify)
+            print("category_modify", category_modify)
         except: 
             pass
-        if not category_to_modify:
+        if not category_modify:
             dispatcher.utter_message(text="No category selected for modification.")
             return []
 
@@ -467,65 +507,101 @@ class ActionModifyOrDeleteCategory(Action):
         ]
 
         dispatcher.utter_message(
-            text=f"You selected '{category_to_modify}'. Would you like to delete it or change it?",
+            text=f"You selected '{category_modify}'. Would you like to delete it or change it?",
             buttons=buttons
         )
-
-        return []
+        
+        return [SlotSet("old_category", category_modify)]
     
-class ActionDeleteCategory(Action):
-    def name(self) -> str:
-        return "action_delete_category"
-
-    def run(self, dispatcher, tracker, domain):
-        category_to_delete = tracker.get_slot("category_modify")
-        temp_categories = tracker.get_slot("temp_categories") or []
-
-        if category_to_delete in temp_categories:
-            temp_categories.remove(category_to_delete)
-            dispatcher.utter_message(text=f"✅ '{category_to_delete}' has been removed.")
-        else:
-            dispatcher.utter_message(text=f"⚠ '{category_to_delete}' was not found in the selected categories.")
-
-        # Update the slot
-        return [SlotSet("temp_categories", temp_categories), 
-                SlotSet("category_modify", None)
-                ]
-
+    
 class ActionChangeCategory(Action):
     def name(self) -> str:
         return "action_change_category"
 
     def run(self, dispatcher, tracker, domain):
-        category_to_modify = tracker.get_slot("category_modify")
+        # Path to the lookup file
+        lookup_file_path = "data/lookup_tables/list_category.txt"
 
-        if not category_to_modify:
-            dispatcher.utter_message(text="No category selected for modification.")
+        # Load categories from the lookup table
+        category_list = list_categories_global
+        # Retrieve categories already selected and dismissed
+        selected_categories = tracker.get_slot("temp_categories") or []
+        dismissed_categories = tracker.get_slot("dismissed_categories") or []
+
+        # Filter out selected and dismissed categories
+        available_categories = [cat for cat in category_list if cat not in selected_categories and cat not in dismissed_categories]
+
+        if not available_categories:
+            dispatcher.utter_message(text="⚠ No more categories available for selection.")
             return []
 
-        dispatcher.utter_message(text=f"✏ Please type the new category to replace '{category_to_modify}'.")
+        # Generate buttons for category selection (limit to 10 for readability)
+        buttons = [{"title": cat, "payload": f'/set_new_category{{"category": "{cat}"}}'} for cat in available_categories[:10]]
+
+        # Add a "Cancel" and a skip button
+        buttons = [{"title": "Cancel", "payload": "/cancel_modification_category"},
+                    {"title": "Skip this step", "payload": "/skip_category"}] + buttons
+
+        dispatcher.utter_message(
+            text="📋 Please select a new category from the list below:",
+            buttons=buttons
+        )
 
         return []
 
+        
 class ActionApplyCategoryChange(Action):
     def name(self) -> str:
         return "action_apply_category_change"
 
     def run(self, dispatcher, tracker, domain):
-        old_category = tracker.get_slot("category_modify")
-        new_category = tracker.get_slot("new_category")
+        old_category = tracker.get_slot("old_category")
         selected_categories = tracker.get_slot("temp_categories") or []
+        new_category = None
+        print("temp_categories before update: ", selected_categories)
+        # # Extract the new category from the user's latest message (button selection)
+        # new_category = tracker.get_slot("new_category")
+        # print("old_category", old_category)
+        # print("new_category_from_slot", new_category)
 
+        # Fallback: Try extracting directly from latest user message (in case slot is not set)
+        latest_message = tracker.latest_message.get("text", "")
+        # entities = tracker.latest_message.get("entities", [])
+        # for entity in entities:
+        #     if entity.get("entity") == "category":
+        #         new_category = entity.get("value")
+        #         break
+        category_list = list_categories_global #load the categories
+        
+        for c in category_list:
+            if c in tracker.latest_message.get("text", ""):
+                new_category = c
+                print("c extracted from message : " , c)
+            
+        print("old_category", old_category)
+        print("new_category_from_message", new_category)
+        # Ensure new_category is valid before updating
+        if not new_category:
+            dispatcher.utter_message(text="⚠ No valid category was selected.")
+            return []
+
+        # Update category selection
         if old_category in selected_categories:
             selected_categories.remove(old_category)
             selected_categories.append(new_category)
+            print("temp_categories after update: ", selected_categories)
+
             dispatcher.utter_message(text=f"✅ '{old_category}' has been changed to '{new_category}'.")
         else:
             dispatcher.utter_message(text=f"⚠ '{old_category}' was not found in the selected categories.")
 
-        return [SlotSet("temp_categories", selected_categories),
-                SlotSet("category_modify", None),
-                SlotSet("new_category", None)]
+        return [
+            SlotSet("temp_categories", selected_categories),
+            SlotSet("category_modify", None),
+            SlotSet("old_category", None),
+            SlotSet("new_category", new_category)
+        ]
+
 
 class ActionConfirmCategories(Action):
     def name(self) -> str:
@@ -533,6 +609,9 @@ class ActionConfirmCategories(Action):
 
     def run(self, dispatcher, tracker, domain):
         selected_categories = tracker.get_slot("temp_categories")
+        
+          # Remove None values from the list
+        selected_categories = [cat for cat in selected_categories if cat]
 
         if not selected_categories:
             dispatcher.utter_message(text="No categories remain selected.")
@@ -548,4 +627,48 @@ class ActionConfirmCategories(Action):
             buttons=buttons
         )
 
+        return []
+    
+
+class ActionDeleteCategory(Action):
+    def name(self) -> str:
+        return "action_delete_category"
+
+    def run(self, dispatcher, tracker, domain):
+        category_to_delete = tracker.get_slot("category_modify")
+        temp_categories = tracker.get_slot("temp_categories") or []
+        dismissed_categories = tracker.get_slot("dismissed_categories") or []
+
+        if category_to_delete in temp_categories:
+            temp_categories.remove(category_to_delete)
+            dispatcher.utter_message(text=f"✅ '{category_to_delete}' has been removed.")
+
+            # Add to dismissed categories if not already present
+            if category_to_delete not in dismissed_categories:
+                dismissed_categories.append(category_to_delete)
+
+        else:
+            dispatcher.utter_message(text=f"⚠ '{category_to_delete}' was not found in the selected categories.")
+
+        # Update slots
+        return [
+            SlotSet("temp_categories", temp_categories), 
+            SlotSet("category_modify", None),
+            SlotSet("dismissed_categories", dismissed_categories)  # Track dismissed category
+        ]
+        
+class ActionCancelModificationCategory(Action):
+    def name(self) -> str:
+        return "action_cancel_modification_category"
+
+    def run(self, dispatcher, tracker, domain):
+        dispatcher.utter_message(text="🚫 Category modification has been canceled.Keeping the existing categories.")
+        return [SlotSet("category_modify", None)]
+    
+class ActionSkipCategory(Action):
+    def name(self) -> str:
+        return "action_skip_category"
+
+    def run(self, dispatcher, tracker, domain):
+        dispatcher.utter_message(text="⏭ Skipping category selection. You can update it later if needed. \n Let's proceed with your location details")
         return []

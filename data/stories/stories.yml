@@ -43,6 +43,17 @@ stories:
       - action: action_modify_or_delete_category
       - intent: change_category
       - action: action_change_category
+      - intent: set_new_category
+      - action: action_apply_category_change
+      - action: action_confirm_categories
+
+  #Step 3: alternate 3 - No categories seleceted and user wants to add one
+  - story: No category selected by OpenAI and user wants to add one
+    steps:
+      - action: action_capture_grievance_text
+      - intent: change_category
+      - action: action_change_category
+      - action: action_listen
       - action: action_apply_category_change
       - action: action_confirm_categories
 

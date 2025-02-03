@@ -1,0 +1,23 @@
+Cultural, Social - Cultural Site Disturbances
+Destruction Of Agrarian Resources - Crop Destruction
+Destruction Of Agrarian Resources - Destruction Of Agrarian Soils
+Destruction Of Agrarian Resources - Soil Pollution
+Economic, Social - Employment Opportunities
+Economic, Social - Land Acquisition Issues
+Environmental - Air Pollution
+Environmental - Drainage And Sewage Management
+Environmental - Noise Pollution
+Environmental, Social - Cutting Of Trees
+Gender, Social - Gender-Based Access Issues
+Malicious Behavior - Theft Of Crops
+Malicious Behavior - Theft Of Tools Or Equipment
+Malicious Behavior, Environmental - Fire Incidents
+Relocation Issues - Forced Relocation Issues
+Relocation Issues - Lack Of Infrastructure Of The Resettlement Site
+Relocation Issues - Poor Housing Quality Of The Resettlement Site
+Relocation Issues - Poor Location Of The Resettlement Site
+Relocation Of Public Utilities - Access To Electricity
+Relocation Of Public Utilities - Access To Water
+Safety - Road Safety Provisions
+Wildlife, Environmental - Wildlife Destruction
+Wildlife, Environmental - Wildlife Passage

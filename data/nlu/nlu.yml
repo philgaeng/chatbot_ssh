@@ -2,6 +2,10 @@ version: "3.1"
 
 nlu:
 #introduce
+- lookup: category
+  examples: |
+    data/lookup_tables/list_category.txt
+
 - intent: introduce
   examples: |
     - Hi, who are you?
@@ -249,31 +253,61 @@ nlu:
 
 - intent: modify_categories
   examples: |
+    - /modify_categories
     - modify_categories
 
 - intent: delete_category
   examples: |
+    - /delete_category
     - delete_category
 
 - intent: modify_category
   examples: |
+    - /modify_category
     - modify_category
+    - /modify_category{"category_modify": [Environmental - Drainage And Sewage Management](category)
+    - /modify_category{"category_modify": [Destruction Of Agrarian Resources - Crop Destruction](category)
+    - /modify_category{"category_modify": [Water Supply Issues](category)
 
 - intent: change_category
   examples: |
+    - /change_category
     - change_category
+    - I want to change to [Environmental - Drainage And Sewage Management](category)
+    - Modify the category to [Destruction Of Agrarian Resources - Crop Destruction](category)
+    - Select [Water Supply Issues](category)
 
 - intent: finalize_categories
   examples: |
     - finalize_categories
+    - /finalize_categories
 
 - intent: submit_category
   examples: |
+    - /submit_category
     - submit_category
+
+- intent: skip_category
+  examples: |
+    - /skip_category
+    - skip_category
+
+- intent: set_new_category
+  examples: |
+    - /set_new_category
+    - set_new_category
+    - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Destruction Of Agrarian Soils](category)
+    - /set_new_category{\"category\": [Environmental - Drainage And Sewage Management](category)
+    - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Crop Destruction](category)
+    - /set_new_category{\"category\": [Water Supply Issues](category)
 
 - intent: start_location_process
   examples: |
     - start_location_process
+
+- intent: cancel_modification_category
+  examples: |
+    - "/cancel_modification_category"
 
 - intent: describe_complain
   examples: |
@@ -311,14 +345,14 @@ nlu:
 
 
 #forms
-- intent: set_category
-  examples: |
-    - /set_category{"grievance_category": "Health"}
-    - /set_category{"grievance_category": "Education"}
-    - /set_category{"grievance_category": "Infrastructure"}
-    - /set_category{"grievance_category": "Education"}
-    - /set_category{"grievance_category": "Other"}
-    - /skip
+# - intent: set_category
+#   examples: |
+#     - /set_category{"grievance_category": "Health"}
+#     - /set_category{"grievance_category": "Education"}
+#     - /set_category{"grievance_category": "Infrastructure"}
+#     - /set_category{"grievance_category": "Education"}
+#     - /set_category{"grievance_category": "Other"}
+#     - /skip
 
 - intent: provide_contact
   examples: |
@@ -406,3 +440,8 @@ nlu:
     - [Phidim](village)
     - [Rukum](village)
     - [Besisahar](village)
+
+- intent : skip_summary
+  examples: |
+    - \skip_summary
+    - skip_summary

@@ -88,6 +88,9 @@ actions:
   - action_change_category
   - action_apply_category_change
   - action_confirm_categories
+  - action_cancel_modification_category
+  - action_skip_category
+
 
 session_config:
   session_expiration_time: 60

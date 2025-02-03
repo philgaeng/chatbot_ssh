@@ -34,10 +34,29 @@ rules:
       - intent: submit_grievance_as_is
       - action: action_submit_grievance_as_is
 
-  - rule: Set grievance category
+  # - rule: Set grievance category
+  #   steps:
+  #     - intent: set_category
+  #     - action: action_set_category
+
+  - rule: User cancels category modification
     steps:
-      - intent: set_category
-      - action: action_set_category
+      - intent: cancel_modification_category
+      - action: action_cancel_modification_category
+      - action: action_confirm_categories  # Move to category confirmation
+
+  - rule: User skips category selection
+    steps:
+      - intent: skip_category
+      - action: action_skip_category
+      - action: action_ask_location  # Move to location selection
+
+  - rule: User skips summary input
+    steps:
+      - intent: skip_summary
+      - action: utter_skip_summary
+      - action: action_ask_location 
+
 
   # - rule: Activate location form
   #   steps:
