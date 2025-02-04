@@ -93,182 +93,153 @@ class ValidateContactForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_contact_form"
 
-    async def extract_user_full_name(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+    async def validate_user_full_name(
+        self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> Dict[Text, Any]:
-        if tracker.latest_message.get("intent", {}).get("name") == "skip":
+        intent = tracker.latest_message.get("intent", {}).get("name")
+        value = tracker.latest_message.get("text")
+        
+        # ✅ Ignore payloads from buttons (they start with "/")
+        if value and value.startswith("/"):  
+            dispatcher.utter_message(response="utter_ask_contact_form_user_full_name")
+            return {slot_name: None}  # Ask again
+
+
+        if intent == "skip":
             dispatcher.utter_message(response="utter_skip_full_name")
-            return {"user_full_name": None}
-        return {"user_full_name": tracker.latest_message.get("text")}
+            return {slot_name: None}
+        
+        if len(value.strip()) < 2:  # Ensure it's at least "First Last"
+            dispatcher.utter_message(response="utter_ask_contact_form_user_full_name")
+            return {slot_name: None}  # Ask again
+        
+        if value and value.strip():
+                    # Example of enforcing a basic rule (modify as needed)
+            return {slot_name: value.strip()}
+        
+        # If user does not respond, schedule a follow-up action
+        return [FollowupAction("action_remind_user_full_name")]
 
-    async def extract_user_honorific_prefix(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-    ) -> Dict[Text, Any]:
-        if tracker.latest_message.get("intent", {}).get("name") == "skip":
-            dispatcher.utter_message(response="utter_skip_honorific_prefix")
-            return {"user_honorific_prefix": None}
-        return {"user_honorific_prefix": tracker.latest_message.get("text")}
 
-    async def extract_user_contact_phone(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+    
+    async def validate_user_contact_phone(
+        self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> Dict[Text, Any]:
         phone_number = tracker.latest_message.get("text")
-        if tracker.latest_message.get("intent", {}).get("name") == "skip":
-            dispatcher.utter_message(response="utter_skip_phone_number")
-            return {"user_contact_phone": None}
+        intent = tracker.latest_message.get("intent", {}).get("name")
+        
+        # ✅ Ignore payloads from buttons (they start with "/")
+        if phone_number and phone_number.startswith("/"):  
+            dispatcher.utter_message(response="utter_ask_contact_form_user_contact_phone")
+            return {slot_name: None}  # Ask again
 
-        # Validate Nepal phone number format
-        if not re.match(r"^\+?(98|97)\d{8}$", phone_number.replace(" ", "").replace("-", "")):
+        if intent in ['skip', 'skip_contact_phone']:
+            dispatcher.utter_message(response="utter_skip_phone_number")
+            return {slot_name: None}
+
+        # Remove all non-numeric characters
+        cleaned_number = re.sub(r"\D", "", phone_number)  # Removes anything that is not a digit
+
+        # Validate Nepal phone number format (must start with 97 or 98 and be exactly 10 digits)
+        if not re.match(r"^(98|97)\d{8}$", cleaned_number):
             dispatcher.utter_message(
                 text=(
                     "The phone number you provided is invalid. "
                     "Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long. "
                     "Please provide a valid number."
-                )
-            )
-            return {"user_contact_phone": None}
+                ), 
+                buttons = [  # Add buttons for better user interaction
+                {"title": "Retry", "payload": "/provide_contact_phone"},
+                {"title": "Skip", "payload": "/skip_contact_phone"}
+            ]
+        )
+            return {slot_name: None} # Forces the bot to re-ask for input
 
-        return {"user_contact_phone": phone_number.strip()}
+        return {slot_name: cleaned_number}
 
-    async def extract_user_contact_email(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+
+    async def validate_user_contact_email(
+        self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> Dict[Text, Any]:
         email = tracker.latest_message.get("text")
-        if tracker.latest_message.get("intent", {}).get("name") == "skip":
-            dispatcher.utter_message(response="utter_skip_email_address")
-            return {"user_contact_email": None}
+        intent = tracker.latest_message.get("intent", {}).get("name")
 
-        # Validate email format
-        if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email.strip()):
+        # ✅ Ignore payloads from buttons (they start with "/")
+        if email and email.startswith("/"):  
+            dispatcher.utter_message(response="utter_ask_contact_form_user_contact_email")
+            return {slot_name: None}  # Ask again
+
+        # Handle user skipping email input
+        if intent in ['skip', 'skip_contact_email']:
+            dispatcher.utter_message(text="✅ No problem! You can proceed without an email.")
+            return {slot_name: None}
+
+        # Clean email input
+        email = email.strip().lower()
+
+        # Email validation pattern
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+
+        # Check if email is valid
+        if not re.match(email_pattern, email):
             dispatcher.utter_message(
                 text=(
-                    "The email address you provided is invalid. "
-                    "A valid email should be in the format: username@domain.com. "
-                    "Please provide a valid email address."
-                )
+                    "⚠️ The email address you provided is invalid.\n"
+                    "A valid email should be in the format: **username@domain.com**.\n"
+                    "Please provide a valid email address or skip this step."
+                ),
+                buttons=[
+                    {"title": "Retry", "payload": "/provide_contact_email"},
+                    {"title": "Skip Email", "payload": "/skip_contact_email"},
+                ]
             )
-            return {"user_contact_email": None}
+            return {slot_name: None}  # Forces bot to re-ask
 
-        return {"user_contact_email": email.strip()}
+        return {slot_name: email}
 
-    async def validate(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-    ) -> List[Dict[Text, Any]]:
-        try:
-            # Collect the slot values
-            user_full_name = tracker.get_slot("user_full_name")
-            user_contact_phone = tracker.get_slot("user_contact_phone")
-            user_contact_email = tracker.get_slot("user_contact_email")
-            user_honorific_prefix = tracker.get_slot("user_honorific_prefix")
 
-            # Construct the confirmation message
-            confirmation_message = (
-                "Thank you for providing your contact details:\n"
-                f"- Full Name: {user_full_name or 'Not provided'}\n"
-                f"- Honorific Prefix: {user_honorific_prefix or 'Not provided'}\n"
-                f"- Phone Number: {user_contact_phone or 'Not provided'}\n"
-                f"- Email Address: {user_contact_email or 'Not provided'}\n\n"
-                "Is this correct?"
-            )
+    # async def validate(
+    #     self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+    # ) -> List[Dict[Text, Any]]:
+    #     try:
+    #         # Collect the slot values
+    #         user_full_name = tracker.get_slot("user_full_name")
+    #         user_contact_phone = tracker.get_slot("user_contact_phone")
+    #         user_contact_email = tracker.get_slot("user_contact_email")
+    #         user_honorific_prefix = tracker.get_slot("user_honorific_prefix")
+            
+    #         if user_contact_phone:
 
-            dispatcher.utter_message(text=confirmation_message)
-            return []
+    #             # Construct the confirmation message
+    #             confirmation_message = (
+    #                 "Thank you for providing your contact details:\n"
+    #                 f"- Full Name: {user_full_name or 'Not provided'}\n"
+    #                 f"- Honorific Prefix: {user_honorific_prefix or 'Not provided'}\n"
+    #                 f"- Phone Number: {user_contact_phone or 'Not provided'}\n"
+    #                 f"- Email Address: {user_contact_email or 'Not provided'}\n\n"
+    #                 "Is this correct?"
+    #             )
+
+    #             dispatcher.utter_message(text=confirmation_message)
+    #             return []
+            
+    #         else:
+    #             dispatcher.utter_message(text="An error occurred while processing your contact details. You need to provide your contact phone",
+    #                                      buttons=[
+    #                                         {"title": "Modify contact phone", "payload": "/anonymous_with_phone"},
+    #                                         {"title": "No contact info", "payload": "/no_contact_provided"},
+    #                                     ]
+    #                                 )
+    #             return []
         
-        except Exception as e:
-            dispatcher.utter_message(text="An error occurred while processing your contact details.")
-            print(f"Error in validate_contact_form: {e}")
-            return []
+    #     except Exception as e:
+    #         dispatcher.utter_message(text="An error occurred while processing your contact details. You need to provide your contact phone")
+    #         print(f"Error in validate_contact_form: {e}")
+    #         return []
 
 
-# class ValidateContactForm(FormValidationAction):
-#     def name(self) -> Text:
-#         return "validate_contact_form"
 
-#     async def extract_user_full_name(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> Dict[Text, Any]:
-#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
-#             dispatcher.utter_message(response="utter_skip_full_name")
-#             return {"user_full_name": None}
-#         return {"user_full_name": tracker.latest_message.get("text")}
 
-#     async def extract_user_honorific_prefix(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> Dict[Text, Any]:
-#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
-#             dispatcher.utter_message(response="utter_skip_honorific_prefix")
-#             return {"user_honorific_prefix": None}
-#         return {"user_honorific_prefix": tracker.latest_message.get("text")}
-
-#     async def extract_user_contact_phone(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> Dict[Text, Any]:
-#         phone_number = tracker.latest_message.get("text")
-#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
-#             dispatcher.utter_message(response="utter_skip_phone_number")
-#             return {"user_contact_phone": None}
-
-#         # Validate Nepal phone number format
-#         if not re.match(r"^(98|97)\d{8}$", phone_number):
-#             dispatcher.utter_message(
-#                 text=(
-#                     "The phone number you provided is invalid. "
-#                     "Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long. "
-#                     "Please provide a valid number."
-#                 )
-#             )
-#             return {"user_contact_phone": None}
-
-#         return {"user_contact_phone": phone_number}
-
-#     async def extract_user_contact_email(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> Dict[Text, Any]:
-#         email = tracker.latest_message.get("text")
-#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
-#             dispatcher.utter_message(response="utter_skip_email_address")
-#             return {"user_contact_email": None}
-
-#         # Validate email format
-#         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
-#             dispatcher.utter_message(
-#                 text=(
-#                     "The email address you provided is invalid. "
-#                     "A valid email should be in the format: username@domain.com. "
-#                     "Please provide a valid email address."
-#                 )
-#             )
-#             return {"user_contact_email": None}
-
-#         return {"user_contact_email": email}
-
-#     async def validate(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> List[Dict[Text, Any]]:
-#         try:
-#             # Collect the slot values
-#             user_full_name = tracker.get_slot("user_full_name")
-#             user_contact_phone = tracker.get_slot("user_contact_phone")
-#             user_contact_email = tracker.get_slot("user_contact_email")
-#             user_honorific_prefix = tracker.get_slot("user_honorific_prefix")
-
-#             # Construct the confirmation message
-#             confirmation_message = (
-#                 "Thank you for providing your contact details:\n"
-#                 f"- Full Name: {user_full_name or 'Not provided'}\n"
-#                 f"- Honorific Prefix: {user_honorific_prefix or 'Not provided'}\n"
-#                 f"- Phone Number: {user_contact_phone or 'Not provided'}\n"
-#                 f"- Email Address: {user_contact_email or 'Not provided'}\n\n"
-#                 "Is this correct?"
-#             )
-
-#             dispatcher.utter_message(text=confirmation_message)
-#             return []
-        
-#         except Exception as e:
-#             dispatcher.utter_message(text="An error occurred while processing your contact details.")
-#             logger.error(f"Error in validate_contact_form: {e}")
-#             return []
 
 
 

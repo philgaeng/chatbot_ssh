@@ -32,6 +32,9 @@ intents:
   - provide_optional
   - provide_municipality
   - provide_address
+  - provide_contact_yes
+  - anonymous_with_phone
+  - no_contact_provided
 
   #grievance
   - start_grievance_process #refers to the process of filing a grievance
@@ -57,4 +60,9 @@ intents:
   - start_location_process
   - submit_address
   - modify_address
+  - set_apply_category_change
+  - provide_contact_email
+  - skip_contact_email
+  - provide_contact_phone
+  - skip_contact_phone
 

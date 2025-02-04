@@ -468,5 +468,34 @@ nlu:
 
 - intent : no_contact_provided
   examples: |
-  - \no_contact_provided
-  - no_contact_provided
+    - \no_contact_provided
+    - no_contact_provided
+
+
+- intent : provide_contact_phone
+  examples: |
+    - \provide_contact_phone
+    - provide_contact_phone
+    - I want to enter my phone number again
+    - Let me correct my phone number
+    - Retry entering phone
+    - Provide my contact phone
+
+- intent : skip_contact_phone
+  examples: |
+    - \skip_contact_phone
+    - skip_contact_phone
+
+- intent : provide_contact_email
+  examples: |
+    - \provide_contact_email
+    - provide_contact_email
+    - I want to enter my email again
+    - Let me correct my email
+    - Retry entering email
+    - Provide my email
+
+- intent : skip_contact_email
+  examples: |
+    - \skip_contact_email
+    - skip_contact_email

@@ -8,8 +8,8 @@ responses:
     - text: "I can help you submit a grievance, check its status, or provide more information. How can I assist you today?"
   utter_goodbye:
     - text: "Goodbye! If you need further assistance, feel free to ask."
-  utter_ask_file_grievance:
-    - text: "Would you like to file a grievance?"
+  # utter_ask_file_grievance:
+  #   - text: "Would you like to file a grievance?"
 
   utter_ask_location:
     - text: "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it."
@@ -187,6 +187,13 @@ responses:
     - text: "What is the name of the village or type Skip"
   utter_ask_address_form_address:
     - text: "Can you provide address details or type Skip"
+  utter_ask_contact_form_user_full_name:
+    - text: "Can you provide your full name (first name, last name) or type Skip"
+  utter_ask_contact_form_user_contact_phone:
+    - text: "Can you provide your phone number or type Skip \n Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long."
+  utter_ask_contact_form_user_contact_email:
+    - text: "Can you provide your email or type Skip"
+
 
 # Contact details collection prompts
   # utter_ask_optional_details:

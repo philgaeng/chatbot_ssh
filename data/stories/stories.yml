@@ -145,15 +145,15 @@ stories:
       - action: utter_skip_contact
       - action: action_submit_grievance
 
-  #User naturally provides contact
-  - story: User starts by providing details
-    steps:
-      - intent: provide_contact  # User provides contact information intent
-      - action: contact_form  # Activates the contact form
-      - active_loop: contact_form  # Keeps the form active
-      - action: validate_contact_form  # Executes the validation logic
-      - active_loop: null  # Ends the form after validation
-      - action: action_submit_grievance  # Submits the grievance after contact details are collected
+  # #User naturally provides contact
+  # - story: User starts by providing details
+  #   steps:
+  #     - intent: provide_contact  # User provides contact information intent
+  #     - action: contact_form  # Activates the contact form
+  #     - active_loop: contact_form  # Keeps the form active
+  #     - action: validate_contact_form  # Executes the validation logic
+  #     - active_loop: null  # Ends the form after validation
+  #     - action: action_submit_grievance  # Submits the grievance after contact details are collected
 
   #User naturally provides location
   - story: Collect location details
@@ -168,4 +168,15 @@ stories:
       - action : address_form
       - active_loop: address_form
       - active_loop: null
-      - action : action_confirm_address 
+      - action : action_confirm_address
+
+  - story: User skips email input
+    steps:
+      - intent: skip_contact_email
+      - action: validate_contact_form
+
+  - story: User skips phone input
+    steps:
+      - intent: skip_contact_phone
+      - action: validate_contact_form
+

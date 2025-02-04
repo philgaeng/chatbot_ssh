@@ -132,7 +132,7 @@ class ActionConfirmAddress(Action):
     def name(self) -> str:
         return "action_confirm_address"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict):
         # province = tracker.get_slot("province")
         # district = tracker.get_slot("district")
         # municipality = tracker.get_slot("municipality")
@@ -179,7 +179,8 @@ class ValidateAddressForm(FormValidationAction):
     def name(self) -> str:
         return "validate_address_form"
 
-    async def validate(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain) -> dict:
+    async def validate_village(self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+    ) -> Dict[Text, Any]:
         """Handles slot validation, allowing skipping and ensuring valid input."""
         requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
 
@@ -187,16 +188,65 @@ class ValidateAddressForm(FormValidationAction):
             return {}
 
         user_response = tracker.latest_message.get("text", "").strip().lower()
+        print("village", user_response)
         intent_name = tracker.latest_message.get("intent", {}).get("name")
+        
+        # ✅ Ignore payloads from buttons (they start with "/")
+        if user_response and user_response.startswith("/"):
+            print("""village - Ignore payloads from buttons (they start with "/")""")
+            dispatcher.utter_message(response= "utter_ask_municipality_form_municipality")
+            return {slot_name: None}  # Ask again
 
         # If the user wants to skip, acknowledge and move to the next slot
         if intent_name == "skip":
             dispatcher.utter_message(text=f"Skipping {requested_slot}.")
-            return {requested_slot: None}
+            return {slot_name: None}
 
         # If the response is "yes" or "no", repeat only the current question
         if user_response in ["yes", "no"]:
             dispatcher.utter_message(text=f"I need more details for {requested_slot}. Please provide a valid answer.")
-            return {requested_slot: None}
+            return {slot_name: None}
+        dispatcher.utter_message(response="utter_ask_address_form_address")
+        return {slot_name: user_response,
+                        "last_message_saved": user_response  # Save the message for comparison
+    } # Store the valid response
+    
+    async def validate_address(
+    self, 
+    slot_name: str,
+    dispatcher: CollectingDispatcher, 
+    tracker: Tracker, 
+    domain: Dict
+    )    -> Dict[Text, Any]:
+        """Handles slot validation, allowing skipping and ensuring valid input."""
+        
+        requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
 
-        return {requested_slot: user_response}  # Store the valid response
+        if not requested_slot:
+            return {}
+
+        user_response = tracker.latest_message.get("text", "").strip().lower()
+        intent_name = tracker.latest_message.get("intent", {}).get("name")
+        last_message = tracker.get_slot("last_message_saved")
+
+        print("address", user_response)
+        
+        # ✅ Ignore payloads from buttons (they start with "/")
+        if user_response and user_response.startswith("/") or user_response == last_message:
+            print("""adress - Ignore payloads from buttons (they start with "/")""")
+            dispatcher.utter_message(response= "utter_ask_municipality_form_address")
+            return {slot_name: None}  # Ask again
+
+        # If the user wants to skip, acknowledge and move to the next slot
+        if intent_name == "skip":
+            dispatcher.utter_message(text=f"Skipping {requested_slot}.")
+            return {slot_name: None}
+
+        # If the response is "yes" or "no", repeat only the current question
+        if user_response in ["yes", "no"]:
+            dispatcher.utter_message(text=f"I need more details for {requested_slot}. Please provide a valid answer.")
+            return {slot_name: None}
+
+        return {slot_name: user_response,
+                        "last_message_saved": user_response  # Save the message for comparison
+    } # Store the valid response

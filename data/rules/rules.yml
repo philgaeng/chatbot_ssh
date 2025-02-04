@@ -39,3 +39,19 @@ rules:
       - intent: skip_summary
       - action: utter_skip_summary
       - action: action_ask_location 
+
+  - rule: User retries providing phone number
+    condition:
+      - active_loop: contact_form
+    steps:
+      - intent: provide_contact_phone
+      - action: contact_form
+      - active_loop: contact_form
+
+  - rule: User retries providing email
+    condition:
+      - active_loop: contact_form
+    steps:
+      - intent: provide_contact_email
+      - action: contact_form
+      - active_loop: contact_form

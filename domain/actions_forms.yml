@@ -30,12 +30,15 @@ forms:
   contact_form:
     required_slots:
       - user_full_name
-      - user_honorific_prefix
       - user_contact_phone
       - user_contact_email
     ignored_intents:
       - agree
       - deny
+
+  collect_phone_form:
+    required_slots:
+      - user_contact_phone
 
   edit_summary_form:
     required_slots:
@@ -90,6 +93,13 @@ actions:
   - action_confirm_categories
   - action_cancel_modification_category
   - action_skip_category
+  - action_ask_contact_consent
+  - action_collect_phone_for_anonymous
+  - utter_ask_address_form_address
+  - utter_ask_contact_form_user_full_name
+  - utter_ask_contact_form_user_contact_phone
+  - utter_ask_contact_form_user_contact_email
+  
 
 
 session_config:
