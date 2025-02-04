@@ -60,23 +60,26 @@ slots:
   #         - active_loop: location_form
   village:
     type: text
-    influence_conversation: false
+    influence_conversation: true
     mappings:
     - type: from_text
       conditions:
       - active_loop: address_form
+        requested_slot: village
 
   address:
     type: text
-    influence_conversation: false
+    influence_conversation: true
     mappings:
       - type: from_text
         conditions:
           - active_loop: address_form
+            requested_slot: address
 
   last_message_saved:
     type: text
     influence_conversation: false
+    mappings: []
 
 
 ####################   contact    ###################

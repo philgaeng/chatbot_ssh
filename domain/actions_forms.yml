@@ -18,6 +18,7 @@ forms:
     ignored_intents:
       - agree
       - deny
+      - nlu_fallback
 
   address_form:
     required_slots:
@@ -35,6 +36,7 @@ forms:
     ignored_intents:
       - agree
       - deny
+      - nlu_fallback
 
   collect_phone_form:
     required_slots:

@@ -114,8 +114,10 @@ class ValidateMunicipalityForm(FormValidationAction):
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
         
-        municipality = tracker.get_slot("municipality")
-        print(f"🔍 DEBUG: municipality slot before validation: {municipality}")
+        # municipality = tracker.get_slot("municipality")
+        # print(f"🔍 DEBUG: municipality slot before validation: {municipality}")
+        
+        municipality = tracker.latest_message.get("text", "").strip().lower()
 
         if not municipality or municipality.startswith("/"):
             dispatcher.utter_message(text="Please enter a valid municipality name.")
@@ -175,78 +177,136 @@ class ActionResetAddressSlots(Action):
             SlotSet("address", None),
         ]
         
+# class ValidateAddressForm(FormValidationAction):
+#     def name(self) -> str:
+#         return "validate_address_form"
+
+#     async def validate_village(self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> Dict[Text, Any]:
+#         """Handles slot validation, allowing skipping and ensuring valid input."""
+        
+#         print("#####validate_village ##############")
+#         # requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
+
+#         # if not requested_slot:
+#         #     return {}
+
+#         user_response = tracker.latest_message.get("text", "").strip().lower()
+#         print("user_response", user_response)
+#         print("slot_name" ,slot_name)
+#         intent_name = tracker.latest_message.get("intent", {}).get("name")
+        
+#         # ✅ Ignore payloads from buttons (they start with "/")
+#         if user_response and user_response.startswith("/"):
+#             print("""village - Ignore payloads from buttons (they start with "/")""")
+#             dispatcher.utter_message(response= "utter_ask_municipality_form_municipality")
+#             return {"village": None}  # Ask again
+
+#         # If the user wants to skip, acknowledge and move to the next slot
+#         if intent_name == "skip":
+#             dispatcher.utter_message(text=f"Skipping 'village.")
+#             return {"village": None}
+
+#         # If the response is "yes" or "no", repeat only the current question
+#         if user_response in ["yes", "no"]:
+#             dispatcher.utter_message(text=f"I need more details for 'village'. Please provide a valid answer.")
+#             return {"village": None}
+#         dispatcher.utter_message(response="utter_ask_address_form_address")
+#         return {"village": user_response, "address": None,
+#                         "last_message_saved": user_response  # Save the message for comparison
+#     } # Store the valid response
+    
+#     async def validate_address(
+#     self, 
+#     slot_name: str,
+#     dispatcher: CollectingDispatcher, 
+#     tracker: Tracker, 
+#     domain: Dict
+#     )    -> Dict[Text, Any]:
+#         """Handles slot validation, allowing skipping and ensuring valid input."""
+#         print("#####validate_adress##############")
+#         # requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
+
+#         # if not requested_slot:
+#         #     return {}
+
+#         user_response = tracker.latest_message.get("text", "").strip().lower()
+#         intent_name = tracker.latest_message.get("intent", {}).get("name")
+#         village = tracker.get_slot("village")
+
+#         print("user_response", user_response)
+#         print("village", village)
+#         print("slot_name", slot_name)
+        
+#         # ✅ Ignore payloads from buttons (they start with "/")
+#         if user_response and user_response.startswith("/") or user_response == village:
+#             print("""adress - Ignore payloads from buttons (they start with "/")""")
+#             dispatcher.utter_message(response= "utter_ask_municipality_form_address")
+#             return {"address": None, "last_message_saved": None}  # Ask again
+
+#         # If the user wants to skip, acknowledge and move to the next slot
+#         if intent_name == "skip":
+#             dispatcher.utter_message(text=f"Skipping 'address'.")
+#             return {"address": None}
+
+#         # If the response is "yes" or "no", repeat only the current question
+#         if user_response in ["yes", "no"]:
+#             dispatcher.utter_message(text=f"I need more details for 'address'. Please provide a valid answer.")
+#             return {"address": None}
+
+#         return {"address": user_response,
+#                         "last_message_saved": user_response  # Save the message for comparison
+#     } # Store the valid response
+        
+
+
 class ValidateAddressForm(FormValidationAction):
-    def name(self) -> str:
+    def name(self) -> Text:
         return "validate_address_form"
 
-    async def validate_village(self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-    ) -> Dict[Text, Any]:
-        """Handles slot validation, allowing skipping and ensuring valid input."""
-        requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
-
-        if not requested_slot:
-            return {}
-
-        user_response = tracker.latest_message.get("text", "").strip().lower()
-        print("village", user_response)
+    # ✅ Extract village slot correctly
+    async def extract_village(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
-        
-        # ✅ Ignore payloads from buttons (they start with "/")
-        if user_response and user_response.startswith("/"):
-            print("""village - Ignore payloads from buttons (they start with "/")""")
-            dispatcher.utter_message(response= "utter_ask_municipality_form_municipality")
-            return {slot_name: None}  # Ask again
 
-        # If the user wants to skip, acknowledge and move to the next slot
-        if intent_name == "skip":
-            dispatcher.utter_message(text=f"Skipping {requested_slot}.")
-            return {slot_name: None}
+        # Ignore nlu_fallback
+        if intent_name == "nlu_fallback":
+            dispatcher.utter_message(text="I couldn't understand that. Please provide the name of the village.")
+            return {"village": None}
 
-        # If the response is "yes" or "no", repeat only the current question
-        if user_response in ["yes", "no"]:
-            dispatcher.utter_message(text=f"I need more details for {requested_slot}. Please provide a valid answer.")
-            return {slot_name: None}
-        dispatcher.utter_message(response="utter_ask_address_form_address")
-        return {slot_name: user_response,
-                        "last_message_saved": user_response  # Save the message for comparison
-    } # Store the valid response
-    
-    async def validate_address(
-    self, 
-    slot_name: str,
-    dispatcher: CollectingDispatcher, 
-    tracker: Tracker, 
-    domain: Dict
-    )    -> Dict[Text, Any]:
-        """Handles slot validation, allowing skipping and ensuring valid input."""
-        
-        requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
+        # Only extract input when village is the requested slot
+        if tracker.get_slot("requested_slot") == "village":
+            return {"village": user_response}
 
-        if not requested_slot:
-            return {}
+        return {}
 
-        user_response = tracker.latest_message.get("text", "").strip().lower()
+    # ✅ Extract address slot correctly
+    async def extract_address(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
-        last_message = tracker.get_slot("last_message_saved")
 
-        print("address", user_response)
-        
-        # ✅ Ignore payloads from buttons (they start with "/")
-        if user_response and user_response.startswith("/") or user_response == last_message:
-            print("""adress - Ignore payloads from buttons (they start with "/")""")
-            dispatcher.utter_message(response= "utter_ask_municipality_form_address")
-            return {slot_name: None}  # Ask again
+        # Ignore nlu_fallback
+        if intent_name == "nlu_fallback":
+            dispatcher.utter_message(text="I couldn't understand that. Please provide the address.")
+            return {"address": None}
 
-        # If the user wants to skip, acknowledge and move to the next slot
-        if intent_name == "skip":
-            dispatcher.utter_message(text=f"Skipping {requested_slot}.")
-            return {slot_name: None}
+        # Only extract input when address is the requested slot
+        if tracker.get_slot("requested_slot") == "address":
+            return {"address": user_response}
 
-        # If the response is "yes" or "no", repeat only the current question
-        if user_response in ["yes", "no"]:
-            dispatcher.utter_message(text=f"I need more details for {requested_slot}. Please provide a valid answer.")
-            return {slot_name: None}
+        return {}
 
-        return {slot_name: user_response,
-                        "last_message_saved": user_response  # Save the message for comparison
-    } # Store the valid response
+    # ✅ Validate village
+    async def validate_village(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        if not slot_value or len(slot_value) < 2:
+            dispatcher.utter_message(text="Please provide a valid village name.")
+            return {"village": None}
+        return {"village": slot_value}
+
+    # ✅ Validate address
+    async def validate_address(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        if not slot_value or len(slot_value) < 5:
+            dispatcher.utter_message(text="Please provide a more detailed address.")
+            return {"address": None}
+        return {"address": slot_value}
+
