@@ -55,4 +55,6 @@ intents:
   - skip_category
   - submit_category
   - start_location_process
+  - submit_address
+  - modify_address
 

@@ -43,11 +43,11 @@ stories:
       - action: action_modify_or_delete_category
       - intent: change_category
       - action: action_change_category
-      - intent: set_new_category
+      - intent: set_apply_category_change
       - action: action_apply_category_change
       - action: action_confirm_categories
 
-  #Step 3: alternate 3 - No categories seleceted and user wants to add one
+  #Step 3: alternate 3 - No categories selected and user wants to add one
   - story: No category selected by OpenAI and user wants to add one
     steps:
       - action: action_capture_grievance_text
@@ -81,32 +81,47 @@ stories:
       - intent: start_location_process
       - action : action_reset_municipality_slots
       - active_loop: municipality_form
-      - active_loop: null
+      - slot_was_set:
+        - municipality  # ✅ Ensures bot waits for user input
       - action : action_confirm_municipality
       - intent : agree
+      - active_loop: null
       - action : address_form
       - active_loop: address_form
       - active_loop: null
       - action : action_confirm_address
-      - intent : agree
-      - action: utter_ask_contact_consent # move to Step 5 if the user agrees to provide contact details
+      - intent : submit_address
+      - action: action_ask_contact_consent # move to Step 5 if the user agrees to provide contact details 
 
   #Step 5: Collect contact details
-  - story: Collect contact details
+
+  - story: User provides contact consent
     steps:
-      # - intent: provide_contact  # User provides contact information intent
-      - action: utter_ask_contact_consent
-      - intent: agree
-      - action: contact_form  # Activates the contact form
-      - active_loop: contact_form  # Keeps the form active
-      - action: validate_contact_form  # Executes the validation logic
-      - active_loop: null  # Ends the form after validation
-      # - action : action_confirm_address
-      # - intent : agree
-      - action: action_submit_grievance  # Submits the grievance after contact details are collected
+      - action: action_ask_contact_consent
+      - intent: provide_contact_yes
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+          - user_contact_phone  # ✅ Ensures bot waits for user input # Keeps the form active  # Executes the validation logic
+      - active_loop: null
+      - action: action_submit_grievance
 
+  - story: Anonymous with phone number
+    steps:
+      - action: action_ask_contact_consent
+      - intent: anonymous_with_phone
+      - action: action_collect_phone_for_anonymous
+      - active_loop: collect_phone_form
+      - slot_was_set:
+          - user_contact_phone 
+      - active_loop: null
+      - action: action_submit_grievance
 
-
+  - story: File anonymously without contact
+    steps:
+      - action: action_ask_contact_consent
+      - intent: no_contact_provided
+      - action: action_submit_grievance
 
 
   #Step 4 : altenate - User skips providing location details

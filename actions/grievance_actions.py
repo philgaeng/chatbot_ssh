@@ -11,18 +11,15 @@
 #
 import re
 import os
+import json
 from dotenv import load_dotenv
-import openai
 from openai import OpenAI
 from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
-from datetime import datetime
-import csv
-import traceback
-from actions.helpers import load_classification_data, load_categories_from_lookup
+from actions.helpers import load_classification_data, load_categories_from_lookup, get_next_grievance_number
 
 #define and load variables
 
@@ -33,8 +30,7 @@ open_ai_key = os.getenv("OPENAI_API_KEY")
 classification_data = load_classification_data()
 list_categories_global = load_categories_from_lookup()
 
-# File to store the last grievance ID
-COUNTER_FILE = "grievance_counter.txt"
+
 
 
 try:
@@ -47,56 +43,6 @@ except Exception as e:
     print(f"Error loading OpenAI API key: {e}")
     
 
-
-
- 
-def get_next_grievance_number():
-    # Get today's date in YYmmDD format
-    today_date = datetime.now().strftime("%y%m%d")
-
-    # Initialize grievance ID if the file doesn't exist or is empty
-    if not os.path.exists(COUNTER_FILE) or os.stat(COUNTER_FILE).st_size == 0:
-        initial_id = f"GR-{today_date}-0001"
-        with open(COUNTER_FILE, "w") as f:
-            f.write(initial_id)
-        return initial_id
-
-    # Read the last grievance ID
-    with open(COUNTER_FILE, "r") as f:
-        last_grievance_id = f.read().strip()
-
-    try:
-        # Validate format and parse the date and counter from the last grievance ID
-        if not last_grievance_id.startswith("GR-"):
-            raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
-        
-        parts = last_grievance_id.split("-")
-        if len(parts) != 3:
-            raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
-
-        _, last_date, last_counter = parts
-        last_counter_number = int(last_counter)
-
-        # If the date is different from today, reset the counter
-        if last_date != today_date:
-            new_grievance_id = f"GR-{today_date}-0001"
-        else:
-            # Increment the counter if the date is the same
-            new_counter_number = last_counter_number + 1
-            new_grievance_id = f"GR-{today_date}-{new_counter_number:04d}"
-
-    except Exception as e:
-        # Handle any parsing error by resetting the counter
-        print(f"Error parsing grievance ID: {e}. Resetting counter.")
-        new_grievance_id = f"GR-{today_date}-0001"
-
-    # Save the new grievance ID to the file
-    with open(COUNTER_FILE, "w") as f:
-        f.write(new_grievance_id)
-
-    return new_grievance_id
-
-
 class ActionStartGrievanceProcess(Action):
     def name(self) -> str:
         return "action_start_grievance_process"
@@ -105,77 +51,64 @@ class ActionStartGrievanceProcess(Action):
         dispatcher.utter_message(response="utter_start_grievance_process")
         return []
 
-
 class ActionCaptureGrievanceText(Action):
     def name(self) -> Text:
         return "action_capture_grievance_text"
+
+    # def parse_summary_and_category(self, result: str):
+    #     """
+    #     Parse the result from OpenAI to extract the grievance summary and categories into a structured dictionary.
+    #     """
+    #     print("############# parse_summary_and_category #######")
+
+    #     # Extract category using regex
+    #     category_match = re.search(r'Category.*?- END Category', result, re.DOTALL)
+    #     category_text = category_match.group(0).replace("- END Category", "").strip() if category_match else ""
+
+    #     # Extract summary using regex
+    #     summary_match = re.search(r'Grievance Summary: (.*?)- END Summary', result, re.DOTALL)
+    #     grievance_summary = summary_match.group(1).strip() if summary_match else ""
+    #     print("summary_match", summary_match, "\ngrievance_summary :", grievance_summary)
+
+    #     # Initialize result dictionary
+    #     result_dict = {"grievance_summary": grievance_summary}
+
+    #     # Process category string dynamically
+    #     if category_text:
+    #         category_list = category_text.split("Category ")
+    #         category_list = [i for i in category_list if len(i) > 0 and "Category" not in i]
+    #         print("category_list :", category_list)
+    #         for idx, category in enumerate(category_list, start=1):
+    #             result_dict[f"category_{idx}"] = category.split(": ")[1].strip().strip(',')
+
+    #     return result_dict
     
-    # def load_classification_data(self):
-    #     """Loads grievance classification data from CSV into a dictionary"""
-    #     categories = []
-    #     try:
-    #         with open(cat_path, "r", encoding="utf-8") as csvfile:
-    #             reader = csv.DictReader(csvfile)
-    #             for row in reader:
-    #                 categories.append(row["Classification"].title() + " - " + row["Generic Grievance Name"].title())  # Normalize case
-                    
-    #         # Remove duplicates
-    #         unique_categories = list(set(categories))
-
-    #         # Save to lookup table
-    #         lookup_file_path = "data/lookup_tables/list_category.txt"
-    #         with open(lookup_file_path, "w", encoding="utf-8") as lookup_file:
-    #             lookup_file.write("\n".join(unique_categories))
-
-    #         print(f"✅ Lookup table updated: {lookup_file_path}")
-            
-    #     except Exception as e:
-    #         print(f"Error loading CSV file: {e}")
-    #         traceback.print_exc()
-    #     return list(set(categories))
-    
-    def parse_summary_and_category(self, result: str):
+    def parse_summary_and_category(self, response: str):
         """
-        Parse the result from OpenAI to extract the grievance summary and categories into a structured dictionary.
+        Parses OpenAI response directly into a structured dictionary.
+        Expects response to be a valid JSON dictionary.
         """
+        print("############# parse_summary_and_category #######")
 
-        # Extract category using regex
-        category_match = re.search(r'Category.*?- END Category', result, re.DOTALL)
-        category_text = category_match.group(0).replace("- END Category", "").strip() if category_match else ""
-
-        # Extract summary using regex
-        summary_match = re.search(r'Grievance Summary: (.*?)- END Summary', result, re.DOTALL)
-        grievance_summary = summary_match.group(1).strip() if summary_match else ""
-        print(grievance_summary)
-
-        # Initialize result dictionary
-        result_dict = {"grievance_summary": grievance_summary}
-        
-
-        # Process category string dynamically
-        if category_text:
-            category_list = category_text.split("Category ")
-            category_list = [i for i in category_list if len(i)> 0 and "Category" not in i]
-            print(category_list)
-            # idx = 1
-            for idx, category in enumerate(category_list, start =1):
-                print(category)
-                result_dict[f"category_{idx}"] = category.split(": ")[1].strip().strip(',') # Extract category name
-
-        return result_dict
-
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        user_input = tracker.latest_message.get("text")
-        print(user_input)
-        # Step 1: Save the free text grievance details
-        grievance_details = user_input
-
-        # Step 1: use OpenAI but restrict the category choices
-        predefined_categories = classification_data# Extract unique categories
-        category_list_str = "\n".join(f"- {c}" for c in predefined_categories)  # Format as list
-        
         try:
+            result_dict = json.loads(response)  # Convert JSON string to dictionary
+            return {
+                "grievance_summary": result_dict.get("grievance_summary", ""),
+                "list_categories": result_dict.get("list_categories", [])
+            }
+        except json.JSONDecodeError:
+            print("⚠ Error: Response is not valid JSON")
+            return {"grievance_summary": "", "list_categories": []}  # Return default empty values
+        
 
+    def _call_openai_for_classification(self, grievance_details: str):
+        """
+        Calls OpenAI API to classify the grievance details into predefined categories.
+        """
+        predefined_categories = classification_data  # Extract unique categories
+        category_list_str = "\n".join(f"- {c}" for c in predefined_categories)  # Format as list
+
+        try:
             client = OpenAI(api_key=open_ai_key)
 
             response = client.chat.completions.create(
@@ -187,64 +120,81 @@ class ActionCaptureGrievanceText(Action):
                         Only choose from the following categories:
                         {category_list_str}
                         Do not create new categories.
-                        Reply only with the categories, if many categories apply just list them with the following format:
-                        Category 1: category, Category 2: category, Category 3: category etc when applicable - END Category
-                        Step 2: summarize the grievance with simple and direct words so they can be understood with people with limited litteracy.
-                        Provide your answer with the following format
-                        Grievance Summary : lorum ipsum etc - END Summary
+                        Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
+                        [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt
+                        Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
+                        
+                        Finally,
+                        Return the response in **strict JSON format** like this:
+                        {{
+                            "grievance_summary": "Summarized grievance text",
+                            "list_categories": ["Category 1", "Category 2"]
+                        }}
                     """}
                 ],
                 model="gpt-4",
             )
 
-            result = response.choices[0].message.content.strip()
-
-            print(f"Raw - gpt mesage : {result}")
-            
-            #Step 2 : parse the results and fill the slots
-            
-            result_dict = self.parse_summary_and_category(result)
-            print(result_dict)
-            temp_categories = [v for k, v in result_dict.items() if "category" in k.lower()]
-            slots = [
-                SlotSet("grievance_details", grievance_details),
-                SlotSet("grievance_summary", result_dict["grievance_summary"]),
-                SlotSet("temp_categories", temp_categories)
-            ]
-
-            # Step 3: Validate category with the user
-            
-            #prepare the response message
-            # Format category display
-            
-            n = len(temp_categories)
-            
-            if n>0:
-                category_text = "\n".join([f"- {v}" for v in temp_categories])
-                response_message = f"I have identified {len(temp_categories)} categories \n " + category_text + "\n Does this seem correct?"
-                
-                dispatcher.utter_message(text= response_message,
-                                        buttons= [
-                    {"title": "Yes", "payload": "/submit_category"},
-                    {"title": "Modify", "payload": "/modify_categories"},
-                    {"title": "Exit", "payload": "/exit_grievance_process"}
-                ])
-                
-                print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
-                # Save the grievance details and initial category suggestion
-                return slots
-            else:
-                dispatcher.utter_message(text= "I have not identified any category",
-                                        buttons= [
-                    {"title": "Process without category", "payload": "/submit_category"},
-                    {"title": "Edit category", "payload": "/change_category"},
-                    {"title": "Exit", "payload": "/exit_grievance_process"}
-                ])
+            return response.choices[0].message.content.strip()
 
         except Exception as e:
-            dispatcher.utter_message(text=f"Sorry, there was an issue processing your grievance. Please try again.\n openAI response \n {result} \n result_dict: {str(result_dict)}")
             print(f"OpenAI API Error: {e}")
+            return None  # Return None in case of failure
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        user_input = tracker.latest_message.get("text")
+        print(user_input)
+
+        # Step 1: Save the free text grievance details
+        grievance_details = user_input
+
+        print("################### action_capture_grievance_text ##########")
+
+        # Call OpenAI for category classification
+        result = self._call_openai_for_classification(grievance_details)
+        
+        if result is None:
+            dispatcher.utter_message(text="⚠ Sorry, there was an issue processing your grievance. Please try again.")
             return []
+
+        print(f"Raw - gpt message: {result}")
+
+        # Step 2: Parse the results and fill the slots
+        result_dict = self.parse_summary_and_category(result)
+        print(result_dict)
+
+        slots = [
+            SlotSet("grievance_details", grievance_details),
+            SlotSet("grievance_summary", result_dict["grievance_summary"]),
+            SlotSet("temp_categories", result_dict["list_categories"])
+        ]
+
+        # Step 3: Validate category with the user
+        temp_categories = result_dict["list_categories"]
+        n = len(temp_categories)
+
+        if n > 0:
+            category_text = "\n".join([v for v in temp_categories])
+            response_message = f"I have identified {n} categories:\n{category_text}\nDoes this seem correct?"
+            
+            dispatcher.utter_message(text=response_message,
+                                     buttons=[
+                                         {"title": "Yes", "payload": "/submit_category"},
+                                         {"title": "Modify", "payload": "/modify_categories"},
+                                         {"title": "Exit", "payload": "/exit_grievance_process"}
+                                     ])
+            
+            print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
+            return slots
+        else:
+            dispatcher.utter_message(text="I have not identified any category",
+                                     buttons=[
+                                         {"title": "Process without category", "payload": "/submit_category"},
+                                         {"title": "Edit category", "payload": "/change_category"},
+                                         {"title": "Exit", "payload": "/exit_grievance_process"}
+                                     ])
+
+        return []
 
 class ActionConfirmCategories(Action):
     def name(self) -> str:
@@ -313,9 +263,9 @@ class ActionValidateSummary(Action):
         return []
     
 
-class ActionAskForSummary(Action):
+class ActionAskForUserSummary(Action):
     def name(self) -> Text:
-        return "action_ask_for_summary"
+        return "action_ask_for_user_summary"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """Step 1: Ask the user to provide a summary"""
@@ -332,7 +282,7 @@ class ActionAskForSummary(Action):
             )
 
         # Activate form so Rasa expects `grievance_summary`
-        return [ActiveLoop("edit_summary_form")]
+        return [SlotSet("grievance_summary", None), ActiveLoop("edit_summary_form")]
 
     
 
@@ -345,7 +295,7 @@ class ActionEditGrievanceSummary(Action):
 
         new_summary = tracker.get_slot("grievance_summary")
 
-        if new_summary and new_summary.lower() != "skip":
+        if new_summary:
             dispatcher.utter_message(text=f"✅ Your grievance summary has been updated to:\n\n'{new_summary}'")
             return [SlotSet("grievance_summary", new_summary), ActiveLoop(None)]  # Deactivate form
         
@@ -425,13 +375,6 @@ class ActionSubmitGrievanceAsIs(Action):
             dispatcher.utter_message(response="utter_grievance_submitted_no_details_as_is")
         return []
 
-# class ActionSetCategory(Action):
-#     def name(self) -> str:
-#         return "action_set_category"
-
-#     async def run(self, dispatcher, tracker, domain):
-#         grievance_category = tracker.get_slot("grievance_category")
-#         return [SlotSet("grievance_category", grievance_category)]
     
 
 class ActionAskForCategoryModification(Action):
@@ -493,6 +436,7 @@ class ActionModifyOrDeleteCategory(Action):
     def run(self, dispatcher, tracker, domain):
         category_modify = tracker.get_slot("category_modify")
         try:
+            print('############ action_modify_or_delete_category ###########')
             print("category_modify", category_modify)
         except: 
             pass
@@ -510,7 +454,8 @@ class ActionModifyOrDeleteCategory(Action):
             text=f"You selected '{category_modify}'. Would you like to delete it or change it?",
             buttons=buttons
         )
-        
+
+        print("old_category", category_modify)
         return [SlotSet("old_category", category_modify)]
     
     
@@ -520,11 +465,12 @@ class ActionChangeCategory(Action):
 
     def run(self, dispatcher, tracker, domain):
         # Path to the lookup file
-        lookup_file_path = "data/lookup_tables/list_category.txt"
-
+        print('############ action_change_category ###########')
         # Load categories from the lookup table
         category_list = list_categories_global
         # Retrieve categories already selected and dismissed
+        
+        print("old_category", tracker.get_slot("old_category"))
         selected_categories = tracker.get_slot("temp_categories") or []
         dismissed_categories = tracker.get_slot("dismissed_categories") or []
 
@@ -536,7 +482,7 @@ class ActionChangeCategory(Action):
             return []
 
         # Generate buttons for category selection (limit to 10 for readability)
-        buttons = [{"title": cat, "payload": f'/set_new_category{{"category": "{cat}"}}'} for cat in available_categories[:10]]
+        buttons = [{"title": cat, "payload": f'/set_apply_category_change{{"category": "{cat}"}}'} for cat in available_categories[:10]]
 
         # Add a "Cancel" and a skip button
         buttons = [{"title": "Cancel", "payload": "/cancel_modification_category"},
@@ -557,20 +503,14 @@ class ActionApplyCategoryChange(Action):
     def run(self, dispatcher, tracker, domain):
         old_category = tracker.get_slot("old_category")
         selected_categories = tracker.get_slot("temp_categories") or []
+        dismissed_categories = tracker.get_slot("dismissed_categories") or []
         new_category = None
+        print('############ action_apply_category_change ###########')
         print("temp_categories before update: ", selected_categories)
-        # # Extract the new category from the user's latest message (button selection)
-        # new_category = tracker.get_slot("new_category")
-        # print("old_category", old_category)
-        # print("new_category_from_slot", new_category)
+        print("old_category", old_category)
+        print("new_category_from_message", new_category)
+        print("temp_categories", selected_categories)
 
-        # Fallback: Try extracting directly from latest user message (in case slot is not set)
-        latest_message = tracker.latest_message.get("text", "")
-        # entities = tracker.latest_message.get("entities", [])
-        # for entity in entities:
-        #     if entity.get("entity") == "category":
-        #         new_category = entity.get("value")
-        #         break
         category_list = list_categories_global #load the categories
         
         for c in category_list:
@@ -578,8 +518,7 @@ class ActionApplyCategoryChange(Action):
                 new_category = c
                 print("c extracted from message : " , c)
             
-        print("old_category", old_category)
-        print("new_category_from_message", new_category)
+
         # Ensure new_category is valid before updating
         if not new_category:
             dispatcher.utter_message(text="⚠ No valid category was selected.")
@@ -588,6 +527,7 @@ class ActionApplyCategoryChange(Action):
         # Update category selection
         if old_category in selected_categories:
             selected_categories.remove(old_category)
+            dismissed_categories.append(old_category)
             selected_categories.append(new_category)
             print("temp_categories after update: ", selected_categories)
 
@@ -598,8 +538,9 @@ class ActionApplyCategoryChange(Action):
         return [
             SlotSet("temp_categories", selected_categories),
             SlotSet("category_modify", None),
-            SlotSet("old_category", None),
-            SlotSet("new_category", new_category)
+            SlotSet("old_category", old_category),
+            SlotSet("new_category", new_category),
+            SlotSet("dismissed_categories", dismissed_categories)
         ]
 
 

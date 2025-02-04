@@ -18,7 +18,7 @@ entities:
   
 
 slots:
-#navigation
+####################    navigation    ##################################
   current_process:
     type: text
     influence_conversation: false
@@ -41,7 +41,7 @@ slots:
       - type: from_entity
         entity: restart_type
 
-# location with entity detection
+#################### location with entity detection  ###################
   # province:
   #   type: text
   #   influence_conversation: false
@@ -111,13 +111,14 @@ slots:
   #     conditions:
   #     - active_loop: location_form
 
-  municipality:
+ municipality:
     type: text
-    influence_conversation: false
+    influence_conversation: true  # ✅ Keeps form active until user enters input
     mappings:
       - type: from_text
         conditions:
           - active_loop: municipality_form
+          
   # ward:
   #   type: text
   #   influence_conversation: false
@@ -141,44 +142,57 @@ slots:
         conditions:
           - active_loop: address_form
 
-#contact
-  user_contact_phone:
-    type: text
-    influence_conversation: false
-    mappings:
-    - type: from_entity
-      entity: user_contact_phone
-      conditions:
-      - active_loop: contact_form
+####################   contact    ###################
+  # user_contact_phone:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: user_contact_phone
+  #     conditions:
+  #     - active_loop: contact_form
+
+  # user_contact_email:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #     - type: from_entity
+  #       entity: user_contact_email
+  #       conditions:
+  #         - active_loop: contact_form
+
+  # user_full_name:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: user_full_name
+  #     conditions:
+  #     - active_loop: contact_form
+      
+  # user_honorific_prefix:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings:
+  #   - type: from_entity
+  #     entity: user_honorific_prefix
+  #     conditions:
+  #     - active_loop: contact_form
+
+
+ user_contact_phone:
+    type: from_text
 
   user_contact_email:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: from_entity
-        entity: user_contact_email
-        conditions:
-          - active_loop: contact_form
+    type: from_text
 
   user_full_name:
-    type: text
-    influence_conversation: false
-    mappings:
-    - type: from_entity
-      entity: user_full_name
-      conditions:
-      - active_loop: contact_form
-      
-  user_honorific_prefix:
-    type: text
-    influence_conversation: false
-    mappings:
-    - type: from_entity
-      entity: user_honorific_prefix
-      conditions:
-      - active_loop: contact_form
+    type: from_text
 
-  #grievance
+  user_honorific_prefix:
+    type: from_text
+
+  ################ grievance slots ###################
   grievance_category:
     type: text
     influence_conversation: false
@@ -194,7 +208,6 @@ slots:
     type: text
     influence_conversation: false
     mappings: []
-
 
   detailed_grievance_completed:
     type: bool
@@ -218,9 +231,13 @@ slots:
   
   category_modify:
     type: text
-    mappings:
-      - type: from_entity
-        entity: category
+    influence_conversation: false
+    mappings: []
+
+  old_category:
+    type: text
+    influence_conversation: false
+    mappings: []
 
   new_category:
     type: text
@@ -240,8 +257,4 @@ slots:
     mappings:
       - type: custom
 
-  old_category:
-    type: text
-    mappings:
-      - type: from_entity
-        entity: category
+

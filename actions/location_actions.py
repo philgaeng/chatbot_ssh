@@ -64,77 +64,6 @@ class ActionAskLocation(Action):
             ]
         )
         return []
-
-
-# class ValidateLocationForm(FormValidationAction):
-#     def name(self) -> Text:
-#         return "validate_location_form"
-
-#     async def extract_slot(self, slot_name: str, dispatcher: CollectingDispatcher, tracker: Tracker) -> Dict[Text, Any]:
-        
-#         """Handles slot extraction, skipping when intent is 'skip', and ensures the correct question is always asked."""
-#         intent_name = tracker.latest_message.get("intent", {}).get("name")
-#         user_response = tracker.latest_message.get("text", "").strip().lower()
-
-#         # If the user wants to skip, acknowledge and move to the next slot
-#         if intent_name == "skip":
-#             dispatcher.utter_message(text=f"Skipping {slot_name}.")
-#             return {slot_name: None}  # Move to the next question
-
-#         # # Always ask the corresponding question before processing input
-#         # dispatcher.utter_message(response=f"utter_ask_{slot_name}")
-
-#         # If the response is "yes" or "no", repeat the question
-#         if user_response in ["yes", "no"]:
-#             dispatcher.utter_message(text=f"I need more details for {slot_name}. Please provide a valid answer.")
-#             return {slot_name: None}  # Keep asking until a valid answer is given
-
-#         return {slot_name: user_response}  # Store the valid response
-
-#     async def extract_province(self, dispatcher, tracker, domain) -> Dict[Text, Any]:
-#         return await self.extract_slot("province", dispatcher, tracker)
-
-#     async def extract_municipality(self, dispatcher, tracker, domain) -> Dict[Text, Any]:
-#         return await self.extract_slot("municipality", dispatcher, tracker)
-
-#     async def extract_ward(self, dispatcher, tracker, domain) -> Dict[Text, Any]:
-#         return await self.extract_slot("ward", dispatcher, tracker)
-
-#     async def extract_village(self, dispatcher, tracker, domain) -> Dict[Text, Any]:
-#         return await self.extract_slot("village", dispatcher, tracker)
-
-#     async def extract_address(self, dispatcher, tracker, domain) -> Dict[Text, Any]:
-#         return await self.extract_slot("address", dispatcher, tracker)
-
-    # async def validate(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-    #     # Collect the slot values
-    #     province = tracker.get_slot("province")
-    #     municipality = tracker.get_slot("municipality")
-    #     ward = tracker.get_slot("ward")
-    #     village = tracker.get_slot("village")
-    #     address = tracker.get_slot("address")
-
-    #     # Construct the confirmation message
-    #     confirmation_message = (
-    #         "Thank you for providing your location details:\n"
-    #         f"- Province: {province or 'Not provided'}\n"
-    #         f"- Municipality: {municipality or 'Not provided'}\n"
-    #         f"- Ward: {ward or 'Not provided'}\n"
-    #         f"- Village: {village or 'Not provided'}\n"
-    #         f"- Address: {address or 'Not provided'}\n\n"
-    #         "Is this correct?"
-    #     )
-    #     logger.debug(f"Validating location form: province={province}, district={district}, municipality={municipality}, ward={ward}, village={village}, address={address}")
-
-    #     dispatcher.utter_message(text=confirmation_message)
-
-    #     return [
-    #         SlotSet("province", province),
-    #         SlotSet("municipality", municipality),
-    #         SlotSet("ward", ward),
-    #         SlotSet("village", village),
-    #         SlotSet("address", address),
-    #     ]
     
 ######### Municipality
 
@@ -151,14 +80,9 @@ class ActionConfirmMunicipality(Action):
         # address = tracker.get_slot("address")
 
         confirmation_message = (
-            f"Thank you for providing your location details:\n"
-            # f"- Province: {province or 'Skipped'}\n"
-            # f"- District: {district or 'Skipped'}\n"
-            f"- Municipality: {municipality or 'Skipped'}\n"
-            # f"- Ward: {ward or 'Skipped'}\n"
-            # f"- Village: {village or 'Skipped'}\n"
-            # f"- Address: {address or 'Skipped'}\n\n"
-            "Is this correct?"
+            f"""Thank you for providing your location details:
+            \n - Municipality: {municipality or 'Skipped'}"
+            \n Is this correct?"""
         )
         
         dispatcher.utter_message(text=confirmation_message)
@@ -180,32 +104,28 @@ class ActionResetMunicipalitySlots(Action):
             # SlotSet("address", None),
         ]
         
+
+
 class ValidateMunicipalityForm(FormValidationAction):
-    def name(self) -> str:
+    def name(self) -> Text:
         return "validate_municipality_form"
 
-    async def validate(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain) -> dict:
-        """Handles slot validation, allowing skipping and ensuring valid input."""
-        requested_slot = tracker.get_slot("requested_slot")  # Get the slot currently being requested
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        
+        municipality = tracker.get_slot("municipality")
+        print(f"🔍 DEBUG: municipality slot before validation: {municipality}")
 
-        if not requested_slot:
-            return {}
+        if not municipality or municipality.startswith("/"):
+            dispatcher.utter_message(text="Please enter a valid municipality name.")
+            print(f"🚨 DEBUG: Invalid municipality detected, resetting slot")
+            return [SlotSet("municipality", None), SlotSet("requested_slot", "municipality")]
 
-        user_response = tracker.latest_message.get("text", "").strip().lower()
-        intent_name = tracker.latest_message.get("intent", {}).get("name")
+        print(f"✅ DEBUG: municipality slot set to: {municipality}")
+        return [SlotSet("municipality", municipality)]
 
-        # If the user wants to skip, acknowledge and move to the next slot
-        if intent_name == "skip":
-            dispatcher.utter_message(text=f"Skipping {requested_slot}.")
-            return {requested_slot: None}
 
-        # If the response is "yes" or "no", repeat only the current question
-        if user_response in ["yes", "no"]:
-            dispatcher.utter_message(text=f"I need more details for {requested_slot}. Please provide a valid answer.")
-            return {requested_slot: None}
-
-        return {requested_slot: user_response}  # Store the valid response
-    
     ########### Address and Village
     
 class ActionConfirmAddress(Action):
@@ -231,7 +151,12 @@ class ActionConfirmAddress(Action):
             "Is this correct?"
         )
         
-        dispatcher.utter_message(text=confirmation_message)
+        dispatcher.utter_message(text=confirmation_message,
+                                 buttons=[
+                                         {"title": "Yes", "payload": "/submit_address"},
+                                         {"title": "Modify", "payload": "/modify_address"},
+                                         {"title": "Exit", "payload": "/exit_grievance_process"}
+                                     ])
         
         return []
 

@@ -20,6 +20,28 @@ from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 
 
+class AskContactConsent(Action):
+    def name(self) -> str:
+        return "action_ask_contact_consent"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = (
+            "Would you like to provide your contact information? Here are your options:\n\n"
+            "1️⃣ **Yes**: Share your contact details for follow-up and updates about your grievance.\n"
+            "2️⃣ **Anonymous with phone number**: Stay anonymous but provide a phone number to receive your grievance ID.\n"
+            "3️⃣ **No contact information**: File your grievance without providing contact details. "
+            "Note that we won't be able to follow up or share your grievance ID."
+        )
+        dispatcher.utter_message(
+            text=message,
+            buttons=[
+                {"title": "Yes", "payload": "/provide_contact_yes"},
+                {"title": "Anonymous with phone", "payload": "/anonymous_with_phone"},
+                {"title": "No contact info", "payload": "/no_contact_provided"},
+            ]
+        )
+        return []
+
 
 # Action to send OTP
 class ActionSendOtp(Action):
@@ -67,7 +89,6 @@ class ActionVerifyOtp(Action):
             return [SlotSet("otp_verified", False)]
         
 
-
 class ValidateContactForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_contact_form"
@@ -97,7 +118,7 @@ class ValidateContactForm(FormValidationAction):
             return {"user_contact_phone": None}
 
         # Validate Nepal phone number format
-        if not re.match(r"^(98|97)\d{8}$", phone_number):
+        if not re.match(r"^\+?(98|97)\d{8}$", phone_number.replace(" ", "").replace("-", "")):
             dispatcher.utter_message(
                 text=(
                     "The phone number you provided is invalid. "
@@ -107,7 +128,7 @@ class ValidateContactForm(FormValidationAction):
             )
             return {"user_contact_phone": None}
 
-        return {"user_contact_phone": phone_number}
+        return {"user_contact_phone": phone_number.strip()}
 
     async def extract_user_contact_email(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
@@ -118,7 +139,7 @@ class ValidateContactForm(FormValidationAction):
             return {"user_contact_email": None}
 
         # Validate email format
-        if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+        if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email.strip()):
             dispatcher.utter_message(
                 text=(
                     "The email address you provided is invalid. "
@@ -128,7 +149,7 @@ class ValidateContactForm(FormValidationAction):
             )
             return {"user_contact_email": None}
 
-        return {"user_contact_email": email}
+        return {"user_contact_email": email.strip()}
 
     async def validate(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
@@ -155,8 +176,99 @@ class ValidateContactForm(FormValidationAction):
         
         except Exception as e:
             dispatcher.utter_message(text="An error occurred while processing your contact details.")
-            logger.error(f"Error in validate_contact_form: {e}")
+            print(f"Error in validate_contact_form: {e}")
             return []
+
+
+# class ValidateContactForm(FormValidationAction):
+#     def name(self) -> Text:
+#         return "validate_contact_form"
+
+#     async def extract_user_full_name(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> Dict[Text, Any]:
+#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
+#             dispatcher.utter_message(response="utter_skip_full_name")
+#             return {"user_full_name": None}
+#         return {"user_full_name": tracker.latest_message.get("text")}
+
+#     async def extract_user_honorific_prefix(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> Dict[Text, Any]:
+#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
+#             dispatcher.utter_message(response="utter_skip_honorific_prefix")
+#             return {"user_honorific_prefix": None}
+#         return {"user_honorific_prefix": tracker.latest_message.get("text")}
+
+#     async def extract_user_contact_phone(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> Dict[Text, Any]:
+#         phone_number = tracker.latest_message.get("text")
+#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
+#             dispatcher.utter_message(response="utter_skip_phone_number")
+#             return {"user_contact_phone": None}
+
+#         # Validate Nepal phone number format
+#         if not re.match(r"^(98|97)\d{8}$", phone_number):
+#             dispatcher.utter_message(
+#                 text=(
+#                     "The phone number you provided is invalid. "
+#                     "Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long. "
+#                     "Please provide a valid number."
+#                 )
+#             )
+#             return {"user_contact_phone": None}
+
+#         return {"user_contact_phone": phone_number}
+
+#     async def extract_user_contact_email(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> Dict[Text, Any]:
+#         email = tracker.latest_message.get("text")
+#         if tracker.latest_message.get("intent", {}).get("name") == "skip":
+#             dispatcher.utter_message(response="utter_skip_email_address")
+#             return {"user_contact_email": None}
+
+#         # Validate email format
+#         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+#             dispatcher.utter_message(
+#                 text=(
+#                     "The email address you provided is invalid. "
+#                     "A valid email should be in the format: username@domain.com. "
+#                     "Please provide a valid email address."
+#                 )
+#             )
+#             return {"user_contact_email": None}
+
+#         return {"user_contact_email": email}
+
+#     async def validate(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+#     ) -> List[Dict[Text, Any]]:
+#         try:
+#             # Collect the slot values
+#             user_full_name = tracker.get_slot("user_full_name")
+#             user_contact_phone = tracker.get_slot("user_contact_phone")
+#             user_contact_email = tracker.get_slot("user_contact_email")
+#             user_honorific_prefix = tracker.get_slot("user_honorific_prefix")
+
+#             # Construct the confirmation message
+#             confirmation_message = (
+#                 "Thank you for providing your contact details:\n"
+#                 f"- Full Name: {user_full_name or 'Not provided'}\n"
+#                 f"- Honorific Prefix: {user_honorific_prefix or 'Not provided'}\n"
+#                 f"- Phone Number: {user_contact_phone or 'Not provided'}\n"
+#                 f"- Email Address: {user_contact_email or 'Not provided'}\n\n"
+#                 "Is this correct?"
+#             )
+
+#             dispatcher.utter_message(text=confirmation_message)
+#             return []
+        
+#         except Exception as e:
+#             dispatcher.utter_message(text="An error occurred while processing your contact details.")
+#             logger.error(f"Error in validate_contact_form: {e}")
+#             return []
 
 
 

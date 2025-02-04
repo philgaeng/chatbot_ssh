@@ -307,7 +307,17 @@ nlu:
 
 - intent: cancel_modification_category
   examples: |
-    - "/cancel_modification_category"
+    - /cancel_modification_category
+
+- intent: submit_address
+  examples: |
+    - /submit_address
+    - submit_address
+
+- intent: modify_address
+  examples: |
+    - /modify_address
+    - modify_address
 
 - intent: describe_complain
   examples: |
@@ -445,3 +455,18 @@ nlu:
   examples: |
     - \skip_summary
     - skip_summary
+
+- intent : provide_contact_yes
+  examples: |
+    - \provide_contact_yes
+    - provide_contact_yes
+
+- intent : anonymous_with_phone
+  examples: |
+    - \anonymous_with_phone
+    - anonymous_with_phone 
+
+- intent : no_contact_provided
+  examples: |
+  - \no_contact_provided
+  - no_contact_provided
