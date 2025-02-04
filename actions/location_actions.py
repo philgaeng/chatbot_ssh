@@ -269,11 +269,9 @@ class ValidateAddressForm(FormValidationAction):
         user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
 
-        # Ignore nlu_fallback
-        if intent_name == "nlu_fallback":
-            dispatcher.utter_message(text="I couldn't understand that. Please provide the name of the village.")
-            return {"village": None}
-
+        print("############# extract village ##########")
+        print(tracker.get_slot("requested_slot"))
+        print(user_response)
         # Only extract input when village is the requested slot
         if tracker.get_slot("requested_slot") == "village":
             return {"village": user_response}
@@ -284,14 +282,13 @@ class ValidateAddressForm(FormValidationAction):
     async def extract_address(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
-
-        # Ignore nlu_fallback
-        if intent_name == "nlu_fallback":
-            dispatcher.utter_message(text="I couldn't understand that. Please provide the address.")
-            return {"address": None}
+        print("############# extract address ##########")
+        print(tracker.get_slot("requested_slot"))
+        print(user_response)
 
         # Only extract input when address is the requested slot
         if tracker.get_slot("requested_slot") == "address":
+            
             return {"address": user_response}
 
         return {}
