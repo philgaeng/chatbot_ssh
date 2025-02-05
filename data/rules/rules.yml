@@ -55,3 +55,23 @@ rules:
       - intent: provide_contact_email
       - action: contact_form
       - active_loop: contact_form
+
+  - rule: ask for user consent after intent "submit_address"
+    steps:
+      - intent: submit_address
+      - action: action_ask_contact_consent
+
+  - rule: Ignore fallback during forms
+    condition:
+      - active_loop: address_form
+    steps:
+      - intent: nlu_fallback
+      - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
+
+  - rule: Ignore fallback during forms
+    condition:
+      - active_loop: contact_form
+    steps:
+      - intent: nlu_fallback
+      - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
+  

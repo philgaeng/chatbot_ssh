@@ -10,6 +10,7 @@
 # from typing import Any, Text, Dict, List
 #
 import re
+import logging
 import os
 import json
 from dotenv import load_dotenv
@@ -31,7 +32,7 @@ classification_data = load_classification_data()
 list_categories_global = load_categories_from_lookup()
 
 
-
+logger = logging.getLogger(__name__)
 
 try:
     if open_ai_key:
@@ -166,15 +167,15 @@ class ActionCaptureGrievanceText(Action):
         slots = [
             SlotSet("grievance_details", grievance_details),
             SlotSet("grievance_summary", result_dict["grievance_summary"]),
-            SlotSet("temp_categories", result_dict["list_categories"])
+            SlotSet("list_of_cat_for_summary", result_dict["list_categories"])
         ]
 
         # Step 3: Validate category with the user
-        temp_categories = result_dict["list_categories"]
-        n = len(temp_categories)
+        list_of_cat_for_summary = result_dict["list_categories"]
+        n = len(list_of_cat_for_summary)
 
         if n > 0:
-            category_text = "\n".join([v for v in temp_categories])
+            category_text = "\n".join([v for v in list_of_cat_for_summary])
             response_message = f"I have identified {n} categories:\n{category_text}\nDoes this seem correct?"
             
             dispatcher.utter_message(text=response_message,
@@ -196,37 +197,6 @@ class ActionCaptureGrievanceText(Action):
 
         return []
 
-class ActionConfirmCategories(Action):
-    def name(self) -> str:
-        return "action_confirm_categories"
-
-    def run(self, dispatcher, tracker, domain):
-        confirmed_categories = tracker.get_slot("temp_categories")
-
-        if not confirmed_categories:
-            dispatcher.utter_message(text="I couldn't find any categories to confirm.")
-            return []
-
-        # # Save confirmed categories as final slots
-        # slots = [SlotSet(f"category_{idx}", category) for idx, category in enumerate(confirmed_categories, start=1)]
-
-        # Confirmation message
-        dispatcher.utter_message(
-            text="Thank you! The categories have been confirmed."
-        )
-
-        # # Ask if they want to add another category manually
-        # buttons = [
-        #     {"title": "Yes, add category", "payload": "/add_category"},
-        #     {"title": "No, continue", "payload": "/continue_process"}
-        # ]
-
-        # dispatcher.utter_message(
-        #     text="Do you want to add another category manually?",
-        #     buttons=buttons
-        # )
-
-        return []
 
 
 
@@ -315,7 +285,7 @@ class ActionSubmitGrievance(Action):
         # Retrieve grievance details, summary, and category from slots
         grievance_details = tracker.get_slot("grievance_details")
         grievance_summary = tracker.get_slot("grievance_summary")
-        grievance_category = tracker.get_slot("temp_category")
+        grievance_category = tracker.get_slot("list_of_cat_for_summary")
 
         # Generate a unique grievance ID
         grievance_id = get_next_grievance_number()
@@ -382,16 +352,16 @@ class ActionAskForCategoryModification(Action):
         return "action_ask_for_category_modification"
 
     def run(self, dispatcher, tracker, domain):
-        temp_categories = tracker.get_slot("temp_categories")
+        list_of_cat_for_summary = tracker.get_slot("list_of_cat_for_summary")
 
-        if not temp_categories:
+        if not list_of_cat_for_summary:
             dispatcher.utter_message(text="No categories selected.")
             return []
 
         # Display categories as buttons for modification
         buttons = [
             {"title": category, "payload": f"/modify_category{{\"category_modify\": \"{category}\"}}"}
-            for category in temp_categories
+            for category in list_of_cat_for_summary
         ]
         buttons.append({"title": "✅ Confirm & Continue", "payload": "/confirm_selection"})
 
@@ -471,7 +441,7 @@ class ActionChangeCategory(Action):
         # Retrieve categories already selected and dismissed
         
         print("old_category", tracker.get_slot("old_category"))
-        selected_categories = tracker.get_slot("temp_categories") or []
+        selected_categories = tracker.get_slot("list_of_cat_for_summary") or []
         dismissed_categories = tracker.get_slot("dismissed_categories") or []
 
         # Filter out selected and dismissed categories
@@ -502,14 +472,14 @@ class ActionApplyCategoryChange(Action):
 
     def run(self, dispatcher, tracker, domain):
         old_category = tracker.get_slot("old_category")
-        selected_categories = tracker.get_slot("temp_categories") or []
+        selected_categories = tracker.get_slot("list_of_cat_for_summary") or []
         dismissed_categories = tracker.get_slot("dismissed_categories") or []
         new_category = None
         print('############ action_apply_category_change ###########')
-        print("temp_categories before update: ", selected_categories)
+        print("list_of_cat_for_summary before update: ", selected_categories)
         print("old_category", old_category)
         print("new_category_from_message", new_category)
-        print("temp_categories", selected_categories)
+        print("list_of_cat_for_summary", selected_categories)
 
         category_list = list_categories_global #load the categories
         
@@ -529,14 +499,14 @@ class ActionApplyCategoryChange(Action):
             selected_categories.remove(old_category)
             dismissed_categories.append(old_category)
             selected_categories.append(new_category)
-            print("temp_categories after update: ", selected_categories)
+            print("list_of_cat_for_summary after update: ", selected_categories)
 
             dispatcher.utter_message(text=f"✅ '{old_category}' has been changed to '{new_category}'.")
         else:
             dispatcher.utter_message(text=f"⚠ '{old_category}' was not found in the selected categories.")
 
         return [
-            SlotSet("temp_categories", selected_categories),
+            SlotSet("list_of_cat_for_summary", selected_categories),
             SlotSet("category_modify", None),
             SlotSet("old_category", old_category),
             SlotSet("new_category", new_category),
@@ -549,7 +519,7 @@ class ActionConfirmCategories(Action):
         return "action_confirm_categories"
 
     def run(self, dispatcher, tracker, domain):
-        selected_categories = tracker.get_slot("temp_categories")
+        selected_categories = tracker.get_slot("list_of_cat_for_summary")
         
           # Remove None values from the list
         selected_categories = [cat for cat in selected_categories if cat]
@@ -577,11 +547,11 @@ class ActionDeleteCategory(Action):
 
     def run(self, dispatcher, tracker, domain):
         category_to_delete = tracker.get_slot("category_modify")
-        temp_categories = tracker.get_slot("temp_categories") or []
+        list_of_cat_for_summary = tracker.get_slot("list_of_cat_for_summary") or []
         dismissed_categories = tracker.get_slot("dismissed_categories") or []
 
-        if category_to_delete in temp_categories:
-            temp_categories.remove(category_to_delete)
+        if category_to_delete in list_of_cat_for_summary:
+            list_of_cat_for_summary.remove(category_to_delete)
             dispatcher.utter_message(text=f"✅ '{category_to_delete}' has been removed.")
 
             # Add to dismissed categories if not already present
@@ -593,7 +563,7 @@ class ActionDeleteCategory(Action):
 
         # Update slots
         return [
-            SlotSet("temp_categories", temp_categories), 
+            SlotSet("list_of_cat_for_summary", list_of_cat_for_summary), 
             SlotSet("category_modify", None),
             SlotSet("dismissed_categories", dismissed_categories)  # Track dismissed category
         ]

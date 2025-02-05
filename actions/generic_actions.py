@@ -14,11 +14,10 @@ from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted
+from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted, UserUtteranceReverted
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
-from rasa_sdk.events import UserUtteranceReverted, Restarted
 
 logger = logging.getLogger(__name__)
 
@@ -134,3 +133,18 @@ class ActionRespondToChallenge(Action):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(response="utter_respond_to_challenge")
         return []
+    
+class ActionCustomFallback(Action):
+    def name(self):
+        return "action_custom_fallback"
+
+    def run(self, dispatcher, tracker, domain):
+        dispatcher.utter_message(
+            text="I didn't understand that. What would you like to do next?",
+            buttons=[
+                {"title": "Try Again", "payload": "/restart_story{\"restart_type\": \"story\"}"},
+                {"title": "File Grievance as Is", "payload": "/file_grievance_as_is"},
+                {"title": "Exit", "payload": "/exit"}
+            ]
+        )
+        return [UserUtteranceReverted()]

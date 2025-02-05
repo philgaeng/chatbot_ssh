@@ -88,6 +88,9 @@ stories:
       - active_loop: null
       - action : address_form
       - active_loop: address_form
+      - slot_was_set:
+          - village
+          - address  # ✅ Ensures bot waits for user input # Keeps the form active  # Executes the validation logic
       - active_loop: null
       - action : action_confirm_address
       - intent : submit_address
@@ -102,7 +105,9 @@ stories:
       - action: contact_form
       - active_loop: contact_form
       - slot_was_set:
+          - user_full_name
           - user_contact_phone  # ✅ Ensures bot waits for user input # Keeps the form active  # Executes the validation logic
+          - user_contact_email
       - active_loop: null
       - action: action_submit_grievance
 

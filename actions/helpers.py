@@ -39,7 +39,7 @@ def load_classification_data(csv_path=DEFAULT_CSV_PATH):
             reader = csv.DictReader(csvfile)
             for row in reader:
                 # Normalize case and format as "Classification - Grievance Name"
-                category = f"{row['Classification'].title()} - {row['Generic Grievance Name'].title()}"
+                category = f"- {row['Classification'].title()} ; {row['Generic Grievance Name'].title()}"
                 categories.append(category)
 
         # Remove duplicates and sort

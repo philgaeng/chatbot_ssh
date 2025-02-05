@@ -83,41 +83,6 @@ slots:
 
 
 ####################   contact    ###################
-  # user_contact_phone:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: user_contact_phone
-  #     conditions:
-  #     - active_loop: contact_form
-
-  # user_contact_email:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #     - type: from_entity
-  #       entity: user_contact_email
-  #       conditions:
-  #         - active_loop: contact_form
-
-  # user_full_name:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: user_full_name
-  #     conditions:
-  #     - active_loop: contact_form
-      
-  # user_honorific_prefix:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: user_honorific_prefix
-  #     conditions:
-  #     - active_loop: contact_form
 
 
   user_contact_phone:
@@ -127,6 +92,7 @@ slots:
     - type: from_text
       conditions:
       - active_loop: contact_form
+        requested_slot: user_contact_phone
 
   user_contact_email:
     type: text
@@ -135,6 +101,7 @@ slots:
     - type: from_text
       conditions:
       - active_loop: contact_form
+        requested_slot: user_contact_email
 
   user_full_name:
     type: text
@@ -143,6 +110,7 @@ slots:
     - type: from_text
       conditions:
       - active_loop: contact_form
+        requested_slot: user_full_name
 
 
   ################ grievance slots ###################
@@ -177,7 +145,7 @@ slots:
     mappings:
       - type: custom
 
-  temp_categories:
+  list_of_cat_for_summary:
     type: list
     influence_conversation: false
     mappings: []
@@ -210,72 +178,3 @@ slots:
     mappings:
       - type: custom
 
-
-# province:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: province
-  #     conditions:
-  #     - active_loop: location_form
-
-  # district:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: district
-  #     conditions:
-  #     - active_loop: location_form
-
-  # municipality:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #     - type: from_entity
-  #       entity: municipality
-  #       conditions:
-  #         - active_loop: municipality_form
-  # ward:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #     - type: from_entity
-  #       entity: ward
-  #       conditions:
-  #         - active_loop: location_form
-  # village:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_entity
-  #     entity: village
-  #     conditions:
-  #     - active_loop: address_form
-
-  # address:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #     - type: from_entity
-  #       entity: address
-  #       conditions:
-  #         - active_loop: address_form
-
-# location simple
-  # province:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_text
-  #     conditions:
-  #     - active_loop: location_form
-
-  # district:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings:
-  #   - type: from_text
-  #     conditions:
-  #     - active_loop: location_form

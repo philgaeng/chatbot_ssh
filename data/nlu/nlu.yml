@@ -353,17 +353,6 @@ nlu:
     - my phone was stolen
     - I was harassed
 
-
-#forms
-# - intent: set_category
-#   examples: |
-#     - /set_category{"grievance_category": "Health"}
-#     - /set_category{"grievance_category": "Education"}
-#     - /set_category{"grievance_category": "Infrastructure"}
-#     - /set_category{"grievance_category": "Education"}
-#     - /set_category{"grievance_category": "Other"}
-#     - /skip
-
 - intent: provide_contact
   examples: |
     - my name is

@@ -1,17 +1,6 @@
 ---
 version: "3.1"
 forms:
-  # location_form:
-  #   required_slots:
-  #     - province
-  #     - district
-  #     - municipality
-  #     - ward
-  #     - village
-  #     - address
-  #   ignored_intents:
-  #     - agree
-  #     - deny
   municipality_form:
     required_slots:
       - municipality
@@ -27,6 +16,7 @@ forms:
     ignored_intents:
       - agree
       - deny
+      - nlu_fallback
 
   contact_form:
     required_slots:
@@ -85,7 +75,6 @@ actions:
   - action_submit_grievance
   - action_restart_grievance
   - action_generate_grievance_id
-  # - action_set_category
   - action_ask_for_category_modification
   - action_set_category_to_modify
   - action_modify_or_delete_category
@@ -101,6 +90,8 @@ actions:
   - utter_ask_contact_form_user_full_name
   - utter_ask_contact_form_user_contact_phone
   - utter_ask_contact_form_user_contact_email
+  - action_custom_fallback
+
   
 
 
