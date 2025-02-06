@@ -4,15 +4,16 @@ import os  # For file path operations
 import logging  # For logging errors
 import csv  # For reading CSV files
 from datetime import datetime
-
+import json  # For loading JSON files
+from rapidfuzz import process
+from constants import (
+    LOOKUP_FILE_PATH,
+    DEFAULT_CSV_PATH,
+    COUNTER_FILE,
+    LOCATION_JSON_PATH
+)
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# Default file paths
-LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
-DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
-# File to store the last grievance ID
-COUNTER_FILE = "/home/ubuntu/nepal_chatbot/data/grievance_counter.txt"
 
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""
@@ -107,8 +108,191 @@ def get_next_grievance_number():
         print(f"Error parsing grievance ID: {e}. Resetting counter.")
         new_grievance_id = f"GR-{today_date}-0001"
 
-    # Save the new grievance ID to the file
+    # Save the new grievance ID to the file 
     with open(COUNTER_FILE, "w") as f:
         f.write(new_grievance_id)
 
     return new_grievance_id
+
+
+class LocationValidator:
+    def __init__(self, json_path=LOCATION_JSON_PATH):
+        with open(json_path, "r") as file:
+            self.locations = self._normalize_locations(json.load(file))
+            self.max_words = self._calculate_max_words()
+
+    def _normalize_locations(self, locations):
+        """Normalize all names in the locations data to lowercase."""
+        for province in locations.get("provinceList", []):
+            province["name"] = province["name"].lower()
+            for district in province.get("districtList", []):
+                district["name"] = district["name"].lower()
+                for municipality in district.get("municipalityList", []):
+                    municipality["name"] = municipality["name"].lower()
+        return locations
+
+    def _calculate_max_words(self):
+        """Calculate the maximum number of words in any municipality name."""
+        max_words = 0
+        for province in self.locations.get("provinceList", []):
+            for district in province.get("districtList", []):
+                for municipality in district.get("municipalityList", []):
+                    words = len(municipality["name"].split())
+                    max_words = max(max_words, words)
+        return max_words
+
+    def _get_common_suffixes(self):
+        """Return list of common suffixes to remove."""
+        return [
+            "province", "district", "municipality", 
+            "rural municipality", "metropolitan", 
+            "sub-metropolitan", "submetropolitan",
+            "metropolitan city", "rural mun", "mun"
+        ]
+
+    def _preprocess(self, text):
+        """Normalize user input to lowercase and remove common suffixes."""
+        if not text:
+            return None
+        
+        text = text.lower().strip()
+        for suffix in self._get_common_suffixes():
+            text = text.replace(suffix, "").strip()
+        return text
+
+    def _generate_possible_names(self, text):
+        """Generate possible location names from input text."""
+        if not text:
+            return []
+        
+        words = text.split()
+        possible_names = []
+        for i in range(len(words)):
+            for j in range(i + 1, min(i + self.max_words + 1, len(words) + 1)):
+                possible_names.append(" ".join(words[i:j]))
+        return possible_names
+
+    def _find_best_match(self, input_value, options, score_cutoff=65):
+        """Find the best match using fuzzy matching."""
+        if not input_value or not options:
+            return None
+        input_value = self._preprocess(input_value)
+        match = process.extractOne(input_value, options, score_cutoff=score_cutoff)
+        return match[0] if match else None
+
+    def _get_province_data(self, province_name):
+        """Get province data by name."""
+        return next(
+            (p for p in self.locations.get("provinceList", []) 
+             if p["name"] == province_name),
+            None
+        )
+
+    def _get_district_data(self, province_data, district_name):
+        """Get district data by name within a province."""
+        return next(
+            (d for d in province_data.get("districtList", []) 
+             if d["name"] == district_name),
+            None
+        )
+
+    def _match_with_qr_data(self, possible_names, qr_province, qr_district):
+        """Try to match location using QR-provided data."""
+        province_list = self.locations.get("provinceList", [])
+        province_names = [p["name"] for p in province_list]
+        
+        # Match province from QR data
+        matched_province = self._find_best_match(qr_province, province_names) if qr_province else None
+        if not matched_province:
+            return None, None, None
+            
+        # Get province data and match district
+        province_data = self._get_province_data(matched_province)
+        district_names = [d["name"] for d in province_data.get("districtList", [])]
+        matched_district = self._find_best_match(qr_district, district_names) if qr_district else None
+        
+        if not matched_district:
+            return matched_province, None, None
+            
+        # Get district data and match municipality
+        district_data = self._get_district_data(province_data, matched_district)
+        municipality_names = [m["name"] for m in district_data.get("municipalityList", [])]
+        
+        # Try to match municipality from possible names
+        for possible_name in possible_names:
+            matched_municipality = self._find_best_match(possible_name, municipality_names)
+            if matched_municipality:
+                return matched_province, matched_district, matched_municipality
+                
+        return matched_province, matched_district, None
+
+    def _match_from_string(self, possible_names):
+        """Try to match location from possible names without QR data."""
+        for province in self.locations.get("provinceList", []):
+            for district in province.get("districtList", []):
+                municipality_names = [m["name"] for m in district.get("municipalityList", [])]
+                
+                # Try municipality match first
+                for possible_name in possible_names:
+                    matched_municipality = self._find_best_match(possible_name, municipality_names)
+                    if matched_municipality:
+                        return province["name"], district["name"], matched_municipality
+        
+        # If no municipality match, try district match
+        for province in self.locations.get("provinceList", []):
+            district_names = [d["name"] for d in province.get("districtList", [])]
+            for possible_name in possible_names:
+                matched_district = self._find_best_match(possible_name, district_names)
+                if matched_district:
+                    return province["name"], matched_district, None
+        
+        # Finally, try province match
+        province_names = [p["name"] for p in self.locations.get("provinceList", [])]
+        for possible_name in possible_names:
+            matched_province = self._find_best_match(possible_name, province_names)
+            if matched_province:
+                return matched_province, None, None
+                
+        return None, None, None
+
+    def _format_result(self, province, district, municipality):
+        """Format the validation result with appropriate error messages."""
+        if not province:
+            return {"error": "Could not determine province."}
+        if not district:
+            return {
+                "province": province,
+                "error": f"Could not determine district in {province}."
+            }
+        if not municipality:
+            return {
+                "province": province,
+                "district": district,
+                "error": f"Could not determine municipality in {district}."
+            }
+        return {
+            "province": province,
+            "district": district,
+            "municipality": municipality
+        }
+
+    def validate_location(self, location_string, qr_province=None, qr_district=None):
+        """Validate location from a single string input and QR defaults."""
+        # Preprocess input and generate possible names
+        processed_text = self._preprocess(location_string)
+        possible_names = self._generate_possible_names(processed_text)
+        
+        # Try matching with QR data first
+        province, district, municipality = self._match_with_qr_data(
+            possible_names, qr_province, qr_district
+        )
+        
+        # If QR matching failed, try matching from string
+        if not (province and district and municipality):
+            prov, dist, muni = self._match_from_string(possible_names)
+            province = province or prov
+            district = district or dist
+            municipality = municipality or muni
+        
+        # Format and return the result
+        return self._format_result(province, district, municipality)

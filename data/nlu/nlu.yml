@@ -80,6 +80,9 @@ nlu:
     - right
     - sounds good
     - affirm
+    - agree
+    - /agree
+    - /Agree
 
 - intent: deny
   examples: |

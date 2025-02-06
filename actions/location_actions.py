@@ -18,9 +18,12 @@ from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAct
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
+from actions.helpers import LocationValidator  # Add this import
+from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the constants
 
 
 logger = logging.getLogger(__name__)
+
 
 
 # Action to prepopulate location based on QR code
@@ -80,12 +83,16 @@ class ActionConfirmMunicipality(Action):
         # address = tracker.get_slot("address")
 
         confirmation_message = (
-            f"""Thank you for providing your location details:
-            \n - Municipality: {municipality or 'Skipped'}"
+            f"""we updated your municipality name to {municipality}
             \n Is this correct?"""
         )
         
-        dispatcher.utter_message(text=confirmation_message)
+        dispatcher.utter_message(text=confirmation_message,
+                                 buttons=[
+                                         {"title": "Yes", "payload": "/Agree"},
+                                         {"title": "Modify", "payload": "/modify_municipality"},
+                                         {"title": "Exit", "payload": "/exit_grievance_process"}
+                                     ])
         
         return []
 
@@ -113,20 +120,30 @@ class ValidateMunicipalityForm(FormValidationAction):
     async def run(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        
-        # municipality = tracker.get_slot("municipality")
-        # print(f"🔍 DEBUG: municipality slot before validation: {municipality}")
-        
-        municipality = tracker.latest_message.get("text", "").strip().lower()
 
-        if not municipality or municipality.startswith("/"):
+        municipality_string = tracker.latest_message.get("text", "").strip().lower()
+        
+        # Create instance of LocationValidator
+        location_validator = LocationValidator()
+
+        # Validate municipality using the validator
+        if not municipality_string or municipality_string.startswith("/"):
             dispatcher.utter_message(text="Please enter a valid municipality name.")
-            print(f"🚨 DEBUG: Invalid municipality detected, resetting slot")
+            logger.debug("🚨 Invalid municipality detected, resetting slot")
             return [SlotSet("municipality", None), SlotSet("requested_slot", "municipality")]
-
-        print(f"✅ DEBUG: municipality slot set to: {municipality}")
+        
+        if not location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT):
+            dispatcher.utter_message(text=f"Please enter a valid municipality name. \n {location_validator.validate_municipality(municipality_string)} is not a valid municipality name in {qr_province}, {qr_district}")
+            logger.debug("🚨 Invalid municipality detected, resetting slot")
+            return [SlotSet("municipality", None), SlotSet("requested_slot", "municipality")]
+        
+        municipality = location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT)["municipality"].title()
+        
+        # if municipality != municipality_string.strip().title():
+        #     dispatcher.utter_message(text=f"We updated your municipality name to {municipality}")
+        
+        logger.debug(f"✅ DEBUG: municipality slot set to: {municipality}")
         return [SlotSet("municipality", municipality)]
-
 
     ########### Address and Village
     

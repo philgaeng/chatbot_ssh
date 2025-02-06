@@ -18,6 +18,8 @@ from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupActi
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
+from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the constants
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,10 @@ class ActionIntroduce(Action):
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         dispatcher.utter_message(
-            response="utter_introduce",
+            text=f"""Hello! Welcome to the Grievance Management Chatbot.
+            You are reaching out to the office of {QR_DISTRICT} in {QR_PROVINCE}.
+            I am here to help you file a grievance or check its status. What would you like to do?"""
+            ,
             buttons=[
                 {"title": "File a grievance", "payload": "/start_grievance_process"},
                 {"title": "Check my status", "payload": "/check_status"},
