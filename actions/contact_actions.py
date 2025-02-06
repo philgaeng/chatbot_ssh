@@ -99,9 +99,23 @@ class ValidateContactForm(FormValidationAction):
     async def extract_user_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
+        
+        print("############# Extract user full name ##########")
+        print("Requested Slot:", tracker.get_slot("requested_slot"))
+        print("User Response:", user_response)
 
         if intent_name in ["skip", "skip_user_full_name"]:
+            print("skipping - slot set to slot_kipped")
             return {"user_full_name": "slot_skipped"}  # Explicitly marking skipped slots
+        
+        # ✅ Ignore button payloads (they start with "/")
+        if user_response.startswith("/"):
+            # dispatcher.utter_message(response="utter_ask_contact_form_user_full_name")
+            print("payload in slot, reset to None")
+            return {"user_full_name": None}  
+        
+        if tracker.get_slot("requested_slot") != "user_full_name":
+            return {}
 
         return {"user_full_name": user_response if user_response else None}
 
@@ -110,22 +124,25 @@ class ValidateContactForm(FormValidationAction):
     async def extract_user_contact_phone(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
-
+        
         print("############# Extract user contact phone ##########")
         print("Requested Slot:", tracker.get_slot("requested_slot"))
         print("User Response:", user_response)
 
-        if tracker.get_slot("requested_slot") != "user_contact_phone":
-            return {}
-
-        # ✅ Ignore button payloads (they start with "/")
-        if user_response.startswith("/"):
-            dispatcher.utter_message(response="utter_ask_contact_form_user_contact_phone")
-            return {"user_contact_phone": None}  
-
+        
         if intent_name in ['skip', 'skip_contact_phone']:
             dispatcher.utter_message(response="utter_skip_phone_number")
+            print("skipping - slot set to slot_kipped")
             return {"user_contact_phone": 'slot_skipped'}
+        
+        # ✅ Ignore button payloads (they start with "/")
+        if user_response.startswith("/"):
+            # dispatcher.utter_message(response="utter_ask_contact_form_user_contact_phone")
+            print("payload in slot, reset to None")
+            return {"user_contact_phone": None}  
+
+        if tracker.get_slot("requested_slot") != "user_contact_phone":
+            return {}
 
         return {"user_contact_phone": user_response}
 
@@ -138,25 +155,28 @@ class ValidateContactForm(FormValidationAction):
         print("Requested Slot:", tracker.get_slot("requested_slot"))
         print("User Response:", user_response)
 
-        if tracker.get_slot("requested_slot") != "user_contact_email":
-            return {}
-
         if user_response.startswith("/"):
-            dispatcher.utter_message(response="utter_ask_contact_form_user_contact_email")
+            # dispatcher.utter_message(response="utter_ask_contact_form_user_contact_email")
+            print("payload in slot, reset to None")
             return {"user_contact_email": None}  
 
         if intent_name in ['skip', 'skip_contact_email']:
+            print("skipping - slot set to slot_kipped")
             dispatcher.utter_message(response="utter_skip_phone_email")
             return {"user_contact_email": 'slot_skipped'}
+        
+        if tracker.get_slot("requested_slot") != "user_contact_email":
+            return {}
 
         return {"user_contact_email": user_response}
 
-        # ✅ Validate user contact phone
+        # ✅ Validate user full name
     async def validate_user_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        print("################ Validate user contact phone ###################")
+        print("################ Validate user full name ###################")
 
         if not slot_value:
-            return {"user_full_name": None}  
+            print("no slot value")
+            return {}  
 
         # Validate Nepal phone number format (starts with 97 or 98 and is 10 digits long)
         if len(slot_value)<3:
@@ -166,16 +186,18 @@ class ValidateContactForm(FormValidationAction):
                 )
 
             )
-            return {"user_contact_phone": None}
-
-        return {"user_contact_phone": slot_value}
+            return {}
+        print("validated", slot_value)
+        return {"user_full_name": slot_value}
+    
     
     # ✅ Validate user contact phone
     async def validate_user_contact_phone(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         print("################ Validate user contact phone ###################")
 
         if not slot_value:
-            return {"user_contact_phone": None}  
+            print("no slot value")
+            return {}  
 
         # Remove non-numeric characters
         cleaned_number = re.sub(r"\D", "", slot_value)
@@ -192,16 +214,19 @@ class ValidateContactForm(FormValidationAction):
                     {"title": "Skip", "payload": "/skip_contact_phone"}
                 ]
             )
-            return {"user_contact_phone": None}
-
+            return {}
+        print("validated", cleaned_number)
         return {"user_contact_phone": cleaned_number}
+
 
     # ✅ Validate user contact email
     async def validate_user_contact_email(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         print("################ Validate user contact email ###################")
 
         if not slot_value:
-            return {"user_contact_email": None}  
+            print("no slot value")
+
+            return {}  
 
         # Standard email validation pattern
         email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -216,6 +241,6 @@ class ValidateContactForm(FormValidationAction):
                     {"title": "Skip Email", "payload": "/skip_contact_email"},
                 ]
             )
-            return {"user_contact_email": None}
-
+            return {}
+        print("validated", slot_value)
         return {"user_contact_email": slot_value.strip().lower()}

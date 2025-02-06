@@ -204,8 +204,7 @@
         // Generate a unique session ID for the user
         const sessionId = "user-" + Math.random().toString(36).substr(2, 9);
         // Connect to RASA server
-        <!-- const socket = io('http://localhost:5005'); -->
-        const socket = io('http://54.179.41.156:5005', { // ✅ NEW (Direct to Rasa)
+        const socket = io('http://54.169.106.51:5005', { // ✅ NEW (Direct to Rasa)
             path: "/socket.io/",
             transports: ["websocket"],
             query: { session_id: sessionId },  // Pass session ID
@@ -354,8 +353,12 @@
             }
             if (response.quick_replies) {
                 appendQuickReplies(response.quick_replies);
-            }
+            };
         });
+        socket.on('user_uttered', function (message) {
+                console.log('📩 User message sent:', message);
+        });
+        
     </script>
   </body>
 </html>

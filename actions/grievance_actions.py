@@ -55,34 +55,6 @@ class ActionStartGrievanceProcess(Action):
 class ActionCaptureGrievanceText(Action):
     def name(self) -> Text:
         return "action_capture_grievance_text"
-
-    # def parse_summary_and_category(self, result: str):
-    #     """
-    #     Parse the result from OpenAI to extract the grievance summary and categories into a structured dictionary.
-    #     """
-    #     print("############# parse_summary_and_category #######")
-
-    #     # Extract category using regex
-    #     category_match = re.search(r'Category.*?- END Category', result, re.DOTALL)
-    #     category_text = category_match.group(0).replace("- END Category", "").strip() if category_match else ""
-
-    #     # Extract summary using regex
-    #     summary_match = re.search(r'Grievance Summary: (.*?)- END Summary', result, re.DOTALL)
-    #     grievance_summary = summary_match.group(1).strip() if summary_match else ""
-    #     print("summary_match", summary_match, "\ngrievance_summary :", grievance_summary)
-
-    #     # Initialize result dictionary
-    #     result_dict = {"grievance_summary": grievance_summary}
-
-    #     # Process category string dynamically
-    #     if category_text:
-    #         category_list = category_text.split("Category ")
-    #         category_list = [i for i in category_list if len(i) > 0 and "Category" not in i]
-    #         print("category_list :", category_list)
-    #         for idx, category in enumerate(category_list, start=1):
-    #             result_dict[f"category_{idx}"] = category.split(": ")[1].strip().strip(',')
-
-    #     return result_dict
     
     def parse_summary_and_category(self, response: str):
         """

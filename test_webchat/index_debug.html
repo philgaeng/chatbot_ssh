@@ -31,7 +31,7 @@
     <p>Version 0.1.x</p>
 
     <!-- Rasa Chat Widget -->
-    <div id="rasa-chat-widget" data-websocket-url="ws://113.212.186.75:5005"></div>
+    <div id="rasa-chat-widget" data-websocket-url="ws://54.169.106.51:5005"></div>
     <script src="https://unpkg.com/@rasahq/rasa-chat" type="application/javascript"></script>
 
     <!-- Debugging Script -->
@@ -52,7 +52,7 @@
     <!-- WebSocket Debugging Script -->
     <script>
         const CONFIG = {
-          RASA_SERVER_URL: "http://113.212.186.75", // Correct IP
+          RASA_SERVER_URL: "http://54.169.106.51:5005", // Correct IP
           SOCKET_PATH: "/socket.io/",
         };
 
@@ -78,11 +78,19 @@
             console.warn("⚠️ Disconnected:", reason);
           });
 
-          socket.on("bot_uttered", (response) => {
+          socket.on('bot_uttered', function (response) {
             console.log("🤖 Bot response received:", response);
+            if (response.text) {
+                appendMessage(response.text, 'received');
+            }
+            if (response.attachment) {
+                appendImage(response.attachment.payload.src, 'received');
+            }
+            if (response.quick_replies) {
+                appendQuickReplies(response.quick_replies);
+            };
           });
-
-          socket.on("user_uttered", (message) => {
+          socket.on("user_uttered", function(message) {
             console.log("📩 User message sent:", message);
           });
 
@@ -90,8 +98,6 @@
           socket.onAny((event, ...args) => {
               console.log(`📡 Received event: ${event}`, args);
           });
-
-         
         })();
     </script>
 </body>
