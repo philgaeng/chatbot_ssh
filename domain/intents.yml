@@ -65,4 +65,12 @@ intents:
   - skip_contact_email
   - provide_contact_phone
   - skip_contact_phone
+  - file_without_validation 
 
+
+  ######## otp ############
+  - provide_otp
+  - retry_otp
+  - skip_otp_verification
+
+ 

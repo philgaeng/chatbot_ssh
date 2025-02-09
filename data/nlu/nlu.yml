@@ -491,3 +491,34 @@ nlu:
   examples: |
     - \skip_contact_email
     - skip_contact_email
+
+ ######## otp ############
+
+- intent: provide_otp
+  examples: |
+    - [123456](otp_number)
+    - The code is [123456](otp_number)
+    - My verification code is [123456](otp_number)
+    - [654321](otp_number)
+    - Here's my code [123456](otp_number)
+
+- intent: retry_otp
+  examples: |
+    - try again
+    - send new code
+    - resend code
+    - send another verification code
+    - retry verification
+    - I need a new code
+
+- intent: skip_otp_verification
+  examples: |
+    - skip verification
+    - continue without verification
+    - skip this step
+    - I don't want to verify
+    - proceed without verification
+    - skip otp
+
+
+

@@ -98,7 +98,7 @@ stories:
 
   #Step 5: Collect contact details
 
-  - story: User provides contact consent
+  - story: User provides contact consent with phone
     steps:
       - action: action_ask_contact_consent
       - intent: provide_contact_yes
@@ -106,10 +106,46 @@ stories:
       - active_loop: contact_form
       - slot_was_set:
           - user_full_name
-          - user_contact_phone  # ✅ Ensures bot waits for user input # Keeps the form active  # Executes the validation logic
+          - user_contact_phone: "+639123456789"  # Example of a valid phone number
           - user_contact_email
       - active_loop: null
-      - action: action_submit_grievance
+      - action: action_check_phone_validation
+      - slot_was_set:
+          - phone_validation_required: true
+      - action: action_initiate_otp_verification
+
+  - story: User provides contact consent without phone
+    steps:
+      - action: action_ask_contact_consent
+      - intent: provide_contact_yes
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+          - user_full_name
+          - user_contact_phone: "slot_skipped"  # Explicit skipped value
+          - user_contact_email
+      - active_loop: null
+      - action: action_check_phone_validation
+      - slot_was_set:
+          - phone_validation_required: false
+      - action: action_recommend_phone_validation
+
+  - story: User chooses to provide phone after recommendation
+    steps:
+      - action: action_recommend_phone_validation
+      - intent: provide_contact_phone
+      - action: phone_validation_form
+      - active_loop: phone_validation_form
+      - slot_was_set:
+          - user_contact_phone
+      - active_loop: null
+      - action: action_initiate_otp_verification
+
+  - story: User chooses to file without phone validation
+    steps:
+      - action: action_recommend_phone_validation
+      - intent: file_without_validation
+      - action: action_submit_grievance_as_is
 
   - story: Anonymous with phone number
     steps:
@@ -185,3 +221,46 @@ stories:
       - intent: skip_contact_phone
       - action: validate_contact_form
 
+########## otp #########################
+
+  - story: grievance submission with phone verification success
+    steps:
+      - action: action_initiate_otp_verification
+      - active_loop: otp_form
+      - slot_was_set:
+          - otp_number
+      - active_loop: null
+      - action: action_verify_otp
+      - slot_was_set:
+          - otp_verified: true
+      - action: action_send_grievance_sms
+      - action: action_submit_grievance
+
+  - story: grievance submission with phone verification retry
+    steps:
+      - action: action_initiate_otp_verification
+      - active_loop: otp_form
+      - slot_was_set:
+          - otp_number
+      - active_loop: null
+      - action: action_verify_otp
+      - slot_was_set:
+          - otp_verified: false
+      - intent: retry_otp
+      - action: action_initiate_otp_verification
+      - active_loop: otp_form
+      - slot_was_set:
+          - otp_number
+      - active_loop: null
+      - action: action_verify_otp
+      - slot_was_set:
+          - otp_verified: true
+      - action: action_send_grievance_sms
+      - action: action_submit_grievance
+
+  - story: grievance submission with phone verification skip
+    steps:
+      - action: action_initiate_otp_verification
+      - intent: skip_otp_verification
+      - action: action_skip_otp_verification
+      - action: action_submit_grievance

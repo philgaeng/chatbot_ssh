@@ -1,25 +1,20 @@
-# This files contains your custom actions which can be used to run
-# custom Python code.
-#
-# See this guide on how to implement these action:
-# https://rasa.com/docs/rasa/custom-actions
-
-
-# This is a simple example for a custom action which utters "Hello World!"
-
-# from typing import Any, Text, Dict, List
-#
 import re
 import logging
-from typing import Any, Text, Dict, List, Optional
+from typing import Any, Text, Dict, List, Optional, Union, Tuple
 from random import randint
-from rasa_sdk import Action, Tracker
+from rasa_sdk import Action, Tracker, FormValidationAction
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from .constants import EMAIL_PROVIDERS_NEPAL
+from .messaging import PinpointClient
+import boto3
+import os
+import time
+from datetime import datetime, timedelta
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -272,3 +267,199 @@ class ValidateContactForm(FormValidationAction):
             return {}
         print("validated", slot_value)
         return {"user_contact_email": slot_value.strip().lower()}
+
+class ActionCheckPhoneValidation(Action):
+    def name(self) -> Text:
+        return "action_check_phone_validation"
+
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        phone_number = tracker.get_slot("user_contact_phone")
+        
+        if phone_number and phone_number != "Skipped":
+            return [SlotSet("phone_validation_required", True)]
+        else:
+            return [SlotSet("phone_validation_required", False)]
+
+class ActionRecommendPhoneValidation(Action):
+    def name(self) -> Text:
+        return "action_recommend_phone_validation"
+
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(
+            text=(
+                "Your grievance is filed without a validated number. Providing a valid number "
+                "will help in the follow-up of the grievance and we recommend it. However, "
+                "you can file the grievance as is."
+            ),
+            buttons=[
+                {"title": "Give Phone Number", "payload": "/provide_phone_number"},
+                {"title": "File Grievance as is", "payload": "/file_without_validation"}
+            ]
+        )
+        return []
+
+class PhoneValidationForm(FormValidationAction):
+    def name(self) -> Text:
+        return "validate_phone_validation_form"
+
+    @staticmethod
+    def required_slots(tracker: Tracker) -> List[Text]:
+        return ["user_contact_phone"]
+
+    async def validate_user_contact_phone(
+        self,
+        slot_value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        if re.match(r'^\+?63\d{10}$', slot_value):
+            return {"user_contact_phone": slot_value}
+        else:
+            dispatcher.utter_message(text="Please enter a valid Philippine phone number.")
+            return {"user_contact_phone": None}
+
+class OTPService:
+    def __init__(self):
+        self.pinpoint_client = boto3.client('pinpoint', 
+            region_name=os.getenv('AWS_REGION'),
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+        )
+        self.application_id = os.getenv('PINPOINT_APPLICATION_ID')
+        self.aws_retries = 3
+        self.retry_delay = 5
+
+    def send_otp_message(self, phone_number: str, otp: str) -> Tuple[bool, Optional[str]]:
+        """Attempts to send OTP via AWS Pinpoint"""
+        try:
+            response = self.pinpoint_client.send_messages(
+                ApplicationId=self.application_id,
+                MessageRequest={
+                    'Addresses': {
+                        phone_number: {'ChannelType': 'SMS'}
+                    },
+                    'MessageConfiguration': {
+                        'SMSMessage': {
+                            'Body': f'Your verification code is {otp}. Please enter this code to verify your phone number.',
+                            'MessageType': 'TRANSACTIONAL'
+                        }
+                    }
+                }
+            )
+            
+            message_response = response['MessageResponse']['Result'][phone_number]
+            if message_response['DeliveryStatus'] == 'SUCCESSFUL':
+                return True, None
+            
+            return False, message_response.get('StatusMessage', 'Unknown error')
+            
+        except Exception as e:
+            return False, str(e)
+
+
+class ActionInitiateOTPVerification(Action):
+    def __init__(self):
+        self.otp_service = OTPService()
+
+    def name(self) -> Text:
+        return "action_initiate_otp_verification"
+
+    def _generate_otp(self) -> str:
+        """Generates a 6-digit OTP"""
+        return str(randint(100000, 999999))
+
+    def _handle_success(self, dispatcher: CollectingDispatcher, user_resend_count: int) -> List[Dict]:
+        """Handles successful OTP send"""
+        resend_text = "" if user_resend_count >= 2 else "\n\nType 'resend' if you don't receive the code."
+        dispatcher.utter_message(
+            text=f"✅ A verification code has been sent to your phone number.\nPlease enter the 6-digit code to verify your number.{resend_text}"
+        )
+        return [
+            SlotSet("otp", self._generate_otp()),
+            SlotSet("otp_verified", False),
+            SlotSet("resend_count", user_resend_count)
+        ]
+
+    def _handle_failure(self, dispatcher: CollectingDispatcher) -> List[Dict]:
+        """Handles failed OTP send after retries"""
+        dispatcher.utter_message(
+            text=(
+                "❌ We're having technical difficulties verifying this phone number.\n"
+                "You can either:\n"
+                "1. Try again with the same number\n"
+                "2. Try a different phone number\n"
+                "3. Skip phone verification"
+            ),
+            buttons=[
+                {"title": "Try Again", "payload": "/retry_otp"},
+                {"title": "Change Number", "payload": "/change_phone_number"},
+                {"title": "Skip Verification", "payload": "/skip_otp_verification"}
+            ]
+        )
+        return []
+
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        phone_number = tracker.get_slot("user_contact_phone")
+        user_resend_count = tracker.get_slot("resend_count") or 0
+        
+        if not phone_number or phone_number == 'slot_skipped':
+            return []
+
+        otp = self._generate_otp()
+        
+        # Try sending OTP with retries
+        for attempt in range(self.otp_service.aws_retries):
+            success, error = self.otp_service.send_otp_message(phone_number, otp)
+            
+            if success:
+                return self._handle_success(dispatcher, user_resend_count)
+            
+            logger.error(f"AWS Attempt {attempt + 1} failed: {error}")
+            if attempt < self.otp_service.aws_retries - 1:
+                time.sleep(self.otp_service.retry_delay)
+        
+        return self._handle_failure(dispatcher)
+
+
+class ActionResendOTP(Action):
+    def name(self) -> Text:
+        return "action_resend_otp"
+
+    def _handle_max_resends(self, dispatcher: CollectingDispatcher) -> List[Dict]:
+        """Handles when max resend attempts reached"""
+        dispatcher.utter_message(
+            text=(
+                "❌ We've tried sending the code 3 times but you haven't received it.\n"
+                "This might mean there's an issue with the phone number.\n"
+                "You can:\n"
+                "1. Try a different phone number\n"
+                "2. Skip phone verification"
+            ),
+            buttons=[
+                {"title": "Change Number", "payload": "/change_phone_number"},
+                {"title": "Skip Verification", "payload": "/skip_otp_verification"}
+            ]
+        )
+        return []
+
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        resend_count = tracker.get_slot("resend_count") or 0
+        
+        if resend_count >= 2:
+            return self._handle_max_resends(dispatcher)
+        
+        # Increment resend count before sending new OTP
+        return await ActionInitiateOTPVerification().run(
+            dispatcher, 
+            tracker, 
+            domain
+        ) + [SlotSet("resend_count", resend_count + 1)]

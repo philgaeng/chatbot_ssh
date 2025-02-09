@@ -75,3 +75,14 @@ rules:
       - intent: nlu_fallback
       - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
   
+# ########### otp ####################
+
+#   - rule: Handle OTP verification
+#     steps:
+#       - intent: provide_otp
+#       - action: action_verify_otp
+
+#   - rule: Handle OTP skip
+#     steps:
+#       - intent: skip_otp_verification
+#       - action: action_skip_otp_verification

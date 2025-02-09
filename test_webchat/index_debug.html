@@ -51,19 +51,18 @@
 
     <!-- WebSocket Debugging Script -->
     <script>
-        const CONFIG = {
-          RASA_SERVER_URL: "http://54.169.106.51:5005", // Correct IP
-          SOCKET_PATH: "/socket.io/",
-        };
-
-        (function () {
-          const socket = io(CONFIG.RASA_SERVER_URL, {
-            path: CONFIG.SOCKET_PATH,
-            transports: ["websocket"], // Force WebSocket to avoid polling issues
-            reconnection: true,  
-            reconnectionAttempts: 5, 
-            reconnectionDelay: 2000,
-          });
+        // Generate a unique session ID for the user
+        const sessionId = "user-" + Math.random().toString(36).substr(2, 9);
+        // Connect to RASA server
+        const socket = io('http://54.169.106.51:5005', { // ✅ NEW (Direct to Rasa)
+            path: "/socket.io/",
+            transports: ["websocket"],
+            query: { session_id: sessionId },  // Pass session ID
+            reconnection: true,          // Automatically attempt reconnection
+            reconnectionAttempts: 10,    // Retry up to 10 times
+            reconnectionDelay: 2000,     // Wait 2 seconds between retries
+            pingTimeout: 60000,          // Match server ping timeout
+        });
 
           // Debugging logs for WebSocket events
           socket.on("connect", () => {
@@ -98,7 +97,7 @@
           socket.onAny((event, ...args) => {
               console.log(`📡 Received event: ${event}`, args);
           });
-        })();
+        ;
     </script>
 </body>
 </html>

@@ -21,6 +21,7 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from actions.helpers import load_classification_data, load_categories_from_lookup, get_next_grievance_number
+from actions.constants import GRIEVANCE_STATUS
 
 #define and load variables
 
@@ -253,6 +254,13 @@ class ActionSubmitGrievance(Action):
     def name(self) -> Text:
         return "action_submit_grievance"
 
+    def is_valid_email(self, email: str) -> bool:
+        """Check if the provided string is a valid email address."""
+        if not email:
+            return False
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
+
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         # Retrieve grievance details, summary, and category from slots
         grievance_details = tracker.get_slot("grievance_details")
@@ -280,11 +288,28 @@ class ActionSubmitGrievance(Action):
 
         confirmation_message += "\nOur team will review it shortly and contact you if more information is needed."
 
+        # Prepare the base events
+        events = [
+            SlotSet("grievance_id", grievance_id),
+            SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"]),
+            FollowupAction("action_send_system_notification_email")  # Always send system notification
+        ]
+
+        # Check if there's a valid email to send user recap to
+        user_email = tracker.get_slot("user_email")
+        if self.is_valid_email(user_email):
+            events = [
+                SlotSet("grievance_id", grievance_id),
+                SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"]),
+                FollowupAction("action_send_system_notification_email"),
+                FollowupAction("action_send_grievance_recap_email")
+            ]
+            confirmation_message += f"\n\nA confirmation email will be sent to {user_email}"
+
         # Send the confirmation message
         dispatcher.utter_message(text=confirmation_message)
 
-        # Set the grievance ID in the slot
-        return [SlotSet("grievance_id", grievance_id)]
+        return events
 
 
 class ActionHandleSkip(Action):
@@ -315,7 +340,9 @@ class ActionSubmitGrievanceAsIs(Action):
             dispatcher.utter_message(response="utter_grievance_submitted_as_is", grievance_details=grievance_details)
         else:
             dispatcher.utter_message(response="utter_grievance_submitted_no_details_as_is")
-        return []
+            
+        # Trigger the submit grievance action
+        return [FollowupAction("action_submit_grievance")]
 
     
 

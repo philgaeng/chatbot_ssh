@@ -1,3 +1,8 @@
+
+import os
+from typing import List
+
+
 # Location Constants
 QR_PROVINCE = "KOSHI"
 QR_DISTRICT = "Jhapa"
@@ -36,5 +41,83 @@ EMAIL_PROVIDERS_NEPAL = {
     "WorldLink Email": ["worldlink.com.np"]
 }
 
+# AWS SNS Configuration
+AWS_REGION = "ap-southeast-1"
+WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
+    "+639175330841", 
+    "+639154345604"
+    # Add other whitelisted numbers
+]
 
-WHITELIST_PHONE_NUMBERS_OTP_TESTING = ["+639175330841", "+639154345604"]
+# Email Configuration
+SMTP_CONFIG = {
+    "SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+    "PORT": int(os.getenv("SMTP_PORT", "587")),
+    "USERNAME": os.getenv("SMTP_USERNAME", "your-email@domain.com"),
+    "PASSWORD": os.getenv("SMTP_PASSWORD", "your-app-password"),
+}
+
+# Admin notification emails
+ADMIN_EMAILS: List[str] = [
+    "philgaeng@gmail.com",
+    # Add other admin emails
+]
+
+# Grievance status
+GRIEVANCE_STATUS = {
+    "SUBMITTED": "submitted",
+    "UNDER_EVALUATION": "under_evaluation",
+    "ESCALATED": "escalated",
+    "RESOLVED": "resolved",
+    "DENIED": "denied"
+}
+
+# Email Templates
+EMAIL_TEMPLATES = {
+    "GRIEVANCE_RECAP_SUBJECT": "Grievance Submission Recap - ID: {grievance_id}",
+    "GRIEVANCE_RECAP_BODY": """
+        <h2>Grievance Submission Recap</h2>
+        <p><strong>Grievance ID:</strong> {grievance_id}</p>
+        <p><strong>Submitted by:</strong> {user_name}</p>
+        
+        <h3>Grievance Details:</h3>
+        <p>{grievance_text}</p>
+        
+        <h3>Categories:</h3>
+        <ul>
+            {categories_html}
+        </ul>
+        
+        <h3>Location:</h3>
+        <p>Municipality: {municipality}</p>
+        <p>Village: {village}</p>
+        <p>Address: {address}</p>
+        
+        <h3>Contact Information:</h3>
+        <p>Phone: {phone}</p>
+        <p>Email: {email}</p>
+    """,
+    "SYSTEM_NOTIFICATION_BODY": """
+        New grievance submission received.
+        Status: {grievance_status}
+
+        Complete Grievance Data:
+        {json_data}
+
+        This is an automated notification. Please do not reply to this email.
+    """
+}
+
+# SMS Templates
+SMS_TEMPLATES = {
+    "OTP_MESSAGE": "Your verification code is {otp}. Please enter this code to verify your phone number.",
+    "GRIEVANCE_RECAP": """Thank you for submitting your grievance (ID: {grievance_id}).
+We have received your complaint and will process it accordingly.
+You will receive updates about your grievance through this number."""
+}
+
+# Default values
+DEFAULT_VALUES = {
+    "NOT_PROVIDED": "Not provided",
+    "ANONYMOUS": "Anonymous"
+}

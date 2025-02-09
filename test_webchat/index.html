@@ -184,7 +184,8 @@
       </defs>
     </svg>
     <header class="header">
-      <p class="title">Chat with Rasa chatbot</p>
+      <p class="title">Grievance Management Chatbot</p>
+      <p class="subtitle">v en.1.0</p>
     </header>
     <div id="messages"></div>
     <form id="form">
@@ -201,6 +202,14 @@
             integrity="sha512-PU5S6BA03fRv1Q5fpwXjg5nlRrgdoguZ74urFInkbABMCENyx5oP3hrDzYMMPh3qdLdknIvrGj3yqZ4JuU7Nag=="
             crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
+    // Add this at the very beginning of your script section
+    function clearRasaSession() {
+        localStorage.removeItem('RASA_SESSION_ID');
+        console.log("Rasa session cleared");
+    }
+
+    // Call clearRasaSession when page loads
+    window.addEventListener('load', clearRasaSession);
         // Generate a unique session ID for the user
         const sessionId = "user-" + Math.random().toString(36).substr(2, 9);
         // Connect to RASA server

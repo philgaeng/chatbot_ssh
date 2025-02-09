@@ -6,7 +6,7 @@ import csv  # For reading CSV files
 from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
-from constants import (
+from .constants import (
     LOOKUP_FILE_PATH,
     DEFAULT_CSV_PATH,
     COUNTER_FILE,

@@ -152,6 +152,9 @@ responses:
   utter_skip_confirmation:
     - text: "Okay, skipping this question."
 
+  utter_ask_otp_input:
+    - text: "Please enter the verification code:\nType 000000 if you haven't received the code."
+
   # # Grievance ID Generation
   # utter_grievance_id_generated:
   #   - text: "Your grievance has been filed. Your grievance ID is {grievance_id}."

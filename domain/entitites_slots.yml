@@ -15,6 +15,7 @@ entities:
   - user_contact_email
   - grievance_category
   - category
+
   
 
 slots:
@@ -112,6 +113,32 @@ slots:
       - active_loop: contact_form
         requested_slot: user_full_name
 
+  phone_validation_required:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  ################   otp    ##############################
+  otp_number:
+    type: text
+    mappings:
+      - type: custom
+
+  otp_verified:
+    type: bool
+    mappings:
+      - type: custom
+    initial_value: false
+    influence_conversation: true
+
+    otp_input:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: from_text
+        conditions:
+          - active_loop: otp_verification_form
 
   ################ grievance slots ###################
   grievance_category:
@@ -178,3 +205,16 @@ slots:
     mappings:
       - type: custom
 
+  grievance_status:
+    type: categorical
+    values:
+      - submitted
+      - under_evaluation
+      - escalated
+      - resolved
+      - denied
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+##########################################

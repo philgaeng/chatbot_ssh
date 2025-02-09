@@ -36,6 +36,18 @@ forms:
     required_slots:
       - grievance_summary
 
+  phone_validation_form:
+    required_slots:
+      - user_contact_phone
+    ignored_intents:
+      - agree
+      - deny
+      - nlu_fallback
+
+  otp_verification_form:
+    required_slots:
+      - otp_input
+
 
 actions:
   - action_introduce
@@ -52,8 +64,6 @@ actions:
   - action_handle_skip
   - action_handle_mood_great
   - action_respond_to_challenge
-  - action_send_otp
-  - action_verify_otp
   - validate_contact_form
   - action_ask_location
   - validate_address_form
@@ -91,7 +101,13 @@ actions:
   - utter_ask_contact_form_user_contact_phone
   - utter_ask_contact_form_user_contact_email
   - action_custom_fallback
-
+  - action_initiate_otp_verification
+  - action_verify_otp
+  - action_skip_otp_verification
+  - action_send_grievance_sms
+  - action_check_phone_validation
+  - action_recommend_phone_validation
+  - action_activate_otp_form
   
 
 
