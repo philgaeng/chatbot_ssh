@@ -650,6 +650,9 @@ class EmailClient:
 
     def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
         try:
+            logger.info(f"Attempting to send email to: {to_emails}")
+            logger.info(f"Using sender email: {self.sender_email}")
+            
             response = self.ses_client.send_email(
                 Source=self.sender_email,
                 Destination={
@@ -661,7 +664,7 @@ class EmailClient:
                         'Charset': 'UTF-8'
                     },
                     'Body': {
-                        'Html': {  # Changed from Text to Html
+                        'Html': {
                             'Data': body,
                             'Charset': 'UTF-8'
                         }
@@ -674,6 +677,9 @@ class EmailClient:
             
         except Exception as e:
             logger.error(f"Failed to send email: {str(e)}")
+            logger.error(f"To: {to_emails}")
+            logger.error(f"Subject: {subject}")
+            logger.error(f"Body: {body[:100]}...")  # Log first 100 chars of body
             return False
 
 class ActionSendGrievanceRecapEmail(Action):
@@ -737,6 +743,9 @@ class ActionSendGrievanceRecapEmail(Action):
         return []
 
 class ActionSendSystemNotificationEmail(Action):
+    def __init__(self):
+        self.email_client = EmailClient()
+
     def name(self) -> Text:
         return "action_send_system_notification_email"
 
@@ -771,8 +780,8 @@ class ActionSendSystemNotificationEmail(Action):
 
         try:
             for admin_email in ADMIN_EMAILS:
-                await self.email_client.send_email(
-                    to_email=admin_email,
+                self.email_client.send_email(
+                    to_emails=[admin_email],
                     subject=f"New Grievance Submission - ID: {grievance_data['grievance_id']} - Status: {grievance_data['grievance_status']}",
                     body=body
                 )
