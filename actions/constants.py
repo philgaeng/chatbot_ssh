@@ -10,7 +10,7 @@ DISTRICT_LIST = ['Jhapa', 'Morang', 'Sunsari']
 
 # You can add other constants here, organized by category
 # For example:
-
+SMS_ENABLED = False  # Set to True to enable SMS    
 # API Constants
 # API_KEY = "your-api-key"
 # BASE_URL = "https://api.example.com"
@@ -38,7 +38,9 @@ EMAIL_PROVIDERS_NEPAL = {
     "Himalayan Host": ["himalayanhost.com.np"],
     "Nepal Link": ["nepallink.com.np"],
     "Mercantile Mail": ["mail.com.np"],
-    "WorldLink Email": ["worldlink.com.np"]
+    "WorldLink Email": ["worldlink.com.np"],
+    "ADB_testing": ["adb.org"], 
+    "project": ["project.com.ph"]
 }
 
 # AWS SNS Configuration
@@ -60,6 +62,7 @@ SMTP_CONFIG = {
 # Admin notification emails
 ADMIN_EMAILS: List[str] = [
     "philgaeng@gmail.com",
+    'philgaeng@project.com.ph'
     # Add other admin emails
 ]
 

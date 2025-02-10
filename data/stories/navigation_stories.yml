@@ -18,4 +18,4 @@ stories:
 - story: User goes back to the main menu
   steps:
   - intent: main_menu
-  - action: action_main_menu
+  - action: action_introduce

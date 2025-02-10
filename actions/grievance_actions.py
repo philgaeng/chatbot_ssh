@@ -22,6 +22,10 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from actions.helpers import load_classification_data, load_categories_from_lookup, get_next_grievance_number
 from actions.constants import GRIEVANCE_STATUS
+from rasa_sdk.forms import FormValidationAction
+from rasa_sdk.types import DomainDict
+from .db_actions import GrievanceDB
+from datetime import datetime
 
 #define and load variables
 
@@ -31,6 +35,9 @@ open_ai_key = os.getenv("OPENAI_API_KEY")
 #load the categories
 classification_data = load_classification_data()
 list_categories_global = load_categories_from_lookup()
+
+#load the db
+db = GrievanceDB()
 
 
 logger = logging.getLogger(__name__)
@@ -46,12 +53,12 @@ except Exception as e:
     
 
 class ActionStartGrievanceProcess(Action):
-    def name(self) -> str:
+    def name(self) -> Text:
         return "action_start_grievance_process"
 
     async def run(self, dispatcher, tracker, domain):
         dispatcher.utter_message(response="utter_start_grievance_process")
-        return []
+        return [SlotSet("verification_context", "new_user")]
 
 class ActionCaptureGrievanceText(Action):
     def name(self) -> Text:
@@ -261,55 +268,100 @@ class ActionSubmitGrievance(Action):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        # Retrieve grievance details, summary, and category from slots
-        grievance_details = tracker.get_slot("grievance_details")
-        grievance_summary = tracker.get_slot("grievance_summary")
-        grievance_category = tracker.get_slot("list_of_cat_for_summary")
+    def collect_grievance_data(self, tracker: Tracker) -> Dict[str, Any]:
+        """Collect all grievance-related data from slots."""
+        return {
+            'phone_number': tracker.get_slot('phone_number'),
+            'email': tracker.get_slot('user_email'),
+            'subject': tracker.get_slot('grievance_summary'),
+            'description': tracker.get_slot('grievance_details'),
+            'category': tracker.get_slot('list_of_cat_for_summary'),
+            'department': tracker.get_slot('department'),
+            'status': GRIEVANCE_STATUS["SUBMITTED"]
+        }
 
-        # Generate a unique grievance ID
-        grievance_id = get_next_grievance_number()
-
-        # Construct the confirmation message
-        confirmation_message = f"Your grievance has been filed successfully.\n\n**Grievance ID:** {grievance_id}\n"
-
-        if grievance_summary:
-            confirmation_message += f"**Summary:** {grievance_summary}\n"
-        else:
-            confirmation_message += "**Summary:** [Not Provided]\n"
-
-        if grievance_category:
-            confirmation_message += f"**Category:** {grievance_category}\n"
-        else:
-            confirmation_message += "**Category:** [Not Provided]\n\nYou can add the category later if needed."
-
-        if grievance_details:
-            confirmation_message += f"**Details:** {grievance_details}\n"
-
-        confirmation_message += "\nOur team will review it shortly and contact you if more information is needed."
-
-        # Prepare the base events
-        events = [
-            SlotSet("grievance_id", grievance_id),
-            SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"]),
-            FollowupAction("action_send_system_notification_email")  # Always send system notification
+    def create_confirmation_message(self, grievance_id: str, grievance_data: Dict[str, Any], user_email: str = None) -> str:
+        """Create a formatted confirmation message."""
+        message = [
+            f"Your grievance has been filed successfully.",
+            f"\n**Grievance ID:** {grievance_id}"
         ]
 
-        # Check if there's a valid email to send user recap to
-        user_email = tracker.get_slot("user_email")
+        # Add summary if available
+        if grievance_data['subject']:
+            message.append(f"**Summary:** {grievance_data['subject']}")
+        else:
+            message.append("**Summary:** [Not Provided]")
+
+        # Add category if available
+        if grievance_data['category']:
+            message.append(f"**Category:** {grievance_data['category']}")
+        else:
+            message.append("**Category:** [Not Provided]\nYou can add the category later if needed.")
+
+        # Add details if available
+        if grievance_data['description']:
+            message.append(f"**Details:** {grievance_data['description']}")
+
+        message.append("\nOur team will review it shortly and contact you if more information is needed.")
+
+        # Add email notification info if available
+        if user_email:
+            message.append(f"\nA confirmation email will be sent to {user_email}")
+
+        return "\n".join(message)
+
+    def determine_follow_up_actions(self, user_email: str) -> List[Dict[Text, Any]]:
+        """Determine which follow-up actions to trigger."""
+        base_actions = [
+            FollowupAction("action_send_system_notification_email")
+        ]
+        
         if self.is_valid_email(user_email):
+            base_actions.append(FollowupAction("action_send_grievance_recap_email"))
+            
+        return base_actions
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        # Collect grievance data
+        grievance_data = self.collect_grievance_data(tracker)
+        user_email = grievance_data.get('email')
+
+        try:
+            # Create grievance in database
+            grievance_id = db.create_grievance(grievance_data)
+            
+            if not grievance_id:
+                raise Exception("Failed to create grievance in database")
+
+            # Create confirmation message
+            confirmation_message = self.create_confirmation_message(
+                grievance_id, 
+                grievance_data,
+                user_email if self.is_valid_email(user_email) else None
+            )
+            
+            # Send confirmation message
+            dispatcher.utter_message(text=confirmation_message)
+
+            # Prepare events
             events = [
                 SlotSet("grievance_id", grievance_id),
-                SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"]),
-                FollowupAction("action_send_system_notification_email"),
-                FollowupAction("action_send_grievance_recap_email")
+                SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"])
             ]
-            confirmation_message += f"\n\nA confirmation email will be sent to {user_email}"
+            
+            # Add follow-up actions
+            events.extend(self.determine_follow_up_actions(user_email))
 
-        # Send the confirmation message
-        dispatcher.utter_message(text=confirmation_message)
+            return events
 
-        return events
+        except Exception as e:
+            print(f"Error submitting grievance: {e}")
+            dispatcher.utter_message(
+                text="I apologize, but there was an error submitting your grievance. "
+                "Please try again or contact support."
+            )
+            return []
 
 
 class ActionHandleSkip(Action):

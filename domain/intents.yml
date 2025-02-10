@@ -35,6 +35,17 @@ intents:
   - provide_contact_yes
   - anonymous_with_phone
   - no_contact_provided
+  - modify_contact_info
+  - modify_email
+  - modify_phone
+  - cancel_modification_contact
+  - confirm_email
+  - provide_contact_phone
+  - skip_contact_phone
+  - file_without_validation
+  - provide_contact_email
+  - skip_contact_email
+
 
   #grievance
   - start_grievance_process #refers to the process of filing a grievance
@@ -61,16 +72,22 @@ intents:
   - submit_address
   - modify_address
   - set_apply_category_change
-  - provide_contact_email
-  - skip_contact_email
-  - provide_contact_phone
-  - skip_contact_phone
-  - file_without_validation 
+
 
 
   ######## otp ############
-  - provide_otp
+  # - provide_otp
   - retry_otp
   - skip_otp_verification
+  - enter_otp
+  - resend_otp
+  - provide_otp
+
+  #### check status ############
+  - start_check_status
+  - retrieve_with_phone
+  - retrieve_grievance_with_id
+  - check_status
+  - retrieve_another_grievance
 
  

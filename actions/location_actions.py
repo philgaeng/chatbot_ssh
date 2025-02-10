@@ -36,21 +36,21 @@ class ActionPrepopulateLocation(Action):
     ) -> List[Dict[Text, Any]]:
         qr_code = tracker.get_slot("qr_code")  # Assume this is pre-set
         location_mapping = {
-            "QR001": {"district": "Kathmandu", "municipality": "KMC"},
-            "QR002": {"district": "Bhaktapur", "municipality": "Bhaktapur"},
+            "QR001": {"user_district": "Kathmandu", "user_municipality": "KMC"},
+            "QR002": {"user_district": "Bhaktapur", "user_municipality": "Bhaktapur"},
         }
         prepopulated = location_mapping.get(qr_code, {})
 
         if prepopulated:
             dispatcher.utter_message(response="utter_prepopulate_location_success", 
-                                      district=prepopulated.get("district"), 
-                                      municipality=prepopulated.get("municipality"))
+                                      district=prepopulated.get("user_district"), 
+                                      municipality=prepopulated.get("user_municipality"))
         else:
             dispatcher.utter_message(response="utter_prepopulate_location_failure")
 
         return [
-            SlotSet("district", prepopulated.get("district")),
-            SlotSet("municipality", prepopulated.get("municipality")),
+            SlotSet("user_district", prepopulated.get("user_district")),
+            SlotSet("user_municipality", prepopulated.get("user_municipality")),
         ]
 
 class ActionAskLocation(Action):
@@ -75,12 +75,12 @@ class ActionConfirmMunicipality(Action):
         return "action_confirm_municipality"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        # province = tracker.get_slot("province")
-        # district = tracker.get_slot("district")
-        municipality = tracker.get_slot("municipality")
-        # ward = tracker.get_slot("ward")
-        # village = tracker.get_slot("village")
-        # address = tracker.get_slot("address")
+        # province = tracker.get_slot("user_province")
+        # district = tracker.get_slot("user_district")
+        municipality = tracker.get_slot("user_municipality")
+        # ward = tracker.get_slot("user_ward")
+        # village = tracker.get_slot("user_village")
+        # address = tracker.get_slot("user_address")
 
         confirmation_message = (
             f"""we updated your municipality name to {municipality}
@@ -103,12 +103,12 @@ class ActionResetMunicipalitySlots(Action):
     def run(self, dispatcher, tracker, domain):
         """Resets all location-related slots before the form starts."""
         return [
-            # SlotSet("province", None),
-            # SlotSet("district", None),
-            SlotSet("municipality", None),
-            # SlotSet("ward", None),
-            # SlotSet("village", None),
-            # SlotSet("address", None),
+            # SlotSet("user_province", None),
+            # SlotSet("user_district", None),
+            SlotSet("user_municipality", None),
+            # SlotSet("user_ward", None),
+            # SlotSet("user_village", None),
+            # SlotSet("user_address", None),
         ]
         
 
@@ -130,12 +130,12 @@ class ValidateMunicipalityForm(FormValidationAction):
         if not municipality_string or municipality_string.startswith("/"):
             dispatcher.utter_message(text="Please enter a valid municipality name.")
             logger.debug("🚨 Invalid municipality detected, resetting slot")
-            return [SlotSet("municipality", None), SlotSet("requested_slot", "municipality")]
+            return [SlotSet("user_municipality", None), SlotSet("requested_slot", "user_municipality")]
         
         if not location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT):
             dispatcher.utter_message(text=f"Please enter a valid municipality name. \n {location_validator.validate_municipality(municipality_string)} is not a valid municipality name in {qr_province}, {qr_district}")
             logger.debug("🚨 Invalid municipality detected, resetting slot")
-            return [SlotSet("municipality", None), SlotSet("requested_slot", "municipality")]
+            return [SlotSet("user_municipality", None), SlotSet("requested_slot", "user_municipality")]
         
         municipality = location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT)["municipality"].title()
         
@@ -143,7 +143,7 @@ class ValidateMunicipalityForm(FormValidationAction):
         #     dispatcher.utter_message(text=f"We updated your municipality name to {municipality}")
         
         logger.debug(f"✅ DEBUG: municipality slot set to: {municipality}")
-        return [SlotSet("municipality", municipality)]
+        return [SlotSet("user_municipality", municipality)]
 
     ########### Address and Village
     
@@ -152,12 +152,12 @@ class ActionConfirmAddress(Action):
         return "action_confirm_address"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict):
-        # province = tracker.get_slot("province")
-        # district = tracker.get_slot("district")
-        # municipality = tracker.get_slot("municipality")
-        # ward = tracker.get_slot("ward")
-        village = tracker.get_slot("village")
-        address = tracker.get_slot("address")
+        # province = tracker.get_slot("user_province")
+        # district = tracker.get_slot("user_district")
+        # municipality = tracker.get_slot("user_municipality")
+        # ward = tracker.get_slot("user_ward")
+        village = tracker.get_slot("user_village")
+        address = tracker.get_slot("user_address")
 
         confirmation_message = (
             f"Thank you for providing your location details:\n"
@@ -186,58 +186,78 @@ class ActionResetAddressSlots(Action):
     def run(self, dispatcher, tracker, domain):
         """Resets all location-related slots before the form starts."""
         return [
-            # # SlotSet("province", None),
-            # # SlotSet("district", None),
-            # SlotSet("municipality", None),
-            # # SlotSet("ward", None),
-            SlotSet("village", None),
-            SlotSet("address", None),
+            # # SlotSet("user_province", None),
+            # # SlotSet("user_district", None),
+            # SlotSet("user_municipality", None),
+            # # SlotSet("user_ward", None),
+            SlotSet("user_village", None),
+            SlotSet("user_address", None),
         ]
 
 class ValidateAddressForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_address_form"
 
+    async def required_slots(
+        self,
+        slots_mapped_in_domain: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Text]:
+        """A list of required slots that the form has to fill"""
+        return ["user_village", "user_address"]
+
+    def _is_skip_requested(self, text: str) -> bool:
+        """Check if user wants to skip the current field"""
+        return text.lower().strip() in ['skip', 'pass', 'next']
+
     # ✅ Extract village slot correctly
     async def extract_village(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
-        intent_name = tracker.latest_message.get("intent", {}).get("name")
-
-        print("############# extract village ##########")
-        print(tracker.get_slot("requested_slot"))
-        print(user_response)
+        
         # Only extract input when village is the requested slot
-        if tracker.get_slot("requested_slot") == "village":
-            return {"village": user_response}
-
+        if tracker.get_slot("requested_slot") == "user_village":
+            print(f"Extracting village. User response: {user_response}")
+            if self._is_skip_requested(user_response):
+                dispatcher.utter_message(text="Skipping village information.")
+                return {"user_village": "Not provided"}
+            return {"user_village": user_response}
         return {}
 
     # ✅ Extract address slot correctly
     async def extract_address(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
-        intent_name = tracker.latest_message.get("intent", {}).get("name")
-        print("############# extract address ##########")
-        print(tracker.get_slot("requested_slot"))
-        print(user_response)
-
+        
         # Only extract input when address is the requested slot
-        if tracker.get_slot("requested_slot") == "address":
-            
-            return {"address": user_response}
-
+        if tracker.get_slot("requested_slot") == "user_address":
+            print(f"Extracting address. User response: {user_response}")
+            if self._is_skip_requested(user_response):
+                dispatcher.utter_message(text="Skipping address information.")
+                return {"user_address": "Not provided"}
+            return {"user_address": user_response}
         return {}
 
     # ✅ Validate village
-    async def validate_village(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        if not slot_value or len(slot_value) < 2:
-            dispatcher.utter_message(text="Please provide a valid village name.")
-            return {"village": None}
-        return {"village": slot_value}
+    async def validate_user_village(self, value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        """Validate user_village value."""
+        if value == "Not provided":
+            return {"user_village": value}
+            
+        if not value or len(value) < 2:
+            dispatcher.utter_message(text="Please provide a valid village name (or type 'skip' to skip).")
+            return {"user_village": None}
+        
+        return {"user_village": value}
 
     # ✅ Validate address
-    async def validate_address(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        if not slot_value or len(slot_value) < 5:
-            dispatcher.utter_message(text="Please provide a more detailed address.")
-            return {"address": None}
-        return {"address": slot_value}
-
+    async def validate_user_address(self, value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        """Validate user_address value."""
+        if value == "Not provided":
+            return {"user_address": value}
+            
+        if not value or len(value) < 5:
+            dispatcher.utter_message(text="Please provide a more detailed address (or type 'skip' to skip).")
+            return {"user_address": None}
+        
+        return {"user_address": value}

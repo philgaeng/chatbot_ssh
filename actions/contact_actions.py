@@ -1,20 +1,20 @@
 import re
 import logging
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
-from random import randint
+
 from rasa_sdk import Action, Tracker, FormValidationAction
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction
+from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from twilio.rest import Client
 from .constants import EMAIL_PROVIDERS_NEPAL
-from .messaging import PinpointClient
-import boto3
-import os
-import time
-from datetime import datetime, timedelta
-from botocore.exceptions import ClientError
+# from .messaging import SMSClient
+# import boto3
+# import os
+# import time
+# from datetime import datetime, timedelta
+# from botocore.exceptions import ClientError
+# from random import randint
 
 logger = logging.getLogger(__name__)
 
@@ -243,30 +243,42 @@ class ValidateContactForm(FormValidationAction):
 
 
     # ✅ Validate user contact email
-    async def validate_user_contact_email(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        print("################ Validate user contact email ###################")
+    def _email_is_valid_format(self, email: Text) -> bool:
+        """Check if email follows basic format requirements."""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
 
+    async def validate_user_contact_email(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
         if not slot_value:
-            print("no slot value")
+            return {"user_contact_email": None}
 
-            return {}  
+        # Use consistent validation methods
+        if not self._email_is_valid_format(slot_value):
+            dispatcher.utter_message(text="⚠️ Please enter a valid email address.")
+            return {"user_contact_email": None}
 
-        # Standard email validation pattern
-        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        if not re.match(email_pattern, slot_value):
+        # Check for Nepali email domain using existing method
+        if not self._email_is_valid_nepal_domain(slot_value):
+            domain = slot_value.split('@')[1]
             dispatcher.utter_message(
-                text=(
-                    "⚠️ The email address you provided is invalid.\n"
-                    "A valid email should be in the format: **username@domain.com**."
-                ),
+                text=f"⚠️ The email domain '{domain}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
                 buttons=[
-                    {"title": "Retry", "payload": "/provide_contact_email"},
-                    {"title": "Skip Email", "payload": "/skip_contact_email"},
+                    {"title": "Confirm Email", "payload": f"/confirm_email{slot_value}"},
+                    {"title": "Try Different Email", "payload": "/provide_contact_email"},
+                    {"title": "Skip Email", "payload": "/skip_contact_email"}
                 ]
             )
-            return {}
-        print("validated", slot_value)
-        return {"user_contact_email": slot_value.strip().lower()}
+            # Keep the email in slot but deactivate form while waiting for user choice
+            return {"user_contact_email": slot_value, "active_loop": None}
+
+        # If all validations pass
+        return {"user_contact_email": slot_value}
 
 class ActionCheckPhoneValidation(Action):
     def name(self) -> Text:
@@ -323,143 +335,106 @@ class PhoneValidationForm(FormValidationAction):
             dispatcher.utter_message(text="Please enter a valid Philippine phone number.")
             return {"user_contact_phone": None}
 
-class OTPService:
-    def __init__(self):
-        self.pinpoint_client = boto3.client('pinpoint', 
-            region_name=os.getenv('AWS_REGION'),
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-        )
-        self.application_id = os.getenv('PINPOINT_APPLICATION_ID')
-        self.aws_retries = 3
-        self.retry_delay = 5
-
-    def send_otp_message(self, phone_number: str, otp: str) -> Tuple[bool, Optional[str]]:
-        """Attempts to send OTP via AWS Pinpoint"""
-        try:
-            response = self.pinpoint_client.send_messages(
-                ApplicationId=self.application_id,
-                MessageRequest={
-                    'Addresses': {
-                        phone_number: {'ChannelType': 'SMS'}
-                    },
-                    'MessageConfiguration': {
-                        'SMSMessage': {
-                            'Body': f'Your verification code is {otp}. Please enter this code to verify your phone number.',
-                            'MessageType': 'TRANSACTIONAL'
-                        }
-                    }
-                }
-            )
-            
-            message_response = response['MessageResponse']['Result'][phone_number]
-            if message_response['DeliveryStatus'] == 'SUCCESSFUL':
-                return True, None
-            
-            return False, message_response.get('StatusMessage', 'Unknown error')
-            
-        except Exception as e:
-            return False, str(e)
-
-
-class ActionInitiateOTPVerification(Action):
-    def __init__(self):
-        self.otp_service = OTPService()
-
+class ActionSkipEmail(Action):
     def name(self) -> Text:
-        return "action_initiate_otp_verification"
+        return "action_skip_email"
 
-    def _generate_otp(self) -> str:
-        """Generates a 6-digit OTP"""
-        return str(randint(100000, 999999))
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        return [SlotSet("user_contact_email", "slot_skipped")]
 
-    def _handle_success(self, dispatcher: CollectingDispatcher, user_resend_count: int) -> List[Dict]:
-        """Handles successful OTP send"""
-        resend_text = "" if user_resend_count >= 2 else "\n\nType 'resend' if you don't receive the code."
-        dispatcher.utter_message(
-            text=f"✅ A verification code has been sent to your phone number.\nPlease enter the 6-digit code to verify your number.{resend_text}"
-        )
+class ActionConfirmEmail(Action):
+    def name(self) -> Text:
+        return "action_confirm_email"
+
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        contact_modification_mode = tracker.get_slot("contact_modification_mode")
+        if contact_modification_mode:
+            dispatcher.utter_message(text="✅ Email updated successfully!")
+            return [SlotSet("contact_modification_mode", False)]
+        return [ActiveLoop("contact_form")]
+
+class ActionProvideNewEmail(Action):
+    def name(self) -> Text:
+        return "action_provide_new_email"
+
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
         return [
-            SlotSet("otp", self._generate_otp()),
-            SlotSet("otp_verified", False),
-            SlotSet("resend_count", user_resend_count)
+            SlotSet("user_contact_email", None),
+            ActiveLoop("contact_form")
         ]
 
-    def _handle_failure(self, dispatcher: CollectingDispatcher) -> List[Dict]:
-        """Handles failed OTP send after retries"""
-        dispatcher.utter_message(
-            text=(
-                "❌ We're having technical difficulties verifying this phone number.\n"
-                "You can either:\n"
-                "1. Try again with the same number\n"
-                "2. Try a different phone number\n"
-                "3. Skip phone verification"
-            ),
-            buttons=[
-                {"title": "Try Again", "payload": "/retry_otp"},
-                {"title": "Change Number", "payload": "/change_phone_number"},
-                {"title": "Skip Verification", "payload": "/skip_otp_verification"}
-            ]
-        )
-        return []
-
-    async def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        phone_number = tracker.get_slot("user_contact_phone")
-        user_resend_count = tracker.get_slot("resend_count") or 0
-        
-        if not phone_number or phone_number == 'slot_skipped':
-            return []
-
-        otp = self._generate_otp()
-        
-        # Try sending OTP with retries
-        for attempt in range(self.otp_service.aws_retries):
-            success, error = self.otp_service.send_otp_message(phone_number, otp)
-            
-            if success:
-                return self._handle_success(dispatcher, user_resend_count)
-            
-            logger.error(f"AWS Attempt {attempt + 1} failed: {error}")
-            if attempt < self.otp_service.aws_retries - 1:
-                time.sleep(self.otp_service.retry_delay)
-        
-        return self._handle_failure(dispatcher)
-
-
-class ActionResendOTP(Action):
+class ActionModifyContactInfo(Action):
     def name(self) -> Text:
-        return "action_resend_otp"
+        return "action_modify_contact_info"
 
-    def _handle_max_resends(self, dispatcher: CollectingDispatcher) -> List[Dict]:
-        """Handles when max resend attempts reached"""
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        current_email = tracker.get_slot("user_contact_email")
+        current_phone = tracker.get_slot("user_contact_phone")
+        
+        buttons = []
+        if current_email and current_email != "slot_skipped":
+            buttons.append({"title": f"📧 Change Email ({current_email})", "payload": "/modify_email"})
+        elif current_email == "slot_skipped":
+            buttons.append({"title": "📧 Add Email", "payload": "/modify_email"})
+            
+        if current_phone and current_phone != "slot_skipped":
+            buttons.append({"title": f"📱 Change Phone ({current_phone})", "payload": "/modify_phone"})
+        elif current_phone == "slot_skipped":
+            buttons.append({"title": "📱 Add Phone", "payload": "/modify_phone"})
+            
+        buttons.append({"title": "❌ Cancel", "payload": "/cancel_modification_contact"})
+            
         dispatcher.utter_message(
-            text=(
-                "❌ We've tried sending the code 3 times but you haven't received it.\n"
-                "This might mean there's an issue with the phone number.\n"
-                "You can:\n"
-                "1. Try a different phone number\n"
-                "2. Skip phone verification"
-            ),
-            buttons=[
-                {"title": "Change Number", "payload": "/change_phone_number"},
-                {"title": "Skip Verification", "payload": "/skip_otp_verification"}
-            ]
+            text="Which contact information would you like to modify?",
+            buttons=buttons
         )
         return []
 
+class ActionModifyEmail(Action):
+    def name(self) -> Text:
+        return "action_modify_email"
+
     async def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        resend_count = tracker.get_slot("resend_count") or 0
-        
-        if resend_count >= 2:
-            return self._handle_max_resends(dispatcher)
-        
-        # Increment resend count before sending new OTP
-        return await ActionInitiateOTPVerification().run(
-            dispatcher, 
-            tracker, 
-            domain
-        ) + [SlotSet("resend_count", resend_count + 1)]
+        return [
+            SlotSet("user_contact_email", None),
+            SlotSet("contact_modification_mode", True),
+            ActiveLoop("contact_form")
+        ]
+
+class ActionCancelModification(Action):
+    def name(self) -> Text:
+        return "action_cancel_modification_contact"
+
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text="✅ Modification cancelled. Your contact information remains unchanged.")
+        return [SlotSet("contact_modification_mode", False)]

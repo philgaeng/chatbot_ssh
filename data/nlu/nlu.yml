@@ -502,17 +502,10 @@ nlu:
     - [654321](otp_number)
     - Here's my code [123456](otp_number)
 
-- intent: retry_otp
-  examples: |
-    - try again
-    - send new code
-    - resend code
-    - send another verification code
-    - retry verification
-    - I need a new code
-
 - intent: skip_otp_verification
   examples: |
+    - /skip_otp_verification
+    - skip_otp_verification
     - skip verification
     - continue without verification
     - skip this step
@@ -520,5 +513,82 @@ nlu:
     - proceed without verification
     - skip otp
 
+- intent: retry_otp
+  examples: |
+    - /retry_otp
+    - retry verification
+    - try again
+
+- intent: resend_otp
+  examples: |
+    - /resend_otp
+    - resend_otp
+    - send new code
+    - resend code
+    - send another verification code
+    - I need a new code
+    - 000000
+
+- intent: enter_otp
+  examples: |
+    - /enter_otp
+    - enter_otp
 
 
+- intent: start_check_status
+  examples: |
+    - start_check_status
+    - /start_check_status
+    - check my status
+    - check my grievance status
+    - check my grievance
+
+- intent: retrieve_with_phone
+  examples: |
+    - retrieve_with_phone
+    - /retrieve_with_phone
+    - retrieve with my phone number
+    - use my phone number
+    - check with mobile number
+    - phone number
+    - i'll use my phone
+
+- intent: retrieve_grievance_with_id
+  examples: |
+    - retrieve_grievance_with_id
+    - /retrieve_grievance_with_id
+    - i have the grievance id
+    - use grievance id
+    - check with complaint number
+    - i have the complaint id
+    - track with grievance number
+
+- intent: check_status
+  examples: |
+    - check_status
+    - /check_status
+    - what's the current status
+    - tell me the status
+    - has there been any progress
+    - what's happening with my complaint
+    - show me the status
+
+- intent: retry_otp
+  examples: |
+    - /retry_otp
+    - retry_otp
+    - let me try again
+    - i want to try another code
+    - try different otp
+    - enter different code
+    - retry otp
+
+- intent: retrieve_another_grievance
+  examples: |
+    - retrieve_another_grievance
+    - /retrieve_another_grievance
+    - check another grievance
+    - i have another complaint to check
+    - check status of different complaint
+    - retrieve another grievance
+    - check one more complaint

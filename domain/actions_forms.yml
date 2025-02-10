@@ -3,7 +3,7 @@ version: "3.1"
 forms:
   municipality_form:
     required_slots:
-      - municipality
+      - user_municipality
     ignored_intents:
       - agree
       - deny
@@ -11,8 +11,8 @@ forms:
 
   address_form:
     required_slots:
-      - village
-      - address
+      - user_village
+      - user_address
     ignored_intents:
       - agree
       - deny
@@ -48,9 +48,15 @@ forms:
     required_slots:
       - otp_input
 
+  grievance_id_form:
+    required_slots:
+      - grievance_id
+
 
 actions:
+#######   generic actions   ###########################################
   - action_introduce
+  - action_prepopulate_location
   - action_back_to_previous_step
   - action_exit_without_filing
   - action_continue
@@ -64,7 +70,9 @@ actions:
   - action_handle_skip
   - action_handle_mood_great
   - action_respond_to_challenge
-  - validate_contact_form
+
+#######   location actions   ###########################################
+
   - action_ask_location
   - validate_address_form
   - validate_municipality_form
@@ -72,6 +80,9 @@ actions:
   - action_confirm_municipality
   - action_reset_address_slots
   - action_reset_municipality_slots
+
+#######   grievance actions   ########################################### 
+
   - action_start_grievance_process
   - action_submit_grievance_as_is
   - action_capture_grievance_text
@@ -94,6 +105,8 @@ actions:
   - action_confirm_categories
   - action_cancel_modification_category
   - action_skip_category
+
+#######   contact actions   ###########################################
   - action_ask_contact_consent
   - action_collect_phone_for_anonymous
   - utter_ask_address_form_address
@@ -108,7 +121,23 @@ actions:
   - action_check_phone_validation
   - action_recommend_phone_validation
   - action_activate_otp_form
+  - action_skip_email
+  - action_confirm_email
+  - action_provide_new_email
+  - action_modify_contact_info
+  - action_modify_email
+  - action_cancel_modification_contact
+  - validate_contact_form
   
+  ########## check status actions ##########
+  - action_choose_retrieval_method
+  - action_retrieve_with_phone
+  - action_retrieve_grievance_with_id
+  - action_check_status
+  - action_retry_otp
+  - action_retrieve_another_grievance
+  - action_display_grievance
+  - action_show_status_history
 
 
 session_config:
