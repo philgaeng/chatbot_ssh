@@ -213,7 +213,7 @@ class ValidateAddressForm(FormValidationAction):
         return text.lower().strip() in ['skip', 'pass', 'next']
 
     # ✅ Extract village slot correctly
-    async def extract_village(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+    async def extract_user_village(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         
         # Only extract input when village is the requested slot
@@ -226,7 +226,7 @@ class ValidateAddressForm(FormValidationAction):
         return {}
 
     # ✅ Extract address slot correctly
-    async def extract_address(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+    async def extract_user_address(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         
         # Only extract input when address is the requested slot

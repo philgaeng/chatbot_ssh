@@ -49,25 +49,6 @@ responses:
     - text: "Thank you for your time. If you change your mind, feel free to start the grievance process again."
 
 ##location_actions
-  # # Prepopulate Location Responses
-  # utter_prepopulate_location_success:
-  #   - text: "We’ve identified your district as {district} and municipality as {municipality}. Please confirm or add more details."
-
-  # utter_prepopulate_location_failure:
-  #   - text: "We could not prepopulate your location. \nPlease provide your district and municipality."
-
-# Skip Responses for Location Form
-  # utter_skip_province:
-  #   - text: "Skipping province."
-
-  # utter_skip_municipality:
-  #   - text: "Skipping municipality."
-
-  # utter_skip_ward:
-  #   - text: "Skipping ward."
-
-  # utter_skip_village:
-  #   - text: "Skipping village."
 
   utter_skip_address:
     - text: "Skipping address."
@@ -90,10 +71,10 @@ responses:
   utter_skip_full_name:
     - text: "Skipping full name."
 
-  utter_skip_phone_number:
+  utter_skip_user_contact_phone:
     - text: "Skipping phone number."
 
-  utter_skip_email_address:
+  utter_skip_contact_email:
     - text: "Skipping email address."
 
 ## generic_actions
@@ -182,13 +163,13 @@ responses:
   #   - text: "Please provide the name of your province or type Skip to skip"
   # utter_ask_location_form_district:
   #   - text: "then, the name of the district  or type Skip"
-  utter_ask_municipality_form_municipality:
+  utter_ask_municipality_form_user_municipality:
     - text: "Please provide the name of the municipality or type Skip."
   # utter_ask_location_form_ward:
   #   - text: "What is the ward number  or type Skip"
-  utter_ask_address_form_village:
+  utter_ask_address_form_user_village:
     - text: "What is the name of the village or type Skip"
-  utter_ask_address_form_address:
+  utter_ask_address_form_user_address:
     - text: "Can you provide address details or type Skip"
   utter_ask_contact_form_user_full_name:
     - text: "Can you provide your full name (first name, last name) or type Skip"

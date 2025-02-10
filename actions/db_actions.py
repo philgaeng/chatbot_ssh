@@ -5,10 +5,12 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from psycopg2.extras import DictCursor
 import uuid
+import pytz
 
 class GrievanceDB:
     def __init__(self):
         self.db_type = self._determine_db_type()
+        self.nepal_tz = pytz.timezone('Asia/Kathmandu')
         self.init_db()
 
     def _determine_db_type(self) -> str:
@@ -56,13 +58,19 @@ class GrievanceDB:
         else:
             return sqlite3.connect("grievances.db")
 
+    def get_nepal_time(self) -> datetime:
+        """Get current time in Nepal timezone"""
+        return datetime.now(self.nepal_tz)
+
     def init_db(self):
         """Initialize the database with required tables"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         if self.db_type == "postgres":
-            # PostgreSQL-specific CREATE TABLE statements
+            # First set the timezone for the database session
+            cursor.execute("SET timezone = 'Asia/Kathmandu';")
+            
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -75,7 +83,7 @@ class GrievanceDB:
                     user_ward TEXT,
                     user_village TEXT,
                     user_address TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -86,13 +94,12 @@ class GrievanceDB:
                     grievance_category TEXT,
                     grievance_summary TEXT NOT NULL,
                     grievance_details TEXT,
-                    grievance_date DATE,
                     grievance_claimed_amount DECIMAL,
                     grievance_location TEXT,
-                    grievance_creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    grievance_modification_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     grievance_status TEXT DEFAULT 'Submitted',
-                    grievance_status_update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    grievance_status_update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -103,8 +110,8 @@ class GrievanceDB:
                     previous_status TEXT NOT NULL,
                     new_status TEXT NOT NULL,
                     next_step TEXT,
-                    expected_resolution_date TIMESTAMP,
-                    update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expected_resolution_date TIMESTAMP WITH TIME ZONE,
+                    update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     updated_by TEXT,
                     notes TEXT
                 )
@@ -135,7 +142,6 @@ class GrievanceDB:
                     grievance_category TEXT,
                     grievance_summary TEXT NOT NULL,
                     grievance_details TEXT,
-                    grievance_date DATE,
                     grievance_claimed_amount DECIMAL,
                     grievance_location TEXT,
                     grievance_creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -259,63 +265,93 @@ class GrievanceDB:
         cursor = conn.cursor()
         
         try:
+            # Set timezone only for PostgreSQL
+            if self.db_type == "postgres":
+                cursor.execute("SET timezone = 'Asia/Kathmandu';")
+                
+            # Generate grievance ID with Nepal time
+            nepal_time = self.get_nepal_time()
+            grievance_id = f"GR{nepal_time.strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            
+            # Convert category list to string if it's a list
+            category = grievance_data.get('grievance_category', '')
+            if isinstance(category, list):
+                category = '; '.join(category)
+
             # First, get or create user
-            cursor.execute("""
-                INSERT INTO users (
-                    user_full_name, user_contact_phone, user_contact_email,
-                    user_province, user_district, user_municipality,
-                    user_ward, user_village, user_address
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (user_contact_phone) 
-                DO UPDATE SET 
-                    user_full_name = EXCLUDED.user_full_name,
-                    user_contact_email = EXCLUDED.user_contact_email
-                RETURNING id
-            """, (
-                user_data.get('user_full_name'),
-                user_data.get('user_contact_phone'),
-                user_data.get('user_contact_email'),
-                user_data.get('user_province'),
-                user_data.get('user_district'),
-                user_data.get('user_municipality'),
-                user_data.get('user_ward'),
-                user_data.get('user_village'),
-                user_data.get('user_address')
-            ))
+            if self.db_type == "postgres":
+                cursor.execute("""
+                    INSERT INTO users (
+                        user_full_name, user_contact_phone, user_contact_email,
+                        user_province, user_district, user_municipality,
+                        user_ward, user_village, user_address
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_contact_phone) 
+                    DO UPDATE SET 
+                        user_full_name = EXCLUDED.user_full_name,
+                        user_contact_email = EXCLUDED.user_contact_email
+                    RETURNING id
+                """, (
+                    user_data.get('user_full_name'),
+                    user_data.get('user_contact_phone'),
+                    user_data.get('user_contact_email'),
+                    user_data.get('user_province'),
+                    user_data.get('user_district'),
+                    user_data.get('user_municipality'),
+                    user_data.get('user_ward'),
+                    user_data.get('user_village'),
+                    user_data.get('user_address')
+                ))
+            else:
+                # SQLite version
+                cursor.execute("""
+                    INSERT OR REPLACE INTO users (
+                        user_full_name, user_contact_phone, user_contact_email,
+                        user_province, user_district, user_municipality,
+                        user_ward, user_village, user_address
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    str(user_data.get('user_full_name', '')),
+                    str(user_data.get('user_contact_phone', '')),
+                    str(user_data.get('user_contact_email', '')),
+                    str(user_data.get('user_province', '')),
+                    str(user_data.get('user_district', '')),
+                    str(user_data.get('user_municipality', '')),
+                    str(user_data.get('user_ward', '')),
+                    str(user_data.get('user_village', '')),
+                    str(user_data.get('user_address', ''))
+                ))
+                cursor.execute("SELECT last_insert_rowid()")
             
             user_id = cursor.fetchone()[0]
-            
-            # Generate grievance ID
-            grievance_id = f"GR{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
-            
-            # Create grievance
-            cursor.execute("""
+
+            # Create grievance with appropriate placeholders
+            placeholder = "%s" if self.db_type == "postgres" else "?"
+            cursor.execute(f"""
                 INSERT INTO grievances (
                     grievance_id, user_id, grievance_category,
-                    grievance_summary, grievance_details, grievance_date,
+                    grievance_summary, grievance_details,
                     grievance_claimed_amount, grievance_location
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING grievance_id
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             """, (
-                grievance_id,
-                user_id,
-                grievance_data.get('grievance_category'),
-                grievance_data.get('grievance_summary'),
-                grievance_data.get('grievance_details'),
-                grievance_data.get('grievance_date'),
-                grievance_data.get('grievance_claimed_amount'),
-                grievance_data.get('grievance_location')
+                str(grievance_id),
+                int(user_id),
+                str(category),
+                str(grievance_data.get('grievance_summary', '')),
+                str(grievance_data.get('grievance_details', '')),
+                str(grievance_data.get('grievance_claimed_amount', '0')),
+                str(grievance_data.get('grievance_location', ''))
             ))
             
             # Create initial history entry
-            cursor.execute("""
+            cursor.execute(f"""
                 INSERT INTO grievance_history (
                     grievance_id, previous_status, new_status,
                     next_step, notes
-                ) VALUES (%s, %s, %s, %s, %s)
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             """, (
-                grievance_id,
-                None,
+                str(grievance_id),
+                '',  # Empty string instead of None for previous_status
                 'Submitted',
                 'Under Review',
                 'Grievance submitted successfully'
@@ -327,6 +363,14 @@ class GrievanceDB:
         except Exception as e:
             conn.rollback()
             print(f"Error creating grievance: {e}")
+            print(f"Values being inserted - user_id: {user_id}, grievance_id: {grievance_id}")
+            print(f"Grievance data values:", {
+                'category': category,
+                'grievance_summary': grievance_data.get('grievance_summary'),
+                'grievance_details': grievance_data.get('grievance_details'),
+                'grievance_claimed_amount': grievance_data.get('grievance_claimed_amount'),
+                'grievance_location': grievance_data.get('grievance_location')
+            })
             return None
             
         finally:

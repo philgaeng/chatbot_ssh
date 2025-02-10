@@ -15,7 +15,7 @@ import os
 import json
 from dotenv import load_dotenv
 from openai import OpenAI
-from typing import Any, Text, Dict, List
+from typing import Any, Text, Dict, List, Tuple
 from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
@@ -261,6 +261,10 @@ class ActionSubmitGrievance(Action):
     def name(self) -> Text:
         return "action_submit_grievance"
 
+    def get_current_datetime(self) -> str:
+        """Get current date and time in YYYY-MM-DD HH:MM format."""
+        return datetime.now().strftime("%Y-%m-%d %H:%M")
+
     def is_valid_email(self, email: str) -> bool:
         """Check if the provided string is a valid email address."""
         if not email:
@@ -268,17 +272,31 @@ class ActionSubmitGrievance(Action):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
-    def collect_grievance_data(self, tracker: Tracker) -> Dict[str, Any]:
-        """Collect all grievance-related data from slots."""
-        return {
-            'phone_number': tracker.get_slot('phone_number'),
-            'email': tracker.get_slot('user_email'),
-            'subject': tracker.get_slot('grievance_summary'),
-            'description': tracker.get_slot('grievance_details'),
-            'category': tracker.get_slot('list_of_cat_for_summary'),
-            'department': tracker.get_slot('department'),
-            'status': GRIEVANCE_STATUS["SUBMITTED"]
+    def collect_grievance_data(self, tracker: Tracker) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Collect and separate user and grievance data from slots."""
+        # User-related data
+        user_data = {
+            'user_contact_phone': tracker.get_slot('user_contact_phone'),
+            'user_contact_email': tracker.get_slot('user_contact_email'),
+            'user_full_name': tracker.get_slot('user_full_name'),
+            'user_province': tracker.get_slot('user_province'),
+            'user_district': tracker.get_slot('user_district'),
+            'user_municipality': tracker.get_slot('user_municipality'),
+            'user_ward': tracker.get_slot('user_ward'),
+            'user_village': tracker.get_slot('user_village'),
+            'user_address': tracker.get_slot('user_address'),
         }
+
+        # Grievance-related data
+        grievance_data = {
+            'grievance_summary': tracker.get_slot('grievance_summary'),
+            'grievance_details': tracker.get_slot('grievance_details'),
+            'grievance_category': tracker.get_slot('list_of_cat_for_summary'),
+            'grievance_claimed_amount': tracker.get_slot('grievance_claimed_amount'),
+            'grievance_location': f"{user_data['user_municipality']}, Ward {user_data['user_ward']}"
+        }
+
+        return user_data, grievance_data
 
     def create_confirmation_message(self, grievance_id: str, grievance_data: Dict[str, Any], user_email: str = None) -> str:
         """Create a formatted confirmation message."""
@@ -288,20 +306,20 @@ class ActionSubmitGrievance(Action):
         ]
 
         # Add summary if available
-        if grievance_data['subject']:
-            message.append(f"**Summary:** {grievance_data['subject']}")
+        if grievance_data['grievance_summary']:
+            message.append(f"**Summary:** {grievance_data['grievance_summary']}")
         else:
             message.append("**Summary:** [Not Provided]")
 
         # Add category if available
-        if grievance_data['category']:
-            message.append(f"**Category:** {grievance_data['category']}")
+        if grievance_data['grievance_category']:
+            message.append(f"**Category:** {grievance_data['grievance_category']}")
         else:
             message.append("**Category:** [Not Provided]\nYou can add the category later if needed.")
 
         # Add details if available
-        if grievance_data['description']:
-            message.append(f"**Details:** {grievance_data['description']}")
+        if grievance_data['grievance_details']:
+            message.append(f"**Details:** {grievance_data['grievance_details']}")
 
         message.append("\nOur team will review it shortly and contact you if more information is needed.")
 
@@ -324,12 +342,12 @@ class ActionSubmitGrievance(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         # Collect grievance data
-        grievance_data = self.collect_grievance_data(tracker)
-        user_email = grievance_data.get('email')
+        user_data, grievance_data = self.collect_grievance_data(tracker)
+        user_email = user_data.get('user_contact_email')
 
         try:
             # Create grievance in database
-            grievance_id = db.create_grievance(grievance_data)
+            grievance_id = db.create_grievance(user_data, grievance_data)
             
             if not grievance_id:
                 raise Exception("Failed to create grievance in database")
