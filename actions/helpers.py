@@ -68,13 +68,22 @@ def update_lookup_table(categories):
     except Exception as e:
         logger.error(f"⚠ Error updating lookup table: {e}")
 
-def get_next_grievance_number():
+def get_next_grievance_number(user_district=None, user_municipality=None):
+    """
+    Generate the next grievance number with district and municipality codes.
+    Format: GR-dd-mm-YYMMDD-NNNN
+    where dd = first 2 letters of district, mm = first 2 letters of municipality
+    """
     # Get today's date in YYmmDD format
     today_date = datetime.now().strftime("%y%m%d")
-
+    
+    # Get location codes (default to 'XX' if not provided)
+    district_code = user_district[:2].upper() if user_district else "XX"
+    municipality_code = user_municipality[:2].upper() if user_municipality else "XX"
+    
     # Initialize grievance ID if the file doesn't exist or is empty
     if not os.path.exists(COUNTER_FILE) or os.stat(COUNTER_FILE).st_size == 0:
-        initial_id = f"GR-{today_date}-0001"
+        initial_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
         with open(COUNTER_FILE, "w") as f:
             f.write(initial_id)
         return initial_id
@@ -89,24 +98,24 @@ def get_next_grievance_number():
             raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
         
         parts = last_grievance_id.split("-")
-        if len(parts) != 3:
+        if len(parts) != 4:
             raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
 
-        _, last_date, last_counter = parts
+        _, last_district_code, last_municipality_code, last_date, last_counter = parts
         last_counter_number = int(last_counter)
 
         # If the date is different from today, reset the counter
         if last_date != today_date:
-            new_grievance_id = f"GR-{today_date}-0001"
+            new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
         else:
             # Increment the counter if the date is the same
             new_counter_number = last_counter_number + 1
-            new_grievance_id = f"GR-{today_date}-{new_counter_number:04d}"
+            new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-{new_counter_number:04d}"
 
     except Exception as e:
         # Handle any parsing error by resetting the counter
         print(f"Error parsing grievance ID: {e}. Resetting counter.")
-        new_grievance_id = f"GR-{today_date}-0001"
+        new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
 
     # Save the new grievance ID to the file 
     with open(COUNTER_FILE, "w") as f:

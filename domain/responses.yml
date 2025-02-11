@@ -117,14 +117,10 @@ responses:
   utter_start_grievance_process:
     - text: "Great! Let's start by understanding your grievance."
 
-  # utter_grievance_summary:
-  #   - text: "Got it! Here's what I understood: {summary}"
 
   utter_grievance_processing_error:
     - text: "Sorry, there was an issue processing your grievance. Please try again."
 
-  # utter_ask_location_details:
-  #   - text: "Where did this happen? You can skip this question if you're unsure."
 
   # Skip Handling
   utter_ask_file_as_is:
@@ -136,21 +132,7 @@ responses:
   utter_ask_otp_input:
     - text: "Please enter the verification code:\nType 000000 if you haven't received the code."
 
-  # # Grievance ID Generation
-  # utter_grievance_id_generated:
-  #   - text: "Your grievance has been filed. Your grievance ID is {grievance_id}."
-
-  # # Restart Grievance Process
-  # utter_restart_grievance_process:
-  #   - text: "Restarting the grievance process. Let's begin again."
-
-  # # Submit Grievance
-  # utter_grievance_submitted:
-  #   - text: "Your grievance '{grievance_details}' has been filed. Our team will review it shortly."
-
-  # utter_grievance_submitted_no_details:
-  #   - text: "Your grievance has been filed. Our team will review it shortly."
-
+ 
   # Submit Grievance As-Is
   utter_grievance_submitted_as_is:
     - text: "Your grievance '{grievance_details}' has been filed as is. Our team will review it shortly and contact you for more information if needed."
@@ -159,10 +141,7 @@ responses:
     - text: "Your grievance has been filed. Our team will review it shortly and contact you for more information if needed."
   
   # Location prompts
-  # utter_ask_municipality_form_province: 
-  #   - text: "Please provide the name of your province or type Skip to skip"
-  # utter_ask_location_form_district:
-  #   - text: "then, the name of the district  or type Skip"
+
   utter_ask_municipality_form_user_municipality:
     - text: "Please provide the name of the municipality or type Skip."
   # utter_ask_location_form_ward:
@@ -177,45 +156,3 @@ responses:
     - text: "Can you provide your phone number or type Skip \n Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long."
   utter_ask_contact_form_user_contact_email:
     - text: "Can you provide your email or type Skip"
-
-
-# Contact details collection prompts
-  # utter_ask_optional_details:
-  #   - text: "Could you share your full name?"
-  
-  # utter_ask_user_honorific_prefix:
-  #   - text: "What is your honorific prefix? (e.g., Mr., Mrs., Dr., etc.)"
-
-  # utter_ask_user_contact_phone:
-  #   - text: "Please provide your mobile number so we can follow up on your grievance."
-
-  # utter_ask_user_contact_email:
-  #   - text: "Could you provide your email address if you have one? This is optional."
-
-
-  # utter_confirm_contact_details:
-  #   - text: |
-  #       "Thank you for providing your contact details:
-  #       - Full Name: {user_full_name if user_full_name else 'Not provided'}
-  #       - Phone Number: {user_contact_phone if user_contact_phone else 'Not provided'}
-  #       - Email: {user_contact_email if user_contact_email else 'Not provided'}."
-
-  # # Final confirmation
-  # utter_grievance_submission_complete:
-  #   - text: "Your grievance has been submitted successfully. Thank you for your cooperation!"
-
-  # #grievance
-  # utter_ask_grievance_details:
-  #   - text: "Could you describe your grievance in detail?"
-  # # utter_grievance_filed:
-  # #   - text: "Your grievance has been filed. Your grievance ID is {grievance_id}."
-  # utter_encourage_details:
-  #   - text: |
-  #       "Thank you for filing your grievance. If you have a few minutes, we can clarify and complete your complaint. This will help us treat it faster. Would that be okay?"
-  # utter_confirm_grievance_summary:
-  #   - text: |
-  #       "Here is what we have captured so far:
-  #       - Location: District {district}, Municipality {municipality}, Ward {ward}, Village {village}, Address {address}.
-  #       - Grievance Details: {grievance_details}.
-  #       - Contact Number: {user_contact_phone}.
-  #       Does this look correct?"

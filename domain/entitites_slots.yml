@@ -7,7 +7,6 @@ entities:
   - ward
   - village
   - address
-  - grievance_details
   - otp
   - user_contact_phone
   - first_name
@@ -39,8 +38,7 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_entity
-        entity: restart_type
+      - type: custom
   
   verification_context:
     type: categorical
@@ -191,11 +189,6 @@ slots:
     mappings: []
 
 
-  grievance_details:
-    type: text
-    influence_conversation: false
-    mappings: []
-
   detailed_grievance_completed:
     type: bool
     influence_conversation: false
@@ -270,6 +263,27 @@ slots:
     type: text
     mappings:
       - type: custom
+
+  grievance_temp:
+    type: text
+    mappings:
+      - type: from_text
+
+  grievance_new_detail:
+    type: text
+    mappings:
+      - type: from_text
+
+  grievance_details:
+    type: text
+    mappings:
+      - type: from_text
+
+
+  combined_grievance:
+    type: text
+    mappings:
+      - type: from_text
         
 
 ##########################################

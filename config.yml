@@ -11,7 +11,7 @@ pipeline:
   - name: CountVectorsFeaturizer
   - name: LexicalSyntacticFeaturizer
   - name: DIETClassifier
-    epochs: 200
+    epochs: 120
     constrain_similarities: true
   - name: EntitySynonymMapper
   - name: FallbackClassifier
@@ -20,15 +20,17 @@ pipeline:
 
 policies:
   - name: MemoizationPolicy
-    max_history: 10
+    max_history: 6
   - name: TEDPolicy
-    max_history: 12
+    max_history: 8
     epochs: 100
     constrain_similarities: true
   - name: RulePolicy
-    core_fallback_threshold: 0.1
+    core_fallback_threshold: 0.2
+    lookup_tables: true
     core_fallback_action_name: "action_custom_fallback"
     enable_fallback_prediction: true
     restrict_rules: true
     check_for_contradictions: true
+    enable_prediction_debugging: true
 

@@ -52,11 +52,19 @@ forms:
     required_slots:
       - grievance_id
 
+  grievance_details_form:
+    required_slots:
+      - grievance_new_detail
+    ignored_intents:
+      - submit_details
+      - add_more_details
+      - exit_without_filing
+      - nlu_fallback
 
 actions:
 #######   generic actions   ###########################################
   - action_introduce
-  - action_prepopulate_location
+  - action_session_start
   - action_back_to_previous_step
   - action_exit_without_filing
   - action_continue
@@ -105,11 +113,13 @@ actions:
   - action_confirm_categories
   - action_cancel_modification_category
   - action_skip_category
+  - validate_grievance_details_form
+  - action_handle_grievance_form_completion
 
 #######   contact actions   ###########################################
   - action_ask_contact_consent
   - action_collect_phone_for_anonymous
-  - utter_ask_address_form_address
+  - utter_ask_address_form_user_address
   - utter_ask_contact_form_user_full_name
   - utter_ask_contact_form_user_contact_phone
   - utter_ask_contact_form_user_contact_email

@@ -19,7 +19,7 @@ from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from actions.helpers import LocationValidator  # Add this import
-from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the constants
+from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST, USE_QR_CODE  # Import the constants
 
 
 logger = logging.getLogger(__name__)
@@ -34,23 +34,30 @@ class ActionPrepopulateLocation(Action):
     def run(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        qr_code = tracker.get_slot("qr_code")  # Assume this is pre-set
-        location_mapping = {
-            "QR001": {"user_district": "Kathmandu", "user_municipality": "KMC"},
-            "QR002": {"user_district": "Bhaktapur", "user_municipality": "Bhaktapur"},
-        }
-        prepopulated = location_mapping.get(qr_code, {})
+        if USE_QR_CODE:
+            qr_code = tracker.get_slot("qr_code")  # Assume this is pre-set
+            location_mapping = {
+                "QR001": {"user_district": "Kathmandu", "user_municipality": "KMC"},
+                "QR002": {"user_district": "Bhaktapur", "user_municipality": "Bhaktapur"},
+                }
+            prepopulated = location_mapping.get(qr_code, {})
+        
+        else:
+            prepopulated = {
+                "user_district": QR_DISTRICT,
+                "user_province": QR_PROVINCE
+            }
 
         if prepopulated:
             dispatcher.utter_message(response="utter_prepopulate_location_success", 
                                       district=prepopulated.get("user_district"), 
-                                      municipality=prepopulated.get("user_municipality"))
+                                      province=prepopulated.get("user_province"))
         else:
             dispatcher.utter_message(response="utter_prepopulate_location_failure")
 
         return [
             SlotSet("user_district", prepopulated.get("user_district")),
-            SlotSet("user_municipality", prepopulated.get("user_municipality")),
+            SlotSet("user_province", prepopulated.get("user_province")),
         ]
 
 class ActionAskLocation(Action):

@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 #         # dispatcher.utter_message(text="Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?")
 #         logger.info("utter_introduce sent")  # Debugging line
 #         return events
+# Action to prepopulate location based on QR code
+
+
 
 class ActionIntroduce(Action):
     def name(self) -> str:
@@ -54,7 +57,48 @@ class ActionIntroduce(Action):
         )
 
         return []
-    
+
+
+
+class ActionSessionStart(Action):
+    def name(self) -> Text:
+        return "action_session_start"
+
+    async def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        # Initialize session
+        events = [SessionStarted()]
+        
+        # Add default location population
+        events.extend([
+            {"event": "slot", "name": "user_province", "value": QR_PROVINCE},
+            {"event": "slot", "name": "user_district", "value": QR_DISTRICT}
+        ])
+        
+        # Send introduction message
+        dispatcher.utter_message(
+            text=f"""Hello! Welcome to the Grievance Management Chatbot.
+            You are reaching out to the office of {QR_DISTRICT} in {QR_PROVINCE}.
+            I am here to help you file a grievance or check its status. What would you like to do?"""
+            ,
+            buttons=[
+                {"title": "File a grievance", "payload": "/start_grievance_process"},
+                {"title": "Check my status", "payload": "/check_status"},
+                {"title": "Exit", "payload": "/goodbye"}
+            ]
+        )
+        
+        # Add the action that listens for the next user message
+        events.append(ActionExecuted("action_listen"))
+        
+        return events
+
+
+
 #helpers
 class ActionSetCurrentProcess(Action):
     def name(self) -> Text:

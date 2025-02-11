@@ -322,39 +322,39 @@ nlu:
     - /modify_address
     - modify_address
 
-- intent: describe_complain
-  examples: |
-    - my field is flooded
-    - they stole
-    - my wife got hurt
-    - my daughter got injured
-    - I can't find a job
-    - they ruined my field
-    - they eat my chicken
-    - they stole my eggs
-    - they stole my farm equipment
-    - the birds have disappeared
-    - the water is spoiled
-    - my well is spoiled
-    - the electricity is off
-    - no more power
-    - the road is damaged
-    - my crops were destroyed
-    - the bridge collapsed
-    - my livestock is missing
-    - they set my house on fire
-    - the school is closed
-    - there is no doctor in the area
-    - the shop is out of food
-    - they blocked my road
-    - there are too many mosquitoes
-    - they cut down my trees
-    - my roof is leaking
-    - the water pump is broken
-    - my fence was destroyed
-    - the hospital is too far
-    - my phone was stolen
-    - I was harassed
+# - intent: describe_complaint
+#   examples: |
+#     - my field is flooded
+#     - they stole
+#     - my wife got hurt
+#     - my daughter got injured
+#     - I can't find a job
+#     - they ruined my field
+#     - they eat my chicken
+#     - they stole my eggs
+#     - they stole my farm equipment
+#     - the birds have disappeared
+#     - the water is spoiled
+#     - my well is spoiled
+#     - the electricity is off
+#     - no more power
+#     - the road is damaged
+#     - my crops were destroyed
+#     - the bridge collapsed
+#     - my livestock is missing
+#     - they set my house on fire
+#     - the school is closed
+#     - there is no doctor in the area
+#     - the shop is out of food
+#     - they blocked my road
+#     - there are too many mosquitoes
+#     - they cut down my trees
+#     - my roof is leaking
+#     - the water pump is broken
+#     - my fence was destroyed
+#     - the hospital is too far
+#     - my phone was stolen
+#     - I was harassed
 
 - intent: provide_contact
   examples: |
@@ -592,3 +592,95 @@ nlu:
     - check status of different complaint
     - retrieve another grievance
     - check one more complaint
+
+- intent: add_more_details
+  examples: |
+    - add_more_details
+    - /add_more_details
+    - add more details
+    - add more information
+    - add more information
+
+- intent: submit_details
+  examples: |
+    - submit_details
+    - /submit_details
+    - submit details
+    - submit grievance
+    - submit grievance details
+    - submit grievance details
+  
+- intent: confirm_email
+  examples: |
+    - confirm_email
+    - /confirm_email
+    - confirm email
+    - confirm my email
+    - confirm my email address
+
+- intent: cancel_modification_contact
+  examples: |
+    - cancel_modification_contact
+    - /cancel_modification_contact
+    - cancel modification
+    - cancel modification
+    - cancel modification
+
+- intent: confirm_selection_category
+  examples: |
+    - confirm_selection_category
+    - /confirm_selection_category
+    - confirm selection
+    - confirm selection
+    - confirm selection
+
+- intent: file_without_validation
+  examples: |
+    - file_without_validation
+    - /file_without_validation
+    - file without validation
+    - file without validation
+    - file without validation
+
+- intent: modify_contact_info
+  examples: |
+    - modify_contact_info
+    - /modify_contact_info
+    - modify contact info
+    - modify contact info
+    - modify contact info
+
+- intent: modify_email
+  examples: |
+    - modify_email
+    - /modify_email
+    - modify email
+    - modify email
+    - modify email
+
+- intent: modify_phone
+  examples: |
+    - modify_phone
+    - /modify_phone
+    - modify phone
+    - modify phone
+    - modify phone
+
+- intent: set_apply_category_change
+  examples: |
+    - set_apply_category_change
+    - /set_apply_category_change
+    - set apply category change
+    - set apply category change
+    - set apply category change
+
+- intent: set_category
+  examples: |
+    - set_category
+    - /set_category
+    - set category
+    - set category
+    - set category
+
+
+  

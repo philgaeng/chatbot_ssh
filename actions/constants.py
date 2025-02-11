@@ -7,6 +7,7 @@ from typing import List
 QR_PROVINCE = "KOSHI"
 QR_DISTRICT = "Jhapa"
 DISTRICT_LIST = ['Jhapa', 'Morang', 'Sunsari']
+USE_QR_CODE = False
 
 # You can add other constants here, organized by category
 # For example:
@@ -83,8 +84,11 @@ EMAIL_TEMPLATES = {
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
         <p><strong>Submitted by:</strong> {user_name}</p>
         
+        <h3>Grievance Summary:</h3>
+        <p>{grievance_summary}</p>
+        
         <h3>Grievance Details:</h3>
-        <p>{grievance_text}</p>
+        <p>{grievance_details}</p>
         
         <h3>Categories:</h3>
         <ul>

@@ -22,6 +22,12 @@ rules:
       - intent: submit_grievance_as_is
       - action: action_submit_grievance_as_is
 
+  - rule: Exit grievance filing at any time
+    steps:
+      - intent: exit_without_filing
+      - action: utter_exit_without_filing
+      - active_loop: null
+
   - rule: User cancels category modification
     steps:
       - intent: cancel_modification_category
@@ -74,15 +80,18 @@ rules:
     steps:
       - intent: nlu_fallback
       - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
+
+  - rule: Introduce when no session activation
+    steps:
+      - intent: introduce
+      - action: action_session_start
   
-# ########### otp ####################
-
-#   - rule: Handle OTP verification
-#     steps:
-#       - intent: provide_otp
-#       - action: action_verify_otp
-
-#   - rule: Handle OTP skip
-#     steps:
-#       - intent: skip_otp_verification
-#       - action: action_skip_otp_verification
+  - rule: Submit grievance details form
+    steps:
+      - intent: submit_details
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_handle_grievance_form_completion
+      - action: action_capture_grievance_text
+      - action: action_confirm_categories

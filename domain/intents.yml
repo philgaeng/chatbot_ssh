@@ -50,7 +50,7 @@ intents:
   #grievance
   - start_grievance_process #refers to the process of filing a grievance
   - set_category
-  - describe_complain
+  # - describe_complaint #remove temporarily
   - restart_grievance
   - submit_grievance #refers to the act of submitting the grievance during the normal process (complete grievance)
   - submit_grievance_as_is #refers to the act of submitting the grievance as is (incomplete grievance)
@@ -72,6 +72,8 @@ intents:
   - submit_address
   - modify_address
   - set_apply_category_change
+  - submit_details
+  - add_more_details
 
 
 

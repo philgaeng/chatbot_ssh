@@ -7,6 +7,7 @@ version: "3.1"
 stories:
   - story: Happy path - retrieve grievance with phone and check status
     steps:
+      - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
           - verification_context: "retrieval"
@@ -71,6 +72,7 @@ stories:
   - story: Direct grievance ID retrieval and status check
   
     steps:
+      - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
           - verification_context: "retrieval"
@@ -91,6 +93,7 @@ stories:
 
   - story: User retrieves multiple grievances
     steps:
+      - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
           - verification_context: "retrieval"
