@@ -197,3 +197,19 @@ class ActionCustomFallback(Action):
             ]
         )
         return [UserUtteranceReverted()]
+    
+############################ HELPER ACTION - SKIP HANDLING ############################
+class ActionHandleSkip(Action):
+    def name(self) -> Text:
+        return "action_handle_skip"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        skip_count = tracker.get_slot("skip_count") or 0
+        skip_count += 1
+
+        if skip_count >= 2:
+            dispatcher.utter_message(response="utter_ask_file_as_is")
+            return [SlotSet("skip_count", 0)]
+        else:
+            dispatcher.utter_message(response="utter_skip_confirmation")
+            return [SlotSet("skip_count", skip_count)]

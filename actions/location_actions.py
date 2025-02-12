@@ -66,7 +66,7 @@ class ActionAskLocation(Action):
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         dispatcher.utter_message(
-            response="utter_ask_location",
+            text="Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
             buttons=[
                 {"title": "Yes", "payload": "/start_location_process"},
                 {"title": "Skip", "payload": "/ask_contact_details"},
@@ -124,33 +124,70 @@ class ValidateMunicipalityForm(FormValidationAction):
     def name(self) -> Text:
         return "validate_municipality_form"
 
-    async def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
+    async def required_slots(
+        self,
+        domain_slots: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Text]:
+        # # On first validation, reset the municipality slot
+        # if tracker.get_slot("requested_slot") is None:
+        #     return [SlotSet("user_municipality", None), "user_municipality"]
+        return ["user_municipality"]
 
-        municipality_string = tracker.latest_message.get("text", "").strip().lower()
+    async def extract_user_municipality(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        print("\n📍 FORM: Extracting municipality")
         
+        # Get the latest message
+        municipality_string = tracker.latest_message.get("text", "").strip()
+        print(f"Latest message: {municipality_string}")
+        
+        # Only extract when municipality is the requested slot
+        if tracker.get_slot("requested_slot") == "user_municipality":
+            # Don't extract if it's a command/intent
+            if municipality_string.startswith("/"):
+                return {}
+            return {"user_municipality": municipality_string}
+        return {}
+
+    async def validate_user_municipality(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        print("\n✨ FORM: Starting validation of municipality")
+        print(f"Received slot_value: {slot_value}")
+        
+        # If no value was extracted, keep the slot empty
+        if slot_value is None:
+            return {"user_municipality": None}
+
         # Create instance of LocationValidator
         location_validator = LocationValidator()
-
-        # Validate municipality using the validator
-        if not municipality_string or municipality_string.startswith("/"):
-            dispatcher.utter_message(text="Please enter a valid municipality name.")
+        
+        if not location_validator.validate_location(slot_value.lower(), qr_province=QR_PROVINCE, qr_district=QR_DISTRICT):
+            dispatcher.utter_message(
+                text=f"Please enter a valid municipality name. \n {location_validator.validate_municipality(slot_value)} is not a valid municipality name in {QR_PROVINCE}, {QR_DISTRICT}"
+            )
             logger.debug("🚨 Invalid municipality detected, resetting slot")
-            return [SlotSet("user_municipality", None), SlotSet("requested_slot", "user_municipality")]
+            return {"user_municipality": None}
         
-        if not location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT):
-            dispatcher.utter_message(text=f"Please enter a valid municipality name. \n {location_validator.validate_municipality(municipality_string)} is not a valid municipality name in {qr_province}, {qr_district}")
-            logger.debug("🚨 Invalid municipality detected, resetting slot")
-            return [SlotSet("user_municipality", None), SlotSet("requested_slot", "user_municipality")]
-        
-        municipality = location_validator.validate_location(municipality_string, qr_province = QR_PROVINCE, qr_district = QR_DISTRICT)["municipality"].title()
-        
-        # if municipality != municipality_string.strip().title():
-        #     dispatcher.utter_message(text=f"We updated your municipality name to {municipality}")
+        municipality = location_validator.validate_location(
+            slot_value.lower(), 
+            qr_province=QR_PROVINCE, 
+            qr_district=QR_DISTRICT
+        )["municipality"].title()
         
         logger.debug(f"✅ DEBUG: municipality slot set to: {municipality}")
-        return [SlotSet("user_municipality", municipality)]
+        return {"user_municipality": municipality}
 
     ########### Address and Village
     

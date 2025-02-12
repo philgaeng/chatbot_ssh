@@ -57,7 +57,7 @@ slots:
     type: text
     influence_conversation: true  # ✅ Keeps form active until user enters input
     mappings:
-      - type: from_text
+      - type: custom
         conditions:
           - active_loop: municipality_form
 
@@ -267,23 +267,23 @@ slots:
   grievance_temp:
     type: text
     mappings:
-      - type: from_text
+      - type: custom
 
   grievance_new_detail:
     type: text
     mappings:
-      - type: from_text
+      - type: custom
 
   grievance_details:
     type: text
     mappings:
-      - type: from_text
+      - type: custom
 
 
   combined_grievance:
     type: text
     mappings:
-      - type: from_text
+      - type: custom
         
 
 ##########################################

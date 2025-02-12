@@ -11,8 +11,7 @@ responses:
   # utter_ask_file_grievance:
   #   - text: "Would you like to file a grievance?"
 
-  utter_ask_location:
-    - text: "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it."
+  
   utter_ask_contact_consent:
     - text: "Do you consent to providing your contact details for follow-up on your grievance? This is optional, your grievance can be filed without it.."
   utter_skip_municipality:
@@ -114,12 +113,12 @@ responses:
 
 ##grievance_actions
   # Grievance Process
-  utter_start_grievance_process:
-    - text: "Great! Let's start by understanding your grievance."
+  # utter_start_grievance_process:
+  # #   - text: "Great! Let's start by understanding your grievance."
 
 
-  utter_grievance_processing_error:
-    - text: "Sorry, there was an issue processing your grievance. Please try again."
+  # utter_grievance_processing_error:
+  #   - text: "Sorry, there was an issue processing your grievance. Please try again."
 
 
   # Skip Handling

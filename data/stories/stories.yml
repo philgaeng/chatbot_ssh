@@ -6,97 +6,40 @@ stories:
 # Step 1.1: User files a grievance with only one input in the grievance details form
   - story: User files a grievance with optional location and contact details
     steps:
+      - intent: introduce
       - action: action_session_start
       - intent: start_grievance_process
-      # - action: action_start_grievance_process
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: utter_start_grievance_process
+      - action: action_start_grievance_process
       - action: grievance_details_form
       - active_loop: grievance_details_form
-      - slot_was_set:
-          - requested_slot: grievance_new_detail
-      - intent: submit_details
-      # - action: grievance_details_form
       - active_loop: null
-      - slot_was_set:
-          - requested_slot: null
-      - action: action_handle_grievance_form_completion
+      # - intent: submit_details
       - action: action_capture_grievance_text
-      - action: action_confirm_categories
       - intent: submit_category
       - action: action_validate_summary
       - intent: validate_summary
       - action: action_ask_location 
 
-  # Step 1.1 repeated version
-  - story: grievance filing path - submit after first detail
+  # # Step 1.1 repeated version
+  - story: User files a grievance
     steps:
       - intent: start_grievance_process
-      # - action: action_start_grievance_process
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: utter_start_grievance_process
+      - action: action_start_grievance_process
       - action: grievance_details_form
       - active_loop: grievance_details_form
-      - slot_was_set:
-          - requested_slot: grievance_new_detail
-      - intent: submit_details
-      # - action: grievance_details_form
       - active_loop: null
-      - slot_was_set:
-          - requested_slot: null
-      - action: action_handle_grievance_form_completion
+      # - intent: submit_details
       - action: action_capture_grievance_text
-      - action: action_confirm_categories
-
-    # Step 1.1 repeated version
-  - story: grievance filing path - submit after first detail
-    steps:
-      - active_loop: grievance_details_form
-      - slot_was_set:
-          - requested_slot: grievance_new_detail
-      - intent: submit_details
-      # - action: grievance_details_form
-      - active_loop: null
-      - slot_was_set:
-          - requested_slot: null
-      - action: action_handle_grievance_form_completion
-      - action: action_capture_grievance_text
-      - action: action_confirm_categories
-
-  # Step 1.2: User files a grievance with more than one input in the grievance details form
-  - story: grievance filing path - add more details
-    steps:
-      - action: action_session_start
-      - intent: start_grievance_process
-      # - action: action_start_grievance_process
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: utter_start_grievance_process
-      # - action: grievance_details_form
-      - active_loop: grievance_details_form
-      - slot_was_set:
-          - requested_slot: grievance_new_detail
-      - intent: add_more_details
-      - slot_was_set:
-          - requested_slot: grievance_new_detail
-      - intent: submit_details
-      - action: grievance_details_form
-      - active_loop: null
-      - slot_was_set:
-          - requested_slot: null
-      - action: action_handle_grievance_form_completion
-      - action: action_capture_grievance_text
-      - action: action_confirm_categories
-
-    
+      - intent: submit_category
+      - action: action_validate_summary
+      - intent: validate_summary
+      - action: action_ask_location 
 
 
   #Step 3: alternate 1 - User deletes one category of the grievance
   - story: User edits the category of the grievance
     steps:
-      - action: action_confirm_categories
+      - action: action_capture_grievance_text
       - intent: modify_categories
       - action: action_ask_for_category_modification
       - intent: modify_category
@@ -109,7 +52,7 @@ stories:
   #Step 3: alternate 2 - User changes one category of the grievance
   - story: User edits the category of the grievance
     steps:
-      - action: action_confirm_categories
+      - action: action_capture_grievance_text
       - intent: modify_categories
       - action: action_ask_for_category_modification
       - intent: modify_category
@@ -153,7 +96,7 @@ stories:
       # - intent: provide_location
       - action: action_ask_location
       - intent: start_location_process
-      - action : action_reset_municipality_slots
+      - action : municipality_form
       - active_loop: municipality_form
       - slot_was_set:
         - user_municipality  # ✅ Ensures bot waits for user input
@@ -285,7 +228,7 @@ stories:
   - story: Collect location details
     steps:
       - intent: provide_municipality
-      - action : action_reset_municipality_slots
+      # - action : action_reset_municipality_slots
       - action: municipality_form
       - active_loop: municipality_form
       - active_loop: null

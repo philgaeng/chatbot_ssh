@@ -28,70 +28,12 @@ rules:
       - action: utter_exit_without_filing
       - active_loop: null
 
-  - rule: User cancels category modification
-    steps:
-      - intent: cancel_modification_category
-      - action: action_cancel_modification_category
-      - action: action_confirm_categories  # Move to category confirmation
-
-  - rule: User skips category selection
-    steps:
-      - intent: skip_category
-      - action: action_skip_category
-      - action: action_ask_location  # Move to location selection
-
-  - rule: User skips summary input
-    steps:
-      - intent: skip_summary
-      - action: utter_skip_summary
-      - action: action_ask_location 
-
-  - rule: User retries providing phone number
-    condition:
-      - active_loop: contact_form
-    steps:
-      - intent: provide_contact_phone
-      - action: contact_form
-      - active_loop: contact_form
-
-  - rule: User retries providing email
-    condition:
-      - active_loop: contact_form
-    steps:
-      - intent: provide_contact_email
-      - action: contact_form
-      - active_loop: contact_form
-
-  - rule: ask for user consent after intent "submit_address"
-    steps:
-      - intent: submit_address
-      - action: action_ask_contact_consent
-
-  - rule: Ignore fallback during forms
-    condition:
-      - active_loop: address_form
-    steps:
-      - intent: nlu_fallback
-      - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
-
-  - rule: Ignore fallback during forms
-    condition:
-      - active_loop: contact_form
-    steps:
-      - intent: nlu_fallback
-      - action: action_listen  # ✅ Bot will wait for user to try again instead of resetting
-
-  - rule: Introduce when no session activation
-    steps:
-      - intent: introduce
-      - action: action_session_start
-  
-  - rule: Submit grievance details form
-    steps:
-      - intent: submit_details
-      - active_loop: null
-      - slot_was_set:
-          - requested_slot: null
-      - action: action_handle_grievance_form_completion
-      - action: action_capture_grievance_text
-      - action: action_confirm_categories
+  # - rule: Activate Municipality Form
+  #   steps:
+  #     - action: action_ask_location
+  #     - intent: start_location_process
+  #     - action : municipality_form
+  #     - active_loop: municipality_form
+  #     - slot_was_set:
+  #       - user_municipality  # ✅ Ensures bot waits for user input
+  #     - action : action_confirm_municipality

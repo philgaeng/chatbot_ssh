@@ -40,7 +40,22 @@ try:
 except Exception as e:
     print(f"Error loading OpenAI API key: {e}")
     
+############################ STEP 0 - GENERIC ACTIONS ############################
 
+class ActionSubmitGrievanceAsIs(Action):
+    def name(self) -> Text:
+        return "action_submit_grievance_as_is"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        grievance_details = tracker.get_slot("grievance_details")
+        if grievance_details:
+            dispatcher.utter_message(response="utter_grievance_submitted_as_is", grievance_details=grievance_details)
+        else:
+            dispatcher.utter_message(response="utter_grievance_submitted_no_details_as_is")
+            
+        # Trigger the submit grievance action
+        return [FollowupAction("action_submit_grievance")]
+    
 class ActionStartGrievanceProcess(Action):
     def name(self) -> Text:
         return "action_start_grievance_process"
@@ -48,7 +63,148 @@ class ActionStartGrievanceProcess(Action):
     async def run(self, dispatcher, tracker, domain):
         # Only set the slot, no messaging
         return [SlotSet("verification_context", "new_user")]
+    
+############################ STEP 1 - GRIEVANCE FORM DETAILS ############################
 
+class ValidateGrievanceDetailsForm(FormValidationAction):
+    def name(self) -> Text:
+        return "validate_grievance_details_form"
+    
+    async def required_slots(
+        self,
+        domain_slots: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Text]:
+        # Check if grievance_new_detail is "completed"
+        if tracker.get_slot("grievance_new_detail") == "completed":
+            print("######################### DEACTIVATING FORM ##############")
+            print("value of slot grievance_details", tracker.get_slot("grievance_details"))
+            print("########################################################")
+            return []  # This will deactivate the form
+        
+        # Otherwise, keep asking for grievance_new_detail
+        return ["grievance_new_detail"]
+
+    async def extract_grievance_new_detail(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        print("\n📥 FORM: Extracting grievance_new_detail")
+        
+        # Get the latest message and intent
+        latest_message = tracker.latest_message.get("text", "").strip()
+        intent = tracker.get_intent_of_latest_message()
+        
+        print(f"Latest message: {latest_message}")
+        print(f"Intent: {intent}")
+        print(f"grievance_details: {tracker.get_slot('grievance_details')}")
+
+        # Only extract when this slot is requested
+        if tracker.get_slot("requested_slot") == "grievance_new_detail":
+            # if intent == "submit_details":
+            #     return {"grievance_new_detail": "completed",
+            #             "follow_up_action": "action_capture_grievance_text"}
+            return {"grievance_new_detail": latest_message}
+        if latest_message == "/start_grievance_process":
+            dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
+        return {}
+    
+    # async def set_slot_validation_context(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+
+    #     return [SlotSet("verification_context", None)]
+
+    async def validate_grievance_new_detail(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        print("\n✨ FORM: Starting validation of grievance_new_detail")
+        print(f"Received slot_value: {slot_value}")
+
+        # initiate grievance_temp and handle the cases where the temp is a payload
+        current_temp = ""
+        if tracker.get_slot("grievance_temp"):
+            if not tracker.get_slot("grievance_temp").startswith("/"):
+                current_temp = tracker.get_slot("grievance_temp")
+                
+        print(f"current_grievance_details: {current_temp}")
+        
+        # Handle form completion
+        if "/submit_details" in slot_value:
+            print("######################### LAST VALIDATION ##############")
+            print("🎯 FORM: Handling submit_details intent")
+            current_temp = tracker.get_slot('grievance_temp')
+            print(f"grievance_temp: {current_temp}")
+            print(f"grievance_details: {current_temp}")
+            print("########################################################")
+            return {
+                "grievance_new_detail": "completed",
+                "grievance_details": current_temp,
+            }
+
+        # Handle valid grievance text
+        if slot_value and not slot_value.startswith('/'):
+            print("✅ FORM: Processing valid grievance text")
+            print(f"slot_value: {slot_value}")
+            updated_temp = self._update_grievance_text(current_temp, slot_value)
+            self._show_options_buttons(dispatcher)
+            
+            print("🔄 FORM: Returning updated slots")
+            print(f"Updated grievance_temp: {updated_temp}")
+            
+            return {
+                "grievance_new_detail": None,
+                "grievance_temp": updated_temp
+            }
+        if not slot_value or slot_value == "/start_grievance_process":
+            dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
+        # Handle invalid inputs - mostly payloads
+        print("⚠️ FORM: Invalid input detected")
+        print(f"Slot value: {slot_value}")
+        print(f"update grievance details: {current_temp}")
+        
+        if slot_value == "/add_more_details":
+            dispatcher.utter_message(text="Please enter more details...")
+        
+        return {"grievance_new_detail": None}
+
+    def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
+        """Helper method to show the standard options buttons."""
+        print("\n🔘 FORM: Showing options buttons")
+        dispatcher.utter_message(
+            text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
+                 "- Location information\n"
+                 "- Persons involved\n"
+                 "- Quantification of damages (e.g., number of bags of rice lost)\n"
+                 "- Monetary value of damages",
+            buttons=[
+                {"title": "File as is", "payload": "/submit_details"},
+                {"title": "Add more details", "payload": "/add_more_details"},
+                {"title": "Cancel filing", "payload": "/exit_without_filing"}
+            ]
+        )
+
+    def _update_grievance_text(self, current_text: str, new_text: str) -> str:
+        """Helper method to update the grievance text."""
+        print(f"\n📝 FORM: Updating grievance text")
+        print(f"Current text: {current_text}")
+        print(f"New text: {new_text}")
+        # handle the cases where the new text is a payload
+        if new_text in ["/submit_details", "/add_more_details", "/exit_without_filing", "/start_grievance_process"]:
+            print("new_text is a payload")
+            new_text = ""
+        updated = current_text + "\n" + new_text if current_text else new_text
+        updated = updated.strip()
+        print(f"Updated text: {updated}")
+        return updated
+
+############################ STEP 2 - OPENAI CATEGORIZATION ############################
 class ActionCaptureGrievanceText(Action):
     def name(self) -> Text:
         return "action_capture_grievance_text"
@@ -71,17 +227,17 @@ class ActionCaptureGrievanceText(Action):
             return {"grievance_summary": "", "list_categories": []}  # Return default empty values
         
 
-    def _call_openai_for_classification(self, grievance_details: str):
+    async def _call_openai_for_classification(self, grievance_details: str):
         """
         Calls OpenAI API to classify the grievance details into predefined categories.
         """
-        predefined_categories = classification_data  # Extract unique categories
-        category_list_str = "\n".join(f"- {c}" for c in predefined_categories)  # Format as list
+        predefined_categories = classification_data
+        category_list_str = "\n".join(f"- {c}" for c in predefined_categories)
 
         try:
             client = OpenAI(api_key=open_ai_key)
 
-            response = client.chat.completions.create(
+            response = client.chat.completions.create(  # Removed await since OpenAI client handles async
                 messages=[
                     {"role": "system", "content": "You are an assistant helping to categorize grievances."},
                     {"role": "user", "content": f"""
@@ -109,16 +265,23 @@ class ActionCaptureGrievanceText(Action):
 
         except Exception as e:
             print(f"OpenAI API Error: {e}")
-            return None  # Return None in case of failure
+            return None
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        user_input = tracker.latest_message.get("text")
-        print(user_input)
-
-        # Step 1: Save the free text grievance details
-        grievance_details = user_input
-
         print("################### action_capture_grievance_text ##########")
+        grievance_details = tracker.get_slot("grievance_temp")
+        print(f"grievance_details_from_grievance_temp: {grievance_details}")
+        
+        if not grievance_details:
+            dispatcher.utter_message(text="There was an issue processing your grievance. Please try again.",
+                                     buttons=[
+                                         {"title": "Try again", "payload": "/start_grievance_process"},
+                                             {"title": "Exit", "payload": "/exit_without_filing"}
+                                            ]
+                                        )
+            return []
+
+        print(f"Raw - grievance_details: {grievance_details}")
 
         # Call OpenAI for category classification
         result = await self._call_openai_for_classification(grievance_details)
@@ -154,7 +317,6 @@ class ActionCaptureGrievanceText(Action):
                                          {"title": "Exit", "payload": "/exit_grievance_process"}
                                      ])
             
-            print(f"Slot - grievance_summary: {result_dict['grievance_summary']}")
             return slots
         else:
             dispatcher.utter_message(text="I have not identified any category",
@@ -168,7 +330,7 @@ class ActionCaptureGrievanceText(Action):
 
 
 
-
+############################ STEP 3 - USER SUMMARY ############################
 class ActionValidateSummary(Action):
     def name(self) -> Text:
         return "action_validate_summary"
@@ -188,15 +350,13 @@ class ActionValidateSummary(Action):
             return []
 
         # Ask the user to confirm the summary with dynamic buttons
-        buttons = [
-            {"title": "Yes", "payload": "/validate_summary"},
-            {"title": "No, let me edit", "payload": "/edit_grievance_summary"},
-            {"title": "Skip", "payload": "/skip_summary"}
-        ]
-
         dispatcher.utter_message(
             text=f"Here's the summary of your grievance: '{grievance_summary}'. Does this look correct?",
-            buttons=buttons
+            buttons=[
+                {"title": "Yes", "payload": "/validate_summary"},
+                {"title": "No, let me edit", "payload": "/edit_grievance_summary"},
+                {"title": "Skip", "payload": "/skip_summary"}
+            ]
         )
 
         return []
@@ -245,7 +405,7 @@ class ActionEditGrievanceSummary(Action):
         return []
 
 
-
+############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(Action):
     def name(self) -> Text:
         return "action_submit_grievance"
@@ -376,39 +536,7 @@ class ActionSubmitGrievance(Action):
             return []
 
 
-class ActionHandleSkip(Action):
-    def name(self) -> Text:
-        return "action_handle_skip"
-
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        skip_count = tracker.get_slot("skip_count") or 0
-        skip_count += 1
-
-        if skip_count >= 2:
-            dispatcher.utter_message(response="utter_ask_file_as_is")
-            return [SlotSet("skip_count", 0)]
-        else:
-            dispatcher.utter_message(response="utter_skip_confirmation")
-            return [SlotSet("skip_count", skip_count)]
-
-
-
-
-class ActionSubmitGrievanceAsIs(Action):
-    def name(self) -> Text:
-        return "action_submit_grievance_as_is"
-
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        grievance_details = tracker.get_slot("grievance_details")
-        if grievance_details:
-            dispatcher.utter_message(response="utter_grievance_submitted_as_is", grievance_details=grievance_details)
-        else:
-            dispatcher.utter_message(response="utter_grievance_submitted_no_details_as_is")
-            
-        # Trigger the submit grievance action
-        return [FollowupAction("action_submit_grievance")]
-
-    
+############################ ALTERNATE PATH - CATEGORY MODIFICATION ############################
 
 class ActionAskForCategoryModification(Action):
     def name(self) -> str:
@@ -642,114 +770,3 @@ class ActionSkipCategory(Action):
         dispatcher.utter_message(text="⏭ Skipping category selection. You can update it later if needed. \n Let's proceed with your location details")
         return []
 
-class ValidateGrievanceDetailsForm(FormValidationAction):
-    def name(self) -> Text:
-        return "validate_grievance_details_form"
-
-    async def extract_grievance_new_detail(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> Dict[Text, Any]:
-        print("\n📥 FORM: Extracting grievance_new_detail")
-        
-        # Get the latest message and intent
-        latest_message = tracker.latest_message.get("text", "").strip()
-        intent = tracker.get_intent_of_latest_message()
-        
-        print(f"Latest message: {latest_message}")
-        print(f"Intent: {intent}")
-
-        # Only extract when this slot is requested
-        if tracker.get_slot("requested_slot") == "grievance_new_detail":
-            if intent == "submit_details":
-                return {"grievance_new_detail": "completed"}
-            return {"grievance_new_detail": latest_message}
-        return {}
-
-    async def validate_grievance_new_detail(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        print("\n✨ FORM: Starting validation of grievance_new_detail")
-        print(f"Received slot_value: {slot_value}")
-        
-        current_temp = tracker.get_slot("grievance_temp") or ""
-        
-        # Handle form completion
-        if slot_value == "completed":
-            print("🎯 FORM: Handling submit_details intent")
-            return {
-                "grievance_new_detail": "completed",
-                "grievance_details": current_temp,
-                "requested_slot": None
-            }
-
-        # Handle valid grievance text
-        if slot_value and not slot_value.startswith('/'):
-            print("✅ FORM: Processing valid grievance text")
-            updated_temp = self._update_grievance_text(current_temp, slot_value)
-            self._show_options_buttons(dispatcher)
-            
-            print("🔄 FORM: Returning updated slots")
-            print(f"Updated grievance_temp: {updated_temp}")
-            
-            return {
-                "grievance_new_detail": None,
-                "grievance_temp": updated_temp
-            }
-
-        # Handle invalid inputs
-        print("⚠️ FORM: Invalid input detected")
-        print(f"Slot value: {slot_value}")
-        dispatcher.utter_message(text="Please provide some details about your grievance.")
-        return {"grievance_new_detail": None}
-
-    def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
-        """Helper method to show the standard options buttons."""
-        print("\n🔘 FORM: Showing options buttons")
-        dispatcher.utter_message(
-            text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
-                 "- Location information\n"
-                 "- Persons involved\n"
-                 "- Quantification of damages (e.g., number of bags of rice lost)\n"
-                 "- Monetary value of damages",
-            buttons=[
-                {"title": "File as is", "payload": "/submit_details"},
-                {"title": "Add more details", "payload": "/add_more_details"},
-                {"title": "Cancel filing", "payload": "/exit_without_filing"}
-            ]
-        )
-
-    def _update_grievance_text(self, current_text: str, new_text: str) -> str:
-        """Helper method to update the grievance text."""
-        print(f"\n📝 FORM: Updating grievance text")
-        print(f"Current text: {current_text}")
-        print(f"New text: {new_text}")
-        updated = current_text + "\n" + new_text if current_text else new_text
-        print(f"Updated text: {updated}")
-        return updated
-
-class ActionHandleGrievanceFormCompletion(Action):
-    def name(self) -> Text:
-        return "action_handle_grievance_form_completion"
-
-    async def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> List[Dict[Text, Any]]:
-        if tracker.get_slot("grievance_new_detail") == "completed":
-            current_temp = tracker.get_slot("grievance_temp") or ""
-            return [
-                SlotSet("grievance_details", current_temp),
-                SlotSet("grievance_temp", None),
-                ActiveLoop(None),
-                FollowupAction("action_capture_grievance_text")
-            ]
-        return []
