@@ -8,13 +8,6 @@ from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAct
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .constants import EMAIL_PROVIDERS_NEPAL
-# from .messaging import SMSClient
-# import boto3
-# import os
-# import time
-# from datetime import datetime, timedelta
-# from botocore.exceptions import ClientError
-# from random import randint
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +39,75 @@ class AskContactConsent(Action):
         
     
 class ValidateContactForm(FormValidationAction):
+    """Form validation action for contact details collection."""
+
     def name(self) -> Text:
         return "validate_contact_form"
-    
+
+    async def required_slots(
+        self,
+        domain_slots: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Text]:
+        print("\n=================== Contact Form Required Slots ===================")
+        
+        required_slots = ["user_contact_phone"]
+        
+        # Check if phone validation is needed
+        phone_number = tracker.get_slot("user_contact_phone")
+        if phone_number and phone_number != "Skipped":
+            print("📱 Phone validation required")
+            required_slots.append("phone_validation_required")
+        
+        # Add email slot if phone is skipped or after phone validation
+        if (phone_number == "Skipped" or 
+            tracker.get_slot("phone_validation_required") is False or
+            tracker.get_slot("otp_verified")):
+            required_slots.append("user_contact_email")
+        
+        print(f"Required slots: {required_slots}")
+        return required_slots
+
+    async def validate_user_contact_phone(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """Validate phone number and set validation requirement."""
+        print("\n✨ FORM: Validating phone number")
+        print(f"Received value: {slot_value}")
+
+        if not slot_value:
+            return {"user_contact_phone": None}
+
+        if slot_value.lower() in ['skip', 'pass']:
+            print("⏩ Phone number skipped")
+            return {
+                "user_contact_phone": "Skipped",
+                "phone_validation_required": False
+            }
+
+        # Validate phone number format
+        if not self._is_valid_phone(slot_value):
+            dispatcher.utter_message(text="Please enter a valid phone number.")
+            return {"user_contact_phone": None}
+
+        print("✅ Valid phone number format")
+        return {
+            "user_contact_phone": slot_value,
+            "phone_validation_required": True
+        }
+
+    def _is_valid_phone(self, phone: str) -> bool:
+        """Check if the phone number is valid."""
+        # Add your phone validation logic here
+        # For example: must be 10 digits, start with valid prefix, etc.
+        return bool(re.match(r'^\d{10}$', phone))
+
     async def extract_user_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         user_response = tracker.latest_message.get("text", "").strip()
         intent_name = tracker.latest_message.get("intent", {}).get("name")
@@ -196,52 +255,6 @@ class ValidateContactForm(FormValidationAction):
         return {"user_full_name": slot_value}
     
     
-    # ✅ Validate user contact phone
-    async def validate_user_contact_phone(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        print("################ Validate user contact phone ###################")
-
-        if not slot_value:
-            print("no slot value")
-            return {}  
-
-        # Remove non-numeric characters
-        cleaned_number = re.sub(r"\D", "", slot_value)
-
-        # Validate Nepal phone number format (starts with 97 or 98 and is 10 digits long)
-        
-        # specific block for testing phase where we allow numbers from the Philippines
-        if re.match(r"^(09|\+?639|00639)\d{9}$", cleaned_number):
-            # Format the number to match our whitelist format (+63XXXXXXXXX)
-            if cleaned_number.startswith('09'):
-                formatted_number = '+63' + cleaned_number[1:]
-            elif cleaned_number.startswith('63'):
-                formatted_number = '+' + cleaned_number
-            elif cleaned_number.startswith('0063'):
-                formatted_number = '+' + cleaned_number[2:]
-            else:
-                formatted_number = cleaned_number
-
-            dispatcher.utter_message(
-                text="This phone number from the Philippines will be validated for testing only"
-            )
-            return {"user_contact_phone": formatted_number}
-            
-        if not re.match(r"^(98|97)\d{8}$", cleaned_number):
-            dispatcher.utter_message(
-                text=(
-                    "The phone number you provided is invalid. "
-                    "Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long."
-                ), 
-                buttons=[
-                    {"title": "Retry", "payload": "/provide_contact_phone"},
-                    {"title": "Skip", "payload": "/skip_contact_phone"}
-                ]
-            )
-            return {}
-        print("validated", cleaned_number)
-        return {"user_contact_phone": cleaned_number}
-
-
     # ✅ Validate user contact email
     def _email_is_valid_format(self, email: Text) -> bool:
         """Check if email follows basic format requirements."""

@@ -48,9 +48,15 @@ responses:
     - text: "Thank you for your time. If you change your mind, feel free to start the grievance process again."
 
 ##location_actions
+  # utter_ask_location_form_user_municipality:
+  #   - text: "Please provide the name of your municipality or type Skip."
+  # utter_ask_location_form_user_village:
+  #   - text: "What is the name of your village or type Skip"
+  # utter_ask_location_form_user_address:
+  #   - text: "Can you provide address details or type Skip"
 
-  utter_skip_address:
-    - text: "Skipping address."
+  # utter_skip_address:
+  #   - text: "Skipping address."
 
 ##contact_actions
   # OTP Responses
@@ -128,8 +134,6 @@ responses:
   utter_skip_confirmation:
     - text: "Okay, skipping this question."
 
-  utter_ask_otp_input:
-    - text: "Please enter the verification code:\nType 000000 if you haven't received the code."
 
  
   # Submit Grievance As-Is

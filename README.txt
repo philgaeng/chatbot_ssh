@@ -192,7 +192,12 @@ Steps to Grant Nginx (www-data) Permissions
    rasa run --enable-api --cors "*" --debug
 
    rasa run --enable-api --cors "*"
-   ```
+
+5. **Start web server
+   ```bash
+   python -m http.server 8000
+
+   
 5. **View Nginx Logs**:
    ```bash
    sudo tail -f /var/log/nginx/error.log

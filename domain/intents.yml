@@ -12,7 +12,6 @@ intents:
   - deny
   # navigation
   - launch_chatbot
-  # - continue
   - skip
   - go_back
   - restart_story
@@ -33,6 +32,8 @@ intents:
   - provide_municipality
   - provide_address
   - provide_contact_yes
+  - submit_address
+  - start_location_process
   - anonymous_with_phone
   - no_contact_provided
   - modify_contact_info
@@ -68,9 +69,6 @@ intents:
   - cancel_modification_category
   - skip_category
   - submit_category
-  - start_location_process
-  - submit_address
-  - modify_address
   - set_apply_category_change
   - submit_details
   - add_more_details

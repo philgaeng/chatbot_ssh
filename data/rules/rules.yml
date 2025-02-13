@@ -30,10 +30,20 @@ rules:
 
   # - rule: Activate Municipality Form
   #   steps:
-  #     - action: action_ask_location
   #     - intent: start_location_process
-  #     - action : municipality_form
-  #     - active_loop: municipality_form
+  #     - action : location_form
+      # - active_loop: municipality_form
+      # - slot_was_set:
+      #   - user_municipality  # ✅ Ensures bot waits for user input
+      # - action : action_confirm_municipality
+
+  # - rule: Activate Contact Form
+  #   steps:
+  #     - intent: provide_contact_yes
+  #     - action: contact_form # ✅ Ensures bot waits for user input
   #     - slot_was_set:
-  #       - user_municipality  # ✅ Ensures bot waits for user input
-  #     - action : action_confirm_municipality
+  #         - user_full_name
+  #         - user_contact_phone  # Example of a valid phone number
+  #         - user_contact_email
+  #     - active_loop: null
+  #     - action: action_check_phone_validation

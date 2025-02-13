@@ -24,16 +24,19 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+
   previous_state:
     type: text
     influence_conversation: false
     mappings:
       - type: custom
+
   current_story:
     type: text
     influence_conversation: false
     mappings:
       - type: custom
+
   restart_type:
     type: text
     influence_conversation: false
@@ -52,32 +55,66 @@ slots:
   
 
 #################### location with entity detection  ###################
+
+  user_municipality_temp:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: custom
   
   user_municipality:
     type: text
     influence_conversation: true  # ✅ Keeps form active until user enters input
     mappings:
       - type: custom
-        conditions:
-          - active_loop: municipality_form
 
   user_village:
     type: text
     influence_conversation: true
     mappings:
-    - type: from_text
-      conditions:
-      - active_loop: address_form
-        requested_slot: user_village
+    - type: custom
 
   user_address:
     type: text
     influence_conversation: true
     mappings:
-      - type: from_text
-        conditions:
-          - active_loop: address_form
-            requested_slot: user_address
+      - type: custom
+
+  provide_additional_location:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  asked_for_additional_location:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  user_municipality_confirmed:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+    
+  user_village_confirmed:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  user_address_confirmed:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
+  user_address_temp:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
 
   ######### not currently used #########
   user_province:
@@ -99,12 +136,10 @@ slots:
     mappings:
       - type: custom
 
-
   last_message_saved:
     type: text
     influence_conversation: false
     mappings: []
-
 
 ####################   contact    ###################
 
@@ -284,6 +319,7 @@ slots:
     type: text
     mappings:
       - type: custom
-        
+
+
 
 ##########################################

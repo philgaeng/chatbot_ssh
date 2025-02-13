@@ -93,24 +93,12 @@ stories:
   #step 4: Collect location
   - story: Collect location details
     steps:
-      # - intent: provide_location
+      # - intent: provide_location  
       - action: action_ask_location
       - intent: start_location_process
-      - action : municipality_form
-      - active_loop: municipality_form
-      - slot_was_set:
-        - user_municipality  # ✅ Ensures bot waits for user input
-      - action : action_confirm_municipality
-      - intent : agree
+      - action : location_form
+      - active_loop: location_form
       - active_loop: null
-      - action : address_form
-      - active_loop: address_form
-      - slot_was_set:
-          - user_village
-          - user_address  # ✅ Ensures bot waits for user input # Keeps the form active  # Executes the validation logic
-      - active_loop: null
-      - action : action_confirm_address
-      - intent : submit_address
       - action: action_ask_contact_consent # move to Step 5 if the user agrees to provide contact details 
 
   #Step 5: Collect contact details with OTP verification
@@ -121,53 +109,13 @@ stories:
       - action: contact_form
       - active_loop: contact_form
       - slot_was_set:
-          - user_full_name
-          - user_contact_phone: "+639123456789"  # Example of a valid phone number
-          - user_contact_email
-      - active_loop: null
-      - action: action_check_phone_validation
-      - slot_was_set:
           - phone_validation_required: true
-      - action: action_initiate_otp_verification
-      - action: action_activate_otp_form
+      - action: otp_verification_form
       - active_loop: otp_verification_form
-      - intent: provide_otp
-      - slot_was_set:
-          - otp_input
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
       - active_loop: null
       - action: action_submit_grievance
 
-  
 
-  - story: User provides contact consent without phone
-    steps:
-      - action: action_ask_contact_consent
-      - intent: provide_contact_yes
-      - action: contact_form
-      - active_loop: contact_form
-      - slot_was_set:
-          - user_full_name
-          - user_contact_phone: "slot_skipped"  # Explicit skipped value
-          - user_contact_email
-      - active_loop: null
-      - action: action_check_phone_validation
-      - slot_was_set:
-          - phone_validation_required: false
-      - action: action_recommend_phone_validation
-
-  - story: User chooses to provide phone after recommendation
-    steps:
-      - action: action_recommend_phone_validation
-      - intent: provide_contact_phone
-      - action: phone_validation_form
-      - active_loop: phone_validation_form
-      - slot_was_set:
-          - user_contact_phone
-      - active_loop: null
-      - action: action_initiate_otp_verification
 
   - story: User chooses to file without phone validation
     steps:
@@ -181,8 +129,8 @@ stories:
       - intent: anonymous_with_phone
       - action: action_collect_phone_for_anonymous
       - active_loop: collect_phone_form
-      - slot_was_set:
-          - user_contact_phone 
+      # - slot_was_set:
+      #     - user_contact_phone 
       - active_loop: null
       - action: action_submit_grievance
 
@@ -229,15 +177,10 @@ stories:
     steps:
       - intent: provide_municipality
       # - action : action_reset_municipality_slots
-      - action: municipality_form
-      - active_loop: municipality_form
+      - action: location_form
+      - active_loop: location_form
       - active_loop: null
-      - action : action_confirm_municipality
-      - intent : agree
-      - action : address_form
-      - active_loop: address_form
-      - active_loop: null
-      - action : action_confirm_address
+      
 
   - story: User skips email input
     steps:
@@ -251,108 +194,108 @@ stories:
 
 ########## OTP Verification Stories #########################
 
-  - story: OTP verification success path for new user
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
-      - action: action_send_grievance_sms
-      - action: action_submit_grievance
+  # - story: OTP verification success path for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
 
-  - story: OTP verification failure and retry for new user
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: false
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
-      - action: action_send_grievance_sms
-      - action: action_submit_grievance
+  # - story: OTP verification failure and retry for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: false
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
 
-  - story: OTP not received (000000 entered)
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - slot_was_set:
-          - otp_input: "000000"
-      - active_loop: null
-      - action: action_verify_otp
-      - intent: resend_otp
-      - action: action_initiate_otp_verification
+  # - story: OTP not received (000000 entered)
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - slot_was_set:
+  #         - otp_input: "000000"
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - intent: resend_otp
+  #     - action: action_initiate_otp_verification
 
-  - story: Resend OTP path
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: resend_otp
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
-      - action: action_send_grievance_sms
-      - action: action_submit_grievance
+  # - story: Resend OTP path
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: resend_otp
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
 
-  - story: Skip OTP verification before form activation for new user
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: skip_otp_verification
-      - action: action_skip_otp_verification
-      - action: action_submit_grievance
+  # - story: Skip OTP verification before form activation for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: skip_otp_verification
+  #     - action: action_skip_otp_verification
+  #     - action: action_submit_grievance
 
-  - story: Skip OTP verification during form input for new user
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - intent: skip_otp_verification
-      - active_loop: null
-      - action: action_skip_otp_verification
-      - action: action_submit_grievance
+  # - story: Skip OTP verification during form input for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - intent: skip_otp_verification
+  #     - active_loop: null
+  #     - action: action_skip_otp_verification
+  #     - action: action_submit_grievance
 
-  # Alternative path for OTP verification failure
-  - story: User provides incorrect OTP
-    steps:
-      - slot_was_set:
-          - verification_context: "new_user"
-      - active_loop: otp_verification_form
-      - intent: provide_otp
-      - slot_was_set:
-          - otp_input
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: false
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
+  # # Alternative path for OTP verification failure
+  # - story: User provides incorrect OTP
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - active_loop: otp_verification_form
+  #     - intent: provide_otp
+  #     - slot_was_set:
+  #         - otp_input
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: false
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form

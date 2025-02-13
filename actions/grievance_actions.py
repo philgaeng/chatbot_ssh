@@ -15,6 +15,7 @@ from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .db_actions import GrievanceDB
 from datetime import datetime
+import traceback
 
 #define and load variables
 
@@ -407,6 +408,9 @@ class ActionEditGrievanceSummary(Action):
 
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(Action):
+    def __init__(self):
+        self.db = GrievanceDB() 
+        
     def name(self) -> Text:
         return "action_submit_grievance"
 
@@ -490,21 +494,23 @@ class ActionSubmitGrievance(Action):
         return base_actions
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        # Get district and municipality from slots
-        user_district = tracker.get_slot("user_district")
-        user_municipality = tracker.get_slot("user_municipality")
-
+        print("\n=================== Submitting Grievance ===================")
+        
         try:
-            # Create grievance ID with location information
-            grievance_id = get_next_grievance_number(user_district, user_municipality)
-            
             # Collect grievance data
             user_data, grievance_data = self.collect_grievance_data(tracker)
             user_email = user_data.get('user_contact_email')
 
-            # Create grievance in database with the new ID
-            if not db.create_grievance(user_data, grievance_data, grievance_id):
+            print(f"📝 User data: {user_data}")
+            print(f"📝 Grievance data: {grievance_data}")
+            
+            # Create grievance in database
+            grievance_id = self.db.create_grievance(user_data, grievance_data)
+            
+            if not grievance_id:
                 raise Exception("Failed to create grievance in database")
+
+            print(f"✅ Grievance created successfully with ID: {grievance_id}")
 
             # Create confirmation message
             confirmation_message = self.create_confirmation_message(
@@ -528,7 +534,8 @@ class ActionSubmitGrievance(Action):
             return events
 
         except Exception as e:
-            print(f"Error submitting grievance: {e}")
+            print(f"❌ Error submitting grievance: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
             dispatcher.utter_message(
                 text="I apologize, but there was an error submitting your grievance. "
                 "Please try again or contact support."

@@ -1,22 +1,38 @@
 ---
 version: "3.1"
 forms:
-  municipality_form:
+  # municipality_form:
+  #   required_slots:
+  #     - user_municipality
+  #   ignored_intents:
+  #     - agree
+  #     - deny
+  #     - nlu_fallback
+
+  # address_form:
+  #   required_slots:
+  #     - user_village
+  #     - user_address
+  #   ignored_intents:
+  #     - agree
+  #     - deny
+  #     - nlu_fallback
+
+  location_form:
     required_slots:
       - user_municipality
     ignored_intents:
-      - agree
-      - deny
       - nlu_fallback
-
-  address_form:
-    required_slots:
-      - user_village
-      - user_address
-    ignored_intents:
-      - agree
-      - deny
-      - nlu_fallback
+      - submit_category
+      - modify_category
+      - delete_category
+      - change_category
+      - set_new_category
+      - finalize_categories
+      - confirm_selection_category
+      - submit_address
+      - modify_address
+      - start_location_process
 
   contact_form:
     required_slots:
@@ -24,8 +40,6 @@ forms:
       - user_contact_phone
       - user_contact_email
     ignored_intents:
-      - agree
-      - deny
       - nlu_fallback
 
   collect_phone_form:
@@ -82,12 +96,7 @@ actions:
 #######   location actions   ###########################################
 
   - action_ask_location
-  - validate_address_form
-  - validate_municipality_form
-  - action_confirm_address
-  - action_confirm_municipality
-  - action_reset_address_slots
-  - action_reset_municipality_slots
+  - validate_location_form
 
 #######   grievance actions   ########################################### 
 
@@ -124,13 +133,13 @@ actions:
   - utter_ask_contact_form_user_contact_phone
   - utter_ask_contact_form_user_contact_email
   - action_custom_fallback
-  - action_initiate_otp_verification
-  - action_verify_otp
-  - action_skip_otp_verification
+  # - action_initiate_otp_verification
+  # - action_verify_otp
+  # - action_skip_otp_verification
   - action_send_grievance_sms
   - action_check_phone_validation
   - action_recommend_phone_validation
-  - action_activate_otp_form
+  # - action_activate_otp_form
   - action_skip_email
   - action_confirm_email
   - action_provide_new_email
@@ -138,6 +147,7 @@ actions:
   - action_modify_email
   - action_cancel_modification_contact
   - validate_contact_form
+  - validate_otp_verification_form
   
   ########## check status actions ##########
   - action_choose_retrieval_method

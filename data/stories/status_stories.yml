@@ -1,8 +1,8 @@
 version: "3.1"
-#Stories that enable an user to retrieve its grievance and check its status
-#The first story is for retrieving the grievance with phone number and OTP verification
-#The second story is for retrieving the grievance with the grievance ID
-#The third story is for checking the status of the grievance that happens once the grievance is retrieved
+# #Stories that enable an user to retrieve its grievance and check its status
+# #The first story is for retrieving the grievance with phone number and OTP verification
+# #The second story is for retrieving the grievance with the grievance ID
+# #The third story is for checking the status of the grievance that happens once the grievance is retrieved
 
 stories:
   - story: Happy path - retrieve grievance with phone and check status
@@ -14,56 +14,8 @@ stories:
           - verification_context: "retrieval"
       - action: action_choose_retrieval_method
       - intent: retrieve_with_phone
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
       - active_loop: otp_verification_form
       - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
-      - action: action_display_grievance
-      - intent: check_status
-      - action: action_check_status
-
-  - story: OTP verification failure and retry during retrieval
-    steps:
-      - intent: retrieve_with_phone
-      - slot_was_set:
-          - verification_context: "retrieval"
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: false
-      - intent: retry_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
-      - slot_was_set:
-          - otp_verified: true
-      - action: action_display_grievance
-      - intent: check_status
-      - action: action_check_status
-
-  - story: Resend OTP during retrieval
-    steps:
-      - intent: retrieve_with_phone
-      - action: action_retrieve_with_phone
-      - slot_was_set:
-          - verification_context: "retrieval"
-      - action: action_initiate_otp_verification
-      - intent: resend_otp
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
-      - active_loop: otp_verification_form
-      - active_loop: null
-      - action: action_verify_otp
       - slot_was_set:
           - otp_verified: true
       - action: action_display_grievance
@@ -102,12 +54,8 @@ stories:
           - verification_context: "retrieval"
       - action: action_choose_retrieval_method
       - intent: retrieve_with_phone
-      - action: action_initiate_otp_verification
-      - intent: enter_otp
-      - action: action_activate_otp_form
       - active_loop: otp_verification_form
       - active_loop: null
-      - action: action_verify_otp
       - slot_was_set:
           - otp_verified: true
       - action: action_display_grievance
