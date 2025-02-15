@@ -99,15 +99,21 @@ stories:
       - action : location_form
       - active_loop: location_form
       - active_loop: null
+      - slot_was_set:
+          - user_address_confirmed: true
       - action: action_ask_contact_consent # move to Step 5 if the user agrees to provide contact details 
 
   #Step 5: Collect contact details with OTP verification
   - story: User provides contact consent with phone verification
     steps:
+
+      - slot_was_set:
+          - user_address_confirmed: true
       - action: action_ask_contact_consent
       - intent: provide_contact_yes
       - action: contact_form
       - active_loop: contact_form
+      - active_loop: null
       - slot_was_set:
           - phone_validation_required: true
       - action: otp_verification_form

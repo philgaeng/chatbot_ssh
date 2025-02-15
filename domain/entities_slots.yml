@@ -68,14 +68,8 @@ slots:
     mappings:
       - type: custom
 
-  user_village:
-    type: text
-    influence_conversation: true
-    mappings:
-    - type: custom
-
-  user_address:
-    type: text
+  user_municipality_confirmed:
+    type: bool
     influence_conversation: true
     mappings:
       - type: custom
@@ -86,20 +80,27 @@ slots:
     mappings:
       - type: custom
 
-  asked_for_additional_location:
+  # asked_for_additional_location:
+  #   type: bool
+  #   influence_conversation: true
+  #   mappings:
+  #     - type: custom
+
+  user_village:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: custom
+
+
+  user_village_confirmed:
     type: bool
     influence_conversation: true
     mappings:
       - type: custom
 
-  user_municipality_confirmed:
-    type: bool
-    influence_conversation: true
-    mappings:
-      - type: custom
-    
-  user_village_confirmed:
-    type: bool
+  user_address:
+    type: text
     influence_conversation: true
     mappings:
       - type: custom
@@ -149,27 +150,25 @@ slots:
     influence_conversation: false
     mappings:
     - type: from_text
-      conditions:
-      - active_loop: contact_form
-        requested_slot: user_contact_phone
+
 
   user_contact_email:
     type: text
     influence_conversation: false
     mappings:
     - type: from_text
-      conditions:
-      - active_loop: contact_form
-        requested_slot: user_contact_email
+
+  user_required_email:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
 
   user_full_name:
     type: text
     influence_conversation: false
     mappings:
     - type: from_text
-      conditions:
-      - active_loop: contact_form
-        requested_slot: user_full_name
 
   phone_validation_required:
     type: bool

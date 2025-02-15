@@ -20,7 +20,9 @@ forms:
 
   location_form:
     required_slots:
-      - user_municipality
+      - user_municipality_temp
+      - user_municipality_confirmed
+      - provide_additional_location
     ignored_intents:
       - nlu_fallback
       - submit_category
@@ -38,7 +40,7 @@ forms:
     required_slots:
       - user_full_name
       - user_contact_phone
-      - user_contact_email
+      - user_required_email
     ignored_intents:
       - nlu_fallback
 

@@ -681,3 +681,8 @@ nlu:
     - set category
     - set category
     - set category
+
+- intent: affirm_location_address
+  examples: |
+    - affirm_location_address
+    - /affirm_location_address

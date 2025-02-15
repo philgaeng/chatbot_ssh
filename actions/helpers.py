@@ -289,6 +289,7 @@ class LocationValidator:
         """Validate location from a single string input and QR defaults."""
         # Preprocess input and generate possible names
         processed_text = self._preprocess(location_string)
+        print(f"######## LocationValidator: Preprocessed text: {processed_text}")
         possible_names = self._generate_possible_names(processed_text)
         
         # Try matching with QR data first
@@ -304,4 +305,6 @@ class LocationValidator:
             municipality = municipality or muni
         
         # Format and return the result
-        return self._format_result(province, district, municipality)
+        result = self._format_result(province, district, municipality)
+        print(f"######## LocationValidator: Result: {result}")
+        return result

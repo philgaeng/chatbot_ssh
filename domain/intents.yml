@@ -33,6 +33,7 @@ intents:
   - provide_address
   - provide_contact_yes
   - submit_address
+  - affirm_location_address
   - start_location_process
   - anonymous_with_phone
   - no_contact_provided
