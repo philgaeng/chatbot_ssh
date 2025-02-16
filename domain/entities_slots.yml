@@ -319,6 +319,16 @@ slots:
     mappings:
       - type: custom
 
-
+  skip_validation_needed:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  
+  skipped_detected_text:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
 
 ##########################################

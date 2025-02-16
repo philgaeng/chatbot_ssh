@@ -18,9 +18,9 @@ from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAct
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
-from actions.helpers import LocationValidator  # Add this import
+from .helpers import LocationValidator #add this import
 from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST, USE_QR_CODE  # Import the constants
-
+from .base_form import BaseFormValidationAction
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class ActionAskLocation(Action):
         return []
     
 
-class ValidateLocationForm(FormValidationAction):
+class ValidateLocationForm(BaseFormValidationAction):
     """Form validation action for location details collection."""
 
     def __init__(self):
@@ -167,36 +167,6 @@ class ValidateLocationForm(FormValidationAction):
 
         return required_slots
     
-    # Add skip request handling
-    async def extract_validation(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        print("######## FORM: Validating ######")
-        print(f"########### Slot value: {slot_value} ###########")
-        if self._is_skip_requested(tracker.latest_message):
-            requested_slot = tracker.get_slot("requested_slot")
-            print (f"######## SKIP --- {requested_slot}")
-            if tracker.get_slot("requested_slot").type() ==  "bool":
-                if requested_slot in ["user_municipality_confirmed", "user_address_confirmed"]:
-                    return {requested_slot: True}
-                return {requested_slot: False}
-            
-            return {requested_slot: "Skipped"}
-        
-        validated_slot = await super().validate(slot_value, dispatcher, tracker, domain)
-        
-        print("Validation Result:", validated_slot)
-        print("=============================================================\n")
-        
-        
-        return validated_slot
-        
-
-            
 
     async def extract_user_municipality_temp(
         self,
@@ -204,23 +174,19 @@ class ValidateLocationForm(FormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        #dispactch the start location process message
-        latest_message = tracker.latest_message
-        
-        extracted_text = tracker.latest_message.get("text", "").strip()
-        print(f"Received value: {extracted_text}")
-        if extracted_text == "/start_location_process":
+        # Handle start location process
+        if tracker.latest_message.get("text", "").strip() == "/start_location_process":
             dispatcher.utter_message(
                 text=f"Please enter your municipality name in {QR_DISTRICT}, {QR_PROVINCE}"
             )
             return {}
-        #check that the active slot is user_municipality_temp
-        if tracker.get_slot("requested_slot") == "user_municipality_temp":
 
-            print("######## FORM: Extracting municipality temp ######")
-                # Just return the extracted value, validation will handle slot setting
-            return {"user_municipality_temp": extracted_text}
-        return {}
+        return await self._handle_slot_extraction(
+            "user_municipality_temp",
+            tracker,
+            dispatcher,
+            domain
+        )
     
     async def validate_user_municipality_temp(
         self,
@@ -276,30 +242,17 @@ class ValidateLocationForm(FormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        # First check if we have a municipality to confirm
+        if not tracker.get_slot("user_municipality_temp"):
+            return {}
 
-        
-        if tracker.get_slot("requested_slot") == "user_municipality_confirmed":
-            print("######## FORM: Extracting municipality confirmed slot ######")
-            
-            latest_message = tracker.latest_message
-            
-                    # Handle skip request
-            if self._is_skip_requested(latest_message):
-                return {"user_municipality_confirmed": True}
-            
-            #check if the user has provided a municipality
-            extracted_text = latest_message.get("text")
-            if tracker.get_slot("user_municipality_temp"):
-                if extracted_text == "/affirm":
-                    print("## user_municipality_confirmed: True ######")
-                    return {"user_municipality_confirmed": True}
-                elif extracted_text == "/deny":
-                    print("## user_municipality_confirmed: False ######")
-                    return {"user_municipality_confirmed": False}
-                else:
-                    print("## user_municipality_confirmed: None ######")
-                    return {"user_municipality_confirmed": None}
-        return {}
+        return await self._handle_boolean_slot_extraction(
+            "user_municipality_confirmed",
+            tracker,
+            dispatcher,
+            domain,
+            skip_value=True  # When skipped, assume confirmed
+        )
     
     async def validate_user_municipality_confirmed(
         self,
@@ -342,29 +295,24 @@ class ValidateLocationForm(FormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-
-        
-        if tracker.get_slot("requested_slot") == "provide_additional_location":
-            
-            latest_message = tracker.latest_message
-            # Handle skip request
-            if self._is_skip_requested(latest_message):
-                return {"provide_additional_location": False}
-            
-            
-            print("######## FORM: Extracting provide_additional_location slot######")
-            extracted_text = latest_message.get("text")
-            
-            if tracker.get_slot("user_municipality"):
-                if extracted_text == "/affirm":
-                    dispatcher.utter_message(
-                        text="Please provide your village name or Skip to skip"
-                    )
-                    return {"provide_additional_location": True}
-                elif extracted_text == "/deny":
-                    return {"provide_additional_location": False}
+        # First check if we have a municipality
+        if not tracker.get_slot("user_municipality"):
             return {}
-        return {}
+
+        async def handle_affirm(dispatcher: CollectingDispatcher) -> Dict[Text, Any]:
+            dispatcher.utter_message(
+                text="Please provide your village name or Skip to skip"
+            )
+            return {"provide_additional_location": True}
+
+        return await self._handle_boolean_slot_extraction(
+            "provide_additional_location",
+            tracker,
+            dispatcher,
+            domain,
+            skip_value=False,
+            custom_affirm_action=handle_affirm
+        )
     
     async def validate_provide_additional_location(
         self,
@@ -411,26 +359,18 @@ class ValidateLocationForm(FormValidationAction):
     
         
     
-    async def extract_user_address_temp( 
+    async def extract_user_address_temp(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-
-
-        
-        if tracker.get_slot("requested_slot") == "user_address_temp":
-            latest_message = tracker.latest_message
-                    # Handle skip request   
-            # if self._is_skip_requested(tracker.latest_message):
-            #     return {"user_address_temp": "Skipped"}
-            extracted_text = latest_message.get("text")
-            # Get the latest user message text
-            print("######## FORM: Extracting address temp ######")
-            print(f"Received value for address: {extracted_text}")
-            return {"user_address_temp": extracted_text}
-        return {}
+        return await self._handle_slot_extraction(
+            "user_address_temp",
+            tracker,
+            dispatcher,
+            domain
+        )
     
 
     
@@ -468,17 +408,19 @@ class ValidateLocationForm(FormValidationAction):
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
-        domain: DomainDict,
+        domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        if tracker.get_slot("requested_slot") == "user_address_confirmed":
-            print("######## FORM: Extracting address confirmed slot ######")
-            latest_message = tracker.latest_message.get("text")
-            if tracker.get_slot("user_address_temp"):
-                if latest_message == "/affirm_location_address":
-                    return {"user_address_confirmed": True}
-                elif latest_message == "/deny":
-                    return {"user_address_confirmed": False}
-        return {}
+        # First check if we have an address to confirm
+        if not tracker.get_slot("user_address_temp"):
+            return {}
+
+        return await self._handle_boolean_slot_extraction(
+            "user_address_confirmed",
+            tracker,
+            dispatcher,
+            domain,
+            skip_value=True  # When skipped, assume confirmed
+        )
 
     async def validate_user_address_confirmed(
         self,

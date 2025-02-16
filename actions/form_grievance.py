@@ -235,7 +235,7 @@ class ActionCaptureGrievanceText(Action):
         predefined_categories = classification_data
         category_list_str = "\n".join(f"- {c}" for c in predefined_categories)
 
-        try:
+        try:            
             client = OpenAI(api_key=open_ai_key)
 
             response = client.chat.completions.create(  # Removed await since OpenAI client handles async
@@ -285,6 +285,8 @@ class ActionCaptureGrievanceText(Action):
         print(f"Raw - grievance_details: {grievance_details}")
 
         # Call OpenAI for category classification
+        dispatcher.utter_message(text="Calling OpenAI for classification... Please wait a few seconds...")
+
         result = await self._call_openai_for_classification(grievance_details)
         
         if result is None:
