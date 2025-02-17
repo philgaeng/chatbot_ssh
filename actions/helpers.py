@@ -6,11 +6,13 @@ import csv  # For reading CSV files
 from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
-from .constants import (
+from .constants import (    
     LOOKUP_FILE_PATH,
     DEFAULT_CSV_PATH,
     COUNTER_FILE,
-    LOCATION_JSON_PATH
+    LOCATION_JSON_PATH,
+    CUT_OFF_FUZZY_MATCH_LOCATION,
+    USE_QR_CODE
 )
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -181,12 +183,15 @@ class LocationValidator:
                 possible_names.append(" ".join(words[i:j]))
         return possible_names
 
-    def _find_best_match(self, input_value, options, score_cutoff=65):
+    def _find_best_match(self, input_value, options, score_cutoff=CUT_OFF_FUZZY_MATCH_LOCATION):
         """Find the best match using fuzzy matching."""
         if not input_value or not options:
             return None
+        
         input_value = self._preprocess(input_value)
-        match = process.extractOne(input_value, options, score_cutoff=score_cutoff)
+        match = process.extractOne(input_value, options, score_cutoff= CUT_OFF_FUZZY_MATCH_LOCATION)
+        if match:
+            print(f"######## LocationValidator: Score: {match[1]}")
         return match[0] if match else None
 
     def _get_province_data(self, province_name):
@@ -204,9 +209,42 @@ class LocationValidator:
              if d["name"] == district_name),
             None
         )
+        
+    def _get_municipality_names(self, district_data: dict) -> list:
+        """
+        Extract and process municipality names from district data.
+        
+        Args:
+            district_data (dict): Dictionary containing municipality list
+            
+        Returns:
+            list: Processed municipality names with common suffixes removed
+        """
+        if not district_data or "municipalityList" not in district_data:
+            return []
+        
+        # Words to remove from municipality names
+        remove_words = ["rural", "municipality", "metropolitan", "sub-metropolitan"]
+        
+        municipality_names = []
+        for mun in district_data.get("municipalityList", []):
+            if not mun or "name" not in mun:
+                continue
+            
+            name = mun["name"].lower()
+            # Remove each word and clean up extra spaces
+            for word in remove_words:
+                name = name.replace(word, "")
+            name = name.strip()
+            
+            if len(name) > 2:  # Only add non-empty names
+                municipality_names.append(name)
+            
+        return municipality_names
 
     def _match_with_qr_data(self, possible_names, qr_province, qr_district):
         """Try to match location using QR-provided data."""
+        print(f"######## LocationValidator: QR")
         province_list = self.locations.get("provinceList", [])
         province_names = [p["name"] for p in province_list]
         
@@ -225,10 +263,14 @@ class LocationValidator:
             
         # Get district data and match municipality
         district_data = self._get_district_data(province_data, matched_district)
-        municipality_names = [m["name"] for m in district_data.get("municipalityList", [])]
+        municipality_names = self._get_municipality_names(district_data)
         
         # Try to match municipality from possible names
         for possible_name in possible_names:
+            if municipality_names:
+                print(f"######## LocationValidator: Municipality names: {municipality_names}")
+            else:
+                print(f"######## LocationValidator: No municipality names")
             matched_municipality = self._find_best_match(possible_name, municipality_names)
             if matched_municipality:
                 return matched_province, matched_district, matched_municipality
@@ -237,9 +279,11 @@ class LocationValidator:
 
     def _match_from_string(self, possible_names):
         """Try to match location from possible names without QR data."""
+        print(f"######## LocationValidator: String")
         for province in self.locations.get("provinceList", []):
             for district in province.get("districtList", []):
-                municipality_names = [m["name"] for m in district.get("municipalityList", [])]
+                municipality_names = self._get_municipality_names(district)
+                print(f"######## LocationValidator: Municipality names: {municipality_names}")
                 
                 # Try municipality match first
                 for possible_name in possible_names:
@@ -292,19 +336,20 @@ class LocationValidator:
         print(f"######## LocationValidator: Preprocessed text: {processed_text}")
         possible_names = self._generate_possible_names(processed_text)
         
-        # Try matching with QR data first
-        province, district, municipality = self._match_with_qr_data(
-            possible_names, qr_province, qr_district
-        )
         
-        # If QR matching failed, try matching from string
-        if not (province and district and municipality):
-            prov, dist, muni = self._match_from_string(possible_names)
-            province = province or prov
-            district = district or dist
-            municipality = municipality or muni
+        #check if QR code is provided
+        if USE_QR_CODE == True:
+            # Try matching with QR data first
+            province, district, municipality = self._match_with_qr_data(
+                possible_names, qr_province, qr_district
+            )
+        
+        else:
+            province, district, municipality = self._match_from_string(possible_names)
+
         
         # Format and return the result
         result = self._format_result(province, district, municipality)
         print(f"######## LocationValidator: Result: {result}")
         return result
+

@@ -292,3 +292,21 @@ class BaseFormValidationAction(FormValidationAction):
                 return {slot_name: False}
 
         return {}
+
+    def _validate_string_length(self, text: str, min_length: int = 2) -> bool:
+        """
+        Validate string length is above minimum requirement.
+        
+        Args:
+            text: String to validate
+            min_length: Minimum required length (default: 2)
+            
+        Returns:
+            bool: True if string length is valid, False otherwise
+        """
+        if not text or not isinstance(text, str):
+            return False
+        
+        # Remove whitespace and check length
+        cleaned_text = text.strip()
+        return len(cleaned_text) > min_length

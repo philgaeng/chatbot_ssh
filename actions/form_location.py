@@ -197,26 +197,26 @@ class ValidateLocationForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         print("######## FORM: Validating municipality_temp ######")
         print(f"Received value: {slot_value}")
-        #check that the active slot is user_municipality_temp
-
-        # ask user to confirm the municipality after extracting the municipality
-
         
-        if slot_value == "Skipped":
-            #update the slots value to reflect the user's choice and terminate the form
-            return {"user_municipality_temp": "Skipped",
-                    "user_municipality_confirmed": True,
-                    "provide_additional_location": False,
-                    "user_municipality": "Skipped"
-                    }
+        if slot_value == "slot_skipped":
+            return {
+                "user_municipality_temp": "slot_skipped",
+                "user_municipality_confirmed": True,
+                "provide_additional_location": False,
+                "user_municipality": "slot_skipped"
+            }
+        
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
+            dispatcher.utter_message(
+                text=f"Please enter a valid municipality name in {QR_DISTRICT}, {QR_PROVINCE} (at least 3 characters)"
+            )
+            return {"user_municipality_temp": None}
                 
         # Validate new municipality input with the extract and rapidfuzz functions
         validated_municipality = self._validate_municipality_input(slot_value)
         print(f"Validated municipality: {validated_municipality}")
-        try:
-            print(f"validated_municipality: {validated_municipality['municipality']}")
-        except:
-            print("No more dic in results")
+        
         if validated_municipality:
             dispatcher.utter_message(
                 text=f"Is {validated_municipality} your correct municipality?",
@@ -330,19 +330,13 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-
-        
-        if tracker.get_slot("requested_slot") == "user_village":
-            latest_message = tracker.latest_message
-                        # Handle skip request
-            if self._is_skip_requested(latest_message):
-                return {"user_village": "Skipped"}
-            
-            print("######## FORM: Extracting village ######")
-            extracted_text = latest_message.get("text")
-            print(f"Received value for village: {extracted_text}")
-            return {"user_village": extracted_text}
-        return {}
+        return await self._handle_boolean_slot_extraction(
+            "user_village",
+            tracker,
+            dispatcher,
+            domain,
+            skip_value=True  # When skipped, assume confirmed
+        )
     
     async def validate_user_village(
         self,
@@ -352,10 +346,24 @@ class ValidateLocationForm(BaseFormValidationAction):
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
         print("######## FORM: Validating village ######")
+        
+        if slot_value == "slot_skipped":
+            dispatcher.utter_message(
+                text="Please provide your address or Skip to skip"
+            )
+            return {"user_village": "slot_skipped"}
+            
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
+            dispatcher.utter_message(
+                text="Please provide a valid village name (at least 3 characters) or type 'skip' to skip"
+            )
+            return {"user_village": None}
+            
         dispatcher.utter_message(
             text="Please provide your address or Skip to skip"
         )
-        return self._validate_optional_field(slot_value, 2, "user_village", dispatcher)
+        return {"user_village": slot_value}
     
         
     
@@ -379,31 +387,35 @@ class ValidateLocationForm(BaseFormValidationAction):
         slot_value: Any,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
-        domain: Dict[Text, Any],
+        domain: DomainDict,
     ) -> Dict[Text, Any]:
-        print("######## FORM: Validating address temp ######")
+        """Validate user_address value."""
+        if slot_value == "slot_skipped":
+            return {"user_address_temp": "slot_skipped"}
             
-        result = self._validate_optional_field(slot_value, 2, "user_address_temp", dispatcher)
-        # If we have a temp value, we're in confirmation mode
-        
-        if result.get("user_address_temp") is not None:
-            confirmation_message = (
-                f"Thank you for providing your location details:\n"
-                f"- Municipality: {tracker.get_slot('user_municipality')}\n"
-                f"- Village: {tracker.get_slot('user_village')}\n"
-                f"- Address: {tracker.get_slot('user_address_temp')}\n\n"
-                "Is this correct?"
-            )
-        
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
             dispatcher.utter_message(
-                text=confirmation_message,
-                buttons=[
-                    {"title": "Yes", "payload": "/affirm_location_address"},
-                    {"title": "No, modify", "payload": "/deny"},
-                ]
+                text="Please provide a valid address (at least 3 characters)"
             )
-            return result
+            return {"user_address_temp": None}
         
+        #check if the address and village are correct
+        confirmation_message = f"""Thank you for providing your location details:
+            - Municipality: {tracker.get_slot('user_municipality')}
+            - Village: {tracker.get_slot('user_village')}
+            - Address: {tracker.get_slot('user_address_temp')}
+            Is this correct?"""
+            
+        dispatcher.utter_message(
+            text= confirmation_message,
+            buttons=[
+                {"title": "Yes", "payload": "/affirm"},
+                {"title": "No", "payload": "/deny"},
+            ]
+        )
+        return {"user_address_temp": slot_value}
+
     async def extract_user_address_confirmed(
         self,
         dispatcher: CollectingDispatcher,

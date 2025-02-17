@@ -7,7 +7,8 @@ from typing import List
 QR_PROVINCE = "KOSHI"
 QR_DISTRICT = "Jhapa"
 DISTRICT_LIST = ['Jhapa', 'Morang', 'Sunsari']
-USE_QR_CODE = False
+USE_QR_CODE = True
+CUT_OFF_FUZZY_MATCH_LOCATION = 75
 
 # You can add other constants here, organized by category
 # For example:
