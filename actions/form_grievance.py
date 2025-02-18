@@ -140,6 +140,7 @@ class ValidateGrievanceDetailsForm(FormValidationAction):
         if "/submit_details" in slot_value:
             print("######################### LAST VALIDATION ##############")
             print("🎯 FORM: Handling submit_details intent")
+            dispatcher.utter_message(text="Calling OpenAI for classification ... Please wait a few seconds...")
             current_temp = tracker.get_slot('grievance_temp')
             print(f"grievance_temp: {current_temp}")
             print(f"grievance_details: {current_temp}")
@@ -283,9 +284,6 @@ class ActionCaptureGrievanceText(Action):
             return []
 
         print(f"Raw - grievance_details: {grievance_details}")
-
-        # Call OpenAI for category classification
-        dispatcher.utter_message(text="Calling OpenAI for classification... Please wait a few seconds...")
 
         result = await self._call_openai_for_classification(grievance_details)
         

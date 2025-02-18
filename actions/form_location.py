@@ -80,19 +80,16 @@ class ValidateLocationForm(BaseFormValidationAction):
     """Form validation action for location details collection."""
 
     def __init__(self):
+        """Initialize the form validation action."""
+        print("ValidateLocationForm.__init__ called")
+        super().__init__()
+        print("super().__init__() completed")
+        print(f"self.lang_helper exists: {hasattr(self, 'lang_helper')}")
         self.location_validator = LocationValidator()
+        print("ValidateLocationForm.__init__ completed")
 
     def name(self) -> Text:
         return "validate_location_form"
-
-    def _is_skip_requested(self,latest_message: dict) -> bool:
-        """Check if user wants to skip the current field."""
-        """Create this function to enable calling for translation in the future"""
-        text = latest_message.get("text", "").strip()
-        intent = latest_message.get("intent", {}).get("name", "")
-        return text.lower().strip() in ['skip', 'pass', 'next'] or intent == "skip"
-
-        
 
     def _validate_municipality_input(
         self,
@@ -262,10 +259,6 @@ class ValidateLocationForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         print("######## FORM: Validating municipality confirmed slot ######")
-        # Handle skip request
-        if self._is_skip_requested(tracker.latest_message):
-            return {"user_municipality_confirmed": True,
-                    "user_municipality": "Skipped"}
         
         print(f"Received value for municipality confirmed: {slot_value}")
         if slot_value == True:
@@ -330,7 +323,7 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_slot_extraction(
             "user_village",
             tracker,
             dispatcher,
