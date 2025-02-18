@@ -149,14 +149,14 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_text
+    - type: custom
 
 
   user_contact_email:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_text
+    - type: custom
 
   user_required_email:
     type: bool
@@ -168,7 +168,7 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-    - type: from_text
+    - type: custom
 
   phone_validation_required:
     type: bool

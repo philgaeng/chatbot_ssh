@@ -242,9 +242,12 @@ nlu:
 
 - intent: validate_summary
   examples: |
+    - /validate_summary
+    - validate_summary
+    - /validate_summar
     - That summary looks good
     - Yes, that's the correct summary
-    - validate_summary
+    - I agree with the summary
 
 - intent: edit_grievance_summary
   examples: |

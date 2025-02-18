@@ -438,7 +438,7 @@ class ValidateLocationForm(BaseFormValidationAction):
         print(f"Received value for address confirmed: {slot_value}")
         # Handle rejection of address confirmation
         if slot_value == False:
-            dispatcher.utter_message(text="Please enter your correct address")
+            dispatcher.utter_message(text="Please enter your correct village and address")
             return {
                 "user_village": None,
                 "user_address": None,
@@ -451,7 +451,8 @@ class ValidateLocationForm(BaseFormValidationAction):
             address = tracker.get_slot("user_address_temp")
             print(f"Address set to: {address}")
             return {
-                "user_address": address
+                "user_address": address,
+                "user_address_confirmed": True
             }
         return {} 
     
