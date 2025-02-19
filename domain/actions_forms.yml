@@ -63,7 +63,6 @@ forms:
 
   grievance_summary_form:
     required_slots:
-      - grievance_list_cat
       - grievance_list_cat_confirmed
     ignored_intents:
       - nlu_fallback
@@ -93,7 +92,7 @@ actions:
   - validate_location_form
 
 #######   grievance actions   ########################################### 
-
+  - validate_grievance_summary_form
   - action_start_grievance_process
   - action_submit_grievance_as_is
   - action_select_alternate_category
