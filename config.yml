@@ -25,6 +25,7 @@ policies:
     max_history: 8
     epochs: 100
     constrain_similarities: true
+    cache_dir: null
   - name: RulePolicy
     core_fallback_threshold: 0.1
     core_fallback_action_name: "action_custom_fallback"

@@ -1,0 +1,307 @@
+version: "3.1"
+
+stories:
+#Main story: User files a grievance with optional location and contact details
+# Step 1: User files a grievance 
+# Step 1.1: User files a grievance with only one input in the grievance details form
+  - story: User files a grievance with optional location and contact details
+    steps:
+      - intent: introduce
+      - action: action_session_start
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - action: grievance_details_form
+      - active_loop: grievance_details_form
+      - active_loop: null
+      # - intent: submit_details
+      - action: action_capture_grievance_text
+      - intent: submit_category
+      - action: action_validate_summary
+      - intent: validate_summary
+      - action: action_ask_location 
+
+  # # Step 1.1 repeated version
+  - story: User files a grievance
+    steps:
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - action: grievance_details_form
+      - active_loop: grievance_details_form
+      - active_loop: null
+      # - intent: submit_details
+      - action: action_capture_grievance_text
+      - intent: submit_category
+      - action: action_validate_summary
+      - intent: validate_summary
+      - action: action_ask_location 
+
+
+  #Step 3: alternate 1 - User deletes one category of the grievance
+  - story: User edits the category of the grievance
+    steps:
+      - action: action_capture_grievance_text
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: delete_category
+      - action: action_delete_category
+      - action: action_confirm_categories
+
+  #Step 3: alternate 2 - User changes one category of the grievance
+  - story: User edits the category of the grievance
+    steps:
+      - action: action_capture_grievance_text
+      - intent: modify_categories
+      - action: action_ask_for_category_modification
+      - intent: modify_category
+      - action: action_set_category_to_modify
+      - action: action_modify_or_delete_category
+      - intent: change_category
+      - action: action_change_category
+      - intent: set_apply_category_change
+      - action: action_apply_category_change
+      - action: action_confirm_categories
+
+  #Step 3: alternate 3 - No categories selected and user wants to add one
+  - story: No category selected by OpenAI and user wants to add one
+    steps:
+      - action: action_capture_grievance_text
+      - intent: change_category
+      - action: action_change_category
+      - action: action_listen
+      - action: action_apply_category_change
+      - action: action_confirm_categories
+
+  #Step 3: Close modification loop
+  - story: User edits the category of the grievance
+    steps:
+      - action: action_confirm_categories
+      - intent: finalize_categories
+      - action: action_validate_summary
+
+#Step 3: alternate b - User edits the summary of the grievance
+  - story: User edits the summary of the grievance
+    steps:
+      - intent: edit_grievance_summary
+      - action: action_ask_for_user_summary
+      - active_loop: edit_summary_form
+      - action: action_edit_grievance_summary
+      - action: action_ask_location
+
+  #step 4: Collect location
+  - story: Collect location details
+    steps:
+      # - intent: provide_location  
+      - action: action_ask_location
+      - intent: start_location_process
+      - action : location_form
+      - active_loop: location_form
+      - active_loop: null
+      - slot_was_set:
+          - user_address_confirmed: true
+      - action: action_ask_contact_consent # move to Step 5 if the user agrees to provide contact details 
+
+  #Step 5: Collect contact details with OTP verification
+  - story: User provides contact consent with phone verification
+    steps:
+
+      - slot_was_set:
+          - user_address_confirmed: true
+      - action: action_ask_contact_consent
+      - intent: provide_contact_yes
+      - action: contact_form
+      - active_loop: contact_form
+      - active_loop: null
+      - slot_was_set:
+          - phone_validation_required: true
+      - action: otp_verification_form
+      - active_loop: otp_verification_form
+      - active_loop: null
+      - action: action_submit_grievance
+
+
+
+  - story: User chooses to file without phone validation
+    steps:
+      - action: action_recommend_phone_validation
+      - intent: file_without_validation
+      - action: action_submit_grievance_as_is
+
+  - story: Anonymous with phone number
+    steps:
+      - action: action_ask_contact_consent
+      - intent: anonymous_with_phone
+      - action: action_collect_phone_for_anonymous
+      - active_loop: collect_phone_form
+      # - slot_was_set:
+      #     - user_contact_phone 
+      - active_loop: null
+      - action: action_submit_grievance
+
+  - story: File anonymously without contact
+    steps:
+      - action: action_ask_contact_consent
+      - intent: no_contact_provided
+      - action: action_submit_grievance
+
+
+  #Step 4 : altenate - User skips providing location details
+  - story: User skips providing location details
+    steps:
+      - action: utter_ask_municipality
+      - or:
+          - intent: skip
+          - intent: deny
+      - action: utter_skip_municipality
+      - action: utter_ask_contact_consent
+
+
+  #Step 5: alternate - User skips providing contact details
+  - story: User skips providing contact details
+    steps:
+      - action: utter_ask_contact_consent
+      - or:
+        - intent: skip
+        - intent: deny
+      - action: utter_skip_contact
+      - action: action_submit_grievance
+
+  # #User naturally provides contact
+  # - story: User starts by providing details
+  #   steps:
+  #     - intent: provide_contact  # User provides contact information intent
+  #     - action: contact_form  # Activates the contact form
+  #     - active_loop: contact_form  # Keeps the form active
+  #     - action: validate_contact_form  # Executes the validation logic
+  #     - active_loop: null  # Ends the form after validation
+  #     - action: action_submit_grievance  # Submits the grievance after contact details are collected
+
+  #User naturally provides location
+  - story: Collect location details
+    steps:
+      - intent: provide_municipality
+      # - action : action_reset_municipality_slots
+      - action: location_form
+      - active_loop: location_form
+      - active_loop: null
+      
+
+  - story: User skips email input
+    steps:
+      - intent: skip_contact_email
+      - action: validate_contact_form
+
+  - story: User skips phone input
+    steps:
+      - intent: skip_contact_phone
+      - action: validate_contact_form
+
+########## OTP Verification Stories #########################
+
+  # - story: OTP verification success path for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
+
+  # - story: OTP verification failure and retry for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: false
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
+
+  # - story: OTP not received (000000 entered)
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - slot_was_set:
+  #         - otp_input: "000000"
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - intent: resend_otp
+  #     - action: action_initiate_otp_verification
+
+  # - story: Resend OTP path
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: resend_otp
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: true
+  #     - action: action_send_grievance_sms
+  #     - action: action_submit_grievance
+
+  # - story: Skip OTP verification before form activation for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: skip_otp_verification
+  #     - action: action_skip_otp_verification
+  #     - action: action_submit_grievance
+
+  # - story: Skip OTP verification during form input for new user
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - action: action_initiate_otp_verification
+  #     - intent: enter_otp
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form
+  #     - intent: skip_otp_verification
+  #     - active_loop: null
+  #     - action: action_skip_otp_verification
+  #     - action: action_submit_grievance
+
+  # # Alternative path for OTP verification failure
+  # - story: User provides incorrect OTP
+  #   steps:
+  #     - slot_was_set:
+  #         - verification_context: "new_user"
+  #     - active_loop: otp_verification_form
+  #     - intent: provide_otp
+  #     - slot_was_set:
+  #         - otp_input
+  #     - action: action_verify_otp
+  #     - slot_was_set:
+  #         - otp_verified: false
+  #     - action: action_activate_otp_form
+  #     - active_loop: otp_verification_form

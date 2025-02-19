@@ -238,15 +238,34 @@ slots:
     mappings:
       - type: custom
 
-  list_of_cat_for_summary:
+  grievance_list_cat:
     type: list
     influence_conversation: false
     mappings: []
   
-  category_modify:
+  grievance_category_modify:
     type: text
     influence_conversation: false
-    mappings: []
+    mappings:
+      - type: custom
+
+  grievance_list_cat_confirmed:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+
+  grievance_summary_temp:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+
+  grievance_summary_confirmed:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
 
   old_category:
     type: text
