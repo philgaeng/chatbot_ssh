@@ -212,10 +212,6 @@ slots:
       - type: custom
 
   ################ grievance slots ###################
-  grievance_category:
-    type: text
-    influence_conversation: false
-    mappings: []
 
   grievance_id:
     type: text
@@ -249,7 +245,7 @@ slots:
     influence_conversation: false
     mappings: []
   
-  grievance_category_modify:
+  grievance_cat_modify:
     type: text
     influence_conversation: false
     mappings:

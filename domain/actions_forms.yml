@@ -93,6 +93,9 @@ actions:
 
 #######   grievance actions   ########################################### 
   - validate_grievance_summary_form
+  - action_ask_grievance_summary_form_grievance_list_cat_confirmed
+  - action_ask_grievance_summary_form_grievance_cat_modify
+  - action_ask_grievance_summary_form_grievance_summary_confirmed
   - action_start_grievance_process
   - action_submit_grievance_as_is
   - action_select_alternate_category

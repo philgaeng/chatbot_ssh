@@ -267,63 +267,63 @@ nlu:
     - /delete_category
     - delete_category
 
-- intent: modify_category
-  examples: |
-    - /modify_category
-    - modify_category
-    - /modify_category{"category_modify": [Environmental - Drainage And Sewage Management](category)
-    - /modify_category{"category_modify": [Destruction Of Agrarian Resources - Crop Destruction](category)
-    - /modify_category{"category_modify": [Water Supply Issues](category)
+# - intent: modify_category
+#   examples: |
+#     - /modify_category
+#     - modify_category
+#     - /modify_category{"category_modify": [Environmental - Drainage And Sewage Management](category)
+#     - /modify_category{"category_modify": [Destruction Of Agrarian Resources - Crop Destruction](category)
+#     - /modify_category{"category_modify": [Water Supply Issues](category)
 
-- intent: change_category
-  examples: |
-    - /change_category
-    - change_category
-    - I want to change to [Environmental - Drainage And Sewage Management](category)
-    - Modify the category to [Destruction Of Agrarian Resources - Crop Destruction](category)
-    - Select [Water Supply Issues](category)
+# - intent: change_category
+#   examples: |
+#     - /change_category
+#     - change_category
+#     - I want to change to [Environmental - Drainage And Sewage Management](category)
+#     - Modify the category to [Destruction Of Agrarian Resources - Crop Destruction](category)
+#     - Select [Water Supply Issues](category)
 
-- intent: finalize_categories
-  examples: |
-    - finalize_categories
-    - /finalize_categories
+# - intent: finalize_categories
+#   examples: |
+#     - finalize_categories
+#     - /finalize_categories
 
-- intent: submit_category
-  examples: |
-    - /submit_category
-    - submit_category
+# - intent: submit_category
+#   examples: |
+#     - /submit_category
+#     - submit_category
 
-- intent: skip_category
-  examples: |
-    - /skip_category
-    - skip_category
+# - intent: skip_category
+#   examples: |
+#     - /skip_category
+#     - skip_category
 
-- intent: set_new_category
-  examples: |
-    - /set_new_category
-    - set_new_category
-    - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Destruction Of Agrarian Soils](category)
-    - /set_new_category{\"category\": [Environmental - Drainage And Sewage Management](category)
-    - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Crop Destruction](category)
-    - /set_new_category{\"category\": [Water Supply Issues](category)
+# - intent: set_new_category
+#   examples: |
+#     - /set_new_category
+#     - set_new_category
+#     - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Destruction Of Agrarian Soils](category)
+#     - /set_new_category{\"category\": [Environmental - Drainage And Sewage Management](category)
+#     - /set_new_category{\"category\": [Destruction Of Agrarian Resources - Crop Destruction](category)
+#     - /set_new_category{\"category\": [Water Supply Issues](category)
 
-- intent: start_location_process
-  examples: |
-    - start_location_process
+# - intent: start_location_process
+#   examples: |
+#     - start_location_process
 
-- intent: cancel_modification_category
-  examples: |
-    - /cancel_modification_category
+# - intent: cancel_modification_category
+#   examples: |
+#     - /cancel_modification_category
 
-- intent: submit_address
-  examples: |
-    - /submit_address
-    - submit_address
+# - intent: submit_address
+#   examples: |
+#     - /submit_address
+#     - submit_address
 
-- intent: modify_address
-  examples: |
-    - /modify_address
-    - modify_address
+# - intent: modify_address
+#   examples: |
+#     - /modify_address
+#     - modify_address
 
 # - intent: describe_complaint
 #   examples: |
@@ -446,25 +446,25 @@ nlu:
     - [Rukum](village)
     - [Besisahar](village)
 
-- intent : skip_summary
-  examples: |
-    - \skip_summary
-    - skip_summary
+# - intent : skip_summary
+#   examples: |
+#     - \skip_summary
+#     - skip_summary
 
-- intent : provide_contact_yes
-  examples: |
-    - \provide_contact_yes
-    - provide_contact_yes
+# - intent : provide_contact_yes
+#   examples: |
+#     - \provide_contact_yes
+#     - provide_contact_yes
 
-- intent : anonymous_with_phone
-  examples: |
-    - \anonymous_with_phone
-    - anonymous_with_phone 
+# - intent : anonymous_with_phone
+#   examples: |
+#     - \anonymous_with_phone
+#     - anonymous_with_phone 
 
-- intent : no_contact_provided
-  examples: |
-    - \no_contact_provided
-    - no_contact_provided
+# - intent : no_contact_provided
+#   examples: |
+#     - \no_contact_provided
+#     - no_contact_provided
 
 
 - intent : provide_contact_phone
@@ -669,23 +669,23 @@ nlu:
     - modify phone
     - modify phone
 
-- intent: set_apply_category_change
-  examples: |
-    - set_apply_category_change
-    - /set_apply_category_change
-    - set apply category change
-    - set apply category change
-    - set apply category change
+# - intent: set_apply_category_change
+#   examples: |
+#     - set_apply_category_change
+#     - /set_apply_category_change
+#     - set apply category change
+#     - set apply category change
+#     - set apply category change
 
-- intent: set_category
-  examples: |
-    - set_category
-    - /set_category
-    - set category
-    - set category
-    - set category
+# - intent: set_category
+#   examples: |
+#     - set_category
+#     - /set_category
+#     - set category
+#     - set category
+#     - set category
 
-- intent: affirm_location_address
-  examples: |
-    - affirm_location_address
-    - /affirm_location_address
+# - intent: affirm_location_address
+#   examples: |
+#     - affirm_location_address
+#     - /affirm_location_address

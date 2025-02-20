@@ -140,29 +140,32 @@ class ValidateLocationForm(BaseFormValidationAction):
     ) -> List[Text]:
         print("\n=================== Location Form Required Slots ===================")
         # initialize required slots
-        required_slots = ["user_municipality_temp"]
-        
-        #expend required slots as the slots get filled
-        if tracker.get_slot("user_municipality_temp"):
-            required_slots.append("user_municipality_confirmed")
-        if tracker.get_slot("user_municipality_confirmed"):
-            required_slots.append("provide_additional_location")
-        
-        #expend required slots as the slots get filled handling the optional fields
-        if tracker.get_slot("provide_additional_location"):
-            if tracker.get_slot("provide_additional_location") == True:
-                required_slots.append("user_village")
-            if tracker.get_slot("user_village"):
-                required_slots.append("user_address_temp")
+        if not domain_slots:
+            additional_slots = ["user_municipality_temp"]
+            
+        else:
+            additional_slots = []
+            #expend required slots as the slots get filled
+            if tracker.get_slot("user_municipality_temp"):
+                additional_slots = ["user_municipality_confirmed"]
+            if tracker.get_slot("user_municipality_confirmed"):
+                additional_slots = ["provide_additional_location"]
+            
+            #expend required slots as the slots get filled handling the optional fields
+            if tracker.get_slot("provide_additional_location"):
+                if tracker.get_slot("provide_additional_location") == True:
+                    additional_slots = ["user_village"]
+                if tracker.get_slot("user_village"):
+                    additional_slots = ["user_address_temp"]
 
-            if tracker.get_slot("user_address_temp"):
-                required_slots.append("user_address_confirmed")
-            if tracker.get_slot("user_address_confirmed"):
-                required_slots.append("user_address")
-                
-        print(f"Required slots: {required_slots}")
+                if tracker.get_slot("user_address_temp"):
+                    additional_slots = ["user_address_confirmed"]
+                if tracker.get_slot("user_address_confirmed"):
+                    additional_slots = ["user_address"]
+                    
+        print(f"Input slots: {domain_slots} \n Additional slots: {additional_slots} \n Updated slots: {domain_slots + additional_slots}")
 
-        return required_slots
+        return domain_slots + additional_slots
     
 
     async def extract_user_municipality_temp(

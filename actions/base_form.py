@@ -225,12 +225,13 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         tracker: Tracker,
         dispatcher: CollectingDispatcher,
         domain: DomainDict,
-        skip_value: Any = None
+        skip_value: Any = None,
+        custom_action: Callable = None
     ) -> Dict[Text, Any]:
         """Helper method for slot extraction logic."""
-        print("\n########### _handle_slot_extraction START ###########")
-        print(f"Slot name: {slot_name}")
+        print(f"\n########### SLOT EXTRACTION START - {slot_name} ###########")
         print(f"Requested slot: {tracker.get_slot('requested_slot')}")
+        
         
         if tracker.get_slot("requested_slot") == slot_name:
             # Check if we're in skip validation mode
@@ -239,10 +240,14 @@ class BaseFormValidationAction(FormValidationAction, ABC):
 
             # Normal slot extraction
             latest_message = tracker.latest_message
-            text = latest_message.get("text", "")
+            message_text = latest_message.get("text", "")
             print(f"Latest message: {latest_message}")
-            print(f"Text: {text}")
+            print(f"Text: {message_text}")
             
+            # Execute custom action if provided
+            if custom_action:
+                await custom_action(dispatcher, tracker, domain)
+
             try:
                 skip_result = self._is_skip_requested(latest_message)
                 is_skip, needs_validation, matched_word = skip_result
@@ -253,6 +258,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 is_skip, needs_validation, matched_word = False, False, ""
             
             if is_skip:
+                print(f"---------- SLOT EXTRACTION END ----------")
                 if needs_validation:
                     # Store original text and request validation
                     dispatcher.utter_message(
@@ -264,7 +270,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     )
                     return {
                         "skip_validation_needed": slot_name,
-                        "skipped_detected_text": text
+                        "skipped_detected_text": message_text
                     }
                 
                 # Direct skip (high confidence match)
@@ -272,8 +278,11 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
                     skip_value = False if slot_type == "bool" else "slot_skipped"
                 return {slot_name: skip_value}
-                
-            return {slot_name: text}
+            print(f"---------- SLOT EXTRACTION END ----------")
+            return {slot_name: message_text}
+        
+        print(f"Slot {slot_name} is not the requested slot : {tracker.get_slot('requested_slot')}")
+        print(f"---------- SLOT EXTRACTION END ----------")
         return {}
 
     async def _handle_boolean_slot_extraction(
