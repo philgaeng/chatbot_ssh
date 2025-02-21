@@ -349,11 +349,13 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             if text.startswith("/affirm") or intent == "affirm":
                 if custom_affirm_action:
                     return await custom_affirm_action(dispatcher)
+                print(f"Affirming {slot_name}")
                 return {slot_name: True}
 
             # Handle negative responses
             # Handle negative responses
             if text.startswith("/deny") or intent == "deny":
+                print(f"Denying {slot_name}")
                 return {slot_name: False}
 
         return {}

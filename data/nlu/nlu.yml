@@ -65,8 +65,28 @@ nlu:
 
   #generic
 
-- intent: agree
+
+
+- intent: deny
   examples: |
+    - no
+    - n
+    - never
+    - I don't think so
+    - don't like that
+    - no way
+    - not really
+    - nope
+
+- intent: affirm
+  examples: |
+    - yes
+    - /affirm
+    - /Affirm
+    - Affirm
+    - Agree
+    - I agree
+    - I agree with 
     - yes
     - y
     - indeed
@@ -83,19 +103,6 @@ nlu:
     - agree
     - /agree
     - /Agree
-
-- intent: deny
-  examples: |
-    - no
-    - n
-    - never
-    - I don't think so
-    - don't like that
-    - no way
-    - not really
-    - nope
-
-
 
 #mood
 - intent: mood_great
@@ -149,13 +156,8 @@ nlu:
 - intent: skip
   examples: |
     - skip
-    - I do not know
     - pass
     - next
-    - I do not have that information
-    - I do not have that
-    - I do not want to provide that
-    - I do not want to say
     - skp
     - sp
     - skiip

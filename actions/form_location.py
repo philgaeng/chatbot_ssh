@@ -26,54 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 
-# # Action to prepopulate location based on QR code
-# class ActionPrepopulateLocation(Action):
-#     def name(self) -> Text:
-#         return "action_prepopulate_location"
-
-#     def run(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
-#     ) -> List[Dict[Text, Any]]:
-#         if USE_QR_CODE:
-#             qr_code = tracker.get_slot("qr_code")  # Assume this is pre-set
-#             location_mapping = {
-#                 "QR001": {"user_district": "Kathmandu", "user_municipality": "KMC"},
-#                 "QR002": {"user_district": "Bhaktapur", "user_municipality": "Bhaktapur"},
-#                 }
-#             prepopulated = location_mapping.get(qr_code, {})
-        
-#         else:
-#             prepopulated = {
-#                 "user_district": QR_DISTRICT,
-#                 "user_province": QR_PROVINCE
-#             }
-
-#         if prepopulated:
-#             dispatcher.utter_message(response="utter_prepopulate_location_success", 
-#                                       district=prepopulated.get("user_district"), 
-#                                       province=prepopulated.get("user_province"))
-#         else:
-#             dispatcher.utter_message(response="utter_prepopulate_location_failure")
-
-#         return [
-#             SlotSet("user_district", prepopulated.get("user_district")),
-#             SlotSet("user_province", prepopulated.get("user_province")),
-#         ]
-
-class ActionAskLocation(Action):
-    def name(self) -> str:
-        return "action_ask_location"
-
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        dispatcher.utter_message(
-            text="Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
-            buttons=[
-                {"title": "Yes", "payload": "/start_location_process"},
-                {"title": "Skip", "payload": "/ask_contact_details"},
-                {"title": "Exit", "payload": "/goodbye"}
-            ]
-        )
-        return []
     
 
 class ValidateLocationForm(BaseFormValidationAction):
@@ -112,25 +64,6 @@ class ValidateLocationForm(BaseFormValidationAction):
         
         return municipality
 
-    def _validate_optional_field(
-        self,
-        slot_value: Text,
-        min_length: int,
-        field_name: str,
-        dispatcher: CollectingDispatcher
-    ) -> Dict[Text, Any]:
-        """Validate optional fields (village/address)."""
-        if slot_value == "Not provided":
-            return {field_name: slot_value}
-            
-        if not slot_value or len(slot_value) < min_length or slot_value.startswith("/"):
-            dispatcher.utter_message(
-                text=f"Please provide a valid {field_name.replace('user_', '').replace('_temp', '')} (or type 'skip' to skip)."
-            )
-            return {field_name: None}
-        
-        return {field_name: slot_value}
-
     async def required_slots(
         self,
         domain_slots: List[Text],
@@ -139,55 +72,68 @@ class ValidateLocationForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> List[Text]:
         print("\n=================== Location Form Required Slots ===================")
-        # initialize required slots
-        if not domain_slots:
-            additional_slots = ["user_municipality_temp"]
-            
-        else:
-            additional_slots = []
-            #expend required slots as the slots get filled
-            if tracker.get_slot("user_municipality_temp"):
-                additional_slots = ["user_municipality_confirmed"]
-            if tracker.get_slot("user_municipality_confirmed"):
-                additional_slots = ["provide_additional_location"]
-            
-            #expend required slots as the slots get filled handling the optional fields
-            if tracker.get_slot("provide_additional_location"):
-                if tracker.get_slot("provide_additional_location") == True:
-                    additional_slots = ["user_village"]
-                if tracker.get_slot("user_village"):
-                    additional_slots = ["user_address_temp"]
+        
 
-                if tracker.get_slot("user_address_temp"):
-                    additional_slots = ["user_address_confirmed"]
-                if tracker.get_slot("user_address_confirmed"):
-                    additional_slots = ["user_address"]
-                    
-        print(f"Input slots: {domain_slots} \n Additional slots: {additional_slots} \n Updated slots: {domain_slots + additional_slots}")
+        # required_slots = domain_slots if domain_slots else ["user_location_consent"]
+        # print(f"user_location_consent: {tracker.get_slot('user_location_consent')}")
+        # if tracker.get_slot("user_location_consent") == False:
+        #     required_slots = [] 
 
-        return domain_slots + additional_slots
+        # if tracker.get_slot("user_location_consent") == True:
+        #     required_slots = ["user_municipality_temp", "user_municipality_confirmed", "user_village", "user_address_temp", "user_address_confirmed", "user_address"]
+        #     #expend required slots as the slots get filled
+        required_slots = ["user_location_consent", "user_municipality_temp", "user_municipality_confirmed", "user_village", "user_address_temp", "user_address_confirmed", "user_address"]
+        print(f"Input slots: {domain_slots} \n Updated slots: {required_slots}")
+        print(f"requested slot: {tracker.get_slot('requested_slot')}")
+        
+        return required_slots
     
-
-    async def extract_user_municipality_temp(
+    async def extract_user_location_consent(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        # Handle start location process
-        if tracker.latest_message.get("text", "").strip() == "/start_location_process":
-            dispatcher.utter_message(
-                text=f"Please enter your municipality name in {QR_DISTRICT}, {QR_PROVINCE}"
-            )
-            return {}
-
+        print("######## FORM: Extracting user_location_consent ######")
+        result = await self._handle_boolean_slot_extraction(
+            "user_location_consent",
+            tracker,
+            dispatcher,
+            domain
+        )
+        print(f"Extraction result: {result}")
+        return result
+    
+    async def validate_user_location_consent(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """Validate user_location_consent value."""
+        print("######## FORM: Validating user_location_consent ########")
+        print(f"Validating value: {slot_value}")
+        
+        if slot_value is True:
+            return {"user_location_consent": True}
+        elif slot_value is False:
+            return {"user_location_consent": False}
+        return {"user_location_consent": None}
+    
+    async def extract_user_municipality_temp(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
             "user_municipality_temp",
             tracker,
             dispatcher,
             domain
         )
-    
+        
     async def validate_user_municipality_temp(
         self,
         slot_value: Any,
@@ -198,19 +144,9 @@ class ValidateLocationForm(BaseFormValidationAction):
         print("######## FORM: Validating municipality_temp ######")
         print(f"Received value: {slot_value}")
         
-        if slot_value == "slot_skipped":
-            return {
-                "user_municipality_temp": "slot_skipped",
-                "user_municipality_confirmed": True,
-                "provide_additional_location": False,
-                "user_municipality": "slot_skipped"
-            }
         
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
-            dispatcher.utter_message(
-                text=f"Please enter a valid municipality name in {QR_DISTRICT}, {QR_PROVINCE} (at least 3 characters)"
-            )
             return {"user_municipality_temp": None}
                 
         # Validate new municipality input with the extract and rapidfuzz functions
@@ -218,23 +154,14 @@ class ValidateLocationForm(BaseFormValidationAction):
         print(f"Validated municipality: {validated_municipality}")
         
         if validated_municipality:
-            dispatcher.utter_message(
-                text=f"Is {validated_municipality} your correct municipality?",
-                buttons=[
-                    {"title": "Yes", "payload": "/affirm"},
-                    {"title": "No", "payload": "/deny"},
-                ]
-            )
             return {"user_municipality_temp": validated_municipality}
         
         else:
-            dispatcher.utter_message(
-                text=f"Please enter your municipality name in {QR_DISTRICT}, {QR_PROVINCE}"
-            )
             return {"user_municipality_temp": None,
                     "user_municipality": None,
                     "user_municipality_confirmed": None
                     }
+                
                 
     async def extract_user_municipality_confirmed(
         self,
@@ -267,14 +194,6 @@ class ValidateLocationForm(BaseFormValidationAction):
         if slot_value == True:
             print("## user_municipality_confirmed: True ######")
             print(f"Received value for municipality: {slot_value}")
-#request the user if you want to provide additional location
-            dispatcher.utter_message(
-                text="Do you want to provide additional location details?",
-                buttons=[
-                    {"title": "Yes", "payload": "/affirm"},
-                    {"title": "No", "payload": "/deny"},
-                ]
-            )
         #save the municipality to the slot
             return {"user_municipality_confirmed": True,
                     "user_municipality": tracker.get_slot("user_municipality_temp")}
@@ -284,42 +203,8 @@ class ValidateLocationForm(BaseFormValidationAction):
                     "user_municipality_temp": None,
                     "user_municipality": None
                     }
+        return {}
     
-    async def extract_provide_additional_location(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        # First check if we have a municipality
-        if not tracker.get_slot("user_municipality"):
-            return {}
-
-        async def handle_affirm(dispatcher: CollectingDispatcher) -> Dict[Text, Any]:
-            dispatcher.utter_message(
-                text="Please provide your village name or Skip to skip"
-            )
-            return {"provide_additional_location": True}
-
-        return await self._handle_boolean_slot_extraction(
-            "provide_additional_location",
-            tracker,
-            dispatcher,
-            domain,
-            skip_value=False,
-            custom_affirm_action=handle_affirm
-        )
-    
-    async def validate_provide_additional_location(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        print("######## FORM: Validating provide_additional_location slot ######")
-        return {"provide_additional_location": slot_value}
-
     async def extract_user_village(
         self,
         dispatcher: CollectingDispatcher,
@@ -344,9 +229,7 @@ class ValidateLocationForm(BaseFormValidationAction):
         print("######## FORM: Validating village ######")
         
         if slot_value == "slot_skipped":
-            dispatcher.utter_message(
-                text="Please provide your address or Skip to skip"
-            )
+
             return {"user_village": "slot_skipped"}
             
         # First validate string length
@@ -356,9 +239,6 @@ class ValidateLocationForm(BaseFormValidationAction):
             )
             return {"user_village": None}
             
-        dispatcher.utter_message(
-            text="Please provide your address or Skip to skip"
-        )
         return {"user_village": slot_value}
     
         
@@ -396,20 +276,7 @@ class ValidateLocationForm(BaseFormValidationAction):
             )
             return {"user_address_temp": None}
         
-        #check if the address and village are correct
-        confirmation_message = f"""Thank you for providing your location details:
-            - Municipality: {tracker.get_slot('user_municipality')}
-            - Village: {tracker.get_slot('user_village')}
-            - Address: {tracker.get_slot('user_address_temp')}
-            Is this correct?"""
-            
-        dispatcher.utter_message(
-            text= confirmation_message,
-            buttons=[
-                {"title": "Yes", "payload": "/affirm"},
-                {"title": "No", "payload": "/deny"},
-            ]
-        )
+
         return {"user_address_temp": slot_value}
 
     async def extract_user_address_confirmed(
@@ -459,3 +326,99 @@ class ValidateLocationForm(BaseFormValidationAction):
             }
         return {} 
     
+    
+class ActionAskLocationFormUserLocationConsent(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_location_consent"
+
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        dispatcher.utter_message(
+            text="Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
+            buttons=[
+                {"title": "Yes", "payload": "/affirm"},
+                {"title": "No", "payload": "/deny"},
+            ]
+        )
+        return []
+    
+class ActionAskLocationFormUserMunicipalityTemp(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_municipality_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        dispatcher.utter_message(
+                text=f"Please enter a valid municipality name in {QR_DISTRICT}, {QR_PROVINCE} (at least 3 characters) or Skip to skip",
+                buttons=[
+                    {"title": "Skip", "payload": "/skip"}
+                ]   
+            )
+        return []
+
+    
+class ActionAskLocationFormUserMunicipalityConfirmed(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_municipality_confirmed"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        validated_municipality = tracker.get_slot('user_municipality_temp')
+        dispatcher.utter_message(
+            text=f"Is {validated_municipality} your correct municipality?",
+                buttons=[
+                    {"title": "Yes", "payload": "/affirm"},
+                    {"title": "No", "payload": "/deny"},
+                ]
+            )
+        return []
+       
+class ActionAskLocationFormUserVillage(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_village"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        dispatcher.utter_message(
+                text="Please provide your village name or Skip to skip",
+                buttons=[
+                    {"title": "Skip", "payload": "/skip"}
+                ]
+            )
+        return []
+    
+class ActionAskLocationFormUserAddressTemp(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_address_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        dispatcher.utter_message(
+                text="Please provide your address or Skip to skip",
+                buttons=[
+                    {"title": "Skip", "payload": "/skip"}
+                ]
+            )
+        return []
+    
+class ActionAskLocationFormUserAddressConfirmed(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_address_confirmed"
+    
+    async def run(self,
+                  dispatcher: CollectingDispatcher,
+                  tracker: Tracker,
+                  domain: dict
+                  ):
+                #check if the address and village are correct
+        confirmation_message = f"""Thank you for providing your location details:
+            - Municipality: {tracker.get_slot('user_municipality')}
+            - Village: {tracker.get_slot('user_village')}
+            - Address: {tracker.get_slot('user_address_temp')}
+            Is this correct?"""
+            
+        dispatcher.utter_message(
+            text= confirmation_message,
+            buttons=[
+                {"title": "Yes", "payload": "/affirm"},
+                {"title": "No", "payload": "/deny"},
+            ]
+        )
+        return []
+    
+

@@ -8,15 +8,15 @@ from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAct
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .constants import EMAIL_PROVIDERS_NEPAL
-
+from .base_form import BaseFormValidationAction
 logger = logging.getLogger(__name__)
 
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
 
-class AskContactConsent(Action):
+class AskContactFormContactConsent(Action):
     def name(self) -> str:
-        return "action_ask_contact_consent"
+        return "action_ask_contact_form_contact_consent"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = (
@@ -38,7 +38,7 @@ class AskContactConsent(Action):
 
         
     
-class ValidateContactForm(FormValidationAction):
+class ValidateContactForm(BaseFormValidationAction):
     """Form validation action for contact details collection."""
 
     def name(self) -> Text:
@@ -52,14 +52,31 @@ class ValidateContactForm(FormValidationAction):
         domain: DomainDict,
     ) -> List[Text]:
         print("\n=================== Contact Form Required Slots ===================")
+        # if not domain_slots:
+        # required_slots = ["user_contact_consent"]
+
+        # if tracker.get_slot("user_contact_consent"):
+        #     required_slots = ["user_full_name", "user_contact_phone", "user_contact_email_temp"]
         
-        required_slots = ["user_full_name", "user_contact_phone", "user_required_email"]
+        # if tracker.get_slot("email_validation_required"):
+        #     required = ["user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
         
-        if tracker.get_slot("user_required_email"):
-            required_slots.append("user_contact_email")
-        
+        # if tracker.get_slot("user_contact_email_confirmed") == False:
+        #     required = ["user_full_name", "user_contact_phone", "user_contact_email_temp"]
+        required_slots = ["user_contact_consent", "user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
         print(f"Required slots: {required_slots}")
         return required_slots
+    
+    async def extract_user_contact_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        return await self._handle_boolean_slot_extraction(
+            "user_contact_consent",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_contact_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        return {"user_contact_consent": slot_value}
 
     async def extract_user_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         if tracker.get_slot("requested_slot") == "user_full_name":
@@ -172,69 +189,51 @@ class ValidateContactForm(FormValidationAction):
         # For example: must be 10 digits, start with valid prefix, etc.
         return bool(re.match(r'^\d{10}$', phone))
 
-    def extact_user_required_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        if tracker.get_slot("requested_slot") == "user_required_email":
-            user_response = tracker.latest_message.get("text", "").strip()
-            intent_name = tracker.latest_message.get("intent", {}).get("name")
+    # def extact_user_required_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+    #     if tracker.get_slot("requested_slot") == "user_required_email":
+    #         user_response = tracker.latest_message.get("text", "").strip()
+    #         intent_name = tracker.latest_message.get("intent", {}).get("name")
 
-            print("############# Extract user required email ##########")
-            print("Requested Slot:", tracker.get_slot("requested_slot"))
-            print("User Response:", user_response)
+    #         print("############# Extract user required email ##########")
+    #         print("Requested Slot:", tracker.get_slot("requested_slot"))
+    #         print("User Response:", user_response)
 
-            if intent_name in ['skip', 'skip_contact_email']:
-                return {"user_required_email": False}
+    #         if intent_name in ['skip', 'skip_contact_email']:
+    #             return {"user_required_email": False}
             
-            if intent_name == "deny":
-                return {"user_required_email": False}
+    #         if intent_name == "deny":
+    #             return {"user_required_email": False}
             
-            if intent_name == "agree":
-                return {"user_required_email": True}
+    #         if intent_name == "agree":
+    #             return {"user_required_email": True}
         
-        return {}
+    #     return {}
     
-    def _validate_user_required_email(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        return {"user_required_email": slot_value}
+    # def _validate_user_required_email(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    #     return {"user_required_email": slot_value}
         
 
 
-    # ✅ Extract user contact email
-    async def extract_user_contact_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        user_response = tracker.latest_message.get("text", "").strip()
-        intent_name = tracker.latest_message.get("intent", {}).get("name")
+    # # ✅ Extract user contact email
+    # async def extract_user_contact_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+    #     user_response = tracker.latest_message.get("text", "").strip()
+    #     intent_name = tracker.latest_message.get("intent", {}).get("name")
 
-        print("############# Extract user contact email ##########")
-        print("Requested Slot:", tracker.get_slot("requested_slot"))
-        print("User Response:", user_response)
+    #     print("############# Extract user contact email ##########")
+    #     print("Requested Slot:", tracker.get_slot("requested_slot"))
+    #     print("User Response:", user_response)
 
-        # Handle special cases
-        if self._email_should_skip_extraction(user_response, intent_name, tracker):
-            return self._email_handle_skip_cases(user_response, intent_name, dispatcher)
-
-        # Extract and validate email
-        extracted_email = self._email_extract_from_text(user_response)
-        if not extracted_email:
-            return self._email_handle_invalid_format(dispatcher)
+    #     # Extract and validate email
+    #     extracted_email = self._email_extract_from_text(user_response)
+    #     if not extracted_email:
+    #         return self._email_handle_invalid_format(dispatcher)
         
-        # Validate domain
-        if not self._email_is_valid_nepal_domain(extracted_email):
-            return self._email_handle_unknown_domain(dispatcher, extracted_email)
+    #     # Validate domain
+    #     if not self._email_is_valid_nepal_domain(extracted_email):
+    #         return self._email_handle_unknown_domain(dispatcher, extracted_email)
         
-        return {"user_contact_email": extracted_email}
+    #     return {"user_contact_email": extracted_email}
 
-    def _email_should_skip_extraction(self, user_response: str, intent_name: str, tracker: Tracker) -> bool:
-        return (user_response.startswith("/") or 
-                intent_name in ['skip', 'skip_contact_email'] or 
-                tracker.get_slot("requested_slot") != "user_contact_email")
-
-    def _email_handle_skip_cases(self, user_response: str, intent_name: str, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
-        if user_response.startswith("/"):
-            print("payload in slot, reset to None")
-            return {"user_contact_email": None}
-        if intent_name in ['skip', 'skip_contact_email']:
-            print("skipping - slot set to slot_kipped")
-            dispatcher.utter_message(response="utter_skip_phone_email")
-            return {"user_contact_email": 'slot_skipped'}
-        return {}
 
     def _email_extract_from_text(self, text: str) -> Optional[str]:
         email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
@@ -256,7 +255,7 @@ class ValidateContactForm(FormValidationAction):
                 {"title": "Skip Email", "payload": "/skip_contact_email"},
             ]
         )
-        return {"user_contact_email": None}
+        return {"user_contact_email_temp": None}
 
     def _email_handle_unknown_domain(self, dispatcher: CollectingDispatcher, email: str) -> Dict[str, Any]:
         email_domain = email.split('@')[1].lower()
@@ -271,7 +270,7 @@ class ValidateContactForm(FormValidationAction):
                 {"title": "Skip Email", "payload": "/skip_contact_email"},
             ]
         )
-        return {"user_contact_email": None}
+        return {"user_contact_email_temp": None}
 
 
     
@@ -282,7 +281,15 @@ class ValidateContactForm(FormValidationAction):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
-    async def validate_user_contact_email(
+    async def extract_user_contact_email_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        return await self._handle_boolean_slot_extraction(
+            "user_contact_email_temp",
+            tracker,
+            dispatcher,
+            domain
+        )
+    
+    async def validate_user_contact_email_temp(
         self,
         slot_value: Any,
         dispatcher: CollectingDispatcher,
@@ -290,29 +297,63 @@ class ValidateContactForm(FormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         if not slot_value:
-            return {"user_contact_email": None}
-
+            return {"user_contact_email_temp": None}
+                # Extract and validate email
+        extracted_email = self._email_extract_from_text(slot_value)
+        if not extracted_email:
+            dispatcher.utter_message(
+            text=(
+                "⚠️ I couldn't find a valid email address in your message.\n"
+                "A valid email should be in the format: **username@domain.com**."
+            ),
+            buttons=[
+                {"title": "Retry", "payload": "/provide_contact_email"},
+                {"title": "Skip Email", "payload": "/skip_contact_email"},
+            ]
+            )
+            return {"user_contact_email_temp": None}
+        
         # Use consistent validation methods
-        if not self._email_is_valid_format(slot_value):
+        if not self._email_is_valid_format(extracted_email):
             dispatcher.utter_message(text="⚠️ Please enter a valid email address.")
-            return {"user_contact_email": None}
+            return {"user_contact_email_temp": None}
 
         # Check for Nepali email domain using existing method
-        if not self._email_is_valid_nepal_domain(slot_value):
+        if not self._email_is_valid_nepal_domain(extracted_email):
             domain = slot_value.split('@')[1]
             dispatcher.utter_message(
                 text=f"⚠️ The email domain '{domain}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
                 buttons=[
-                    {"title": "Confirm Email", "payload": f"/confirm_email{slot_value}"},
-                    {"title": "Try Different Email", "payload": "/provide_contact_email"},
-                    {"title": "Skip Email", "payload": "/skip_contact_email"}
+                    {"title": "Confirm Email", "payload": f"/slot_confirmed"},
+                    {"title": "Try Different Email", "payload": "/slot_edited"},
+                    {"title": "Skip Email", "payload": "/slot_skipped"}
                 ]
             )
             # Keep the email in slot but deactivate form while waiting for user choice
-            return {"user_contact_email": slot_value, "active_loop": None}
+            return {"user_contact_email_temp": extracted_email,
+                    "email_validation_required": True}
 
         # If all validations pass
-        return {"user_contact_email": slot_value}
+        return {"user_contact_email_temp": extracted_email}
+    
+    async def extract_user_contact_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        return await self._handle_boolean_slot_extraction(
+            "user_contact_email_confirmed",
+            tracker,
+            dispatcher,
+            domain
+        )
+    async def validate_user_contact_email_confirmed(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        if slot_value == "true":
+            return {"user_contact_email": tracker.get_slot("user_contact_email_temp"),
+                    "user_contact_email_confirmed": True}
+        else:
+            #reset the slots to restart the loop
+            return {
+                    "user_contact_email_temp" : None,
+                    "user_contact_email_confirmed" : None
+                    }
+
 
 class ActionCheckPhoneValidation(Action):
     def name(self) -> Text:

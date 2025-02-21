@@ -4,9 +4,7 @@ forms:
 
   location_form:
     required_slots:
-      - user_municipality_temp
-      - user_municipality_confirmed
-      - provide_additional_location
+      - user_location_consent
     ignored_intents:
       - nlu_fallback
       - submit_category
@@ -88,15 +86,27 @@ actions:
 
 #######   location actions   ###########################################
 
-  - action_ask_location
+  # - action_ask_location
   - validate_location_form
+  - action_ask_location_form_user_location_consent
+  - action_ask_location_form_user_municipality_temp
+  - action_ask_location_form_user_municipality_confirmed
+  - action_ask_location_form_user_village
+  - action_ask_location_form_user_address_temp
+  - action_ask_location_form_user_address_confirmed
 
 #######   grievance actions   ########################################### 
+  - action_start_grievance_process
+  - validate_grievance_details_form
+  - action_ask_grievance_details_form_grievance_temp
   - validate_grievance_summary_form
   - action_ask_grievance_summary_form_grievance_list_cat_confirmed
   - action_ask_grievance_summary_form_grievance_cat_modify
   - action_ask_grievance_summary_form_grievance_summary_confirmed
-  - action_start_grievance_process
+  - action_ask_grievance_summary_form_grievance_summary_temp
+  
+
+  
   - action_submit_grievance_as_is
   - action_select_alternate_category
   - action_set_category
@@ -117,11 +127,14 @@ actions:
   - action_confirm_categories
   - action_cancel_modification_category
   - action_skip_category
-  - validate_grievance_details_form
+ 
   - action_handle_grievance_form_completion
 
 #######   contact actions   ###########################################
-  - action_ask_contact_consent
+ 
+  
+  
+  - action_ask_contact_form_contact_consent
   - action_collect_phone_for_anonymous
   - utter_ask_address_form_user_address
   - utter_ask_contact_form_user_full_name

@@ -64,9 +64,15 @@ class ActionStartGrievanceProcess(Action):
         return "action_start_grievance_process"
 
     async def run(self, dispatcher, tracker, domain):
+        # reset the form parameters
+        ValidateGrievanceSummaryForm.message_display_list_cat = True
+        print("######################### RESET FORM PARAMETERS ##############")
+        print("Value of message_display_list_cat: ", ValidateGrievanceSummaryForm.message_display_list_cat)
+        print("---------------------------------------------")
         
         # reset the slots used by the form grievance_details_form and grievance_summary_form and set verification_context to new_user
-        return [SlotSet("grievance_details", None),
+        return [SlotSet("grievance_new_detail", None),
+                SlotSet("grievance_details", None),
                 SlotSet("grievance_summary_temp", None),
                 SlotSet("grievance_summary_confirmed", None),
                 SlotSet("grievance_summary", None),
@@ -255,14 +261,15 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         if "/submit_details" in slot_value:
             print("######################### LAST VALIDATION ##############")
             print("🎯 FORM: Handling submit_details intent")
-            
+            #call action_ask_grievance_details_form_grievance_temp
+            await ActionAskGrievanceDetailsFormGrievanceTemp().run(dispatcher, tracker, domain)
             
             # Get base slots
             slots_to_set = {
                 "grievance_new_detail": "completed",
                 "grievance_temp": tracker.get_slot('grievance_temp'),
             }
-            
+            print(f"-------- end of validate_grievance_new_detail --------")
             # Add OpenAI results
             openai_action = ActionCallOpenAI()
             openai_slots = await openai_action.run(dispatcher, tracker, domain)
@@ -276,26 +283,25 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         if slot_value and not slot_value.startswith('/'):
             print("✅ FORM: Processing valid grievance text")
             print(f"slot_value: {slot_value}")
+            
+            #call action_ask_grievance_details_form_grievance_temp
+            await ActionAskGrievanceDetailsFormGrievanceTemp().run(dispatcher, tracker, domain)
+            
             updated_temp = self._update_grievance_text(current_temp, slot_value)
-            self._show_options_buttons(dispatcher)
             
             print("🔄 FORM: Returning updated slots")
             print(f"Updated grievance_temp: {updated_temp}")
+            print(f"-------- end of validate_grievance_new_detail --------")
             
             return {
                 "grievance_new_detail": None,
                 "grievance_temp": updated_temp
             }
-        if not slot_value or slot_value == "/start_grievance_process":
-            dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
-        # Handle invalid inputs - mostly payloads
-        print("⚠️ FORM: Invalid input detected")
+        # Handle invalid inputs - mostly payloads and reinitialize the slot
+        print("⚠️ FORM: Invalid input detected - setting the slot to None")
         print(f"Slot value: {slot_value}")
         print(f"update grievance details: {current_temp}")
-        
-        if slot_value == "/add_more_details":
-            dispatcher.utter_message(text="Please enter more details...")
-        
+        print(f"-------- end of validate_grievance_new_detail --------")
         return {"grievance_new_detail": None}
 
     def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
@@ -327,10 +333,46 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         updated = updated.strip()
         print(f"Updated text: {updated}")
         return updated
+    
+class ActionAskGrievanceDetailsFormGrievanceTemp(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_details_form_grievance_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        slot_grievance = tracker.get_slot("grievance_new_detail")
+        
+        if not slot_grievance or slot_grievance == "/start_grievance_process":
+            dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
+        
+        if slot_grievance == "/add_more_details":
+            dispatcher.utter_message(text="Please enter more details...")
+            
+        if "/submit_details" in slot_grievance:
+            dispatcher.utter_message(text="Calling OpenAI for classification... This may take a few seconds...")
+            
+        if slot_grievance and not slot_grievance.startswith('/'):
+            print("\n🔘 FORM: Showing options buttons")
+            dispatcher.utter_message(
+                text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
+                    "- Location information\n"
+                    "- Persons involved\n"
+                    "- Quantification of damages (e.g., number of bags of rice lost)\n"
+                    "- Monetary value of damages",
+                buttons=[
+                    {"title": "File as is", "payload": "/submit_details"},
+                    {"title": "Add more details", "payload": "/add_more_details"},
+                    {"title": "Cancel filing", "payload": "/exit_without_filing"}
+                ]
+            )
+            
+        return []
 
 class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         # Class variable to track message display
     message_display_list_cat = True
+    
+    def __init__(self):
+        self.message_display_list_cat = True
         
     def name(self) -> Text:
         return "validate_grievance_summary_form"
@@ -388,11 +430,6 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             dispatcher,
             domain
         )
-        
-    
-
-    
-    
     
     async def validate_grievance_list_cat_confirmed(self, slot_value: Any,
                                                    dispatcher: CollectingDispatcher, 
@@ -401,7 +438,6 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
                                                    ) -> List[Dict[Text, Any]]:
         print("######################### VALIDATE GRIEVANCE LIST CAT CONFIRMED ##############")
 
-        
         slot_value = slot_value.strip('/')
          #initialize the list of cat
         list_of_cat = tracker.get_slot("grievance_list_cat")
@@ -527,10 +563,9 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             slots_to_set["grievance_summary"] = tracker.get_slot("grievance_summary_temp")
         
         if slot_value == "slot_edited":
-            dispatcher.utter_message(text="Please enter the new summary and confirm again.")
+            
             slots_to_set["grievance_summary_temp"] = None
             
-                
         return slots_to_set
     
     async def extract_grievance_summary_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -556,11 +591,135 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             slots_to_set["grievance_summary"] = "slot_skipped"
         
         elif slot_value:
-            slots_to_set["grievance_summary_confirmed"] = "slot_edited"
+            slots_to_set["grievance_summary_confirmed"] = None
 
         return slots_to_set
 
 
+class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_summary_form_grievance_list_cat_confirmed"
+
+    async def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Dict[Text, Any]]:
+        """Ask for grievance_list_cat_confirmed slot."""
+        
+        print(f"Action called with message_display_list_cat: {ValidateGrievanceSummaryForm.message_display_list_cat}")
+            
+        if ValidateGrievanceSummaryForm.message_display_list_cat:
+            grievance_list_cat = tracker.get_slot("grievance_list_cat")
+            print(f"Current categories: {grievance_list_cat}")
+            
+            if not grievance_list_cat or grievance_list_cat == []:
+                print("No categories found, sending no categories message")
+                dispatcher.utter_message(text="No categories have been identified yet.",
+                                    buttons=[
+                                        {"title": "Add category", "payload": "/add_category"},
+                                        {"title": "Continue without categories", "payload": "/slot_confirmed"}
+                                    ])
+            else:
+                print(f"Sending message with categories: {grievance_list_cat}")
+                category_text = "\n".join([v for v in grievance_list_cat])
+                response_message = f"I have identified these categories:\n{category_text}\nDoes this seem correct?"
+                
+                dispatcher.utter_message(text=response_message,
+                                    buttons=[
+                                        {"title": "Yes", "payload": "/slot_confirmed"},
+                                        {"title": "Add category", "payload": "/slot_added"},
+                                        {"title": "Delete category", "payload": "/slot_deleted"},
+                                        {"title": "Exit", "payload": "/skip"}
+                                    ])
+            ValidateGrievanceSummaryForm.message_display_list_cat = False
+            print(f"Set message_display_list_cat to {ValidateGrievanceSummaryForm.message_display_list_cat}")
+
+        return []
+
+
+class ActionAskGrievanceSummaryFormGrievanceCatModify(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_summary_form_grievance_cat_modify"
+    
+    async def run(
+        self, 
+        dispatcher: CollectingDispatcher, 
+        tracker: Tracker,
+        domain: DomainDict
+        ) -> List[Dict[Text, Any]]:
+        
+        flag = tracker.get_slot("grievance_list_cat_confirmed")
+        print("ask_cat_modify flag :", flag)
+        list_of_cat = tracker.get_slot("grievance_list_cat")
+        
+        if flag == 'slot_deleted':
+            
+            if not list_of_cat:
+                dispatcher.utter_message(text="No categories selected. Skipping this step.")
+                return {"grievance_list_cat_confirmed": "slot_skipped"}
+            else:
+                buttons = [
+                    {"title": cat, "payload": f'/delete_category{{"category_to_delete": "{cat}"}}'}
+                    for cat in list_of_cat
+                ]
+                buttons.append({"title": "Skip", "payload": "/skip"})
+
+                dispatcher.utter_message(
+                    text="Which category would you like to delete?",
+                    buttons=buttons
+                )
+                
+        if flag == "slot_added":
+            list_cat_to_add = [cat for cat in LIST_OF_CATEGORIES if cat not in list_of_cat]
+            #display the new category to the user with buttons
+            buttons = [
+                {"title": cat, "payload": f'/add_category{{"category": "{cat}"}}'} 
+                for cat in list_cat_to_add[:10]
+            ]
+            dispatcher.utter_message(
+                text="Please select the new category from the list below:",
+                buttons=buttons
+            )
+        return []
+    
+    
+class ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_summary_form_grievance_summary_confirmed"
+    
+    async def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict
+        ) -> List[Dict[Text, Any]]:
+        
+        #create a function to utter the message for the summary
+        current_summary = tracker.get_slot("grievance_summary_temp")
+        if current_summary:
+            dispatcher.utter_message(
+                text=f"Here is the current summary: '{current_summary}'.\n Is this correct?",
+                buttons=[
+                    {"title": "Validate summary", "payload": "/slot_confirmed"},
+                    {"title": "Edit summary", "payload": "/slot_edited"},
+                    {"title": "Skip", "payload": "/skip"}
+                ]
+            )
+        else:
+            dispatcher.utter_message(
+                text="There is no summary yet. Please type a new summary for your grievance or type 'skip' to proceed without a summary."
+            )
+    
+class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_summary_form_grievance_summary_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        if tracker.get_slot("grievance_summary_confirmed") == "slot_edited":
+            dispatcher.utter_message(text="Please enter the new summary and confirm again.")
+        return []
 
 
 
@@ -701,120 +860,7 @@ class ActionSubmitGrievance(Action):
             return []
         
         
-class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
-    def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_list_cat_confirmed"
 
-    async def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> List[Dict[Text, Any]]:
-        """Ask for grievance_list_cat_confirmed slot."""
-        
-        print(f"Action called with message_display_list_cat: {ValidateGrievanceSummaryForm.message_display_list_cat}")
-            
-        if ValidateGrievanceSummaryForm.message_display_list_cat:
-            grievance_list_cat = tracker.get_slot("grievance_list_cat")
-            print(f"Current categories: {grievance_list_cat}")
-            
-            if not grievance_list_cat or grievance_list_cat == []:
-                print("No categories found, sending no categories message")
-                dispatcher.utter_message(text="No categories have been identified yet.",
-                                    buttons=[
-                                        {"title": "Add category", "payload": "/add_category"},
-                                        {"title": "Skip", "payload": "/skip"}
-                                    ])
-            else:
-                print(f"Sending message with categories: {grievance_list_cat}")
-                category_text = "\n".join([v for v in grievance_list_cat])
-                response_message = f"I have identified these categories:\n{category_text}\nDoes this seem correct?"
-                
-                dispatcher.utter_message(text=response_message,
-                                    buttons=[
-                                        {"title": "Yes", "payload": "/slot_confirmed"},
-                                        {"title": "Add category", "payload": "/slot_added"},
-                                        {"title": "Delete category", "payload": "/slot_deleted"},
-                                        {"title": "Exit", "payload": "/skip"}
-                                    ])
-            ValidateGrievanceSummaryForm.message_display_list_cat = False
-            print(f"Set message_display_list_cat to {ValidateGrievanceSummaryForm.message_display_list_cat}")
-
-        return []
-
-
-class ActionAskGrievanceSummaryFormGrievanceCatModify(Action):
-    def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_cat_modify"
-    
-    async def run(
-        self, 
-        dispatcher: CollectingDispatcher, 
-        tracker: Tracker,
-        domain: DomainDict
-        ) -> List[Dict[Text, Any]]:
-        
-        flag = tracker.get_slot("grievance_list_cat_confirmed")
-        print("ask_cat_modify flag :", flag)
-        list_of_cat = tracker.get_slot("grievance_list_cat")
-        
-        if flag == 'slot_deleted':
-            
-            if not list_of_cat:
-                dispatcher.utter_message(text="No categories selected. Skipping this step.")
-                return {"grievance_list_cat_confirmed": "slot_skipped"}
-            else:
-                buttons = [
-                    {"title": cat, "payload": f'/delete_category{{"category_to_delete": "{cat}"}}'}
-                    for cat in list_of_cat
-                ]
-                buttons.append({"title": "Skip", "payload": "/skip"})
-
-                dispatcher.utter_message(
-                    text="Which category would you like to delete?",
-                    buttons=buttons
-                )
-                
-        if flag == "slot_added":
-            list_cat_to_add = [cat for cat in LIST_OF_CATEGORIES if cat not in list_of_cat]
-            #display the new category to the user with buttons
-            buttons = [
-                {"title": cat, "payload": f'/add_category{{"category": "{cat}"}}'} 
-                for cat in list_cat_to_add[:10]
-            ]
-            dispatcher.utter_message(
-                text="Please select the new category from the list below:",
-                buttons=buttons
-            )
-        return []
-    
-class ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed(Action):
-    def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_summary_confirmed"
-    
-    async def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict
-        ) -> List[Dict[Text, Any]]:
-        
-        #create a function to utter the message for the summary
-        current_summary = tracker.get_slot("grievance_summary_temp")
-        if current_summary:
-            dispatcher.utter_message(
-                text=f"Here is the current summary: '{current_summary}'.\n Is this correct?",
-                buttons=[
-                    {"title": "Validate summary", "payload": "/slot_confirmed"},
-                    {"title": "Edit summary", "payload": "/slot_edited"},
-                    {"title": "Skip", "payload": "/skip"}
-                ]
-            )
-        else:
-            dispatcher.utter_message(
-                text="There is no summary yet. Please type a new summary for your grievance or type 'skip' to proceed without a summary."
-            )
     
 ############################ ALTERNATE PATH - CATEGORY MODIFICATION ############################
 

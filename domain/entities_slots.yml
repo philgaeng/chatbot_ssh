@@ -56,6 +56,12 @@ slots:
 
 #################### location with entity detection  ###################
 
+  user_location_consent:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
   user_municipality_temp:
     type: text
     influence_conversation: true
@@ -151,6 +157,29 @@ slots:
     mappings:
     - type: custom
 
+  user_contact_consent:
+    type: bool
+    influence_conversation: false
+    mappings:
+    - type: custom
+
+  user_contact_email_temp:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+
+  email_validation_required:
+    type: bool
+    influence_conversation: false
+    mappings:
+    - type: custom
+
+  user_contact_email_confirmed:
+    type: bool
+    influence_conversation: false
+    mappings:
+    - type: custom
 
   user_contact_email:
     type: text
@@ -333,6 +362,7 @@ slots:
     type: text
     mappings:
       - type: custom
+
 
 
   combined_grievance:

@@ -8,7 +8,7 @@ intents:
   - goodbye
 
   # generic
-  - agree
+  - affirm
   - deny
   # navigation
   - launch_chatbot
