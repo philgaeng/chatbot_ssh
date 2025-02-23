@@ -691,3 +691,10 @@ nlu:
 #   examples: |
 #     - affirm_location_address
 #     - /affirm_location_address
+
+- intent: contact_phone
+  examples: |
+    - \d{10}(contact_phone)
+    - [9876543210](contact_phone)
+    - [09176399999](contact_phone)
+    - \d{11}(contact_phone)

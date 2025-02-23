@@ -18,10 +18,25 @@ stories:
       - active_loop: null
       - action: location_form
       - active_loop: location_form
+      - slot_was_set:
+          - user_location_consent: true
+          - user_municipality: Birtamod
+          - user_municipality_confirmed: true
+          - user_village: dard
+          - user_address: mollar
+          - user_address_confirmed: true
       - active_loop: null
       - action: contact_form
       - active_loop: contact_form
       - active_loop: null
+      - slot_was_set:
+          - user_contact_consent: true
+          - user_contact_phone
+          - phone_validation_required: true
+      - action: otp_verification_form
+      - active_loop: otp_verification_form
+      - active_loop: null
+      - action: action_submit_grievance
 
 
   # # Step 1.1 repeated version
@@ -37,7 +52,25 @@ stories:
       - active_loop: null
       - action: location_form
       - active_loop: location_form
+      - slot_was_set:
+          - user_location_consent: true
+          - user_municipality: slot_skipped
+          - user_municipality_confirmed: true
+          - user_village: slot_skipped
+          - user_address: slot_skipped
+          - user_address_confirmed: true
       - active_loop: null
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+          - user_contact_consent: true
+          - user_contact_phone
+          - phone_validation_required: true
+      - active_loop: null
+      - action: otp_verification_form
+      - active_loop: otp_verification_form
+      - active_loop: null
+      - action: action_submit_grievance
 
 
 
@@ -59,8 +92,6 @@ stories:
       - action: contact_form
       - active_loop: contact_form
       - active_loop: null
-      - slot_was_set:
-          - phone_validation_required: true
       - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
@@ -76,7 +107,7 @@ stories:
 
   - story: Anonymous with phone number
     steps:
-      - action: action_ask_contact_form_contact_consent
+      - action: action_ask_contact_form_user_contact_consent
       - intent: anonymous_with_phone
       - action: action_collect_phone_for_anonymous
       - active_loop: collect_phone_form

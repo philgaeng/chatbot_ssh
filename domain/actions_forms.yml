@@ -20,9 +20,14 @@ forms:
 
   contact_form:
     required_slots:
+      - user_contact_consent
       - user_full_name
       - user_contact_phone
-      - user_required_email
+      - phone_validation_required
+      - user_contact_email_temp
+      - user_contact_email_confirmed
+      
+
     ignored_intents:
       - nlu_fallback
 
@@ -134,15 +139,16 @@ actions:
  
   
   
-  - action_ask_contact_form_contact_consent
+  - action_ask_contact_form_user_contact_consent
+  - action_ask_contact_form_user_full_name
+  - action_ask_contact_form_user_contact_phone
+  - action_ask_contact_form_phone_validation_required
+  - action_ask_contact_form_user_contact_email_temp
   - action_collect_phone_for_anonymous
-  - utter_ask_address_form_user_address
-  - utter_ask_contact_form_user_full_name
-  - utter_ask_contact_form_user_contact_phone
-  - utter_ask_contact_form_user_contact_email
   - action_custom_fallback
   - action_send_grievance_sms
   - action_check_phone_validation
+  
   - action_recommend_phone_validation
   - action_skip_email
   - action_confirm_email

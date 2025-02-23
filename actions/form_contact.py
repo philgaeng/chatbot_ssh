@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
 
-class AskContactFormContactConsent(Action):
+class AskContactFormUserContactConsent(Action):
     def name(self) -> str:
-        return "action_ask_contact_form_contact_consent"
+        return "action_ask_contact_form_user_contact_consent"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = (
@@ -29,46 +29,80 @@ class AskContactFormContactConsent(Action):
         dispatcher.utter_message(
             text=message,
             buttons=[
-                {"title": "Yes", "payload": "/provide_contact_yes"},
+                {"title": "Yes", "payload": "/affirm"},
                 {"title": "Anonymous with phone", "payload": "/anonymous_with_phone"},
-                {"title": "No contact info", "payload": "/no_contact_provided"},
+                {"title": "No contact info", "payload": "/slot_skipped"},
             ]
         )
         return []
-
-        
     
+class ActionAskContactFormUserFullName(Action):
+    def name(self) -> Text:
+        return "action_ask_contact_form_user_full_name"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text="Please enter your full name. You can skip this if you prefer to remain anonymous.",
+                                 buttons=[
+                                     {"title": "Skip", "payload": "/slot_skipped"}
+                                 ]
+                                 )
+        return []
+    
+class ActionAskContactFormUserContactPhone(Action):
+    def name(self) -> Text:
+        return "action_ask_contact_form_user_contact_phone"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text="Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. \nYou can skip this if you prefer to remain anonymous.",
+                                 buttons=[
+                                     {"title": "Skip", "payload": "/slot_skipped"}
+                                 ]
+                                 )
+        return []
+    
+
+class ActionAskContactFormPhoneValidationRequired(Action):
+    def name(self) -> Text:
+        return "action_ask_contact_form_phone_validation_required"
+
+    async def run(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(
+            text=(
+                "Your grievance is filed without a validated number. Providing a valid number "
+                "will help in the follow-up of the grievance and we recommend it. However, "
+                "you can file the grievance as is."
+            ),
+            buttons=[
+                {"title": "Give Phone Number", "payload": "/affirm"},
+                {"title": "File Grievance as is", "payload": "/deny"}
+            ]
+        )
+        return []
+    
+class ActionAskContactFormUserContactEmailTemp(Action):
+    def name(self) -> Text:
+        return "action_ask_contact_form_user_contact_email_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text="Please enter your contact email. You can skip this if you prefer to remain anonymous.",
+                                 buttons=[
+                                     {"title": "Skip", "payload": "/slot_skipped"}
+                                 ]
+                                 )
+        return []
+    
+
 class ValidateContactForm(BaseFormValidationAction):
     """Form validation action for contact details collection."""
 
     def name(self) -> Text:
         return "validate_contact_form"
 
-    async def required_slots(
-        self,
-        domain_slots: List[Text],
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> List[Text]:
-        print("\n=================== Contact Form Required Slots ===================")
-        # if not domain_slots:
-        # required_slots = ["user_contact_consent"]
-
-        # if tracker.get_slot("user_contact_consent"):
-        #     required_slots = ["user_full_name", "user_contact_phone", "user_contact_email_temp"]
-        
-        # if tracker.get_slot("email_validation_required"):
-        #     required = ["user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
-        
-        # if tracker.get_slot("user_contact_email_confirmed") == False:
-        #     required = ["user_full_name", "user_contact_phone", "user_contact_email_temp"]
-        required_slots = ["user_contact_consent", "user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
-        print(f"Required slots: {required_slots}")
-        return required_slots
     
     async def extract_user_contact_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_slot_extraction(
             "user_contact_consent",
             tracker,
             dispatcher,
@@ -76,74 +110,65 @@ class ValidateContactForm(BaseFormValidationAction):
         )
         
     async def validate_user_contact_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        return {"user_contact_consent": slot_value}
+        print("################ Validate user contact consent ###################")
+        print(f"Received value: {slot_value}")
+        slot_value = slot_value.strip('/')
+        
+        if slot_value == "slot_skipped":
+            return {"user_contact_consent": "slot_skipped",
+                    "user_full_name": "slot_skipped",
+                    "user_contact_phone": "slot_skipped",
+                    "user_contact_email_temp": "slot_skipped",
+                    "user_contact_email_confirmed": "slot_skipped"
+                    }
+        if slot_value == "anonymous_with_phone":
+            return {"user_contact_consent": "anonymous_with_phone",
+                    "user_full_name": "slot_skipped",
+                    "user_contact_phone": None,
+                    "user_contact_email_temp": "slot_skipped",
+                    "user_contact_email_confirmed": "slot_skipped"
+                    }
+        if slot_value == "affirm":
+            return {"user_contact_consent": "affirm",
+                    "user_full_name": None,
+                    "user_contact_phone": None,
+                    "user_contact_email_temp": None,
+                    "user_contact_email_confirmed": None
+                    }
+        
 
     async def extract_user_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        if tracker.get_slot("requested_slot") == "user_full_name":
-            user_response = tracker.latest_message.get("text", "").strip()
-            intent_name = tracker.latest_message.get("intent", {}).get("name")
-            
-            print("############# Extract user full name ##########")
-            print("Requested Slot:", tracker.get_slot("requested_slot"))
-            print("User Response:", user_response)
-
-            if intent_name in ["skip", "skip_user_full_name"]:
-                print("skipping - slot set to slot_kipped")
-                return {"user_full_name": "slot_skipped"}  # Explicitly marking skipped slots
-            
-            # ✅ Ignore button payloads (they start with "/")
-            if user_response.startswith("/"):
-                # dispatcher.utter_message(response="utter_ask_contact_form_user_full_name")
-                print("payload in slot, reset to None")
-                return {"user_full_name": None}  
-            
-            if tracker.get_slot("requested_slot") != "user_full_name":
-                return {}
-
-            return {"user_full_name": user_response if user_response else None}
-        return {}
+        return await self._handle_slot_extraction(
+            "user_full_name",
+            tracker,
+            dispatcher,
+            domain
+        )
     
-    def _validate_user_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    def validate_user_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         print("################ Validate user full name ###################")
-
-        if not slot_value:
+        if "slot_skipped" in slot_value:
+            return {"user_full_name": "slot_skipped"}
+        
+        if not slot_value or slot_value.startswith('/'):
             return {"user_full_name": None}
+
         if len(slot_value)<3:
             dispatcher.utter_message(text="Please enter a valid full name")
             return {"user_full_name": None}
+        
         print("validated", slot_value)
         return {"user_full_name": slot_value}
     
     # ✅ Extract user contact phone
     async def extract_user_contact_phone(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         
-        if tracker.get_slot("requested_slot") == "user_contact_phone":
-            user_response = tracker.latest_message.get("text", "").strip()
-            intent_name = tracker.latest_message.get("intent", {}).get("name")
-            
-            print("############# Extract user contact phone ##########")
-            print("Requested Slot:", tracker.get_slot("requested_slot"))
-            print("User Response:", user_response)
-
-            
-            if intent_name in ['skip', 'skip_contact_phone']:
-                dispatcher.utter_message(response="utter_skip_phone_number")
-                print("skipping - slot set to slot_kipped")
-                return {"user_contact_phone": 'slot_skipped'}
-            
-            # ✅ Ignore button payloads (they start with "/")
-            if user_response.startswith("/"):
-                # dispatcher.utter_message(response="utter_ask_contact_form_user_contact_phone")
-                print("payload in slot, reset to None")
-                return {"user_contact_phone": None}  
-
-            if tracker.get_slot("requested_slot") != "user_contact_phone":
-                return {}
-
-            return {"user_contact_phone": user_response}
-        
-        return {}
-    
+        return await self._handle_slot_extraction(
+            "user_contact_phone",
+            tracker,
+            dispatcher,
+            domain
+        )
     
     async def validate_user_contact_phone(
         self,
@@ -156,28 +181,20 @@ class ValidateContactForm(BaseFormValidationAction):
         print("\n✨ FORM: Validating phone number")
         print(f"Received value: {slot_value}")
 
-        if not slot_value:
-            return {"user_contact_phone": None}
-
-        if slot_value.lower() in ['skip', 'pass']:
+        if "slot_skipped" in slot_value:
             print("⏩ Phone number skipped")
             return {
-                "user_contact_phone": "Skipped",
-                "phone_validation_required": False
+                "user_contact_phone": "slot_skipped"
             }
-
+        if slot_value.startswith("/"):
+            print("payload in slot, reset to None")
+            return {"user_contact_phone": None}  
+        
         # Validate phone number format
         if not self._is_valid_phone(slot_value):
             dispatcher.utter_message(text="Please enter a valid phone number.")
             return {"user_contact_phone": None}
 
-        print("✅ Valid phone number format")
-        dispatcher.utter_message(text="Do you want to provide your email address?",
-                                 buttons=[
-                                     {"title": "Yes", "payload": "/provide_contact_email"},
-                                     {"title": "No", "payload": "/skip_contact_email"}
-                                 ]
-                                 )
         return {
             "user_contact_phone": slot_value,
             "phone_validation_required": True
@@ -189,50 +206,20 @@ class ValidateContactForm(BaseFormValidationAction):
         # For example: must be 10 digits, start with valid prefix, etc.
         return bool(re.match(r'^\d{10}$', phone))
 
-    # def extact_user_required_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-    #     if tracker.get_slot("requested_slot") == "user_required_email":
-    #         user_response = tracker.latest_message.get("text", "").strip()
-    #         intent_name = tracker.latest_message.get("intent", {}).get("name")
+    async def extract_phone_validation_required(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
+        return await self._handle_boolean_slot_extraction(
+            "phone_validation_required",
+            tracker,
+            dispatcher,
+            domain
+        )
 
-    #         print("############# Extract user required email ##########")
-    #         print("Requested Slot:", tracker.get_slot("requested_slot"))
-    #         print("User Response:", user_response)
-
-    #         if intent_name in ['skip', 'skip_contact_email']:
-    #             return {"user_required_email": False}
-            
-    #         if intent_name == "deny":
-    #             return {"user_required_email": False}
-            
-    #         if intent_name == "agree":
-    #             return {"user_required_email": True}
-        
-    #     return {}
-    
-    # def _validate_user_required_email(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-    #     return {"user_required_email": slot_value}
-        
-
-
-    # # ✅ Extract user contact email
-    # async def extract_user_contact_email(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-    #     user_response = tracker.latest_message.get("text", "").strip()
-    #     intent_name = tracker.latest_message.get("intent", {}).get("name")
-
-    #     print("############# Extract user contact email ##########")
-    #     print("Requested Slot:", tracker.get_slot("requested_slot"))
-    #     print("User Response:", user_response)
-
-    #     # Extract and validate email
-    #     extracted_email = self._email_extract_from_text(user_response)
-    #     if not extracted_email:
-    #         return self._email_handle_invalid_format(dispatcher)
-        
-    #     # Validate domain
-    #     if not self._email_is_valid_nepal_domain(extracted_email):
-    #         return self._email_handle_unknown_domain(dispatcher, extracted_email)
-        
-    #     return {"user_contact_email": extracted_email}
+    async def validate_phone_validation_required(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        if slot_value == "true" and tracker.get_slot("user_contact_phone") == "slot_skipped":
+            return {"phone_validation_required": True,
+                    "user_contact_phone": None}
+        else:
+            return {"phone_validation_required": slot_value}
 
 
     def _email_extract_from_text(self, text: str) -> Optional[str]:
@@ -355,23 +342,23 @@ class ValidateContactForm(BaseFormValidationAction):
                     }
 
 
-class ActionCheckPhoneValidation(Action):
-    def name(self) -> Text:
-        return "action_check_phone_validation"
+# class ActionCheckPhoneValidation(Action):
+#     def name(self) -> Text:
+#         return "action_check_phone_validation"
 
-    async def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        phone_number = tracker.get_slot("user_contact_phone")
+#     async def run(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+#     ) -> List[Dict[Text, Any]]:
+#         phone_number = tracker.get_slot("user_contact_phone")
         
-        if phone_number and phone_number != "Skipped":
-            return [SlotSet("phone_validation_required", True)]
-        else:
-            return [SlotSet("phone_validation_required", False)]
+#         if phone_number and phone_number != "Skipped":
+#             return [SlotSet("phone_validation_required", True)]
+#         else:
+#             return [SlotSet("phone_validation_required", False)]
 
-class ActionRecommendPhoneValidation(Action):
+class ActionAskContactFormPhoneValidationRequired(Action):
     def name(self) -> Text:
-        return "action_recommend_phone_validation"
+        return "action_ask_contact_form_phone_validation_required"
 
     async def run(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]

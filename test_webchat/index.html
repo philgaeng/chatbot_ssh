@@ -213,7 +213,7 @@
         // Generate a unique session ID for the user
         const sessionId = "user-" + Math.random().toString(36).substr(2, 9);
         // Connect to RASA server
-        const socket = io('http://18.143.139.64:5005', { // ✅ NEW (Direct to Rasa)
+        const socket = io('http://47.129.143.102:5005', { // ✅ NEW (Direct to Rasa)
             path: "/socket.io/",
             transports: ["websocket"],
             query: { session_id: sessionId },  // Pass session ID

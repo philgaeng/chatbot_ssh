@@ -8,10 +8,10 @@ entities:
   - village
   - address
   - otp
-  - user_contact_phone
+  - contact_phone
   - first_name
   - last_name
-  - user_contact_email
+  - contact_email
   - grievance_category
   - category
 
