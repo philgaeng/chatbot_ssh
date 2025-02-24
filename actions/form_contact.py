@@ -147,17 +147,20 @@ class ValidateContactForm(BaseFormValidationAction):
     
     def validate_user_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         print("################ Validate user full name ###################")
+        print(f"Validating value: {slot_value}")
         if "slot_skipped" in slot_value:
+            print("full name skipped")
             return {"user_full_name": "slot_skipped"}
         
         if not slot_value or slot_value.startswith('/'):
+            print("validation rejected")
             return {"user_full_name": None}
 
         if len(slot_value)<3:
             dispatcher.utter_message(text="Please enter a valid full name")
             return {"user_full_name": None}
         
-        print("validated", slot_value)
+        print("validated :", slot_value)
         return {"user_full_name": slot_value}
     
     # ✅ Extract user contact phone
@@ -178,7 +181,7 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate phone number and set validation requirement."""
-        print("\n✨ FORM: Validating phone number")
+        print("################ Validate user contact phone ###################")
         print(f"Received value: {slot_value}")
 
         if "slot_skipped" in slot_value:
@@ -195,6 +198,7 @@ class ValidateContactForm(BaseFormValidationAction):
             dispatcher.utter_message(text="Please enter a valid phone number.")
             return {"user_contact_phone": None}
 
+        print("validated :", slot_value)
         return {
             "user_contact_phone": slot_value,
             "phone_validation_required": True
@@ -269,7 +273,7 @@ class ValidateContactForm(BaseFormValidationAction):
         return bool(re.match(pattern, email))
 
     async def extract_user_contact_email_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_slot_extraction(
             "user_contact_email_temp",
             tracker,
             dispatcher,
@@ -283,10 +287,10 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        if not slot_value:
-            return {"user_contact_email_temp": None}
-                # Extract and validate email
+        print("################ Validate user contact email temp ###################")
+
         extracted_email = self._email_extract_from_text(slot_value)
+        print(f"Extracted email: {extracted_email}")
         if not extracted_email:
             dispatcher.utter_message(
             text=(
@@ -317,11 +321,11 @@ class ValidateContactForm(BaseFormValidationAction):
                 ]
             )
             # Keep the email in slot but deactivate form while waiting for user choice
-            return {"user_contact_email_temp": extracted_email,
-                    "email_validation_required": True}
-
+            return {"user_contact_email_temp": extracted_email}
+        print("email is valid")
         # If all validations pass
-        return {"user_contact_email_temp": extracted_email}
+        return {"user_contact_email_temp": extracted_email,
+                "user_contact_email_confirmed": True}
     
     async def extract_user_contact_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -331,7 +335,8 @@ class ValidateContactForm(BaseFormValidationAction):
             domain
         )
     async def validate_user_contact_email_confirmed(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        if slot_value == "true":
+        print("################ Validate user contact email confirmed ###################")
+        if slot_value:
             return {"user_contact_email": tracker.get_slot("user_contact_email_temp"),
                     "user_contact_email_confirmed": True}
         else:

@@ -229,7 +229,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         custom_action: Callable = None
     ) -> Dict[Text, Any]:
         """Helper method for slot extraction logic."""
-        print(f"\n########### SLOT EXTRACTION START - {slot_name} ###########")
+        print(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
         print(f"Requested slot: {tracker.get_slot('requested_slot')}")
         
         
@@ -308,8 +308,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         Returns:
             Dict[Text, Any]: Slot updates
         """
-        print("\n########### _handle_boolean_slot_extraction START ###########")
-        print(f"Slot name: {slot_name}")
+        print(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
         print(f"Requested slot: {tracker.get_slot('requested_slot')}")
         if tracker.get_slot("requested_slot") == slot_name:
             latest_message = tracker.latest_message

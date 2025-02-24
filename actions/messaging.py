@@ -438,11 +438,7 @@ class OTPSMSActions:
         return self._generate_and_send_otp(dispatcher, tracker, is_resend=True)
 
 
-class ValidateOTPVerificationForm(FormValidationAction, OTPSMSActions):
-    """Form validation action for OTP verification."""
-    
-    def name(self) -> Text:
-        return "validate_otp_verification_form"
+
 
 
 class ActionSendGrievanceSMS(Action):

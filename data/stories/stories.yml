@@ -20,10 +20,10 @@ stories:
       - active_loop: location_form
       - slot_was_set:
           - user_location_consent: true
-          - user_municipality: Birtamod
+          - user_municipality
           - user_municipality_confirmed: true
-          - user_village: dard
-          - user_address: mollar
+          - user_village
+          - user_address
           - user_address_confirmed: true
       - active_loop: null
       - action: contact_form

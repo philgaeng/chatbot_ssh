@@ -88,6 +88,7 @@ actions:
   - action_handle_skip
   - action_handle_mood_great
   - action_respond_to_challenge
+  - action_default_fallback
 
 #######   location actions   ###########################################
 

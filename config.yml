@@ -15,12 +15,14 @@ pipeline:
     constrain_similarities: true
   - name: EntitySynonymMapper
   - name: FallbackClassifier
-    threshold: 0.4
+    threshold: 0.2
     ambiguity_threshold: 0.2
 
 policies:
   - name: MemoizationPolicy
     max_history: 6
+  - name: AugmentedMemoizationPolicy
+    max_history: 8
   - name: TEDPolicy
     max_history: 8
     epochs: 100

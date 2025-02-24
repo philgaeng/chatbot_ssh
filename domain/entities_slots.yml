@@ -169,11 +169,6 @@ slots:
     mappings:
     - type: custom
 
-  email_validation_required:
-    type: bool
-    influence_conversation: false
-    mappings:
-    - type: custom
 
   user_contact_email_confirmed:
     type: bool
@@ -187,11 +182,7 @@ slots:
     mappings:
     - type: custom
 
-  user_required_email:
-    type: bool
-    influence_conversation: false
-    mappings:
-      - type: custom
+
 
   user_full_name:
     type: text
