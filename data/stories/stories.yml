@@ -31,7 +31,6 @@ stories:
       - active_loop: null
       - slot_was_set:
           - user_contact_consent: true
-          - user_contact_phone
           - phone_validation_required: true
       - action: otp_verification_form
       - active_loop: otp_verification_form
@@ -64,7 +63,6 @@ stories:
       - active_loop: contact_form
       - slot_was_set:
           - user_contact_consent: true
-          - user_contact_phone
           - phone_validation_required: true
       - active_loop: null
       - action: otp_verification_form

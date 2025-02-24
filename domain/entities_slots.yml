@@ -43,12 +43,13 @@ slots:
     mappings:
       - type: custom
   
-  verification_context:
+  main_story:
     type: categorical
     values:
-      - retrieval
+      - status_update
       - new_user
-      - modify
+      - modify_grievance
+      - modify_contact
     influence_conversation: true
     mappings:
       - type: custom
@@ -209,20 +210,23 @@ slots:
     mappings:
       - type: custom
 
-  otp_verified:
-    type: bool
+  otp_status:
+    type: categorical
+    values:
+      - verified
+      - invalid_otp
+      - resend
+      - slot_skipped
     mappings:
       - type: custom
-    initial_value: false
-    influence_conversation: true
+
 
   otp_input:
     type: text
     influence_conversation: true
     mappings:
-      - type: from_text
-        conditions:
-          - active_loop: otp_verification_form
+      - type: custom
+
 
   otp_resend_count:
     type: float

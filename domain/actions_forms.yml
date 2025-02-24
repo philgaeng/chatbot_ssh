@@ -26,8 +26,6 @@ forms:
       - phone_validation_required
       - user_contact_email_temp
       - user_contact_email_confirmed
-      
-
     ignored_intents:
       - nlu_fallback
 
@@ -39,17 +37,19 @@ forms:
     required_slots:
       - grievance_summary
 
-  phone_validation_form:
-    required_slots:
-      - user_contact_phone
-    ignored_intents:
-      - agree
-      - deny
-      - nlu_fallback
+  # phone_validation_form:
+  #   required_slots:
+  #     - user_contact_phone
+  #   ignored_intents:
+  #     - agree
+  #     - deny
+  #     - nlu_fallback
 
   otp_verification_form:
     required_slots:
+      - otp_number
       - otp_input
+      - otp_status
 
   grievance_id_form:
     required_slots:
@@ -89,6 +89,7 @@ actions:
   - action_handle_mood_great
   - action_respond_to_challenge
   - action_default_fallback
+  - action_custom_fallback
 
 #######   location actions   ###########################################
 
@@ -145,8 +146,11 @@ actions:
   - action_ask_contact_form_user_contact_phone
   - action_ask_contact_form_phone_validation_required
   - action_ask_contact_form_user_contact_email_temp
+  - validate_contact_form
+
+  ########## contact legacy actions ##########
   - action_collect_phone_for_anonymous
-  - action_custom_fallback
+
   - action_send_grievance_sms
   - action_check_phone_validation
   
@@ -157,7 +161,9 @@ actions:
   - action_modify_contact_info
   - action_modify_email
   - action_cancel_modification_contact
-  - validate_contact_form
+
+  ########## otp actions ##########
+  - action_ask_otp_verification_otp_input
   - validate_otp_verification_form
   
   ########## check status actions ##########

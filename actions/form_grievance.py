@@ -78,7 +78,7 @@ class ActionStartGrievanceProcess(Action):
                 SlotSet("grievance_summary", None),
                 SlotSet("grievance_list_cat", None),
                 SlotSet("grievance_list_cat_confirmed", None),
-                SlotSet("verification_context", "new_user")]
+                SlotSet("main_story", "new_grievance")]
 
     
 class ActionCallOpenAI(Action):

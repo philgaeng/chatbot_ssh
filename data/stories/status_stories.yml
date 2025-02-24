@@ -11,13 +11,13 @@ stories:
       - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
-          - verification_context: "retrieval"
+            - main_story: "status_update"
       - action: action_choose_retrieval_method
       - intent: retrieve_with_phone
       - active_loop: otp_verification_form
       - active_loop: null
       - slot_was_set:
-          - otp_verified: true
+          - main_story: "status_update"
       - action: action_display_grievance
       - intent: check_status
       - action: action_check_status
@@ -29,7 +29,7 @@ stories:
       - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
-          - verification_context: "retrieval"
+          - main_story: "status_update"
       - action: action_choose_retrieval_method
       - intent: retrieve_grievance_with_id
       - action: grievance_id_form
@@ -51,13 +51,13 @@ stories:
       - action: action_session_start
       - intent: start_check_status
       - slot_was_set:
-          - verification_context: "retrieval"
+          - main_story: "status_update"
       - action: action_choose_retrieval_method
       - intent: retrieve_with_phone
       - active_loop: otp_verification_form
       - active_loop: null
       - slot_was_set:
-          - otp_verified: true
+          - main_story: "status_update"
       - action: action_display_grievance
       - intent: check_status
       - action: action_check_status

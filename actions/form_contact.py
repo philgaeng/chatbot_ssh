@@ -199,6 +199,10 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"user_contact_phone": None}
 
         print("validated :", slot_value)
+        
+        if re.match(r'^09\d{9}$', slot_value) or re.match(r'^639\d{8}$', slot_value):
+            dispatcher.utter_message(text="You entered a PH number for validation.")
+            slot_value = slot_value.replace('09', '+639') if slot_value.startswith('09') else slot_value.replace('639', '+639') if slot_value.startswith('639') else slot_value
         return {
             "user_contact_phone": slot_value,
             "phone_validation_required": True
@@ -207,8 +211,14 @@ class ValidateContactForm(BaseFormValidationAction):
     def _is_valid_phone(self, phone: str) -> bool:
         """Check if the phone number is valid."""
         # Add your phone validation logic here
-        # For example: must be 10 digits, start with valid prefix, etc.
-        return bool(re.match(r'^\d{10}$', phone))
+        #Nepalese logic
+        # 1. Must be 10 digits and start with 9
+        if re.match(r'^9\d{9}$', phone):
+            return True
+        #Matching PH number format for testing
+        if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
+            return True
+        return False
 
     async def extract_phone_validation_required(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -361,89 +371,89 @@ class ValidateContactForm(BaseFormValidationAction):
 #         else:
 #             return [SlotSet("phone_validation_required", False)]
 
-class ActionAskContactFormPhoneValidationRequired(Action):
-    def name(self) -> Text:
-        return "action_ask_contact_form_phone_validation_required"
+# class ActionAskContactFormPhoneValidationRequired(Action):
+#     def name(self) -> Text:
+#         return "action_ask_contact_form_phone_validation_required"
 
-    async def run(
-        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(
-            text=(
-                "Your grievance is filed without a validated number. Providing a valid number "
-                "will help in the follow-up of the grievance and we recommend it. However, "
-                "you can file the grievance as is."
-            ),
-            buttons=[
-                {"title": "Give Phone Number", "payload": "/provide_phone_number"},
-                {"title": "File Grievance as is", "payload": "/file_without_validation"}
-            ]
-        )
-        return []
+#     async def run(
+#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+#     ) -> List[Dict[Text, Any]]:
+#         dispatcher.utter_message(
+#             text=(
+#                 "Your grievance is filed without a validated number. Providing a valid number "
+#                 "will help in the follow-up of the grievance and we recommend it. However, "
+#                 "you can file the grievance as is."
+#             ),
+#             buttons=[
+#                 {"title": "Give Phone Number", "payload": "/provide_phone_number"},
+#                 {"title": "File Grievance as is", "payload": "/file_without_validation"}
+#             ]
+#         )
+#         return []
 
-class PhoneValidationForm(FormValidationAction):
-    def name(self) -> Text:
-        return "validate_phone_validation_form"
+# class PhoneValidationForm(FormValidationAction):
+#     def name(self) -> Text:
+#         return "validate_phone_validation_form"
 
-    @staticmethod
-    def required_slots(tracker: Tracker) -> List[Text]:
-        return ["user_contact_phone"]
+#     @staticmethod
+#     def required_slots(tracker: Tracker) -> List[Text]:
+#         return ["user_contact_phone"]
 
-    async def validate_user_contact_phone(
-        self,
-        slot_value: Text,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> Dict[Text, Any]:
-        if re.match(r'^\+?63\d{10}$', slot_value):
-            return {"user_contact_phone": slot_value}
-        else:
-            dispatcher.utter_message(text="Please enter a valid Philippine phone number.")
-            return {"user_contact_phone": None}
+#     async def validate_user_contact_phone(
+#         self,
+#         slot_value: Text,
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any],
+#     ) -> Dict[Text, Any]:
+#         if re.match(r'^\+?63\d{10}$', slot_value):
+#             return {"user_contact_phone": slot_value}
+#         else:
+#             dispatcher.utter_message(text="Please enter a valid Philippine phone number.")
+#             return {"user_contact_phone": None}
 
-class ActionSkipEmail(Action):
-    def name(self) -> Text:
-        return "action_skip_email"
+# class ActionSkipEmail(Action):
+#     def name(self) -> Text:
+#         return "action_skip_email"
 
-    async def run(
-        self, 
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        return [SlotSet("user_contact_email", "slot_skipped")]
+#     async def run(
+#         self, 
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any]
+#     ) -> List[Dict[Text, Any]]:
+#         return [SlotSet("user_contact_email", "slot_skipped")]
 
-class ActionConfirmEmail(Action):
-    def name(self) -> Text:
-        return "action_confirm_email"
+# class ActionConfirmEmail(Action):
+#     def name(self) -> Text:
+#         return "action_confirm_email"
 
-    async def run(
-        self, 
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        contact_modification_mode = tracker.get_slot("contact_modification_mode")
-        if contact_modification_mode:
-            dispatcher.utter_message(text="✅ Email updated successfully!")
-            return [SlotSet("contact_modification_mode", False)]
-        return [ActiveLoop("contact_form")]
+#     async def run(
+#         self, 
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any]
+#     ) -> List[Dict[Text, Any]]:
+#         contact_modification_mode = tracker.get_slot("contact_modification_mode")
+#         if contact_modification_mode:
+#             dispatcher.utter_message(text="✅ Email updated successfully!")
+#             return [SlotSet("contact_modification_mode", False)]
+#         return [ActiveLoop("contact_form")]
 
-class ActionProvideNewEmail(Action):
-    def name(self) -> Text:
-        return "action_provide_new_email"
+# class ActionProvideNewEmail(Action):
+#     def name(self) -> Text:
+#         return "action_provide_new_email"
 
-    async def run(
-        self, 
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any]
-    ) -> List[Dict[Text, Any]]:
-        return [
-            SlotSet("user_contact_email", None),
-            ActiveLoop("contact_form")
-        ]
+#     async def run(
+#         self, 
+#         dispatcher: CollectingDispatcher,
+#         tracker: Tracker,
+#         domain: Dict[Text, Any]
+#     ) -> List[Dict[Text, Any]]:
+#         return [
+#             SlotSet("user_contact_email", None),
+#             ActiveLoop("contact_form")
+#         ]
 
 class ActionModifyContactInfo(Action):
     def name(self) -> Text:
