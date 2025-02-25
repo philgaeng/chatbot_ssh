@@ -249,13 +249,6 @@ slots:
     mappings:
       - type: custom
 
-  detailed_grievance_completed:
-    type: bool
-    influence_conversation: false
-    mappings:
-      - type: from_intent
-        intent: agree
-        value: true
 
   skip_count:
     type: float
@@ -307,9 +300,7 @@ slots:
     type: text
     influence_conversation: false
     mappings:
-      - type: from_text
-        conditions:
-          - active_loop: edit_summary_form  # Only accept user input when this form is active
+      - type: custom # Only accept user input when this form is active
   
   grievance_date:
     type: text

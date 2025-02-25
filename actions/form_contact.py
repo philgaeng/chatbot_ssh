@@ -93,9 +93,28 @@ class ActionAskContactFormUserContactEmailTemp(Action):
                                  )
         return []
     
+class ActionAskContactFormUserContactEmailConfirmed(Action):
+    def name(self) -> Text:
+        return "action_ask_contact_form_user_contact_email_confirmed"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        domain_name = tracker.get_slot("user_contact_email_temp").split('@')[1]
+        dispatcher.utter_message(
+                text=f"⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
+                buttons=[
+                    {"title": "Confirm Email", "payload": f"/slot_confirmed"},
+                    {"title": "Try Different Email", "payload": "/slot_edited"},
+                    {"title": "Skip Email", "payload": "/slot_skipped"}
+            ]
+        )
+        return []
 
+    
 class ValidateContactForm(BaseFormValidationAction):
     """Form validation action for contact details collection."""
+    
+    def __init__(self):
+        super().__init__()
 
     def name(self) -> Text:
         return "validate_contact_form"
@@ -229,11 +248,12 @@ class ValidateContactForm(BaseFormValidationAction):
         )
 
     async def validate_phone_validation_required(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        if slot_value == "true" and tracker.get_slot("user_contact_phone") == "slot_skipped":
-            return {"phone_validation_required": True,
+        if slot_value and tracker.get_slot("user_contact_phone") == "slot_skipped":
+            print("Reset phone number to None - expected next slot to be user_contact_phone")
+            return {"phone_validation_required": None,
                     "user_contact_phone": None}
         else:
-            return {"phone_validation_required": slot_value}
+            return {"phone_validation_required": False}
 
 
     def _email_extract_from_text(self, text: str) -> Optional[str]:
@@ -245,37 +265,6 @@ class ValidateContactForm(BaseFormValidationAction):
         email_domain = email.split('@')[1].lower()
         return email_domain in EMAIL_PROVIDERS_NEPAL_LIST or email_domain.endswith('.com.np')
 
-    def _email_handle_invalid_format(self, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
-        dispatcher.utter_message(
-            text=(
-                "⚠️ I couldn't find a valid email address in your message.\n"
-                "A valid email should be in the format: **username@domain.com**."
-            ),
-            buttons=[
-                {"title": "Retry", "payload": "/provide_contact_email"},
-                {"title": "Skip Email", "payload": "/skip_contact_email"},
-            ]
-        )
-        return {"user_contact_email_temp": None}
-
-    def _email_handle_unknown_domain(self, dispatcher: CollectingDispatcher, email: str) -> Dict[str, Any]:
-        email_domain = email.split('@')[1].lower()
-        dispatcher.utter_message(
-            text=(
-                f"⚠️ The email domain '{email_domain}' is not recognized as a common Nepali email provider.\n"
-                "Please confirm if this is correct or try again with a different email."
-            ),
-            buttons=[
-                {"title": "Confirm Email", "payload": f"/confirm_email{{{email}}}"},
-                {"title": "Try Different Email", "payload": "/provide_contact_email"},
-                {"title": "Skip Email", "payload": "/skip_contact_email"},
-            ]
-        )
-        return {"user_contact_email_temp": None}
-
-
-    
-    
     # ✅ Validate user contact email
     def _email_is_valid_format(self, email: Text) -> bool:
         """Check if email follows basic format requirements."""
@@ -298,7 +287,9 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         print("################ Validate user contact email temp ###################")
-
+        if slot_value == "slot_skipped":
+            return {"user_contact_email_temp": "slot_skipped"}
+        
         extracted_email = self._email_extract_from_text(slot_value)
         print(f"Extracted email: {extracted_email}")
         if not extracted_email:
@@ -306,11 +297,7 @@ class ValidateContactForm(BaseFormValidationAction):
             text=(
                 "⚠️ I couldn't find a valid email address in your message.\n"
                 "A valid email should be in the format: **username@domain.com**."
-            ),
-            buttons=[
-                {"title": "Retry", "payload": "/provide_contact_email"},
-                {"title": "Skip Email", "payload": "/skip_contact_email"},
-            ]
+            )
             )
             return {"user_contact_email_temp": None}
         
@@ -321,40 +308,49 @@ class ValidateContactForm(BaseFormValidationAction):
 
         # Check for Nepali email domain using existing method
         if not self._email_is_valid_nepal_domain(extracted_email):
-            domain = slot_value.split('@')[1]
-            dispatcher.utter_message(
-                text=f"⚠️ The email domain '{domain}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
-                buttons=[
-                    {"title": "Confirm Email", "payload": f"/slot_confirmed"},
-                    {"title": "Try Different Email", "payload": "/slot_edited"},
-                    {"title": "Skip Email", "payload": "/slot_skipped"}
-                ]
-            )
+            print("user validation required")
             # Keep the email in slot but deactivate form while waiting for user choice
-            return {"user_contact_email_temp": extracted_email}
+            return {"user_contact_email_temp": extracted_email,
+                    "user_contact_email_confirmed": None}
+            
         print("email is valid")
         # If all validations pass
         return {"user_contact_email_temp": extracted_email,
-                "user_contact_email_confirmed": True}
+                "user_contact_email_confirmed": True,
+                "user_contact_email": extracted_email}
     
     async def extract_user_contact_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_slot_extraction(
             "user_contact_email_confirmed",
             tracker,
             dispatcher,
             domain
         )
     async def validate_user_contact_email_confirmed(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        """Validate the user's confirmation of their email address.
+        
+        This function handles three possible responses:
+        - slot_skipped: User chose to skip providing an email
+        - slot_confirmed: User confirmed their non-Nepali email domain is correct
+        - slot_edited: User wants to edit their email and try again
+        
+        Args:
+            slot_value: The value received from the user's response
+            dispatcher: The dispatcher used to send messages to the user
+            tracker: The conversation tracker
+            domain: The bot's domain configuration
+            
+        Returns:
+            Dict containing updates to the relevant email slots based on user's choice
+        """
         print("################ Validate user contact email confirmed ###################")
-        if slot_value:
-            return {"user_contact_email": tracker.get_slot("user_contact_email_temp"),
-                    "user_contact_email_confirmed": True}
-        else:
-            #reset the slots to restart the loop
-            return {
-                    "user_contact_email_temp" : None,
-                    "user_contact_email_confirmed" : None
-                    }
+        if slot_value == "slot_skipped":
+            return {"user_contact_email_confirmed": "slot_skipped"}
+        if slot_value == "slot_confirmed":
+            return {"user_contact_email_confirmed": True}
+        if slot_value == "slot_edited":
+            return {"user_contact_email_temp": None,
+                    "user_contact_email_confirmed": None}
 
 
 # class ActionCheckPhoneValidation(Action):

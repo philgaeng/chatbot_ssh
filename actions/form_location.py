@@ -118,7 +118,15 @@ class ValidateLocationForm(BaseFormValidationAction):
         if slot_value is True:
             return {"user_location_consent": True}
         elif slot_value is False:
-            return {"user_location_consent": False}
+            return {"user_location_consent": False,
+                    "user_municipality_temp": "slot_skipped",
+                    "user_municipality": "slot_skipped",
+                    "user_municipality_confirmed": False,
+                    "user_village": "slot_skipped",
+                    "user_address_temp": "slot_skipped",
+                    "user_address": "slot_skipped",
+                    "user_address_confirmed": False}
+            
         return {"user_location_consent": None}
     
     async def extract_user_municipality_temp(
@@ -144,6 +152,11 @@ class ValidateLocationForm(BaseFormValidationAction):
         print("######## FORM: Validating municipality_temp ######")
         print(f"Received value: {slot_value}")
         
+        #deal with the slot_skipped case
+        if slot_value == "slot_skipped":
+            return {"user_municipality_temp": "slot_skipped",
+                    "user_municipality": "slot_skipped",
+                    "user_municipality_confirmed": False}
         
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
@@ -177,8 +190,7 @@ class ValidateLocationForm(BaseFormValidationAction):
             "user_municipality_confirmed",
             tracker,
             dispatcher,
-            domain,
-            skip_value=True  # When skipped, assume confirmed
+            domain  # When skipped, assume confirmed
         )
     
     async def validate_user_municipality_confirmed(
@@ -215,8 +227,7 @@ class ValidateLocationForm(BaseFormValidationAction):
             "user_village",
             tracker,
             dispatcher,
-            domain,
-            skip_value=True  # When skipped, assume confirmed
+            domain# When skipped, assume confirmed
         )
     
     async def validate_user_village(

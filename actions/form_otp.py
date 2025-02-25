@@ -14,13 +14,16 @@ from random import randint
 logger = logging.getLogger(__name__)
 
 
-
-class ActionAskOTPVerificationOtpInput(Action):
+    
+class ActionAskOtpVerificationOtpInput(Action):
     def __init__(self):
         self.sms_client = SMSClient()
 
     def name(self) -> Text:
-        return "action_ask_otp_verification_otp_input"
+        return "action_ask_otp_verification_form_otp_input"
+
+    def _generate_otp(self):
+        return ''.join([str(randint(0, 9)) for _ in range(6)])
     
     async def run(
         self,
@@ -29,7 +32,7 @@ class ActionAskOTPVerificationOtpInput(Action):
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
         print("\n=================== Asking for OTP Input ===================")
-        otp = tracker.get_slot("otp_number")
+        otp_number = tracker.get_slot("otp_number")
         phone_number = tracker.get_slot("user_contact_phone")
         otp_status = tracker.get_slot("otp_status")
         resend_count = tracker.get_slot("otp_resend_count") or 0
@@ -37,26 +40,31 @@ class ActionAskOTPVerificationOtpInput(Action):
             {"title": "Resend", "payload": "/resend"},
             {"title": "Skip", "payload": "/skip"}
         ]
-        
-        cond_generate_otp = otp and (not otp_status or otp_status == "resend" and resend_count < 3)
-        if cond_generate_otp:  # OTP already generated
+        #deal with the case where the OTP needs to be generated = first send or resend
+        if not otp_status or otp_status == "resend" and resend_count < 3 :
+        # OTP already generated
+            otp_number = self._generate_otp()
             message_sms = (
-                f"Your verification code is {otp}. "
+                f"Your verification code is {otp_number}. "
                 "Please enter this code to verify your phone number."
             )
-            message_bot = f"Please enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number."
+            message_bot = f"-------- OTP verification ongoing --------\nPlease enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number."
             if otp_status == "resend":
                 message_bot = message_bot + f"This is your {resend_count + 1} attempt. You have {3 - resend_count} attempts left."
-            if self.sms_client.send_sms(phone_number, message_sms):
+            
+            try:
+                self.sms_client.send_sms(phone_number, message_sms)
                 print("✅ SMS sent successfully")
                 dispatcher.utter_message(
                     text= message_bot,
                     buttons=buttons_otp
                 )
-            else:
+                
+            except Exception as e:
+                print(f"❌ Error sending SMS: {e}")
                 dispatcher.utter_message(text="❌ Sorry, we couldn't send the verification code.")
         
-        if otp and otp_status == "resend" and resend_count >= 3:
+        if otp_status == "resend" and resend_count >= 3:
             dispatcher.utter_message(text="❌ Maximum resend attempts reached. Please try again later or skip verification.",
                                      buttons = buttons_otp)
             
@@ -77,21 +85,37 @@ class ActionAskOTPVerificationOtpInput(Action):
             # )
             # TODO: Add corresponding story paths and rules for each option
 
-        if otp and otp_status in ["invalid_format", "invalid_otp"]:
+        if otp_status in ["invalid_format", "invalid_otp"]:
             dispatcher.utter_message(text="❌ Invalid code. Please try again or type 'resend' to get a new code.",
                                      buttons = buttons_otp)
                 
-        if otp and otp_status == "slot_skipped":
+        if otp_status == "slot_skipped":
             dispatcher.utter_message(text="Continuing without phone verification. Your grievance details will not be sent via SMS.")
             
 
-        return []
+        return [SlotSet("otp_number", otp_number), SlotSet("otp_resend_count", resend_count)]
     
 
-class ValidateOTPVerificationForm(FormValidationAction):
+class ValidateOTPVerificationForm(BaseFormValidationAction):
+    
+    def __init__(self):
+        super().__init__()
 
     def name(self) -> Text:
         return "validate_otp_verification_form"
+
+    async def required_slots(
+        self,
+        domain_slots: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Text]:
+        print("######################### REQUIRED SLOTS ##############")
+        print(f"required_slots : {domain_slots}")
+        print(f"reqested_slot : {tracker.get_slot('requested_slot')}")
+        
+        return ["otp_input", "otp_status"]
     
     async def extract_otp_input(
         self,
@@ -99,26 +123,12 @@ class ValidateOTPVerificationForm(FormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-
         return await self._handle_slot_extraction(
             "otp_input",
             tracker,
             dispatcher,
             domain
         )
-    async def validate_otp_number(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        print("\n=================== Generating OTP ===================")
-        if tracker.get_slot("requested_slot") == "otp_number":
-            otp_number = ''.join([str(randint(0, 9)) for _ in range(6)])
-            print(f"Generated OTP: {otp_number}")
-            return {"otp_number": otp_number}
-        return {}
 
     async def validate_otp_input(
         self,
@@ -133,6 +143,7 @@ class ValidateOTPVerificationForm(FormValidationAction):
         slot_value = slot_value.strip("/").lower()
         if "resend" in slot_value:
             print("🔄 Resend OTP requested")
+            #regenerate OTP
             return {"otp_input": None, 
                     "otp_status" : "resend",
                     "otp_resend_count" : tracker.get_slot("otp_resend_count") or 0}
@@ -157,6 +168,7 @@ class ValidateOTPVerificationForm(FormValidationAction):
         
         if self._is_matching_otp(slot_value, expected_otp):
             print("✅ OTP matched successfully")
+            dispatcher.utter_message(text="✅ OTP verified successfully")
             return {"otp_input": slot_value,
                     "otp_status" : "verified",
                     "otp_resend_count" : 0}

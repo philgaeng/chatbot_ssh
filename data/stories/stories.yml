@@ -15,6 +15,10 @@ stories:
       - active_loop: null
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
+      - slot_was_set:
+          - grievance_list_cat_confirmed
+          - grievance_summary_temp
+          - grievance_summary_confirmed
       - active_loop: null
       - action: location_form
       - active_loop: location_form
@@ -28,10 +32,10 @@ stories:
       - active_loop: null
       - action: contact_form
       - active_loop: contact_form
-      - active_loop: null
       - slot_was_set:
           - user_contact_consent: true
           - phone_validation_required: true
+      - active_loop: null
       - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
@@ -48,6 +52,10 @@ stories:
       - active_loop: null
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
+      - slot_was_set:
+          - grievance_list_cat_confirmed
+          - grievance_summary_temp
+          - grievance_summary_confirmed
       - active_loop: null
       - action: location_form
       - active_loop: location_form
@@ -97,22 +105,22 @@ stories:
 
 
 
-  - story: User chooses to file without phone validation
-    steps:
-      - action: action_recommend_phone_validation
-      - intent: file_without_validation
-      - action: action_submit_grievance_as_is
+  # - story: User chooses to file without phone validation
+  #   steps:
+  #     - action: action_recommend_phone_validation
+  #     - intent: file_without_validation
+  #     - action: action_submit_grievance_as_is
 
-  - story: Anonymous with phone number
-    steps:
-      - action: action_ask_contact_form_user_contact_consent
-      - intent: anonymous_with_phone
-      - action: action_collect_phone_for_anonymous
-      - active_loop: collect_phone_form
-      # - slot_was_set:
-      #     - user_contact_phone 
-      - active_loop: null
-      - action: action_submit_grievance
+  # - story: Anonymous with phone number
+  #   steps:
+  #     - action: action_ask_contact_form_user_contact_consent
+  #     - intent: anonymous_with_phone
+  #     - action: action_collect_phone_for_anonymous
+  #     - active_loop: collect_phone_form
+  #     # - slot_was_set:
+  #     #     - user_contact_phone 
+  #     - active_loop: null
+  #     - action: action_submit_grievance
 
   # - story: File anonymously without contact
   #   steps:

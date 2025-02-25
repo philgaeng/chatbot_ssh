@@ -80,7 +80,7 @@ GRIEVANCE_STATUS = {
 # Email Templates
 EMAIL_TEMPLATES = {
     "GRIEVANCE_RECAP_SUBJECT": "Grievance Submission Recap - ID: {grievance_id}",
-    "GRIEVANCE_RECAP_BODY": """
+    "GRIEVANCE_RECAP_USER_BODY": """
         <h2>Grievance Submission Recap</h2>
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
         <p><strong>Submitted by:</strong> {user_name}</p>
@@ -105,7 +105,7 @@ EMAIL_TEMPLATES = {
         <p>Phone: {phone}</p>
         <p>Email: {email}</p>
     """,
-    "SYSTEM_NOTIFICATION_BODY": """
+    "GRIEVANCE_RECAP_ADMIN_BODY": """
         New grievance submission received.
         Status: {grievance_status}
 

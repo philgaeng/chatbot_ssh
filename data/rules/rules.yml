@@ -44,9 +44,11 @@ rules:
       - active_loop: null
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
-      - active_loop: null
       - slot_was_set:
-        - user_location_consent: null
+        - grievance_list_cat_confirmed
+        - grievance_summary_temp
+        - grievance_summary_confirmed
+      - active_loop: null
       - action: location_form
       - active_loop: location_form
       - active_loop: null
@@ -54,7 +56,11 @@ rules:
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: true
+        - user_full_name
         - phone_validation_required: true
+        - user_contact_phone
+        - user_contact_email_temp
+        - user_contact_email_confirmed
       - active_loop: null
       - action: otp_verification_form
       - active_loop: otp_verification_form
@@ -70,7 +76,11 @@ rules:
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: false
+        - user_full_name: slot_skipped
+        - user_contact_phone: slot_skipped
         - phone_validation_required: false
+        - user_contact_email_temp: slot_skipped
+        - user_contact_email_confirmed: slot_skipped
       - active_loop: null
       - action: action_submit_grievance
 
@@ -82,7 +92,11 @@ rules:
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: true  
+        - user_full_name
+        - user_contact_phone: slot_skipped
         - phone_validation_required: false
+        - user_contact_email_temp
+        - user_contact_email_confirmed
       - active_loop: null
       - action: action_submit_grievance
       
