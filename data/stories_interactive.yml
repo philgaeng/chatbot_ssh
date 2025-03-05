@@ -1,0 +1,245 @@
+
+version: "3.1"
+stories:
+- story: interactive_story_1
+  steps:
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: nav_introduce
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: grievance_process_start
+  - action: action_start_grievance_process
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_details: null
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - grievance_summary: null
+  - slot_was_set:
+    - grievance_list_cat: null
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: lost harvest
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_submit
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: completed
+  - slot_was_set:
+    - grievance_temp: lost harvest
+  - slot_was_set:
+    - grievance_details: lost harvest
+  - slot_was_set:
+    - grievance_summary_temp: Harvest has been lost
+  - slot_was_set:
+    - grievance_list_cat:
+      - Destruction Of Agrarian Resources ; Crop Destruction
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: grievance_summary_form
+  - active_loop: grievance_summary_form
+  - slot_was_set:
+    - requested_slot: grievance_list_cat_confirmed
+  - action: grievance_summary_form
+  - slot_was_set:
+    - grievance_list_cat_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_cat_modify: slot_confirmed
+  - slot_was_set:
+    - requested_slot: grievance_summary_confirmed
+  - action: grievance_summary_form
+  - slot_was_set:
+    - grievance_summary_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_summary: Harvest has been lost
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - requested_slot: user_location_consent
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: kankai
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: Kankai
+  - slot_was_set:
+    - requested_slot: user_municipality_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_confirmed: true
+  - slot_was_set:
+    - user_municipality: Kankai
+  - slot_was_set:
+    - requested_slot: user_village
+  - intent: location_address_provide
+    entities:
+    - village: ghailadubba
+  - action: location_form
+  - slot_was_set:
+    - user_village: ghailadubba
+  - slot_was_set:
+  - action: location_form
+  - slot_was_set:
+    - user_address_temp: main st
+  - slot_was_set:
+    - requested_slot: user_address_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_address_confirmed: true
+  - slot_was_set:
+    - user_address: main st
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - requested_slot: user_location_consent
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - requested_slot: user_contact_consent
+  - intent: affirm
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_consent: affirm
+  - slot_was_set:
+    - user_full_name: null
+  - slot_was_set:
+    - user_contact_phone: null
+  - slot_was_set:
+    - user_contact_email_temp: null
+  - slot_was_set:
+    - user_contact_email_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_full_name
+  - intent: contact_full_name_provide
+    entities:
+    - full_name: zinedine zidane
+  - action: contact_form
+  - slot_was_set:
+    - user_full_name: zinedine zidane
+  - slot_was_set:
+    - requested_slot: user_contact_phone
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '9876543210'
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_phone: '9876543210'
+  - slot_was_set:
+    - phone_validation_required: true
+  - slot_was_set:
+    - requested_slot: user_contact_email_temp
+  - intent: contact_email_provide
+    entities:
+    - contact_email: philgaeng@pm.me
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_temp: philgaeng@pm.me
+  - slot_was_set:
+    - user_contact_email_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_contact_email_confirmed
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_confirmed: /slot_confirmed
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: otp_verification_form
+  - active_loop: otp_verification_form
+  - slot_was_set:
+    - requested_slot: otp_input
+  - slot_was_set:
+    - otp_number: '309165'
+  - slot_was_set:
+    - otp_resend_count: 0
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '309165'
+  - intent: otp_provide
+    entities:
+    - otp_number: '309165'
+  - action: otp_verification_form
+  - slot_was_set:
+    - otp_input: '309165'
+  - slot_was_set:
+    - otp_status: verified
+  - slot_was_set:
+    - otp_resend_count: 0
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: action_submit_grievance
+  - slot_was_set:
+    - grievance_id: GR202503051A02AD
+  - slot_was_set:
+    - grievance_status: submitted

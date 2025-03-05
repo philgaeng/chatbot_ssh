@@ -82,7 +82,13 @@ class ValidateLocationForm(BaseFormValidationAction):
         # if tracker.get_slot("user_location_consent") == True:
         #     required_slots = ["user_municipality_temp", "user_municipality_confirmed", "user_village", "user_address_temp", "user_address_confirmed", "user_address"]
         #     #expend required slots as the slots get filled
-        required_slots = ["user_location_consent", "user_municipality_temp", "user_municipality_confirmed", "user_village", "user_address_temp", "user_address_confirmed", "user_address"]
+        required_slots = ["user_location_consent", 
+                          "user_municipality_temp", 
+                          "user_municipality_confirmed", 
+                          "user_village", 
+                          "user_address_temp", 
+                          "user_address_confirmed", 
+                          "user_address"]
         print(f"Input slots: {domain_slots} \n Updated slots: {required_slots}")
         print(f"requested slot: {tracker.get_slot('requested_slot')}")
         
@@ -127,7 +133,7 @@ class ValidateLocationForm(BaseFormValidationAction):
                     "user_address": "slot_skipped",
                     "user_address_confirmed": False}
             
-        return {"user_location_consent": None}
+        
     
     async def extract_user_municipality_temp(
         self,

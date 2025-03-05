@@ -4,7 +4,7 @@ rules:
 
   - rule: Say goodbye anytime the user says goodbye
     steps:
-      - intent: goodbye
+      - intent: nav_goodbye
       - action: utter_goodbye
 
   - rule: Respond to user challenge
@@ -19,12 +19,12 @@ rules:
 
   - rule: User files the grievance as is
     steps:
-      - intent: submit_grievance_as_is
+      - intent: grievance_submit_as_is
       - action: action_submit_grievance_as_is
 
   - rule: Exit grievance filing at any time
     steps:
-      - intent: exit_without_filing
+      - intent: nav_exit
       - action: utter_exit_without_filing
       - active_loop: null
 
@@ -33,13 +33,13 @@ rules:
     - intent: nlu_fallback
     - action: action_default_fallback
 
-  - rule: Happy path for grievance filing
+  - rule: Happy path for grievance filing - step 1 Grievance Form and transition to Location Form
     steps:
-      - intent: start_grievance_process
+      - intent: grievance_process_start
       - slot_was_set:
         - main_story: "new_grievance"
-      - action : action_start_grievance_process
-      - action : grievance_details_form
+      - action: action_start_grievance_process
+      - action: grievance_details_form
       - active_loop: grievance_details_form
       - active_loop: null
       - action: grievance_summary_form
@@ -51,8 +51,17 @@ rules:
       - active_loop: null
       - action: location_form
       - active_loop: location_form
+      - slot_was_set:
+        - user_location_consent
+        - user_municipality
+        - user_municipality_confirmed
+        - user_village
+        - user_address
+        - user_address_confirmed
       - active_loop: null
       - action: contact_form
+      - slot_was_set:
+        - main_story: "new_grievance"
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: true
@@ -67,12 +76,11 @@ rules:
       - active_loop: null
       - action: action_submit_grievance
 
-
   - rule: User files grievance without contact consent
     steps:
+      - action: contact_form  
       - slot_was_set:
         - main_story: "new_grievance"
-      - action: contact_form
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: false
@@ -86,9 +94,9 @@ rules:
 
   - rule: User files grievance without contact phone
     steps:
+      - action: contact_form
       - slot_was_set:
         - main_story: "new_grievance"
-      - action: contact_form
       - active_loop: contact_form
       - slot_was_set:
         - user_contact_consent: true  

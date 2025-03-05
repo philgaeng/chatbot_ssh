@@ -6,7 +6,7 @@ stories:
   steps:
     - intent: mood_unhappy
     - action: utter_mood_unhappy
-    - intent: restart_story
+    - intent: nav_restart
     - action: action_restart_story
  
 
@@ -14,5 +14,5 @@ stories:
   steps:
     - intent: mood_unhappy
     - action: utter_mood_unhappy
-    - intent: exit_without_filing
-    - action: utter_exit_without_filing
+    - intent: nav_exit
+    - action: action_exit_without_filing

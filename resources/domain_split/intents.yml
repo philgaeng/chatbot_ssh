@@ -1,5 +1,10 @@
 version: "3.1"
 
+
+
+###########################################
+########          INTENTS
+###########################################
 intents:
   #greetings
   - introduce
@@ -27,7 +32,8 @@ intents:
 
   #contact
   - provide_contact
-  - provide_phone
+  - provide_contact_phone
+  - provide_contact_email
   - provide_optional
   - provide_municipality
   - provide_address
@@ -45,7 +51,6 @@ intents:
   - provide_contact_phone
   - skip_contact_phone
   - file_without_validation
-  - provide_contact_email
   - skip_contact_email
 
 

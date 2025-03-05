@@ -1,5 +1,14 @@
 version: "3.1"
 
+
+
+
+
+
+
+###########################################
+########          ENTITIES
+###########################################
 entities:
   - qr_code
   - district
@@ -7,16 +16,19 @@ entities:
   - ward
   - village
   - address
-  - otp
+  - otp_number
   - contact_phone
   - first_name
   - last_name
+  - full_name
   - contact_email
   - grievance_category
-  - category
+
 
   
-
+###########################################
+########          SLOTS
+###########################################
 slots:
 ####################    navigation    ##################################
   current_process:
@@ -61,7 +73,7 @@ slots:
     type: bool
     influence_conversation: true
     mappings:
-      - type: custom
+    - type: custom
 
   user_municipality_temp:
     type: text

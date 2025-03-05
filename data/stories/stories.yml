@@ -6,10 +6,12 @@ stories:
 # Step 1.1: User files a grievance with only one input in the grievance details form
   - story: User files a grievance with optional location and contact details
     steps:
-      - intent: introduce
+      - intent: nav_introduce
       - action: action_session_start
-      - intent: start_grievance_process
+      - intent: grievance_process_start
       - action: action_start_grievance_process
+      - slot_was_set:
+          - main_story: "new_grievance"
       - action: grievance_details_form
       - active_loop: grievance_details_form
       - active_loop: null
@@ -22,13 +24,6 @@ stories:
       - active_loop: null
       - action: location_form
       - active_loop: location_form
-      - slot_was_set:
-          - user_location_consent: true
-          - user_municipality
-          - user_municipality_confirmed: true
-          - user_village
-          - user_address
-          - user_address_confirmed: true
       - active_loop: null
       - action: contact_form
       - active_loop: contact_form
@@ -43,10 +38,12 @@ stories:
 
 
   # # Step 1.1 repeated version
-  - story: User files a grievance
+  - story: User files a grievanceY
     steps:
-      - intent: start_grievance_process
+      - intent: grievance_process_start
       - action: action_start_grievance_process
+      - slot_was_set:
+        - main_story: "new_grievance"
       - action: grievance_details_form
       - active_loop: grievance_details_form
       - active_loop: null
@@ -59,13 +56,6 @@ stories:
       - active_loop: null
       - action: location_form
       - active_loop: location_form
-      - slot_was_set:
-          - user_location_consent: true
-          - user_municipality: slot_skipped
-          - user_municipality_confirmed: true
-          - user_village: slot_skipped
-          - user_address: slot_skipped
-          - user_address_confirmed: true
       - active_loop: null
       - action: contact_form
       - active_loop: contact_form
@@ -78,19 +68,34 @@ stories:
       - active_loop: null
       - action: action_submit_grievance
 
+  # # User does not provide phone number
+  # - story: User does not provide phone number
+  #   steps:
+  #     - action: contact_form
+  #     - active_loop: contact_form
+  #     - slot_was_set:
+  #         - phone_validation_required: false
+  #     - active_loop: null
+  #     - action: action_submit_grievance
 
-
-  #step 4: Collect location and contact details
-  - story: Collect location and contact details
-    steps:
-      # - intent: provide_location  
-      - intent: start_location_process
-      - action : location_form
-      - active_loop: location_form
-      - active_loop: null
-      - action: contact_form
-      - active_loop: contact_form
-      - active_loop: null
+  # #step 4: Collect location and contact details
+  # - story: Collect location and contact details
+  #   steps:
+  #     # - intent: provide_location  
+  #     - intent: start_location_process
+  #     - action : location_form
+  #     - active_loop: location_form
+  #     - active_loop: null
+  #     - action: contact_form
+  #     - active_loop: contact_form
+  #     - slot_was_set:
+  #         - user_contact_consent: true
+  #         - phone_validation_required: true
+  #     - active_loop: null
+  #     - action: otp_verification_form
+  #     - active_loop: otp_verification_form
+  #     - active_loop: null
+  #     - action: action_submit_grievance
 
   #Step 5: Collect contact details with OTP verification
   - story: User provides contact consent with phone verification
@@ -163,19 +168,9 @@ stories:
   #User naturally provides location
   - story: Collect location details
     steps:
-      - intent: provide_municipality
-      # - action : action_reset_municipality_slots
+      - intent: location_municipality_provide
       - action: location_form
       - active_loop: location_form
       - active_loop: null
       
 
-  - story: User skips email input
-    steps:
-      - intent: skip_contact_email
-      - action: validate_contact_form
-
-  - story: User skips phone input
-    steps:
-      - intent: skip_contact_phone
-      - action: validate_contact_form

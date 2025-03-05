@@ -1,5 +1,10 @@
 ---
 version: "3.1"
+
+
+###########################################
+########          FORMS
+###########################################
 forms:
 
   location_form:
@@ -61,6 +66,11 @@ forms:
     ignored_intents:
       - nlu_fallback
       
+
+
+###########################################
+########          ACTIONS
+###########################################
 
 actions:
 #######   generic actions   ###########################################
@@ -137,6 +147,7 @@ actions:
   - action_ask_contact_form_user_contact_phone
   - action_ask_contact_form_phone_validation_required
   - action_ask_contact_form_user_contact_email_temp
+  - action_ask_contact_form_user_contact_email_confirmed
   - validate_contact_form
 
   ########## contact legacy actions ##########

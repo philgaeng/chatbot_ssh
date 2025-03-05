@@ -7,61 +7,61 @@ version: "3.1"
 stories:
   - story: Happy path - retrieve grievance with phone and check status
     steps:
-      - intent: introduce
+      - intent: nav_introduce
       - action: action_session_start
-      - intent: start_check_status
+      - intent: status_check_start
       - slot_was_set:
             - main_story: "status_update"
       - action: action_choose_retrieval_method
-      - intent: retrieve_with_phone
+      - intent: status_check_phone
       - active_loop: otp_verification_form
       - active_loop: null
       - slot_was_set:
           - main_story: "status_update"
       - action: action_display_grievance
-      - intent: check_status
+      - intent: status_check
       - action: action_check_status
 
   - story: Direct grievance ID retrieval and status check
   
     steps:
-      - intent: introduce
+      - intent: nav_introduce
       - action: action_session_start
-      - intent: start_check_status
+      - intent: status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - action: action_choose_retrieval_method
-      - intent: retrieve_grievance_with_id
+      - intent: status_check_id
       - action: grievance_id_form
       - active_loop: grievance_id_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: check_status
+      - intent: status_check
       - action: action_check_status
 
   - story: User checks status immediately after displaying grievance
     steps:
       - action: action_display_grievance
-      - intent: check_status
+      - intent: status_check
       - action: action_check_status
 
-  - story: User retrieves multiple grievances
+  - story: User retrieves multiplrae grievances
     steps:
-      - intent: introduce
+      - intent: nav_introduce
       - action: action_session_start
-      - intent: start_check_status
+      - intent: status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - action: action_choose_retrieval_method
-      - intent: retrieve_with_phone
+      - intent: status_check_phone
       - active_loop: otp_verification_form
       - active_loop: null
       - slot_was_set:
           - main_story: "status_update"
       - action: action_display_grievance
-      - intent: check_status
+      - intent: status_check
       - action: action_check_status
-      - intent: retrieve_another_grievance
+      - intent: status_check_another
       - action: action_display_grievance
-      - intent: check_status
+      - intent: status_check
       - action: action_check_status

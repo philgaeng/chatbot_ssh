@@ -1,0 +1,27 @@
+version: "3.1"
+nlu:
+- intent: nav_introduce
+  examples: |
+    - hello
+- intent: nlu_fallback
+  examples: |
+    - lost harvest
+    - main st
+- intent: location_municipality_provide
+  examples: |
+    - [kankai](municipality)
+- intent: location_address_provide
+  examples: |
+    - [ghailadubba](village)
+- intent: contact_full_name_provide
+  examples: |
+    - [zinedine zidane](full_name)
+- intent: contact_phone_provide
+  examples: |
+    - [9876543210](contact_phone)
+- intent: contact_email_provide
+  examples: |
+    - [philgaeng@pm.me](contact_email)
+- intent: otp_provide
+  examples: |
+    - [309165](otp_number)
