@@ -1,0 +1,842 @@
+
+version: "3.1"
+stories:
+- story: interactive_story_1
+  steps:
+  - intent: nav_introduce
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: grievance_process_start
+  - action: action_start_grievance_process
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_details: null
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - grievance_summary: null
+  - slot_was_set:
+    - grievance_list_cat: null
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+    entities:
+    - municipality: hharvest
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: I lost my hharvest of rice and corn
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_submit
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: completed
+  - slot_was_set:
+    - grievance_temp: I lost my hharvest of rice and corn
+  - slot_was_set:
+    - grievance_details: I lost my hharvest of rice and corn
+  - slot_was_set:
+    - grievance_summary_temp: Loss of rice and corn harvest
+  - slot_was_set:
+    - grievance_list_cat:
+      - Destruction Of Agrarian Resources ; Crop Destruction
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: grievance_summary_form
+  - active_loop: grievance_summary_form
+  - slot_was_set:
+    - requested_slot: grievance_list_cat_confirmed
+  - action: grievance_summary_form
+  - slot_was_set:
+    - grievance_list_cat_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_cat_modify: slot_confirmed
+  - slot_was_set:
+    - requested_slot: grievance_summary_confirmed
+  - intent: grievance_summary_validate
+  - action: grievance_summary_form
+  - slot_was_set:
+    - grievance_summary_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_summary: Loss of rice and corn harvest
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - requested_slot: user_location_consent
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: dhakan basti
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: null
+  - slot_was_set:
+    - user_municipality: null
+  - slot_was_set:
+    - user_municipality_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: haldibari
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: Haldibari
+  - slot_was_set:
+    - requested_slot: user_municipality_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_confirmed: true
+  - slot_was_set:
+    - user_municipality: Haldibari
+  - slot_was_set:
+    - requested_slot: user_village
+  - intent: location_municipality_provide
+    entities:
+    - village: dhakkan basti
+  - action: location_form
+  - slot_was_set:
+    - user_village: dhakkan basti
+  - slot_was_set:
+    - requested_slot: user_address_temp
+  - intent: location_address_provide
+    entities:
+    - address: shyam bhujel house
+  - action: location_form
+  - slot_was_set:
+    - user_address_temp: shyam bhujel house
+  - slot_was_set:
+    - requested_slot: user_address_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_address_confirmed: true
+  - slot_was_set:
+    - user_address: shyam bhujel house
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - requested_slot: user_contact_consent
+  - intent: affirm
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_consent: affirm
+  - slot_was_set:
+    - user_full_name: null
+  - slot_was_set:
+    - user_contact_phone: null
+  - slot_was_set:
+    - user_contact_email_temp: null
+  - slot_was_set:
+    - user_contact_email_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_full_name
+  - intent: contact_full_name_provide
+    entities:
+    - full_name: mickey mouse
+  - action: contact_form
+  - slot_was_set:
+    - user_full_name: mickey mouse
+  - slot_was_set:
+    - requested_slot: user_contact_phone
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '9876543210'
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_phone: '9876543210'
+  - slot_was_set:
+    - phone_validation_required: true
+  - slot_was_set:
+    - requested_slot: user_contact_email_temp
+  - intent: contact_email_provide
+    entities:
+    - contact_email: philgaeng@pm.me
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_temp: philgaeng@pm.me
+  - slot_was_set:
+    - user_contact_email_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_contact_email_confirmed
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_confirmed: /slot_confirmed
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: otp_verification_form
+  - active_loop: otp_verification_form
+  - slot_was_set:
+    - requested_slot: otp_input
+  - slot_was_set:
+    - otp_number: '008021'
+  - slot_was_set:
+    - otp_resend_count: 0
+  - intent: otp_provide
+    entities:
+    - otp_number: '008021'
+  - slot_was_set:
+    - otp_input: '008021'
+  - slot_was_set:
+    - otp_status: verified
+  - slot_was_set:
+    - otp_resend_count: 0
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+
+- story: interactive_story_1
+  steps:
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: nav_introduce
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: grievance_process_start
+  - action: action_start_grievance_process
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_details: null
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - grievance_summary: null
+  - slot_was_set:
+    - grievance_list_cat: null
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: I cannot find a job at the road workshop
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_add
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: "I cannot find a job at the road workshop\nI want to workk on the road to provide to my family"
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_add
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: location_address_provide
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: "I cannot find a job at the road workshop\nI want to workk on the road to provide to my family\nI can work in the nearest village"
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_submit
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: completed
+  - slot_was_set:
+    - grievance_temp: "I cannot find a job at the road workshop\nI want to workk on the road to provide to my family\nI can work in the nearest village"
+  - slot_was_set:
+    - grievance_details: "I cannot find a job at the road workshop\nI want to workk on the road to provide to my family\nI can work in the nearest village"
+  - slot_was_set:
+    - grievance_summary_temp: Individual unable to find employment at a local road workshop and is willing to work in the nearest village.
+  - slot_was_set:
+    - grievance_list_cat:
+      - Economic, Social ; Employment Opportunities
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - intent: grievance_details_submit
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - requested_slot: user_location_consent
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_location_consent: true
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: Jaltal
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: null
+  - slot_was_set:
+    - user_municipality: null
+  - slot_was_set:
+    - user_municipality_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: Jalthal
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: null
+  - slot_was_set:
+    - user_municipality: null
+  - slot_was_set:
+    - user_municipality_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_municipality_temp
+  - intent: location_municipality_provide
+    entities:
+    - municipality: Birtamod
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_temp: Birtamod
+  - slot_was_set:
+    - requested_slot: user_municipality_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_municipality_confirmed: true
+  - slot_was_set:
+    - user_municipality: Birtamod
+  - slot_was_set:
+    - requested_slot: user_village
+  - intent: location_municipality_provide
+    entities:
+    - village: buttabari
+  - action: location_form
+  - slot_was_set:
+    - user_village: buttabari
+  - slot_was_set:
+    - requested_slot: user_address_temp
+  - intent: location_address_provide
+    entities:
+    - address: Harkalal Marga
+  - action: location_form
+  - slot_was_set:
+    - user_address_temp: Harkalal Marga
+  - slot_was_set:
+    - requested_slot: user_address_confirmed
+  - intent: affirm
+  - action: location_form
+  - slot_was_set:
+    - user_address_confirmed: true
+  - slot_was_set:
+    - user_address: Harkalal Marga
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - requested_slot: user_contact_consent
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_consent: anonymous_with_phone
+  - slot_was_set:
+    - user_full_name: slot_skipped
+  - slot_was_set:
+    - user_contact_phone: null
+  - slot_was_set:
+    - user_contact_email_temp: slot_skipped
+  - slot_was_set:
+    - user_contact_email_confirmed: slot_skipped
+  - slot_was_set:
+    - requested_slot: user_contact_phone
+  - intent: otp_provide
+    entities:
+    - otp_number: '9876543210'
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '9876543210'
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_phone: '9876543210'
+  - slot_was_set:
+    - phone_validation_required: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - user_contact_consent: anonymous_with_phone
+  - slot_was_set:
+    - user_full_name: slot_skipped
+  - slot_was_set:
+    - user_contact_phone: '9876543210'
+  - slot_was_set:
+    - phone_validation_required: false
+  - slot_was_set:
+    - user_contact_email_temp: slot_skipped
+  - slot_was_set:
+    - user_contact_email_confirmed: slot_skipped
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: otp_verification_form
+  - active_loop: otp_verification_form
+  - slot_was_set:
+    - requested_slot: otp_input
+  - slot_was_set:
+    - otp_number: '862952'
+  - slot_was_set:
+    - otp_resend_count: 0
+  - intent: otp_provide
+    entities:
+    - otp_number: '862952'
+  - slot_was_set:
+    - otp_input: '862952'
+  - slot_was_set:
+    - otp_status: verified
+  - slot_was_set:
+    - otp_resend_count: 0
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: action_submit_grievance
+  - slot_was_set:
+    - grievance_id: GR20250306AFF3E6
+  - slot_was_set:
+    - grievance_status: submitted
+
+- story: interactive_story_2
+  steps:
+  - intent: nav_introduce
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: grievance_process_start
+  - action: action_start_grievance_process
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_details: null
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - grievance_summary: null
+  - slot_was_set:
+    - grievance_list_cat: null
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: they cut trees on my field
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: "they cut trees on my field\na pipe broke and spilled pollutants on my field"
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_add
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: location_address_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: "they cut trees on my field\na pipe broke and spilled pollutants on my field\nmy field is located to the river"
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_submit
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: completed
+  - slot_was_set:
+    - grievance_temp: "they cut trees on my field\na pipe broke and spilled pollutants on my field\nmy field is located to the river"
+  - slot_was_set:
+    - grievance_details: "they cut trees on my field\na pipe broke and spilled pollutants on my field\nmy field is located to the river"
+  - slot_was_set:
+    - grievance_summary_temp: Trees chopped down and pollution due to a pipe spill on my land
+  - slot_was_set:
+    - grievance_list_cat:
+      - Environmental, Social ; Cutting Of Trees
+      - Destruction Of Agrarian Resources ; Soil Pollution
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - intent: grievance_details_submit
+  - action: location_form
+  - active_loop: location_form
+  - slot_was_set:
+    - requested_slot: user_location_consent
+  - intent: deny
+  - action: location_form
+  - slot_was_set:
+    - user_location_consent: false
+  - slot_was_set:
+    - user_municipality_temp: slot_skipped
+  - slot_was_set:
+    - user_municipality: slot_skipped
+  - slot_was_set:
+    - user_municipality_confirmed: false
+  - slot_was_set:
+    - user_village: slot_skipped
+  - slot_was_set:
+    - user_address_temp: slot_skipped
+  - slot_was_set:
+    - user_address: slot_skipped
+  - slot_was_set:
+    - user_address_confirmed: false
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - requested_slot: user_contact_consent
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_consent: slot_skipped
+  - slot_was_set:
+    - user_full_name: slot_skipped
+  - slot_was_set:
+    - user_contact_phone: slot_skipped
+  - slot_was_set:
+    - user_contact_email_temp: slot_skipped
+  - slot_was_set:
+    - user_contact_email_confirmed: slot_skipped
+  - slot_was_set:
+    - requested_slot: phone_validation_required
+  - intent: affirm
+  - action: contact_form
+  - slot_was_set:
+    - phone_validation_required: null
+  - slot_was_set:
+    - user_contact_phone: null
+  - slot_was_set:
+    - requested_slot: user_contact_phone
+  - intent: otp_provide
+    entities:
+    - otp_number: '9876567890'
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '9876567890'
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_phone: '9876567890'
+  - slot_was_set:
+    - phone_validation_required: true
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: otp_verification_form
+  - active_loop: otp_verification_form
+  - slot_was_set:
+    - requested_slot: otp_input
+  - slot_was_set:
+    - otp_number: '533688'
+  - slot_was_set:
+    - otp_resend_count: 0
+  - intent: otp_provide
+    entities:
+    - otp_number: '533688'
+  - slot_was_set:
+    - otp_input: '533688'
+  - slot_was_set:
+    - otp_status: verified
+  - slot_was_set:
+    - otp_resend_count: 0
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: action_submit_grievance
+  - slot_was_set:
+    - grievance_id: GR202503062029EC
+  - slot_was_set:
+    - grievance_status: submitted
+
+- story: interactive_story_1
+  steps:
+  - intent: nav_introduce
+  - slot_was_set:
+    - user_province: KOSHI
+  - slot_was_set:
+    - user_district: Jhapa
+  - intent: grievance_process_start
+  - action: action_start_grievance_process
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_details: null
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - grievance_summary: null
+  - slot_was_set:
+    - grievance_list_cat: null
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_provide
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: thhey killed and eat my chicken
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_add
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_monetary_provide
+    entities:
+    - monetary: 16000 Rp
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: null
+  - slot_was_set:
+    - grievance_temp: "thhey killed and eat my chicken\nI lost 16000 Rp"
+  - slot_was_set:
+    - requested_slot: grievance_new_detail
+  - intent: grievance_details_submit
+  - action: grievance_details_form
+  - slot_was_set:
+    - grievance_new_detail: completed
+  - slot_was_set:
+    - grievance_temp: "thhey killed and eat my chicken\nI lost 16000 Rp"
+  - slot_was_set:
+    - grievance_details: "thhey killed and eat my chicken\nI lost 16000 Rp"
+  - slot_was_set:
+    - grievance_summary_temp: Someone killed and consumed my chicken, and I lost 16000 Rp due to this.
+  - slot_was_set:
+    - grievance_list_cat:
+      - Destruction Of Agrarian Resources ; Crop Destruction
+      - Malicious Behavior ; Theft Of Crops
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: grievance_summary_form
+  - active_loop: grievance_summary_form
+  - slot_was_set:
+    - requested_slot: grievance_list_cat_confirmed
+  - slot_was_set:
+    - grievance_list_cat_confirmed: slot_added
+  - slot_was_set:
+    - requested_slot: grievance_cat_modify
+  - slot_was_set:
+    - grievance_cat_modify: null
+  - slot_was_set:
+    - grievance_list_cat:
+      - Destruction Of Agrarian Resources ; Crop Destruction
+      - Malicious Behavior ; Theft Of Crops
+      - Economic, Social ; Land Acquisition Issues
+  - slot_was_set:
+    - grievance_list_cat_confirmed: null
+  - slot_was_set:
+    - requested_slot: grievance_list_cat_confirmed
+  - slot_was_set:
+    - grievance_list_cat_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_cat_modify: slot_confirmed
+  - slot_was_set:
+    - requested_slot: grievance_summary_confirmed
+  - slot_was_set:
+    - grievance_summary_confirmed: slot_edited
+  - slot_was_set:
+    - grievance_summary_temp: null
+  - slot_was_set:
+    - requested_slot: grievance_summary_temp
+  - intent: grievance_details_submit
+    entities:
+    - monetary: 1600 Rp
+  - slot_was_set:
+    - grievance_summary_temp: my chicken were stolen and I lost 1600 Rp
+  - slot_was_set:
+    - grievance_summary_confirmed: null
+  - slot_was_set:
+    - requested_slot: grievance_summary_confirmed
+  - slot_was_set:
+    - grievance_summary_confirmed: slot_confirmed
+  - slot_was_set:
+    - grievance_summary: my chicken were stolen and I lost 1600 Rp
+  - slot_was_set:
+    - requested_slot: null
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: grievance_summary_form
+  - active_loop: grievance_summary_form
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: contact_form
+  - active_loop: contact_form
+  - slot_was_set:
+    - requested_slot: user_contact_consent
+  - intent: affirm
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_consent: affirm
+  - slot_was_set:
+    - user_full_name: null
+  - slot_was_set:
+    - user_contact_phone: null
+  - slot_was_set:
+    - user_contact_email_temp: null
+  - slot_was_set:
+    - user_contact_email_confirmed: null
+  - slot_was_set:
+    - requested_slot: user_full_name
+  - intent: nlu_fallback
+  - action: contact_form
+  - slot_was_set:
+    - user_full_name: slot_skipped
+  - slot_was_set:
+    - requested_slot: user_contact_phone
+  - intent: otp_provide
+    entities:
+    - otp_number: '9753108642'
+  - intent: contact_phone_provide
+    entities:
+    - contact_phone: '9753108642'
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_phone: '9753108642'
+  - slot_was_set:
+    - phone_validation_required: true
+  - slot_was_set:
+    - requested_slot: user_contact_email_temp
+  - slot_was_set:
+    - user_contact_email_temp: null
+  - slot_was_set:
+    - requested_slot: user_contact_email_temp
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_temp: slot_skipped
+  - slot_was_set:
+    - requested_slot: user_contact_email_temp
+  - action: contact_form
+  - slot_was_set:
+    - user_contact_email_temp: slot_skipped
+  - slot_was_set:
+    - user_contact_email_confirmed: slot_skipped
+  - slot_was_set:
+    - requested_slot: phone_validation_required
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: otp_verification_form
+  - active_loop: otp_verification_form
+  - slot_was_set:
+    - requested_slot: otp_input
+  - slot_was_set:
+    - otp_number: '533688'
+  - slot_was_set:
+    - otp_resend_count: 0
+  - intent: otp_provide
+    entities:
+    - otp_number: '533688'
+  - slot_was_set:
+    - otp_input: '533688'
+  - slot_was_set:
+    - otp_status: verified
+  - slot_was_set:
+    - otp_resend_count: 0
+  - slot_was_set:
+    - requested_slot: null
+  - active_loop: null
+  - action: action_submit_grievance
+  - slot_was_set:
+    - grievance_id: GR202503062029EC
+  - slot_was_set:
+    - grievance_status: submitted

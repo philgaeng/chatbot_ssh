@@ -16,8 +16,6 @@ stories:
       - intent: status_check_phone
       - active_loop: otp_verification_form
       - active_loop: null
-      - slot_was_set:
-          - main_story: "status_update"
       - action: action_display_grievance
       - intent: status_check
       - action: action_check_status
@@ -56,8 +54,6 @@ stories:
       - intent: status_check_phone
       - active_loop: otp_verification_form
       - active_loop: null
-      - slot_was_set:
-          - main_story: "status_update"
       - action: action_display_grievance
       - intent: status_check
       - action: action_check_status

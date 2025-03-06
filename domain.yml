@@ -23,6 +23,7 @@ intents:
 - grievance_details_add
 - grievance_details_provide
 - grievance_details_submit
+- grievance_monetary_provide
 - grievance_process_start
 - grievance_submit_as_is
 - grievance_summary_edit
@@ -51,15 +52,16 @@ intents:
 - status_check_start
 entities:
 - municipality
-- full_name
+- monetary
 - contact_phone
 - village
+- address
 - otp_number
 - contact_email
+- full_name
 - qr_code
 - district
 - ward
-- address
 - first_name
 - last_name
 - grievance_category
@@ -417,8 +419,8 @@ responses:
   utter_ask_contact_form_user_contact_email:
   - text: Can you provide your email or type Skip
 actions:
-- action_submit_grievance
 - action_start_grievance_process
+- action_submit_grievance
 - action_introduce
 - action_session_start
 - action_back_to_previous_step

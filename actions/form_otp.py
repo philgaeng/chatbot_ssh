@@ -31,7 +31,7 @@ class ActionAskOtpVerificationOtpInput(Action):
         tracker: Tracker,
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        print("\n=================== Asking for OTP Input ===================")
+        logger.debug("=================== Asking for OTP Input ===================")
         otp_number = tracker.get_slot("otp_number")
         phone_number = tracker.get_slot("user_contact_phone")
         otp_status = tracker.get_slot("otp_status")
@@ -54,15 +54,15 @@ class ActionAskOtpVerificationOtpInput(Action):
             
             try:
                 self.sms_client.send_sms(phone_number, message_sms)
-                print("✅ SMS sent successfully")
+                logger.info("SMS sent successfully")
                 dispatcher.utter_message(
                     text= message_bot,
                     buttons=buttons_otp
                 )
                 
             except Exception as e:
-                print(f"❌ Error sending SMS: {e}")
-                dispatcher.utter_message(text="❌ Sorry, we couldn't send the verification code.")
+                logger.error(f"Error sending SMS: {e}")
+                dispatcher.utter_message(text="Sorry, we couldn't send the verification code.")
         
         if otp_status == "resend" and resend_count >= 3:
             dispatcher.utter_message(text="❌ Maximum resend attempts reached. Please try again later or skip verification.",
@@ -142,15 +142,14 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
 
         slot_value = slot_value.strip("/").lower()
         if "resend" in slot_value:
-            print("🔄 Resend OTP requested")
-            #regenerate OTP
+            logger.info("Resend OTP requested")
             return {"otp_input": None, 
-                    "otp_status" : "resend",
-                    "otp_resend_count" : tracker.get_slot("otp_resend_count") or 0}
+                    "otp_status": "resend",
+                    "otp_resend_count": tracker.get_slot("otp_resend_count") or 0}
 
         # Handle skip request
         if slot_value in ["slot_skipped", "skip"]:
-            print("⏩ Skip verification requested")
+            logger.info("Skip verification requested")
             return {"otp_input": "slot_skipped", 
                     "otp_status" : "slot_skipped",
                     "otp_resend_count" : 0}
@@ -182,11 +181,11 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
     def _is_valid_otp_format(self, slot_value: str) -> bool:
         """Validate OTP format (6 digits)."""
         is_valid = bool(slot_value and slot_value.isdigit() and len(slot_value) == 6)
-        print(f"OTP format validation: {is_valid} for value: {slot_value}")
+        logger.debug(f"OTP format validation: {is_valid} for value: {slot_value}")
         return is_valid
 
     def _is_matching_otp(self, input_otp: str, expected_otp: str) -> bool:
         """Verify if the input OTP matches the expected OTP."""
         is_matching = bool(input_otp and expected_otp and input_otp == expected_otp)
-        print(f"OTP match validation: {is_matching} (Input: {input_otp}, Expected: {expected_otp})")
+        logger.debug(f"OTP match validation: {is_matching} (Input: {input_otp}, Expected: {expected_otp})")
         return is_matching
