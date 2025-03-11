@@ -19,7 +19,6 @@ from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from .helpers import LocationValidator #add this import
-from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST, USE_QR_CODE  # Import the constants
 from .base_form import BaseFormValidationAction
 
 logger = logging.getLogger(__name__)
@@ -30,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class ValidateLocationForm(BaseFormValidationAction):
     """Form validation action for location details collection."""
+    
 
     def __init__(self):
         """Initialize the form validation action."""
@@ -40,18 +40,21 @@ class ValidateLocationForm(BaseFormValidationAction):
         self.location_validator = LocationValidator()
         print("ValidateLocationForm.__init__ completed")
 
+
     def name(self) -> Text:
         return "validate_location_form"
 
     def _validate_municipality_input(
         self,
-        input_text: Text
+        input_text: Text,
+        qr_province: Text,
+        qr_district: Text
     ) -> Dict[Text, Any]:
         """Validate new municipality input."""
-        validation_result = self.location_validator.validate_location(
+        validation_result = self.location_validator._validate_location(
             input_text.lower(), 
-            qr_province=QR_PROVINCE, 
-            qr_district=QR_DISTRICT
+            qr_province, 
+            qr_district
         )
         
         municipality = validation_result.get("municipality")
@@ -73,16 +76,9 @@ class ValidateLocationForm(BaseFormValidationAction):
     ) -> List[Text]:
         print("\n=================== Location Form Required Slots ===================")
         
-
-        # required_slots = domain_slots if domain_slots else ["user_location_consent"]
-        # print(f"user_location_consent: {tracker.get_slot('user_location_consent')}")
-        # if tracker.get_slot("user_location_consent") == False:
-        #     required_slots = [] 
-
-        # if tracker.get_slot("user_location_consent") == True:
-        #     required_slots = ["user_municipality_temp", "user_municipality_confirmed", "user_village", "user_address_temp", "user_address_confirmed", "user_address"]
-        #     #expend required slots as the slots get filled
         required_slots = ["user_location_consent", 
+                          "user_province",
+                          "user_district",
                           "user_municipality_temp", 
                           "user_municipality_confirmed", 
                           "user_village", 
@@ -133,6 +129,86 @@ class ValidateLocationForm(BaseFormValidationAction):
                     "user_address": "slot_skipped",
                     "user_address_confirmed": False}
             
+    async def extract_user_province(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "user_province",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_province(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        if slot_value == "slot_skipped":
+            dispatcher.utter_message(
+                text="Please provide a valid province name, this is required to file your grievance"
+            )
+            return {"user_province": None}
+        
+        #check if the province is valid
+        if not self.location_validator._check_province(slot_value):
+            dispatcher.utter_message(
+                text=f"We cannot match your entry {slot_value} to a valid province. Please try again"
+            )
+            return {"user_province": None}
+        
+        result = self.location_validator._check_province(slot_value)
+        dispatcher.utter_message(
+            text=f"We have matched your entry {slot_value} to {result}."
+        )
+        
+        return {"user_province": slot_value}
+        
+    async def extract_user_district(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(  
+            "user_district",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_district(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        if slot_value == "slot_skipped":
+            dispatcher.utter_message(
+                text="Please provide a valid district name, this is required to file your grievance"
+            )
+            return {"user_district": None}
+            
+        #check if the district is valid
+        if not self.location_validator._check_district(slot_value, tracker.get_slot("user_province")):
+            dispatcher.utter_message(
+                text=f"We cannot match your entry {slot_value} to a valid district. Please try again"
+            )
+            return {"user_district": None}
+            
+        result = self.location_validator._check_district(slot_value, tracker.get_slot("user_province"))
+        dispatcher.utter_message(
+            text=f"We have matched your entry {slot_value} to {result}."
+        )
+        
+        return {"user_district": slot_value}
+        
         
     
     async def extract_user_municipality_temp(
@@ -169,7 +245,9 @@ class ValidateLocationForm(BaseFormValidationAction):
             return {"user_municipality_temp": None}
                 
         # Validate new municipality input with the extract and rapidfuzz functions
-        validated_municipality = self._validate_municipality_input(slot_value)
+        validated_municipality = self._validate_municipality_input(slot_value, 
+                                                                   tracker.get_slot("user_province"),
+                                                                   tracker.get_slot("user_district"))
         print(f"Validated municipality: {validated_municipality}")
         
         if validated_municipality:
@@ -273,8 +351,6 @@ class ValidateLocationForm(BaseFormValidationAction):
             domain
         )
     
-
-    
     async def validate_user_address_temp(
         self,
         slot_value: Any,
@@ -363,8 +439,10 @@ class ActionAskLocationFormUserMunicipalityTemp(Action):
         return "action_ask_location_form_user_municipality_temp"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        province = tracker.get_slot("user_province")
+        district = tracker.get_slot("user_district")
         dispatcher.utter_message(
-                text=f"Please enter a valid municipality name in {QR_DISTRICT}, {QR_PROVINCE} (at least 3 characters) or Skip to skip",
+                text=f"Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
                 buttons=[
                     {"title": "Skip", "payload": "/skip"}
                 ]   

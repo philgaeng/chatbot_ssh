@@ -14,8 +14,12 @@ class LanguageHelper:
     def __init__(self):
         """Initialize language patterns and skip words for different languages."""
         self.skip_words = {
-            'en': ['skip', 'pass', 'next', 'skip it', 'pass this'],
-            'ne': [
+            'en': {'keywords': ['skip', 'pass', 'next', 'skip it', 'pass this'],
+                   'ignore_list': ['access'],
+                   'fuzzy_threshold_1': 98,
+                   'fuzzy_threshold_2': 75},
+            
+            'ne': {'keywords': [
                 'छोड्नुहोस्', 'छोड', 'अर्को', 
                 'छोडी दिनुस', 'छोडिदिनुस',
                 'छोड्ने', 'छोड्दिनु', 
@@ -23,8 +27,11 @@ class LanguageHelper:
                 'स्किप', 'पास', 'नेक्स्ट',
                 'यसलाई छोड्नुहोस्',
                 'यो चाहिएन'
-            ],
-            'hi': ['छोड़ें', 'छोड़ दो', 'अगला', 'आगे बढ़ें']
+            ], 'fuzzy_threshold_1': 98,
+                   'fuzzy_threshold_2': 75},
+            'hi': {'keywords': ['छोड़ें', 'छोड़ दो', 'अगला', 'आगे बढ़ें'],
+                   'fuzzy_threshold_1': 98,
+                   'fuzzy_threshold_2': 75}
         }
         
         # Compile regex patterns for each language
@@ -81,27 +88,34 @@ class LanguageHelper:
     def is_skip_instruction(self, input_text: str) -> Tuple[bool, bool, str]:
         """Check if text is a skip instruction."""
         try:
+            if input_text.startswith("/"):
+                return False, False, ""
             
+            input_text = input_text.lower().strip()
             # Detect language
             lang = self.detect_language(input_text)
             
             # Get skip words for detected language
-            skip_words = self.skip_words.get(lang, self.skip_words['en'])
+            skip_words = self.skip_words.get(lang, self.skip_words['en']).get('keywords')
+            fuzzy_threshold_1 = self.skip_words.get(lang, self.skip_words['en']).get('fuzzy_threshold_1')
+            fuzzy_threshold_2 = self.skip_words.get(lang, self.skip_words['en']).get('fuzzy_threshold_2')
+            ignore_words = self.skip_words.get(lang, self.skip_words['en']).get('ignore_list')
             
             # Get the best fuzzy match score and matched word
             best_score = 0
             best_match = ""
             for input_word in input_text.split():
-                score, match = self._get_fuzzy_match_score(input_word, skip_words)
-                if score > best_score:
-                    best_score = score
-                    best_match = input_word
+                if input_word not in ignore_words:
+                    score, match = self._get_fuzzy_match_score(input_word, skip_words)
+                    if score > best_score:
+                        best_score = score
+                        best_match = input_word
             
-            if best_score >= 98:
+            if best_score >= fuzzy_threshold_1:
                 result = (True, False, best_match)
                 return result
             
-            if best_score >= 60:
+            if best_score >= fuzzy_threshold_2:
                 result = (True, True, best_match)
                 return result
             

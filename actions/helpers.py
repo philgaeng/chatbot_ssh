@@ -6,6 +6,7 @@ import csv  # For reading CSV files
 from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
+from typing import Optional
 from .constants import (    
     LOOKUP_FILE_PATH,
     DEFAULT_CSV_PATH,
@@ -16,6 +17,7 @@ from .constants import (
 )
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""
@@ -42,7 +44,7 @@ def load_classification_data(csv_path=DEFAULT_CSV_PATH):
             reader = csv.DictReader(csvfile)
             for row in reader:
                 # Normalize case and format as "Classification - Grievance Name"
-                category = f"- {row['Classification'].title()} ; {row['Generic Grievance Name'].title()}"
+                category = f"{row['Classification'].title()} - {row['Generic Grievance Name'].title()}"
                 categories.append(category)
 
         # Remove duplicates and sort
@@ -329,7 +331,7 @@ class LocationValidator:
             "municipality": municipality
         }
 
-    def validate_location(self, location_string, qr_province=None, qr_district=None):
+    def _validate_location(self, location_string, qr_province=None, qr_district=None):
         """Validate location from a single string input and QR defaults."""
         # Preprocess input and generate possible names
         processed_text = self._preprocess(location_string)
@@ -338,7 +340,7 @@ class LocationValidator:
         
         
         #check if QR code is provided
-        if USE_QR_CODE == True:
+        if qr_province and qr_district:
             # Try matching with QR data first
             province, district, municipality = self._match_with_qr_data(
                 possible_names, qr_province, qr_district
@@ -353,3 +355,24 @@ class LocationValidator:
         print(f"######## LocationValidator: Result: {result}")
         return result
 
+    def _check_province(self, input_text):
+        """Check if the province name is valid."""
+        # Finally, try province match
+        possible_names = self._generate_possible_names(input_text)
+        province_names = [p["name"] for p in self.locations.get("provinceList", [])]
+        for possible_name in possible_names:
+            matched_province = self._find_best_match(possible_name, province_names)
+            if matched_province:
+                return matched_province
+        return None
+    
+    def _check_district(self, input_text, province_name):
+        """Check if the district name is valid."""
+        # Finally, try province match
+        possible_names = self._generate_possible_names(input_text)
+        district_names = [d["name"] for d in self.locations.get("provinceList", [])[province_name].get("districtList", [])]
+        for possible_name in possible_names:
+            matched_district = self._find_best_match(possible_name, district_names)
+            if matched_district:
+                return matched_district
+        return None

@@ -44,11 +44,41 @@ class ActionIntroduce(Action):
         return "action_introduce"
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        dispatcher.utter_message(
-            text=f"""Hello! Welcome to the Grievance Management Chatbot.
-            You are reaching out to the office of {QR_DISTRICT} in {QR_PROVINCE}.
+        # Extract province and district from the payload
+        message = tracker.latest_message.get('text', '')
+        entities = tracker.latest_message.get('entities', [])
+        
+        # Try to get province and district from the message payload
+        province = None
+        district = None
+        
+        try:
+            import json
+            # Check if the message contains JSON data
+            if '{' in message and '}' in message:
+                json_str = message[message.index('{'):message.rindex('}')+1]
+                data = json.loads(json_str)
+                province = data.get('province')
+                district = data.get('district')
+        except:
+            pass
+
+        # If we got province and district from the payload, set the slots
+        events = []
+        if province and district:
+            events.extend([
+                SlotSet("user_province", province),
+                SlotSet("user_district", district)
+            ])
+            welcome_text = f"""INTRODUCE: Hello! Welcome to the Grievance Management Chatbot.
+            You are reaching out to the office of {district} in {province}.
             I am here to help you file a grievance or check its status. What would you like to do?"""
-            ,
+        else:
+            welcome_text = """INTRODUCE: Hello! Welcome to the Grievance Management Chatbot.
+            I am here to help you file a grievance or check its status. What would you like to do?"""
+
+        dispatcher.utter_message(
+            text=welcome_text,
             buttons=[
                 {"title": "File a grievance", "payload": "/start_grievance_process"},
                 {"title": "Check my status", "payload": "/check_status"},
@@ -56,7 +86,7 @@ class ActionIntroduce(Action):
             ]
         )
 
-        return []
+        return events
 
 
 
@@ -73,25 +103,45 @@ class ActionSessionStart(Action):
         # Initialize session
         events = [SessionStarted()]
         
-        # Add default location population
-        events.extend([
-            {"event": "slot", "name": "user_province", "value": QR_PROVINCE},
-            {"event": "slot", "name": "user_district", "value": QR_DISTRICT}
-        ])
+        # Get the latest message
+        message = tracker.latest_message.get('text', '')
         
-        # Send introduction message
-        dispatcher.utter_message(
-            text=f"""Hello! Welcome to the Grievance Management Chatbot.
-            You are reaching out to the office of {QR_DISTRICT} in {QR_PROVINCE}.
+        # Initialize welcome text
+        welcome_text = """Hello! Welcome to the Grievance Management Chatbot.
             I am here to help you file a grievance or check its status. What would you like to do?"""
-            ,
-            buttons=[
-                {"title": "File a grievance", "payload": "/start_grievance_process"},
-                {"title": "Check my status", "payload": "/check_status"},
-                {"title": "Exit", "payload": "/goodbye"}
-            ]
-        )
         
+        try:
+            import json
+            # Check if the message contains JSON data
+            if '{' in message and '}' in message:
+                json_str = message[message.index('{'):message.rindex('}')+1]
+                data = json.loads(json_str)
+                province = data.get('province')
+                district = data.get('district')
+                
+                if province and district:
+                    events.extend([
+                        SlotSet("user_province", province),
+                        SlotSet("user_district", district)
+                    ])
+                    welcome_text = f"""Hello! Welcome to the Grievance Management Chatbot.
+                    You are reaching out to the office of {district} in {province}.
+                    I am here to help you file a grievance or check its status. What would you like to do?"""
+                    print(welcome_text)
+                
+        except:
+            pass
+        if message and "/" in message:
+            # Send introduction message
+            dispatcher.utter_message(
+                text=welcome_text,
+                buttons=[
+                    {"title": "File a grievance", "payload": "/start_grievance_process"},
+                    {"title": "Check my status", "payload": "/check_status"},
+                    {"title": "Exit", "payload": "/goodbye"}
+                ]
+            )
+            
         # Add the action that listens for the next user message
         events.append(ActionExecuted("action_listen"))
         

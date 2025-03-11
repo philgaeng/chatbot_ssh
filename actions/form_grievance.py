@@ -17,6 +17,7 @@ from rasa_sdk.types import DomainDict
 from .db_actions import GrievanceDB
 from datetime import datetime
 from .messaging import SMSClient, EmailClient
+from rapidfuzz import process
 import traceback
 
 #define and load variables
@@ -471,6 +472,24 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             domain
         )
     
+    def get_category_to_modify(self, input_text: str) -> str:
+        """
+        Extracts the category from the slot_value by matching it from the list of categories using rapidfuzz
+        Returns None if no categories in slot_value
+        
+        """
+        selected_category = None
+        if ":" in input_text:
+             #initialize the selected category
+            temp_cat = input_text.split(":")[1].strip()
+            for c in LIST_OF_CATEGORIES:
+                if c in input_text:
+                        selected_category = c
+                if not selected_category:
+                    #select the category c in the list_of_cat that is the closest match to the temp_cat using rapidfuzz
+                    selected_category = process.extractOne(input_text, LIST_OF_CATEGORIES)
+                    
+        return selected_category
     
     async def validate_grievance_cat_modify(self, slot_value: Any,
                                                    dispatcher: CollectingDispatcher, 
@@ -514,13 +533,10 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         list_of_cat = tracker.get_slot("grievance_list_cat")
         print("list_of_cat: ", list_of_cat)
         
-        selected_category = None #initialize the selected category
         
-        for c in LIST_OF_CATEGORIES:
-            if c in slot_value:
-                selected_category = c
+        selected_category = self.get_category_to_modify(slot_value)
                 
-                print("c extracted from message : " , selected_category)
+        print("c extracted from message : " , selected_category)
                 
         if not selected_category or slot_value == "slot_skipped":
             dispatcher.utter_message(text="No category selected. skipping this step.")

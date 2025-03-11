@@ -16,6 +16,10 @@ SMS_ENABLED = False  # Set to True to enable SMS
 # API Constants
 # API_KEY = "your-api-key"
 # BASE_URL = "https://api.example.com"
+DOMAIN_NAME = "13.212.33.134"
+BASE_URL = f"http://{DOMAIN_NAME}"
+SOCKET_URL = f"{BASE_URL}:5005"
+WS_URL = f"ws://{DOMAIN_NAME}:5005"
 
 # File Paths
 LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
