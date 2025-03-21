@@ -20,6 +20,8 @@ from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from .helpers import LocationValidator #add this import
 from .base_form import BaseFormValidationAction
+from icecream import ic
+from .utterance_mapping import get_utterance, get_buttons
 
 logger = logging.getLogger(__name__)
 
@@ -149,25 +151,32 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
+            messages = {'en' : "Please provide a valid province name, this is required to file your grievance",
+                        'ne' : "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"}
             dispatcher.utter_message(
-                text="Please provide a valid province name, this is required to file your grievance"
+                text=messages[language_code]
             )
             return {"user_province": None}
         
         #check if the province is valid
         if not self.location_validator._check_province(slot_value):
+            messages = {'en' : "We cannot match your entry {slot_value} to a valid province. Please try again",
+                        'ne' : "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
             dispatcher.utter_message(
-                text=f"We cannot match your entry {slot_value} to a valid province. Please try again"
+                text=messages[language_code].format(slot_value=slot_value)
             )
             return {"user_province": None}
         
-        result = self.location_validator._check_province(slot_value)
+        result = self.location_validator._check_province(slot_value).title()
+        messages = {'en' : "We have matched your entry {slot_value} to {result}.",
+                    'ne' : "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
         dispatcher.utter_message(
-            text=f"We have matched your entry {slot_value} to {result}."
+            text=messages[language_code].format(slot_value=slot_value, result=result)
         )
         
-        return {"user_province": slot_value}
+        return {"user_province": result}
         
     async def extract_user_district(
         self,
@@ -189,25 +198,34 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
+            messages = {'en' : "Please provide a valid district name, this is required to file your grievance",
+                        'ne' : "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"}
             dispatcher.utter_message(
-                text="Please provide a valid district name, this is required to file your grievance"
+                text=messages[language_code]
             )
             return {"user_district": None}
             
         #check if the district is valid
-        if not self.location_validator._check_district(slot_value, tracker.get_slot("user_province")):
+        province = tracker.get_slot("user_province").lower()
+        ic(province)
+        if not self.location_validator._check_district(slot_value, province):
+            messages = {'en' : "We cannot match your entry {slot_value} to a valid district. Please try again",
+                        'ne' : "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
             dispatcher.utter_message(
-                text=f"We cannot match your entry {slot_value} to a valid district. Please try again"
+                text=messages[language_code].format(slot_value=slot_value)
             )
             return {"user_district": None}
             
-        result = self.location_validator._check_district(slot_value, tracker.get_slot("user_province"))
+        result = self.location_validator._check_district(slot_value, province).title()
+        messages = {'en' : "We have matched your entry {slot_value} to {result}.",
+                    'ne' : "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
         dispatcher.utter_message(
-            text=f"We have matched your entry {slot_value} to {result}."
+            text=messages[language_code].format(slot_value=slot_value, result=result)
         )
         
-        return {"user_district": slot_value}
+        return {"user_district": result}
         
         
     
@@ -517,3 +535,22 @@ class ActionAskLocationFormUserAddressConfirmed(Action):
         return []
     
 
+class ActionAskLocationFormUserProvince(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_province"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = get_utterance('location_form', self.name(), 1, 'en')
+        buttons = get_buttons('location_form', self.name(), 1, 'en')
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+    
+class ActionAskLocationFormUserDistrict(Action):
+    def name(self) -> str:
+        return "action_ask_location_form_user_district"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = get_utterance('location_form', self.name(), 1, 'en')
+        buttons = get_buttons('location_form', self.name(), 1, 'en')
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []

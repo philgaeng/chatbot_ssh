@@ -1,15 +1,107 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Modern Rasa Chat</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rasa Chat Interface</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script type="module">
+        import { WEBSOCKET_CONFIG, SESSION_CONFIG, UI_CONFIG } from './config.js';
+        
+        // Function to get URL parameters
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                province: params.get('province'),
+                district: params.get('district')
+            };
+        }
+
+        // Create a temporary session ID
+        const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        // Make getSessionId available globally
+        window.getSessionId = function() {
+            const storage = localStorage;
+            const storageKey = SESSION_CONFIG.STORAGE_KEY;
+            return storage.getItem(storageKey) || tempSessionId;
+        };
+
+        // Initialize socket connection with config
+        const socket = io(WEBSOCKET_CONFIG.URL, {
+            path: WEBSOCKET_CONFIG.OPTIONS.path,
+            transports: WEBSOCKET_CONFIG.OPTIONS.transports,
+            query: { session_id: tempSessionId },
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 2000,
+            pingTimeout: 60000,
+        });
+
+        // Make socket available globally
+        window.socket = socket;
+
+        // Rest of your socket.io code...
+        socket.on('connect', () => {
+            console.log('Connected to Socket.io server.');
+            const storage = localStorage;
+            const storageKey = SESSION_CONFIG.STORAGE_KEY;
+            storage.setItem(storageKey, socket.id);
+            
+            // First request a session
+            socket.emit('session_request', { session_id: socket.id });
+            
+            // Wait for session initialization
+            socket.once('session_confirm', () => {
+                // Send initial message after a short delay
+                setTimeout(() => {
+                    const { province, district } = getUrlParams();
+                    const initialMessage = province && district 
+                        ? `/introduce{"province": "${province}", "district": "${district}"}`
+                        : '/introduce';
+                    
+                    console.log('Sending initial message:', initialMessage);
+                    socket.emit('user_uttered', {
+                        message: initialMessage,
+                        session_id: socket.id
+                    });
+                }, 1000);
+            });
+        });
+
+        // Handle bot responses
+        socket.on('bot_uttered', (response) => {
+            console.log('Bot uttered:', response);
+            if (response.text) {
+                appendMessage(response.text, 'received');
+            }
+            if (response.quick_replies) {
+                appendQuickReplies(response.quick_replies);
+            }
+            if (response.attachment) {
+                console.log('Attachment received:', response.attachment);
+            }
+        });
+
+        // Error handling
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            appendMessage('Connection error. Please try again later.', 'received');
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Disconnected:', reason);
+            if (reason === "io server disconnect") {
+                socket.connect();
+            }
+        });
+
+        socket.on('user_uttered', function (message) {
+            console.log('📩 User message sent:', message);
+        });
+    </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
     
-    <!-- Socket.IO -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"
-            integrity="sha512-PU5S6BA03fRv1Q5fpwXjg5nlRrgdoguZ74urFInkbABMCENyx5oP3hrDzYMMPh3qdLdknIvrGj3yqZ4JuU7Nag=="
-            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
     <!-- Modern styles -->
     <style>
         :root {
@@ -431,26 +523,6 @@
         // Call clearRasaSession when page loads
         window.addEventListener('load', clearRasaSession);
 
-        // Create a temporary session ID
-        const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-        function getSessionId() {
-            const storage = localStorage;
-            const storageKey = 'RASA_SESSION_ID';
-            return storage.getItem(storageKey) || tempSessionId;
-        }
-
-        // Your working Socket.IO implementation
-        const socket = io('http://13.212.33.134:5005', {
-            path: "/socket.io/",
-            transports: ["websocket"],
-            query: { session_id: tempSessionId },
-            reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 2000,
-            pingTimeout: 60000,
-        });
-
         const messages = document.getElementById('messages');
         const form = document.getElementById('form');
         const messageInput = document.getElementById('message-input');
@@ -490,7 +562,7 @@
                 button.textContent = reply.title;
                 button.onclick = () => {
                     appendMessage(reply.title, 'sent');
-                    socket.emit('user_uttered', {
+                    window.socket.emit('user_uttered', {
                         message: reply.payload,
                         session_id: getSessionId()
                     });
@@ -514,73 +586,18 @@
             chatLauncher.style.display = 'block';
         };
 
-        // Socket.IO event handlers
-        socket.on('connect', () => {
-            console.log('Connected to Socket.io server.');
-            const storage = localStorage;
-            const storageKey = 'RASA_SESSION_ID';
-            storage.setItem(storageKey, socket.id);
-            
-            socket.emit('session_request', { session_id: socket.id });
-            
-            // Send initial message after a short delay
-            setTimeout(() => {
-                const { province, district } = getUrlParams();
-                const initialMessage = province && district 
-                    ? `/introduce{"province": "${province}", "district": "${district}"}`
-                    : '/introduce';
-                
-                console.log('Sending initial message:', initialMessage);
-                socket.emit('user_uttered', {
-                    message: initialMessage,
-                    session_id: socket.id
-                });
-            }, 1000);
-        });
-
-        socket.on('bot_uttered', (response) => {
-            console.log('Bot uttered:', response);
-            if (response.text) {
-                appendMessage(response.text, 'received');
-            }
-            if (response.quick_replies) {
-                appendQuickReplies(response.quick_replies);
-            }
-            if (response.attachment) {
-                // Handle attachments if needed
-                console.log('Attachment received:', response.attachment);
-            }
-        });
-
         // Form submission
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             const msg = messageInput.value;
             if (msg) {
                 appendMessage(msg, 'sent');
-                socket.emit('user_uttered', {
+                window.socket.emit('user_uttered', {
                     message: msg,
                     session_id: getSessionId()
                 });
                 messageInput.value = '';
             }
-        });
-
-        // Error handling
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error);
-            appendMessage('Connection error. Please try again later.', 'received');
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log('Disconnected:', reason);
-            if (reason === "io server disconnect") {
-                socket.connect();
-            }
-        });
-
-        socket.on('user_uttered', function (message) {
-            console.log('📩 User message sent:', message);
         });
     </script>
 </body>

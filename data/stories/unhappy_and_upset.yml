@@ -5,7 +5,7 @@ stories:
 - story: unhappy user restarts story
   steps:
     - intent: mood_unhappy
-    - action: utter_mood_unhappy
+    - action: action_mood_unhappy
     - intent: nav_restart
     - action: action_restart_story
  
@@ -13,6 +13,6 @@ stories:
 - story: unhappy user exits
   steps:
     - intent: mood_unhappy
-    - action: utter_mood_unhappy
+    - action: action_mood_unhappy
     - intent: nav_exit
-    - action: utter_exit_without_filing
+    - action: action_exit_without_filing

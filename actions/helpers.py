@@ -7,6 +7,7 @@ from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
 from typing import Optional
+from icecream import ic
 from .constants import (    
     LOOKUP_FILE_PATH,
     DEFAULT_CSV_PATH,
@@ -370,7 +371,9 @@ class LocationValidator:
         """Check if the district name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        district_names = [d["name"] for d in self.locations.get("provinceList", [])[province_name].get("districtList", [])]
+        district_list_temp = [i for i in self.locations.get("provinceList", []) if i["name"] == province_name]
+        district_list = district_list_temp[0].get("districtList", [])
+        district_names = [d["name"] for d in district_list]
         for possible_name in possible_names:
             matched_district = self._find_best_match(possible_name, district_names)
             if matched_district:

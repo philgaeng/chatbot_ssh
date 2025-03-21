@@ -1,16 +1,18 @@
 version: "3.1"
 stories:
-- story: grievance_crop_loss_with_full_details
+- story: grievance_crop_loss_with_full_details in english
   steps:
-  - intent: nav_introduce
+  - intent: intent_session_start
+  - action: action_session_start
+  - intent: set_english
+  - action: action_set_english
   - slot_was_set:
-    - user_province: KOSHI
-    - user_district: Jhapa
+    - language_code: "en"
+  - action: action_menu
   - intent: grievance_process_start
   - action: action_start_grievance_process
   - slot_was_set:
     - main_story: new_grievance
-  # Grievance details collection
   - action: grievance_details_form
   - active_loop: grievance_details_form
   - slot_was_set:
@@ -66,16 +68,24 @@ stories:
     - grievance_id: GR20250306AFF3E6
     - grievance_status: submitted
 
-- story: grievance_employment_anonymous
+- story: grievance_employment_anonymous in english
   steps:
-  - intent: nav_introduce
+  - intent: intent_session_start
+  - action: action_session_start
+  - intent: set_english
+  - action: action_set_english
   - slot_was_set:
-    - user_province: KOSHI
-    - user_district: Jhapa
+    - language_code: "en"
+  - action: action_menu
   - intent: grievance_process_start
   - action: action_start_grievance_process
   - slot_was_set:
     - main_story: new_grievance
+  - action: grievance_details_form
+  - active_loop: grievance_details_form
+  - slot_was_set:
+    - grievance_temp: I cannot find a job at the road workshop
+  - active_loop: null
   # Grievance details collection
   - action: grievance_details_form
   - active_loop: grievance_details_form
@@ -137,16 +147,21 @@ stories:
     - grievance_id: GR20250306AFF3E6
     - grievance_status: submitted
 
-- story: grievance_environmental_damage_anonymous
+- story: grievance_environmental_damage_anonymous in english
   steps:
-  - intent: nav_introduce
+  - intent: intent_session_start
+  - action: action_session_start
+  - intent: set_english
+  - action: action_set_english
   - slot_was_set:
-    - user_province: KOSHI
-    - user_district: Jhapa
+    - language_code: "en"
+  - action: action_menu
   - intent: grievance_process_start
   - action: action_start_grievance_process
   - slot_was_set:
+    - language_code
     - main_story: new_grievance
+  - active_loop: null
   # Grievance details collection
   - action: grievance_details_form
   - active_loop: grievance_details_form
@@ -204,15 +219,19 @@ stories:
     - grievance_id: GR202503062029EC
     - grievance_status: submitted
 
-- story: grievance_with_change_of_category
+- story: grievance_with_change_of_category in english
   steps:
-  - intent: nav_introduce
+  - intent: intent_session_start
+  - action: action_session_start
+  - intent: set_english
+  - action: action_set_english
   - slot_was_set:
-    - user_province: KOSHI
-    - user_district: Jhapa
+    - language_code: "en"
+  - action: action_menu
   - intent: grievance_process_start
   - action: action_start_grievance_process
   - slot_was_set:
+    - language_code
     - main_story: new_grievance
   # Grievance details collection
   - action: grievance_details_form
@@ -264,16 +283,21 @@ stories:
   - slot_was_set:
     - grievance_id: GR202503062029EC
 
-- story: grievance_lost_harvest_with_full_details
+- story: grievance_lost_harvest_with_full_details in english
   steps:
-  - intent: nav_introduce
+  - intent: intent_session_start
+  - action: action_session_start
+  - intent: set_english
+  - action: action_set_english
   - slot_was_set:
-    - user_province: KOSHI
-    - user_district: Jhapa
+    - language_code: "en"
+  - action: action_menu
   - intent: grievance_process_start
   - action: action_start_grievance_process
   - slot_was_set:
+    - language_code
     - main_story: new_grievance
+  - active_loop: null
   # Grievance details collection
   - action: grievance_details_form
   - active_loop: grievance_details_form

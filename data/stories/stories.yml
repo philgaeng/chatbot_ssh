@@ -1,13 +1,21 @@
 version: "3.1"
 
 stories:
-#Main story: User files a grievance with optional location and contact details
+#Main story: User files a grievance in english with optional location and contact details
 # Step 1: User files a grievance 
 # Step 1.1: User files a grievance with only one input in the grievance details form
   - story: User files a grievance with optional location and contact details
     steps:
-      - intent: nav_introduce
+      - intent: intent_session_start
       - action: action_session_start
+      # - action: menu_form
+      # - active_loop: menu_form
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+        - language_code: "en"
+      # - action: action_set_language
+      - action: action_menu
       - intent: grievance_process_start
       - action: action_start_grievance_process
       - slot_was_set:
@@ -36,14 +44,22 @@ stories:
       - active_loop: null
       - action: action_submit_grievance
 
-
   # # Step 1.1 repeated version
-  - story: User files a grievanceY
+  - story: User files a grievance in nepali with optional location and contact details
     steps:
+      - intent: intent_session_start
+      - action: action_session_start
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+        - language_code: "ne"
+      - action: action_menu
       - intent: grievance_process_start
       - action: action_start_grievance_process
       - slot_was_set:
         - main_story: "new_grievance"
+      - active_loop: null
+      - action: action_start_grievance_process
       - action: grievance_details_form
       - active_loop: grievance_details_form
       - active_loop: null
@@ -168,7 +184,7 @@ stories:
   #User naturally provides location
   - story: Collect location details
     steps:
-      - intent: location_municipality_provide
+      - intent: location_process_start
       - action: location_form
       - active_loop: location_form
       - active_loop: null

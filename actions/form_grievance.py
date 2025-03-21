@@ -19,7 +19,8 @@ from datetime import datetime
 from .messaging import SMSClient, EmailClient
 from rapidfuzz import process
 import traceback
-
+from .utterance_mapping import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from icecream import ic
 #define and load variables
 
 load_dotenv('/home/ubuntu/nepal_chatbot/.env')
@@ -71,6 +72,15 @@ class ActionStartGrievanceProcess(Action):
         print("######################### RESET FORM PARAMETERS ##############")
         print("Value of message_display_list_cat: ", ValidateGrievanceSummaryForm.message_display_list_cat)
         print("---------------------------------------------")
+        
+        # Get language code from tracker
+        language_code = tracker.get_slot("language_code") or "en"
+        
+        # Get utterance and buttons from mapping
+        utterance = get_utterance("grievance_form", "action_start_grievance_process", 1, language_code)
+        buttons = get_buttons("grievance_form", "action_start_grievance_process", 1, language_code)
+        ic(utterance)
+        dispatcher.utter_message(text=utterance, buttons=buttons)
         
         # reset the slots used by the form grievance_details_form and grievance_summary_form and set verification_context to new_user
         return [SlotSet("grievance_new_detail", None),
@@ -126,7 +136,7 @@ class ActionCallOpenAI(Action):
                         Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
                         [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt
                         Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
-                        
+                        For the summary, reply in the language of the grievance.
                         Finally,
                         Return the response in **strict JSON format** like this:
                         {{
@@ -146,17 +156,15 @@ class ActionCallOpenAI(Action):
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         
-        
+        language_code = tracker.get_slot("language_code") or "en"
         grievance_details = tracker.get_slot("grievance_temp")
         print(f"grievance_details_from_grievance_temp: {grievance_details}")
         
         if not grievance_details:
-            dispatcher.utter_message(text="There was an issue processing your grievance. Please try again.",
-                                    buttons=[
-                                        {"title": "Try again", "payload": "/start_grievance_process"},
-                                            {"title": "Exit", "payload": "/exit_without_filing"}
-                                            ]
-                                        )
+            
+            utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+            buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
             return {}
 
         print(f"Raw - grievance_details: {grievance_details}")
@@ -164,7 +172,9 @@ class ActionCallOpenAI(Action):
         result = await self._call_openai_for_classification(grievance_details)
         
         if result is None:
-            dispatcher.utter_message(text="⚠ Sorry, there was an issue processing your grievance. Please try again.")
+            utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+            buttons = get_buttons("grievance_form", self.name(), 2, language_code)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
             return {}
 
         print(f"Raw - gpt message: {result}")
@@ -219,30 +229,19 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
+        result = {}
         latest_message = tracker.latest_message
-        if latest_message:
-            # Get the latest message and inten
-            input_text = latest_message.get("text")
-            intent = latest_message.get("intent")
-            
-            if input_text == "/start_grievance_process":
-                dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
-            print("######################### EXTRACT GRIEVANCE NEW DETAIL ##############")
-
-            
-            # Only extract when this slot is requested
-            return await self._handle_slot_extraction(
-            "grievance_new_detail",
-            tracker,
-            dispatcher,
-            domain,
-            skip_value=True,  # When skipped, assume confirmed
-            # custom_action=self._dispatch_openai_message
-        )
-
-        
-        return {}
-
+        requested_slot = tracker.get_slot("requested_slot")=="grievance_new_detail"
+        if latest_message and requested_slot:
+        # Only extract when the value is not None slot is requested
+            result = await self._handle_slot_extraction(
+                                            "grievance_new_detail",
+                                            tracker,
+                                            dispatcher,
+                                            domain,
+                                            skip_value=True,  # When skipped, assume confirmed
+                                        )
+        return result
 
     async def validate_grievance_new_detail(
         self,
@@ -263,7 +262,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         print(f"current_grievance_details: {current_temp}")
         
         # Handle form completion
-        if "/submit_details" in slot_value:
+        if slot_value and "/submit_details" in slot_value:
             print("######################### LAST VALIDATION ##############")
             print("🎯 FORM: Handling submit_details intent")
             #call action_ask_grievance_details_form_grievance_temp
@@ -309,21 +308,21 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         print(f"-------- end of validate_grievance_new_detail --------")
         return {"grievance_new_detail": None}
 
-    def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
-        """Helper method to show the standard options buttons."""
-        print("\n🔘 FORM: Showing options buttons")
-        dispatcher.utter_message(
-            text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
-                 "- Location information\n"
-                 "- Persons involved\n"
-                 "- Quantification of damages (e.g., number of bags of rice lost)\n"
-                 "- Monetary value of damages",
-            buttons=[
-                {"title": "File as is", "payload": "/submit_details"},
-                {"title": "Add more details", "payload": "/add_more_details"},
-                {"title": "Cancel filing", "payload": "/exit_without_filing"}
-            ]
-        )
+    # def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
+    #     """Helper method to show the standard options buttons."""
+    #     print("\n🔘 FORM: Showing options buttons")
+    #     dispatcher.utter_message(
+    #         text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
+    #              "- Location information\n"
+    #              "- Persons involved\n"
+    #              "- Quantification of damages (e.g., number of bags of rice lost)\n"
+    #              "- Monetary value of damages",
+    #         buttons=[
+    #             {"title": "File as is", "payload": "/submit_details"},
+    #             {"title": "Add more details", "payload": "/add_more_details"},
+    #             {"title": "Cancel filing", "payload": "/exit_without_filing"}
+    #         ]
+    #     )
 
     def _update_grievance_text(self, current_text: str, new_text: str) -> str:
         """Helper method to update the grievance text."""
@@ -345,30 +344,26 @@ class ActionAskGrievanceDetailsFormGrievanceTemp(Action):
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         slot_grievance = tracker.get_slot("grievance_new_detail")
+        language_code = tracker.get_slot("language_code") or "en"
         
-        if not slot_grievance or slot_grievance == "/start_grievance_process":
-            dispatcher.utter_message(text="Great! Let's start by understanding your grievance...")
+        # if not slot_grievance or slot_grievance == "/start_grievance_process":
+        #     print("######################### ASK GRIEVANCE TEMP ##############")
+        #     utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+        #     buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+        #     dispatcher.utter_message(text=utterance, buttons=buttons)
         
         if slot_grievance == "/add_more_details":
-            dispatcher.utter_message(text="Please enter more details...")
+            utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+            dispatcher.utter_message(text=utterance)
             
         if "/submit_details" in slot_grievance:
-            dispatcher.utter_message(text="Calling OpenAI for classification... This may take a few seconds...")
+            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            dispatcher.utter_message(text=utterance)
             
         if slot_grievance and not slot_grievance.startswith('/'):
-            print("\n🔘 FORM: Showing options buttons")
-            dispatcher.utter_message(
-                text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
-                    "- Location information\n"
-                    "- Persons involved\n"
-                    "- Quantification of damages (e.g., number of bags of rice lost)\n"
-                    "- Monetary value of damages",
-                buttons=[
-                    {"title": "File as is", "payload": "/submit_details"},
-                    {"title": "Add more details", "payload": "/add_more_details"},
-                    {"title": "Cancel filing", "payload": "/exit_without_filing"}
-                ]
-            )
+            utterance = get_utterance("grievance_form", self.name(), 4, language_code)
+            buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
             
         return []
 
@@ -631,8 +626,7 @@ class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        """Ask for grievance_list_cat_confirmed slot."""
-        
+        language_code = tracker.get_slot("language_code") or "en"
         print(f"ACTION ASK GRIEVANCE SUMMARY FORM GRIEVANCE LIST CAT CONFIRMED\n called with message_display_list_cat: {ValidateGrievanceSummaryForm.message_display_list_cat}")
             
         if ValidateGrievanceSummaryForm.message_display_list_cat:
@@ -641,23 +635,17 @@ class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
             
             if not grievance_list_cat or grievance_list_cat == []:
                 print("No categories found, sending no categories message")
-                dispatcher.utter_message(text="No categories have been identified yet.",
-                                    buttons=[
-                                        {"title": "Add category", "payload": "/add_category"},
-                                        {"title": "Continue without categories", "payload": "/slot_confirmed"}
-                                    ])
+                utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+                buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+            
             else:
                 print(f"Sending message with categories: {grievance_list_cat}")
                 category_text = "\n".join([v for v in grievance_list_cat])
-                response_message = f"I have identified these categories:\n{category_text}\nDoes this seem correct?"
-                
-                dispatcher.utter_message(text=response_message,
-                                    buttons=[
-                                        {"title": "Yes", "payload": "/slot_confirmed"},
-                                        {"title": "Add category", "payload": "/slot_added"},
-                                        {"title": "Delete category", "payload": "/slot_deleted"},
-                                        {"title": "Exit", "payload": "/skip"}
-                                    ])
+                utterance = get_utterance("grievance_form", self.name(), 2, language_code).format(category_text=category_text)  
+                buttons = get_buttons("grievance_form", self.name(), 2, language_code)
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+
             ValidateGrievanceSummaryForm.message_display_list_cat = False
             print(f"Set message_display_list_cat to {ValidateGrievanceSummaryForm.message_display_list_cat}")
 
@@ -674,15 +662,15 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(Action):
         tracker: Tracker,
         domain: DomainDict
         ) -> List[Dict[Text, Any]]:
-        
+        language_code = tracker.get_slot("language_code") or "en"
         flag = tracker.get_slot("grievance_list_cat_confirmed")
         print("ask_cat_modify flag :", flag)
         list_of_cat = tracker.get_slot("grievance_list_cat")
         
         if flag == 'slot_deleted':
-            
             if not list_of_cat:
-                dispatcher.utter_message(text="No categories selected. Skipping this step.")
+                utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+                dispatcher.utter_message(text=utterance)
                 return {"grievance_list_cat_confirmed": "slot_skipped"}
             else:
                 buttons = [
@@ -690,23 +678,17 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(Action):
                     for cat in list_of_cat
                 ]
                 buttons.append({"title": "Skip", "payload": "/skip"})
-
-                dispatcher.utter_message(
-                    text="Which category would you like to delete?",
-                    buttons=buttons
-                )
+                utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+                dispatcher.utter_message(text=utterance, buttons=buttons)
                 
         if flag == "slot_added":
             list_cat_to_add = [cat for cat in LIST_OF_CATEGORIES if cat not in list_of_cat]
-            #display the new category to the user with buttons
             buttons = [
                 {"title": cat, "payload": f'/add_category{{"category": "{cat}"}}'} 
                 for cat in list_cat_to_add[:10]
             ]
-            dispatcher.utter_message(
-                text="Please select the new category from the list below:",
-                buttons=buttons
-            )
+            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
         return []
     
     
@@ -720,30 +702,29 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed(Action):
         tracker: Tracker,
         domain: DomainDict
         ) -> List[Dict[Text, Any]]:
-        
-        #create a function to utter the message for the summary
+        language_code = tracker.get_slot("language_code") or "en"
         current_summary = tracker.get_slot("grievance_summary_temp")
         if current_summary:
-            dispatcher.utter_message(
-                text=f"Here is the current summary: '{current_summary}'.\n Is this correct?",
-                buttons=[
-                    {"title": "Validate summary", "payload": "/slot_confirmed"},
-                    {"title": "Edit summary", "payload": "/slot_edited"},
-                    {"title": "Skip", "payload": "/skip"}
-                ]
-            )
+            utterance = get_utterance("grievance_form", self.name(), 1, language_code).format(current_summary=current_summary)
+            buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+            dispatcher.utter_message(text=f"{utterance}\n'{current_summary}'", buttons=buttons)
         else:
-            dispatcher.utter_message(
-                text="There is no summary yet. Please type a new summary for your grievance or type 'skip' to proceed without a summary."
-            )
-    
+            utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+            buttons = BUTTON_SKIP
+            dispatcher.utter_message(text=utterance)
+
 class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(Action):
     def name(self) -> Text:
         return "action_ask_grievance_summary_form_grievance_summary_temp"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        language_code = tracker.get_slot("language_code") or "en"
         if tracker.get_slot("grievance_summary_confirmed") == "slot_edited":
-            dispatcher.utter_message(text="Please enter the new summary and confirm again.")
+            utterance = get_utterance("grievance_form", 
+                                      self.name(), 
+                                      2, 
+                                      language_code)
+            dispatcher.utter_message(text=utterance)
         return []
 
 
@@ -810,44 +791,77 @@ class ActionSubmitGrievance(Action):
 
         return user_data, grievance_data, grievance_status
 
-    def create_confirmation_message(self, grievance_id: str, grievance_data: Dict[str, Any], user_email: str = None) -> str:
+    def create_confirmation_message(self, 
+                                    tracker: Tracker, 
+                                    grievance_id: str, 
+                                    grievance_data: Dict[str, Any],
+                                    user_email: str = None) -> str:
         """Create a formatted confirmation message."""
-        message = [
-            f"Your grievance has been filed successfully.",
-            f"\n**Grievance ID:** {grievance_id}"
-        ]
-
+        message = []
+        language_code = tracker.get_slot("language_code") or "en"
+        message = [get_utterance("grievance_form", 
+                                 'create_confirmation_message', 
+                                 i, 
+                                 language_code).format(i) for i in ['base_message',
+                                                         'grievance_summary',
+                                                         'grievance_category',
+                                                         'grievance_details',
+                                                         'grievance_email',
+                                                         'grievance_phone',
+                                                         'grievance_outro']]
+        
         # Add summary if available
-        if grievance_data['grievance_summary']:
-            message.append(f"**Summary:** {grievance_data['grievance_summary']}")
-        else:
-            message.append("**Summary:** [Not Provided]")
+        # if grievance_data['grievance_summary']:
+        #     if language_code == "ne":
+        #         message.append(f"**सारांश:** {grievance_data['grievance_summary']}")
+        #     else:   
+        #         message.append(f"**Summary:** {grievance_data['grievance_summary']}")
+        # else:
+        #     if language_code == "ne":
+        #         message.append("**सारांश:** [Not Provided]")
+        #     else:
+        #         message.append("**Summary:** [Not Provided]")
 
-        # Add category if available
-        if grievance_data['grievance_category']:
-            message.append(f"**Category:** {grievance_data['grievance_category']}")
-        else:
-            message.append("**Category:** [Not Provided]\nYou can add the category later if needed.")
+        # # Add category if available
+        # if grievance_data['grievance_category']:
+        #     if language_code == "ne":
+        #         message.append(f"**श्रेणी:** {grievance_data['grievance_category']}")
+        #     else:
+        #         message.append(f"**Category:** {grievance_data['grievance_category']}")
+        # else:
+        #     if language_code == "ne":
+        #         message.append("**श्रेणी:** [प्रदान गरिएन]\n यदि आवश्यक भएमा तपाईंले पछि श्रेणी थप्न सक्नुहुन्छ")
+        #     else:
+        #         message.append("**Category:** [Not Provided]\nYou can add the category later if needed.")
 
-        # Add details if available
-        if grievance_data['grievance_details']:
-            message.append(f"**Details:** {grievance_data['grievance_details']}")
+        # # Add details if available
+        # if grievance_data['grievance_details']:
+        #     if language_code == "ne":
+        #         message.append(f"**विवरण:** {grievance_data['grievance_details']}")
+        #     else:
+        #         message.append(f"**Details:** {grievance_data['grievance_details']}")
+        # if language_code == "ne":
+        #     message.append("\nहाम्रो टीमले तपाईंको गुनासो थुप्रै जानकारी गर्नेछौं र अगाडि जानकारी आवश्यक भएको छ भन्ने सम्झौतामा तपाईंलाई सम्पर्क गर्नेछौं।")
+        # else:
+        #     message.append("\nOur team will review it shortly and contact you if more information is needed.")
 
-        message.append("\nOur team will review it shortly and contact you if more information is needed.")
-
-        # Add email notification info if available
-        if user_email:
-            message.append(f"\nA confirmation email will be sent to {user_email}")
+        # # Add email notification info if available
+        # if user_email:
+        #     if language_code == "ne":
+        #         message.append(f"\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {user_email}")
+        #     else:
+        #         message.append(f"\nA confirmation email will be sent to {user_email}")
 
         return "\n".join(message)
     
     async def _send_grievance_recap_email(self, 
+                                          tracker: Tracker,
                                           to_emails: List[str],
                                           email_data: Dict[str, Any],
                                           body_name: str,
                                           dispatcher: CollectingDispatcher) -> None:
         """Send a recap email to the user."""
-
+        language_code = tracker.get_slot("language_code") or "en"
         json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
         
         # categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_category'] or []))
@@ -881,10 +895,10 @@ class ActionSubmitGrievance(Action):
                                         subject = subject,
                                         body=body
                                         )
-            if body_name == "GRIEVANCE_RECAP_USER_BODY":    
-                dispatcher.utter_message(
-                        text="✅ A recap of your grievance has been sent to your email."
-                    )
+            if body_name == "GRIEVANCE_RECAP_USER_BODY":
+                message = get_utterance("grievance_form", self.name(), 2, language_code)
+                dispatcher.utter_message(text=message)
+                
         except Exception as e:
             logger.error(f"Failed to send system notification email: {e}"
             )
@@ -893,6 +907,7 @@ class ActionSubmitGrievance(Action):
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         print("\n=================== Submitting Grievance ===================")
+        language_code = tracker.get_slot("language_code") or "en"
         
         try:
             # Collect grievance data
@@ -949,7 +964,9 @@ class ActionSubmitGrievance(Action):
                                                        "GRIEVANCE_RECAP_USER_BODY", 
                                                        dispatcher=dispatcher)
                 
-            
+                # Send email confirmation message
+                utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+                dispatcher.utter_message(text=utterance)
         
             # Prepare events
             return [
@@ -961,10 +978,8 @@ class ActionSubmitGrievance(Action):
         except Exception as e:
             print(f"❌ Error submitting grievance: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
-            dispatcher.utter_message(
-                text="I apologize, but there was an error submitting your grievance. "
-                "Please try again or contact support."
-            )
+            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            dispatcher.utter_message(text=utterance)
             return []
         
         

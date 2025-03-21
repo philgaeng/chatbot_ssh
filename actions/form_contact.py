@@ -9,31 +9,24 @@ from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .constants import EMAIL_PROVIDERS_NEPAL
 from .base_form import BaseFormValidationAction
+from .utterance_mapping import get_utterance, get_buttons
 logger = logging.getLogger(__name__)
 
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
+def get_language_code(tracker: Tracker) -> str:
+    """Helper function to get the language code from tracker with English as fallback."""
+    return tracker.get_slot("language_code") or "en"
 
 class AskContactFormUserContactConsent(Action):
     def name(self) -> str:
         return "action_ask_contact_form_user_contact_consent"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        message = (
-            "Would you like to provide your contact information? Here are your options:\n\n"
-            "1️⃣ **Yes**: Share your contact details for follow-up and updates about your grievance.\n"
-            "2️⃣ **Anonymous with phone number**: Stay anonymous but provide a phone number to receive your grievance ID.\n"
-            "3️⃣ **No contact information**: File your grievance without providing contact details. "
-            "Note that we won't be able to follow up or share your grievance ID."
-        )
-        dispatcher.utter_message(
-            text=message,
-            buttons=[
-                {"title": "Yes", "payload": "/affirm"},
-                {"title": "Anonymous with phone", "payload": "/anonymous_with_phone"},
-                {"title": "No contact info", "payload": "/slot_skipped"},
-            ]
-        )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskContactFormUserFullName(Action):
@@ -41,11 +34,10 @@ class ActionAskContactFormUserFullName(Action):
         return "action_ask_contact_form_user_full_name"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text="Please enter your full name. You can skip this if you prefer to remain anonymous.",
-                                 buttons=[
-                                     {"title": "Skip", "payload": "/slot_skipped"}
-                                 ]
-                                 )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskContactFormUserContactPhone(Action):
@@ -53,11 +45,10 @@ class ActionAskContactFormUserContactPhone(Action):
         return "action_ask_contact_form_user_contact_phone"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text="Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. \nYou can skip this if you prefer to remain anonymous.",
-                                 buttons=[
-                                     {"title": "Skip", "payload": "/slot_skipped"}
-                                 ]
-                                 )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 
@@ -68,17 +59,10 @@ class ActionAskContactFormPhoneValidationRequired(Action):
     async def run(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(
-            text=(
-                "Your grievance is filed without a validated number. Providing a valid number "
-                "will help in the follow-up of the grievance and we recommend it. However, "
-                "you can file the grievance as is."
-            ),
-            buttons=[
-                {"title": "Give Phone Number", "payload": "/affirm"},
-                {"title": "File Grievance as is", "payload": "/deny"}
-            ]
-        )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskContactFormUserContactEmailTemp(Action):
@@ -86,11 +70,10 @@ class ActionAskContactFormUserContactEmailTemp(Action):
         return "action_ask_contact_form_user_contact_email_temp"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text="Please enter your contact email. You can skip this if you prefer to remain anonymous.",
-                                 buttons=[
-                                     {"title": "Skip", "payload": "/slot_skipped"}
-                                 ]
-                                 )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskContactFormUserContactEmailConfirmed(Action):
@@ -99,14 +82,10 @@ class ActionAskContactFormUserContactEmailConfirmed(Action):
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         domain_name = tracker.get_slot("user_contact_email_temp").split('@')[1]
-        dispatcher.utter_message(
-                text=f"⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
-                buttons=[
-                    {"title": "Confirm Email", "payload": f"/slot_confirmed"},
-                    {"title": "Try Different Email", "payload": "/slot_edited"},
-                    {"title": "Skip Email", "payload": "/slot_skipped"}
-            ]
-        )
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language).format(domain_name=domain_name)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
     
@@ -463,24 +442,22 @@ class ActionModifyContactInfo(Action):
     ) -> List[Dict[Text, Any]]:
         current_email = tracker.get_slot("user_contact_email")
         current_phone = tracker.get_slot("user_contact_phone")
+        language = get_language_code(tracker)
         
-        buttons = []
+        message = get_utterance('contact_form', self.name(), 1, language)
+        buttons = get_buttons('contact_form', self.name(), 1, language)
+        
         if current_email and current_email != "slot_skipped":
-            buttons.append({"title": f"📧 Change Email ({current_email})", "payload": "/modify_email"})
+            buttons = [i for i in buttons if "Add Email" or "इमेल परिवर्तन गर्नुहोस्" not in i['title']]
         elif current_email == "slot_skipped":
-            buttons.append({"title": "📧 Add Email", "payload": "/modify_email"})
+            buttons = [i for i in buttons if "Change Email" or "इमेल थप्नुहोस्"not in i['title']]
             
         if current_phone and current_phone != "slot_skipped":
-            buttons.append({"title": f"📱 Change Phone ({current_phone})", "payload": "/modify_phone"})
+            buttons = [i for i in buttons if "Add Phone" or "फोन थप्नुहोस्" not in i['title']]
         elif current_phone == "slot_skipped":
-            buttons.append({"title": "📱 Add Phone", "payload": "/modify_phone"})
+            buttons = [i for i in buttons if "Change Phone" or "फोन परिवर्तन गर्नुहोस्" not in i['title']]
             
-        buttons.append({"title": "❌ Cancel", "payload": "/cancel_modification_contact"})
-            
-        dispatcher.utter_message(
-            text="Which contact information would you like to modify?",
-            buttons=buttons
-        )
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
 class ActionModifyEmail(Action):
@@ -493,6 +470,9 @@ class ActionModifyEmail(Action):
         tracker: Tracker,
         domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
         return [
             SlotSet("user_contact_email", None),
             SlotSet("contact_modification_mode", True),
@@ -509,5 +489,7 @@ class ActionCancelModification(Action):
         tracker: Tracker,
         domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text="✅ Modification cancelled. Your contact information remains unchanged.")
+        language = get_language_code(tracker)
+        message = get_utterance('contact_form', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
         return [SlotSet("contact_modification_mode", False)]

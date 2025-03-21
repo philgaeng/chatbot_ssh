@@ -19,133 +19,115 @@ from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
 from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the constants
-
-
+from .utterance_mapping import get_utterance, get_buttons
+from icecream import ic
+import json
 logger = logging.getLogger(__name__)
 
-# class ActionSessionStart(Action):
-#     def name(self) -> str:
-#         return "action_session_start"
 
-#     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-#         logger.info("ActionSessionStart triggered")
-#         events = [SessionStarted(), ActionExecuted("action_listen")]
-#         logger.info("Dispatcher is sending response: utter_introduce")  # Debugging line
-#         dispatcher.utter_message(response="utter_introduce")
-#         # dispatcher.utter_message(text="Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?")
-#         logger.info("utter_introduce sent")  # Debugging line
-#         return events
-# Action to prepopulate location based on QR code
-
-
-
-class ActionIntroduce(Action):
-    def name(self) -> str:
-        return "action_introduce"
-
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        # Extract province and district from the payload
-        message = tracker.latest_message.get('text', '')
-        entities = tracker.latest_message.get('entities', [])
-        
-        # Try to get province and district from the message payload
-        province = None
-        district = None
-        
-        try:
-            import json
-            # Check if the message contains JSON data
-            if '{' in message and '}' in message:
-                json_str = message[message.index('{'):message.rindex('}')+1]
-                data = json.loads(json_str)
-                province = data.get('province')
-                district = data.get('district')
-        except:
-            pass
-
-        # If we got province and district from the payload, set the slots
-        events = []
-        if province and district:
-            events.extend([
-                SlotSet("user_province", province),
-                SlotSet("user_district", district)
-            ])
-            welcome_text = f"""INTRODUCE: Hello! Welcome to the Grievance Management Chatbot.
-            You are reaching out to the office of {district} in {province}.
-            I am here to help you file a grievance or check its status. What would you like to do?"""
-        else:
-            welcome_text = """INTRODUCE: Hello! Welcome to the Grievance Management Chatbot.
-            I am here to help you file a grievance or check its status. What would you like to do?"""
-
-        dispatcher.utter_message(
-            text=welcome_text,
-            buttons=[
-                {"title": "File a grievance", "payload": "/start_grievance_process"},
-                {"title": "Check my status", "payload": "/check_status"},
-                {"title": "Exit", "payload": "/goodbye"}
-            ]
-        )
-
-        return events
-
+def get_language_code(tracker: Tracker) -> str:
+    """Helper function to get the language code from tracker with English as fallback."""
+    return tracker.get_slot("language_code") or "en"
 
 
 class ActionSessionStart(Action):
     def name(self) -> Text:
         return "action_session_start"
+    
+    def get_province_and_district(self, message: str) -> str:
+        if '{' in message and '}' in message:
+            json_str = message[message.index('{'):message.rindex('}')+1]
+            data = json.loads(json_str)
+            province = data.get('province')
+            district = data.get('district')
+            return province, district
+        else:
+            return None, None
 
-    async def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> List[Dict[Text, Any]]:
-        # Initialize session
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         events = [SessionStarted()]
-        
-        # Get the latest message
         message = tracker.latest_message.get('text', '')
-        
-        # Initialize welcome text
-        welcome_text = """Hello! Welcome to the Grievance Management Chatbot.
-            I am here to help you file a grievance or check its status. What would you like to do?"""
-        
-        try:
-            import json
-            # Check if the message contains JSON data
-            if '{' in message and '}' in message:
-                json_str = message[message.index('{'):message.rindex('}')+1]
-                data = json.loads(json_str)
-                province = data.get('province')
-                district = data.get('district')
-                
+        ic(tracker.latest_message)
+        ic(message)
+        if message:
+            if "introduce" in message.lower():
+                province, district = self.get_province_and_district(message)
                 if province and district:
                     events.extend([
                         SlotSet("user_province", province),
                         SlotSet("user_district", district)
                     ])
-                    welcome_text = f"""Hello! Welcome to the Grievance Management Chatbot.
-                    You are reaching out to the office of {district} in {province}.
-                    I am here to help you file a grievance or check its status. What would you like to do?"""
-                    print(welcome_text)
-                
-        except:
-            pass
-        if message and "/" in message:
-            # Send introduction message
-            dispatcher.utter_message(
-                text=welcome_text,
-                buttons=[
-                    {"title": "File a grievance", "payload": "/start_grievance_process"},
-                    {"title": "Check my status", "payload": "/check_status"},
-                    {"title": "Exit", "payload": "/goodbye"}
-                ]
-            )
-            
-        # Add the action that listens for the next user message
-        events.append(ActionExecuted("action_listen"))
-        
+        #dispatch message to choose language
+        text = get_utterance('generic_actions', self.name(), 1, 'en')
+        buttons = get_buttons('generic_actions', self.name(), 1, 'en')
+        ic(text)
+        ic(buttons)
+        dispatcher.utter_message(text=text, buttons=buttons)
         return events
+    
+# class ActionSetLanguage(Action):
+#     def name(self) -> Text:
+#         return "action_set_language"
+    
+
+#     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+#         message = tracker.latest_message.get('text', '')
+#         print(message)
+#         if "nepali" in tracker.latest_message.get('text', '').lower():
+#             events = [SlotSet("language_code", "ne")]
+#         elif "english" in tracker.latest_message.get('text', '').lower():
+#             events = [SlotSet("language_code", "en")]
+#         else:
+#             events = []
+#         return events
+
+class ActionSetEnglish(Action):
+    def name(self) -> Text:
+        return "action_set_english"
+    
+    def run(self,
+            dispatcher: CollectingDispatcher,
+            tracker: Tracker,
+            domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        return [SlotSet("language_code", "en")]
+    
+class ActionSetNepali(Action):
+    def name(self) -> Text:
+        return "action_set_nepali"
+    
+    def run(self,
+            dispatcher: CollectingDispatcher,
+            tracker: Tracker,
+            domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        return [SlotSet("language_code", "ne")]
+
+class ActionMenu(Action):
+    def name(self) -> Text:
+        return "action_menu"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        
+        # Get language, district and province
+        language = get_language_code(tracker)
+        district = tracker.get_slot("user_district")
+        province = tracker.get_slot("user_province")
+        ic(language, district, province)
+        if district and province:
+            welcome_text = get_utterance('generic_actions', self.name(), 2, language).format(
+                district=district,
+                province=province
+            )
+        else:
+            welcome_text = get_utterance('generic_actions', self.name(), 1, language)
+        buttons = get_buttons('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=welcome_text, buttons=buttons)
+        return []
 
 
 
@@ -156,7 +138,9 @@ class ActionSetCurrentProcess(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         current_story = "Filing a Complaint"  # Replace with dynamic logic if needed
-        dispatcher.utter_message(response="utter_set_current_process", current_story=current_story)
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language).format(current_story=current_story)
+        dispatcher.utter_message(text=message)
         return [SlotSet("current_process", current_story)]
 
 
@@ -169,7 +153,9 @@ class ActionGoBack(Action):
         return "action_go_back"
 
     def run(self, dispatcher, tracker, domain):
-        dispatcher.utter_message(response="utter_go_back")
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
         return [UserUtteranceReverted()]
 
 
@@ -182,17 +168,15 @@ class ActionRestartStory(Action):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         current_process = tracker.get_slot("current_process")
         current_story = tracker.get_slot("current_story")
+        language = get_language_code(tracker)
 
         process_name = current_process if current_process else "current process"
         story_name = current_story if current_story else "current story"
 
-        buttons = [
-            {"title": f"Restart the {process_name}", "payload": "/restart_story{\"restart_type\": \"process\"}"},
-            {"title": f"Restart the {story_name}", "payload": "/restart_story{\"restart_type\": \"story\"}"},
-            {"title": "Go back to the main menu", "payload": "/main_menu"}
-        ]
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        buttons = get_buttons('generic_actions', self.name(), 1, language)
 
-        dispatcher.utter_message(response="utter_restart_story", buttons=buttons)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
     
@@ -203,10 +187,14 @@ class ActionShowCurrentStory(Action):
 
     def run(self, dispatcher, tracker, domain):
         current_story = tracker.get_slot("current_story")
+        language = get_language_code(tracker)
+        
         if current_story:
-            dispatcher.utter_message(response="utter_show_current_story", current_story=current_story)
+            message = get_utterance('generic_actions', self.name(), 1, language).format(current_story=current_story)
         else:
-            dispatcher.utter_message(response="utter_show_current_story_unknown")
+            message = get_utterance('generic_actions', self.name(), 2, language)
+            
+        dispatcher.utter_message(text=message)
         return []
 
 #mood actions
@@ -216,12 +204,15 @@ class ActionHandleMoodGreat(Action):
 
     def run(self, dispatcher, tracker, domain):
         previous_action = tracker.get_slot("previous_state")
+        language = get_language_code(tracker)
 
         if previous_action:
-            dispatcher.utter_message(response="utter_mood_great_continue")
+            message = get_utterance('generic_actions', self.name(), 1, language)
+            dispatcher.utter_message(text=message)
             return [FollowupAction(previous_action)]
         else:
-            dispatcher.utter_message(response="utter_mood_great_next_step")
+            message = get_utterance('generic_actions', self.name(), 2, language)
+            dispatcher.utter_message(text=message)
             return []
 
         
@@ -230,7 +221,9 @@ class ActionRespondToChallenge(Action):
         return "action_respond_to_challenge"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(response="utter_respond_to_challenge")
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
         return []
     
 class ActionCustomFallback(Action):
@@ -238,14 +231,10 @@ class ActionCustomFallback(Action):
         return "action_custom_fallback"
 
     def run(self, dispatcher, tracker, domain):
-        dispatcher.utter_message(
-            text="I didn't understand that. What would you like to do next?",
-            buttons=[
-                {"title": "Try Again", "payload": "/restart_story{\"restart_type\": \"story\"}"},
-                {"title": "File Grievance as Is", "payload": "/file_grievance_as_is"},
-                {"title": "Exit", "payload": "/exit"}
-            ]
-        )
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        buttons = get_buttons('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return [UserUtteranceReverted()]
 
 
@@ -258,10 +247,44 @@ class ActionHandleSkip(Action):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         skip_count = tracker.get_slot("skip_count") or 0
         skip_count += 1
+        language = get_language_code(tracker)
 
         if skip_count >= 2:
-            dispatcher.utter_message(response="utter_ask_file_as_is")
+            message = get_utterance('generic_actions', self.name(), 1, language)
+            dispatcher.utter_message(text=message)
             return [SlotSet("skip_count", 0)]
         else:
-            dispatcher.utter_message(response="utter_skip_confirmation")
+            message = get_utterance('generic_actions', self.name(), 2, language)
+            dispatcher.utter_message(text=message)
             return [SlotSet("skip_count", skip_count)]
+
+class ActionGoodbye(Action):
+    def name(self) -> Text:
+        return "action_goodbye"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
+        return []
+        
+class ActionMoodUnhappy(Action):
+    def name(self) -> Text:
+        return "action_mood_unhappy"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
+        return []
+        
+class ActionExitWithoutFiling(Action):
+    def name(self) -> Text:
+        return "action_exit_without_filing"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        buttons = get_buttons('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []

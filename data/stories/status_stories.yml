@@ -5,13 +5,19 @@ version: "3.1"
 # #The third story is for checking the status of the grievance that happens once the grievance is retrieved
 
 stories:
-  - story: Happy path - retrieve grievance with phone and check status
+  - story: Happy path - retrieve grievance with phone and check status in english
     steps:
-      - intent: nav_introduce
+      - intent: intent_session_start
       - action: action_session_start
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+        - language_code: "en"
+      - action: action_menu
       - intent: status_check_start
       - slot_was_set:
             - main_story: "status_update"
+      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
       - active_loop: otp_verification_form
@@ -20,14 +26,71 @@ stories:
       - intent: status_check
       - action: action_check_status
 
-  - story: Direct grievance ID retrieval and status check
-  
+  - story: Happy path - retrieve grievance with phone and check status in nepali
     steps:
-      - intent: nav_introduce
+      - intent: intent_session_start
       - action: action_session_start
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+        - language_code: "ne"
+      - action: action_menu
       - intent: status_check_start
       - slot_was_set:
-          - main_story: "status_update"
+            - main_story: "status_update"
+      - active_loop: null
+      - action: action_choose_retrieval_method
+      - intent: status_check_phone
+      - active_loop: otp_verification_form
+      - active_loop: null
+      - action: action_display_grievance
+      - intent: status_check
+      - action: action_check_status
+
+
+  - story: Direct grievance ID retrieval and status check in english
+    steps:
+      - intent: intent_session_start
+      - action: action_session_start
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+        - language_code: "en"
+      - action: action_menu
+      - intent: status_check_start
+      - slot_was_set:
+            - main_story: "status_update"
+      # - action: action_menu
+      # - intent: status_check_start
+      # - slot_was_set:
+      #       - main_story: "status_update"
+      - active_loop: null
+      - action: action_choose_retrieval_method
+      - intent: status_check_id
+      - action: grievance_id_form
+      - active_loop: grievance_id_form
+      - active_loop: null
+      - action: action_display_grievance
+      - intent: status_check
+      - action: action_check_status
+
+  - story: Direct grievance ID retrieval and status check in nepali
+    steps:
+      - intent: intent_session_start
+      - action: action_session_start
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+        - language_code: "ne"
+      - action: action_menu
+      - intent: status_check_start
+      - slot_was_set:
+            - main_story: "status_update"
+      # - action: action_menu
+      # - intent: status_check_start
+      # - slot_was_set:
+      #       - main_story: "status_update"
+      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_id
       - action: grievance_id_form
@@ -43,13 +106,44 @@ stories:
       - intent: status_check
       - action: action_check_status
 
-  - story: User retrieves multiplrae grievances
+  - story: User retrieves multiple grievances in english
     steps:
-      - intent: nav_introduce
+      - intent: intent_session_start
       - action: action_session_start
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+        - language_code: "en"
+      - action: action_menu
       - intent: status_check_start
       - slot_was_set:
           - main_story: "status_update"
+      - active_loop: null
+      - action: action_choose_retrieval_method
+      - intent: status_check_phone
+      - active_loop: otp_verification_form
+      - active_loop: null
+      - action: action_display_grievance
+      - intent: status_check
+      - action: action_check_status
+      - intent: status_check_another
+      - action: action_display_grievance
+      - intent: status_check
+      - action: action_check_status
+
+  - story: User retrieves multiple grievances in nepali
+    steps:
+      - intent: intent_session_start
+      - action: action_session_start
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+        - language_code: "ne"
+      - action: action_menu
+      - intent: status_check_start
+      - slot_was_set:
+          - main_story: "status_update"
+      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
       - active_loop: otp_verification_form

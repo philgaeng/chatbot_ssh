@@ -160,6 +160,9 @@ nlu:
     - goodmorning
     - goodevening
     - good afternoon
+
+- intent: intent_session_start
+  examples: |
     - /introduce
     - /Introduce
     - /introduce{"province": "${province}", "district": "${district}"}
@@ -549,3 +552,16 @@ nlu:
     - check my grievance status
     - check my grievance
 
+- intent: set_nepali
+  examples: |
+    - /ne
+    - /nepali
+    - nepali
+    - नेपाली
+
+- intent: set_english
+  examples: |
+    - /en
+    - /english
+    - english
+    - अंग्रेजी

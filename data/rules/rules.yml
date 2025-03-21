@@ -5,7 +5,7 @@ rules:
   - rule: Say goodbye anytime the user says goodbye
     steps:
       - intent: nav_goodbye
-      - action: utter_goodbye
+      - action: action_goodbye
 
   - rule: Respond to user challenge
     steps:
@@ -25,13 +25,77 @@ rules:
   - rule: Exit grievance filing at any time
     steps:
       - intent: nav_exit
-      - action: utter_exit_without_filing
+      - action: action_exit_without_filing
       - active_loop: null
 
   - rule: Implementation of the Two-Stage-Fallback
     steps:
     - intent: nlu_fallback
     - action: action_default_fallback
+
+  - rule: action session start
+    steps:
+      - intent: nav_session_start
+      - action: action_session_start
+
+  # - rule: Menu form
+  #   steps:
+  #     - intent: menu_form
+  #     - action: menu_form
+  #     - active_loop: menu_form
+
+  # - rule: On start
+  #   steps:
+  #     - intent: nav_introduce
+  #     - action: action_session_start
+  #     - action: menu_form
+  #     - active_loop: menu_form
+  #     - slot_was_set:
+  #       - language_code
+  #       - main_story: "new_grievance"
+  #     - active_loop: null
+
+  # - rule: Handle active forms
+  #   condition:
+  #     - active_loop: menu_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: menu_form
+
+  # - rule: Handle grievance details form
+  #   condition:
+  #     - active_loop: grievance_details_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: grievance_details_form
+
+  # - rule: Handle grievance summary form
+  #   condition:
+  #     - active_loop: grievance_summary_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: grievance_summary_form
+
+  # - rule: Handle location form
+  #   condition:
+  #     - active_loop: location_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: location_form
+
+  # - rule: Handle contact form
+  #   condition:
+  #     - active_loop: contact_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: contact_form
+
+  # - rule: Handle OTP verification form
+  #   condition:
+  #     - active_loop: otp_verification_form
+  #   steps:
+  #     - action: action_listen
+  #     - active_loop: otp_verification_form
 
   # - rule: Happy path for grievance filing - step 1 Grievance Form and transition to Location Form
   #   steps:

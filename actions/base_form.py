@@ -288,16 +288,17 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     }
                 
                 # Direct skip (high confidence match)
-                if skip_value is None:
+                if slot_value is None:
                     slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                    skip_value = False if slot_type == "bool" else "slot_skipped"
+                    slot_value = False if slot_type == "bool" else "slot_skipped"
                 return {slot_name: skip_value}
             print(f"---------- SLOT EXTRACTION END ----------")
-            return {slot_name: message_text}
+            if message_text:
+                return {slot_name: message_text}
         
-        print(f"Slot {slot_name} is not the requested slot : {tracker.get_slot('requested_slot')}")
-        print(f"---------- SLOT EXTRACTION END ----------")
-        return {}
+        # print(f"Slot {slot_name} is not the requested slot : {tracker.get_slot('requested_slot')}")
+        # print(f"---------- SLOT EXTRACTION END ----------")
+        # return {}
 
     async def _handle_boolean_slot_extraction(
         self,
