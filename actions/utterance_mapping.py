@@ -272,6 +272,54 @@ UTTERANCE_MAPPING = {
             'buttons': {
                 1: BUTTONS_SKIP
             }
+        },
+        'validate_user_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid province name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid province. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_user_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid district name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid district. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_user_village': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
+                    'ne': "कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्"
+                }
+            }
+        },
+        'validate_user_address_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid address (at least 3 characters)",
+                    'ne': "कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)"
+                }
+            }
         }
     },
     'contact_form': {
@@ -284,6 +332,30 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_CONTACT_CONSENT
+            }
+        },
+        'validate_user_full_name': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid full name (at least 3 characters)",
+                    'ne': "कृपया मान्य पूरा नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर)"
+                }
+            }
+        },
+        'validate_user_contact_phone': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid phone number (10 digits starting with 9)",
+                    'ne': "कृपया मान्य फोन नम्बर प्रविष्ट गर्नुहोस् (9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ)"
+                }
+            }
+        },
+        'validate_user_contact_email_temp': {
+            'utterances': {
+                1: {
+                    'en': "⚠️ I couldn't find a valid email address in your message.\nA valid email should be in the format: **username@domain.com**.",
+                    'ne': "⚠️ तपाईंको संदेशमा मान्य इमेल ठेगाना फेला पार्न सकिन्छ।\nएक वैध इमेल ठेगाना फॉर्मेट: **username@domain.com** हुनुपर्छ।"
+                }
             }
         },
         'action_ask_contact_form_user_full_name': {
@@ -624,19 +696,19 @@ UTTERANCE_MAPPING = {
                 'grievance_phone': {
                     'en': "**Phone: {grievance_phone}**",
                     'ne': "**फोन: {grievance_phone}**"
-            },
+                },
                 'grievance_outro': {
                     'en': "Our team will review it shortly and contact you if more information is needed.",
                     'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
-            },
-            'grievance_timeline': {
-                'en': "The standard timeline for a grievance is 15 days.",
-                'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ।"
-            },
-            'grievance_status': {
-                'en': "**Status:**",
-                'ne': "**स्थिति:**"
-            }
+                },
+                'grievance_timeline': {
+                    'en': "The standard timeline for a grievance is 15 days.",
+                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ।"
+                },
+                'grievance_status': {
+                    'en': "**Status:**",
+                    'ne': "**स्थिति:**"
+                }
             }
         }
     },

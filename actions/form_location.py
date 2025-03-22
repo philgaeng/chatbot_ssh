@@ -153,27 +153,21 @@ class ValidateLocationForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
-            messages = {'en' : "Please provide a valid province name, this is required to file your grievance",
-                        'ne' : "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"}
             dispatcher.utter_message(
-                text=messages[language_code]
+                text=get_utterance('location_form', 'validate_user_province', 1, language_code)
             )
             return {"user_province": None}
         
         #check if the province is valid
         if not self.location_validator._check_province(slot_value):
-            messages = {'en' : "We cannot match your entry {slot_value} to a valid province. Please try again",
-                        'ne' : "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
             dispatcher.utter_message(
-                text=messages[language_code].format(slot_value=slot_value)
+                text=get_utterance('location_form', 'validate_user_province', 2, language_code).format(slot_value=slot_value)
             )
             return {"user_province": None}
         
         result = self.location_validator._check_province(slot_value).title()
-        messages = {'en' : "We have matched your entry {slot_value} to {result}.",
-                    'ne' : "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
         dispatcher.utter_message(
-            text=messages[language_code].format(slot_value=slot_value, result=result)
+            text=get_utterance('location_form', 'validate_user_province', 3, language_code).format(slot_value=slot_value, result=result)
         )
         
         return {"user_province": result}
@@ -200,29 +194,21 @@ class ValidateLocationForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
-            messages = {'en' : "Please provide a valid district name, this is required to file your grievance",
-                        'ne' : "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"}
             dispatcher.utter_message(
-                text=messages[language_code]
+                text=get_utterance('location_form', 'validate_user_district', 1, language_code)
             )
             return {"user_district": None}
             
-        #check if the district is valid
         province = tracker.get_slot("user_province").lower()
-        ic(province)
         if not self.location_validator._check_district(slot_value, province):
-            messages = {'en' : "We cannot match your entry {slot_value} to a valid district. Please try again",
-                        'ne' : "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
             dispatcher.utter_message(
-                text=messages[language_code].format(slot_value=slot_value)
+                text=get_utterance('location_form', 'validate_user_district', 2, language_code).format(slot_value=slot_value)
             )
             return {"user_district": None}
             
         result = self.location_validator._check_district(slot_value, province).title()
-        messages = {'en' : "We have matched your entry {slot_value} to {result}.",
-                    'ne' : "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"}
         dispatcher.utter_message(
-            text=messages[language_code].format(slot_value=slot_value, result=result)
+            text=get_utterance('location_form', 'validate_user_district', 3, language_code).format(slot_value=slot_value, result=result)
         )
         
         return {"user_district": result}
@@ -342,13 +328,13 @@ class ValidateLocationForm(BaseFormValidationAction):
         print("######## FORM: Validating village ######")
         
         if slot_value == "slot_skipped":
-
             return {"user_village": "slot_skipped"}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
+            language_code = tracker.get_slot("language_code")
             dispatcher.utter_message(
-                text="Please provide a valid village name (at least 3 characters) or type 'skip' to skip"
+                text=get_utterance('location_form', 'validate_user_village', 1, language_code)
             )
             return {"user_village": None}
             
@@ -382,12 +368,12 @@ class ValidateLocationForm(BaseFormValidationAction):
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
+            language_code = tracker.get_slot("language_code")
             dispatcher.utter_message(
-                text="Please provide a valid address (at least 3 characters)"
+                text=get_utterance('location_form', 'validate_user_address_temp', 1, language_code)
             )
             return {"user_address_temp": None}
         
-
         return {"user_address_temp": slot_value}
 
     async def extract_user_address_confirmed(
@@ -443,13 +429,10 @@ class ActionAskLocationFormUserLocationConsent(Action):
         return "action_ask_location_form_user_location_consent"
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        dispatcher.utter_message(
-            text="Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
-            buttons=[
-                {"title": "Yes", "payload": "/affirm"},
-                {"title": "No", "payload": "/deny"},
-            ]
-        )
+        language_code = tracker.get_slot("language_code")
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskLocationFormUserMunicipalityTemp(Action):
@@ -459,12 +442,10 @@ class ActionAskLocationFormUserMunicipalityTemp(Action):
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         province = tracker.get_slot("user_province")
         district = tracker.get_slot("user_district")
-        dispatcher.utter_message(
-                text=f"Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
-                buttons=[
-                    {"title": "Skip", "payload": "/skip"}
-                ]   
-            )
+        language_code = tracker.get_slot("language_code")
+        message = get_utterance('location_form', self.name(), 1, language_code).format(district=district, province=province)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
     
@@ -474,13 +455,10 @@ class ActionAskLocationFormUserMunicipalityConfirmed(Action):
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('user_municipality_temp')
-        dispatcher.utter_message(
-            text=f"Is {validated_municipality} your correct municipality?",
-                buttons=[
-                    {"title": "Yes", "payload": "/affirm"},
-                    {"title": "No", "payload": "/deny"},
-                ]
-            )
+        language_code = tracker.get_slot("language_code")
+        message = get_utterance('location_form', self.name(), 1, language_code).format(validated_municipality=validated_municipality)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
        
 class ActionAskLocationFormUserVillage(Action):
@@ -488,12 +466,10 @@ class ActionAskLocationFormUserVillage(Action):
         return "action_ask_location_form_user_village"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        dispatcher.utter_message(
-                text="Please provide your village name or Skip to skip",
-                buttons=[
-                    {"title": "Skip", "payload": "/skip"}
-                ]
-            )
+        language_code = tracker.get_slot("language_code")
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskLocationFormUserAddressTemp(Action):
@@ -501,12 +477,10 @@ class ActionAskLocationFormUserAddressTemp(Action):
         return "action_ask_location_form_user_address_temp"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        dispatcher.utter_message(
-                text="Please provide your address or Skip to skip",
-                buttons=[
-                    {"title": "Skip", "payload": "/skip"}
-                ]
-            )
+        language_code = tracker.get_slot("language_code")
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskLocationFormUserAddressConfirmed(Action):
@@ -518,19 +492,18 @@ class ActionAskLocationFormUserAddressConfirmed(Action):
                   tracker: Tracker,
                   domain: dict
                   ):
-                #check if the address and village are correct
-        confirmation_message = f"""Thank you for providing your location details:
-            - Municipality: {tracker.get_slot('user_municipality')}
-            - Village: {tracker.get_slot('user_village')}
-            - Address: {tracker.get_slot('user_address_temp')}
-            Is this correct?"""
+        #check if the address and village are correct
+        municipality = tracker.get_slot('user_municipality')
+        village = tracker.get_slot('user_village')
+        address = tracker.get_slot('user_address_temp')
+        language_code = tracker.get_slot('language_code')
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
+        message = message.format(municipality=municipality, village=village, address=address)
             
         dispatcher.utter_message(
-            text= confirmation_message,
-            buttons=[
-                {"title": "Yes", "payload": "/affirm"},
-                {"title": "No", "payload": "/deny"},
-            ]
+            text=message,
+            buttons=buttons
         )
         return []
     
@@ -540,8 +513,9 @@ class ActionAskLocationFormUserProvince(Action):
         return "action_ask_location_form_user_province"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = get_utterance('location_form', self.name(), 1, 'en')
-        buttons = get_buttons('location_form', self.name(), 1, 'en')
+        language_code = tracker.get_slot('language_code')
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
@@ -550,7 +524,8 @@ class ActionAskLocationFormUserDistrict(Action):
         return "action_ask_location_form_user_district"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = get_utterance('location_form', self.name(), 1, 'en')
-        buttons = get_buttons('location_form', self.name(), 1, 'en')
+        language_code = tracker.get_slot('language_code')
+        message = get_utterance('location_form', self.name(), 1, language_code)
+        buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []

@@ -155,7 +155,9 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"user_full_name": None}
 
         if len(slot_value)<3:
-            dispatcher.utter_message(text="Please enter a valid full name")
+            language = get_language_code(tracker)
+            message = get_utterance('contact_form', 'validate_user_full_name', 1, language)
+            dispatcher.utter_message(text=message)
             return {"user_full_name": None}
         
         print("validated :", slot_value)
@@ -181,7 +183,7 @@ class ValidateContactForm(BaseFormValidationAction):
         """Validate phone number and set validation requirement."""
         print("################ Validate user contact phone ###################")
         print(f"Received value: {slot_value}")
-
+        language = get_language_code(tracker)
         if "slot_skipped" in slot_value:
             print("⏩ Phone number skipped")
             return {
@@ -193,7 +195,8 @@ class ValidateContactForm(BaseFormValidationAction):
         
         # Validate phone number format
         if not self._is_valid_phone(slot_value):
-            dispatcher.utter_message(text="Please enter a valid phone number.")
+            message = get_utterance('contact_form', 'validate_user_contact_phone', 1, language)
+            dispatcher.utter_message(text=message)
             return {"user_contact_phone": None}
 
         print("validated :", slot_value)
@@ -266,23 +269,21 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         print("################ Validate user contact email temp ###################")
+        language = get_language_code(tracker)
         if slot_value == "slot_skipped":
             return {"user_contact_email_temp": "slot_skipped"}
         
         extracted_email = self._email_extract_from_text(slot_value)
         print(f"Extracted email: {extracted_email}")
         if not extracted_email:
-            dispatcher.utter_message(
-            text=(
-                "⚠️ I couldn't find a valid email address in your message.\n"
-                "A valid email should be in the format: **username@domain.com**."
-            )
-            )
+            message = get_utterance('contact_form', 'validate_user_contact_email_temp', 1, language)
+            dispatcher.utter_message(text=message)
             return {"user_contact_email_temp": None}
         
         # Use consistent validation methods
         if not self._email_is_valid_format(extracted_email):
-            dispatcher.utter_message(text="⚠️ Please enter a valid email address.")
+            message = get_utterance('contact_form', 'validate_user_contact_email_temp', 1, language)
+            dispatcher.utter_message(text=message)
             return {"user_contact_email_temp": None}
 
         # Check for Nepali email domain using existing method
