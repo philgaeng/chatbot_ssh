@@ -44,16 +44,11 @@ rules:
   #     - action: menu_form
   #     - active_loop: menu_form
 
-  # - rule: On start
-  #   steps:
-  #     - intent: nav_introduce
-  #     - action: action_session_start
-  #     - action: menu_form
-  #     - active_loop: menu_form
-  #     - slot_was_set:
-  #       - language_code
-  #       - main_story: "new_grievance"
-  #     - active_loop: null
+  - rule: On start
+    steps:
+      - intent: intent_session_start
+      - action: action_introduce
+
 
   # - rule: Handle active forms
   #   condition:

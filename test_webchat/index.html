@@ -41,7 +41,14 @@
         // Make socket available globally
         window.socket = socket;
 
-        // Rest of your socket.io code...
+        // Track session state
+        let sessionConfirmed = false;
+        let sessionStarted = false;
+        let messageRetryCount = 0;
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 500; // 500ms
+
+        // Modified connection handling
         socket.on('connect', () => {
             console.log('Connected to Socket.io server.');
             const storage = localStorage;
@@ -50,28 +57,28 @@
             
             // First request a session
             socket.emit('session_request', { session_id: socket.id });
+        });
+
+        // Handle session confirmation
+        socket.on('session_confirm', () => {
+            sessionConfirmed = true;
+            console.log('Session confirmed');
             
-            // Wait for session initialization
-            socket.once('session_confirm', () => {
-                // Send initial message after a short delay
-                setTimeout(() => {
-                    const { province, district } = getUrlParams();
-                    const initialMessage = province && district 
-                        ? `/introduce{"province": "${province}", "district": "${district}"}`
-                        : '/introduce';
-                    
-                    console.log('Sending initial message:', initialMessage);
-                    socket.emit('user_uttered', {
-                        message: initialMessage,
-                        session_id: socket.id
-                    });
-                }, 1000);
-            });
+            // Wait a short moment to ensure session is fully initialized
+            setTimeout(() => {
+                sessionStarted = true;
+                sendIntroduceMessage();
+            }, 1000);
         });
 
         // Handle bot responses
         socket.on('bot_uttered', (response) => {
             console.log('Bot uttered:', response);
+            
+            // Reset retry count when we get a response
+            messageRetryCount = 0;
+            
+            // Handle the response
             if (response.text) {
                 appendMessage(response.text, 'received');
             }
@@ -82,6 +89,42 @@
                 console.log('Attachment received:', response.attachment);
             }
         });
+
+        // Function to send introduce message
+        function sendIntroduceMessage() {
+            if (!sessionStarted) {
+                console.log('Waiting for session to be fully initialized...');
+                return;
+            }
+            
+            const { province, district } = getUrlParams();
+            const initialMessage = province && district 
+                ? `/introduce{"province": "${province}", "district": "${district}"}`
+                : '/introduce';
+            
+            console.log('Sending initial message:', initialMessage);
+            socket.emit('user_uttered', {
+                message: initialMessage,
+                session_id: socket.id
+            });
+
+            // Set up retry mechanism
+            const retryTimer = setTimeout(() => {
+                if (messageRetryCount < MAX_RETRIES) {
+                    messageRetryCount++;
+                    console.log(`No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`);
+                    sendIntroduceMessage();
+                } else {
+                    console.log('Max retries reached, giving up');
+                    appendMessage('Sorry, there seems to be a connection issue. Please try again.', 'received');
+                }
+            }, RETRY_DELAY);
+
+            // Clear the retry timer if we get a response
+            socket.once('bot_uttered', () => {
+                clearTimeout(retryTimer);
+            });
+        }
 
         // Error handling
         socket.on('connect_error', (error) => {

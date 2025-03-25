@@ -707,7 +707,7 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed(Action):
         if current_summary:
             utterance = get_utterance("grievance_form", self.name(), 1, language_code).format(current_summary=current_summary)
             buttons = get_buttons("grievance_form", self.name(), 1, language_code)
-            dispatcher.utter_message(text=f"{utterance}\n'{current_summary}'", buttons=buttons)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
         else:
             utterance = get_utterance("grievance_form", self.name(), 1, language_code)
             buttons = BUTTON_SKIP
@@ -767,6 +767,7 @@ class ActionSubmitGrievance(Action):
 
         # Grievance-related data
         grievance_data = {
+            'grievance_id': tracker.get_slot('grievance_id'),
             'grievance_summary': tracker.get_slot('grievance_summary'),
             'grievance_details': tracker.get_slot('grievance_details'),
             'grievance_category': tracker.get_slot('grievance_list_cat'),
@@ -792,23 +793,29 @@ class ActionSubmitGrievance(Action):
         return user_data, grievance_data, grievance_status
 
     def create_confirmation_message(self, 
-                                    tracker: Tracker, 
-                                    grievance_id: str, 
                                     grievance_data: Dict[str, Any],
-                                    user_email: str = None) -> str:
+                                    user_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
-        message = []
-        language_code = tracker.get_slot("language_code") or "en"
+        ic(self.language_code)
         message = [get_utterance("grievance_form", 
                                  'create_confirmation_message', 
                                  i, 
-                                 language_code).format(i) for i in ['base_message',
+                                 self.language_code) for i in ['grievance_id',
                                                          'grievance_summary',
                                                          'grievance_category',
                                                          'grievance_details',
                                                          'grievance_email',
                                                          'grievance_phone',
-                                                         'grievance_outro']]
+                                                         'grievance_outro',
+                                                         'grievance_timeline']]
+        
+        message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
+                                            grievance_summary=grievance_data['grievance_summary'],
+                                            grievance_category=grievance_data['grievance_category'],
+                                            grievance_details=grievance_data['grievance_details'],
+                                            grievance_email=user_data['user_contact_email'],
+                                            grievance_phone=user_data['user_contact_phone'],
+                                           )
         
         # Add summary if available
         # if grievance_data['grievance_summary']:
@@ -852,16 +859,15 @@ class ActionSubmitGrievance(Action):
         #     else:
         #         message.append(f"\nA confirmation email will be sent to {user_email}")
 
-        return "\n".join(message)
+        return message
     
     async def _send_grievance_recap_email(self, 
-                                          tracker: Tracker,
                                           to_emails: List[str],
                                           email_data: Dict[str, Any],
                                           body_name: str,
                                           dispatcher: CollectingDispatcher) -> None:
         """Send a recap email to the user."""
-        language_code = tracker.get_slot("language_code") or "en"
+        
         json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
         
         # categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_category'] or []))
@@ -896,7 +902,7 @@ class ActionSubmitGrievance(Action):
                                         body=body
                                         )
             if body_name == "GRIEVANCE_RECAP_USER_BODY":
-                message = get_utterance("grievance_form", self.name(), 2, language_code)
+                message = get_utterance("grievance_form", self.name(), 2, self.language_code)
                 dispatcher.utter_message(text=message)
                 
         except Exception as e:
@@ -907,7 +913,7 @@ class ActionSubmitGrievance(Action):
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         print("\n=================== Submitting Grievance ===================")
-        language_code = tracker.get_slot("language_code") or "en"
+        self.language_code = tracker.get_slot("language_code") or "en"
         
         try:
             # Collect grievance data
@@ -933,9 +939,8 @@ class ActionSubmitGrievance(Action):
             
             # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
-                grievance_id, 
                 grievance_data,
-                user_email 
+                user_data 
             )
                 
             # Send confirmation message
@@ -965,7 +970,7 @@ class ActionSubmitGrievance(Action):
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+                utterance = get_utterance("grievance_form", self.name(), 2, self.language_code)
                 dispatcher.utter_message(text=utterance)
         
             # Prepare events
@@ -978,7 +983,7 @@ class ActionSubmitGrievance(Action):
         except Exception as e:
             print(f"❌ Error submitting grievance: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            utterance = get_utterance("grievance_form", self.name(), 3, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []
         

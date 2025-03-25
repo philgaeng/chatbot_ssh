@@ -165,7 +165,14 @@ nlu:
   examples: |
     - /introduce
     - /Introduce
+    - introduce{"province": "${province}", "district": "${district}"}
     - /introduce{"province": "${province}", "district": "${district}"}
+    - introduce{"province": "${province}", "district": "${district}"}
+    - /introduce{"province": "${province}", "district": "${district}"}
+    - /introduce{"province": "${province}", "district": "${district}"}
+    - /introduce{"province": "${province}", "district": "${district}"}
+    - /introduce{"province": "${province}", "district": "${district}"}
+
 
 - intent: nav_menu_main
   examples: |

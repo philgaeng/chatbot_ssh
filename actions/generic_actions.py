@@ -34,6 +34,14 @@ class ActionSessionStart(Action):
     def name(self) -> Text:
         return "action_session_start"
     
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        ic("action_session_start")
+        return [SessionStarted()]
+    
+class ActionIntroduce(Action):
+    def name(self) -> Text:
+        return "action_introduce"
+    
     def get_province_and_district(self, message: str) -> str:
         if '{' in message and '}' in message:
             json_str = message[message.index('{'):message.rindex('}')+1]
@@ -46,7 +54,7 @@ class ActionSessionStart(Action):
 
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        events = [SessionStarted()]
+        events = []
         message = tracker.latest_message.get('text', '')
         ic(tracker.latest_message)
         ic(message)
@@ -64,6 +72,7 @@ class ActionSessionStart(Action):
         ic(text)
         ic(buttons)
         dispatcher.utter_message(text=text, buttons=buttons)
+        ic(events)
         return events
     
 # class ActionSetLanguage(Action):

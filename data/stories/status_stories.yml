@@ -8,7 +8,7 @@ stories:
   - story: Happy path - retrieve grievance with phone and check status in english
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_english
       - action: action_set_english
       - slot_was_set:
@@ -29,7 +29,7 @@ stories:
   - story: Happy path - retrieve grievance with phone and check status in nepali
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
       - slot_was_set:
@@ -51,7 +51,7 @@ stories:
   - story: Direct grievance ID retrieval and status check in english
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_english
       - action: action_set_english
       - slot_was_set:
@@ -77,7 +77,7 @@ stories:
   - story: Direct grievance ID retrieval and status check in nepali
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
       - slot_was_set:
@@ -109,7 +109,7 @@ stories:
   - story: User retrieves multiple grievances in english
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_english
       - action: action_set_english
       - slot_was_set:
@@ -132,9 +132,9 @@ stories:
       - action: action_check_status
 
   - story: User retrieves multiple grievances in nepali
-    steps:
+    steps:  
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
       - slot_was_set:

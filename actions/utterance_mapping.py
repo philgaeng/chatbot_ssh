@@ -182,6 +182,21 @@ BUTTONS_FALLBACK = {
         {"title": "बाहिर निस्कनुहोस्", "payload": BUTTON_EXIT}
     ]
 }
+VALIDATION_SKIP = {"utterance":{
+    "en" : "Did you want to skip this field? I matched '{matched_word}'",
+    "ne" : "के तपाईं यो क्षेत्र छोड्न चाहनुहुन्छ? मैले '{matched_word}' मिलान गरेको छु।"
+    },
+    "buttons":{
+        "en": [
+            {"title": "Yes, skip it", "payload": "/affirm_skip"},
+            {"title": "No, let me enter a value", "payload": "/deny_skip"}
+        ],
+        "ne": [
+            {"title": "हो", "payload": "/affirm_skip"},
+            {"title": "होइन", "payload": "/deny_skip"}
+        ]
+    }
+}
 
 UTTERANCE_MAPPING = {
     'location_form': {
@@ -332,30 +347,6 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_CONTACT_CONSENT
-            }
-        },
-        'validate_user_full_name': {
-            'utterances': {
-                1: {
-                    'en': "Please enter a valid full name (at least 3 characters)",
-                    'ne': "कृपया मान्य पूरा नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर)"
-                }
-            }
-        },
-        'validate_user_contact_phone': {
-            'utterances': {
-                1: {
-                    'en': "Please enter a valid phone number (10 digits starting with 9)",
-                    'ne': "कृपया मान्य फोन नम्बर प्रविष्ट गर्नुहोस् (9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ)"
-                }
-            }
-        },
-        'validate_user_contact_email_temp': {
-            'utterances': {
-                1: {
-                    'en': "⚠️ I couldn't find a valid email address in your message.\nA valid email should be in the format: **username@domain.com**.",
-                    'ne': "⚠️ तपाईंको संदेशमा मान्य इमेल ठेगाना फेला पार्न सकिन्छ।\nएक वैध इमेल ठेगाना फॉर्मेट: **username@domain.com** हुनुपर्छ।"
-                }
             }
         },
         'action_ask_contact_form_user_full_name': {
@@ -673,8 +664,8 @@ UTTERANCE_MAPPING = {
         },
         'create_confirmation_message': {
             'utterances': {
-                'base_message': {
-                    'en': "Your grievance has been filed successfully.\n**Grievance ID:** {grievance_id}",
+                'grievance_id': {
+                    'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
                     'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
                 },
                 'grievance_summary': {
@@ -716,27 +707,12 @@ UTTERANCE_MAPPING = {
         'action_introduce': {
             'utterances': {
                 1: {
-                    'en': "Hello! Welcome to the Grievance Management Chatbot.\nI am here to help you file a grievance or check its status. What would you like to do?",
-                    'ne': "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
-                },
-                2: {
-                    'en': "Hello! Welcome to the Grievance Management Chatbot.\nYou are reaching out to the office of {district} in {province}.\nI am here to help you file a grievance or check its status. What would you like to do?",
-                    'ne': "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+                    'en':
+                     "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nHello! Welcome to the Grievance Management Chatbot.\nWhat language do you want to use?"
                 }
             },
             'buttons': {
-                1: {
-                    'en': [
-                        {"title": "File a grievance", "payload": "/start_grievance_process"},
-                        {"title": "Check my status", "payload": "/check_status"},
-                        {"title": "Exit", "payload": "/goodbye"}
-                    ],
-                    'ne': [
-                        {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/start_grievance_process"},
-                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
-                        {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
-                    ]
-                }
+                1: BUTTONS_LANGUAGE_OPTIONS
             }
         },
         'action_menu': {
@@ -765,18 +741,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_session_start': {
-            'utterances': {
-                1: {
-                    'en':
-                     "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nHello! Welcome to the Grievance Management Chatbot.\nWhat language do you want to use?"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_LANGUAGE_OPTIONS
-                
-            }
-        },
+        
         'action_set_current_process': {
             'utterances': {
                 1: {

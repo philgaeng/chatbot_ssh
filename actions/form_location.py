@@ -42,7 +42,6 @@ class ValidateLocationForm(BaseFormValidationAction):
         self.location_validator = LocationValidator()
         print("ValidateLocationForm.__init__ completed")
 
-
     def name(self) -> Text:
         return "validate_location_form"
 
@@ -50,11 +49,12 @@ class ValidateLocationForm(BaseFormValidationAction):
         self,
         input_text: Text,
         qr_province: Text,
-        qr_district: Text
+        qr_district: Text,
     ) -> Dict[Text, Any]:
         """Validate new municipality input."""
+        
         validation_result = self.location_validator._validate_location(
-            input_text.lower(), 
+            input_text.title(), 
             qr_province, 
             qr_district
         )
@@ -151,7 +151,8 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        language_code = tracker.get_slot("language_code")
+        self.location_validator._initialize_constants(tracker)
+        language_code = self.location_validator.language_code
         if slot_value == "slot_skipped":
             dispatcher.utter_message(
                 text=get_utterance('location_form', 'validate_user_province', 1, language_code)
@@ -192,14 +193,15 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        language_code = tracker.get_slot("language_code")
+        self.location_validator._initialize_constants(tracker)
+        language_code = self.location_validator.language_code
         if slot_value == "slot_skipped":
             dispatcher.utter_message(
                 text=get_utterance('location_form', 'validate_user_district', 1, language_code)
             )
             return {"user_district": None}
             
-        province = tracker.get_slot("user_province").lower()
+        province = tracker.get_slot("user_province").title()
         if not self.location_validator._check_district(slot_value, province):
             dispatcher.utter_message(
                 text=get_utterance('location_form', 'validate_user_district', 2, language_code).format(slot_value=slot_value)
@@ -235,6 +237,8 @@ class ValidateLocationForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        self.location_validator._initialize_constants(tracker)
+        language_code = self.location_validator.language_code
         print("######## FORM: Validating municipality_temp ######")
         print(f"Received value: {slot_value}")
         
@@ -326,13 +330,13 @@ class ValidateLocationForm(BaseFormValidationAction):
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
         print("######## FORM: Validating village ######")
-        
+        language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
             return {"user_village": "slot_skipped"}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
-            language_code = tracker.get_slot("language_code")
+            
             dispatcher.utter_message(
                 text=get_utterance('location_form', 'validate_user_village', 1, language_code)
             )
@@ -363,12 +367,13 @@ class ValidateLocationForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate user_address value."""
+        language_code = tracker.get_slot("language_code")
         if slot_value == "slot_skipped":
             return {"user_address_temp": "slot_skipped"}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
-            language_code = tracker.get_slot("language_code")
+            
             dispatcher.utter_message(
                 text=get_utterance('location_form', 'validate_user_address_temp', 1, language_code)
             )

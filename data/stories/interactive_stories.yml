@@ -3,7 +3,7 @@ stories:
 - story: grievance_crop_loss_with_full_details in english
   steps:
   - intent: intent_session_start
-  - action: action_session_start
+  - action: action_introduce
   - intent: set_english
   - action: action_set_english
   - slot_was_set:
@@ -71,7 +71,7 @@ stories:
 - story: grievance_employment_anonymous in english
   steps:
   - intent: intent_session_start
-  - action: action_session_start
+  - action: action_introduce
   - intent: set_english
   - action: action_set_english
   - slot_was_set:
@@ -149,8 +149,7 @@ stories:
 
 - story: grievance_environmental_damage_anonymous in english
   steps:
-  - intent: intent_session_start
-  - action: action_session_start
+  - action: action_introduce
   - intent: set_english
   - action: action_set_english
   - slot_was_set:
@@ -222,7 +221,7 @@ stories:
 - story: grievance_with_change_of_category in english
   steps:
   - intent: intent_session_start
-  - action: action_session_start
+  - action: action_introduce
   - intent: set_english
   - action: action_set_english
   - slot_was_set:
@@ -286,7 +285,7 @@ stories:
 - story: grievance_lost_harvest_with_full_details in english
   steps:
   - intent: intent_session_start
-  - action: action_session_start
+  - action: action_introduce
   - intent: set_english
   - action: action_set_english
   - slot_was_set:

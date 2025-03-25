@@ -27,7 +27,7 @@ DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorizati
 # File to store the last grievance ID
 COUNTER_FILE = "/home/ubuntu/nepal_chatbot/data/grievance_counter.txt"
 # Location JSON file
-LOCATION_JSON_PATH = "/home/ubuntu/nepal_chatbot/resources/nepal_location.json"
+LOCATION_FOLDER_PATH = "/home/ubuntu/nepal_chatbot/resources/location_dataset/"
 # List of email providers
 EMAIL_PROVIDERS_NEPAL = {
     "Gmail": ["gmail.com"],
@@ -132,4 +132,50 @@ You will receive updates about your grievance through this number."""
 DEFAULT_VALUES = {
     "NOT_PROVIDED": "Not provided",
     "ANONYMOUS": "Anonymous"
+}
+
+# Location Words
+DIC_LOCATION_WORDS = { "province" : {
+    "en" : ["province"],
+    "ne" : ["प्रदेश"]
+    },
+    "district" : {
+        "en" : ["district"],
+        "ne" : ["जिल्ला"]
+    },
+    "municipality" : {
+        "en" : ["municipality", "rural municipality", "metropolitan"],
+        "ne" : ["महानगरपालिका", "गाउँपालिका", "नगरपालिका"]
+    }
+}
+
+DIC_LOCATION_MAPPING = {
+    "प्रदेश न. १": {
+        "new_nepali": "कोशी",
+        "english": "Koshi"
+    },
+    "प्रदेश न. २": {
+        "new_nepali": "मधेश",
+        "english": "Madhesh"
+    },
+    "प्रदेश न. ३": {
+        "new_nepali": "बागमती",
+        "english": "Bagmati"
+    },
+    "प्रदेश न. ४": {
+        "new_nepali": "गण्डकी",
+        "english": "Gandaki"
+    },
+    "प्रदेश न. ५": {
+        "new_nepali": "लुम्बिनी",
+        "english": "Lumbini"
+    },
+    "प्रदेश न. ६": {
+        "new_nepali": "कर्णाली",
+        "english": "Karnali"
+    },
+    "प्रदेश न. ७": {
+        "new_nepali": "सुदूरपश्चिम",
+        "english": "Sudurpashchim"
+    }
 }

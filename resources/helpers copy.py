@@ -16,8 +16,7 @@ from .constants import (
     LOCATION_FOLDER_PATH,
     CUT_OFF_FUZZY_MATCH_LOCATION,
     USE_QR_CODE,
-    DIC_LOCATION_WORDS,
-    DIC_LOCATION_MAPPING
+    DIC_LOCATION_WORDS
 )
 
 # Set up logging
@@ -135,53 +134,37 @@ def get_next_grievance_number(user_district=None, user_municipality=None):
 
 
 class LocationValidator:
-    """
-    Validate and normalize location names using fuzzy matching.
-    Use the cleaned json file for validation located in the resources/location_dataset folder.
-    The json file should be named as <language_code>_cleaned.json
-    """
     def __init__(self, 
                  tracker = Tracker, 
                  json_path=LOCATION_FOLDER_PATH):
-    
-        json_path_en = f"{json_path}en_cleaned.json"
-        json_path_ne = f"{json_path}ne_cleaned.json"
-        self.locations_both_language = dict()
-        ic(json_path)
-        if USE_QR_CODE:
-            with open(json_path_en, "r") as file:
-                self.locations_both_language["en"] = self._normalize_locations(json.load(file))
-            with open(json_path_ne, "r") as file:
-                self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
-
-            
-    def _initialize_constants(self, tracker):
         language_code = 'en'
-        if tracker and isinstance(tracker, Tracker) and "language_code" in tracker.slots:
+        ic(tracker)
+        if tracker:
             language_temp = tracker.get_slot("language_code")
             if language_temp:
                 language_code = language_temp
-        self.language_code = language_code
-        self.locations = self.locations_both_language[language_code]
-        self.max_words = self._calculate_max_words()
-        self.provinces = [p["name"].strip("Province").strip("प्रदेश") for p in self.locations]
-            
+        json_path = f"{json_path}{language_code}.json"
+        if USE_QR_CODE:
+            with open(json_path, "r") as file:
+                self.locations = self._normalize_locations(json.load(file))
+            self.max_words = self._calculate_max_words()
+
     def _normalize_locations(self, locations):
         """Normalize all names in the locations data to lowercase."""
-        for province in locations:
-            province["name"] = province["name"].title().strip("Province").strip("प्रदेश")
-            for district in province.get("districts", []):
-                district["name"] = district["name"].title().strip("District")
-                for municipality in district.get("municipalities", []):
-                    municipality["name"] = municipality["name"].title()
+        for province in locations.get("provinceList", []):
+            province["name"] = province["name"].lower()
+            for district in province.get("districtList", []):
+                district["name"] = district["name"].lower()
+                for municipality in district.get("municipalityList", []):
+                    municipality["name"] = municipality["name"].lower()
         return locations
 
     def _calculate_max_words(self):
         """Calculate the maximum number of words in any municipality name."""
         max_words = 0
-        for province in self.locations:
-            for district in province.get("districts", []):
-                for municipality in district.get("municipalities", []):
+        for province in self.locations.get("provinceList", []):
+            for district in province.get("districtList", []):
+                for municipality in district.get("municipalityList", []):
                     words = len(municipality["name"].split())
                     max_words = max(max_words, words)
         return max_words
@@ -202,9 +185,9 @@ class LocationValidator:
         if not text:
             return None
         
-        text = text.title().strip()
+        text = text.lower().strip()
         for suffix in self._get_common_suffixes():
-            text = text.replace(suffix.title(), "").strip()
+            text = text.replace(suffix, "").strip()
         return text
 
     def _generate_possible_names(self, text):
@@ -233,7 +216,7 @@ class LocationValidator:
     def _get_province_data(self, province_name):
         """Get province data by name."""
         return next(
-            (p for p in self.locations
+            (p for p in self.locations.get("provinceList", []) 
              if p["name"] == province_name),
             None
         )
@@ -241,21 +224,10 @@ class LocationValidator:
     def _get_district_data(self, province_data, district_name):
         """Get district data by name within a province."""
         return next(
-            (d for d in province_data.get("districts", []) 
+            (d for d in province_data.get("districtList", []) 
              if d["name"] == district_name),
             None
         )
-        
-    def _get_district_names(self, province_name):
-        """Get district names by province name.
-        Extract and process district names from province data for a chosen province name.
-        """
-        ic(province_name)
-        province_data = [province for province in self.locations if 
-                         province["name"] == province_name][0]
-        if not province_data:
-            return []
-        return [d["name"] for d in province_data.get("districts", [])]
         
     def _get_municipality_names(self, district_data: dict) -> list:
         """
@@ -267,18 +239,19 @@ class LocationValidator:
         Returns:
             list: Processed municipality names with common suffixes removed
         """
-        
-        remove_words = DIC_LOCATION_WORDS["municipality"][self.language_code]
-        if not district_data or "municipalities" not in district_data:  
+        language_code = self.tracker.get_slot("language_code")
+        language_code = "en" if not language_code else language_code
+        remove_words = DIC_LOCATION_WORDS["municipality"][language_code]
+        if not district_data or "municipalityList" not in district_data:
             return []
         
         
         municipality_names = []
-        for mun in district_data.get("municipalities", []):
+        for mun in district_data.get("municipalityList", []):
             if not mun or "name" not in mun:
                 continue
             
-            name = mun["name"].title()
+            name = mun["name"].lower()
             # Remove each word and clean up extra spaces
             for word in remove_words:
                 name = name.replace(word, "")
@@ -292,7 +265,7 @@ class LocationValidator:
     def _match_with_qr_data(self, possible_names, qr_province, qr_district):
         """Try to match location using QR-provided data."""
         print(f"######## LocationValidator: QR")
-        province_list = self.locations
+        province_list = self.locations.get("provinceList", [])
         province_names = [p["name"] for p in province_list]
         
         # Match province from QR data
@@ -302,7 +275,7 @@ class LocationValidator:
             
         # Get province data and match district
         province_data = self._get_province_data(matched_province)
-        district_names = [d["name"] for d in province_data.get("districts", [])]
+        district_names = [d["name"] for d in province_data.get("districtList", [])]
         matched_district = self._find_best_match(qr_district, district_names) if qr_district else None
         
         if not matched_district:
@@ -327,8 +300,8 @@ class LocationValidator:
     def _match_from_string(self, possible_names):
         """Try to match location from possible names without QR data."""
         print(f"######## LocationValidator: String")
-        for province in self.locations:
-            for district in province.get("districts", []):
+        for province in self.locations.get("provinceList", []):
+            for district in province.get("districtList", []):
                 municipality_names = self._get_municipality_names(district)
                 print(f"######## LocationValidator: Municipality names: {municipality_names}")
                 
@@ -339,16 +312,17 @@ class LocationValidator:
                         return province["name"], district["name"], matched_municipality
         
         # If no municipality match, try district match
-        for province in self.locations:
-            district_names = [d["name"] for d in province.get("districts", [])]
+        for province in self.locations.get("provinceList", []):
+            district_names = [d["name"] for d in province.get("districtList", [])]
             for possible_name in possible_names:
                 matched_district = self._find_best_match(possible_name, district_names)
                 if matched_district:
                     return province["name"], matched_district, None
         
         # Finally, try province match
+        province_names = [p["name"] for p in self.locations.get("provinceList", [])]
         for possible_name in possible_names:
-            matched_province = self._find_best_match(possible_name, self.provinces)
+            matched_province = self._find_best_match(possible_name, province_names)
             if matched_province:
                 return matched_province, None, None
                 
@@ -403,9 +377,9 @@ class LocationValidator:
         """Check if the province name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        ic(self.provinces)
+        province_names = [p["name"] for p in self.locations.get("provinceList", [])]
         for possible_name in possible_names:
-            matched_province = self._find_best_match(possible_name, self.provinces)
+            matched_province = self._find_best_match(possible_name, province_names)
             if matched_province:
                 return matched_province
         return None
@@ -414,7 +388,9 @@ class LocationValidator:
         """Check if the district name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        district_names = self._get_district_names(province_name)
+        district_list_temp = [i for i in self.locations.get("provinceList", []) if i["name"] == province_name]
+        district_list = district_list_temp[0].get("districtList", [])
+        district_names = [d["name"] for d in district_list]
         for possible_name in possible_names:
             matched_district = self._find_best_match(possible_name, district_names)
             if matched_district:

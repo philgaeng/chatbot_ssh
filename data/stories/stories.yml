@@ -7,7 +7,7 @@ stories:
   - story: User files a grievance with optional location and contact details
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       # - action: menu_form
       # - active_loop: menu_form
       - intent: set_english
@@ -48,7 +48,7 @@ stories:
   - story: User files a grievance in nepali with optional location and contact details
     steps:
       - intent: intent_session_start
-      - action: action_session_start
+      - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
       - slot_was_set:

@@ -7,6 +7,9 @@ from typing import Dict, Text, Any, Tuple, List, Callable
 from rapidfuzz import fuzz
 import re
 import traceback
+from .utterance_mapping import VALIDATION_SKIP
+
+
 
 class LanguageHelper:
     """Helper class for language detection and skip word matching."""
@@ -276,11 +279,8 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 if needs_validation:
                     # Store original text and request validation
                     dispatcher.utter_message(
-                        text=f"Did you want to skip this field? I matched '{matched_word}'",
-                        buttons=[
-                            {"title": "Yes, skip it", "payload": "/affirm_skip"},
-                            {"title": "No, let me enter a value", "payload": "/deny_skip"}
-                        ]
+                        text= VALIDATION_SKIP["utterance"][self.language_code].format(matched_word=matched_word),
+                        buttons= VALIDATION_SKIP["buttons"][self.language_code]
                     )
                     return {
                         "skip_validation_needed": slot_name,
@@ -288,9 +288,9 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     }
                 
                 # Direct skip (high confidence match)
-                if slot_value is None:
-                    slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                    slot_value = False if slot_type == "bool" else "slot_skipped"
+                
+                slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
+                skip_value = False if slot_type == "bool" else "slot_skipped"
                 return {slot_name: skip_value}
             print(f"---------- SLOT EXTRACTION END ----------")
             if message_text:
@@ -347,11 +347,8 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             if is_skip:
                 if needs_validation:
                     dispatcher.utter_message(
-                        text=f"Did you want to skip this field? I matched '{matched_word}'",
-                        buttons=[
-                            {"title": "Yes, skip it", "payload": "/affirm_skip"},
-                            {"title": "No, let me enter a value", "payload": "/deny_skip"}
-                        ]
+                        text= VALIDATION_SKIP["utterance"][self.language_code].format(matched_word=matched_word),
+                        buttons= VALIDATION_SKIP["buttons"][self.language_code]
                     )
                     return {
                         "skip_validation_needed": slot_name,
