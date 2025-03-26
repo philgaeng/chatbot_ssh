@@ -35,7 +35,10 @@ class ActionAskContactFormUserFullName(Action):
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
+        if tracker.get_slot("gender_issues_reported") == "slot_skipped":
+            message = get_utterance('contact_form', self.name(), 1, language)
+        else:
+            message = get_utterance('contact_form', self.name(), 2, language)
         buttons = get_buttons('contact_form', self.name(), 1, language)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []

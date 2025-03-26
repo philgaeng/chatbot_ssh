@@ -308,21 +308,6 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         print(f"-------- end of validate_grievance_new_detail --------")
         return {"grievance_new_detail": None}
 
-    # def _show_options_buttons(self, dispatcher: CollectingDispatcher) -> None:
-    #     """Helper method to show the standard options buttons."""
-    #     print("\n🔘 FORM: Showing options buttons")
-    #     dispatcher.utter_message(
-    #         text="Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
-    #              "- Location information\n"
-    #              "- Persons involved\n"
-    #              "- Quantification of damages (e.g., number of bags of rice lost)\n"
-    #              "- Monetary value of damages",
-    #         buttons=[
-    #             {"title": "File as is", "payload": "/submit_details"},
-    #             {"title": "Add more details", "payload": "/add_more_details"},
-    #             {"title": "Cancel filing", "payload": "/exit_without_filing"}
-    #         ]
-    #     )
 
     def _update_grievance_text(self, current_text: str, new_text: str) -> str:
         """Helper method to update the grievance text."""
@@ -345,12 +330,6 @@ class ActionAskGrievanceDetailsFormGrievanceTemp(Action):
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         slot_grievance = tracker.get_slot("grievance_new_detail")
         language_code = tracker.get_slot("language_code") or "en"
-        
-        # if not slot_grievance or slot_grievance == "/start_grievance_process":
-        #     print("######################### ASK GRIEVANCE TEMP ##############")
-        #     utterance = get_utterance("grievance_form", self.name(), 1, language_code)
-        #     buttons = get_buttons("grievance_form", self.name(), 1, language_code)
-        #     dispatcher.utter_message(text=utterance, buttons=buttons)
         
         if slot_grievance == "/add_more_details":
             utterance = get_utterance("grievance_form", self.name(), 2, language_code)
@@ -382,21 +361,26 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         print("######################### REQUIRED SLOTS ##############")
         
         updated_slots = domain_slots
-        print(f"required_slots input: {domain_slots}")
+        ic(tracker.get_slot("gender_issues_reported"))
+        ic(domain_slots)
         if not domain_slots:
             updated_slots = ["grievance_list_cat_confirmed"]
         
         grievance_list_cat_confirmed = tracker.get_slot("grievance_list_cat_confirmed")
         grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
-        # print(f"grievance_list_cat_confirmed: {grievance_list_cat_confirmed}")
-        # print(f"grievance_cat_modify: {grievance_cat_modify}")  
+ 
         
         # After category modification is complete, go back to confirmation
         if grievance_cat_modify:
             print(" category modify detected")
             updated_slots = ["grievance_list_cat_confirmed"]  # Reset to ask for confirmation again
-
-        if grievance_list_cat_confirmed in ["slot_skipped", "slot_confirmed"]:
+        
+        #deal with the case where gender issues is part of list_of_cat by adding one slot to the updated_slots
+        if tracker.get_slot("gender_issues_reported") and "gender_follow_up" not in updated_slots:
+            updated_slots = updated_slots + ["gender_follow_up"]
+            ic(updated_slots)
+            
+        elif grievance_list_cat_confirmed in ["slot_skipped", "slot_confirmed"]:
             # Use extend to add multiple items to the list
             updated_slots = [
                 "grievance_summary_confirmed",
@@ -404,7 +388,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
                 "grievance_summary"
             ]
             
-        if grievance_list_cat_confirmed in ["slot_added", "slot_deleted"]:
+        elif grievance_list_cat_confirmed in ["slot_added", "slot_deleted"]:
             print(" category added or deleted detected")
             updated_slots = ["grievance_cat_modify"]  # Simplified - only ask for the modification
 
@@ -417,7 +401,32 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         print("--------- END REQUIRED SLOTS ---------")
 
         return updated_slots
-
+    
+    
+    def _detect_gender_issues(self, tracker: Tracker) -> bool:
+        """
+        Detects gender issues in the grievance list of categories
+        """
+        list_of_cat = tracker.get_slot("grievance_list_cat")
+        #check if the string "gender" is in any of the categories in the list_of_cat
+        return any("gender" in category.lower() for category in list_of_cat)
+    
+    def _report_gender_issues(self, 
+                                 dispatcher: CollectingDispatcher, 
+                                 tracker: Tracker):
+            """
+            Helper function to report gender issues and return the specific updated slots
+            the changes in requested_slot are not handled in that specific function
+            the utterance and buttons are handled in the action_ask_grievance_summary_form_gender_follow_up
+            """
+            ic("run _report_gender_issues")
+            # update all the regular slots to validate the form and add the gender_issues_reported slot
+            return {"grievance_list_cat_confirmed": "slot_confirmed",
+                    "grievance_cat_modify": "slot_skipped",
+                    "grievance_list_cat": tracker.get_slot("grievance_list_cat"),
+                    "grievance_summary": tracker.get_slot("grievance_summary_temp"),
+                    "grievance_summary_confirmed": "slot_skipped",
+                    "gender_issues_reported": True}
             
     async def extract_grievance_list_cat_confirmed(self, 
                                                    dispatcher: CollectingDispatcher,
@@ -440,20 +449,19 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         print("######################### VALIDATE GRIEVANCE LIST CAT CONFIRMED ##############")
 
         slot_value = slot_value.strip('/')
-         #initialize the list of cat
-        # list_of_cat = tracker.get_slot("grievance_list_cat")
-        # list_of_cat_to_add = LIST_OF_CATEGORIES if not list_of_cat else [cat for cat in LIST_OF_CATEGORIES if cat not in list_of_cat]
-        # print(f"message_display_list_cat: {ValidateGrievanceSummaryForm.message_display_list_cat}")
+        list_of_cat = tracker.get_slot("grievance_list_cat") #get the list of cat from the slot to check for gender issues
         
         print(f"grievance_list_cat_confirmed: {slot_value}")
         
         if slot_value in ["slot_skipped", "slot_confirmed"]:
-            print(slot_value, "EXPECTED SLOT VALUE")
-            # self.utter_summary_message(dispatcher, tracker)
-            return {"grievance_list_cat_confirmed": slot_value,
-                    "grievance_cat_modify": slot_value}
-        
-                
+            if self._detect_gender_issues(tracker):
+                ic("validate_grievance_list_cat_confirmed: gender issues detected in list_of_cat")
+                return self._report_gender_issues(dispatcher, tracker)
+            else:
+                ic("validate_grievance_list_cat_confirmed: no gender issues detected in list_of_cat")
+                return {"grievance_list_cat_confirmed": slot_value,
+                        "grievance_cat_modify": slot_value}
+            
         return {"grievance_list_cat_confirmed": slot_value}
     
     
@@ -550,11 +558,20 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         #reset the message_display_list_cat to True
         ValidateGrievanceSummaryForm.message_display_list_cat = True
         print("updated list of cat: ", list_of_cat)
+        
+        # #deal with the case where gender issues is part of list_of_cat
+        # if self._detect_gender_issues(tracker):
+        #     ic("validate_grievance_cat_modify: gender issues detected in list_of_cat")
+        #     return self._report_gender_issues(dispatcher, tracker)
+            
         #update the slots
         return {"grievance_list_cat": list_of_cat,
                 "grievance_list_cat_confirmed": None,
                 "grievance_cat_modify": None,
                 "requested_slot": "grievance_list_cat_confirmed"}
+        
+        
+    
 
     
     async def extract_grievance_summary_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -615,6 +632,45 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             
         return {}
 
+    async def extract_gender_follow_up(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        return await self._handle_slot_extraction(
+            "gender_follow_up",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_gender_follow_up(self, slot_value: Any,
+                                                   dispatcher: CollectingDispatcher, 
+                                                   tracker: Tracker, 
+                                                   domain: Dict[Text, Any]
+                                                   ) -> List[Dict[Text, Any]]:
+        
+        slots = {"user_location_consent": False,
+                    "user_municipality_temp": "slot_skipped",
+                    "user_municipality": "slot_skipped",
+                    "user_municipality_confirmed": False,
+                    "user_village": "slot_skipped",
+                    "user_address_temp": "slot_skipped",
+                    "user_address": "slot_skipped",
+                    "user_address_confirmed": False,
+                    "user_contact_consent": "slot_skipped",
+                    "user_full_name": "slot_skipped",
+                    "user_contact_phone": "slot_skipped",
+                    "phone_validation_required": False,
+                    "user_contact_email_temp": "slot_skipped",
+                    "user_contact_email_confirmed": "slot_skipped"
+                    }
+        
+        if slot_value == "/exit" or "slot_skipped" in slot_value:
+            return slots
+        if slot_value == "/anonymous_with_phone":
+            slots["user_contact_consent"] = "anonymous_with_phone"
+            slots["user_full_name"] = None
+            slots["user_contact_phone"] = None
+            slots["phone_validation_required"] = True
+            return slots
+        return {}
 
 class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
     def name(self) -> Text:
@@ -727,7 +783,18 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(Action):
             dispatcher.utter_message(text=utterance)
         return []
 
-
+class ActionAskGrievanceSummaryFormGenderFollowUp(Action):
+    def name(self) -> Text:
+        return "action_ask_grievance_summary_form_gender_follow_up"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        language_code = tracker.get_slot("language_code") or "en"
+        for i in range(1, 4):
+            utterance = get_utterance("grievance_form", self.name(), i, language_code)
+            dispatcher.utter_message(text=utterance)
+        utterance = get_utterance("grievance_form", self.name(), 4, language_code)
+        buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+        dispatcher.utter_message(text=utterance, buttons=buttons)
 
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(Action):
@@ -816,48 +883,7 @@ class ActionSubmitGrievance(Action):
                                             grievance_email=user_data['user_contact_email'],
                                             grievance_phone=user_data['user_contact_phone'],
                                            )
-        
-        # Add summary if available
-        # if grievance_data['grievance_summary']:
-        #     if language_code == "ne":
-        #         message.append(f"**सारांश:** {grievance_data['grievance_summary']}")
-        #     else:   
-        #         message.append(f"**Summary:** {grievance_data['grievance_summary']}")
-        # else:
-        #     if language_code == "ne":
-        #         message.append("**सारांश:** [Not Provided]")
-        #     else:
-        #         message.append("**Summary:** [Not Provided]")
 
-        # # Add category if available
-        # if grievance_data['grievance_category']:
-        #     if language_code == "ne":
-        #         message.append(f"**श्रेणी:** {grievance_data['grievance_category']}")
-        #     else:
-        #         message.append(f"**Category:** {grievance_data['grievance_category']}")
-        # else:
-        #     if language_code == "ne":
-        #         message.append("**श्रेणी:** [प्रदान गरिएन]\n यदि आवश्यक भएमा तपाईंले पछि श्रेणी थप्न सक्नुहुन्छ")
-        #     else:
-        #         message.append("**Category:** [Not Provided]\nYou can add the category later if needed.")
-
-        # # Add details if available
-        # if grievance_data['grievance_details']:
-        #     if language_code == "ne":
-        #         message.append(f"**विवरण:** {grievance_data['grievance_details']}")
-        #     else:
-        #         message.append(f"**Details:** {grievance_data['grievance_details']}")
-        # if language_code == "ne":
-        #     message.append("\nहाम्रो टीमले तपाईंको गुनासो थुप्रै जानकारी गर्नेछौं र अगाडि जानकारी आवश्यक भएको छ भन्ने सम्झौतामा तपाईंलाई सम्पर्क गर्नेछौं।")
-        # else:
-        #     message.append("\nOur team will review it shortly and contact you if more information is needed.")
-
-        # # Add email notification info if available
-        # if user_email:
-        #     if language_code == "ne":
-        #         message.append(f"\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {user_email}")
-        #     else:
-        #         message.append(f"\nA confirmation email will be sent to {user_email}")
 
         return message
     
@@ -870,7 +896,6 @@ class ActionSubmitGrievance(Action):
         
         json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
         
-        # categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_category'] or []))
         categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_category'] or []))
         # Create email body using template
         
@@ -988,122 +1013,6 @@ class ActionSubmitGrievance(Action):
             return []
         
         
-
-    
-############################ ALTERNATE PATH - CATEGORY MODIFICATION ############################
-
-# class ActionAskForCategoryModification(Action):
-#     def name(self) -> str:
-#         return "action_ask_for_category_modification"
-
-#     def run(self, dispatcher, tracker, domain):
-#         grievance_list_cat = tracker.get_slot("grievance_list_cat")
-
-#         if not grievance_list_cat:
-#             dispatcher.utter_message(text="No categories selected.")
-#             return []
-
-#         # Display categories as buttons for modification
-#         buttons = [
-#             {"title": category, "payload": f"/modify_category{{\"category_modify\": \"{category}\"}}"}
-#             for category in grievance_list_cat
-#         ]
-#         buttons.append({"title": "✅ Confirm & Continue", "payload": "/confirm_selection"})
-
-#         dispatcher.utter_message(
-#             text="Which category would you like to modify?",
-#             buttons=buttons
-#         )
-
-#         return []
-    
-# class ActionSetCategoryToModify(Action):
-#     def name(self) -> str:
-#         return "action_set_category_to_modify"
-
-#     def run(self, dispatcher, tracker, domain):
-#         # selected_category = tracker.get_slot("category_modify")  # Extract from intent payload
-#         # print("ActionSetCagoryToModify - from slot :", selected_category)
-        
-        
-#         for c in LIST_OF_CATEGORIES:
-#             if c in tracker.latest_message.get("text"):
-#                 selected_category = c
-#                 print("c extracted from message : " , c)
-                
-#         if not selected_category:
-#             dispatcher.utter_message(text="No category selected.")
-#             return []
-
-#         # Set the category_to_modify slot
-#         print("category_modify", selected_category)
-#         return [SlotSet("category_modify", selected_category)]
-
-
-# class ActionModifyOrDeleteCategory(Action):
-#     def name(self) -> str:
-#         return "action_modify_or_delete_category"
-
-#     def run(self, dispatcher, tracker, domain):
-#         category_modify = tracker.get_slot("category_modify")
-#         try:
-#             print('############ action_modify_or_delete_category ###########')
-#             print("category_modify", category_modify)
-#         except: 
-#             pass
-#         if not category_modify:
-#             dispatcher.utter_message(text="No category selected for modification.")
-#             return []
-
-#         buttons = [
-#             {"title": "🗑 Delete", "payload": "/delete_category"},
-#             {"title": "✏ Change", "payload": "/change_category"},
-#             {"title": "Cancel", "payload": "/cancel_modification"}
-#         ]
-
-#         dispatcher.utter_message(
-#             text=f"You selected '{category_modify}'. Would you like to delete it or change it?",
-#             buttons=buttons
-#         )
-
-#         print("old_category", category_modify)
-#         return [SlotSet("old_category", category_modify)]
-    
-    
-# class ActionChangeCategory(Action):
-#     def name(self) -> str:
-#         return "action_change_category"
-
-#     def run(self, dispatcher, tracker, domain):
-#         # Path to the lookup file
-#         print('############ action_change_category ###########')
-
-#         # Retrieve categories already selected and dismissed
-        
-#         print("old_category", tracker.get_slot("old_category"))
-#         selected_categories = tracker.get_slot("grievance_list_cat") or []
-#         dismissed_categories = tracker.get_slot("dismissed_categories") or []
-
-#         # Filter out selected and dismissed categories
-#         available_categories = [cat for cat in LIST_OF_CATEGORIES if cat not in selected_categories and cat not in dismissed_categories]
-
-#         if not available_categories:
-#             dispatcher.utter_message(text="⚠ No more categories available for selection.")
-#             return []
-
-#         # Generate buttons for category selection (limit to 10 for readability)
-#         buttons = [{"title": cat, "payload": f'/set_apply_category_change{{"category": "{cat}"}}'} for cat in available_categories[:10]]
-
-#         # Add a "Cancel" and a skip button
-#         buttons = [{"title": "Cancel", "payload": "/cancel_modification_category"},
-#                     {"title": "Skip this step", "payload": "/skip_category"}] + buttons
-
-#         dispatcher.utter_message(
-#             text="📋 Please select a new category from the list below:",
-#             buttons=buttons
-#         )
-
-#         return []
 
         
 

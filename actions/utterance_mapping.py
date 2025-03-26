@@ -166,6 +166,17 @@ BUTTONS_RESTART_OPTIONS = {
     ]
 }
 
+BUTTONS_GENDER_FOLLOW_UP = {
+    'en': [
+        {"title": "No, I want to Exit", "payload": BUTTON_EXIT},
+        {"title": "I want to file anonymously with one phone number", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
+    ],
+    'ne': [
+        {"title": "निस्कनुहोस्", "payload": BUTTON_EXIT},
+        {"title": "मैले एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
+    ],
+}
+
 BUTTONS_FALLBACK = {
     'en': [
         {"title": "Try Again", "payload": BUTTON_TRY_AGAIN},
@@ -182,6 +193,8 @@ BUTTONS_FALLBACK = {
         {"title": "बाहिर निस्कनुहोस्", "payload": BUTTON_EXIT}
     ]
 }
+
+
 VALIDATION_SKIP = {"utterance":{
     "en" : "Did you want to skip this field? I matched '{matched_word}'",
     "ne" : "के तपाईं यो क्षेत्र छोड्न चाहनुहुन्छ? मैले '{matched_word}' मिलान गरेको छु।"
@@ -352,6 +365,10 @@ UTTERANCE_MAPPING = {
         'action_ask_contact_form_user_full_name': {
             'utterances': {
                 1: {
+                    'en': "Please enter the name you want us to address you by. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                },
+                2: {
                     'en': "Please enter your full name. You can skip this if you prefer to remain anonymous.",
                     'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
                 }
@@ -432,7 +449,7 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'otp_form': {
+    'otp_verification_form': {
         'action_ask_otp_verification_form_otp_input': {
             'utterances': {
                 1: {
@@ -466,6 +483,34 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'action_ask_grievance_summary_form_gender_follow_up': {
+            'utterances': {
+                1: {
+                    'en': """We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
+                    """,
+                    'ne': """गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
+                    """
+                },
+                2: {
+                    'en': """Address : Koshi Regional Hospital, Biratnagar
+                    Morang
+                    Phone : 021-530103""",
+                    'ne': """कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर
+                    फोन : 021-530103""",
+                },
+                3: {
+                    'en': """ You can get more information on : https://nwchelpline.gov.np""",
+                    'ne': """तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np""",
+                },
+                4: {
+                    'en': "If you desire, you can provide us with more details that we will forward to the OCMC.",
+                    'ne': "यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।",
+                }
+            },
+            'buttons': {
+                1: BUTTONS_GENDER_FOLLOW_UP
+            }
+        },  
         'action_ask_grievance_details_form_grievance_temp': {
             'utterances': {
                 1: {
@@ -730,12 +775,12 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "File a grievance", "payload": "/start_grievance_process"},
-                        {"title": "Check my status", "payload": "/check_status"},
+                        {"title": "Check my status", "payload": "/start_check_status"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
                     'ne': [
                         {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/start_grievance_process"},
-                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
+                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/start_check_status"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                     ]
                 }
@@ -891,6 +936,71 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_LANGUAGE_OPTIONS
+            }
+        }
+    },
+    'otp_verification_form': {
+        'action_ask_otp_verification_form_otp_consent': {
+            'utterances': {
+                1: {
+                    'en': "Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you.",
+                    'ne': "के तपाईं आफ्नो फोन नम्बरको प्रमाणित गर्न चाहनुहुन्छ? यदि तपाईं नम्बर सुनिश्चित गर्न नभएको हुन्, त्यसैले तपाईंको नम्बर सुनिश्चित गर्न हुन्छ र हामीलाई सुनिश्चित गर्न हुन्छ कि तपाईंलाई सम्पर्क गर्न हुन्छ।",
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'otp_verified_successfully': {
+            'utterances': {
+                1: {
+                    'en': "OTP verified successfully",
+                    'ne': "OTP सुनिश्चित गर्न गरिएको छ।"
+                }
+            }
+        },
+        "action_ask_otp_verification_form_otp_input": {
+            'utterances': {
+                1: {
+                    'en': "Your verification code is {otp_number}. \n Please enter this code to verify your phone number.",
+                    'ne': "तपाईंको प्रमाणित कोड {otp_number} हो। \n कृपया यो कोड प्रमाणित गर्न तपाईंको फोन नम्बरमा प्रविष्ट गर्नुहोस्।"
+                },
+                2: {
+                    'en': "-------- OTP verification ongoing --------\nPlease enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number.",
+                    'ne': "-------- OTP सुनिश्चित गर्न गरिएको छ --------\nकृपया तपाईंको फोन नम्बर {phone_number}मा पठाईएको 6-अंकीय एक बारमा प्रविष्ट गर्नुहोस्।"
+                },
+                3: {
+                    'en': "This is your {resend_count} attempt. You have {max_attempts} attempts left.",
+                    'ne': "यो तपाईंको {resend_count} प्रयास हो। तपाईंलाई अब {max_attempts} प्रयास बाँचेको छ।"
+                },
+                4: {
+                    'en': "Sorry, we couldn't send the verification code.",
+                    'ne': "मलाई खुशी लाग्यो कि तपाईं अपनो मन बदल्न चाहनुहुन्छ। म तपाईंलाई के मद्दत गर्न सक्छु?"
+                },
+                5: {
+                    'en': "❌ Maximum resend attempts reached. Please try again later or skip verification.",
+                    'ne': "❌ अधिकतम प्रयास पुनः प्रयास गर्न गरिएको छ। कृपया फेरि प्रयास गर्नुहोस् वा प्रमाणित गर्न छोड्नुहोस्।"
+                },
+                6: {
+                    'en': "❌ Invalid code. Please try again or type 'resend' to get a new code.",
+                    'ne': "❌ अवैध कोड। कृपया पुनः प्रयास गर्नुहोस् वा 'resend' प्रमाणित गर्न गर्नुहोस्।"
+                },
+                7: {
+                    'en': "Continuing without phone verification. Your grievance details will not be sent via SMS.",
+                    'ne': "प्रमाणित गर्न छोड्नुहोस्। तपाईंको गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Resend", "payload": "/resend"},
+                        {"title": "Skip", "payload": "/skip"}
+                    ],
+                    'ne': [
+                        {"title": "पुनः प्रमाणित गर्नुहोस्", "payload": "/resend"},
+                        {"title": "छोड्नुहोस्", "payload": "/skip"}
+                    ]
+                }
             }
         }
     },

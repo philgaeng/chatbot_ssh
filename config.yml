@@ -16,7 +16,7 @@ pipeline:
   - name: EntitySynonymMapper
   - name: FallbackClassifier
     threshold: 0.2
-    ambiguity_threshold: 0.2
+    ambiguity_threshold: 0.05
 
 policies:
   - name: MemoizationPolicy
