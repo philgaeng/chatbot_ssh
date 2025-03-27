@@ -204,59 +204,119 @@ class GrievanceDB:
 
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict]:
         """Retrieve complete grievance details by ID with user information"""
-        query = """
-            SELECT 
-                g.grievance_id,
-                g.grievance_category,
-                g.grievance_summary,
-                g.grievance_details,
-                g.grievance_date,
-                g.grievance_claimed_amount,
-                g.grievance_location,
-                g.grievance_creation_date,
-                g.grievance_status,
-                g.grievance_status_update_date,
-                u.user_full_name,
-                u.user_contact_phone,
-                u.user_address,
-                h.next_step,
-                h.expected_resolution_date
-            FROM grievances g
-            JOIN users u ON g.user_id = u.id
-            LEFT JOIN (
-                SELECT DISTINCT ON (grievance_id)
-                    grievance_id, next_step, expected_resolution_date
-                FROM grievance_history
-                ORDER BY grievance_id, update_date DESC
-            ) h ON g.grievance_id = h.grievance_id
-            WHERE g.grievance_id = %s
-        """
+        if self.db_type == "postgres":
+            query = """
+                SELECT 
+                    g.grievance_id,
+                    g.grievance_category,
+                    g.grievance_summary,
+                    g.grievance_details,
+                    g.grievance_date,
+                    g.grievance_claimed_amount,
+                    g.grievance_location,
+                    g.grievance_creation_date,
+                    g.grievance_status,
+                    g.grievance_status_update_date,
+                    u.user_full_name,
+                    u.user_contact_phone,
+                    u.user_address,
+                    h.next_step,
+                    h.expected_resolution_date
+                FROM grievances g
+                JOIN users u ON g.user_id = u.id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (grievance_id)
+                        grievance_id, next_step, expected_resolution_date
+                    FROM grievance_history
+                    ORDER BY grievance_id, update_date DESC
+                ) h ON g.grievance_id = h.grievance_id
+                WHERE g.grievance_id = %s
+            """
+        else:  # SQLite
+            query = """
+                SELECT 
+                    g.grievance_id,
+                    g.grievance_category,
+                    g.grievance_summary,
+                    g.grievance_details,
+                    g.grievance_date,
+                    g.grievance_claimed_amount,
+                    g.grievance_location,
+                    g.grievance_creation_date,
+                    g.grievance_status,
+                    g.grievance_status_update_date,
+                    u.user_full_name,
+                    u.user_contact_phone,
+                    u.user_address,
+                    h.next_step,
+                    h.expected_resolution_date
+                FROM grievances g
+                JOIN users u ON g.user_id = u.id
+                LEFT JOIN (
+                    SELECT grievance_id, next_step, expected_resolution_date
+                    FROM grievance_history h1
+                    WHERE update_date = (
+                        SELECT MAX(update_date)
+                        FROM grievance_history h2
+                        WHERE h2.grievance_id = h1.grievance_id
+                    )
+                ) h ON g.grievance_id = h.grievance_id
+                WHERE g.grievance_id = ?
+            """
+        
         results = self.execute_query(query, (grievance_id,))
         return results[0] if results else None
 
     def get_grievances_by_phone(self, phone_number: str) -> List[Dict]:
         """Retrieve all grievances for a phone number with latest status"""
-        query = """
-            SELECT 
-                g.grievance_id,
-                g.grievance_category,
-                g.grievance_summary,
-                g.grievance_date,
-                g.grievance_creation_date,
-                g.grievance_status,
-                g.grievance_status_update_date,
-                h.next_step
-            FROM grievances g
-            JOIN users u ON g.user_id = u.id
-            LEFT JOIN (
-                SELECT DISTINCT ON (grievance_id)
-                    grievance_id, next_step
-                FROM grievance_history
-                ORDER BY grievance_id, update_date DESC
-            ) h ON g.grievance_id = h.grievance_id
-            WHERE u.user_contact_phone = %s
-            ORDER BY g.grievance_creation_date DESC
-        """
+        if self.db_type == "postgres":
+            query = """
+                SELECT 
+                    g.grievance_id,
+                    g.grievance_category,
+                    g.grievance_summary,
+                    g.grievance_date,
+                    g.grievance_creation_date,
+                    g.grievance_status,
+                    g.grievance_status_update_date,
+                    h.next_step
+                FROM grievances g
+                JOIN users u ON g.user_id = u.id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (grievance_id)
+                        grievance_id, next_step
+                    FROM grievance_history
+                    ORDER BY grievance_id, update_date DESC
+                ) h ON g.grievance_id = h.grievance_id
+                WHERE u.user_contact_phone = %s
+                ORDER BY g.grievance_creation_date DESC
+            """
+        else:  # SQLite
+            query = """
+                SELECT 
+                    g.grievance_id,
+                    g.grievance_category,
+                    g.grievance_summary,
+                    g.grievance_date,
+                    g.grievance_creation_date,
+                    g.grievance_status,
+                    g.grievance_status_update_date,
+                    h.next_step
+                FROM grievances g
+                JOIN users u ON g.user_id = u.id
+                LEFT JOIN (
+                    SELECT grievance_id, next_step
+                    FROM grievance_history h1
+                    WHERE update_date = (
+                        SELECT MAX(update_date)
+                        FROM grievance_history h2
+                        WHERE h2.grievance_id = h1.grievance_id
+                    )
+                ) h ON g.grievance_id = h.grievance_id
+                WHERE u.user_contact_phone = ?
+                ORDER BY g.grievance_creation_date DESC
+            """
+        
         return self.execute_query(query, (phone_number,))
 
     def create_grievance(self, user_data: Dict, grievance_data: Dict) -> Optional[str]:

@@ -87,6 +87,8 @@ EMAIL_TEMPLATES = {
     "GRIEVANCE_RECAP_USER_BODY": """
         <h2>Grievance Submission Recap</h2>
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
+        <p><strong>Grievance Filed on:</strong> {grievance_timestamp}</p>
+        <p><strong>Expected Resolution Date:</strong> {grievance_timeline}</p>
         <p><strong>Submitted by:</strong> {user_name}</p>
         
         <h3>Grievance Summary:</h3>
@@ -121,11 +123,19 @@ EMAIL_TEMPLATES = {
 }
 
 # SMS Templates
-SMS_TEMPLATES = {
-    "OTP_MESSAGE": "Your verification code is {otp}. Please enter this code to verify your phone number.",
-    "GRIEVANCE_RECAP": """Thank you for submitting your grievance (ID: {grievance_id}).
+DIC_SMS_TEMPLATES ={
+    "OTP_MESSAGE": {
+        'en': "Your verification code is {otp}. Please enter this code to verify your phone number.",
+        'ne': "तपाईंको सत्यापन कोड {otp} हो। कृपया यो कोड फ्रिज गर्नुहोस् तपाईंको फोन नम्बरको सत्यापन गर्ने लागि।",
+    },
+    "GRIEVANCE_RECAP": {
+        'en': """Thank you for submitting your grievance (ID: {grievance_id}).
 We have received your complaint and will process it accordingly.
-You will receive updates about your grievance through this number."""
+You will receive updates about your grievance through this number.""",
+        'ne': """तपाईंको गुनासो दर्ता गर्ने लागि धन्यवाद (ID: {grievance_id})।
+        हामीले तपाईंको गुनासो ग्रहण गरेको छ र तपाईंको गुनासोको अनुसार सुनिश्चित गर्नेछौं।
+        तपाईंलाई तपाईंको गुनासोको अपडेट यो नम्बरमा प्राप्त हुनेछ।"""
+    }
 }
 
 # Default values

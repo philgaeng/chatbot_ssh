@@ -11,11 +11,11 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from actions.helpers import load_classification_data, load_categories_from_lookup, get_next_grievance_number
-from actions.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS
+from actions.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .db_actions import GrievanceDB
-from datetime import datetime
+from datetime import datetime, timedelta
 from .messaging import SMSClient, EmailClient
 from rapidfuzz import process
 import traceback
@@ -819,7 +819,12 @@ class ActionSubmitGrievance(Action):
 
     def collect_grievance_data(self, tracker: Tracker) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Collect and separate user and grievance data from slots."""
-        # User-related data
+        # set up the timestamp and timeline
+        grievance_timestamp = self.get_current_datetime()
+        grievance_timeline = (datetime.strptime(grievance_timestamp, "%Y-%m-%d %H:%M") + 
+                            timedelta(days=15)).strftime("%Y-%m-%d")
+        
+        # user data
         user_data = {
             'user_contact_phone': tracker.get_slot('user_contact_phone'),
             'user_contact_email': tracker.get_slot('user_contact_email'),
@@ -840,11 +845,13 @@ class ActionSubmitGrievance(Action):
             'grievance_category': tracker.get_slot('grievance_list_cat'),
             'grievance_claimed_amount': tracker.get_slot('grievance_claimed_amount')
         }
+
         
         grievance_status = {
             "grievance_status": GRIEVANCE_STATUS["SUBMITTED"],
             'submission_type': "new_grievance",
-            "timestamp": self.get_current_datetime()
+            "timestamp": grievance_timestamp,
+            "grievance_timeline": grievance_timeline
         }
         
         # change all the values of the slots_skipped or None to "NOT_PROVIDED"
@@ -868,6 +875,7 @@ class ActionSubmitGrievance(Action):
                                  'create_confirmation_message', 
                                  i, 
                                  self.language_code) for i in ['grievance_id',
+                                                                'grievance_timestamp',
                                                          'grievance_summary',
                                                          'grievance_category',
                                                          'grievance_details',
@@ -877,11 +885,13 @@ class ActionSubmitGrievance(Action):
                                                          'grievance_timeline']]
         
         message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
+                                            grievance_timestamp=grievance_data['grievance_timestamp'],
                                             grievance_summary=grievance_data['grievance_summary'],
                                             grievance_category=grievance_data['grievance_category'],
                                             grievance_details=grievance_data['grievance_details'],
                                             grievance_email=user_data['user_contact_email'],
                                             grievance_phone=user_data['user_contact_phone'],
+                                            grievance_timeline=grievance_data['grievance_timeline']
                                            )
 
 
@@ -910,7 +920,9 @@ class ActionSubmitGrievance(Action):
             address=email_data['user_address'],
             phone=email_data['user_contact_phone'],
             grievance_id=email_data['grievance_id'],
-            email=email_data['user_contact_email']
+            email=email_data['user_contact_email'],
+            grievance_timeline=email_data['grievance_timeline'],
+            grievance_timestamp=email_data['grievance_timestamp']
         ) 
         if body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
             body = EMAIL_TEMPLATES[body_name].format(

@@ -13,7 +13,7 @@ from actions.constants import (
     SMTP_CONFIG,
     ADMIN_EMAILS,
     EMAIL_TEMPLATES,
-    SMS_TEMPLATES,
+    DIC_SMS_TEMPLATES,
     DEFAULT_VALUES,
     GRIEVANCE_STATUS,
     SMS_ENABLED

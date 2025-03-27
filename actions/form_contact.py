@@ -10,6 +10,8 @@ from rasa_sdk.types import DomainDict
 from .constants import EMAIL_PROVIDERS_NEPAL
 from .base_form import BaseFormValidationAction
 from .utterance_mapping import get_utterance, get_buttons
+from icecream import ic
+
 logger = logging.getLogger(__name__)
 
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
@@ -100,6 +102,22 @@ class ValidateContactForm(BaseFormValidationAction):
 
     def name(self) -> Text:
         return "validate_contact_form"
+    
+    async def required_slots(self, 
+                       domain_slots: List[Text], 
+                       dispatcher: CollectingDispatcher, 
+                       tracker: Tracker, 
+                       domain: DomainDict) -> List[Text]:
+        """
+        This function is used to determine the required slots for the contact form depending on the main story.
+        It checks the main story to determine if the user is checking status and only requires the phone number.
+        """
+        main_story = tracker.get_slot("main_story")
+        ic(main_story)
+        if main_story == "status_update":
+            return ["user_contact_phone"]
+        else:
+            return ["user_contact_consent", "user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
 
     
     async def extract_user_contact_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
@@ -336,103 +354,6 @@ class ValidateContactForm(BaseFormValidationAction):
                     "user_contact_email_confirmed": None}
 
 
-# class ActionCheckPhoneValidation(Action):
-#     def name(self) -> Text:
-#         return "action_check_phone_validation"
-
-#     async def run(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-#     ) -> List[Dict[Text, Any]]:
-#         phone_number = tracker.get_slot("user_contact_phone")
-        
-#         if phone_number and phone_number != "Skipped":
-#             return [SlotSet("phone_validation_required", True)]
-#         else:
-#             return [SlotSet("phone_validation_required", False)]
-
-# class ActionAskContactFormPhoneValidationRequired(Action):
-#     def name(self) -> Text:
-#         return "action_ask_contact_form_phone_validation_required"
-
-#     async def run(
-#         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
-#     ) -> List[Dict[Text, Any]]:
-#         dispatcher.utter_message(
-#             text=(
-#                 "Your grievance is filed without a validated number. Providing a valid number "
-#                 "will help in the follow-up of the grievance and we recommend it. However, "
-#                 "you can file the grievance as is."
-#             ),
-#             buttons=[
-#                 {"title": "Give Phone Number", "payload": "/provide_phone_number"},
-#                 {"title": "File Grievance as is", "payload": "/file_without_validation"}
-#             ]
-#         )
-#         return []
-
-# class PhoneValidationForm(FormValidationAction):
-#     def name(self) -> Text:
-#         return "validate_phone_validation_form"
-
-#     @staticmethod
-#     def required_slots(tracker: Tracker) -> List[Text]:
-#         return ["user_contact_phone"]
-
-#     async def validate_user_contact_phone(
-#         self,
-#         slot_value: Text,
-#         dispatcher: CollectingDispatcher,
-#         tracker: Tracker,
-#         domain: Dict[Text, Any],
-#     ) -> Dict[Text, Any]:
-#         if re.match(r'^\+?63\d{10}$', slot_value):
-#             return {"user_contact_phone": slot_value}
-#         else:
-#             dispatcher.utter_message(text="Please enter a valid Philippine phone number.")
-#             return {"user_contact_phone": None}
-
-# class ActionSkipEmail(Action):
-#     def name(self) -> Text:
-#         return "action_skip_email"
-
-#     async def run(
-#         self, 
-#         dispatcher: CollectingDispatcher,
-#         tracker: Tracker,
-#         domain: Dict[Text, Any]
-#     ) -> List[Dict[Text, Any]]:
-#         return [SlotSet("user_contact_email", "slot_skipped")]
-
-# class ActionConfirmEmail(Action):
-#     def name(self) -> Text:
-#         return "action_confirm_email"
-
-#     async def run(
-#         self, 
-#         dispatcher: CollectingDispatcher,
-#         tracker: Tracker,
-#         domain: Dict[Text, Any]
-#     ) -> List[Dict[Text, Any]]:
-#         contact_modification_mode = tracker.get_slot("contact_modification_mode")
-#         if contact_modification_mode:
-#             dispatcher.utter_message(text="✅ Email updated successfully!")
-#             return [SlotSet("contact_modification_mode", False)]
-#         return [ActiveLoop("contact_form")]
-
-# class ActionProvideNewEmail(Action):
-#     def name(self) -> Text:
-#         return "action_provide_new_email"
-
-#     async def run(
-#         self, 
-#         dispatcher: CollectingDispatcher,
-#         tracker: Tracker,
-#         domain: Dict[Text, Any]
-#     ) -> List[Dict[Text, Any]]:
-#         return [
-#             SlotSet("user_contact_email", None),
-#             ActiveLoop("contact_form")
-#         ]
 
 class ActionModifyContactInfo(Action):
     def name(self) -> Text:

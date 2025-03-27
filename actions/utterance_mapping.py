@@ -194,6 +194,17 @@ BUTTONS_FALLBACK = {
     ]
 }
 
+BUTTONS_CHECK_STATUS = {
+    'en': [
+        {"title": "Check Status", "payload": "/check_status"},
+        {"title": "Skip", "payload": BUTTON_SKIP},
+    ],
+    'ne': [
+        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+    ]
+}
+
 
 VALIDATION_SKIP = {"utterance":{
     "en" : "Did you want to skip this field? I matched '{matched_word}'",
@@ -713,6 +724,10 @@ UTTERANCE_MAPPING = {
                     'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
                     'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
                 },
+                'grievance_timestamp': {
+                    'en': "Grievance filed on: {grievance_timestamp}",
+                    'ne': "गुनासो दर्ता गरिएको: {grievance_timestamp}"
+                },
                 'grievance_summary': {
                     'en': "**Summary: {grievance_summary}**",
                     'ne': "**सारांश: {grievance_summary}**"
@@ -727,7 +742,7 @@ UTTERANCE_MAPPING = {
                 },
                 'grievance_email': {
                     'en': "\nA confirmation email will be sent to {grievance_email}",
-                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ।"
+                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {grievance_email}"
                 },
                 'grievance_phone': {
                     'en': "**Phone: {grievance_phone}**",
@@ -738,8 +753,8 @@ UTTERANCE_MAPPING = {
                     'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
                 },
                 'grievance_timeline': {
-                    'en': "The standard timeline for a grievance is 15 days.",
-                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ।"
+                    'en': "The standard timeline for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
+                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
                 },
                 'grievance_status': {
                     'en': "**Status:**",
@@ -1024,6 +1039,205 @@ UTTERANCE_MAPPING = {
                             ]
                 }
             }
+        }
+    },
+    'check_status': {
+        'action_choose_retrieval_method': {
+            'utterances': {
+                1: {
+                    'en': "How would you like to retrieve your grievance?",
+                    'ne': "तपाईं आफ्नो गुनासो कसरी पुनः प्राप्त गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Use Phone Number", "payload": "/retrieve_with_phone"},
+                        {"title": "Use Grievance ID", "payload": "/retrieve_grievance_with_id"}
+                    ],
+                    'ne': [
+                        {"title": "फोन नम्बर प्रयोग गर्नुहोस्", "payload": "/retrieve_with_phone"},
+                        {"title": "गुनासो ID प्रयोग गर्नुहोस्", "payload": "/retrieve_grievance_with_id"}
+                    ]
+                }
+            }
+        },
+        'action_display_grievance': {
+            'utterances': {
+                1: {
+                    'en': "Sorry, I couldn't find any grievance with that ID.",
+                    'ne': "माफ गर्नुहोस्, म त्यो ID सँग कुनै गुनासो भेट्टाउन सकिन।"
+                },
+                2: {
+                    'en': "No grievances found for this phone number.",
+                    'ne': "यो फोन नम्बरको लागि कुनै गुनासो भेट्टाउन सकिएन।"
+                },
+                3: {
+                    'en': "Sorry, I need either a grievance ID or phone number to retrieve details.",
+                    'ne': "माफ गर्नुहोस्, मलाई विवरण पुनः प्राप्त गर्न गुनासो ID वा फोन नम्बर चाहिन्छ।"
+                },
+                4: {
+                    'en': "Found {count} grievances:",
+                    'ne': "{count} वटा गुनासो भेट्टाउन सकिएन:"
+                },
+                5: {
+                    'en': "Which grievance would you like to check?",
+                    'ne': "तपाईं कुन गुनासो जाँच गर्न चाहनुहुन्छ?"
+                },
+                6: {
+                    'en': "Would you like to check the detailed status?",
+                    'ne': "के तपाईं विस्तृत स्थिति जाँच गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Check Status", "payload": "/check_status"}
+                    ],
+                    'ne': [
+                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"}
+                    ]
+                }
+            }
+        },
+        'action_helpers': {
+            'utterances': {
+                'grievance_id': {
+                    'en': "🔍 **Grievance ID:** {grievance_id}",
+                    'ne': "🔍 **गुनासो ID:** {grievance_id}"
+                },
+                'grievance_category': {
+                    'en': "📋 **Category:** {grievance_category}",
+                    'ne': "📋 **श्रेणी:** {grievance_category}"
+                },
+                'grievance_summary': {
+                    'en': "📝 **Summary:** {grievance_summary}",
+                    'ne': "📝 **सारांश:** {grievance_summary}"
+                },
+                'grievance_date': {
+                    'en': "📅 **Date:** {grievance_date}",
+                    'ne': "📅 **मिति:** {grievance_date}"
+                },
+                'grievance_creation_date': {
+                    'en': "📅 **Created:** {grievance_creation_date}",
+                    'ne': "📅 **सिर्जना गरिएको:** {grievance_creation_date}"
+                },
+                'grievance_status': {
+                    'en': "📊 **Status:** {grievance_status}",
+                    'ne': "📊 **स्थिति:** {grievance_status}"
+                },
+                'grievance_status_update_date': {
+                    'en': "🔄 **Last Updated:** {grievance_status_update_date}",
+                    'ne': "🔄 **अन्तिम अपडेट:** {grievance_status_update_date}"
+                },
+                'next_step': {
+                    'en': "➡️ **Next Step:** {next_step}",
+                    'ne': "➡️ **अर्को चरण:** {next_step}"
+                },
+                'expected_resolution_date': {
+                    'en': "🎯 **Expected Resolution:** {expected_resolution_date}",
+                    'ne': "🎯 **अपेक्षित समाधान:** {expected_resolution_date}"
+                },
+                'user_full_name': {
+                    'en': "👤 **Name:** {user_full_name}",
+                    'ne': "👤 **नाम:** {user_full_name}"
+                },
+                'user_contact_phone': {
+                    'en': "📞 **Phone:** {user_contact_phone}",
+                    'ne': "📞 **फोन:** {user_contact_phone}"
+                },
+                'user_address': {
+                    'en': "📍 **Address:** {user_address}",
+                    'ne': "📍 **ठेगाना:** {user_address}"
+                },
+                'grievance_claimed_amount': {
+                    'en': "💰 **Claimed Amount:** {grievance_claimed_amount}",
+                    'ne': "💰 **दावी रकम:** {grievance_claimed_amount}"
+                },
+                'grievance_location': {
+                    'en': "📍 **Location:** {grievance_location}",
+                    'ne': "📍 **स्थान:** {grievance_location}"
+                }
+            }
+        },
+        'action_check_status': {
+            'utterances': {
+                1: {
+                    'en': "Sorry, I couldn't determine which grievance to check.",
+                    'ne': "माफ गर्नुहोस्, म कुन गुनासो जाँच गर्ने निर्धारण गर्न सकिन।"
+                },
+                2: {
+                    'en': "Sorry, I couldn't retrieve the status history at this moment.",
+                    'ne': "माफ गर्नुहोस्, म यो समयमा स्थिति इतिहास पुनः प्राप्त गर्न सकिन।"
+                },
+                3: {
+                    'en': "Would you like to see the full status history?",
+                    'ne': "के तपाईं पूर्ण स्थिति इतिहास हेर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "View History", "payload": "/show_status_history"},
+                        {"title": "Check Another Grievance", "payload": "/retrieve_another_grievance"}
+                    ],
+                    'ne': [
+                        {"title": "इतिहास हेर्नुहोस्", "payload": "/show_status_history"},
+                        {"title": "अर्को गुनासो जाँच गर्नुहोस्", "payload": "/retrieve_another_grievance"}
+                    ]
+                }
+            }
+        },
+        'action_show_status_history': {
+            'utterances': {
+                1: {
+                    'en': "Sorry, I couldn't determine which grievance to show history for.",
+                    'ne': "माफ गर्नुहोस्, म कुन गुनासोको लागि इतिहास देखाउने निर्धारण गर्न सकिन।"
+                },
+                2: {
+                    'en': "No status history found for this grievance.",
+                    'ne': "यो गुनासोको लागि कुनै स्थिति इतिहास भेट्टाउन सकिएन।"
+                },
+                3: {
+                    'en': "What would you like to do next?",
+                    'ne': "तपाईं अब के गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Check Current Status", "payload": "/check_status"},
+                        {"title": "Check Another Grievance", "payload": "/retrieve_another_grievance"},
+                        {"title": "End Conversation", "payload": "/goodbye"}
+                    ],
+                    'ne': [
+                        {"title": "वर्तमान स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
+                        {"title": "अर्को गुनासो जाँच गर्नुहोस्", "payload": "/retrieve_another_grievance"},
+                        {"title": "कुराकानी समाप्त गर्नुहोस्", "payload": "/goodbye"}
+                    ]
+                }
+            }
+        },
+        'validate_grievance_id_form': {
+            'utterances': {
+                1: {
+                    'en': "We have found your grievance with ID: {grievance_id}",
+                    'ne': "हामीलाई तपाईंको गुनासो भेट्टाउने ID: {grievance_id} भेटिन्छ।"
+                },
+                2: {
+                    'en': "Incorrect grievance ID",
+                    'ne': "अवैध गुनासो ID"
+                }
+                
+            }
+        },
+        'action_ask_grievance_id_form_grievance_id': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid grievance ID starting with 'GR'.",
+                    'ne': "कृपया 'GR' शुरु गर्ने एक वैध गुनासो ID प्रविष्ट गर्नुहोस्।"
+                }
+            }   
         }
     }
 }

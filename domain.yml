@@ -511,6 +511,7 @@ actions:
 - action_retrieve_with_phone
 - action_retrieve_grievance_with_id
 - action_check_status
+- action_check_status_start
 - action_retry_otp
 - action_retrieve_another_grievance
 - action_display_grievance
@@ -519,6 +520,8 @@ actions:
 - action_ask_menu_form_language_code
 - validate_menu_form
 - action_mood_unhappy
+- validate_grievance_id_form
+- action_ask_grievance_id_form_grievance_id
 forms:
   menu_form:
     required_slots:

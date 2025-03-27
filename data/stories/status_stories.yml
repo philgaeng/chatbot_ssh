@@ -15,11 +15,18 @@ stories:
         - language_code: "en"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
             - main_story: "status_update"
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+        - user_contact_phone: "9818000000"
+      - active_loop: null
+      - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
@@ -36,16 +43,22 @@ stories:
         - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
             - main_story: "status_update"
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+        - user_contact_phone: "9818000000"
+      - active_loop: null
+      - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
+      - action: action_menu
 
 
   - story: Direct grievance ID retrieval and status check in english
@@ -58,21 +71,16 @@ stories:
         - language_code: "en"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
             - main_story: "status_update"
-      # - action: action_menu
-      # - intent: status_check_start
-      # - slot_was_set:
-      #       - main_story: "status_update"
-      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_id
       - action: grievance_id_form
       - active_loop: grievance_id_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
+      - action: action_menu
 
   - story: Direct grievance ID retrieval and status check in nepali
     steps:
@@ -84,12 +92,9 @@ stories:
         - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
             - main_story: "status_update"
-      # - action: action_menu
-      # - intent: status_check_start
-      # - slot_was_set:
-      #       - main_story: "status_update"
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_id
@@ -97,14 +102,7 @@ stories:
       - active_loop: grievance_id_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
-
-  - story: User checks status immediately after displaying grievance
-    steps:
-      - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
+      - action: action_menu
 
   - story: User retrieves multiple grievances in english
     steps:
@@ -116,20 +114,30 @@ stories:
         - language_code: "en"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
           - main_story: "status_update"
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+        - user_contact_phone: "9818000000"
+      - active_loop: null
+      - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
-      - intent: status_check_another
+      - action: action_menu
+
+  - story: User checks status immediately after displaying grievance
+    steps:
       - action: action_display_grievance
       - intent: status_check
       - action: action_check_status
+
+  - story: User retrieves multiple grievances in nepali
 
   - story: User retrieves multiple grievances in nepali
     steps:  
@@ -141,17 +149,19 @@ stories:
         - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
+      - action: action_check_status_start
       - slot_was_set:
           - main_story: "status_update"
-      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+        - user_contact_phone: "9818000000"
+      - active_loop: null
+      - action: otp_verification_form
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
-      - intent: status_check_another
-      - action: action_display_grievance
-      - intent: status_check
-      - action: action_check_status
+      - action: action_menu
+
