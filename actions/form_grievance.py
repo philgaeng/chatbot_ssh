@@ -91,6 +91,45 @@ class ActionStartGrievanceProcess(Action):
                 SlotSet("grievance_list_cat", None),
                 SlotSet("grievance_list_cat_confirmed", None),
                 SlotSet("main_story", "new_grievance")]
+        
+
+class ActionSetGrievanceId(Action):
+    def __init__(self):
+        self.db = GrievanceDB()
+
+    def name(self) -> Text:
+        return "action_set_grievance_id"
+
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """Generate and set a new grievance ID with temporary status"""
+        try:
+            # Generate grievance ID with Nepal time
+            nepal_time = self.db.get_nepal_time()
+            grievance_id = f"GR{nepal_time.strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            
+            # Create initial grievance record with temporary status
+            grievance_data = {
+                "grievance_id": grievance_id,
+                "grievance_status": "TEMP",  # Temporary status
+                "user_contact_phone": tracker.get_slot("user_contact_phone") or "NOT_PROVIDED",
+                "user_contact_email": tracker.get_slot("user_contact_email") or "NOT_PROVIDED",
+                "user_full_name": tracker.get_slot("user_full_name") or "NOT_PROVIDED",
+                "grievance_summary": "PENDING",
+                "grievance_details": "PENDING",
+                "grievance_category": "PENDING"
+            }
+            
+            # Create the grievance with temporary status
+            if self.db.create_grievance(grievance_data):
+                ic(f"Created temporary grievance with ID: {grievance_id}")
+                return [SlotSet("grievance_id", grievance_id)]
+            else:
+                ic("Failed to create temporary grievance")
+                return []
+                
+        except Exception as e:
+            ic(f"Error creating temporary grievance: {str(e)}")
+            return []
 
     
 class ActionCallOpenAI(Action):
@@ -825,50 +864,43 @@ class ActionSubmitGrievance(Action):
                             timedelta(days=15)).strftime("%Y-%m-%d")
         
         # user data
-        user_data = {
-            'user_contact_phone': tracker.get_slot('user_contact_phone'),
-            'user_contact_email': tracker.get_slot('user_contact_email'),
-            'user_full_name': tracker.get_slot('user_full_name'),
-            'user_province': tracker.get_slot('user_province'),
-            'user_district': tracker.get_slot('user_district'),
-            'user_municipality': tracker.get_slot('user_municipality'),
-            'user_ward': tracker.get_slot('user_ward'),
-            'user_village': tracker.get_slot('user_village'),
-            'user_address': tracker.get_slot('user_address'),
-        }
-
-        # Grievance-related data
-        grievance_data = {
-            'grievance_id': tracker.get_slot('grievance_id'),
-            'grievance_summary': tracker.get_slot('grievance_summary'),
-            'grievance_details': tracker.get_slot('grievance_details'),
-            'grievance_category': tracker.get_slot('grievance_list_cat'),
-            'grievance_claimed_amount': tracker.get_slot('grievance_claimed_amount')
-        }
-
+        grievance_data={k : tracker.get_slot(k) for k in ["user_contact_phone",
+                                                          "user_contact_email",
+                                                          "user_full_name",
+                                                          "user_province",
+                                                          "user_district",
+                                                          "user_municipality",
+                                                          "user_ward",
+                                                          "user_village",
+                                                          "user_address",
+                                                          "grievance_id",
+                                                          "grievance_summary",
+                                                          "grievance_details",
+                                                          "grievance_category",
+                                                          "grievance_claimed_amount"
+                                                          ]}
         
-        grievance_status = {
-            "grievance_status": GRIEVANCE_STATUS["SUBMITTED"],
-            'submission_type': "new_grievance",
-            "timestamp": grievance_timestamp,
-            "grievance_timeline": grievance_timeline
-        }
+        grievance_data["grievance_status"] = GRIEVANCE_STATUS["SUBMITTED"]
+        grievance_data["submission_type"] = "new_grievance"
+        grievance_data["grievance_timestamp"] = grievance_timestamp
+        grievance_data["grievance_timeline"] = grievance_timeline
+        
         
         # change all the values of the slots_skipped or None to "NOT_PROVIDED"
-        for key, value in user_data.items():
-            if value == "slot_skipped" or value is None:
-                user_data[key] = DEFAULT_VALUES["NOT_PROVIDED"]
+        grievance_data = self._update_key_values_for_db_storage(grievance_data)
                 
+        return grievance_data
+
+    def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update the values of the grievance data for the database storage."""
         for key, value in grievance_data.items():
             if value == "slot_skipped" or value is None:
                 grievance_data[key] = DEFAULT_VALUES["NOT_PROVIDED"]
-                
-
-        return user_data, grievance_data, grievance_status
-
+        return grievance_data
+    
+    
     def create_confirmation_message(self, 
-                                    grievance_data: Dict[str, Any],
-                                    user_data: Dict[str, Any]) -> str:
+                                    grievance_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
         ic(self.language_code)
         message = [get_utterance("grievance_form", 
@@ -889,8 +921,8 @@ class ActionSubmitGrievance(Action):
                                             grievance_summary=grievance_data['grievance_summary'],
                                             grievance_category=grievance_data['grievance_category'],
                                             grievance_details=grievance_data['grievance_details'],
-                                            grievance_email=user_data['user_contact_email'],
-                                            grievance_phone=user_data['user_contact_phone'],
+                                            grievance_email=grievance_data['user_contact_email'],
+                                            grievance_phone=grievance_data['user_contact_phone'],
                                             grievance_timeline=grievance_data['grievance_timeline']
                                            )
 
@@ -954,19 +986,19 @@ class ActionSubmitGrievance(Action):
         
         try:
             # Collect grievance data
-            user_data, grievance_data, grievance_status = self.collect_grievance_data(tracker)
-            user_email = user_data.get('user_contact_email')
+            grievance_data = self.collect_grievance_data(tracker)
+            user_email = grievance_data.get('user_contact_email')
             user_email = user_email if self.is_valid_email(user_email) else None
-            if user_data.get('otp_verified') == True:
-                user_contact_phone = user_data.get('user_contact_phone')
+            if grievance_data.get('otp_verified') == True:
+                user_contact_phone = grievance_data.get('user_contact_phone')
             else:
                 user_contact_phone = None
 
-            print(f"📝 User data: {user_data}")
-            print(f"📝 Grievance data: {grievance_data}")
+            ic(grievance_data)
             
             # Create grievance in database
-            grievance_id = self.db.create_grievance(user_data, grievance_data)
+            grievance_id = self.db.create_grievance(grievance_data)
+            grievance_data['grievance_id'] = grievance_id #udpate the dictionary with the grievance_id
             
             if not grievance_id:
                 raise Exception("Failed to create grievance in database")
@@ -976,8 +1008,7 @@ class ActionSubmitGrievance(Action):
             
             # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
-                grievance_data,
-                user_data 
+                grievance_data
             )
                 
             # Send confirmation message
@@ -987,14 +1018,11 @@ class ActionSubmitGrievance(Action):
                 #send sms
                 self.sms_client.send_sms(user_contact_phone, confirmation_message)
             
-
-            #prepare email data for compiling the email by combining user_data, grievance_data and grievance_status
-            email_data = {**user_data, **grievance_data, **grievance_status}
-            email_data['grievance_id'] = grievance_id
+            
             
             #send email to admin
             await self._send_grievance_recap_email(ADMIN_EMAILS, 
-                                                   email_data, 
+                                                   grievance_data, 
                                                    "GRIEVANCE_RECAP_ADMIN_BODY", 
                                                    dispatcher=dispatcher)
             
@@ -1002,7 +1030,7 @@ class ActionSubmitGrievance(Action):
             print("user_email :", user_email)
             if user_email:
                 await self._send_grievance_recap_email([user_email], 
-                                                       email_data, 
+                                                       grievance_data, 
                                                        "GRIEVANCE_RECAP_USER_BODY", 
                                                        dispatcher=dispatcher)
                 

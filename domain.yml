@@ -53,6 +53,7 @@ intents:
 - status_check_id
 - status_check_phone
 - status_check_start
+- attach_files
 entities:
 - municipality
 - monetary
@@ -256,8 +257,9 @@ slots:
     - type: custom
   grievance_id:
     type: text
-    influence_conversation: false
-    mappings: []
+    influence_conversation: true
+    mappings:
+    - type: custom
   utter_count:
     type: float
     initial_value: 0
@@ -320,13 +322,7 @@ slots:
     mappings:
     - type: custom
   grievance_status:
-    type: categorical
-    values:
-    - submitted
-    - under_evaluation
-    - escalated
-    - resolved
-    - denied
+    type: text
     influence_conversation: true
     mappings:
     - type: custom
@@ -358,6 +354,16 @@ slots:
   skipped_detected_text:
     type: text
     influence_conversation: false
+    mappings:
+    - type: custom
+  is_temporary:
+    type: bool
+    influence_conversation: true
+    mappings:
+    - type: custom
+  file_references:
+    type: list
+    influence_conversation: true
     mappings:
     - type: custom
 
@@ -522,6 +528,24 @@ actions:
 - action_mood_unhappy
 - validate_grievance_id_form
 - action_ask_grievance_id_form_grievance_id
+- action_attach_file
+- action_set_grievance_id
+# - action_submit_grievance_with_details
+# - action_get_grievance_status
+# - action_get_grievance_history
+# - action_get_grievance_details
+# - action_get_grievance_files
+# - action_get_grievance_summary
+# - action_get_grievance_category
+# - action_get_grievance_location
+# - action_get_grievance_claimed_amount
+# - action_get_grievance_creation_date
+# - action_get_grievance_modification_date
+# - action_get_grievance_status_update_date
+# - action_get_grievance_next_step
+# - action_get_grievance_expected_resolution_date
+# - action_get_grievance_notes
+# - action_get_grievance_updated_by
 forms:
   menu_form:
     required_slots:

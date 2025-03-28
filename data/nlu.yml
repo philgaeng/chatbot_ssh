@@ -65,3 +65,18 @@ nlu:
 - synonym: philgaeng@pm.me
   examples: |
     - philgaeng@pm..m
+- intent: attach_files
+  examples: |
+    - /attach_files
+    - I want to attach a file
+    - Can I send a document
+    - I need to upload a file
+    - I would like to attach a document
+    - I have photos to upload
+    - I want to send you a picture
+    - Can I share a document with you
+    - I want to add an attachment
+    - Upload document
+    - Send file
+    - Attach photo
+    - Share document

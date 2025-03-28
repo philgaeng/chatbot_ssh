@@ -22,7 +22,8 @@ from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the con
 from .utterance_mapping import get_utterance, get_buttons
 from icecream import ic
 import json
-logger = logging.getLogger(__name__)
+import uuid
+from .db_actions import GrievanceDB
 
 
 def get_language_code(tracker: Tracker) -> str:
@@ -34,7 +35,10 @@ class ActionSessionStart(Action):
     def name(self) -> Text:
         return "action_session_start"
     
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    def run(self, 
+            dispatcher: CollectingDispatcher, 
+            tracker: Tracker,
+            domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         ic("action_session_start")
         return [SessionStarted()]
     
@@ -75,27 +79,12 @@ class ActionIntroduce(Action):
         ic(events)
         return events
     
-# class ActionSetLanguage(Action):
-#     def name(self) -> Text:
-#         return "action_set_language"
-    
-
-#     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         message = tracker.latest_message.get('text', '')
-#         print(message)
-#         if "nepali" in tracker.latest_message.get('text', '').lower():
-#             events = [SlotSet("language_code", "ne")]
-#         elif "english" in tracker.latest_message.get('text', '').lower():
-#             events = [SlotSet("language_code", "en")]
-#         else:
-#             events = []
-#         return events
 
 class ActionSetEnglish(Action):
     def name(self) -> Text:
         return "action_set_english"
     
-    def run(self,
+    def run(
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -105,7 +94,7 @@ class ActionSetNepali(Action):
     def name(self) -> Text:
         return "action_set_nepali"
     
-    def run(self,
+    def run(
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -297,3 +286,137 @@ class ActionExitWithoutFiling(Action):
         buttons = get_buttons('generic_actions', self.name(), 1, language)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
+    
+    ############### ATTACHMENT ACTIONS #########################
+    
+class ActionAttachFile(Action):
+    def name(self) -> Text:
+        return "action_attach_file"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """Handle file attachments sent by the user"""
+        language = get_language_code(tracker)
+        
+        # Debug the incoming message in detail
+        ic("ActionAttachFile triggered")
+        ic("Latest message content:", tracker.latest_message)
+        
+        # Get the current grievance ID
+        grievance_id = tracker.get_slot("grievance_id")
+        ic("Current grievance ID:", grievance_id)
+        
+        # Get file references - check all possible locations where they might be found
+        latest_message = tracker.latest_message
+        file_references = []
+        
+        # 1. First check if they're directly in the message
+        direct_refs = latest_message.get('file_references', [])
+        if direct_refs:
+            ic("Found file references directly in message:", direct_refs)
+            file_references = direct_refs
+        
+        # 2. Check if they're in the metadata (common with custom data)
+        elif 'metadata' in latest_message:
+            metadata = latest_message.get('metadata', {})
+            ic("Message metadata:", metadata)
+            
+            # Try common locations for file references
+            meta_refs = metadata.get('file_references', [])
+            if meta_refs:
+                ic("Found file references in metadata[file_references]:", meta_refs)
+                file_references = meta_refs
+        
+        # 3. Check if they're in custom_data (common with socket.io transport)
+        custom_data = latest_message.get('custom_data', {})
+        if not file_references and custom_data:
+            ic("Message custom_data:", custom_data)
+            custom_refs = custom_data.get('file_references', [])
+            if custom_refs:
+                ic("Found file references in custom_data:", custom_refs)
+                file_references = custom_refs
+                
+        # 4. Check additional data that might be sent from socket.io
+        additional_data = latest_message.get('additional_data', {})
+        if not file_references and additional_data:
+            ic("Additional data:", additional_data)
+            additional_refs = additional_data.get('file_references', [])
+            if additional_refs:
+                ic("Found file references in additional_data:", additional_refs)
+                file_references = additional_refs
+        
+        # 5. Parse entities for file references (sometimes channels encode it this way)
+        entities = latest_message.get('entities', [])
+        if not file_references and entities:
+            ic("Message entities:", entities)
+            for entity in entities:
+                if entity.get('entity') == 'file_reference':
+                    file_references.append(entity.get('value'))
+                    ic("Found file reference in entity:", entity.get('value'))
+        
+        # 6. Last resort - check raw text for encoded file references
+        if not file_references:
+            text = latest_message.get('text', '')
+            ic("Message text:", text)
+            # Try to extract JSON from the text if it contains file references
+            if 'file_references' in text or 'files' in text:
+                try:
+                    # Find JSON-like content between curly braces
+                    import re
+                    json_content = re.search(r'\{.*\}', text)
+                    if json_content:
+                        import json
+                        parsed = json.loads(json_content.group(0))
+                        if 'file_references' in parsed:
+                            file_references = parsed['file_references']
+                            ic("Extracted file references from text:", file_references)
+                except Exception as e:
+                    ic("Error parsing JSON from text:", str(e))
+        
+        ic("Final file references found:", file_references)
+        
+        if not file_references:
+            # No files were attached
+            ic("No file references found after all checks")
+            message = get_utterance('generic_actions', self.name(), 1, language)
+            dispatcher.utter_message(text=message)
+            return []
+        
+        if not grievance_id:
+            # No grievance ID is available, store files temporarily
+            ic("No grievance ID available, using temporary ID")
+            temp_grievance_id = f"temp_{tracker.sender_id}"
+            message = get_utterance('generic_actions', self.name(), 3, language)
+            dispatcher.utter_message(text=message)
+            return []
+        
+        # Files have been attached and we have a grievance ID
+        file_names = []
+        for file_ref in file_references:
+            if isinstance(file_ref, dict):
+                name = file_ref.get('name', file_ref.get('filename', 'Unknown file'))
+                ic("Processing file reference (dict):", file_ref, "Name:", name)
+                file_names.append(name)
+            else:
+                ic("Processing file reference (non-dict):", file_ref)
+                file_names.append(str(file_ref))
+        
+        # Send confirmation message
+        if len(file_names) == 1:
+            message = get_utterance('generic_actions', self.name(), 2, language).format(
+                file_name=file_names[0]
+            )
+        else:
+            files_str = ", ".join(file_names)
+            message = get_utterance('generic_actions', self.name(), 4, language).format(
+                count=len(file_names),
+                files=files_str
+            )
+        
+        ic("Sending response message:", message)
+        dispatcher.utter_message(text=message)
+        
+        # Return the grievance ID in the custom data
+        return []
+
+
+    

@@ -434,7 +434,7 @@ class ActionAskLocationFormUserLocationConsent(Action):
         return "action_ask_location_form_user_location_consent"
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
         message = get_utterance('location_form', self.name(), 1, language_code)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -447,7 +447,7 @@ class ActionAskLocationFormUserMunicipalityTemp(Action):
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         province = tracker.get_slot("user_province")
         district = tracker.get_slot("user_district")
-        language_code = tracker.get_slot("language_code")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
         message = get_utterance('location_form', self.name(), 1, language_code).format(district=district, province=province)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -460,7 +460,7 @@ class ActionAskLocationFormUserMunicipalityConfirmed(Action):
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('user_municipality_temp')
-        language_code = tracker.get_slot("language_code")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
         message = get_utterance('location_form', self.name(), 1, language_code).format(validated_municipality=validated_municipality)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -471,7 +471,7 @@ class ActionAskLocationFormUserVillage(Action):
         return "action_ask_location_form_user_village"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
         message = get_utterance('location_form', self.name(), 1, language_code)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -482,7 +482,7 @@ class ActionAskLocationFormUserAddressTemp(Action):
         return "action_ask_location_form_user_address_temp"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
         message = get_utterance('location_form', self.name(), 1, language_code)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -518,7 +518,7 @@ class ActionAskLocationFormUserProvince(Action):
         return "action_ask_location_form_user_province"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot('language_code')
+        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
         message = get_utterance('location_form', self.name(), 1, language_code)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -529,7 +529,7 @@ class ActionAskLocationFormUserDistrict(Action):
         return "action_ask_location_form_user_district"
     
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot('language_code')
+        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
         message = get_utterance('location_form', self.name(), 1, language_code)
         buttons = get_buttons('location_form', self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)

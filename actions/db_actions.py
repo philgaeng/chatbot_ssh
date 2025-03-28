@@ -98,8 +98,9 @@ class GrievanceDB:
                     grievance_location TEXT,
                     grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    grievance_status TEXT DEFAULT 'Submitted',
-                    grievance_status_update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    grievance_status TEXT DEFAULT 'TEMP',
+                    grievance_status_update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    is_temporary BOOLEAN DEFAULT TRUE
                 )
             """)
 
@@ -144,10 +145,11 @@ class GrievanceDB:
                     grievance_details TEXT,
                     grievance_claimed_amount DECIMAL,
                     grievance_location TEXT,
-                    grievance_creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    grievance_modification_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    grievance_status TEXT DEFAULT 'Submitted',
-                    grievance_status_update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    grievance_status TEXT DEFAULT 'TEMP',
+                    grievance_status_update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    is_temporary BOOLEAN DEFAULT TRUE,
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             """)
@@ -159,8 +161,8 @@ class GrievanceDB:
                     previous_status TEXT NOT NULL,
                     new_status TEXT NOT NULL,
                     next_step TEXT,
-                    expected_resolution_date TIMESTAMP,
-                    update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expected_resolution_date TIMESTAMP WITH TIME ZONE,
+                    update_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     updated_by TEXT,
                     notes TEXT,
                     FOREIGN KEY (grievance_id) REFERENCES grievances(grievance_id)
@@ -319,7 +321,7 @@ class GrievanceDB:
         
         return self.execute_query(query, (phone_number,))
 
-    def create_grievance(self, user_data: Dict, grievance_data: Dict) -> Optional[str]:
+    def create_grievance(self, grievance_data: Dict) -> Optional[str]:
         """Create a new grievance with user information"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -329,16 +331,31 @@ class GrievanceDB:
             if self.db_type == "postgres":
                 cursor.execute("SET timezone = 'Asia/Kathmandu';")
                 
-            # Generate grievance ID with Nepal time
-            nepal_time = self.get_nepal_time()
-            grievance_id = f"GR{nepal_time.strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            # Generate grievance ID if not provided
+            grievance_id = grievance_data.get('grievance_id')
+            if not grievance_id:
+                nepal_time = self.get_nepal_time()
+                grievance_id = f"GR{nepal_time.strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
             
             # Convert category list to string if it's a list
             category = grievance_data.get('grievance_category', '')
             if isinstance(category, list):
                 category = '; '.join(category)
-
-            # First, get or create user
+            
+            # Handle user data
+            user_data = {
+                'user_full_name': grievance_data.get('user_full_name', 'NOT_PROVIDED'),
+                'user_contact_phone': grievance_data.get('user_contact_phone', 'NOT_PROVIDED'),
+                'user_contact_email': grievance_data.get('user_contact_email', 'NOT_PROVIDED'),
+                'user_province': grievance_data.get('user_province', 'NOT_PROVIDED'),
+                'user_district': grievance_data.get('user_district', 'NOT_PROVIDED'),
+                'user_municipality': grievance_data.get('user_municipality', 'NOT_PROVIDED'),
+                'user_ward': grievance_data.get('user_ward', 'NOT_PROVIDED'),
+                'user_village': grievance_data.get('user_village', 'NOT_PROVIDED'),
+                'user_address': grievance_data.get('user_address', 'NOT_PROVIDED')
+            }
+            
+            # Insert or update user
             if self.db_type == "postgres":
                 cursor.execute("""
                     INSERT INTO users (
@@ -346,21 +363,26 @@ class GrievanceDB:
                         user_province, user_district, user_municipality,
                         user_ward, user_village, user_address
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (user_contact_phone) 
-                    DO UPDATE SET 
+                    ON CONFLICT (user_contact_phone) DO UPDATE SET
                         user_full_name = EXCLUDED.user_full_name,
-                        user_contact_email = EXCLUDED.user_contact_email
+                        user_contact_email = EXCLUDED.user_contact_email,
+                        user_province = EXCLUDED.user_province,
+                        user_district = EXCLUDED.user_district,
+                        user_municipality = EXCLUDED.user_municipality,
+                        user_ward = EXCLUDED.user_ward,
+                        user_village = EXCLUDED.user_village,
+                        user_address = EXCLUDED.user_address
                     RETURNING id
                 """, (
-                    user_data.get('user_full_name'),
-                    user_data.get('user_contact_phone'),
-                    user_data.get('user_contact_email'),
-                    user_data.get('user_province'),
-                    user_data.get('user_district'),
-                    user_data.get('user_municipality'),
-                    user_data.get('user_ward'),
-                    user_data.get('user_village'),
-                    user_data.get('user_address')
+                    grievance_data.get('user_full_name'),
+                    grievance_data.get('user_contact_phone'),
+                    grievance_data.get('user_contact_email'),
+                    grievance_data.get('user_province'),
+                    grievance_data.get('user_district'),
+                    grievance_data.get('user_municipality'),
+                    grievance_data.get('user_ward'),
+                    grievance_data.get('user_village'),
+                    grievance_data.get('user_address')
                 ))
             else:
                 # SQLite version
@@ -371,15 +393,15 @@ class GrievanceDB:
                         user_ward, user_village, user_address
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    str(user_data.get('user_full_name', '')),
-                    str(user_data.get('user_contact_phone', '')),
-                    str(user_data.get('user_contact_email', '')),
-                    str(user_data.get('user_province', '')),
-                    str(user_data.get('user_district', '')),
-                    str(user_data.get('user_municipality', '')),
-                    str(user_data.get('user_ward', '')),
-                    str(user_data.get('user_village', '')),
-                    str(user_data.get('user_address', ''))
+                    str(grievance_data.get('user_full_name', '')),
+                    str(grievance_data.get('user_contact_phone', '')),
+                    str(grievance_data.get('user_contact_email', '')),
+                    str(grievance_data.get('user_province', '')),
+                    str(grievance_data.get('user_district', '')),
+                    str(grievance_data.get('user_municipality', '')),
+                    str(grievance_data.get('user_ward', '')),
+                    str(grievance_data.get('user_village', '')),
+                    str(grievance_data.get('user_address', ''))
                 ))
                 cursor.execute("SELECT last_insert_rowid()")
             
@@ -397,10 +419,12 @@ class GrievanceDB:
                 str(grievance_id),
                 int(user_id),
                 str(category),
-                str(grievance_data.get('grievance_summary', '')),
-                str(grievance_data.get('grievance_details', '')),
+                str(grievance_data.get('grievance_summary', 'PENDING')),
+                str(grievance_data.get('grievance_details', 'PENDING')),
                 str(grievance_data.get('grievance_claimed_amount', '0')),
-                str(grievance_data.get('grievance_location', ''))
+                str(grievance_data.get('grievance_location', 'NOT_PROVIDED')),
+                str(grievance_data.get('grievance_status', 'TEMP')),
+                grievance_data.get('is_temporary', True)
             ))
             
             # Create initial history entry
@@ -412,9 +436,9 @@ class GrievanceDB:
             """, (
                 str(grievance_id),
                 '',  # Empty string instead of None for previous_status
-                'Submitted',
-                'Under Review',
-                'Grievance submitted successfully'
+                str(grievance_data.get('grievance_status', 'TEMP')),
+                'Pending',
+                'Grievance created with temporary status'
             ))
             
             conn.commit()

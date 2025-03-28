@@ -912,8 +912,27 @@ UTTERANCE_MAPPING = {
                     'en': "Goodbye! If you need further assistance, feel free to ask.",
                     'ne': "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                 }
+            },
+        'action_attach_file': {
+            'utterances': {
+                1: {
+                    'en': "No files were attached. Please select files using the attachment button first.",
+                    'ne': "कुनै फाइलहरू संलग्न गरिएको छैन। कृपया पहिले एट्याचमेन्ट बटन प्रयोग गरेर फाइलहरू छान्नुहोस्।"
+                },
+                2: {
+                    'en': "Thank you. Your file '{file_name}' has been successfully attached to your grievance.",
+                    'ne': "धन्यवाद। तपाईंको फाइल '{file_name}' सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ।"
+                },
+                3: {
+                    'en': "Please file a grievance first before attaching files.",
+                    'ne': "कृपया फाइलहरू संलग्न गर्नु अघि गुनासो दर्ता गर्नुहोस्।"
+                },
+                4: {
+                    'en': "Thank you. Your {count} files ({files}) have been successfully attached to your grievance.",
+                    'ne': "धन्यवाद। तपाईंका {count} फाइलहरू ({files}) सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छन्।"
+                }
             }
-        
+        }
     },
     'menu_form': {
         'action_ask_menu_form_main_story': {

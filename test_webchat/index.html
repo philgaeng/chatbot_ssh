@@ -20,8 +20,11 @@
         // Create a temporary session ID
         const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 
-        // Make getSessionId available globally
+        // Make getSessionId available globally and ensure it returns the socket ID
         window.getSessionId = function() {
+            if (socket && socket.connected) {
+                return socket.id;
+            }
             const storage = localStorage;
             const storageKey = SESSION_CONFIG.STORAGE_KEY;
             return storage.getItem(storageKey) || tempSessionId;
@@ -31,11 +34,10 @@
         const socket = io(WEBSOCKET_CONFIG.URL, {
             path: WEBSOCKET_CONFIG.OPTIONS.path,
             transports: WEBSOCKET_CONFIG.OPTIONS.transports,
-            query: { session_id: tempSessionId },
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 2000,
-            pingTimeout: 60000,
+            pingTimeout: 120000,
         });
 
         // Make socket available globally
@@ -48,25 +50,36 @@
         const MAX_RETRIES = 3;
         const RETRY_DELAY = 500; // 500ms
 
+        // Store grievance ID when available
+        window.grievanceId = null;
+        window.currentRetryTimer = null;
+
         // Modified connection handling
         socket.on('connect', () => {
-            console.log('Connected to Socket.io server.');
+            console.log('Socket connected with ID:', socket.id);
             const storage = localStorage;
             const storageKey = SESSION_CONFIG.STORAGE_KEY;
             storage.setItem(storageKey, socket.id);
             
+            // Reset session state
+            sessionConfirmed = false;
+            sessionStarted = false;
+            messageRetryCount = 0;
+            
             // First request a session
             socket.emit('session_request', { session_id: socket.id });
+            console.log('Sent session_request with ID:', socket.id);
         });
 
         // Handle session confirmation
         socket.on('session_confirm', () => {
             sessionConfirmed = true;
-            console.log('Session confirmed');
+            console.log('Session confirmed with ID:', socket.id);
             
             // Wait a short moment to ensure session is fully initialized
             setTimeout(() => {
                 sessionStarted = true;
+                console.log('Session fully initialized, sending initial message...');
                 sendIntroduceMessage();
             }, 1000);
         });
@@ -75,8 +88,20 @@
         socket.on('bot_uttered', (response) => {
             console.log('Bot uttered:', response);
             
+            // Clear any pending retry timer
+            if (window.currentRetryTimer) {
+                clearTimeout(window.currentRetryTimer);
+                window.currentRetryTimer = null;
+            }
+            
             // Reset retry count when we get a response
             messageRetryCount = 0;
+            
+            // Check if response contains grievance ID
+            if (response.custom && response.custom.grievance_id) {
+                console.log('Grievance ID received:', response.custom.grievance_id);
+                window.grievanceId = response.custom.grievance_id;
+            }
             
             // Handle the response
             if (response.text) {
@@ -90,7 +115,49 @@
             }
         });
 
-        // Function to send introduce message
+        // Add a new safe message sending function
+        window.safeSendMessage = function(message, additionalData = {}) {
+            // Ensure we have a session
+            if (!socket.connected) {
+                console.error('Socket not connected, cannot send message');
+                return false;
+            }
+            
+            // Create message payload
+            const payload = {
+                message: message,
+                session_id: socket.id
+            };
+            
+            // If additional data is provided, add it to the payload
+            if (Object.keys(additionalData).length > 0) {
+                // For file references specifically, we need to ensure they're properly formatted
+                if (additionalData.file_references) {
+                    console.log('Adding file references to message payload:', additionalData.file_references);
+                    // Make file references available in multiple places for compatibility
+                    payload.file_references = additionalData.file_references;
+                    // Also add as metadata which some Rasa channels use
+                    payload.metadata = { 
+                        file_references: additionalData.file_references 
+                    };
+                } else {
+                    // For other kinds of data
+                    payload.metadata = additionalData;
+                }
+            }
+            
+            // Send the message
+            console.log('Sending message:', payload);
+            socket.emit('user_uttered', payload);
+            return true;
+        }
+
+        // For backward compatibility
+        function safeSendMessage(message, additionalData = {}) {
+            return window.safeSendMessage(message, additionalData);
+        }
+
+        // Update the sendIntroduceMessage function to use safeSendMessage
         function sendIntroduceMessage() {
             if (!sessionStarted) {
                 console.log('Waiting for session to be fully initialized...');
@@ -102,41 +169,57 @@
                 ? `/introduce{"province": "${province}", "district": "${district}"}`
                 : '/introduce';
             
-            console.log('Sending initial message:', initialMessage);
-            socket.emit('user_uttered', {
-                message: initialMessage,
-                session_id: socket.id
-            });
-
-            // Set up retry mechanism
-            const retryTimer = setTimeout(() => {
-                if (messageRetryCount < MAX_RETRIES) {
-                    messageRetryCount++;
-                    console.log(`No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`);
-                    sendIntroduceMessage();
-                } else {
-                    console.log('Max retries reached, giving up');
-                    appendMessage('Sorry, there seems to be a connection issue. Please try again.', 'received');
-                }
-            }, RETRY_DELAY);
-
-            // Clear the retry timer if we get a response
-            socket.once('bot_uttered', () => {
-                clearTimeout(retryTimer);
-            });
+            console.log('Preparing to send initial message:', initialMessage);
+            
+            if (window.safeSendMessage(initialMessage)) {
+                console.log('Initial message sent successfully');
+                
+                // Set up retry mechanism
+                const retryTimer = setTimeout(() => {
+                    if (messageRetryCount < MAX_RETRIES) {
+                        messageRetryCount++;
+                        console.log(`No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`);
+                        sendIntroduceMessage();
+                    } else {
+                        console.log('Max retries reached, giving up');
+                        appendMessage('Sorry, there seems to be a connection issue. Please try again.', 'received');
+                    }
+                }, RETRY_DELAY);
+                
+                window.currentRetryTimer = retryTimer;
+            }
         }
 
         // Error handling
+        socket.on('error', (error) => {
+            console.error('Socket error:', error);
+        });
+
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
             appendMessage('Connection error. Please try again later.', 'received');
         });
 
-        socket.on('disconnect', (reason) => {
-            console.log('Disconnected:', reason);
-            if (reason === "io server disconnect") {
-                socket.connect();
-            }
+        socket.on('connect_timeout', () => {
+            console.error('Connection timeout');
+            appendMessage('Connection timed out. Please try again later.', 'received');
+        });
+
+        socket.on('reconnect_attempt', (attemptNumber) => {
+            console.log('Reconnection attempt:', attemptNumber);
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('Reconnected after', attemptNumber, 'attempts');
+        });
+
+        socket.on('reconnect_error', (error) => {
+            console.error('Reconnection error:', error);
+        });
+
+        socket.on('reconnect_failed', () => {
+            console.error('Reconnection failed');
+            appendMessage('Unable to reconnect. Please refresh the page.', 'received');
         });
 
         socket.on('user_uttered', function (message) {
@@ -503,6 +586,63 @@
                 padding-bottom: max(15px, env(safe-area-inset-bottom));
             }
         }
+
+        .input-container {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+
+        .attachment-button {
+            background: none;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            color: #555;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .attachment-button:hover {
+            background-color: #f0f0f0;
+        }
+
+        .file-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 0 15px;
+        }
+
+        .file-item {
+            background: #eee;
+            padding: 8px 12px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            max-width: calc(100% - 20px);
+        }
+
+        .file-item-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 10px;
+        }
+
+        .file-item-remove {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 5px;
+        }
     </style>
 </head>
 <body>
@@ -531,7 +671,15 @@
         </div>
         <div id="messages"></div>
         <form id="form">
-            <input id="message-input" placeholder="Type your message here..." autocomplete="off"/>
+            <div class="input-container">
+                <button type="button" id="attachment-button" class="attachment-button">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <input id="message-input" placeholder="Type your message here..." autocomplete="off"/>
+                <input type="file" id="file-input" style="display: none;" multiple />
+            </div>
             <button type="submit" class="send-button">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -605,10 +753,7 @@
                 button.textContent = reply.title;
                 button.onclick = () => {
                     appendMessage(reply.title, 'sent');
-                    window.socket.emit('user_uttered', {
-                        message: reply.payload,
-                        session_id: getSessionId()
-                    });
+                    window.safeSendMessage(reply.payload);
                     messages.removeChild(quickRepliesDiv);
                 };
                 quickRepliesDiv.appendChild(button);
@@ -629,19 +774,280 @@
             chatLauncher.style.display = 'block';
         };
 
-        // Form submission
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const msg = messageInput.value;
-            if (msg) {
-                appendMessage(msg, 'sent');
-                window.socket.emit('user_uttered', {
-                    message: msg,
-                    session_id: getSessionId()
-                });
-                messageInput.value = '';
+        // File attachment handling
+        const attachmentButton = document.getElementById('attachment-button');
+        const fileInput = document.getElementById('file-input');
+        let selectedFiles = [];
+
+        attachmentButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                handleSelectedFiles(files);
             }
         });
+
+        function handleSelectedFiles(files) {
+            // Clear previous files
+            selectedFiles = [];
+            
+            // Process each file
+            files.forEach(file => {
+                // Check file size (2MB limit)
+                if (file.size > 2 * 1024 * 1024) {
+                    // File is too large, compress it
+                    compressFile(file).then(compressedFile => {
+                        selectedFiles.push(compressedFile);
+                        displayFilePreview();
+                    });
+                } else {
+                    selectedFiles.push(file);
+                }
+            });
+            
+            displayFilePreview();
+        }
+
+        function compressFile(file) {
+            return new Promise((resolve) => {
+                // For images, we can use canvas to compress
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Calculate new dimensions while maintaining aspect ratio
+                            let width = img.width;
+                            let height = img.height;
+                            const maxSize = 1200; // Max dimension
+                            
+                            if (width > height && width > maxSize) {
+                                height = (height * maxSize) / width;
+                                width = maxSize;
+                            } else if (height > maxSize) {
+                                width = (width * maxSize) / height;
+                                height = maxSize;
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            // Convert to blob with reduced quality
+                            canvas.toBlob(
+                                blob => {
+                                    // Create a new file from the blob
+                                    const compressedFile = new File([blob], file.name, {
+                                        type: file.type,
+                                        lastModified: file.lastModified
+                                    });
+                                    resolve(compressedFile);
+                                },
+                                file.type,
+                                0.7 // Compression quality (0.7 = 70%)
+                            );
+                        };
+                    };
+                } else {
+                    // For non-image files, return as is for now
+                    // You may want to add other compression methods for different file types
+                    resolve(file);
+                }
+            });
+        }
+
+        function displayFilePreview() {
+            // Remove existing preview
+            const existingPreview = document.querySelector('.file-preview');
+            if (existingPreview) {
+                existingPreview.remove();
+            }
+            
+            if (selectedFiles.length === 0) return;
+            
+            // Create preview container
+            const previewContainer = document.createElement('div');
+            previewContainer.classList.add('file-preview');
+            
+            // Add each file to the preview
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.classList.add('file-item');
+                
+                const fileName = document.createElement('span');
+                fileName.classList.add('file-item-name');
+                fileName.textContent = file.name;
+                
+                const removeButton = document.createElement('button');
+                removeButton.classList.add('file-item-remove');
+                removeButton.textContent = '×';
+                removeButton.onclick = () => {
+                    selectedFiles.splice(index, 1);
+                    displayFilePreview();
+                };
+                
+                fileItem.appendChild(fileName);
+                fileItem.appendChild(removeButton);
+                previewContainer.appendChild(fileItem);
+            });
+            
+            // Add the preview above the input form
+            form.parentNode.insertBefore(previewContainer, form);
+        }
+
+        // Update the form submission handler to use safeSendMessage
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = messageInput.value;
+            
+            // Handle text message
+            if (msg) {
+                appendMessage(msg, 'sent');
+                window.safeSendMessage(msg);
+                messageInput.value = '';
+            }
+            
+            // Handle file upload if any files are selected
+            if (selectedFiles.length > 0) {
+                appendMessage(`Uploading ${selectedFiles.length} file(s)...`, 'sent');
+                
+                // Check if there are actually files selected before trying to upload
+                if (selectedFiles.some(file => file && file.size > 0)) {
+                    try {
+                        // Upload files
+                        const fileRefs = await uploadFiles(selectedFiles);
+                        
+                        // Check if we got valid file references back
+                        if (fileRefs && fileRefs.length > 0) {
+                            console.log('File references ready to send to Rasa:', fileRefs);
+                            
+                            // Create a message with detailed file information
+                            const fileDesc = fileRefs.map(ref => 
+                                `${ref.name} (${ref.type || 'unknown type'}, ${ref.size || 'unknown size'} bytes)`
+                            ).join(', ');
+                            
+                            // Detailed message about files for better understanding
+                            const fileMessage = `/attach_files with ${fileRefs.length} file(s): ${fileDesc}`;
+                            
+                            // Send the payload with file references in multiple formats for maximum compatibility
+                            window.safeSendMessage('/attach_files', { 
+                                file_references: fileRefs,
+                                files: fileRefs,  // Alternative name some integrations use
+                                description: fileDesc,
+                                count: fileRefs.length,
+                                grievance_id: window.grievanceId || 'pending'
+                            });
+                            
+                            console.log('Sent attach_files message with detailed references');
+                            
+                            // Clear selected files
+                            selectedFiles = [];
+                            displayFilePreview();
+                        } else {
+                            throw new Error('No file references received from server');
+                        }
+                    } catch (error) {
+                        console.error('Error uploading files:', error);
+                        appendMessage(`Failed to upload files: ${error.message}. Please try again.`, 'received');
+                    }
+                } else {
+                    appendMessage('No valid files selected. Please select files using the attachment button.', 'received');
+                    // Clear selected files
+                    selectedFiles = [];
+                    displayFilePreview();
+                }
+            } else if (!msg) {
+                // If no message and no files, remind the user to enter a message or attach files
+                appendMessage('Please enter a message or attach files.', 'received');
+            }
+        });
+
+        // Function to upload files to the server
+        async function uploadFiles(files) {
+            // Check if files array is empty
+            if (!files || files.length === 0) {
+                throw new Error('No files to upload');
+            }
+            
+            const formData = new FormData();
+            
+            // Get the current grievance ID if available
+            const grievanceId = window.grievanceId || 'pending';
+            
+            formData.append('grievance_id', grievanceId);
+            
+            // Log what we're uploading
+            console.log(`Uploading ${files.length} files with grievance ID: ${grievanceId}`);
+            
+            // Add each file to the form data and validate
+            let validFiles = 0;
+            files.forEach(file => {
+                if (file && file.size > 0) {
+                    formData.append('files', file);
+                    console.log(`Added file: ${file.name}, size: ${file.size} bytes`);
+                    validFiles++;
+                } else {
+                    console.warn(`Skipping invalid file: ${file ? file.name : 'undefined'}`);
+                }
+            });
+            
+            // Check if we have any valid files
+            if (validFiles === 0) {
+                throw new Error('No valid files to upload');
+            }
+            
+            try {
+                // Send the files to the server
+                console.log('Sending files to server...');
+                const response = await fetch('http://localhost:5001/upload-files', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+                
+                // Get result and log it
+                const result = await response.json();
+                console.log('Server response:', result);
+                
+                // Format the file references for Rasa
+                if (result && result.file_references) {
+                    // Ensure each file reference has the required fields
+                    return result.file_references.map(fileRef => {
+                        // If it's already formatted properly, just return it
+                        if (fileRef.name && fileRef.url) {
+                            return fileRef;
+                        }
+                        
+                        // Otherwise, create a properly formatted reference
+                        return {
+                            name: fileRef.filename || fileRef.name || 'Unknown file',
+                            url: fileRef.url || fileRef.file_url || fileRef.path || '',
+                            type: fileRef.type || fileRef.mimetype || 'application/octet-stream',
+                            size: fileRef.size || 0,
+                            // Additional metadata that might help
+                            grievance_id: grievanceId,
+                            timestamp: new Date().toISOString()
+                        };
+                    });
+                }
+                
+                return result.file_references || [];
+            } catch (error) {
+                console.error('Error in uploadFiles:', error);
+                throw error;
+            }
+        }
     </script>
 </body>
 </html> 

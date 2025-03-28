@@ -166,4 +166,9 @@ rules:
   #       - user_contact_email_confirmed
   #     - active_loop: null
   #     - action: action_submit_grievance
+
+  - rule: Handle file attachments
+    steps:
+      - intent: attach_files
+      - action: action_attach_file
       
