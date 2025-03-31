@@ -22,9 +22,29 @@ from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the con
 from .utterance_mapping import get_utterance, get_buttons
 from icecream import ic
 import json
-import uuid
-from .db_actions import GrievanceDB
 
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+class ActionWrapper:
+    """Wrapper to catch and log registration errors for actions"""
+    @staticmethod
+    def wrap_action(action_class):
+        try:
+            action_instance = action_class()
+            # Test the run method signature
+            run_method = getattr(action_instance, 'run')
+            if run_method.__code__.co_argcount != 4:  # 4 because of 'self' + 3 params
+                logger.error(f"❌ Action {action_class.__name__} has incorrect number of parameters in run method. "
+                           f"Found {run_method.__code__.co_argcount - 1} params, expected 3 "
+                           f"(dispatcher, tracker, domain)")
+                logger.error(f"Parameters found: {run_method.__code__.co_varnames[:run_method.__code__.co_argcount]}")
+            return action_instance
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize action {action_class.__name__}: {str(e)}")
+            raise
 
 def get_language_code(tracker: Tracker) -> str:
     """Helper function to get the language code from tracker with English as fallback."""
@@ -85,6 +105,7 @@ class ActionSetEnglish(Action):
         return "action_set_english"
     
     def run(
+            self,
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -95,6 +116,7 @@ class ActionSetNepali(Action):
         return "action_set_nepali"
     
     def run(
+            self,
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -293,67 +315,35 @@ class ActionAttachFile(Action):
     def name(self) -> Text:
         return "action_attach_file"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        """Handle file attachments sent by the user"""
-        language = get_language_code(tracker)
-        
-        # Debug the incoming message in detail
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
         ic("ActionAttachFile triggered")
-        ic("Latest message content:", tracker.latest_message)
-        
-        # Get the current grievance ID
-        grievance_id = tracker.get_slot("grievance_id")
-        ic("Current grievance ID:", grievance_id)
-        
-        # Get file references - check all possible locations where they might be found
         latest_message = tracker.latest_message
+        ic("Latest message:", latest_message)
+        language_code = get_language_code(tracker)
+        
+        grievance_id = tracker.get_slot("grievance_id")
+        ic("Current grievance_id:", grievance_id)
+        
+        # Check for file references in the message
         file_references = []
         
-        # 1. First check if they're directly in the message
-        direct_refs = latest_message.get('file_references', [])
-        if direct_refs:
-            ic("Found file references directly in message:", direct_refs)
-            file_references = direct_refs
+        # Check in the main message
+        if "file_references" in latest_message:
+            ic("Found file references in main message")
+            file_references.extend(latest_message["file_references"])
         
-        # 2. Check if they're in the metadata (common with custom data)
-        elif 'metadata' in latest_message:
-            metadata = latest_message.get('metadata', {})
-            ic("Message metadata:", metadata)
-            
-            # Try common locations for file references
-            meta_refs = metadata.get('file_references', [])
-            if meta_refs:
-                ic("Found file references in metadata[file_references]:", meta_refs)
-                file_references = meta_refs
+        # Check in metadata
+        if "metadata" in latest_message and "file_references" in latest_message["metadata"]:
+            ic("Found file references in metadata")
+            file_references.extend(latest_message["metadata"]["file_references"])
         
-        # 3. Check if they're in custom_data (common with socket.io transport)
-        custom_data = latest_message.get('custom_data', {})
-        if not file_references and custom_data:
-            ic("Message custom_data:", custom_data)
-            custom_refs = custom_data.get('file_references', [])
-            if custom_refs:
-                ic("Found file references in custom_data:", custom_refs)
-                file_references = custom_refs
-                
-        # 4. Check additional data that might be sent from socket.io
-        additional_data = latest_message.get('additional_data', {})
-        if not file_references and additional_data:
-            ic("Additional data:", additional_data)
-            additional_refs = additional_data.get('file_references', [])
-            if additional_refs:
-                ic("Found file references in additional_data:", additional_refs)
-                file_references = additional_refs
+        ic("Collected file references:", file_references)
         
-        # 5. Parse entities for file references (sometimes channels encode it this way)
-        entities = latest_message.get('entities', [])
-        if not file_references and entities:
-            ic("Message entities:", entities)
-            for entity in entities:
-                if entity.get('entity') == 'file_reference':
-                    file_references.append(entity.get('value'))
-                    ic("Found file reference in entity:", entity.get('value'))
-        
-        # 6. Last resort - check raw text for encoded file references
         if not file_references:
             text = latest_message.get('text', '')
             ic("Message text:", text)
@@ -377,15 +367,15 @@ class ActionAttachFile(Action):
         if not file_references:
             # No files were attached
             ic("No file references found after all checks")
-            message = get_utterance('generic_actions', self.name(), 1, language)
+            message = get_utterance('generic_actions', self.name(), 1, language_code)
             dispatcher.utter_message(text=message)
             return []
-        
+            
         if not grievance_id:
             # No grievance ID is available, store files temporarily
             ic("No grievance ID available, using temporary ID")
             temp_grievance_id = f"temp_{tracker.sender_id}"
-            message = get_utterance('generic_actions', self.name(), 3, language)
+            message = get_utterance('generic_actions', self.name(), 3, language_code)
             dispatcher.utter_message(text=message)
             return []
         
@@ -402,12 +392,12 @@ class ActionAttachFile(Action):
         
         # Send confirmation message
         if len(file_names) == 1:
-            message = get_utterance('generic_actions', self.name(), 2, language).format(
+            message = get_utterance('generic_actions', self.name(), 2, language_code).format(
                 file_name=file_names[0]
             )
         else:
             files_str = ", ".join(file_names)
-            message = get_utterance('generic_actions', self.name(), 4, language).format(
+            message = get_utterance('generic_actions', self.name(), 4, language_code).format(
                 count=len(file_names),
                 files=files_str
             )

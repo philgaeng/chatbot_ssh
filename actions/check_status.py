@@ -3,12 +3,12 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, FollowupAction
 from rasa_sdk.forms import FormValidationAction
-from .db_actions import GrievanceDB
+from .db_manager import db_manager
 from .utterance_mapping import get_utterance, get_buttons
 from .form_contact import BaseFormValidationAction
 from icecream import ic
 # Initialize database connection
-db = GrievanceDB()
+db = db_manager
 
 class ActionHelpers():
         
