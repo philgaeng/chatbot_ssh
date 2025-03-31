@@ -14,7 +14,6 @@ stories:
       - action: action_set_english
       - slot_was_set:
         - language_code: "en"
-      # - action: action_set_language
       - action: action_menu
       - intent: grievance_process_start
       - action: action_start_grievance_process
