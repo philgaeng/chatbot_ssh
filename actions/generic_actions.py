@@ -137,7 +137,7 @@ class ActionMenu(Action):
         language = get_language_code(tracker)
         district = tracker.get_slot("user_district")
         province = tracker.get_slot("user_province")
-        ic(language, district, province)
+        #ic(language, district, province)
         if district and province:
             welcome_text = get_utterance('generic_actions', self.name(), 2, language).format(
                 district=district,

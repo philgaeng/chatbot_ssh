@@ -8,6 +8,7 @@ from rapidfuzz import fuzz
 import re
 import traceback
 from .utterance_mapping import VALIDATION_SKIP
+from icecream import ic
 
 
 
@@ -126,8 +127,8 @@ class LanguageHelper:
             return result
             
         except Exception as e:
-            print(f"Error in skip detection: {e} ---- is_skip_instruction")
-            print(f"Traceback: {traceback.format_exc()}")
+            #ic(f"Error in skip detection: {e} ---- is_skip_instruction")
+            #ic(f"Traceback: {traceback.format_exc()}")
             return False, False, ""
 
 class BaseFormValidationAction(FormValidationAction, ABC):
@@ -155,15 +156,14 @@ class BaseFormValidationAction(FormValidationAction, ABC):
     def _is_skip_requested(self, latest_message: dict) -> Tuple[bool, bool, str]:
         """Check if user wants to skip the current field."""
         if not hasattr(self, 'lang_helper'):
-            print("ERROR: lang_helper not initialized!")
+            #ic("ERROR: lang_helper not initialized!")
             return False, False, ""
         
         input_text = latest_message.get("text", "").strip()
         intent = latest_message.get("intent", {}).get("name", "")
         
-        
         if intent == "skip":
-            print("Skip detected through intent")
+            #ic("Skip detected through intent")
             return True, False, "skip"
         
         if input_text:
@@ -171,8 +171,8 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 results = self.lang_helper.is_skip_instruction(input_text)
                 return results
             except Exception as e:
-                print(f"Error in skip detection: {str(e)}")
-                print(f"Full error: {traceback.format_exc()}")
+                ic(f"Error in skip detection: {str(e)}")
+                ic(f"Full error: {traceback.format_exc()}")
                 return False, False, ""
 
         return False, False, ""
@@ -246,9 +246,8 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         custom_action: Callable = None
     ) -> Dict[Text, Any]:
         """Helper method for slot extraction logic."""
-        print(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
-        print(f"Requested slot: {tracker.get_slot('requested_slot')}")
-        
+        ic(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
+        #ic(f"Requested slot: {tracker.get_slot('requested_slot')}")
         
         if tracker.get_slot("requested_slot") == slot_name:
             # Check if we're in skip validation mode
@@ -258,8 +257,8 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             # Normal slot extraction
             latest_message = tracker.latest_message
             message_text = latest_message.get("text", "")
-            print(f"Latest message: {latest_message}")
-            print(f"Text: {message_text}")
+            ic(f"Latest message: {latest_message}")
+            #ic(f"Text: {message_text}")
             
             # Execute custom action if provided
             if custom_action:
@@ -269,13 +268,13 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 skip_result = self._is_skip_requested(latest_message)
                 is_skip, needs_validation, matched_word = skip_result
             except Exception as e:
-                print(f"Error in skip detection: {e}")
-                print(f"Exception type: {type(e)}")
-                print(f"Exception traceback:", traceback.format_exc())
+                ic(f"Error in skip detection: {e}")
+                ic(f"Exception type: {type(e)}")
+                ic(f"Exception traceback:", traceback.format_exc())
                 is_skip, needs_validation, matched_word = False, False, ""
             
             if is_skip:
-                print(f"---------- SLOT EXTRACTION END ----------")
+                #ic(f"---------- SLOT EXTRACTION END ----------")
                 if needs_validation:
                     # Store original text and request validation
                     dispatcher.utter_message(
@@ -288,17 +287,16 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     }
                 
                 # Direct skip (high confidence match)
-                
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
                 skip_value = False if slot_type == "bool" else "slot_skipped"
                 return {slot_name: skip_value}
-            print(f"---------- SLOT EXTRACTION END ----------")
+            ic(f"---------- SLOT EXTRACTION END ----------")
             if message_text:
                 return {slot_name: message_text}
         
-        # print(f"Slot {slot_name} is not the requested slot : {tracker.get_slot('requested_slot')}")
-        # print(f"---------- SLOT EXTRACTION END ----------")
-        # return {}
+        ic(f"Slot {slot_name} is not the requested slot : {tracker.get_slot('requested_slot')}")
+        ic(f"---------- SLOT EXTRACTION END ----------")
+        return {}
 
     async def _handle_boolean_slot_extraction(
         self,
@@ -323,15 +321,15 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         Returns:
             Dict[Text, Any]: Slot updates
         """
-        print(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
-        print(f"Requested slot: {tracker.get_slot('requested_slot')}")
+        ic(f"\n########### SLOT EXTRACTION START - {slot_name}  - STRING SLOT ###########")
+        ic(f"Requested slot: {tracker.get_slot('requested_slot')}")
         if tracker.get_slot("requested_slot") == slot_name:
             latest_message = tracker.latest_message
             text = latest_message.get("text", "")
             intent = latest_message.get("intent", {}).get("name", "")
             
-            print("######## boolean slot extraction ########")
-            print(f"text: {text}, intent: {intent}")
+            ic("######## boolean slot extraction ########")
+            ic(f"text: {text}, intent: {intent}")
 
             # Check if we're in skip validation mode
             if tracker.get_slot("skip_validation_needed") == slot_name:
@@ -340,9 +338,9 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             # Check for skip using the updated method
             try:
                 is_skip, needs_validation, matched_word = self._is_skip_requested(latest_message)
-                print(f"is_skip: {is_skip}, needs_validation: {needs_validation}, matched_word: {matched_word}")
+                ic(f"is_skip: {is_skip}, needs_validation: {needs_validation}, matched_word: {matched_word}")
             except Exception as e:
-                print(f"Error in skip detection: {e}", print("latest_message: ", latest_message.get("text", "")))
+                ic(f"Error in skip detection: {e}", ic("latest_message: ", latest_message.get("text", "")))
                 is_skip, needs_validation, matched_word = False, False, ""
             if is_skip:
                 if needs_validation:
@@ -360,13 +358,12 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             if text.startswith("/affirm") or intent == "affirm":
                 if custom_affirm_action:
                     return await custom_affirm_action(dispatcher)
-                print(f"Affirming {slot_name}")
+                # ic(f"Affirming {slot_name}")
                 return {slot_name: True}
 
             # Handle negative responses
-            # Handle negative responses
             if text.startswith("/deny") or intent == "deny":
-                print(f"Denying {slot_name}")
+                #ic(f"Denying {slot_name}")
                 return {slot_name: False}
 
         return {}

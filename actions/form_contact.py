@@ -113,15 +113,15 @@ class ValidateContactForm(BaseFormValidationAction):
         It checks the main story to determine if the user is checking status and only requires the phone number.
         """
         main_story = tracker.get_slot("main_story")
-        ic(main_story)
+        #ic(main_story)
         if main_story == "status_update":
             return ["user_contact_phone"]
         else:
-            return ["user_contact_consent", "user_full_name", "user_contact_phone", "user_contact_email_temp", "user_contact_email_confirmed"]
+            return ["user_contact_consent",  "user_contact_phone", "user_full_name", "user_contact_email_temp", "user_contact_email_confirmed"]
 
     
     async def extract_user_contact_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        return await self._handle_slot_extraction(
+        return await self._handle_boolean_slot_extraction(
             "user_contact_consent",
             tracker,
             dispatcher,
@@ -131,24 +131,17 @@ class ValidateContactForm(BaseFormValidationAction):
     async def validate_user_contact_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         print("################ Validate user contact consent ###################")
         print(f"Received value: {slot_value}")
-        slot_value = slot_value.strip('/')
         
-        if slot_value == "slot_skipped":
-            return {"user_contact_consent": "slot_skipped",
+        if slot_value == False:
+            return {"user_contact_consent": False,
                     "user_full_name": "slot_skipped",
                     "user_contact_phone": "slot_skipped",
                     "user_contact_email_temp": "slot_skipped",
                     "user_contact_email_confirmed": "slot_skipped"
                     }
-        if slot_value == "anonymous_with_phone":
-            return {"user_contact_consent": "anonymous_with_phone",
-                    "user_full_name": "slot_skipped",
-                    "user_contact_phone": None,
-                    "user_contact_email_temp": "slot_skipped",
-                    "user_contact_email_confirmed": "slot_skipped"
-                    }
-        if slot_value == "affirm":
-            return {"user_contact_consent": "affirm",
+
+        if slot_value == True:
+            return {"user_contact_consent": True,
                     "user_full_name": None,
                     "user_contact_phone": None,
                     "user_contact_email_temp": None,

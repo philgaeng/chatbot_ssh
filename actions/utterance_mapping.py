@@ -365,12 +365,12 @@ UTTERANCE_MAPPING = {
         'action_ask_contact_form_user_contact_consent': {
             'utterances': {
                 1: {
-                    'en': "Would you like to provide your contact information? Here are your options:\n\n1️⃣ **Yes**: Share your contact details for follow-up and updates about your grievance.\n2️⃣ **Anonymous with phone number**: Stay anonymous but provide a phone number to receive your grievance ID.\n3️⃣ **No contact information**: File your grievance without providing contact details. Note that we won't be able to follow up or share your grievance ID.",
-                    'ne': "के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईंका विकल्पहरू यहाँ छन्:\n\n1️⃣ **हो**: तपाईंको गुनासोको अनुवर्ती र अपडेटको लागि आफ्नो सम्पर्क विवरण साझेदारी गर्नुहोस्।\n2️⃣ **फोन नम्बरसहित गुमनाम**: गुमनाम रहनुहोस् तर तपाईंको गुनासो आईडी प्राप्त गर्न फोन नम्बर प्रदान गर्नुहोस्।\n3️⃣ **सम्पर्क जानकारी छैन**: सम्पर्क विवरण प्रदान नगरी आफ्नो गुनासो दर्ता गर्नुहोस्। ध्यान दिनुहोस् कि हामी अनुवर्ती गर्न वा तपाईंको गुनासो आईडी साझेदारी गर्न सक्षम हुने छैनौं।"
+                    'en': "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.",
+                    'ne': "के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईं गुमनाम रहन सक्नुहुन्छ तर हामी तपाईंलाई अनुवर्ती वा अपडेटको लागि सम्पर्क गर्न सक्नुहुनेछैनौं।"
                 }
             },
             'buttons': {
-                1: BUTTONS_CONTACT_CONSENT
+                1: BUTTONS_AFFIRM_DENY
             }
         },
         'action_ask_contact_form_user_full_name': {
@@ -580,10 +580,14 @@ UTTERANCE_MAPPING = {
                     'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।"
                 },
                 2: {
-                    'en': "✅ A recap of your grievance has been sent to your email.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ।"
+                    'en': "✅ A recap of your grievance has been sent to your email : {user_contact_email}.",
+                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}"
                 },
                 3: {
+                    'en': "✅ A recap of your grievance has been sent to your phone : {user_contact_phone}.",
+                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {user_contact_phone}"
+                },
+                4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 }
@@ -596,16 +600,20 @@ UTTERANCE_MAPPING = {
                     'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।"
                 },
                 2: {
-                    'en': "✅ A recap of your grievance has been sent to your email.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ।"
+                    'en': "✅ A recap of your grievance has been sent to your email : {user_contact_email}.",
+                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}"
                 },
                 3: {
+                    'en': "✅ A recap of your grievance has been sent to your phone : {user_contact_phone}.",
+                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {user_contact_phone}"
+                },
+                4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_list_cat_confirmed': {
+        'action_ask_grievance_summary_form_grievance_categories_confirmed': {
             'utterances': {
                 1: {
                     'en': "No categories have been identified yet.",
@@ -732,28 +740,28 @@ UTTERANCE_MAPPING = {
                     'en': "**Summary: {grievance_summary}**",
                     'ne': "**सारांश: {grievance_summary}**"
                 },
-                'grievance_category': {
-                    'en': "**Category: {grievance_category}**",
-                    'ne': "**श्रेणी: {grievance_category}**"
+                'grievance_categories': {
+                    'en': "**Category: {grievance_categories}**",
+                    'ne': "**श्रेणी: {grievance_categories}**"
                 },
                 'grievance_details': {
                     'en': "**Details: {grievance_details}**",
                     'ne': "**विवरण: {grievance_details}**"
                 },
-                'grievance_email': {
-                    'en': "\nA confirmation email will be sent to {grievance_email}",
-                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {grievance_email}"
+                'user_contact_email': {
+                    'en': "\nA confirmation email will be sent to {user_contact_email}",
+                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {user_contact_email}"
                 },
-                'grievance_phone': {
-                    'en': "**Phone: {grievance_phone}**",
-                    'ne': "**फोन: {grievance_phone}**"
+                'user_contact_phone': {
+                    'en': "**A confirmation SMS will be sent to your phone: {user_contact_phone}**",
+                    'ne': "**तपाईंको फोनमा सुनिश्चित गर्ने संदेश भेटिन्छ। {user_contact_phone}**"
                 },
                 'grievance_outro': {
                     'en': "Our team will review it shortly and contact you if more information is needed.",
                     'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
                 },
                 'grievance_timeline': {
-                    'en': "The standard timeline for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
+                    'en': "The standard resolution time for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
                     'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
                 },
                 'grievance_status': {
@@ -1125,9 +1133,9 @@ UTTERANCE_MAPPING = {
                     'en': "🔍 **Grievance ID:** {grievance_id}",
                     'ne': "🔍 **गुनासो ID:** {grievance_id}"
                 },
-                'grievance_category': {
-                    'en': "📋 **Category:** {grievance_category}",
-                    'ne': "📋 **श्रेणी:** {grievance_category}"
+                'grievance_categories': {
+                    'en': "📋 **Category:** {grievance_categories}",
+                    'ne': "📋 **श्रेणी:** {grievance_categories}"
                 },
                 'grievance_summary': {
                     'en': "📝 **Summary:** {grievance_summary}",

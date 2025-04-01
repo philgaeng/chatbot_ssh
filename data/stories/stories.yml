@@ -26,7 +26,7 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-          - grievance_list_cat_confirmed
+          - grievance_categories_confirmed
           - grievance_summary_temp
           - grievance_summary_confirmed
       - active_loop: null
@@ -65,7 +65,7 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-          - grievance_list_cat_confirmed
+          - grievance_categories_confirmed
           - grievance_summary_temp
           - grievance_summary_confirmed
       - active_loop: null
@@ -83,15 +83,15 @@ stories:
       - active_loop: null
       - action: action_submit_grievance
 
-  # # User does not provide phone number
-  # - story: User does not provide phone number
-  #   steps:
-  #     - action: contact_form
-  #     - active_loop: contact_form
-  #     - slot_was_set:
-  #         - phone_validation_required: false
-  #     - active_loop: null
-  #     - action: action_submit_grievance
+  # User does not provide phone number
+  - story: User does not provide phone number
+    steps:
+      - action: contact_form
+      - active_loop: contact_form
+      - slot_was_set:
+          - phone_validation_required: false
+      - active_loop: null
+      - action: action_submit_grievance
 
   # #step 4: Collect location and contact details
   # - story: Collect location and contact details
@@ -125,51 +125,6 @@ stories:
 
 
 
-  # - story: User chooses to file without phone validation
-  #   steps:
-  #     - action: action_recommend_phone_validation
-  #     - intent: file_without_validation
-  #     - action: action_submit_grievance_as_is
-
-  # - story: Anonymous with phone number
-  #   steps:
-  #     - action: action_ask_contact_form_user_contact_consent
-  #     - intent: anonymous_with_phone
-  #     - action: action_collect_phone_for_anonymous
-  #     - active_loop: collect_phone_form
-  #     # - slot_was_set:
-  #     #     - user_contact_phone 
-  #     - active_loop: null
-  #     - action: action_submit_grievance
-
-  # - story: File anonymously without contact
-  #   steps:
-  #     - action: action_ask_contact_form_contact_consent
-  #     - intent: no_contact_provided
-  #     - action: action_submit_grievance
-
-
-  # #Step 4 : altenate - User skips providing location details
-  # - story: User skips providing location details
-  #   steps:
-  #     - action: utter_ask_municipality
-  #     - or:
-  #         - intent: skip
-  #         - intent: deny
-  #     - action: utter_skip_municipality
-  #     - action: utter_ask_contact_consent
-
-
-  # #Step 5: alternate - User skips providing contact details
-  # - story: User skips providing contact details
-  #   steps:
-  #     - action: utter_ask_contact_consent
-  #     - or:
-  #       - intent: skip
-  #       - intent: deny
-  #     - action: utter_skip_contact
-  #     - action: action_submit_grievance
-
   # #User naturally provides contact
   # - story: User starts by providing details
   #   steps:
@@ -201,7 +156,7 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-        - grievance_list_cat_confirmed
+        - grievance_categories_confirmed
         - grievance_summary_temp
         - grievance_summary_confirmed
       - active_loop: null

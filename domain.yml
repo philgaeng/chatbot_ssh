@@ -6,31 +6,9 @@ intents:
 - intent_session_start
 - affirm
 - bot_challenge
-#- contact_consent_provide
-#- contact_email_confirm
-#- contact_email_modify
-#- contact_email_provide
-#- contact_full_name_provide
-#- contact_info_modify
-#- contact_modification_cancel
-#- contact_phone_modify
-#- contact_phone_provide
 - deny
-#- grievance_category_change
-#- grievance_category_confirm
-#- grievance_category_delete
-#- grievance_category_modify
-#- grievance_category_set
-#- grievance_details_add
-#- grievance_details_provide
-#- grievance_details_submit
-#- grievance_monetary_provide
 - grievance_process_start
 - grievance_submit_as_is
-#- grievance_summary_edit
-#- grievance_summary_validate
-#- language_select
-#- location_address_provide
 - location_process_start
 - mood_great
 - mood_unhappy
@@ -41,10 +19,6 @@ intents:
 - nav_menu_main
 - nav_restart
 - nlu_fallback
-#- otp_enter
-#- otp_provide
-#- otp_resend
-#- otp_retry
 - set_english
 - set_nepali
 - skip
@@ -175,6 +149,11 @@ slots:
     influence_conversation: false
     mappings:
     - type: custom
+  user_project:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
   user_ward:
     type: text
     initial_value: '0'
@@ -272,7 +251,7 @@ slots:
     influence_conversation: false
     mappings:
     - type: custom
-  grievance_list_cat:
+  grievance_categories:
     type: list
     influence_conversation: false
     mappings: []
@@ -281,7 +260,7 @@ slots:
     influence_conversation: false
     mappings:
     - type: custom
-  grievance_list_cat_confirmed:
+  grievance_categories_confirmed:
     type: text
     influence_conversation: false
     mappings:
@@ -296,14 +275,14 @@ slots:
     influence_conversation: false
     mappings:
     - type: custom
-  old_category:
-    type: text
-    influence_conversation: false
-    mappings: []
-  new_category:
-    type: text
-    influence_conversation: false
-    mappings: []
+  # old_category:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings: []
+  # new_category:
+  #   type: text
+  #   influence_conversation: false
+  #   mappings: []
   grievance_summary:
     type: text
     influence_conversation: false
@@ -366,6 +345,7 @@ slots:
     influence_conversation: true
     mappings:
     - type: custom
+
 
 # responses:
 # #- utter_introduce:
@@ -470,30 +450,30 @@ actions:
 - validate_grievance_details_form
 - action_ask_grievance_details_form_grievance_temp
 - validate_grievance_summary_form
-- action_ask_grievance_summary_form_grievance_list_cat_confirmed
+- action_ask_grievance_summary_form_grievance_categories_confirmed
 - action_ask_grievance_summary_form_grievance_cat_modify
 - action_ask_grievance_summary_form_grievance_summary_confirmed
 - action_ask_grievance_summary_form_grievance_summary_temp
 - action_ask_grievance_summary_form_gender_follow_up
 - action_submit_grievance_as_is
-- action_select_alternate_category
-- action_set_category
-- action_validate_category
+# - action_select_alternate_category
+# - action_set_category
+- action_validate_categories
 - action_validate_summary
 - action_ask_summary
 - action_ask_for_user_summary
 - action_edit_grievance_summary
 - action_restart_grievance
 - action_generate_grievance_id
-- action_ask_for_category_modification
-- action_set_category_to_modify
+- action_ask_for_categories_modification
+# - action_set_category_to_modify
 - action_modify_or_delete_category
 - action_delete_category
-- action_change_category
-- action_apply_category_change
+# - action_change_category
+# - action_apply_category_change
 - action_confirm_categories
 - action_cancel_modification_category
-- action_skip_category
+# - action_skip_category
 - action_handle_grievance_form_completion
 - action_ask_contact_form_user_contact_consent
 - action_ask_contact_form_user_full_name
@@ -503,12 +483,12 @@ actions:
 - action_ask_contact_form_user_contact_email_confirmed
 - validate_contact_form
 - action_recommend_phone_validation
-- action_skip_email
-- action_confirm_email
-- action_provide_new_emailemail
-- action_modify_contact_info
-- action_modify_email
-- action_cancel_modification_contact
+# - action_skip_email
+# - action_confirm_email
+# - action_provide_new_emailemail
+# - action_modify_contact_info
+# - action_modify_email
+# - action_cancel_modification_contact
 - action_ask_otp_verification_form_otp_consent
 - action_ask_otp_verification_form_otp_number
 - action_ask_otp_verification_form_otp_input
@@ -530,22 +510,7 @@ actions:
 - action_ask_grievance_id_form_grievance_id
 - action_attach_file
 - action_set_grievance_id
-# - action_submit_grievance_with_details
-# - action_get_grievance_status
-# - action_get_grievance_history
-# - action_get_grievance_details
-# - action_get_grievance_files
-# - action_get_grievance_summary
-# - action_get_grievance_category
-# - action_get_grievance_location
-# - action_get_grievance_claimed_amount
-# - action_get_grievance_creation_date
-# - action_get_grievance_modification_date
-# - action_get_grievance_status_update_date
-# - action_get_grievance_next_step
-# - action_get_grievance_expected_resolution_date
-# - action_get_grievance_notes
-# - action_get_grievance_updated_by
+
 forms:
   menu_form:
     required_slots:
@@ -556,15 +521,6 @@ forms:
     - user_location_consent
     ignored_intents:
     - nlu_fallback
-    - submit_category
-    - modify_category
-    - delete_category
-    - change_category
-    - set_new_category
-    - finalize_categories
-    - confirm_selection_category
-    - submit_address
-    - modify_address
     - start_location_process
   contact_form:
     required_slots:
@@ -599,6 +555,6 @@ forms:
     - nlu_fallback
   grievance_summary_form:
     required_slots:
-    - grievance_list_cat_confirmed
+    - grievance_categories_confirmed
     ignored_intents:
     - nlu_fallback

@@ -40,8 +40,7 @@ class AskMenuFormMainStory(Action):
         language = get_language_code(tracker)
         province = tracker.get_slot("user_province")
         district = tracker.get_slot("user_district")
-        print("language", language)
-        
+        #ic(language, district, province)
         
         if province and district:
             welcome_text = get_utterance('menu_form', self.name(), 2, language).format(

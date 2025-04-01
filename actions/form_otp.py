@@ -71,6 +71,8 @@ class ActionAskOtpVerificationFormOtpInput(Action):
                     text= message_bot,
                     buttons=buttons_otp
                 )
+                text = "TEMPORARY MESSAGE FOR TESTING " + message_sms
+                dispatcher.utter_message(text=text)
                 
             except Exception as e:
                 logger.error(f"Error sending SMS: {e}")
