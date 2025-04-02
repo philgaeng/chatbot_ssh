@@ -489,8 +489,8 @@ UTTERANCE_MAPPING = {
         'action_start_grievance_process': {
             'utterances': {
                 1: {
-                    'en': "Great! Let's start by understanding your grievance...",
-                    'ne': "राम्रो! चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
+                    'en': "Great! Your grievance ID is {grievance_id}. Let's start by understanding your grievance...",
+                    'ne': "राम्रो! तपाईंको गुनासो ID हो {grievance_id}। चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
                 }
             }
         },
@@ -580,14 +580,18 @@ UTTERANCE_MAPPING = {
                     'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।"
                 },
                 2: {
-                    'en': "✅ A recap of your grievance has been sent to your email : {user_contact_email}.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}"
-                },
-                3: {
                     'en': "✅ A recap of your grievance has been sent to your phone : {user_contact_phone}.",
                     'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {user_contact_phone}"
                 },
+                3: {
+                    'en': "✅ A recap of your grievance has been sent to your email : {user_contact_email}.",
+                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}"
+                },
                 4: {
+                    'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
+                    'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
+                },
+                5: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 }
@@ -769,6 +773,26 @@ UTTERANCE_MAPPING = {
                     'ne': "**स्थिति:**"
                 }
             }
+        },
+        'inform_files_uploaded': {
+            'en': {
+                1: "✅ Your files have been successfully attached to your grievance:\n{description}",
+                2: "You can continue with your grievance process or attach more files if needed."
+            },
+            'ne': {
+                1: "✅ तपाईंको फाइलहरू सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ:\n{description}",
+                2: "तपाईं आफ्नो गुनासो प्रक्रिया जारी राख्न सक्नुहुन्छ वा थप फाइलहरू संलग्न गर्न सक्नुहुन्छ।"
+            }
+        },
+        'inform_files_oversized': {
+            'en': {
+                1: "⚠️ Some files exceeded the maximum size limit of {max_size_formatted}:\n{oversized_files_list}",
+                2: "Please compress these files or upload smaller files."
+            },
+            'ne': {
+                1: "⚠️ केही फाइलहरू अधिकतम साइज सीमा {max_size_formatted} भन्दा बढी छन्:\n{oversized_files_list}",
+                2: "कृपया यी फाइलहरूलाई कम्प्रेस गर्नुहोस् वा सानो फाइलहरू अपलोड गर्नुहोस्।"
+            }
         }
     },
     'generic_actions': {
@@ -938,6 +962,10 @@ UTTERANCE_MAPPING = {
                 4: {
                     'en': "Thank you. Your {count} files ({files}) have been successfully attached to your grievance.",
                     'ne': "धन्यवाद। तपाईंका {count} फाइलहरू ({files}) सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छन्।"
+                },
+                5: {
+                    'en': "You can now attach files to your grievance using the attachment button.",
+                    'ne': "अब तपाईं एट्याचमेन्ट बटन प्रयोग गरेर आफ्नो गुनासोमा फाइलहरू संलग्न गर्न सक्नुहुन्छ।"
                 }
             }
         }
@@ -1266,7 +1294,76 @@ UTTERANCE_MAPPING = {
                 }
             }   
         }
-    }
+    },
+    'file_server': {
+        'upload_files': {
+            'utterances': {
+                1: {
+                    'en': "No grievance_id provided",
+                    'ne': "गुनासो ID प्रदान गरिएन"
+                },
+                2: {
+                    'en': "Please complete your grievance details before attaching files",
+                    'ne': "कृपया गुनासो विवरण पूरा गर्न पहिले फाइलहरू अपलोड गर्नुहोस्"
+                },
+                3: {
+                    'en': "No files provided",
+                    'ne': "कुनै फाइल प्रदान गरिएन"
+                },
+                4: {
+                    'en': "No files selected",
+                    'ne': "कुनै फाइल चयन गरिएन"
+                },
+                5: {
+                    'en': "This type of file is not allowed. Please upload a different file.",
+                    'ne': "यो प्रकारको फाइल अनुमति भेटिन्छ नैन। कृपया अर्को फाइल अपलोड गर्नुहोस्।"
+                },
+                6: {
+                    'en': "There was a problem uploading your files. Please try again.",
+                    'ne': "फाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।"
+                }
+            }
+        },
+        'get_files': {
+            'utterances': {
+                1: {
+                    'en': "Internal server error",
+                    'ne': "आंतरिक सर्वर त्रुटि"
+                }
+                
+            }
+        },
+        'download_files': {
+            'utterances': {
+                1: {
+                    'en': "File not found",
+                    'ne': "फाइल भेटिन्छ नैन"
+                },
+                2: {
+                    'en': "Internal server error",
+                    'ne': "आंतरिक सर्वर त्रुटि"
+                }
+            }
+        }
+    },
+    "action_inform_files_uploaded": {
+        "en": [
+            "✅ Your files have been successfully attached to your grievance.",  # Simple success message
+            "There was a problem uploading your files. Please try again."  # Simple error message
+        ],
+        "ne": [
+            "✅ तपाईंको फाइलहरू सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ।",  # Simple success message
+            "फाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।"  # Simple error message
+        ]
+    },
+    "action_inform_files_oversized": {
+        "en": [
+            "⚠️ Some files are too large to upload. The maximum file size allowed is {max_size_formatted}. Please reduce the size of your files and try again."  # Simple size limit message
+        ],
+        "ne": [
+            "⚠️ केही फाइलहरू अपलोड गर्न धेरै ठूला छन्। अधिकतम फाइल साइज {max_size_formatted} हो। कृपया फाइलको साइज घटाएर पुन: प्रयास गर्नुहोस्।"  # Simple size limit message
+        ]
+    },
 }
 
 def get_utterance(form_name: str, action_name: str, utter_index: int, language: str = 'en') -> str:

@@ -1,4 +1,3 @@
-
 import os
 from typing import List
 
@@ -189,3 +188,6 @@ DIC_LOCATION_MAPPING = {
         "english": "Sudurpashchim"
     }
 }
+
+# File upload settings
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes

@@ -13,7 +13,6 @@ stories:
   - action: action_start_grievance_process
   - slot_was_set:
     - main_story: new_grievance 
-  - action: action_set_grievance_id
   - action: grievance_details_form
   - active_loop: grievance_details_form
   - slot_was_set:
@@ -82,7 +81,6 @@ stories:
   - action: action_start_grievance_process
   - slot_was_set:
     - main_story: new_grievance
-  - action: action_set_grievance_id
   - action: grievance_details_form
   - active_loop: grievance_details_form
   - slot_was_set:
@@ -162,7 +160,6 @@ stories:
   - slot_was_set:
     - language_code
     - main_story: new_grievance
-  - action: action_set_grievance_id
   - active_loop: null
   # Grievance details collection
   - action: grievance_details_form
@@ -235,7 +232,6 @@ stories:
   - slot_was_set:
     - language_code
     - main_story: new_grievance
-  - action: action_set_grievance_id
   # Grievance details collection
   - action: grievance_details_form
   - active_loop: grievance_details_form
@@ -300,7 +296,6 @@ stories:
   - slot_was_set:
     - language_code
     - main_story: new_grievance
-  - action: action_set_grievance_id
   - active_loop: null
   # Grievance details collection
   - action: grievance_details_form

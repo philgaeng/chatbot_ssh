@@ -18,7 +18,7 @@ from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupActi
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
-from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST  # Import the constants
+from .constants import QR_PROVINCE, QR_DISTRICT, DISTRICT_LIST, MAX_FILE_SIZE  # Import MAX_FILE_SIZE
 from .utterance_mapping import get_utterance, get_buttons
 from icecream import ic
 import json
@@ -406,6 +406,56 @@ class ActionAttachFile(Action):
         dispatcher.utter_message(text=message)
         
         # Return the grievance ID in the custom data
+        return []
+
+class ActionInformFilesUploaded(Action):
+    def name(self) -> Text:
+        return "action_inform_files_uploaded"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        ic("ActionInformFilesUploaded triggered")
+        language_code = get_language_code(tracker)
+        metadata = tracker.latest_message.get('metadata', {})
+        
+        if metadata.get('success'):
+            file_description = metadata.get('description', '')
+            message = get_utterance('generic_actions', self.name(), 1, language_code).format(
+                description=file_description
+            )
+            dispatcher.utter_message(text=message)
+        else:
+            message = get_utterance('generic_actions', self.name(), 2, language_code)
+            dispatcher.utter_message(text=message)
+            
+        return []
+
+class ActionInformFilesOversized(Action):
+    def name(self) -> Text:
+        return "action_inform_files_oversized"
+
+    def run(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        ic("ActionInformFilesOversized triggered")
+        language_code = get_language_code(tracker)
+        metadata = tracker.latest_message.get('metadata', {})
+        
+        # Format max size in MB (simplified to whole number)
+        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
+        max_size_formatted = f"{max_size_mb:.0f} MB"  # Just the number, no "MB"
+        
+        message = get_utterance('generic_actions', self.name(), 1, language_code).format(
+            max_size_formatted=max_size_formatted
+        )
+        dispatcher.utter_message(text=message)
         return []
 
 

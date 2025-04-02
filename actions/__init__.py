@@ -6,6 +6,9 @@ import logging
 from importlib import import_module
 from pathlib import Path
 from .generic_actions import ActionWrapper
+import threading
+from .file_server import app
+import time
 
 
 # Add the project root directory to the Python path
@@ -26,7 +29,35 @@ from .generic_actions import *
 from .form_grievance import *
 from .form_location import *
 
+def start_file_server():
+    """Start the file server in a background thread"""
+    try:
+        logger.info("Starting file server on port 5001...")
+        # Create uploads directory if it doesn't exist
+        upload_dir = os.path.join(project_root, 'test_webchat', 'actions', 'uploads')
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+            logger.info(f"Created uploads directory: {upload_dir}")
+        
+        # Start Flask app
+        app.run(host='0.0.0.0', port=5001, use_reloader=False, debug=False)
+    except Exception as e:
+        logger.error(f"Error starting file server: {str(e)}", exc_info=True)
 
+# Start file server in a background thread
+file_server_thread = threading.Thread(target=start_file_server, daemon=True)
+file_server_thread.start()
+
+# Wait a moment to ensure the server starts
+time.sleep(1)
+
+# Check if the server is running
+try:
+    import requests
+    response = requests.get('http://localhost:5001/')
+    logger.info("File server is running successfully")
+except Exception as e:
+    logger.error(f"File server may not be running: {str(e)}")
 
 def get_action_classes() -> List[Type[Action]]:
     """Get all action classes from the actions package"""

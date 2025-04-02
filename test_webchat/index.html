@@ -53,6 +53,10 @@
         // Store grievance ID when available
         window.grievanceId = null;
         window.currentRetryTimer = null;
+        window.hasReceivedResponse = false;
+        window.introductionSent = false;
+        window.introductionWindowTimer = null;  // Timer for the introduction window
+        window.sessionInitialized = false;  // New flag to track session initialization
 
         // Modified connection handling
         socket.on('connect', () => {
@@ -80,9 +84,38 @@
             setTimeout(() => {
                 sessionStarted = true;
                 console.log('Session fully initialized, sending initial message...');
-                sendIntroduceMessage();
+                if (!window.sessionInitialized) {
+                    sendIntroduceMessage();
+                }
             }, 1000);
         });
+
+        // Function to extract grievance ID from bot response
+        function extractGrievanceId(response) {
+            // Check various locations where the grievance ID might be
+            if (response.json_message?.grievance_id) {
+                console.log('Found grievance ID in json_message:', response.json_message.grievance_id);
+                return response.json_message.grievance_id;
+            }
+            if (response.metadata?.grievance_id) {
+                console.log('Found grievance ID in metadata:', response.metadata.grievance_id);
+                return response.metadata.grievance_id;
+            }
+            if (response.grievance_id) {
+                console.log('Found grievance ID in root:', response.grievance_id);
+                return response.grievance_id;
+            }
+            // Check if the text contains a grievance ID (e.g., "Your grievance ID is GR123")
+            if (response.text) {
+                const grievanceMatch = response.text.match(/Your grievance ID is (GR\d+[A-Z0-9]{4})/);
+                if (grievanceMatch) {
+                    console.log('Found grievance ID in text:', grievanceMatch[1]);
+                    return grievanceMatch[1];
+                }
+            }
+            console.log('No grievance ID found in response:', response);
+            return null;
+        }
 
         // Handle bot responses
         socket.on('bot_uttered', (response) => {
@@ -94,17 +127,30 @@
                 window.currentRetryTimer = null;
             }
             
+            // Clear the introduction window timer
+            if (window.introductionWindowTimer) {
+                clearTimeout(window.introductionWindowTimer);
+                window.introductionWindowTimer = null;
+            }
+            
             // Reset retry count when we get a response
             messageRetryCount = 0;
             
-            // Check if response contains grievance ID
-            if (response.custom && response.custom.grievance_id) {
-                console.log('Grievance ID received:', response.custom.grievance_id);
-                window.grievanceId = response.custom.grievance_id;
+            // Mark that we've received a response
+            window.hasReceivedResponse = true;
+            
+            // Extract and set grievance ID if present
+            const grievanceId = extractGrievanceId(response);
+            if (grievanceId) {
+                console.log('Setting grievance ID:', grievanceId);
+                window.grievanceId = grievanceId;
             }
             
+            // Log current grievance ID state
+            console.log('Current grievance ID:', window.grievanceId);
+            
             // Handle the response
-            if (response.text) {
+            if (response.text && !response.custom?.hidden) {
                 appendMessage(response.text, 'received');
             }
             if (response.quick_replies) {
@@ -164,6 +210,12 @@
                 return;
             }
             
+            // Check if we've already sent an introduction
+            if (window.introductionSent) {
+                console.log('Introduction already sent, skipping...');
+                return;
+            }
+            
             const { province, district } = getUrlParams();
             const initialMessage = province && district 
                 ? `/introduce{"province": "${province}", "district": "${district}"}`
@@ -173,20 +225,35 @@
             
             if (window.safeSendMessage(initialMessage)) {
                 console.log('Initial message sent successfully');
+                window.introductionSent = true;  // Mark introduction as sent
                 
-                // Set up retry mechanism
-                const retryTimer = setTimeout(() => {
-                    if (messageRetryCount < MAX_RETRIES) {
-                        messageRetryCount++;
-                        console.log(`No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`);
-                        sendIntroduceMessage();
-                    } else {
-                        console.log('Max retries reached, giving up');
-                        appendMessage('Sorry, there seems to be a connection issue. Please try again.', 'received');
-                    }
-                }, RETRY_DELAY);
-                
-                window.currentRetryTimer = retryTimer;
+                // Set up retry mechanism only if we haven't received a response yet
+                if (!window.hasReceivedResponse) {
+                    // Set up the introduction window timer (3 seconds)
+                    window.introductionWindowTimer = setTimeout(() => {
+                        console.log('Introduction window closed - no more retries allowed');
+                        if (window.currentRetryTimer) {
+                            clearTimeout(window.currentRetryTimer);
+                            window.currentRetryTimer = null;
+                        }
+                        if (messageRetryCount >= MAX_RETRIES) {
+                            appendMessage('Sorry, there seems to be a connection issue. Please try again.', 'received');
+                        }
+                    }, 3000);  // 3 second window
+                    
+                    // Set up retry timer with shorter delay
+                    const retryTimer = setTimeout(() => {
+                        if (messageRetryCount < MAX_RETRIES && !window.hasReceivedResponse) {
+                            messageRetryCount++;
+                            console.log(`No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`);
+                            // Reset the introduction sent flag to allow retry
+                            window.introductionSent = false;
+                            sendIntroduceMessage();
+                        }
+                    }, RETRY_DELAY);
+                    
+                    window.currentRetryTimer = retryTimer;
+                }
             }
         }
 
@@ -708,6 +775,21 @@
         // Add this at the very beginning of your script section
         function clearRasaSession() {
             localStorage.removeItem('RASA_SESSION_ID');
+            window.hasReceivedResponse = false;  // Reset response flag
+            window.introductionSent = false;  // Reset introduction flag
+            window.grievanceId = null;  // Reset grievance ID
+            window.sessionInitialized = false;  // Reset session initialization flag
+            
+            // Clear any pending timers
+            if (window.currentRetryTimer) {
+                clearTimeout(window.currentRetryTimer);
+                window.currentRetryTimer = null;
+            }
+            if (window.introductionWindowTimer) {
+                clearTimeout(window.introductionWindowTimer);
+                window.introductionWindowTimer = null;
+            }
+            
             console.log("Rasa session cleared");
         }
 
@@ -790,6 +872,222 @@
             }
         });
 
+        // Function to format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Update the form submission handler to use safeSendMessage
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = messageInput.value;
+            
+            // Handle text message
+            if (msg) {
+                appendMessage(msg, 'sent');
+                window.safeSendMessage(msg);
+                messageInput.value = '';
+            }
+            
+            // Handle file upload if any files are selected
+            if (selectedFiles.length > 0) {
+                // Check if we have a valid grievance ID
+                if (!window.grievanceId || window.grievanceId === 'pending') {
+                    appendMessage("Please complete your grievance details before attaching files.", 'received');
+                    // Clear selected files
+                    selectedFiles = [];
+                    displayFilePreview();
+                    return;
+                }
+
+                appendMessage("Uploading your files...", 'sent');
+                
+                try {
+                    // Upload files
+                    const response = await uploadFiles(selectedFiles);
+                    
+                    // Handle oversized files
+                    if (response.oversized_files && response.oversized_files.length > 0) {
+                        window.safeSendMessage('/inform_files_oversized', {
+                            oversized_files: response.oversized_files.map(file => ({
+                                name: file.filename,
+                                size: file.size
+                            }))
+                        });
+                    }
+                    
+                    // Handle successfully uploaded files
+                    if (response.files && response.files.length > 0) {
+                        const fileRefs = response.files.map(ref => ({
+                            name: ref.filename || ref.name || 'Unknown file',
+                            url: ref.file_id || ref.url || '',
+                            type: ref.file_type || 'application/octet-stream',
+                            size: ref.file_size || 0,
+                            grievance_id: window.grievanceId,
+                            timestamp: new Date().toISOString()
+                        }));
+                        
+                        // Send the payload with file references to Rasa
+                        window.safeSendMessage('/inform_files_uploaded', { 
+                            file_references: fileRefs,
+                            files: fileRefs,
+                            description: fileRefs.map(ref => `${ref.name}`).join(', '),
+                            count: fileRefs.length,
+                            grievance_id: window.grievanceId,
+                            success: true
+                        });
+                    }
+                    
+                    // Clear selected files
+                    selectedFiles = [];
+                    displayFilePreview();
+                    
+                } catch (error) {
+                    console.error('Error uploading files:', error);
+                    // Send a user-friendly error message to Rasa
+                    window.safeSendMessage('/inform_files_uploaded', { 
+                        success: false,
+                        error: "There was a problem uploading your files. Please try again."
+                    });
+                    
+                    // Clear selected files
+                    selectedFiles = [];
+                    displayFilePreview();
+                }
+            } else if (!msg) {
+                // If no message and no files, remind the user to enter a message or attach files
+                appendMessage('Please enter a message or attach files.', 'received');
+            }
+        });
+
+        // Function to upload files to the server
+        async function uploadFiles(files) {
+            // Check if files array is empty
+            if (!files || files.length === 0) {
+                throw new Error('No files to upload');
+            }
+            
+            const formData = new FormData();
+            
+            // Get the current grievance ID if available
+            const grievanceId = window.grievanceId;
+            if (!grievanceId) {
+                throw new Error('No grievance ID available');
+            }
+            
+            // Log the full grievance ID being used
+            console.log(`Uploading ${files.length} files with grievance ID: ${grievanceId}`);
+            console.log('Full grievance ID length:', grievanceId.length);
+            
+            formData.append('grievance_id', grievanceId);
+            
+            // Add each file to the form data and validate
+            let validFiles = 0;
+            files.forEach(file => {
+                if (file && file.size > 0) {
+                    formData.append('files[]', file);
+                    console.log(`Added file: ${file.name}, size: ${file.size} bytes`);
+                    validFiles++;
+                } else {
+                    console.warn(`Skipping invalid file: ${file ? file.name : 'undefined'}`);
+                }
+            });
+            
+            // Check if we have any valid files
+            if (validFiles === 0) {
+                throw new Error('No valid files to upload');
+            }
+            
+            try {
+                // Send the files to the server
+                console.log('Sending files to server...');
+                console.log('FormData contents:', {
+                    grievance_id: grievanceId,
+                    file_count: validFiles
+                });
+                
+                const response = await fetch('http://localhost:5001/upload-files', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Upload failed with status:', response.status);
+                    console.error('Error response:', errorText);
+                    throw new Error(`Upload failed: ${response.status} ${response.statusText}\n${errorText}`);
+                }
+                
+                // Get result and log it
+                const result = await response.json();
+                console.log('Server response:', result);
+                
+                if (!result || !result.files) {
+                    console.error('Invalid server response:', result);
+                    throw new Error('Invalid server response: missing files data');
+                }
+                
+                // Format the file references for Rasa
+                const fileRefs = result.files.map(fileRef => ({
+                    name: fileRef.filename || fileRef.name || 'Unknown file',
+                    url: fileRef.file_id || fileRef.url || '',
+                    type: fileRef.file_type || 'application/octet-stream',
+                    size: fileRef.file_size || 0,
+                    grievance_id: grievanceId,  // Use the full grievance ID here too
+                    timestamp: new Date().toISOString()
+                }));
+                
+                console.log('Formatted file references:', fileRefs);
+                return fileRefs;
+            } catch (error) {
+                console.error('Error in uploadFiles:', error);
+                throw error;
+            }
+        }
+
+        function displayFilePreview() {
+            // Remove existing preview
+            const existingPreview = document.querySelector('.file-preview');
+            if (existingPreview) {
+                existingPreview.remove();
+            }
+            
+            if (selectedFiles.length === 0) return;
+            
+            // Create preview container
+            const previewContainer = document.createElement('div');
+            previewContainer.classList.add('file-preview');
+            
+            // Add each file to the preview
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.classList.add('file-item');
+                
+                const fileName = document.createElement('span');
+                fileName.classList.add('file-item-name');
+                fileName.textContent = file.name;
+                
+                const removeButton = document.createElement('button');
+                removeButton.classList.add('file-item-remove');
+                removeButton.textContent = '×';
+                removeButton.onclick = () => {
+                    selectedFiles.splice(index, 1);
+                    displayFilePreview();
+                };
+                
+                fileItem.appendChild(fileName);
+                fileItem.appendChild(removeButton);
+                previewContainer.appendChild(fileItem);
+            });
+            
+            // Add the preview above the input form
+            form.parentNode.insertBefore(previewContainer, form);
+        }
+
         function handleSelectedFiles(files) {
             // Clear previous files
             selectedFiles = [];
@@ -862,191 +1160,6 @@
                     resolve(file);
                 }
             });
-        }
-
-        function displayFilePreview() {
-            // Remove existing preview
-            const existingPreview = document.querySelector('.file-preview');
-            if (existingPreview) {
-                existingPreview.remove();
-            }
-            
-            if (selectedFiles.length === 0) return;
-            
-            // Create preview container
-            const previewContainer = document.createElement('div');
-            previewContainer.classList.add('file-preview');
-            
-            // Add each file to the preview
-            selectedFiles.forEach((file, index) => {
-                const fileItem = document.createElement('div');
-                fileItem.classList.add('file-item');
-                
-                const fileName = document.createElement('span');
-                fileName.classList.add('file-item-name');
-                fileName.textContent = file.name;
-                
-                const removeButton = document.createElement('button');
-                removeButton.classList.add('file-item-remove');
-                removeButton.textContent = '×';
-                removeButton.onclick = () => {
-                    selectedFiles.splice(index, 1);
-                    displayFilePreview();
-                };
-                
-                fileItem.appendChild(fileName);
-                fileItem.appendChild(removeButton);
-                previewContainer.appendChild(fileItem);
-            });
-            
-            // Add the preview above the input form
-            form.parentNode.insertBefore(previewContainer, form);
-        }
-
-        // Update the form submission handler to use safeSendMessage
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const msg = messageInput.value;
-            
-            // Handle text message
-            if (msg) {
-                appendMessage(msg, 'sent');
-                window.safeSendMessage(msg);
-                messageInput.value = '';
-            }
-            
-            // Handle file upload if any files are selected
-            if (selectedFiles.length > 0) {
-                appendMessage(`Uploading ${selectedFiles.length} file(s)...`, 'sent');
-                
-                // Check if there are actually files selected before trying to upload
-                if (selectedFiles.some(file => file && file.size > 0)) {
-                    try {
-                        // Upload files
-                        const fileRefs = await uploadFiles(selectedFiles);
-                        
-                        // Check if we got valid file references back
-                        if (fileRefs && fileRefs.length > 0) {
-                            console.log('File references ready to send to Rasa:', fileRefs);
-                            
-                            // Create a message with detailed file information
-                            const fileDesc = fileRefs.map(ref => 
-                                `${ref.name} (${ref.type || 'unknown type'}, ${ref.size || 'unknown size'} bytes)`
-                            ).join(', ');
-                            
-                            // Detailed message about files for better understanding
-                            const fileMessage = `/attach_files with ${fileRefs.length} file(s): ${fileDesc}`;
-                            
-                            // Send the payload with file references in multiple formats for maximum compatibility
-                            window.safeSendMessage('/attach_files', { 
-                                file_references: fileRefs,
-                                files: fileRefs,  // Alternative name some integrations use
-                                description: fileDesc,
-                                count: fileRefs.length,
-                                grievance_id: window.grievanceId || 'pending'
-                            });
-                            
-                            console.log('Sent attach_files message with detailed references');
-                            
-                            // Clear selected files
-                            selectedFiles = [];
-                            displayFilePreview();
-                        } else {
-                            throw new Error('No file references received from server');
-                        }
-                    } catch (error) {
-                        console.error('Error uploading files:', error);
-                        appendMessage(`Failed to upload files: ${error.message}. Please try again.`, 'received');
-                    }
-                } else {
-                    appendMessage('No valid files selected. Please select files using the attachment button.', 'received');
-                    // Clear selected files
-                    selectedFiles = [];
-                    displayFilePreview();
-                }
-            } else if (!msg) {
-                // If no message and no files, remind the user to enter a message or attach files
-                appendMessage('Please enter a message or attach files.', 'received');
-            }
-        });
-
-        // Function to upload files to the server
-        async function uploadFiles(files) {
-            // Check if files array is empty
-            if (!files || files.length === 0) {
-                throw new Error('No files to upload');
-            }
-            
-            const formData = new FormData();
-            
-            // Get the current grievance ID if available
-            const grievanceId = window.grievanceId || 'pending';
-            
-            formData.append('grievance_id', grievanceId);
-            
-            // Log what we're uploading
-            console.log(`Uploading ${files.length} files with grievance ID: ${grievanceId}`);
-            
-            // Add each file to the form data and validate
-            let validFiles = 0;
-            files.forEach(file => {
-                if (file && file.size > 0) {
-                    formData.append('files', file);
-                    console.log(`Added file: ${file.name}, size: ${file.size} bytes`);
-                    validFiles++;
-                } else {
-                    console.warn(`Skipping invalid file: ${file ? file.name : 'undefined'}`);
-                }
-            });
-            
-            // Check if we have any valid files
-            if (validFiles === 0) {
-                throw new Error('No valid files to upload');
-            }
-            
-            try {
-                // Send the files to the server
-                console.log('Sending files to server...');
-                const response = await fetch('http://localhost:5001/upload-files', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Upload failed: ${response.statusText}`);
-                }
-                
-                // Get result and log it
-                const result = await response.json();
-                console.log('Server response:', result);
-                
-                // Format the file references for Rasa
-                if (result && result.file_references) {
-                    // Ensure each file reference has the required fields
-                    return result.file_references.map(fileRef => {
-                        // If it's already formatted properly, just return it
-                        if (fileRef.name && fileRef.url) {
-                            return fileRef;
-                        }
-                        
-                        // Otherwise, create a properly formatted reference
-                        return {
-                            name: fileRef.filename || fileRef.name || 'Unknown file',
-                            url: fileRef.url || fileRef.file_url || fileRef.path || '',
-                            type: fileRef.type || fileRef.mimetype || 'application/octet-stream',
-                            size: fileRef.size || 0,
-                            // Additional metadata that might help
-                            grievance_id: grievanceId,
-                            timestamp: new Date().toISOString()
-                        };
-                    });
-                }
-                
-                return result.file_references || [];
-            } catch (error) {
-                console.error('Error in uploadFiles:', error);
-                throw error;
-            }
         }
     </script>
 </body>

@@ -65,6 +65,9 @@ class ActionSubmitGrievanceAsIs(Action):
         return [FollowupAction("action_submit_grievance")]
     
 class ActionStartGrievanceProcess(Action):
+    def __init__(self):
+        self.db = db_manager
+
     def name(self) -> Text:
         return "action_start_grievance_process"
 
@@ -75,17 +78,25 @@ class ActionStartGrievanceProcess(Action):
         print("Value of message_display_list_cat: ", ValidateGrievanceSummaryForm.message_display_list_cat)
         print("---------------------------------------------")
         
+        # Create the grievance with temporary status
+        grievance_id = self.db.create_grievance()
+        ic(f"Created temporary grievance with ID: {grievance_id}")
+        
         # Get language code from tracker
         language_code = tracker.get_slot("language_code") or "en"
         
         # Get utterance and buttons from mapping
-        utterance = get_utterance("grievance_form", "action_start_grievance_process", 1, language_code)
-        buttons = get_buttons("grievance_form", "action_start_grievance_process", 1, language_code)
+        utterance = get_utterance("grievance_form", "action_start_grievance_process", 1, language_code).format(grievance_id=grievance_id)
         ic(utterance)
-        dispatcher.utter_message(text=utterance, buttons=buttons)
+        
+        # Send utterance with grievance ID in the text
+        dispatcher.utter_message(
+            text=utterance
+        )
         
         # reset the slots used by the form grievance_details_form and grievance_summary_form and set verification_context to new_user
-        return [SlotSet("grievance_new_detail", None),
+        return [SlotSet("grievance_id", grievance_id),
+                SlotSet("grievance_new_detail", None),
                 SlotSet("grievance_details", None),
                 SlotSet("grievance_summary_temp", None),
                 SlotSet("grievance_summary_confirmed", None),
@@ -93,25 +104,7 @@ class ActionStartGrievanceProcess(Action):
                 SlotSet("grievance_categories", None),
                 SlotSet("grievance_categories_confirmed", None),
                 SlotSet("main_story", "new_grievance")]
-        
 
-class ActionSetGrievanceId(Action):
-    def __init__(self):
-        self.db = db_manager
-
-    def name(self) -> Text:
-        return "action_set_grievance_id"
-    
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        """Generate and set a new grievance ID with temporary status"""
-        ic('-------action_set_grievance_id-------')
-        # Create the grievance with temporary status
-        grievance_id = self.db.create_grievance()
-        ic(f"Created temporary grievance with ID: {grievance_id}")
-        return [SlotSet("grievance_id", grievance_id)]
-                
-
-    
 class ActionCallOpenAI(Action):
     def name(self) -> Text:
         return "action_call_openai_classification"
@@ -919,11 +912,36 @@ class ActionSubmitGrievance(Action):
                 grievance_data[key] = DEFAULT_VALUES["NOT_PROVIDED"]
         return grievance_data
     
+    def _get_attached_files_info(self, grievance_id: str) -> str:
+        """Get information about files attached to a grievance.
+        
+        Args:
+            grievance_id (str): The ID of the grievance to check for files
+            
+        Returns:
+            str: A formatted string containing file information, or empty string if no files
+        """
+        files = self.db.get_grievance_files(grievance_id)
+        if not files:
+            return {"has_files": False,
+                    "files_info": ""}
+        else:
+            files_info = "\nAttached files:\n" + "\n".join([
+            f"- {file['file_name']} ({file['file_size']} bytes)"
+            for file in files
+        ])
+            return {"has_files": True,
+                    "files_info": files_info}
     
     def create_confirmation_message(self, 
                                     grievance_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
         ic(self.language_code)
+        
+        # Get attached files information using the helper function
+        has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
+        files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
+        
         message = [get_utterance("grievance_form", 
                                  'create_confirmation_message', 
                                  i, 
@@ -947,6 +965,9 @@ class ActionSubmitGrievance(Action):
                                             grievance_timeline=grievance_data['grievance_timeline']
                                            )
 
+        # Add files information to the message
+        if has_files:
+            message = message + files_info
         return message
     
     async def _send_grievance_recap_email(self, 
@@ -1035,7 +1056,7 @@ class ActionSubmitGrievance(Action):
                 #send sms
                 self.sms_client.send_sms(user_contact_phone, confirmation_message)
                 #utter sms confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 3, self.language_code).format(user_contact_phone=user_contact_phone)
+                utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(user_contact_phone=user_contact_phone)
                 dispatcher.utter_message(text=utterance)
             
             #send email to admin
@@ -1053,9 +1074,14 @@ class ActionSubmitGrievance(Action):
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(user_contact_email=user_contact_email)
+                utterance = get_utterance("grievance_form", self.name(), 3, self.language_code).format(user_contact_email=user_contact_email)
                 dispatcher.utter_message(text=utterance)
-        
+                
+            #send utter to users if they have not attached any files yet
+            if not self._get_attached_files_info(grievance_id)["has_files"]:
+                utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+                dispatcher.utter_message(text=utterance)
+                
             # Prepare events
             return [
                 SlotSet("grievance_id", grievance_id),
@@ -1065,7 +1091,7 @@ class ActionSubmitGrievance(Action):
         except Exception as e:
             print(f"❌ Error submitting grievance: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            utterance = get_utterance("grievance_form", self.name(), 5, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []
         
