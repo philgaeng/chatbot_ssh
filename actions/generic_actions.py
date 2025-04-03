@@ -308,155 +308,62 @@ class ActionExitWithoutFiling(Action):
         buttons = get_buttons('generic_actions', self.name(), 1, language)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
-    
-    ############### ATTACHMENT ACTIONS #########################
-    
-class ActionAttachFile(Action):
+
+
+
+# Clear session action
+class ActionClearSession(Action): # Corrected class name if it was typo
     def name(self) -> Text:
-        return "action_attach_file"
+        return "action_clear_session"
 
-    def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> List[Dict[Text, Any]]:
-        ic("ActionAttachFile triggered")
-        latest_message = tracker.latest_message
-        ic("Latest message:", latest_message)
-        language_code = get_language_code(tracker)
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        ic("ActionClearSession triggered")
+        # Optional: Send a confirmation text
+        # language = get_language_code(tracker)
+        # text_message = "Clearing the chat window..." # Or get from utterance map
         
-        grievance_id = tracker.get_slot("grievance_id")
-        ic("Current grievance_id:", grievance_id)
-        
-        # Check for file references in the message
-        file_references = []
-        
-        # Check in the main message
-        if "file_references" in latest_message:
-            ic("Found file references in main message")
-            file_references.extend(latest_message["file_references"])
-        
-        # Check in metadata
-        if "metadata" in latest_message and "file_references" in latest_message["metadata"]:
-            ic("Found file references in metadata")
-            file_references.extend(latest_message["metadata"]["file_references"])
-        
-        ic("Collected file references:", file_references)
-        
-        if not file_references:
-            text = latest_message.get('text', '')
-            ic("Message text:", text)
-            # Try to extract JSON from the text if it contains file references
-            if 'file_references' in text or 'files' in text:
-                try:
-                    # Find JSON-like content between curly braces
-                    import re
-                    json_content = re.search(r'\{.*\}', text)
-                    if json_content:
-                        import json
-                        parsed = json.loads(json_content.group(0))
-                        if 'file_references' in parsed:
-                            file_references = parsed['file_references']
-                            ic("Extracted file references from text:", file_references)
-                except Exception as e:
-                    ic("Error parsing JSON from text:", str(e))
-        
-        ic("Final file references found:", file_references)
-        
-        if not file_references:
-            # No files were attached
-            ic("No file references found after all checks")
-            message = get_utterance('generic_actions', self.name(), 1, language_code)
-            dispatcher.utter_message(text=message)
-            return []
-            
-        if not grievance_id:
-            # No grievance ID is available, store files temporarily
-            ic("No grievance ID available, using temporary ID")
-            temp_grievance_id = f"temp_{tracker.sender_id}"
-            message = get_utterance('generic_actions', self.name(), 3, language_code)
-            dispatcher.utter_message(text=message)
-            return []
-        
-        # Files have been attached and we have a grievance ID
-        file_names = []
-        for file_ref in file_references:
-            if isinstance(file_ref, dict):
-                name = file_ref.get('name', file_ref.get('filename', 'Unknown file'))
-                ic("Processing file reference (dict):", file_ref, "Name:", name)
-                file_names.append(name)
-            else:
-                ic("Processing file reference (non-dict):", file_ref)
-                file_names.append(str(file_ref))
-        
-        # Send confirmation message
-        if len(file_names) == 1:
-            message = get_utterance('generic_actions', self.name(), 2, language_code).format(
-                file_name=file_names[0]
-            )
-        else:
-            files_str = ", ".join(file_names)
-            message = get_utterance('generic_actions', self.name(), 4, language_code).format(
-                count=len(file_names),
-                files=files_str
-            )
-        
-        ic("Sending response message:", message)
-        dispatcher.utter_message(text=message)
-        
-        # Return the grievance ID in the custom data
-        return []
-
-class ActionInformFilesUploaded(Action):
-    def name(self) -> Text:
-        return "action_inform_files_uploaded"
-
-    def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> List[Dict[Text, Any]]:
-        ic("ActionInformFilesUploaded triggered")
-        language_code = get_language_code(tracker)
-        metadata = tracker.latest_message.get('metadata', {})
-        
-        if metadata.get('success'):
-            file_description = metadata.get('description', '')
-            message = get_utterance('generic_actions', self.name(), 1, language_code).format(
-                description=file_description
-            )
-            dispatcher.utter_message(text=message)
-        else:
-            message = get_utterance('generic_actions', self.name(), 2, language_code)
-            dispatcher.utter_message(text=message)
-            
-        return []
-
-class ActionInformFilesOversized(Action):
-    def name(self) -> Text:
-        return "action_inform_files_oversized"
-
-    def run(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> List[Dict[Text, Any]]:
-        ic("ActionInformFilesOversized triggered")
-        language_code = get_language_code(tracker)
-        metadata = tracker.latest_message.get('metadata', {})
-        
-        # Format max size in MB (simplified to whole number)
-        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
-        max_size_formatted = f"{max_size_mb:.0f} MB"  # Just the number, no "MB"
-        
-        message = get_utterance('generic_actions', self.name(), 1, language_code).format(
-            max_size_formatted=max_size_formatted
+        # Send the command via custom JSON payload
+        dispatcher.utter_message(
+            # text=text_message, # Uncomment if you want text
+            json_message={"custom": {"clear_window": True}} # Use custom field
         )
-        dispatcher.utter_message(text=message)
+        ic("Sent clear_window command")
+        # This action doesn't modify Rasa's state directly, 
+        # just sends a command to the frontend.
+        # If you ALSO wanted to reset slots or restart the conversation, 
+        # you would return events like Restarted() here.
         return []
 
 
-    
+class ActionCloseBrowserTab(Action):
+    def name(self) -> Text:
+        return "action_close_browser_tab"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        ic("ActionCloseBrowserTab triggered")
+        # Optional: Send a confirmation text
+        # language = get_language_code(tracker)
+        # text_message = "Clearing the chat window..." # Or get from utterance map
+        
+        # Send the command via custom JSON payload
+        dispatcher.utter_message(
+            # text=text_message, # Uncomment if you want text
+            json_message={"custom": {"close_browser_tab": True}} # Use custom field
+        )
+        ic("Sent close_browser_tab command")
+        # This action doesn't modify Rasa's state directly, 
+        # just sends a command to the frontend.
+        # If you ALSO wanted to reset slots or restart the conversation, 
+        # you would return events like Restarted() here.
+        return []
+
+class ActionCleanWindowOptions(Action):
+    def name(self) -> Text:
+        return "action_clean_window_options"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        buttons = get_buttons('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []

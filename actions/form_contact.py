@@ -2,23 +2,134 @@ import re
 import logging
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
-from rasa_sdk import Action, Tracker, FormValidationAction
+from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
-from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from .constants import EMAIL_PROVIDERS_NEPAL
+from .constants import EMAIL_PROVIDERS_NEPAL_LIST
 from .base_form import BaseFormValidationAction
+from .helpers import ContactLocationValidator
 from .utterance_mapping import get_utterance, get_buttons
 from icecream import ic
 
+
 logger = logging.getLogger(__name__)
 
-EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
 def get_language_code(tracker: Tracker) -> str:
     """Helper function to get the language code from tracker with English as fallback."""
     return tracker.get_slot("language_code") or "en"
+
+#-----------------------------------------------------------------------------
+ ######################## AskContactFormSlots Actions ########################
+ #-----------------------------------------------------------------------------
+ 
+class ActionAskContactFormUserLocationConsent(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_location_consent"
+
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+    
+class ActionAskContactFormUserMunicipalityTemp(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_municipality_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        province = tracker.get_slot("user_province")
+        district = tracker.get_slot("user_district")
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code).format(district=district, province=province)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+
+    
+class ActionAskContactFormUserMunicipalityConfirmed(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_municipality_confirmed"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        validated_municipality = tracker.get_slot('user_municipality_temp')
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code).format(validated_municipality=validated_municipality)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+       
+class ActionAskContactFormUserVillage(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_village"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+    
+class ActionAskContactFormUserAddressTemp(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_address_temp"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+    
+class ActionAskContactFormUserAddressConfirmed(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_address_confirmed"
+    
+    async def run(self,
+                  dispatcher: CollectingDispatcher,
+                  tracker: Tracker,
+                  domain: dict
+                  ):
+        #check if the address and village are correct
+        municipality = tracker.get_slot('user_municipality')
+        village = tracker.get_slot('user_village')
+        address = tracker.get_slot('user_address_temp')
+        language_code = tracker.get_slot('language_code')
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        message = message.format(municipality=municipality, village=village, address=address)
+            
+        dispatcher.utter_message(
+            text=message,
+            buttons=buttons
+        )
+        return []
+    
+
+class ActionAskContactFormUserProvince(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_province"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+    
+class ActionAskContactFormUserDistrict(Action):
+    def name(self) -> str:
+        return "action_ask_contact_form_user_district"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
+        message = get_utterance('contact_form', self.name(), 1, language_code)
+        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+ 
 
 class AskContactFormUserContactConsent(Action):
     def name(self) -> str:
@@ -93,12 +204,21 @@ class ActionAskContactFormUserContactEmailConfirmed(Action):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
+  #-----------------------------------------------------------------------------
+ ######################## ValidateContactForm Actions ########################
+ #-----------------------------------------------------------------------------
     
 class ValidateContactForm(BaseFormValidationAction):
     """Form validation action for contact details collection."""
     
     def __init__(self):
         super().__init__()
+        print("ValidateContactForm.__init__ called")
+        super().__init__()
+        print("super().__init__() completed")
+        print(f"self.lang_helper exists: {hasattr(self, 'lang_helper')}")
+        self.validator = ContactLocationValidator()
+        print("ValidateContactForm.__init__ completed")
 
     def name(self) -> Text:
         return "validate_contact_form"
@@ -117,8 +237,356 @@ class ValidateContactForm(BaseFormValidationAction):
         if main_story == "status_update":
             return ["user_contact_phone"]
         else:
-            return ["user_contact_consent",  "user_contact_phone", "user_full_name", "user_contact_email_temp", "user_contact_email_confirmed"]
+            required_slots_location = ["user_location_consent", 
+                          "user_province",
+                          "user_district",
+                          "user_municipality_temp", 
+                          "user_municipality_confirmed", 
+                          "user_village", 
+                          "user_address_temp", 
+                          "user_address_confirmed", 
+                          "user_address"]
+            required_slots_contact = ["user_contact_consent",  "user_contact_phone", "user_full_name", "user_contact_email_temp", "user_contact_email_confirmed"]
+            return required_slots_location + required_slots_contact
 
+
+
+    
+    async def extract_user_location_consent(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        print("######## FORM: Extracting user_location_consent ######")
+        result = await self._handle_boolean_slot_extraction(
+            "user_location_consent",
+            tracker,
+            dispatcher,
+            domain
+        )
+        print(f"Extraction result: {result}")
+        return result
+    
+    async def validate_user_location_consent(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """Validate user_location_consent value."""
+        print("######## FORM: Validating user_location_consent ########")
+        print(f"Validating value: {slot_value}")
+        
+        if slot_value is True:
+            return {"user_location_consent": True}
+        elif slot_value is False:
+            return {"user_location_consent": False,
+                    "user_municipality_temp": "slot_skipped",
+                    "user_municipality": "slot_skipped",
+                    "user_municipality_confirmed": False,
+                    "user_village": "slot_skipped",
+                    "user_address_temp": "slot_skipped",
+                    "user_address": "slot_skipped",
+                    "user_address_confirmed": False}
+            
+    async def extract_user_province(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "user_province",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_province(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        self.validator._initialize_constants(tracker)
+        language_code = self.validator.language_code
+        if slot_value == "slot_skipped":
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_province', 1, language_code)
+            )
+            return {"user_province": None}
+        
+        #check if the province is valid
+        if not self.validator._check_province(slot_value):
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_province', 2, language_code).format(slot_value=slot_value)
+            )
+            return {"user_province": None}
+        
+        result = self.validator._check_province(slot_value).title()
+        dispatcher.utter_message(
+            text=get_utterance('contact_form', 'validate_user_province', 3, language_code).format(slot_value=slot_value, result=result)
+        )
+        
+        return {"user_province": result}
+        
+    async def extract_user_district(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(  
+            "user_district",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_district(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        self.validator._initialize_constants(tracker)
+        language_code = self.validator.language_code
+        if slot_value == "slot_skipped":
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_district', 1, language_code)
+            )
+            return {"user_district": None}
+            
+        province = tracker.get_slot("user_province").title()
+        if not self.validator._check_district(slot_value, province):
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_district', 2, language_code).format(slot_value=slot_value)
+            )
+            return {"user_district": None}
+            
+        result = self.validator._check_district(slot_value, province).title()
+        dispatcher.utter_message(
+            text=get_utterance('contact_form', 'validate_user_district', 3, language_code).format(slot_value=slot_value, result=result)
+        )
+        
+        return {"user_district": result}
+        
+        
+    
+    async def extract_user_municipality_temp(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "user_municipality_temp",
+            tracker,
+            dispatcher,
+            domain
+        )
+        
+    async def validate_user_municipality_temp(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        self.validator._initialize_constants(tracker)
+        language_code = self.validator.language_code
+        print("######## FORM: Validating municipality_temp ######")
+        print(f"Received value: {slot_value}")
+        
+        #deal with the slot_skipped case
+        if slot_value == "slot_skipped":
+            return {"user_municipality_temp": "slot_skipped",
+                    "user_municipality": "slot_skipped",
+                    "user_municipality_confirmed": False}
+        
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
+            return {"user_municipality_temp": None}
+                
+        # Validate new municipality input with the extract and rapidfuzz functions
+        validated_municipality = self.validator._validate_municipality_input(slot_value, 
+                                                                   tracker.get_slot("user_province"),
+                                                                   tracker.get_slot("user_district"))
+        print(f"Validated municipality: {validated_municipality}")
+        
+        if validated_municipality:
+            return {"user_municipality_temp": validated_municipality}
+        
+        else:
+            return {"user_municipality_temp": None,
+                    "user_municipality": None,
+                    "user_municipality_confirmed": None
+                    }
+                
+                
+    async def extract_user_municipality_confirmed(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        # First check if we have a municipality to confirm
+        if not tracker.get_slot("user_municipality_temp"):
+            return {}
+
+        return await self._handle_boolean_slot_extraction(
+            "user_municipality_confirmed",
+            tracker,
+            dispatcher,
+            domain  # When skipped, assume confirmed
+        )
+    
+    async def validate_user_municipality_confirmed(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        print("######## FORM: Validating municipality confirmed slot ######")
+        
+        print(f"Received value for municipality confirmed: {slot_value}")
+        if slot_value == True:
+            print("## user_municipality_confirmed: True ######")
+            print(f"Received value for municipality: {slot_value}")
+        #save the municipality to the slot
+            return {"user_municipality_confirmed": True,
+                    "user_municipality": tracker.get_slot("user_municipality_temp")}
+            
+        elif slot_value == False:
+            return {"user_municipality_confirmed": None,
+                    "user_municipality_temp": None,
+                    "user_municipality": None
+                    }
+        return {}
+    
+    async def extract_user_village(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "user_village",
+            tracker,
+            dispatcher,
+            domain# When skipped, assume confirmed
+        )
+    
+    async def validate_user_village(
+        self,
+        slot_value: Text,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        print("######## FORM: Validating village ######")
+        language_code = tracker.get_slot("language_code")
+        if slot_value == "slot_skipped":
+            return {"user_village": "slot_skipped"}
+            
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
+            
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_village', 1, language_code)
+            )
+            return {"user_village": None}
+            
+        return {"user_village": slot_value}
+    
+        
+    
+    async def extract_user_address_temp(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "user_address_temp",
+            tracker,
+            dispatcher,
+            domain
+        )
+    
+    async def validate_user_address_temp(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        """Validate user_address value."""
+        language_code = tracker.get_slot("language_code")
+        if slot_value == "slot_skipped":
+            return {"user_address_temp": "slot_skipped"}
+            
+        # First validate string length
+        if not self._validate_string_length(slot_value, min_length=2):
+            
+            dispatcher.utter_message(
+                text=get_utterance('contact_form', 'validate_user_address_temp', 1, language_code)
+            )
+            return {"user_address_temp": None}
+        
+        return {"user_address_temp": slot_value}
+
+    async def extract_user_address_confirmed(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        # First check if we have an address to confirm
+        if not tracker.get_slot("user_address_temp"):
+            return {}
+
+        return await self._handle_boolean_slot_extraction(
+            "user_address_confirmed",
+            tracker,
+            dispatcher,
+            domain,
+            skip_value=True  # When skipped, assume confirmed
+        )
+
+    async def validate_user_address_confirmed(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        print("######## FORM: Validating address confirmed slot ######")
+        print(f"Received value for address confirmed: {slot_value}")
+        # Handle rejection of address confirmation
+        if slot_value == False:
+            dispatcher.utter_message(text="Please enter your correct village and address")
+            return {
+                "user_village": None,
+                "user_address": None,
+                "user_address_temp": None,
+                "user_address_confirmed": None
+            }
+        
+        # Check if we have a confirmation
+        if slot_value == True:
+            address = tracker.get_slot("user_address_temp")
+            print(f"Address set to: {address}")
+            return {
+                "user_address": address,
+                "user_address_confirmed": True
+            }
+        return {} 
     
     async def extract_user_contact_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -208,7 +676,7 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"user_contact_phone": None}  
         
         # Validate phone number format
-        if not self._is_valid_phone(slot_value):
+        if not self.validator._is_valid_phone(slot_value):
             message = get_utterance('contact_form', 'validate_user_contact_phone', 1, language)
             dispatcher.utter_message(text=message)
             return {"user_contact_phone": None}
@@ -222,18 +690,6 @@ class ValidateContactForm(BaseFormValidationAction):
             "user_contact_phone": slot_value,
             "phone_validation_required": True
         }
-
-    def _is_valid_phone(self, phone: str) -> bool:
-        """Check if the phone number is valid."""
-        # Add your phone validation logic here
-        #Nepalese logic
-        # 1. Must be 10 digits and start with 9
-        if re.match(r'^9\d{9}$', phone):
-            return True
-        #Matching PH number format for testing
-        if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
-            return True
-        return False
 
     async def extract_phone_validation_required(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -250,22 +706,6 @@ class ValidateContactForm(BaseFormValidationAction):
                     "user_contact_phone": None}
         else:
             return {"phone_validation_required": False}
-
-
-    def _email_extract_from_text(self, text: str) -> Optional[str]:
-        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-        email_match = re.search(email_pattern, text)
-        return email_match.group(0) if email_match else None
-
-    def _email_is_valid_nepal_domain(self, email: str) -> bool:
-        email_domain = email.split('@')[1].lower()
-        return email_domain in EMAIL_PROVIDERS_NEPAL_LIST or email_domain.endswith('.com.np')
-
-    # ✅ Validate user contact email
-    def _email_is_valid_format(self, email: Text) -> bool:
-        """Check if email follows basic format requirements."""
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
 
     async def extract_user_contact_email_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
@@ -287,7 +727,7 @@ class ValidateContactForm(BaseFormValidationAction):
         if slot_value == "slot_skipped":
             return {"user_contact_email_temp": "slot_skipped"}
         
-        extracted_email = self._email_extract_from_text(slot_value)
+        extracted_email = self.validator._email_extract_from_text(slot_value)
         print(f"Extracted email: {extracted_email}")
         if not extracted_email:
             message = get_utterance('contact_form', 'validate_user_contact_email_temp', 1, language)
@@ -295,13 +735,13 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"user_contact_email_temp": None}
         
         # Use consistent validation methods
-        if not self._email_is_valid_format(extracted_email):
+        if not self.validator._email_is_valid_format(extracted_email):
             message = get_utterance('contact_form', 'validate_user_contact_email_temp', 1, language)
             dispatcher.utter_message(text=message)
             return {"user_contact_email_temp": None}
 
         # Check for Nepali email domain using existing method
-        if not self._email_is_valid_nepal_domain(extracted_email):
+        if not self.validator._email_is_valid_nepal_domain(extracted_email):
             print("user validation required")
             # Keep the email in slot but deactivate form while waiting for user choice
             return {"user_contact_email_temp": extracted_email,
@@ -346,7 +786,9 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"user_contact_email_temp": None,
                     "user_contact_email_confirmed": None}
 
-
+#-----------------------------------------------------------------------------
+ ######################## ModifyContactInfo Actions ########################
+ #-----------------------------------------------------------------------------
 
 class ActionModifyContactInfo(Action):
     def name(self) -> Text:

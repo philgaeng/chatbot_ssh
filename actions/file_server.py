@@ -58,7 +58,7 @@ def upload_files():
         
         # Check if grievance_id is provided
         grievance_id = request.form.get('grievance_id')
-        logger.info(f"Grievance ID: {grievance_id}")
+        logger.info(f"Received grievance ID: {grievance_id} (length: {len(grievance_id) if grievance_id else 0})")
         
         if not grievance_id:
             logger.error("No grievance_id provided")
@@ -123,12 +123,13 @@ def upload_files():
                 # Store file metadata in database
                 file_data = {
                     'file_id': file_id,
-                    'grievance_id': grievance_id,
+                    'grievance_id': grievance_id,  # Using the full grievance ID
                     'file_name': filename,
                     'file_path': file_path,
                     'file_type': filename.rsplit('.', 1)[1].lower(),
                     'file_size': file_size
                 }
+                logger.info(f"Storing file metadata with grievance ID: {grievance_id}")
                 
                 # Save to database using DatabaseManager
                 if db_manager.store_file_attachment(file_data):
@@ -157,8 +158,9 @@ def upload_files():
         
         if oversized_files:
             response_data["oversized_files"] = oversized_files
+            response_data["max_file_size"] = MAX_FILE_SIZE
             if not uploaded_files:
-                return jsonify(response_data), 413  # Payload Too Large
+                return jsonify(response_data), 413
         
         if uploaded_files:
             response_data["message"] = "Files uploaded successfully"
@@ -171,7 +173,6 @@ def upload_files():
 
     except Exception as e:
         logger.error(f"Error uploading files: {str(e)}", exc_info=True)
-        
         error_message = get_utterance('file_server', 'upload_files', 6, language)
         return jsonify({"error": error_message}), 500
 

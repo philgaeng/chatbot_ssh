@@ -103,7 +103,8 @@ class ActionStartGrievanceProcess(Action):
                 SlotSet("grievance_summary", None),
                 SlotSet("grievance_categories", None),
                 SlotSet("grievance_categories_confirmed", None),
-                SlotSet("main_story", "new_grievance")]
+                SlotSet("main_story", "new_grievance"),
+                SlotSet("gender_issues_reported", False)]
 
 class ActionCallOpenAI(Action):
     def name(self) -> Text:
@@ -396,7 +397,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         
         #deal with the case where gender issues is part of list_of_cat by adding one slot to the updated_slots
         if tracker.get_slot("gender_issues_reported") and "gender_follow_up" not in updated_slots:
-            updated_slots = updated_slots + ["gender_follow_up"]
+            updated_slots = ["gender_follow_up"]
             #ic(updated_slots)
             
         elif grievance_categories_confirmed in ["slot_skipped", "slot_confirmed"]:
@@ -415,6 +416,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
 
         print(f"Input slots: {domain_slots} \n Updated slots: {updated_slots}")
         print(f"Value grievance_categories_confirmed: {grievance_categories_confirmed}, Value grievance_cat_modify: {tracker.get_slot('grievance_cat_modify')}")
+        print(f"Value gender_follow_up: {tracker.get_slot('gender_follow_up')}")
         print(f"next requested slot: {tracker.get_slot('requested_slot')}")
         print(f"message_display_list_cat: {ValidateGrievanceSummaryForm.message_display_list_cat}")
         print("--------- END REQUIRED SLOTS ---------")
@@ -426,9 +428,13 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         """
         Detects gender issues in the grievance list of categories
         """
-        list_of_cat = tracker.get_slot("grievance_categories")
+        
+        categories = tracker.get_slot("grievance_categories")
+        ic(categories)
+        gender_issues_detected = any("gender" in category.lower() for category in categories)
+        ic(gender_issues_detected)
         #check if the string "gender" is in any of the categories in the list_of_cat
-        return any("gender" in category.lower() for category in list_of_cat)
+        return gender_issues_detected
     
     def _report_gender_issues(self, 
                                  dispatcher: CollectingDispatcher, 
@@ -467,9 +473,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
                                                    ) -> List[Dict[Text, Any]]:
         print("######################### VALIDATE GRIEVANCE LIST CAT CONFIRMED ##############")
 
-        slot_value = slot_value.strip('/')
-        list_of_cat = tracker.get_slot("grievance_categories") #get the list of cat from the slot to check for gender issues
-        
+        slot_value = slot_value.strip('/')        
         print(f"grievance_categories_confirmed: {slot_value}")
         
         if slot_value in ["slot_skipped", "slot_confirmed"]:
@@ -826,6 +830,7 @@ class ActionSubmitGrievance(Action):
         self.sms_client = SMSClient()
         self.email_client = EmailClient()
         
+        
     def name(self) -> Text:
         return "action_submit_grievance"
 
@@ -891,7 +896,8 @@ class ActionSubmitGrievance(Action):
                                                           "grievance_summary",
                                                           "grievance_details",
                                                           "grievance_categories",
-                                                          "grievance_claimed_amount"
+                                                          "grievance_claimed_amount",
+                                                          "otp_verified"
                                                           ]}
         
         grievance_data["grievance_status"] = GRIEVANCE_STATUS["SUBMITTED"]
@@ -1019,22 +1025,42 @@ class ActionSubmitGrievance(Action):
         except Exception as e:
             logger.error(f"Failed to send system notification email: {e}"
             )
+            
+    # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
+    #         """Handle the case of gender follow up."""
+    #         utterance = get_utterance("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         buttons = get_buttons("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         ic(utterance, buttons)
+    #         dispatcher.utter_message(text=utterance, buttons=buttons)
+    
+    def _send_last_utterance_buttons(self, 
+                                     gender_tag: bool, 
+                                     has_files: bool, 
+                                     dispatcher: CollectingDispatcher) -> str:
+        buttons = None
+        ic("send last utterance and buttons")
+        if gender_tag:
+                utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
+                buttons = get_buttons("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
+        elif not has_files:
+            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 2, self.language_code)
+        else:
+            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 3, self.language_code)
+        
+        ic(utterance, buttons)
+        if buttons:
+            dispatcher.utter_message(text=utterance, buttons=buttons)
+        else:
+            dispatcher.utter_message(text=utterance)
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         print("\n=================== Submitting Grievance ===================")
         self.language_code = tracker.get_slot("language_code") or "en"
+        self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
         
         try:
             # Collect grievance data
             grievance_data = self.collect_grievance_data(tracker)
-            
-            user_contact_email = grievance_data.get('user_contact_email')
-            user_contact_email = user_contact_email if self.is_valid_email(user_contact_email) else None
-            if grievance_data.get('otp_verified') == True:
-                user_contact_phone = grievance_data.get('user_contact_phone')
-            else:
-                user_contact_phone = None
-
             ic('collected grievance data from tracker', grievance_data)
             
             # Update the existing grievance with complete data
@@ -1052,12 +1078,15 @@ class ActionSubmitGrievance(Action):
             # Send confirmation message
             dispatcher.utter_message(text=confirmation_message)
             
-            if user_contact_phone:
+            if grievance_data.get('otp_verified') == True:
                 #send sms
-                self.sms_client.send_sms(user_contact_phone, confirmation_message)
-                #utter sms confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(user_contact_phone=user_contact_phone)
-                dispatcher.utter_message(text=utterance)
+                user_contact_phone = grievance_data.get('user_contact_phone')
+                if user_contact_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
+                    self.sms_client.send_sms(user_contact_phone, confirmation_message)
+                    #utter sms confirmation message
+                    utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(user_contact_phone=user_contact_phone)
+                    ic(user_contact_phone, utterance)
+                    dispatcher.utter_message(text=utterance)
             
             #send email to admin
             await self._send_grievance_recap_email(ADMIN_EMAILS, 
@@ -1066,8 +1095,8 @@ class ActionSubmitGrievance(Action):
                                                    dispatcher=dispatcher)
             
             #send email to user
-            print("user_contact_email :", user_contact_email)
-            if user_contact_email:
+            user_contact_email = grievance_data.get('user_contact_email')
+            if user_contact_email and user_contact_email != DEFAULT_VALUES["NOT_PROVIDED"]:
                 await self._send_grievance_recap_email([user_contact_email], 
                                                        grievance_data, 
                                                        "GRIEVANCE_RECAP_USER_BODY", 
@@ -1076,11 +1105,25 @@ class ActionSubmitGrievance(Action):
                 # Send email confirmation message
                 utterance = get_utterance("grievance_form", self.name(), 3, self.language_code).format(user_contact_email=user_contact_email)
                 dispatcher.utter_message(text=utterance)
+            
+            #send the last utterance and buttons
+            self._send_last_utterance_buttons(self.gender_issues_reported, 
+                                                self._get_attached_files_info(grievance_id)["has_files"],
+                                                dispatcher=dispatcher)
                 
-            #send utter to users if they have not attached any files yet
-            if not self._get_attached_files_info(grievance_id)["has_files"]:
-                utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
-                dispatcher.utter_message(text=utterance)
+            
+            # #deal with the case of gender follow up
+            # if self.gender_issues_reported:
+            #     self._grievance_submit_gender_follow_up(dispatcher)
+            
+            # #send utter to users if they have not attached any files or a reminder to attach more files
+            # elif not self._get_attached_files_info(grievance_id)["has_files"]:
+            #     utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            #     dispatcher.utter_message(text=utterance)
+            
+            # else:
+            #         utterance = get_utterance("grievance_form", self.name(), 5, self.language_code)
+            #         dispatcher.utter_message(text=utterance)
                 
             # Prepare events
             return [
@@ -1091,11 +1134,13 @@ class ActionSubmitGrievance(Action):
         except Exception as e:
             print(f"❌ Error submitting grievance: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("grievance_form", self.name(), 5, self.language_code)
+            utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []
         
-        
+    
+                
+            
 
         
 

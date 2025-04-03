@@ -7,7 +7,8 @@ from rasa_sdk import Tracker
 from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
-from typing import Optional
+from typing import Optional, Dict, Any, Tuple
+import re
 from icecream import ic
 from .constants import (    
     LOOKUP_FILE_PATH,
@@ -17,7 +18,8 @@ from .constants import (
     CUT_OFF_FUZZY_MATCH_LOCATION,
     USE_QR_CODE,
     DIC_LOCATION_WORDS,
-    DIC_LOCATION_MAPPING
+    DIC_LOCATION_MAPPING,
+    EMAIL_PROVIDERS_NEPAL_LIST
 )
 
 # Set up logging
@@ -134,7 +136,7 @@ def get_next_grievance_number(user_district=None, user_municipality=None):
 
 
 
-class LocationValidator:
+class ContactLocationValidator:
     """
     Validate and normalize location names using fuzzy matching.
     Use the cleaned json file for validation located in the resources/location_dataset folder.
@@ -420,3 +422,154 @@ class LocationValidator:
             if matched_district:
                 return matched_district
         return None
+    
+    def _validate_municipality_input(
+            self,
+            input_text: str,
+            qr_province: str,
+            qr_district: str,
+        ) -> str:
+            """Validate new municipality input."""
+            
+            validation_result = self._validate_location(
+                input_text.title(), 
+                qr_province, 
+                qr_district
+            )
+            
+            municipality = validation_result.get("municipality")
+            
+            if not municipality:
+                return None
+            
+            municipality = municipality.title()
+            print(f"✅ Municipality validated: {municipality}")
+            
+            return municipality
+
+    def _validate_string_length(self, text: str, min_length: int = 2) -> bool:
+        """Validate if the string meets minimum length requirement."""
+        return bool(text and len(text.strip()) >= min_length)
+
+    # def validate_municipality_input(
+    #     self,
+    #     input_text: Text,
+    #     qr_province: Text,
+    #     qr_district: Text,
+    # ) -> Dict[Text, Any]:
+    #     """Validate new municipality input."""
+    #     validation_result = self._validate_location(
+    #         input_text.title(), 
+    #         qr_province, 
+    #         qr_district
+    #     )
+        
+    #     municipality = validation_result.get("municipality")
+        
+    #     if not municipality:
+    #         return None
+        
+    #     municipality = municipality.title()
+    #     print(f"✅ Municipality validated: {municipality}")
+        
+    #     return municipality
+
+    # def validate_province(self, slot_value: Any, language_code: str) -> Tuple[bool, str, Optional[str]]:
+    #     """Validate province input."""
+    #     if slot_value == "slot_skipped":
+    #         return False, get_utterance('location_form', 'validate_user_province', 1, language_code), None
+        
+    #     # Check if the province is valid
+    #     if not self._check_province(slot_value):
+    #         return False, get_utterance('location_form', 'validate_user_province', 2, language_code).format(slot_value=slot_value), None
+        
+    #     result = self._check_province(slot_value).title()
+    #     return True, get_utterance('location_form', 'validate_user_province', 3, language_code).format(slot_value=slot_value, result=result), result
+
+    # def validate_district(self, slot_value: Any, province: str, language_code: str) -> Tuple[bool, str, Optional[str]]:
+    #     """Validate district input."""
+    #     if slot_value == "slot_skipped":
+    #         return False, get_utterance('location_form', 'validate_user_district', 1, language_code), None
+            
+    #     if not self._check_district(slot_value, province):
+    #         return False, get_utterance('location_form', 'validate_user_district', 2, language_code).format(slot_value=slot_value), None
+            
+    #     result = self._check_district(slot_value, province).title()
+    #     return True, get_utterance('location_form', 'validate_user_district', 3, language_code).format(slot_value=slot_value, result=result), result
+
+    # def validate_municipality(self, slot_value: Any, province: str, district: str, language_code: str) -> Dict[Text, Any]:
+    #     """Validate municipality input."""
+    #     if slot_value == "slot_skipped":
+    #         return {
+    #             "user_municipality_temp": "slot_skipped",
+    #             "user_municipality": "slot_skipped",
+    #             "user_municipality_confirmed": False
+    #         }
+        
+    #     # First validate string length
+    #     if not self._validate_string_length(slot_value, min_length=2):
+    #         return {"user_municipality_temp": None}
+                
+    #     # Validate new municipality input
+    #     validated_municipality = self.validate_municipality_input(slot_value, province, district)
+        
+    #     if validated_municipality:
+    #         return {"user_municipality_temp": validated_municipality}
+    #     else:
+    #         return {
+    #             "user_municipality_temp": None,
+    #             "user_municipality": None,
+    #             "user_municipality_confirmed": None
+    #         }
+
+    # def validate_village(self, slot_value: Text, language_code: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    #     """Validate village input."""
+    #     if slot_value == "slot_skipped":
+    #         return True, None, "slot_skipped"
+            
+    #     # First validate string length
+    #     if not self._validate_string_length(slot_value, min_length=2):
+    #         return False, get_utterance('location_form', 'validate_user_village', 1, language_code), None
+            
+    #     return True, None, slot_value
+
+    # def validate_address(self, slot_value: Any, language_code: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    #     """Validate address input."""
+    #     if slot_value == "slot_skipped":
+    #         return True, None, "slot_skipped"
+            
+    #     # First validate string length
+    #     if not self._validate_string_length(slot_value, min_length=2):
+    #         return False, get_utterance('location_form', 'validate_user_address_temp', 1, language_code), None
+        
+    #     return True, None, slot_value
+    
+    def _is_valid_phone(self, phone: str) -> bool:
+        """Check if the phone number is valid."""
+        # Add your phone validation logic here
+        #Nepalese logic
+        # 1. Must be 10 digits and start with 9
+        if re.match(r'^9\d{9}$', phone):
+            return True
+        #Matching PH number format for testing
+        if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
+            return True
+        return False
+    
+    def _email_extract_from_text(self, text: str) -> Optional[str]:
+        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+        email_match = re.search(email_pattern, text)
+        return email_match.group(0) if email_match else None
+
+    def _email_is_valid_nepal_domain(self, email: str) -> bool:
+        email_domain = email.split('@')[1].lower()
+        return email_domain in EMAIL_PROVIDERS_NEPAL_LIST or email_domain.endswith('.com.np')
+
+    # ✅ Validate user contact email
+    def _email_is_valid_format(self, email: str) -> bool:
+        """Check if email follows basic format requirements."""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
+
+    
+    

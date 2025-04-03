@@ -161,6 +161,25 @@ nlu:
     - goodevening
     - good afternoon
 
+- intent: nav_clear
+  examples: |
+    - clear
+    - clear the session
+    - clear the conversation
+    - clear the chat
+    - clear the chat history
+    - /nav_clear
+
+- intent: nav_close_browser_tab
+  examples: |
+    - close the browser tab
+    - close the browser
+    - close the tab
+    - close the window
+    - /nav_close_browser_tab
+
+
+
 - intent: intent_session_start
   examples: |
     - /introduce
@@ -572,3 +591,12 @@ nlu:
     - /english
     - english
     - अंग्रेजी
+
+
+- intent: slot_extraction
+  examples: |
+    - /slot_extraction
+    - /slot_confirmed
+    - /slot_added
+    - /slot_deleted
+    

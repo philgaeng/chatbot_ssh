@@ -446,5 +446,41 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
+    def is_valid_grievance_id(self, grievance_id: str) -> bool:
+        """Check if a grievance ID is valid.
+        
+        Args:
+            grievance_id (str): The grievance ID to validate
+            
+        Returns:
+            bool: True if the grievance ID is valid, False otherwise
+        """
+        if not grievance_id or not isinstance(grievance_id, str):
+            return False
+        
+        # Check if the ID starts with GR and contains only alphanumeric characters
+        if not grievance_id.startswith('GR') or not grievance_id[2:].replace('-', '').isalnum():
+            return False
+        
+        # Check if the grievance exists in the database
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) FROM grievances 
+                WHERE grievance_id = %s
+            """, (grievance_id,))
+            
+            count = cursor.fetchone()[0]
+            return count > 0
+            
+        except Exception as e:
+            logger.error(f"Error validating grievance ID: {e}")
+            return False
+            
+        finally:
+            conn.close()
+
 # Create a singleton instance
 db_manager = DatabaseManager() 

@@ -58,6 +58,10 @@
         window.introductionWindowTimer = null;  // Timer for the introduction window
         window.sessionInitialized = false;  // New flag to track session initialization
 
+        // Add these near the top with other global variables
+        window.lastBotMessageText = '';
+        window.lastBotQuickReplies = null; // Store the quick replies array
+
         // Modified connection handling
         socket.on('connect', () => {
             console.log('Socket connected with ID:', socket.id);
@@ -107,7 +111,8 @@
             }
             // Check if the text contains a grievance ID (e.g., "Your grievance ID is GR123")
             if (response.text) {
-                const grievanceMatch = response.text.match(/Your grievance ID is (GR\d+[A-Z0-9]{4})/);
+                // Updated regex to ensure we capture the complete ID format
+                const grievanceMatch = response.text.match(/Your grievance ID is (GR[A-Z0-9]+)/);
                 if (grievanceMatch) {
                     console.log('Found grievance ID in text:', grievanceMatch[1]);
                     return grievanceMatch[1];
@@ -120,6 +125,8 @@
         // Handle bot responses
         socket.on('bot_uttered', (response) => {
             console.log('Bot uttered:', response);
+            
+            window.lastBotQuickReplies = null; 
             
             // Clear any pending retry timer
             if (window.currentRetryTimer) {
@@ -149,13 +156,19 @@
             // Log current grievance ID state
             console.log('Current grievance ID:', window.grievanceId);
             
-            // Handle the response
+            let botMessageText = null;
+            // Handle the response text
             if (response.text && !response.custom?.hidden) {
                 appendMessage(response.text, 'received');
+                window.lastBotMessageText = response.text; // Store the text
+                botMessageText = response.text; 
             }
+            // Handle quick replies
             if (response.quick_replies) {
                 appendQuickReplies(response.quick_replies);
+                window.lastBotQuickReplies = response.quick_replies; // Store the quick replies
             }
+            
             if (response.attachment) {
                 console.log('Attachment received:', response.attachment);
             }
@@ -884,62 +897,72 @@
         // Update the form submission handler to use safeSendMessage
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const msg = messageInput.value;
+            const msg = messageInput.value.trim(); // Trim whitespace
+            let redisplayLastBotMessage = false;
+
+            // --- Intercept commands BEFORE sending to Rasa ---
+            if (msg === '/nav_clear') {
+                console.log('Intercepted /nav_clear, reloading page...');
+                messageInput.value = ''; // Clear input
+                location.reload();
+                return; // Stop processing this submission
+            } 
             
-            // Handle text message
+            if (msg === '/nav_close_browser_tab') {
+                console.log('Intercepted /nav_close_browser_tab, attempting to close...');
+                messageInput.value = ''; // Clear input
+                try {
+                    window.close();
+                } catch (error) {
+                    console.error("Script couldn't close the window:", error);
+                    appendMessage("Couldn't automatically close the tab.", 'received'); // Inform user
+                }
+                return; // Stop processing this submission
+            }
+            // --- End of command interception ---
+
+
+            // Handle regular text message (if not intercepted above)
             if (msg) {
                 appendMessage(msg, 'sent');
                 window.safeSendMessage(msg);
                 messageInput.value = '';
             }
-            
+
             // Handle file upload if any files are selected
             if (selectedFiles.length > 0) {
                 // Check if we have a valid grievance ID
                 if (!window.grievanceId || window.grievanceId === 'pending') {
-                    appendMessage("Please complete your grievance details before attaching files.", 'received');
+                     const pendingMessage = "Please complete your grievance details before attaching files.\nकृपया फाइलहरू संलग्न गर्नु अघि आफ्नो गुनासो विवरण पूरा गर्नुहोस्।";
+                    appendMessage(pendingMessage, 'received');
                     // Clear selected files
                     selectedFiles = [];
                     displayFilePreview();
                     return;
                 }
 
-                appendMessage("Uploading your files...", 'sent');
+                const uploadingMessage = "Uploading your files...\nतपाईंको फाइलहरू अपलोड गर्दै...";
+                appendMessage(uploadingMessage, 'sent');
                 
                 try {
-                    // Upload files
-                    const response = await uploadFiles(selectedFiles);
-                    
-                    // Handle oversized files
-                    if (response.oversized_files && response.oversized_files.length > 0) {
-                        window.safeSendMessage('/inform_files_oversized', {
-                            oversized_files: response.oversized_files.map(file => ({
-                                name: file.filename,
-                                size: file.size
-                            }))
-                        });
+                    // Upload files - uploadFiles now returns the raw server response
+                    const serverResponse = await uploadFiles(selectedFiles); 
+
+                    // Handle oversized files from the server response
+                    if (serverResponse.oversized_files && serverResponse.oversized_files.length > 0) {
+                        // Read max_file_size from the server response
+                        const maxSizeInBytes = serverResponse.max_file_size || (10 * 1024 * 1024); // Default to 10MB if not provided
+                        const maxSizeMB = (maxSizeInBytes / (1024 * 1024)).toFixed(1); // Format to 1 decimal place
+                        const oversizedMessage = `⚠️ Some files are too large to upload. The maximum file size allowed is ${maxSizeMB}MB. Please reduce the size of your files and try again.\n⚠️ केही फाइलहरू अपलोड गर्न धेरै ठूला छन्। अधिकतम फाइल साइज ${maxSizeMB}MB हो। कृपया फाइलको साइज घटाएर पुन: प्रयास गर्नुहोस्।`;
+                        appendMessage(oversizedMessage, 'received');
                     }
-                    
-                    // Handle successfully uploaded files
-                    if (response.files && response.files.length > 0) {
-                        const fileRefs = response.files.map(ref => ({
-                            name: ref.filename || ref.name || 'Unknown file',
-                            url: ref.file_id || ref.url || '',
-                            type: ref.file_type || 'application/octet-stream',
-                            size: ref.file_size || 0,
-                            grievance_id: window.grievanceId,
-                            timestamp: new Date().toISOString()
-                        }));
-                        
-                        // Send the payload with file references to Rasa
-                        window.safeSendMessage('/inform_files_uploaded', { 
-                            file_references: fileRefs,
-                            files: fileRefs,
-                            description: fileRefs.map(ref => `${ref.name}`).join(', '),
-                            count: fileRefs.length,
-                            grievance_id: window.grievanceId,
-                            success: true
-                        });
+
+                    // Handle successfully uploaded files from the server response
+                    if (serverResponse.files && serverResponse.files.length > 0) {
+                        // Access filename from the raw server response
+                        const fileNames = serverResponse.files.map(file => file.filename).join(', '); 
+                        const successMessage = `✅ Your files have been successfully attached to your grievance:\n${fileNames}\n✅ तपाईंको फाइलहरू सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ:\n${fileNames}`;
+                        appendMessage(successMessage, 'received');
                     }
                     
                     // Clear selected files
@@ -948,19 +971,36 @@
                     
                 } catch (error) {
                     console.error('Error uploading files:', error);
-                    // Send a user-friendly error message to Rasa
-                    window.safeSendMessage('/inform_files_uploaded', { 
-                        success: false,
-                        error: "There was a problem uploading your files. Please try again."
-                    });
+                    const errorMessage = "There was a problem uploading your files. Please try again.\nफाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।";
+                    appendMessage(errorMessage, 'received');
                     
                     // Clear selected files
                     selectedFiles = [];
                     displayFilePreview();
+                } finally {
+                    // Clear selected files after attempt
+                    selectedFiles = [];
+                    displayFilePreview();
+                    // Set flag to redisplay AFTER file handling is done
+                    redisplayLastBotMessage = true; 
                 }
             } else if (!msg) {
-                // If no message and no files, remind the user to enter a message or attach files
-                appendMessage('Please enter a message or attach files.', 'received');
+                 const promptMessage = "Please enter a message or attach files.\nकृपया सन्देश प्रविष्ट गर्नुहोस् वा फाइलहरू संलग्न गर्नुहोस्।";
+                 appendMessage(promptMessage, 'received');
+            }
+
+            // After potential file handling, repeat the last bot message if the flag is set
+            if (redisplayLastBotMessage) { 
+                setTimeout(() => {
+                    // Re-display text if available
+                    if (window.lastBotMessageText) {
+                         appendMessage(window.lastBotMessageText, 'received');
+                    }
+                    // Re-display quick replies if available
+                    if (window.lastBotQuickReplies) {
+                        appendQuickReplies(window.lastBotQuickReplies);
+                    }
+                }, 500); // 500ms delay
             }
         });
 
@@ -1019,33 +1059,33 @@
                     const errorText = await response.text();
                     console.error('Upload failed with status:', response.status);
                     console.error('Error response:', errorText);
-                    throw new Error(`Upload failed: ${response.status} ${response.statusText}\n${errorText}`);
+                     // Try to parse the error response as JSON if possible
+                    let errorData = { message: `Upload failed: ${response.status} ${response.statusText}` };
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch(e) { /* Ignore parsing error */ }
+                    // Include oversized file info in the error if available
+                    if (response.status === 413 && errorData.oversized_files) {
+                         throw { status: response.status, data: errorData }; // Throw object with status and data
+                    } else {
+                       throw new Error(`Upload failed: ${response.status} ${response.statusText}\n${errorText}`);
+                    }
                 }
                 
                 // Get result and log it
-                const result = await response.json();
+                const result = await response.json(); // This is the raw server response
                 console.log('Server response:', result);
                 
-                if (!result || !result.files) {
-                    console.error('Invalid server response:', result);
-                    throw new Error('Invalid server response: missing files data');
-                }
-                
-                // Format the file references for Rasa
-                const fileRefs = result.files.map(fileRef => ({
-                    name: fileRef.filename || fileRef.name || 'Unknown file',
-                    url: fileRef.file_id || fileRef.url || '',
-                    type: fileRef.file_type || 'application/octet-stream',
-                    size: fileRef.file_size || 0,
-                    grievance_id: grievanceId,  // Use the full grievance ID here too
-                    timestamp: new Date().toISOString()
-                }));
-                
-                console.log('Formatted file references:', fileRefs);
-                return fileRefs;
+                 // Return the raw server response object
+                return result; 
+
             } catch (error) {
                 console.error('Error in uploadFiles:', error);
-                throw error;
+                 // If the error object contains oversized_files data (from the 413 case)
+                if (error.status === 413 && error.data) {
+                    return error.data; // Return the error data so the caller can handle oversized files
+                }
+                throw error; // Re-throw other errors
             }
         }
 

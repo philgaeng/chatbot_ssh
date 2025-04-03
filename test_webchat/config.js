@@ -1,6 +1,6 @@
 // Server Configuration
 const SERVER_CONFIG = {
-    HOST: '54.169.207.145',
+    HOST: '13.212.207.135',
     PORT: 5005,
     PATH: '/socket.io/',
     TRANSPORTS: ['websocket']

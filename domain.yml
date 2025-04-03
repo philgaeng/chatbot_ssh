@@ -13,6 +13,7 @@ intents:
 - mood_great
 - mood_unhappy
 - nav_back
+- nav_clear
 - nav_exit
 - nav_goodbye
 - nav_introduce
@@ -28,6 +29,7 @@ intents:
 - status_check_phone
 - status_check_start
 - attach_files
+- slot_extraction
 entities:
 - municipality
 - monetary
@@ -223,6 +225,11 @@ slots:
     - slot_skipped
     mappings:
     - type: custom
+  otp_verified:
+    type: bool
+    influence_conversation: true
+    mappings:
+    - type: custom
   otp_input:
     type: text
     influence_conversation: true
@@ -346,74 +353,6 @@ slots:
     mappings:
     - type: custom
 
-
-# responses:
-# #- utter_introduce:
-# #  - text: Hello! Welcome to the Grievance Management Chatbot. I am here to help you file a grievance or check its status. What would you like to do?
-# - utter_explain_bot_purpose:
-#   - text: I can help you submit a grievance, check its status, or provide more information. How can I assist you today?
-
-#- utter_ask_contact_consent:
-#  - text: Do you consent to providing your contact details for follow-up on your grievance? This is optional, your grievance can be filed without it..
-#- utter_skip_municipality:
-#  - text: Skipping location details. Don't worry, you can file your grievance without it.
-#- utter_skip_contact:
-#  - text: Skipping contact details. Don't worry, you can file your grievance without it.
-#- utter_skip_summary:
-#  - text: Skipping grievance summary. Don't worry, you can file your grievance without it.
-
-#- utter_send_otp:
-#  - text: Sending OTP to {phone_number}.
-#- utter_send_otp_failure:
-#  - text: 'Failed to send OTP: {error}'
-#- utter_otp_verified_success:
-#  - text: OTP verified successfully.
-#- utter_otp_verified_failure:
-#  - text: Incorrect OTP. Please try again.
-#- utter_skip_full_name:
-#  - text: Skipping full name.
-#- utter_skip_user_contact_phone:
-#  - text: Skipping phone number.
-#- utter_skip_contact_email:
-#  - text: Skipping email address.
-#- utter_set_current_process:
-#  - text: You are now in the '{current_story}' process.
-#- utter_mood_great_continue:
-#  - text: That's fantastic to hear! Let's continue where we left off.
-#- utter_mood_great_next_step:
-#  - text: I'm glad you're feeling great! Let's figure out what to do next.
-#- utter_respond_to_challenge:
-#  - text: I am a bot, here to assist you with your grievance management!
-#- utter_go_back:
-#  - text: Alright, going back to the previous step.
-#- utter_show_current_story:
-#  - text: You are currently in the '{current_story}' story.
-#- utter_show_current_story_unknown:
-#  - text: I'm not sure which story we are in right now.
-#- utter_restart_story:
-#  - text: Where would you like to restart?
-#- utter_ask_file_as_is:
-#  - text: It seems you're skipping the questions. Would you like to file your grievance as is?
-#- utter_skip_confirmation:
-#  - text: Okay, skipping this question.
-#- utter_grievance_submitted_as_is:
-#  - text: Your grievance '{grievance_details}' has been filed as is. Our team will review it shortly and contact you for more information if needed.
-#- utter_grievance_submitted_no_details_as_is:
-#  - text: Your grievance has been filed. Our team will review it shortly and contact you for more information if needed.
-#- utter_ask_municipality_form_user_municipality:
-#  - text: Please provide the name of the municipality or type Skip.
-#- utter_ask_address_form_user_village:
-#  - text: What is the name of the village or type Skip
-#- utter_ask_address_form_user_address:
-#  - text: Can you provide address details or type Skip
-#- utter_ask_contact_form_user_full_name:
-#  - text: Can you provide your full name (first name, last name) or type Skip
-#- utter_ask_contact_form_user_contact_phone:
-#  - text: |-
-#      Can you provide your phone number or type Skip 
-#       Nepal mobile numbers must start with 98 or 97 and be exactly 10 digits long.
-#- utter_ask_contact_form_user_contact_email:
-#  - text: Can you provide your email or type Skip
 actions:
 - action_set_english
 - action_set_nepali
@@ -421,7 +360,8 @@ actions:
 - action_submit_grievance
 - action_introduce
 - action_session_start
-# - action_set_language
+- action_close_browser_tab
+- action_clear_session
 - action_menu
 - action_back_to_previous_step
 - action_exit_without_filing
@@ -456,8 +396,6 @@ actions:
 - action_ask_grievance_summary_form_grievance_summary_temp
 - action_ask_grievance_summary_form_gender_follow_up
 - action_submit_grievance_as_is
-# - action_select_alternate_category
-# - action_set_category
 - action_validate_categories
 - action_validate_summary
 - action_ask_summary
@@ -465,16 +403,14 @@ actions:
 - action_edit_grievance_summary
 - action_restart_grievance
 - action_generate_grievance_id
-- action_ask_for_categories_modification
-# - action_set_category_to_modify
-- action_modify_or_delete_category
-- action_delete_category
-# - action_change_category
-# - action_apply_category_change
-- action_confirm_categories
-- action_cancel_modification_category
-# - action_skip_category
-- action_handle_grievance_form_completion
+- action_ask_contact_form_user_location_consent
+- action_ask_contact_form_user_province
+- action_ask_contact_form_user_district
+- action_ask_contact_form_user_municipality_temp
+- action_ask_contact_form_user_municipality_confirmed
+- action_ask_contact_form_user_village
+- action_ask_contact_form_user_address_temp
+- action_ask_contact_form_user_address_confirmed
 - action_ask_contact_form_user_contact_consent
 - action_ask_contact_form_user_full_name
 - action_ask_contact_form_user_contact_phone
@@ -483,12 +419,6 @@ actions:
 - action_ask_contact_form_user_contact_email_confirmed
 - validate_contact_form
 - action_recommend_phone_validation
-# - action_skip_email
-# - action_confirm_email
-# - action_provide_new_emailemail
-# - action_modify_contact_info
-# - action_modify_email
-# - action_cancel_modification_contact
 - action_ask_otp_verification_form_otp_consent
 - action_ask_otp_verification_form_otp_number
 - action_ask_otp_verification_form_otp_input
@@ -521,9 +451,9 @@ forms:
     - user_location_consent
     ignored_intents:
     - nlu_fallback
-    - start_location_process
   contact_form:
     required_slots:
+    - user_location_consent
     - user_contact_consent
     - user_full_name
     - user_contact_phone
@@ -532,6 +462,8 @@ forms:
     - user_contact_email_confirmed
     ignored_intents:
     - nlu_fallback
+    - slot_extraction
+    - start_grievance_process
   collect_phone_form:
     required_slots:
     - user_contact_phone
@@ -553,8 +485,10 @@ forms:
     - add_more_details
     - exit_without_filing
     - nlu_fallback
+    - slot_extraction
   grievance_summary_form:
     required_slots:
     - grievance_categories_confirmed
     ignored_intents:
     - nlu_fallback
+    - slot_extraction

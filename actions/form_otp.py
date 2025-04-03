@@ -52,6 +52,7 @@ class ActionAskOtpVerificationFormOtpInput(Action):
         otp_status = tracker.get_slot("otp_status")
         resend_count = tracker.get_slot("otp_resend_count") or 0
         buttons_otp = get_buttons("otp_verification_form", self.name(), 1, language_code)
+        
         #deal with the case where the OTP needs to be generated = first send or resend
         if not otp_status or otp_status == "resend" and resend_count < 3 :
         # OTP already generated
@@ -125,6 +126,9 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
         ic(tracker.get_slot("otp_consent"))
         ic(tracker.get_slot("otp_status"))
         ic(tracker.get_slot("otp_input"))
+        #skip the otp_verification_form if no phone number is provided
+        if not tracker.get_slot("user_contact_phone") or tracker.get_slot("user_contact_phone") == "slot_skipped":
+            return []
         if tracker.get_slot("gender_issues_reported"):
             ic("gender issues reported")
             if tracker.get_slot("otp_consent") == False:
@@ -213,6 +217,7 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
             dispatcher.utter_message(text=message)
             return {"otp_input": slot_value,
                     "otp_status" : "verified",
+                    "otp_verified" : True,
                     "otp_resend_count" : 0}
         else:
             print("❌ OTP verification failed")

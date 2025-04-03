@@ -26,15 +26,11 @@ stories:
   - slot_was_set:
     - grievance_summary_temp: "Loss of rice and corn harvest"
     - grievance_categories: ["Destruction Of Agrarian Resources ; Crop Destruction"]
-  - slot_was_set:
-    - grievance_categories_confirmed: slot_confirmed
-    - grievance_cat_modify: slot_confirmed
-    - grievance_summary_confirmed: slot_confirmed
     - grievance_summary: "Loss of rice and corn harvest"
   - active_loop: null
-  # Location collection
-  - action: location_form
-  - active_loop: location_form
+  # Contact information collection
+  - action: contact_form
+  - active_loop: contact_form
   - slot_was_set:
     - user_location_consent: true
     - user_municipality_temp: Haldibar
@@ -43,11 +39,6 @@ stories:
     - user_village: dhakkan basti
     - user_address: shyam bhujel house
     - user_address_confirmed: true
-  - active_loop: null
-  # Contact information collection
-  - action: contact_form
-  - active_loop: contact_form
-  - slot_was_set:
     - user_contact_consent: true
     - user_full_name: mickey mouse
     - user_contact_phone: '9876543210'
@@ -112,9 +103,8 @@ stories:
     - grievance_summary_confirmed: slot_confirmed
     - grievance_summary: "Individual unable to find employment at a local road workshop and is willing to work in the nearest village."
   - active_loop: null
-  # Location collection
-  - action: location_form
-  - active_loop: location_form
+  - action: contact_form
+  - active_loop: contact_form
   - slot_was_set:
     - user_location_consent: true
     - user_municipality: Birtamod
@@ -122,11 +112,6 @@ stories:
     - user_village: buttabari
     - user_address: Harkalal Marga
     - user_address_confirmed: true
-  - active_loop: null
-  # Anonymous contact information
-  - action: contact_form
-  - active_loop: contact_form
-  - slot_was_set:
     - user_contact_consent: false
     - user_full_name: slot_skipped
     - user_contact_phone: '9876543210'
@@ -183,9 +168,8 @@ stories:
       - "Environmental, Social ; Cutting Of Trees"
       - "Destruction Of Agrarian Resources ; Soil Pollution"
   - active_loop: null
-  # Location form - user declines
-  - action: location_form
-  - active_loop: location_form
+  - action: contact_form
+  - active_loop: contact_form
   - slot_was_set:
     - user_location_consent: false
     - user_municipality_temp: slot_skipped
@@ -194,11 +178,6 @@ stories:
     - user_village: slot_skipped
     - user_address: slot_skipped
     - user_address_confirmed: false
-  - active_loop: null
-  # Contact form - minimal information
-  - action: contact_form
-  - active_loop: contact_form
-  - slot_was_set:
     - user_contact_consent: false
     - user_full_name: slot_skipped
     - user_contact_phone: '9876567890'
@@ -258,10 +237,18 @@ stories:
     - grievance_summary_confirmed: slot_confirmed
     - grievance_summary: "my chicken were stolen and I lost 1600 Rp"
   - active_loop: null
+
   # Contact information collection
   - action: contact_form
   - active_loop: contact_form
   - slot_was_set:
+    - user_location_consent: false
+    - user_municipality_temp: slot_skipped
+    - user_municipality: slot_skipped
+    - user_municipality_confirmed: false
+    - user_village: slot_skipped
+    - user_address: slot_skipped
+    - user_address_confirmed: false
     - user_contact_consent: true
     - user_full_name: slot_skipped
     - user_contact_phone: '9753108642'
@@ -317,9 +304,9 @@ stories:
     - grievance_summary_confirmed: slot_confirmed
     - grievance_summary: "Harvest has been lost"
   - active_loop: null
-  # Location collection
-  - action: location_form
-  - active_loop: location_form
+  # Contact information collection
+  - action: contact_form
+  - active_loop: contact_form
   - slot_was_set:
     - user_location_consent: true
     - user_municipality_temp: Kankai
@@ -329,11 +316,6 @@ stories:
     - user_address_temp: main st
     - user_address: main st
     - user_address_confirmed: true
-  - active_loop: null
-  # Contact information collection
-  - action: contact_form
-  - active_loop: contact_form
-  - slot_was_set:
     - user_contact_consent: true
     - user_full_name: zinedine zidane
     - user_contact_phone: '9876543210'

@@ -48,6 +48,9 @@ EMAIL_PROVIDERS_NEPAL = {
     "project": ["project.com.ph"]
 }
 
+EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
+
+
 # AWS SNS Configuration
 AWS_REGION = "ap-southeast-1"
 WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
@@ -191,3 +194,4 @@ DIC_LOCATION_MAPPING = {
 
 # File upload settings
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
+

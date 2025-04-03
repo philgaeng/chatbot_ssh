@@ -16,3 +16,4 @@ stories:
     - action: action_mood_unhappy
     - intent: nav_exit
     - action: action_exit_without_filing
+    - action: action_menu

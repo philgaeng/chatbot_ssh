@@ -2,7 +2,6 @@ from typing import Any, Text, Dict, List, Optional
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, FollowupAction
-from rasa_sdk.forms import FormValidationAction
 from .db_manager import db_manager
 from .utterance_mapping import get_utterance, get_buttons
 from .form_contact import BaseFormValidationAction
@@ -248,13 +247,27 @@ class ValidateGrievanceIdForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         ic(self.name())
         self.language_code = tracker.get_slot("language_code")
+        
+        # Check if the input is empty or not a string
+        if not slot_value or not isinstance(slot_value, str):
+            message = get_utterance("check_status", self.name(), 3, self.language_code)
+            dispatcher.utter_message(text=message)
+            return {"grievance_id": None}
+            
+        # Check if the ID starts with GR and contains only alphanumeric characters
+        if not slot_value.startswith('GR') or not slot_value[2:].replace('-', '').isalnum():
+            message = get_utterance("check_status", self.name(), 4, self.language_code)
+            dispatcher.utter_message(text=message)
+            return {"grievance_id": None}
+            
+        # Check if the grievance exists in the database
         if db.is_valid_grievance_id(slot_value):
             ic(slot_value)
             message = get_utterance("check_status", self.name(), 1, self.language_code)
             dispatcher.utter_message(text=message.format(grievance_id=slot_value))
             return {"grievance_id": slot_value}
         else:
-            message = get_utterance("check_status", self.name(), 1, self.language_code)
+            message = get_utterance("check_status", self.name(), 2, self.language_code)
             dispatcher.utter_message(text=message)
             return {"grievance_id": None}
         

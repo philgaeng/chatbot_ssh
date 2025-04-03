@@ -66,6 +66,18 @@ BUTTONS_SKIP = {
     ]
 }
 
+BUTTONS_CLEAN_WINDOW_OPTIONS = {
+    'en': [
+        {"title": "Close Browser", "payload": "/nav_close_browser_tab"},
+        {"title": "Clear Session", "payload": "/nav_clear"}
+    ],
+    'ne': [
+        {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
+        {"title": "सत्र खाली गर्नुहोस्", "payload": "/nav_clear"}
+    ]
+}
+
+
 BUTTONS_SLOT_SKIPPED = {
     'en': [
         {"title": "Skip", "payload": BUTTON_SLOT_SKIPPED}
@@ -362,6 +374,142 @@ UTTERANCE_MAPPING = {
         }
     },
     'contact_form': {
+        'action_ask_contact_form_user_location_consent': {
+            'utterances': {
+                1: {
+                    'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
+                    'ne': "के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_contact_form_user_municipality_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
+                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_contact_form_user_municipality_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Is {validated_municipality} your correct municipality?",
+                    'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_contact_form_user_village': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your village name or Skip to skip",
+                    'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_contact_form_user_address_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your address or Skip to skip",
+                    'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_contact_form_user_address_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
+                    'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_contact_form_user_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your province name or Skip",
+                    'ne': "कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_contact_form_user_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your district name or Skip",
+                    'ne': "कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'validate_user_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid province name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid province. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_user_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid district name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid district. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_user_village': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
+                    'ne': "कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्"
+                }
+            }
+        },
+        'validate_user_address_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid address (at least 3 characters)",
+                    'ne': "कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)"
+                }
+            }
+        },
         'action_ask_contact_form_user_contact_consent': {
             'utterances': {
                 1: {
@@ -588,13 +736,28 @@ UTTERANCE_MAPPING = {
                     'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}"
                 },
                 4: {
-                    'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
-                    'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
-                },
-                5: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 }
+            }
+        },
+        'send_last_utterance_buttons': {
+            'utterances': {
+                1: {
+                    'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
+                    'ne': "तपाईंको गुनासो दर्ता गरिएको छ। हामीलाई एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ।"
+                },
+                2: {
+                    'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
+                    'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
+                },
+                3: {
+                    'en': "You can still attach more files to your grievance  by clicking on the attachment button below.",
+                    'ne': "तपाईं अभी भी तपाईंको गुनासोको लागि अधिक फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_CLEAN_WINDOW_OPTIONS
             }
         },
         'action_submit_grievance_as_is': {
@@ -774,7 +937,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'inform_files_uploaded': {
+        'action_inform_files_uploaded': {
             'en': {
                 1: "✅ Your files have been successfully attached to your grievance:\n{description}",
                 2: "You can continue with your grievance process or attach more files if needed."
@@ -784,7 +947,7 @@ UTTERANCE_MAPPING = {
                 2: "तपाईं आफ्नो गुनासो प्रक्रिया जारी राख्न सक्नुहुन्छ वा थप फाइलहरू संलग्न गर्न सक्नुहुन्छ।"
             }
         },
-        'inform_files_oversized': {
+        'action_inform_files_oversized': {
             'en': {
                 1: "⚠️ Some files exceeded the maximum size limit of {max_size_formatted}:\n{oversized_files_list}",
                 2: "Please compress these files or upload smaller files."
@@ -967,6 +1130,17 @@ UTTERANCE_MAPPING = {
                     'en': "You can now attach files to your grievance using the attachment button.",
                     'ne': "अब तपाईं एट्याचमेन्ट बटन प्रयोग गरेर आफ्नो गुनासोमा फाइलहरू संलग्न गर्न सक्नुहुन्छ।"
                 }
+            }
+        },
+        'action_clean_window_options': {
+            'utterances': {
+                1: {
+                    'en': "Your grievance is completed. You can close the browser tab or session.",
+                    'ne': "तपाईंको गुनासो पूरा हुन गरियो। तपाईं ब्राउजर टैब वा सत्र बन्द गर्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_CLEAN_WINDOW_OPTIONS
             }
         }
     },
@@ -1280,10 +1454,17 @@ UTTERANCE_MAPPING = {
                     'ne': "हामीलाई तपाईंको गुनासो भेट्टाउने ID: {grievance_id} भेटिन्छ।"
                 },
                 2: {
-                    'en': "Incorrect grievance ID",
-                    'ne': "अवैध गुनासो ID"
+                    'en': "Sorry, we couldn't find a grievance with that ID in our system. Please check the ID and try again.",
+                    'ne': "माफ गर्नुहोस्, हामीले यो ID सँग कुनै गुनासो फेला पार्न सकेनौं। कृपया ID जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।"
+                },
+                3: {
+                    'en': "Please enter a valid grievance ID. The ID cannot be empty.",
+                    'ne': "कृपया वैध गुनासो ID प्रविष्ट गर्नुहोस्। ID खाली हुन सक्दैन।"
+                },
+                4: {
+                    'en': "The grievance ID must start with 'GR' followed by numbers and letters. Please check the format and try again.",
+                    'ne': "गुनासो ID 'GR' सँग सुरु हुनुपर्छ र त्यसपछि नम्बर र अक्षरहरू आउनुपर्छ। कृपया ढाँचा जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।"
                 }
-                
             }
         },
         'action_ask_grievance_id_form_grievance_id': {
@@ -1347,14 +1528,14 @@ UTTERANCE_MAPPING = {
         }
     },
     "action_inform_files_uploaded": {
-        "en": [
-            "✅ Your files have been successfully attached to your grievance.",  # Simple success message
-            "There was a problem uploading your files. Please try again."  # Simple error message
-        ],
-        "ne": [
-            "✅ तपाईंको फाइलहरू सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ।",  # Simple success message
-            "फाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।"  # Simple error message
-        ]
+        "en": {
+            1: "✅ Your files have been successfully attached to your grievance:\n{description}",
+            2: "There was a problem uploading your files. Please try again."
+        },
+        "ne": {
+            1: "✅ तपाईंको फाइलहरू सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ:\n{description}",
+            2: "फाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।"
+        }
     },
     "action_inform_files_oversized": {
         "en": [
