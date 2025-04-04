@@ -13,12 +13,10 @@ from icecream import ic
 from .constants import (    
     LOOKUP_FILE_PATH,
     DEFAULT_CSV_PATH,
-    COUNTER_FILE,
     LOCATION_FOLDER_PATH,
     CUT_OFF_FUZZY_MATCH_LOCATION,
     USE_QR_CODE,
     DIC_LOCATION_WORDS,
-    DIC_LOCATION_MAPPING,
     EMAIL_PROVIDERS_NEPAL_LIST
 )
 
@@ -79,60 +77,6 @@ def update_lookup_table(categories):
     except Exception as e:
         logger.error(f"⚠ Error updating lookup table: {e}")
 
-def get_next_grievance_number(user_district=None, user_municipality=None):
-    """
-    Generate the next grievance number with district and municipality codes.
-    Format: GR-dd-mm-YYMMDD-NNNN
-    where dd = first 2 letters of district, mm = first 2 letters of municipality
-    """
-    # Get today's date in YYmmDD format
-    today_date = datetime.now().strftime("%y%m%d")
-    
-    # Get location codes (default to 'XX' if not provided)
-    district_code = user_district[:2].upper() if user_district else "XX"
-    municipality_code = user_municipality[:2].upper() if user_municipality else "XX"
-    
-    # Initialize grievance ID if the file doesn't exist or is empty
-    if not os.path.exists(COUNTER_FILE) or os.stat(COUNTER_FILE).st_size == 0:
-        initial_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
-        with open(COUNTER_FILE, "w") as f:
-            f.write(initial_id)
-        return initial_id
-
-    # Read the last grievance ID
-    with open(COUNTER_FILE, "r") as f:
-        last_grievance_id = f.read().strip()
-
-    try:
-        # Validate format and parse the date and counter from the last grievance ID
-        if not last_grievance_id.startswith("GR-"):
-            raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
-        
-        parts = last_grievance_id.split("-")
-        if len(parts) != 4:
-            raise ValueError(f"Invalid format in counter file: {last_grievance_id}")
-
-        _, last_district_code, last_municipality_code, last_date, last_counter = parts
-        last_counter_number = int(last_counter)
-
-        # If the date is different from today, reset the counter
-        if last_date != today_date:
-            new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
-        else:
-            # Increment the counter if the date is the same
-            new_counter_number = last_counter_number + 1
-            new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-{new_counter_number:04d}"
-
-    except Exception as e:
-        # Handle any parsing error by resetting the counter
-        print(f"Error parsing grievance ID: {e}. Resetting counter.")
-        new_grievance_id = f"GR-{district_code}-{municipality_code}-{today_date}-0001"
-
-    # Save the new grievance ID to the file 
-    with open(COUNTER_FILE, "w") as f:
-        f.write(new_grievance_id)
-
-    return new_grievance_id
 
 
 
@@ -450,99 +394,6 @@ class ContactLocationValidator:
     def _validate_string_length(self, text: str, min_length: int = 2) -> bool:
         """Validate if the string meets minimum length requirement."""
         return bool(text and len(text.strip()) >= min_length)
-
-    # def validate_municipality_input(
-    #     self,
-    #     input_text: Text,
-    #     qr_province: Text,
-    #     qr_district: Text,
-    # ) -> Dict[Text, Any]:
-    #     """Validate new municipality input."""
-    #     validation_result = self._validate_location(
-    #         input_text.title(), 
-    #         qr_province, 
-    #         qr_district
-    #     )
-        
-    #     municipality = validation_result.get("municipality")
-        
-    #     if not municipality:
-    #         return None
-        
-    #     municipality = municipality.title()
-    #     print(f"✅ Municipality validated: {municipality}")
-        
-    #     return municipality
-
-    # def validate_province(self, slot_value: Any, language_code: str) -> Tuple[bool, str, Optional[str]]:
-    #     """Validate province input."""
-    #     if slot_value == "slot_skipped":
-    #         return False, get_utterance('location_form', 'validate_user_province', 1, language_code), None
-        
-    #     # Check if the province is valid
-    #     if not self._check_province(slot_value):
-    #         return False, get_utterance('location_form', 'validate_user_province', 2, language_code).format(slot_value=slot_value), None
-        
-    #     result = self._check_province(slot_value).title()
-    #     return True, get_utterance('location_form', 'validate_user_province', 3, language_code).format(slot_value=slot_value, result=result), result
-
-    # def validate_district(self, slot_value: Any, province: str, language_code: str) -> Tuple[bool, str, Optional[str]]:
-    #     """Validate district input."""
-    #     if slot_value == "slot_skipped":
-    #         return False, get_utterance('location_form', 'validate_user_district', 1, language_code), None
-            
-    #     if not self._check_district(slot_value, province):
-    #         return False, get_utterance('location_form', 'validate_user_district', 2, language_code).format(slot_value=slot_value), None
-            
-    #     result = self._check_district(slot_value, province).title()
-    #     return True, get_utterance('location_form', 'validate_user_district', 3, language_code).format(slot_value=slot_value, result=result), result
-
-    # def validate_municipality(self, slot_value: Any, province: str, district: str, language_code: str) -> Dict[Text, Any]:
-    #     """Validate municipality input."""
-    #     if slot_value == "slot_skipped":
-    #         return {
-    #             "user_municipality_temp": "slot_skipped",
-    #             "user_municipality": "slot_skipped",
-    #             "user_municipality_confirmed": False
-    #         }
-        
-    #     # First validate string length
-    #     if not self._validate_string_length(slot_value, min_length=2):
-    #         return {"user_municipality_temp": None}
-                
-    #     # Validate new municipality input
-    #     validated_municipality = self.validate_municipality_input(slot_value, province, district)
-        
-    #     if validated_municipality:
-    #         return {"user_municipality_temp": validated_municipality}
-    #     else:
-    #         return {
-    #             "user_municipality_temp": None,
-    #             "user_municipality": None,
-    #             "user_municipality_confirmed": None
-    #         }
-
-    # def validate_village(self, slot_value: Text, language_code: str) -> Tuple[bool, Optional[str], Optional[str]]:
-    #     """Validate village input."""
-    #     if slot_value == "slot_skipped":
-    #         return True, None, "slot_skipped"
-            
-    #     # First validate string length
-    #     if not self._validate_string_length(slot_value, min_length=2):
-    #         return False, get_utterance('location_form', 'validate_user_village', 1, language_code), None
-            
-    #     return True, None, slot_value
-
-    # def validate_address(self, slot_value: Any, language_code: str) -> Tuple[bool, Optional[str], Optional[str]]:
-    #     """Validate address input."""
-    #     if slot_value == "slot_skipped":
-    #         return True, None, "slot_skipped"
-            
-    #     # First validate string length
-    #     if not self._validate_string_length(slot_value, min_length=2):
-    #         return False, get_utterance('location_form', 'validate_user_address_temp', 1, language_code), None
-        
-    #     return True, None, slot_value
     
     def _is_valid_phone(self, phone: str) -> bool:
         """Check if the phone number is valid."""

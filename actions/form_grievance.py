@@ -10,7 +10,7 @@ from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
-from actions.helpers import load_classification_data, load_categories_from_lookup, get_next_grievance_number
+from actions.helpers import load_classification_data, load_categories_from_lookup
 from actions.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
