@@ -23,8 +23,6 @@ WS_URL = f"ws://{DOMAIN_NAME}:5005"
 # File Paths
 LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
 DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
-# File to store the last grievance ID
-COUNTER_FILE = "/home/ubuntu/nepal_chatbot/data/grievance_counter.txt"
 # Location JSON file
 LOCATION_FOLDER_PATH = "/home/ubuntu/nepal_chatbot/resources/location_dataset/"
 # List of email providers
