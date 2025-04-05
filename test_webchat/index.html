@@ -6,7 +6,11 @@
     <title>Rasa Chat Interface</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script type="module">
-        import { WEBSOCKET_CONFIG, SESSION_CONFIG, UI_CONFIG } from './config.js';
+        // Import the configurations we need
+        import { WEBSOCKET_CONFIG, SESSION_CONFIG, UI_CONFIG, FILE_UPLOAD_CONFIG } from './config.js';
+        
+        // Make FILE_UPLOAD_CONFIG globally available for the file upload function
+        window.FILE_UPLOAD_CONFIG = FILE_UPLOAD_CONFIG;
         
         // Function to get URL parameters
         function getUrlParams() {
@@ -16,7 +20,7 @@
                 district: params.get('district')
             };
         }
-
+        
         // Create a temporary session ID
         const tempSessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 
@@ -1050,7 +1054,7 @@
                     file_count: validFiles
                 });
                 
-                const response = await fetch('http://localhost:5001/upload-files', {
+                const response = await fetch(window.FILE_UPLOAD_CONFIG.URL, {
                     method: 'POST',
                     body: formData
                 });
@@ -1134,8 +1138,9 @@
             
             // Process each file
             files.forEach(file => {
-                // Check file size (2MB limit)
-                if (file.size > 2 * 1024 * 1024) {
+                // Check file size using the config value
+                const maxFileSize = window.FILE_UPLOAD_CONFIG.MAX_SIZE_MB * 1024 * 1024;
+                if (file.size > maxFileSize) {
                     // File is too large, compress it
                     compressFile(file).then(compressedFile => {
                         selectedFiles.push(compressedFile);

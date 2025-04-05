@@ -1,9 +1,8 @@
-// Configuration Loader
-// This script automatically selects the right configuration file based on the environment
+// Development Environment Configuration
 
 // Server Configuration
 const SERVER_CONFIG = {
-    HOST: 'nepal-gms-chatbot.facets-ai.com',
+    HOST: '54.255.219.233',  // Development server
     PORT: 5005,
     PATH: '/socket.io/',
     TRANSPORTS: ['websocket']
@@ -11,7 +10,7 @@ const SERVER_CONFIG = {
 
 // WebSocket Configuration
 const WEBSOCKET_CONFIG = {
-    URL: `//${SERVER_CONFIG.HOST}`,
+    URL: `//${SERVER_CONFIG.HOST}:${SERVER_CONFIG.PORT}`,
     OPTIONS: {
         path: SERVER_CONFIG.PATH,
         transports: SERVER_CONFIG.TRANSPORTS
@@ -20,7 +19,7 @@ const WEBSOCKET_CONFIG = {
 
 // File Upload Configuration
 const FILE_UPLOAD_CONFIG = {
-    URL: 'https://nepal-gms-chatbot.facets-ai.com/upload-files',
+    URL: 'http://localhost:5001/upload-files',  // Local development file server
     MAX_SIZE_MB: 10
 };
 
