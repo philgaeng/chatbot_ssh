@@ -1,0 +1,21 @@
+version: "3.1"
+
+#navigation stories linked mostly to buttons
+
+stories:
+# - story: User chooses to go back
+#   steps:
+#   - intent: mood_unhappy
+#   - action: utter_mood_unhappy
+#   - intent: go_back
+#   - action: action_go_back
+
+- story: User chooses to restart the story
+  steps:
+  - intent: nav_restart
+  - action: action_restart_story
+
+- story: User goes back to the main menu
+  steps:
+  - intent: nav_menu_main
+  - action: action_introduce

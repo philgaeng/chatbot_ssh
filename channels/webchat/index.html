@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nepal Roads Grievance Chatbot</title>
+    <link rel="stylesheet" href="../shared/styles/common.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="../shared/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../shared/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../shared/images/favicon-16x16.png">
+    <link rel="manifest" href="../shared/images/site.webmanifest">
+    <meta name="description" content="Chat with our bot to report road-related grievances">
+</head>
+<body>
+    <a href="#main" class="skip-link">Skip to main content</a>
+
+    <div class="container">
+        <header>
+            <img src="../shared/images/DOR-logo.png" alt="Department of Roads Logo" width="200">
+            <h1>Nepal Roads Grievance Chatbot</h1>
+            <p>Report issues related to roads and transportation</p>
+        </header>
+
+        <main id="main">
+            <div id="chat-container">
+                <div id="chat-messages"></div>
+                <div id="typing-indicator" class="hidden">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+        </div>
+                <form id="message-form">
+                    <input type="text" id="user-input" placeholder="Type your message..." aria-label="Type your message">
+                    <button type="submit" class="primary-btn">Send</button>
+                </form>
+                <div id="attachment-preview" class="hidden"></div>
+                <div id="attachment-controls" class="hidden">
+                    <button id="attachment-btn" class="secondary-btn">
+                        <span>Attach File</span>
+                </button>
+                    <input type="file" id="file-input" class="hidden" accept="image/*,.pdf,.doc,.docx">
+                </div>
+            </div>
+        </main>
+
+        <div class="controls" role="toolbar">
+            <button id="clearBtn" class="secondary-btn">Clear Chat</button>
+            <button id="accessibilityBtn" class="secondary-btn">Accessibility</button>
+            <button id="accessibleModeBtn" class="primary-btn">Switch to Accessible Interface</button>
+            <button id="helpBtn" class="secondary-btn">Help</button>
+        </div>
+
+        <dialog id="helpDialog">
+            <h2>Help & Instructions</h2>
+            <p>Use this chat interface to report grievances related to roads or transportation:</p>
+            <ol>
+                <li>Describe your issue in the chat</li>
+                <li>Provide location details when prompted</li>
+                <li>Attach photos if available</li>
+                <li>Submit your grievance through the chat</li>
+            </ol>
+            <p>For a more accessible interface with voice recording capabilities, click "Switch to Accessible Interface".</p>
+            <button class="primary-btn">Close</button>
+        </dialog>
+        
+        <footer>
+            <p>&copy; 2025 Department of Roads, Nepal. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script src="../shared/scripts/utils.js"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 

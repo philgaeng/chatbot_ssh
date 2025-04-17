@@ -1,0 +1,456 @@
+/* Accessible Interface Styles */
+
+/* Base styles and CSS Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #045c94;
+    --primary-dark: #024b7a;
+    --secondary-color: #0c8599;
+    --accent-color: #f59f00;
+    --warning-color: #e67700;
+    --error-color: #e03131;
+    --success-color: #2b8a3e;
+    --text-color: #212529;
+    --light-bg: #f8f9fa;
+    --border-color: #ced4da;
+    --focus-ring-color: #339af0;
+    --focus-ring-offset: 3px;
+    --background-color: #f9f9f9;
+    --border-radius: 8px;
+    --box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* High contrast mode */
+body.high-contrast {
+    --primary-color: #ffff00; /* Bright yellow */
+    --primary-dark: #d6d600;
+    --secondary-color: #00ffff; /* Bright cyan */
+    --accent-color: #ff8000; /* Bright orange */
+    --warning-color: #ff0000; /* Bright red */
+    --error-color: #ff0000;
+    --success-color: #00ff00; /* Bright green */
+    --text-color: #ffffff; /* White text */
+    --light-bg: #000000; /* Black background */
+    --border-color: #ffffff; /* White borders */
+    --focus-ring-color: #ffff00; /* Yellow focus rings */
+    --focus-ring-offset: 3px;
+    --background-color: #000000; /* Black background */
+    color: #ffffff;
+    background-color: #000000;
+}
+
+body.high-contrast button {
+    border: 2px solid #ffffff;
+    color: #000000;
+    font-weight: bold;
+}
+
+body.high-contrast .primary-btn,
+body.high-contrast .record-btn {
+    background-color: #ff0000; /* Red */
+    color: #ffffff;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast .secondary-btn,
+body.high-contrast .retry-btn {
+    background-color: #ffff00; /* Yellow */
+    color: #000000;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast .next-btn,
+body.high-contrast .primary-btn {
+    background-color: #00ff00; /* Green */
+    color: #000000;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast .read-btn {
+    background-color: #00ffff; /* Cyan */
+    color: #000000;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast input {
+    background-color: #000000;
+    color: #ffffff;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast .step {
+    border: 2px solid #ffffff;
+    background-color: #000000;
+}
+
+body.high-contrast h1,
+body.high-contrast h2,
+body.high-contrast h3 {
+    color: #ffff00; /* Yellow headings */
+}
+
+body.high-contrast .status {
+    background-color: #333333;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+}
+
+body.high-contrast audio {
+    background-color: #000000;
+}
+
+body.high-contrast dialog {
+    background-color: #000000;
+    color: #ffffff;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+body.high-contrast a {
+    color: #00ffff; /* Cyan links */
+}
+
+body.high-contrast footer {
+    border-top: 2px solid #ffffff;
+}
+
+body.high-contrast header {
+    border-bottom: 2px solid #ffffff;
+}
+
+body.high-contrast .rate-control {
+    color: #ffffff;
+}
+
+body.high-contrast #grievanceId {
+    background-color: #333333;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+}
+
+body.high-contrast img {
+    border: 2px solid #ffffff;
+    background-color: #ffffff;
+    padding: 2px;
+}
+
+/* Enhanced focus styles for keyboard users in high contrast mode */
+body.high-contrast button:focus,
+body.high-contrast input:focus,
+body.high-contrast select:focus {
+    outline: 3px solid #ffff00; /* Yellow outline */
+    outline-offset: var(--focus-ring-offset);
+}
+
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--primary-color);
+    color: white;
+    padding: 8px;
+    z-index: 100;
+    transition: top 0.3s;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    padding: 10px 0;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1, h2, h3 {
+    color: var(--primary-color);
+    margin-top: 0;
+}
+
+h1 {
+    font-size: 2.2rem;
+}
+
+h2 {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+}
+
+.step-container {
+    margin-bottom: 30px;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.content {
+    margin-bottom: 20px;
+}
+
+button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+button:hover {
+    background-color: var(--primary-dark);
+}
+
+button:active {
+    transform: translateY(2px);
+}
+
+/* Enhanced focus styles for keyboard users */
+button:focus,
+input:focus,
+select:focus {
+    outline: 3px solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+    position: relative;
+    z-index: 2;
+}
+
+.record-btn {
+    background-color: var(--error-color);
+}
+
+.record-btn:hover {
+    background-color: #c92a2a;
+}
+
+.next-btn {
+    background-color: var(--success-color);
+}
+
+.next-btn:hover {
+    background-color: #237a34;
+}
+
+.retry-btn {
+    background-color: var(--warning-color);
+}
+
+.retry-btn:hover {
+    background-color: #d9480f;
+}
+
+.status {
+    margin: 15px 0;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.recording-indicator {
+    width: 12px;
+    height: 12px;
+    background-color: var(--error-color);
+    border-radius: 50%;
+    margin-right: 10px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.playback {
+    margin: 15px 0;
+}
+
+audio {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+footer {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Accessibility tools */
+.a11y-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.a11y-tools button {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+}
+
+.rate-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rate-control label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.hidden {
+    display: none;
+}
+
+.help-btn, .read-btn {
+    background-color: var(--secondary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.help-btn:hover, .read-btn:hover {
+    background-color: #0a7386;
+}
+
+.help-btn i, .read-btn i {
+    font-size: 1.2rem;
+}
+
+/* Modal dialog styling */
+dialog {
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-width: 80%;
+    margin: auto;
+}
+
+dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+dialog h2 {
+    margin-top: 0;
+}
+
+dialog ol, dialog ul {
+    padding-left: 25px;
+}
+
+dialog button {
+    margin-top: 15px;
+}
+
+#result {
+    text-align: center;
+    padding: 30px;
+}
+
+#result h2 {
+    color: var(--success-color);
+}
+
+#grievanceId {
+    background-color: #e9ecef;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* Reading state animation */
+.read-btn.reading {
+    background-color: var(--accent-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.read-btn.reading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.2) 50%, 
+        transparent 100%);
+    animation: reading-wave 1.5s infinite;
+}
+
+@keyframes reading-wave {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .rate-control {
+        width: 100%;
+    }
+} 
