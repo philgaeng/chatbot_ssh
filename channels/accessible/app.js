@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const state = {
-        currentStep: 1,
+        currentStep: 'step1',
         recording: false,
         recorder: null,
         audioBlobs: {},
@@ -139,7 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Define the sequence of steps
         stepSequence: ['step1', 'step2a', 'step2b', 'step3a', 'step3b', 'step3c', 'result'],
         // Store the grievance ID once created
-        grievanceId: null
+        grievanceId: null,
+        // Store selected files for upload
+        selectedFiles: []
     };
 
     console.log('Accessible interface: Initializing steps');
@@ -226,11 +228,24 @@ document.addEventListener('DOMContentLoaded', () => {
         initHelp();
         initReadButtons();
         initFocusAnnouncements();
+        initFileUpload();
 
         // Show first step and hide all others
         Object.keys(stepContainers).forEach(stepId => {
             stepContainers[stepId].hidden = (stepId !== 'step1');
         });
+        
+        // Add direct submit button handler for step3c
+        const step3cSubmitBtn = document.querySelector('#playback3c .next-btn');
+        if (step3cSubmitBtn) {
+            console.log('Adding direct handler to step3c submit button');
+            step3cSubmitBtn.addEventListener('click', function() {
+                console.log('Step3c submit button clicked directly');
+                submitGrievance();
+            });
+        } else {
+            console.error('Could not find step3c submit button');
+        }
         
         console.log('TTS disabled - welcome message not announced');
         /* Original welcome message - disabled
@@ -760,6 +775,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Navigation
     function showStep(stepId) {
         console.log('Showing step:', stepId);
+        console.log('Current step in state:', state.currentStep);
+        console.log('Audio blob for step1 exists:', !!state.audioBlobs['step1']);
+        console.log('Audio blobs keys:', Object.keys(state.audioBlobs));
         
         // Special handling when moving from step1 to step2a - create grievance ID
         if (state.currentStep === 'step1' && stepId === 'step2a') {
@@ -797,7 +815,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper function to update UI elements with grievance ID
     function updateUIWithGrievanceId(id) {
         console.log('Updating UI with grievance ID:', id);
-        // Any UI elements that need to display the ID can be updated here
+        // Store the ID in the span element on the result page
+        const idSpan = document.querySelector('#grievanceId span');
+        if (idSpan) {
+            idSpan.textContent = id;
+        }
     }
     
     // Complete the step navigation process
@@ -920,10 +942,131 @@ document.addEventListener('DOMContentLoaded', () => {
         return `GR-${timestamp}-${random}`;
     }
 
+    // File upload functionality
+    function initFileUpload() {
+        console.log('Initializing file upload functionality');
+        
+        const attachBtn = document.getElementById('attachFilesBtn');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const fileListUl = fileList ? fileList.querySelector('ul') : null;
+        
+        if (!attachBtn || !fileInput || !fileList || !fileListUl) {
+            console.error('File upload elements not found in the DOM');
+            return;
+        }
+        
+        // Show file input when attach button is clicked
+        attachBtn.addEventListener('click', function() {
+            console.log('Attach files button clicked');
+            fileInput.click();
+        });
+        
+        // Handle file selection
+        fileInput.addEventListener('change', function() {
+            console.log('Files selected:', this.files.length);
+            if (this.files.length > 0) {
+                // Clear previous file list
+                fileListUl.innerHTML = '';
+                state.selectedFiles = Array.from(this.files);
+                
+                // Display selected files
+                state.selectedFiles.forEach((file, index) => {
+                    const fileSizeKB = Math.round(file.size / 1024);
+                    const fileItem = document.createElement('li');
+                    
+                    const fileNameSpan = document.createElement('span');
+                    fileNameSpan.className = 'file-name';
+                    fileNameSpan.textContent = file.name;
+                    
+                    const fileSizeSpan = document.createElement('span');
+                    fileSizeSpan.className = 'file-size';
+                    fileSizeSpan.textContent = `${fileSizeKB} KB`;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-file';
+                    removeBtn.textContent = '×';
+                    removeBtn.setAttribute('aria-label', `Remove file ${file.name}`);
+                    removeBtn.addEventListener('click', function() {
+                        removeFile(index);
+                    });
+                    
+                    fileItem.appendChild(fileNameSpan);
+                    fileItem.appendChild(fileSizeSpan);
+                    fileItem.appendChild(removeBtn);
+                    fileListUl.appendChild(fileItem);
+                });
+                
+                // Show the file list
+                fileList.hidden = false;
+                
+                // Announce files selected
+                simpleSpeech(`${this.files.length} files selected.`, document.getElementById('rate').value);
+            } else {
+                // Hide the file list if no files are selected
+                fileList.hidden = true;
+                state.selectedFiles = [];
+            }
+        });
+    }
+
+    // Remove a file from the selected files
+    function removeFile(index) {
+        console.log('Removing file at index:', index);
+        if (index >= 0 && index < state.selectedFiles.length) {
+            const fileName = state.selectedFiles[index].name;
+            
+            // Remove from state
+            state.selectedFiles.splice(index, 1);
+            
+            // Update the UI
+            const fileListUl = document.querySelector('#fileList ul');
+            if (fileListUl) {
+                fileListUl.innerHTML = ''; // Clear the list
+                
+                // Rebuild the list with updated files
+                state.selectedFiles.forEach((file, idx) => {
+                    const fileSizeKB = Math.round(file.size / 1024);
+                    const fileItem = document.createElement('li');
+                    
+                    const fileNameSpan = document.createElement('span');
+                    fileNameSpan.className = 'file-name';
+                    fileNameSpan.textContent = file.name;
+                    
+                    const fileSizeSpan = document.createElement('span');
+                    fileSizeSpan.className = 'file-size';
+                    fileSizeSpan.textContent = `${fileSizeKB} KB`;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-file';
+                    removeBtn.textContent = '×';
+                    removeBtn.setAttribute('aria-label', `Remove file ${file.name}`);
+                    removeBtn.addEventListener('click', function() {
+                        removeFile(idx);
+                    });
+                    
+                    fileItem.appendChild(fileNameSpan);
+                    fileItem.appendChild(fileSizeSpan);
+                    fileItem.appendChild(removeBtn);
+                    fileListUl.appendChild(fileItem);
+                });
+                
+                // Hide the file list if no files are left
+                if (state.selectedFiles.length === 0) {
+                    document.getElementById('fileList').hidden = true;
+                }
+            }
+            
+            // Announce file removal
+            simpleSpeech(`Removed file ${fileName}.`, document.getElementById('rate').value);
+        }
+    }
+
     // Form submission
     async function submitGrievance() {
         console.log('Submitting grievance');
         try {
+            // Handle voice recordings submission
             const formData = new FormData();
             
             // Use existing grievance ID if available
@@ -938,85 +1081,144 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('grievance_id', newId);
             }
             
-            // Add all audio recordings with descriptive names
+            // Log how many audio blobs we have
+            console.log('Audio blobs to submit:', Object.keys(state.audioBlobs).length);
+            
+            // Add all audio recordings with database field names
             Object.entries(state.audioBlobs).forEach(([key, blob]) => {
                 if (blob) {
-                    // Use more descriptive names for each recording
-                    const fileName = key
-                        .replace('step1', 'grievance')
-                        .replace('step2a', 'name')
-                        .replace('step2b', 'phone')
-                        .replace('step3a', 'municipality')
-                        .replace('step3b', 'village')
-                        .replace('step3c', 'address');
+                    // Use database field names for each recording to match backend
+                    const fieldNameMap = {
+                        'step1': 'grievance_details',
+                        'step2a': 'user_full_name',
+                        'step2b': 'user_contact_phone',
+                        'step3a': 'user_municipality',
+                        'step3b': 'user_village',
+                        'step3c': 'user_address'
+                    };
                     
+                    const fileName = fieldNameMap[key] || key;
+                    
+                    console.log(`Adding blob for ${key} as ${fileName}.webm (size: ${blob.size} bytes)`);
                     formData.append(`${fileName}.webm`, blob);
                 }
             });
 
-            console.log('Submitting to:', config.api.baseUrl + config.api.endpoints.submitGrievance);
-            const response = await fetch(config.api.baseUrl + config.api.endpoints.submitGrievance, {
-                method: 'POST',
-                body: formData
-            });
+            const submissionUrl = config.api.baseUrl + config.api.endpoints.submitGrievance;
+            console.log('Submitting voice recordings to:', submissionUrl);
+            
+            try {
+                const response = await fetch(submissionUrl, {
+                    method: 'POST',
+                    body: formData
+                });
 
-            if (!response.ok) {
-                console.error('Submission failed:', response.status, response.statusText);
-                throw new Error(config.errors.submission);
-            }
-            
-            const data = await response.json();
-            console.log('Submission successful, full response data:', data);
-            
-            document.getElementById('result').hidden = false;
-            
-            // Hide all step containers
-            Object.keys(stepContainers).forEach(id => {
-                if (id !== 'result') stepContainers[id].hidden = true;
-            });
-            
-            // Use the grievance ID returned from the server or the one we already have
-            const grievanceId = data.id || data.grievance_id || state.grievanceId;
-            console.log('Using grievance ID for display:', grievanceId);
-            
-            if (grievanceId) {
-                const idElement = document.getElementById('grievanceId');
-                console.log('Found grievanceId element:', idElement);
-                if (idElement) {
-                    const spanElement = idElement.querySelector('span');
-                    console.log('Found span element inside grievanceId:', spanElement);
-                    if (spanElement) {
-                        console.log('Setting span text content to:', grievanceId);
-                        spanElement.textContent = grievanceId;
-                        idElement.hidden = false;
-                    } else {
-                        console.error('Span element for grievance ID not found');
-                        console.log('Setting entire idElement textContent instead');
-                        idElement.textContent = 'Your grievance ID is: ' + grievanceId;
-                        idElement.hidden = false;
-                    }
+                if (!response.ok) {
+                    console.error('Voice submission failed with status:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error(config.errors.submission + ' (Status: ' + response.status + ')');
+                }
+                
+                console.log('Voice submission successful, parsing response');
+                const data = await response.json();
+                console.log('Voice submission response data:', data);
+                
+                // Use the grievance ID returned from the server or the one we already have
+                const grievanceId = data.grievance_id || data.id || state.grievanceId;
+                console.log('Using grievance ID for subsequent uploads:', grievanceId);
+                
+                // After successful voice submission, upload any attached files
+                if (state.selectedFiles && state.selectedFiles.length > 0) {
+                    await uploadFiles(grievanceId);
                 } else {
-                    console.error('Grievance ID element not found in DOM');
+                    console.log('No files selected for upload');
                 }
-            } else {
-                console.error('No grievance ID found in response or state:', data);
-                const idElement = document.getElementById('grievanceId');
-                if (idElement) {
-                    idElement.textContent = 'Grievance submitted successfully.';
-                    idElement.hidden = false;
+                
+                // Set current step to result before showing the result screen
+                state.currentStep = 'result';
+                
+                // Hide all step containers
+                Object.keys(stepContainers).forEach(id => {
+                    stepContainers[id].hidden = (id !== 'result');
+                });
+                
+                // Display the grievance ID
+                if (grievanceId) {
+                    const idElement = document.getElementById('grievanceId');
+                    if (idElement) {
+                        const spanElement = idElement.querySelector('span');
+                        if (spanElement) {
+                            spanElement.textContent = grievanceId;
+                            idElement.hidden = false;
+                        } else {
+                            idElement.textContent = 'Your grievance ID is: ' + grievanceId;
+                            idElement.hidden = false;
+                        }
+                    }
                 }
+                
+                const resultMessage = document.getElementById('resultMessage');
+                if (resultMessage) {
+                    resultMessage.textContent = 'Your voice recordings have been received.';
+                    if (state.selectedFiles && state.selectedFiles.length > 0) {
+                        resultMessage.textContent += ' Your files have also been uploaded.';
+                    }
+                }
+                
+            } catch (fetchError) {
+                console.error('Fetch error during submission:', fetchError);
+                throw fetchError;
             }
-            
-            const resultMessage = document.getElementById('resultMessage');
-            if (resultMessage) {
-                resultMessage.textContent = 'Your voice recordings have been received.';
-            }
-            
-            console.log(`Would have announced: Your grievance is submitted. Your grievance ID is ${grievanceId || 'generated'}. Please save this ID for your reference.`);
             
         } catch (err) {
             console.error('Submission error:', err);
-            showError(err.message);
+            showError(err.message || config.errors.submission);
+        }
+    }
+
+    // Upload files after voice recording submission
+    async function uploadFiles(grievanceId) {
+        if (!state.selectedFiles || state.selectedFiles.length === 0) {
+            console.log('No files to upload');
+            return;
+        }
+        
+        console.log(`Uploading ${state.selectedFiles.length} files for grievance ID ${grievanceId}`);
+        
+        try {
+            const formData = new FormData();
+            formData.append('grievance_id', grievanceId);
+            
+            // Add all files to the FormData
+            state.selectedFiles.forEach((file, index) => {
+                console.log(`Adding file to upload: ${file.name} (${file.size} bytes)`);
+                formData.append('files[]', file);
+            });
+            
+            // Use the accessibleFileUpload endpoint from config
+            const uploadUrl = config.api.baseUrl + config.api.endpoints.accessibleFileUpload;
+            console.log('Uploading files to:', uploadUrl);
+            
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                console.error('File upload failed with status:', response.status, response.statusText);
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                throw new Error('File upload failed (Status: ' + response.status + ')');
+            }
+            
+            const data = await response.json();
+            console.log('File upload successful:', data);
+            
+            return data;
+        } catch (error) {
+            console.error('Error uploading files:', error);
+            // Don't throw the error - we still want to show the success screen for the voice recording
         }
     }
 

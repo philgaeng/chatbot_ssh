@@ -453,4 +453,89 @@ dialog button {
     .rate-control {
         width: 100%;
     }
+}
+
+/* File upload container and file list */
+.file-upload-container {
+    margin: 15px 0;
+}
+
+.file-list {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: var(--light-bg);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.file-list h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.file-list ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.file-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.file-list li:last-child {
+    border-bottom: none;
+}
+
+.file-list .file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 10px;
+}
+
+.file-list .file-size {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.file-list .remove-file {
+    background-color: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 10px;
+    padding: 0;
+    font-size: 14px;
+}
+
+/* High contrast styles for file upload */
+body.high-contrast .file-list {
+    background-color: #000000;
+    border: 2px solid #ffffff;
+}
+
+body.high-contrast .file-list li {
+    border-bottom: 1px solid #ffffff;
+}
+
+body.high-contrast .file-list .file-size {
+    color: #00ffff;
+}
+
+body.high-contrast .file-list .remove-file {
+    background-color: #ff0000;
+    color: #ffffff;
+    border: 1px solid #ffffff;
 } 
