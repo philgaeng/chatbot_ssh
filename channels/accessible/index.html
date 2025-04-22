@@ -109,6 +109,14 @@
                     <div id="playback3c" class="playback" hidden>
                         <audio controls></audio>
                         <button class="retry-btn secondary-btn" aria-label="Retry recording your street address">Retry</button>
+                        <div class="file-upload-container">
+                            <button id="attachFilesBtn" class="secondary-btn" aria-label="Attach photos or documents">Attach Files</button>
+                            <input type="file" id="fileInput" multiple accept="image/*,application/pdf,video/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden>
+                            <div id="fileList" class="file-list" hidden>
+                                <h3>Selected Files:</h3>
+                                <ul></ul>
+                            </div>
+                        </div>
                         <button class="next-btn primary-btn" aria-label="Submit your grievance">Submit</button>
                     </div>
                 </div>

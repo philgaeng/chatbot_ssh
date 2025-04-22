@@ -104,6 +104,7 @@ window.APP_CONFIG = {
         endpoints: {
             submitGrievance: '/submit-voice-grievance',
             fileUpload: '/upload-files',
+            accessibleFileUpload: '/accessible-file-upload',
             createGrievance: '/create-grievance'
         }
     },
