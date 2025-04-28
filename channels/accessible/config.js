@@ -105,7 +105,7 @@ window.APP_CONFIG = {
             submitGrievance: '/submit-voice-grievance',
             fileUpload: '/upload-files',
             accessibleFileUpload: '/accessible-file-upload',
-            createGrievance: '/create-grievance'
+            checkStatus: '/check-status'
         }
     },
     recording: {
@@ -121,6 +121,10 @@ window.APP_CONFIG = {
             max: 28,
             step: 2
         }
+    },
+    upload: {
+        maxFileSize: 10 * 1024 * 1024, // 10MB in bytes
+        allowedTypes: ['image', 'video', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt']
     },
     errors: {
         browserSupport: 'Voice recording is not supported in your browser.',

@@ -11,6 +11,14 @@ The Nepal Chatbot consists of several components:
 3. **Accessibility App**: Provides an accessible interface for users
 4. **Database**: PostgreSQL database used by all components
 
+## Prerequisites
+
+- Python 3.10
+- Rasa 3.6.21
+- PostgreSQL database
+- Nginx (for production deployment)
+- Required Python packages (install with `pip install -r requirements.txt`)
+
 ## Project Structure
 
 The code is organized into three main modules:
@@ -21,12 +29,21 @@ The code is organized into three main modules:
 
 ## Running the Servers
 
+### Process Management
+
+
+```
+
 ### All-in-one Server Script
 
 The easiest way to run all components is using the `run_servers.py` script:
 
 ```bash
-python run_servers.py --all
+# First kill any existing processes
+pkill -f run_servers.py; sleep 2
+
+# Then start all servers
+python3 run_servers.py --all
 ```
 
 This will:
@@ -91,6 +108,23 @@ Make sure your `.env` file is properly set up with:
 - AWS credentials (if using AWS services)
 - OpenAI API key (for voice transcription)
 
+## File Management
+
+### Uploads Directory
+
+The system stores uploaded files in the `uploads/` directory:
+
+```bash
+# Create directory structure for uploads if needed
+mkdir -p /home/ubuntu/nepal_chatbot/uploads/voice_recordings
+
+# Set appropriate permissions
+chmod -R 775 /home/ubuntu/nepal_chatbot/uploads
+chown -R ubuntu:www-data /home/ubuntu/nepal_chatbot/uploads
+```
+
+Note: The `uploads/` directory is excluded from Git tracking to avoid committing large files.
+
 ## Development Workflow
 
 When developing the Nepal Chatbot:
@@ -105,10 +139,72 @@ The separation ensures that the Rasa action server only loads what it needs and 
 
 If you encounter issues:
 
-1. Check the logs for any error messages
-2. Ensure the database is properly configured 
+1. Check the logs for any error messages:
+   ```bash
+   # Check all logs
+   tail -f /home/ubuntu/nepal_chatbot/logs/*.log
+   
+   # Check specific server logs
+   tail -f /home/ubuntu/nepal_chatbot/logs/actions_server.log
+   tail -f /home/ubuntu/nepal_chatbot/logs/accessible_server.log
+   ```
+
+2. Ensure the database is properly configured and running:
+   ```bash
+   # Connect to PostgreSQL
+   sudo -u postgres psql
+   
+   # List databases
+   \l
+   
+   # Connect to the grievance database
+   \c grievance_db
+   
+   # List tables
+   \dt
+   ```
+
 3. Make sure all dependencies are installed
-4. Check that port numbers are not already in use
+4. Check that port numbers are not already in use:
+   ```bash
+   # Check what's using port 5001
+   sudo lsof -i:5001
+   ```
+
+5. Verify server processes are running:
+   ```bash
+   ps aux | grep python
+   ```
+
+6. If using Nginx, check Nginx logs:
+   ```bash
+   sudo tail -f /var/log/nginx/error.log
+   ```
+
+## Production Deployment
+
+For production environments:
+
+1. **Configure Nginx** to proxy requests to the appropriate server ports
+2. **Set up proper permissions** for the www-data user to access files
+3. **Enable HTTPS** using Let's Encrypt or similar services
+4. **Configure startup scripts** to automatically start servers on system boot
+
+### Nginx Permission Setup
+
+```bash
+# Change the Group Ownership to www-data
+sudo chown -R ubuntu:www-data /home/ubuntu/nepal_chatbot
+
+# Set Directory Permissions
+sudo chmod -R 775 /home/ubuntu/nepal_chatbot
+
+# Set the setgid Bit
+sudo chmod g+s /home/ubuntu/nepal_chatbot
+
+# Verify Permissions
+ls -ld /home/ubuntu/nepal_chatbot
+```
 
 ## Server Communication
 

@@ -59,12 +59,19 @@ class DatabaseManager:
         return f"GR{datetime.now(self.nepal_tz).strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}{suffix}"
 
     def init_db(self):
-        """Initialize PostgreSQL database"""
-        conn = self.get_connection()
-        cur = conn.cursor()
+        """Initialize the database tables and indexes"""
         try:
-            # Set timezone
-            cur.execute("SET timezone = 'Asia/Kathmandu';")
+            conn = self.get_connection()
+            if not conn:
+                return False
+            
+            cur = conn.cursor()
+            
+            # Check if database is already initialized
+            cur.execute("SELECT to_regclass('grievances')")
+            if cur.fetchone()[0] is not None:
+                logger.info("Database already initialized")
+                return True
             
             # Create tables
             self._create_tables(cur)
@@ -73,17 +80,69 @@ class DatabaseManager:
             self._create_indexes(cur)
             
             conn.commit()
-            logger.info("PostgreSQL database initialized successfully")
+            logger.info("Database initialization completed")
+            return True
         except Exception as e:
-            conn.rollback()
-            logger.error(f"PostgreSQL initialization error: {e}")
+            logger.error(f"Database initialization error: {str(e)}")
+            if conn:
+                conn.rollback()
+            return False
         finally:
-            cur.close()
-            conn.close()
+            if 'cur' in locals() and cur:
+                cur.close()
+            if 'conn' in locals() and conn:
+                conn.close()
+
+    def recreate_db(self):
+        """Drop and recreate all database tables with updated schema"""
+        try:
+            conn = self.get_connection()
+            if not conn:
+                logger.error("Failed to connect to database")
+                return False
+            
+            cur = conn.cursor()
+            
+            # Drop tables in reverse order of dependency
+            logger.info("Dropping tables in reverse order...")
+            
+            # Drop tables with foreign key dependencies first
+            cur.execute("DROP TABLE IF EXISTS grievance_transcriptions CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievance_translations CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievance_voice_recordings CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievance_status_history CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievance_history CASCADE")
+            cur.execute("DROP TABLE IF EXISTS file_attachments CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievances CASCADE")
+            cur.execute("DROP TABLE IF EXISTS users CASCADE")
+            cur.execute("DROP TABLE IF EXISTS grievance_statuses CASCADE")
+            
+            # Create tables with updated schema
+            self._create_tables(cur)
+            
+            # Create indexes
+            self._create_indexes(cur)
+            
+            conn.commit()
+            logger.info("All tables and indexes recreated successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error recreating database: {str(e)}")
+            if conn:
+                conn.rollback()
+            return False
+            
+        finally:
+            if 'cur' in locals() and cur:
+                cur.close()
+            if 'conn' in locals() and conn:
+                conn.close()
 
     def _create_tables(self, cur):
         """Create PostgreSQL tables"""
         # Status tables
+        logger.info("Creating/recreating grievance_statuses table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_statuses (
                 status_code TEXT PRIMARY KEY,
@@ -98,6 +157,7 @@ class DatabaseManager:
         """)
 
         # Users table
+        logger.info("Creating/recreating users table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -115,7 +175,8 @@ class DatabaseManager:
             )
         """)
 
-        # Main grievances table - removed status fields
+        # Main grievances table with language_code field
+        logger.info("Creating/recreating grievances table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievances (
                 grievance_id TEXT PRIMARY KEY,
@@ -125,6 +186,7 @@ class DatabaseManager:
                 grievance_details TEXT,
                 grievance_claimed_amount DECIMAL,
                 grievance_location TEXT,
+                language_code TEXT DEFAULT 'ne',
                 grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 is_temporary BOOLEAN DEFAULT TRUE,
@@ -133,6 +195,7 @@ class DatabaseManager:
         """)
 
         # Status history table (after grievances table is created)
+        logger.info("Creating/recreating grievance_status_history table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_status_history (
                 id SERIAL PRIMARY KEY,
@@ -147,6 +210,7 @@ class DatabaseManager:
         """)
 
         # For backward compatibility - legacy history table
+        logger.info("Creating/recreating grievance_history table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_history (
                 id SERIAL PRIMARY KEY,
@@ -160,6 +224,7 @@ class DatabaseManager:
         """)
 
         # File attachments table
+        logger.info("Creating/recreating file_attachments table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS file_attachments (
                 id SERIAL PRIMARY KEY,
@@ -173,7 +238,8 @@ class DatabaseManager:
             )
         """)
 
-        # Voice recording tables
+        # Voice recording tables with language_code fields
+        logger.info("Creating/recreating grievance_voice_recordings table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
                 recording_id UUID PRIMARY KEY,
@@ -183,11 +249,14 @@ class DatabaseManager:
                 duration_seconds INTEGER,
                 file_size_bytes INTEGER,
                 processing_status TEXT DEFAULT 'pending' CHECK (processing_status IN ('pending', 'transcribing', 'transcribed', 'failed')),
+                language_code TEXT,
+                language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
+        logger.info("Creating/recreating grievance_transcriptions table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_transcriptions (
                 transcription_id UUID PRIMARY KEY,
@@ -200,12 +269,15 @@ class DatabaseManager:
                 verification_notes TEXT,
                 verified_by TEXT,
                 verified_at TIMESTAMP WITH TIME ZONE,
+                language_code TEXT,
+                language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
         # Translations table
+        logger.info("Creating/recreating grievance_translations table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_translations (
                 grievance_id TEXT PRIMARY KEY REFERENCES grievances(grievance_id),
@@ -225,6 +297,7 @@ class DatabaseManager:
         # Initialize default statuses if table is empty
         cur.execute("SELECT COUNT(*) FROM grievance_statuses")
         if cur.fetchone()[0] == 0:
+            logger.info("Initializing default grievance statuses...")
             cur.execute("""
                 INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES
                 ('TEMP', 'Temporary', 'अस्थायी', 'Initial temporary status for new grievances', 'नयाँ गुनासोहरूको लागि प्रारम्भिक अस्थायी स्थिति', 0),
@@ -239,6 +312,7 @@ class DatabaseManager:
     def _create_indexes(self, cur):
         """Create PostgreSQL indexes"""
         # Users table indexes
+        logger.info("Creating/recreating user indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_user_phone ON users(user_contact_phone);
             CREATE INDEX IF NOT EXISTS idx_user_email ON users(user_contact_email);
@@ -246,15 +320,18 @@ class DatabaseManager:
         """)
 
         # Grievances table indexes
+        logger.info("Creating/recreating grievances indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_grievance_user ON grievances(user_id);
             CREATE INDEX IF NOT EXISTS idx_grievance_creation_date ON grievances(grievance_creation_date);
             CREATE INDEX IF NOT EXISTS idx_grievance_modification_date ON grievances(grievance_modification_date);
             CREATE INDEX IF NOT EXISTS idx_grievance_source ON grievances(source);
             CREATE INDEX IF NOT EXISTS idx_grievance_temporary ON grievances(is_temporary);
+            CREATE INDEX IF NOT EXISTS idx_grievance_language ON grievances(language_code);
         """)
 
         # Status tables indexes
+        logger.info("Creating/recreating status indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_status_active ON grievance_statuses(is_active);
             CREATE INDEX IF NOT EXISTS idx_status_order ON grievance_statuses(sort_order);
@@ -265,6 +342,7 @@ class DatabaseManager:
         """)
 
         # Legacy history table
+        logger.info("Creating/recreating history indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_grievance_history_id ON grievance_history(grievance_id);
             CREATE INDEX IF NOT EXISTS idx_grievance_history_new_status ON grievance_history(new_status);
@@ -272,6 +350,7 @@ class DatabaseManager:
         """)
 
         # File attachments indexes
+        logger.info("Creating/recreating file attachment indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_file_attachments_grievance_id ON file_attachments(grievance_id);
             CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file_id);
@@ -279,23 +358,29 @@ class DatabaseManager:
         """)
 
         # Voice recordings indexes
+        logger.info("Creating/recreating voice recording indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_grievance_id ON grievance_voice_recordings(grievance_id);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_status ON grievance_voice_recordings(processing_status);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_type ON grievance_voice_recordings(recording_type);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_created ON grievance_voice_recordings(created_at);
+            CREATE INDEX IF NOT EXISTS idx_voice_recordings_language ON grievance_voice_recordings(language_code);
+            CREATE INDEX IF NOT EXISTS idx_voice_recordings_detected_language ON grievance_voice_recordings(language_code_detect);
         """)
 
         # Transcriptions indexes
+        logger.info("Creating/recreating transcription indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_transcriptions_recording_id ON grievance_transcriptions(recording_id);
             CREATE INDEX IF NOT EXISTS idx_transcriptions_grievance_id ON grievance_transcriptions(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_verification_status ON grievance_transcriptions(verification_status);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_verified_by ON grievance_transcriptions(verified_by);
+            CREATE INDEX IF NOT EXISTS idx_transcriptions_status ON grievance_transcriptions(verification_status);
             CREATE INDEX IF NOT EXISTS idx_transcriptions_created ON grievance_transcriptions(created_at);
+            CREATE INDEX IF NOT EXISTS idx_transcriptions_language ON grievance_transcriptions(language_code);
+            CREATE INDEX IF NOT EXISTS idx_transcriptions_detected_language ON grievance_transcriptions(language_code_detect);
         """)
-
+        
         # Translations indexes
+        logger.info("Creating/recreating translation indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_translations_verified ON grievance_translations(verified_at);
             CREATE INDEX IF NOT EXISTS idx_translations_method ON grievance_translations(translation_method);
@@ -303,78 +388,63 @@ class DatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_translations_created ON grievance_translations(created_at);
         """)
 
-    def create_grievance(self, source: str = 'bot') -> Optional[str]:
+    def create_grievance(self, source: str = 'bot', language_code: str = 'ne') -> Optional[str]:
         """Create a minimal grievance record with temporary status
         
         Args:
-            source (str): Source of the grievance - 'accessibility' or 'bot'
+            source: Source of the grievance (bot, accessibility, etc.)
+            language_code: Language code (default: 'ne' for Nepali)
             
         Returns:
-            Optional[str]: The generated grievance ID or None if creation fails
+            Grievance ID if successful, None if failed
         """
-        logger.info(f"Creating new grievance with source: {source}")
         conn = None
+        cur = None
         try:
             conn = self.get_connection()
-            cursor = conn.cursor()
+            if not conn:
+                return None
             
-            logger.info("Setting timezone to Asia/Kathmandu")
-            cursor.execute("SET timezone = 'Asia/Kathmandu';")
+            cur = conn.cursor()
             
-            # Generate grievance ID with source
+            # Generate unique ID for the grievance
             grievance_id = self.generate_grievance_id(source)
-            logger.info(f"Generated grievance ID: {grievance_id}")
             
-            # Create minimal user record with just an ID
-            logger.info("Creating new user record")
-            cursor.execute("""
-                INSERT INTO users DEFAULT VALUES
-                RETURNING id
-            """)
+            # Get the current date
+            nepal_today = datetime.now(self.nepal_tz).strftime('%Y-%m-%d %H:%M:%S') if self.nepal_tz else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
-            user_id = cursor.fetchone()[0]
-            logger.info(f"Created user with ID: {user_id}")
-
-            # Create minimal grievance record
-            logger.info(f"Creating grievance record with ID: {grievance_id}")
-            cursor.execute("""
+            # Insert into grievances table
+            cur.execute("""
                 INSERT INTO grievances (
-                    grievance_id, user_id, is_temporary, source
-                ) VALUES (%s, %s, %s, %s)
-            """, (
-                str(grievance_id),
-                int(user_id),
-                True,
-                source
-            ))
+                    grievance_id, grievance_creation_date, grievance_modification_date, is_temporary, source, language_code
+                ) VALUES (%s, %s, %s, TRUE, %s, %s)
+                RETURNING grievance_id
+            """, (grievance_id, nepal_today, nepal_today, source, language_code))
             
-            # Create initial status history entry
-            logger.info("Creating initial status history entry")
-            cursor.execute("""
-                INSERT INTO grievance_status_history (
-                    grievance_id, status_code, 
-                    notes, created_by
-                ) VALUES (%s, %s, %s, %s)
-            """, (
-                str(grievance_id),
-                'TEMP',
-                f'Grievance created with temporary status via {source} interface',
-                'system'
-            ))
+            result = cur.fetchone()
             
-            logger.info("Committing transaction")
+            if not result:
+                raise ValueError("Failed to create grievance record")
+            
+            # Commit the transaction to ensure the grievance exists in the database
             conn.commit()
-            logger.info(f"Successfully created grievance with ID: {grievance_id}")
+            
+            # Now set the initial status in a separate transaction
+            success = self.update_grievance_status(grievance_id, 'TEMP', 'system')
+            if not success:
+                logger.warning(f"Failed to set initial status for grievance {grievance_id}, but grievance was created")
+            
             return grievance_id
             
         except Exception as e:
+            logger.error(f"Error creating grievance: {str(e)}")
             if conn:
                 conn.rollback()
-            logger.error(f"Error creating temporary grievance: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
             
         finally:
+            if cur:
+                cur.close()
             if conn:
                 conn.close()
 
@@ -687,140 +757,201 @@ class DatabaseManager:
             conn.close()
 
     def store_voice_recording(self, recording_data: Dict) -> Optional[str]:
-        """Store voice recording metadata
+        """Store voice recording metadata in the database
         
         Args:
-            recording_data (Dict): Dictionary containing recording metadata:
-                - grievance_id: ID of the associated grievance
-                - file_path: Path to the stored audio file
-                - recording_type: Type of recording ('details', 'contact', 'location')
-                - duration_seconds: Duration of recording in seconds
-                - file_size_bytes: Size of file in bytes
+            recording_data: Dictionary containing recording metadata with fields:
+                - recording_id: UUID for the recording
+                - grievance_id: Associated grievance ID
+                - file_path: Path to the audio file
+                - recording_type: Type of recording (details, contact, location)
+                - duration_seconds: Duration of recording in seconds (optional)
+                - file_size_bytes: Size of the file in bytes
+                - processing_status: Status of the recording (pending, transcribing, transcribed, failed)
+                - language_code: Language code of the interface (default: 'ne' for Nepali)
                 
         Returns:
-            Optional[str]: The recording ID if successful, None otherwise
+            Recording ID if successful, None otherwise
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
         try:
-            recording_id = str(uuid.uuid4())
+            conn = self.get_connection()
+            if not conn:
+                return None
             
-            cursor.execute("""
-                INSERT INTO grievance_voice_recordings (
-                    recording_id, grievance_id, file_path,
-                    recording_type, duration_seconds, file_size_bytes
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+            cur = conn.cursor()
+            
+            # Extract required fields
+            recording_id = recording_data.get('recording_id')
+            if not recording_id:
+                recording_id = str(uuid.uuid4())
+            
+            grievance_id = recording_data.get('grievance_id')
+            if not grievance_id:
+                raise ValueError("Grievance ID is required")
+            
+            file_path = recording_data.get('file_path')
+            if not file_path:
+                raise ValueError("File path is required")
+            
+            # Extract optional fields with defaults
+            recording_type = recording_data.get('recording_type', 'details')
+            duration_seconds = recording_data.get('duration_seconds')
+            file_size_bytes = recording_data.get('file_size_bytes', 0)
+            processing_status = recording_data.get('processing_status', 'pending')
+            language_code = recording_data.get('language_code', 'ne') # Default to Nepali
+            
+            # Insert into database
+            cur.execute("""
+                INSERT INTO grievance_voice_recordings
+                (recording_id, grievance_id, file_path, recording_type, 
+                 duration_seconds, file_size_bytes, processing_status, language_code, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 RETURNING recording_id
-            """, (
-                recording_id,
-                recording_data['grievance_id'],
-                recording_data['file_path'],
-                recording_data['recording_type'],
-                recording_data.get('duration_seconds'),
-                recording_data.get('file_size_bytes')
-            ))
+            """, (recording_id, grievance_id, file_path, recording_type, 
+                  duration_seconds, file_size_bytes, processing_status, language_code))
             
+            result = cur.fetchone()
             conn.commit()
-            return recording_id
+            
+            if result:
+                return result[0]  # Return the recording_id
+            return None
             
         except Exception as e:
-            conn.rollback()
-            logger.error(f"Error storing voice recording: {e}")
+            logger.error(f"Error storing voice recording: {str(e)}")
+            if conn:
+                conn.rollback()
             return None
             
         finally:
-            conn.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
     def store_transcription(self, transcription_data: Dict) -> Optional[str]:
-        """Store transcription data
+        """Store transcription in the database
         
         Args:
-            transcription_data (Dict): Dictionary containing transcription data:
-                - recording_id: ID of the associated recording
-                - grievance_id: ID of the associated grievance
+            transcription_data: Dictionary containing transcription data with fields:
+                - transcription_id: UUID for the transcription
+                - recording_id: Associated recording ID
+                - grievance_id: Associated grievance ID
                 - automated_transcript: Text from automated transcription
-                - confidence_score: Confidence score from transcription service
+                - verified_transcript: Manually verified text (optional)
+                - verification_status: Status of verification (pending, verified, rejected)
+                - verified_by: User who verified the transcription (optional)
+                - confidence_score: Confidence score from the transcription model (optional)
+                - language_code: Language code of the interface (default: 'ne')
+                - language_code_detect: Detected language code from audio (optional)
                 
         Returns:
-            Optional[str]: The transcription ID if successful, None otherwise
+            Transcription ID if successful, None otherwise
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
         try:
-            transcription_id = str(uuid.uuid4())
+            conn = self.get_connection()
+            if not conn:
+                return None
             
-            cursor.execute("""
-                INSERT INTO grievance_transcriptions (
-                    transcription_id, recording_id, grievance_id,
-                    automated_transcript, confidence_score
-                ) VALUES (%s, %s, %s, %s, %s)
+            cur = conn.cursor()
+            
+            # Extract required fields
+            transcription_id = transcription_data.get('transcription_id')
+            if not transcription_id:
+                transcription_id = str(uuid.uuid4())
+            
+            recording_id = transcription_data.get('recording_id')
+            if not recording_id:
+                raise ValueError("Recording ID is required")
+            
+            grievance_id = transcription_data.get('grievance_id')
+            if not grievance_id:
+                raise ValueError("Grievance ID is required")
+            
+            automated_transcript = transcription_data.get('automated_transcript')
+            if not automated_transcript:
+                raise ValueError("Automated transcript is required")
+            
+            # Extract optional fields with defaults
+            verified_transcript = transcription_data.get('verified_transcript')
+            verification_status = transcription_data.get('verification_status', 'pending')
+            verified_by = transcription_data.get('verified_by')
+            confidence_score = transcription_data.get('confidence_score', 0.0)
+            language_code = transcription_data.get('language_code', 'ne')  # Default to Nepali
+            language_code_detect = transcription_data.get('language_code_detect')  # Detected language
+            
+            # Insert into database
+            cur.execute("""
+                INSERT INTO grievance_transcriptions
+                (transcription_id, recording_id, grievance_id, automated_transcript, 
+                 verified_transcript, verification_status, verified_by, confidence_score,
+                 language_code, language_code_detect, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 RETURNING transcription_id
-            """, (
-                transcription_id,
-                transcription_data['recording_id'],
-                transcription_data['grievance_id'],
-                transcription_data['automated_transcript'],
-                transcription_data.get('confidence_score')
-            ))
+            """, (transcription_id, recording_id, grievance_id, automated_transcript, 
+                  verified_transcript, verification_status, verified_by, confidence_score,
+                  language_code, language_code_detect))
             
+            result = cur.fetchone()
             conn.commit()
-            return transcription_id
+            
+            if result:
+                return result[0]  # Return the transcription_id
+            return None
             
         except Exception as e:
-            conn.rollback()
-            logger.error(f"Error storing transcription: {e}")
+            logger.error(f"Error storing transcription: {str(e)}")
+            if conn:
+                conn.rollback()
             return None
             
         finally:
-            conn.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
-    def verify_transcription(self, transcription_id: str, verification_data: Dict) -> bool:
-        """Update transcription with verification data
+    def update_recording_language(self, recording_id: str, language_code: str) -> bool:
+        """Update the detected language for a voice recording
         
         Args:
-            transcription_id (str): ID of the transcription to verify
-            verification_data (Dict): Dictionary containing verification data:
-                - verified_transcript: Verified/corrected transcript text
-                - verification_status: New status ('verified' or 'rejected')
-                - verification_notes: Optional notes from verifier
-                - verified_by: ID or name of the verifying officer
-                
-        Returns:
-            bool: True if verification was successful, False otherwise
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute("""
-                UPDATE grievance_transcriptions SET
-                    verified_transcript = %s,
-                    verification_status = %s,
-                    verification_notes = %s,
-                    verified_by = %s,
-                    verified_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE transcription_id = %s
-            """, (
-                verification_data['verified_transcript'],
-                verification_data['verification_status'],
-                verification_data.get('verification_notes'),
-                verification_data['verified_by'],
-                transcription_id
-            ))
+            recording_id: ID of the recording to update
+            language_code: Detected language code
             
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            conn = self.get_connection()
+            if not conn:
+                return False
+            
+            cur = conn.cursor()
+            
+            # Update the recording with the detected language
+            cur.execute("""
+                UPDATE grievance_voice_recordings
+                SET language_code_detect = %s, updated_at = NOW()
+                WHERE recording_id = %s
+                RETURNING recording_id
+            """, (language_code, recording_id))
+            
+            result = cur.fetchone()
             conn.commit()
-            return True
+            
+            return result is not None
             
         except Exception as e:
-            conn.rollback()
-            logger.error(f"Error verifying transcription: {e}")
+            logger.error(f"Error updating recording language: {str(e)}")
+            if conn:
+                conn.rollback()
             return False
             
         finally:
-            conn.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
     def get_voice_recordings(self, grievance_id: str) -> List[Dict]:
         """Get all voice recordings for a grievance
@@ -838,7 +969,7 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT recording_id, file_path, recording_type,
                        duration_seconds, file_size_bytes, processing_status,
-                       created_at, updated_at
+                       language_code, language_code_detect, created_at, updated_at
                 FROM grievance_voice_recordings
                 WHERE grievance_id = %s
                 ORDER BY created_at DESC
@@ -868,7 +999,7 @@ class DatabaseManager:
         
         try:
             cursor.execute("""
-                SELECT t.*, r.recording_type
+                SELECT t.*, r.recording_type, r.language_code
                 FROM grievance_transcriptions t
                 JOIN grievance_voice_recordings r ON t.recording_id = r.recording_id
                 WHERE t.grievance_id = %s

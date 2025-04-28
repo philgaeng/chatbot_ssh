@@ -1,1266 +1,2542 @@
-// Accessible Interface JavaScript
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('Accessible interface: DOM loaded');
-    const config = window.APP_CONFIG;
-    
-    // Simple speech function that works (copied directly from test-speech.html)
-    function simpleSpeech(text, rate = 1.0, callback) {
-        try {
-            // TEMPORARILY DISABLED TTS
-            console.log('TTS disabled - would have spoken:', text);
-            
-            // Just call the callback immediately
-            if (callback) {
-                setTimeout(callback, 100);
-            }
-            return true;
-            
-            /* ORIGINAL CODE COMMENTED OUT
-            if (!window.speechSynthesis) {
-                throw new Error('Speech synthesis not supported');
-            }
-            
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = typeof rate === 'string' ? parseFloat(rate) : rate;
-            
-            utterance.onstart = function() {
-                console.log('Speech started');
-            };
-            
-            utterance.onend = function() {
-                console.log('Speech ended');
-                if (callback) callback();
-            };
-            
-            utterance.onerror = function(event) {
-                console.error('Speech error:', event.error || 'Unknown error');
-                showFallbackText(text);
-                if (callback) callback(event.error || 'Unknown error');
-            };
-            
-            window.speechSynthesis.speak(utterance);
-            console.log('Speech request sent');
-            
-            return true;
-            */
-        } catch (error) {
-            console.error('Speech exception:', error.message);
-            // showFallbackText(text); // Also disable this
-            if (callback) callback(error.message);
-            return false;
-        }
-    }
-    
-    // Visual fallback display (copied from test-speech.html)
-    function showFallbackText(text) {
-        // TEMPORARILY DISABLED
-        console.log('Fallback text display disabled - would have shown:', text);
-        return;
-        
-        /* ORIGINAL CODE COMMENTED OUT
-        console.log('Showing fallback text:', text);
-        
-        // Create dialog
-        const dialog = document.createElement('div');
-        dialog.style.position = 'fixed';
-        dialog.style.top = '30%';
-        dialog.style.left = '50%';
-        dialog.style.transform = 'translate(-50%, -50%)';
-        dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        dialog.style.color = 'white';
-        dialog.style.padding = '20px';
-        dialog.style.borderRadius = '10px';
-        dialog.style.zIndex = '9999';
-        dialog.style.minWidth = '300px';
-        dialog.style.maxWidth = '80%';
-        dialog.style.textAlign = 'center';
-        
-        const heading = document.createElement('h3');
-        heading.textContent = 'Text to Speech';
-        heading.style.margin = '0 0 10px 0';
-        
-        const content = document.createElement('p');
-        content.textContent = text;
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Close';
-        closeBtn.style.marginTop = '15px';
-        
-        dialog.appendChild(heading);
-        dialog.appendChild(content);
-        dialog.appendChild(closeBtn);
-        
-        document.body.appendChild(dialog);
-        console.log('Fallback dialog shown');
-        
-        closeBtn.onclick = function() {
-            document.body.removeChild(dialog);
-            console.log('Fallback dialog closed');
-        };
-        
-        // Auto-dismiss after 8 seconds
-        setTimeout(function() {
-            if (document.body.contains(dialog)) {
-                document.body.removeChild(dialog);
-                console.log('Fallback dialog auto-dismissed');
-            }
-        }, 8000);
-        */
-    }
-    
-    // Get utilities from shared script (but we'll use our own speech function)
-    const { $ } = window.nepalChatbot || { $: (id) => document.getElementById(id) };
-    const accessibility = window.nepalChatbot?.accessibility || {
-        toggleContrast: function() {
-            document.body.classList.toggle('high-contrast');
-        },
-        setFontSize: function(size) {
-            document.documentElement.style.fontSize = size + 'px';
-        },
-        savePreference: function(key, value) {
-            localStorage.setItem(key, value);
-        },
-        loadPreference: function(key, defaultValue) {
-            const value = localStorage.getItem(key);
-            return value !== null ? value : defaultValue;
-        }
-    };
-    
-    const state = {
-        currentStep: 'step1',
-        recording: false,
-        recorder: null,
-        audioBlobs: {},
-        fontSize: config.accessibility.fontSize.default,
-        lastAnnouncement: Date.now(),
-        // Define the sequence of steps
-        stepSequence: ['step1', 'step2a', 'step2b', 'step3a', 'step3b', 'step3c', 'result'],
-        // Store the grievance ID once created
-        grievanceId: null,
-        // Store selected files for upload
-        selectedFiles: []
-    };
+/**
+ * Nepal Chatbot Accessible Interface
+ * Modular structure based on refactoring plan
+ */
 
-    console.log('Accessible interface: Initializing steps');
-    
-    // Initialize all step containers and elements
-    // We're using a more structured approach for expanded steps
-    const stepContainers = {
-        step1: document.getElementById('step1'),
-        step2a: document.getElementById('step2a'),
-        step2b: document.getElementById('step2b'),
-        step3a: document.getElementById('step3a'),
-        step3b: document.getElementById('step3b'),
-        step3c: document.getElementById('step3c'),
-        result: document.getElementById('result')
-    };
-    
-    // Create a structured object for each step's elements
-    const stepElements = {};
-    
-    // Setup all steps (1, 2a, 2b, 3a, 3b, 3c)
-    const stepIds = ['1', '2a', '2b', '3a', '3b', '3c'];
-    
-    stepIds.forEach(id => {
-        const stepKey = 'step' + id;
-        const container = document.getElementById(stepKey);
-        if (!container) {
-            console.error(`Step container ${stepKey} not found in the DOM`);
-            return;
-        }
-        
-        console.log(`Initializing elements for step ${stepKey}`);
-        
-        const recordBtnId = `recordBtn${id}`;
-        const statusId = `status${id}`;
-        const playbackId = `playback${id}`;
-        
-        const recordBtn = document.getElementById(recordBtnId);
-        const status = document.getElementById(statusId);
-        const playback = document.getElementById(playbackId);
-        
-        if (!recordBtn) console.warn(`Record button ${recordBtnId} not found for ${stepKey}`);
-        if (!status) console.warn(`Status element ${statusId} not found for ${stepKey}`);
-        if (!playback) console.warn(`Playback element ${playbackId} not found for ${stepKey}`);
-        
-        stepElements[stepKey] = {
-            container: container,
-            recordBtn: recordBtn,
-            status: status,
-            timer: status ? status.querySelector('span') : null,
-            playback: playback,
-            audio: playback ? playback.querySelector('audio') : null,
-            retryBtn: playback ? playback.querySelector('.retry-btn') : null,
-            nextBtn: playback ? playback.querySelector('.next-btn') : null
-        };
-        
-        // Log the initialized elements
-        console.log(`Step ${id} initialized:`, {
-            container: !!stepElements[stepKey].container,
-            recordBtn: !!stepElements[stepKey].recordBtn,
-            status: !!stepElements[stepKey].status,
-            timer: !!stepElements[stepKey].timer,
-            playback: !!stepElements[stepKey].playback,
-            audio: !!stepElements[stepKey].audio,
-            retryBtn: !!stepElements[stepKey].retryBtn,
-            nextBtn: !!stepElements[stepKey].nextBtn
+// Module namespaces
+let SpeechModule = {};
+let AccessibilityModule = {};
+let UIModule = {};
+let APIModule = {};
+let RecordingModule = {};
+let FileUploadModule = {};
+let GrievanceModule = {};
+
+// Global state
+let state = {
+    currentStep: '1',  // Start with first step as string
+    grievanceId: null
+};
+let recordedBlobs = {};
+let appInitialized = false;
+
+// --- Submission Overlay Logic ---
+// 1. Show overlay on submit
+// 2. Prevent multiple submissions
+// 3. Show Cancel button after 5s
+// 4. AbortController for fetch
+// 5. Hide overlay and re-enable UI on completion/cancel
+
+// Add these variables at the top level
+let submissionAbortController = null;
+let cancelBtnTimeout = null;
+
+// Add at the start of the file, after any imports
+let overlayMutationObserver = null;
+
+// Add at the top of the file
+let isSubmitting = false;
+
+function setupOverlayObserver() {
+    const overlay = document.getElementById('submissionOverlay');
+    if (!overlay) {
+        console.error('[ERROR] Could not set up overlay observer: overlay not found');
+        return;
+    }
+
+    // Create an observer instance
+    overlayMutationObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'hidden') {
+                console.log('[DEBUG] Overlay visibility changed:', {
+                    isHidden: overlay.hidden,
+                    timestamp: new Date().toISOString(),
+                    stack: new Error().stack
+                });
+            }
         });
     });
 
-    // Initialize
-    function init() {
-        console.log('Accessible interface: Initializing');
+    // Start observing the overlay for attribute changes
+    overlayMutationObserver.observe(overlay, {
+        attributes: true,
+        attributeFilter: ['hidden']
+    });
+}
+
+// Utility to show/hide overlay
+function showSubmissionOverlay() {
+    console.log('[TRACE] showSubmissionOverlay called');
+    const overlay = document.getElementById('submissionOverlay');
+    if (!overlay) {
+        console.error('[ERROR] Submission overlay element not found');
+        return;
+    }
+    
+    // Reset overlay content
+    const message = overlay.querySelector('.submission-message');
+    if (message) {
+        message.textContent = 'Submitting your grievance…';
+        message.style.color = '#045c94';
+    }
+    
+    const cancelBtn = overlay.querySelector('#cancelSubmissionBtn');
+    if (cancelBtn) {
+        cancelBtn.style.display = 'none';
+        if (cancelBtnTimeout) clearTimeout(cancelBtnTimeout);
+        cancelBtnTimeout = setTimeout(() => {
+            cancelBtn.style.display = 'inline-block';
+        }, 5000);
+    }
+    
+    // Show overlay
+    overlay.hidden = false;
+    
+    // Disable the submit button
+    const submitBtn = document.getElementById('submitGrievanceBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+    }
+}
+
+// Add a function to check for duplicate overlays
+function checkForDuplicateOverlays() {
+    const overlays = document.querySelectorAll('#submissionOverlay');
+    if (overlays.length > 1) {
+        console.error('[ERROR] Multiple submission overlays found:', overlays.length);
+        overlays.forEach((overlay, index) => {
+            console.error(`[ERROR] Overlay ${index + 1}:`, overlay);
+        });
+    }
+}
+
+// Call the check when the page loads
+document.addEventListener('DOMContentLoaded', checkForDuplicateOverlays);
+
+function hideSubmissionOverlay() {
+    console.log('[TRACE] hideSubmissionOverlay called');
+    const overlay = document.getElementById('submissionOverlay');
+    if (overlay) {
+        overlay.hidden = true;
+        if (cancelBtnTimeout) clearTimeout(cancelBtnTimeout);
+        // Re-enable the submit button
+        const submitBtn = document.getElementById('submitGrievanceBtn');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
+    }
+}
+
+/**
+ * Speech Module - Handles text-to-speech functionality
+ */
+SpeechModule = {
+    voice: null,
+    voices: [],
+    speaking: false,
+    autoRead: true, // default to true
+    currentRate: 1,
+    
+    init: function() {
+        this.loadPreferences();
+        // If no preference, default to true
+        if (localStorage.getItem('autoRead') === null) {
+            this.autoRead = true;
+        }
         
-        // Check for media devices
-        if (!navigator.mediaDevices) {
-            console.error('Media devices API not available');
-            showError(config.errors.browserSupport);
+        // Set up speech synthesis
+        if ('speechSynthesis' in window) {
+            this.setupVoices();
+            
+            // Handle speech rate dropdown
+            document.getElementById('speedBtn').addEventListener('click', this.toggleSpeedDropdown.bind(this));
+            
+            // Set up speech rate options
+            const speedOptions = document.querySelectorAll('.speed-option');
+            speedOptions.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    const rate = parseFloat(e.target.dataset.rate);
+                    this.setRate(rate);
+                    this.toggleSpeedDropdown();
+                });
+            });
+            
+            // Set up the read page button
+            document.getElementById('readPageBtn').addEventListener('click', this.toggleAutoRead.bind(this));
+            
+            // Close the dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('speedDropdown');
+                const speedBtn = document.getElementById('speedBtn');
+                if (dropdown && !dropdown.hidden && e.target !== speedBtn && !speedBtn.contains(e.target) && 
+                    e.target !== dropdown && !dropdown.contains(e.target)) {
+                    this.toggleSpeedDropdown(null, true);
+                }
+            });
+            
+            // Update button text with saved rate
+            document.querySelector('#speedBtn .icon').textContent = this.currentRate + 'x';
+        } else {
+            console.error('Speech synthesis not supported');
+            document.getElementById('readPageBtn').disabled = true;
+            document.getElementById('speedBtn').disabled = true;
+        }
+    },
+    
+    setupVoices: function() {
+        // Setup voices when they're loaded
+        window.speechSynthesis.onvoiceschanged = () => {
+            this.voices = window.speechSynthesis.getVoices();
+            
+            // Find a suitable voice (prefer English)
+            this.voice = this.voices.find(voice => voice.lang.startsWith('en')) || this.voices[0];
+            console.log('Selected voice:', this.voice);
+        };
+        
+        // Check if voices are already loaded
+        this.voices = window.speechSynthesis.getVoices();
+        if (this.voices.length > 0) {
+            this.voice = this.voices.find(voice => voice.lang.startsWith('en')) || this.voices[0];
+            console.log('Voices already loaded, selected:', this.voice);
+        }
+    },
+    
+    speak: function(text) {
+        if (!('speechSynthesis' in window)) {
+            console.error('Speech synthesis not supported');
             return;
         }
         
-        console.log('Media devices supported');
+        // Stop any current speech
+            window.speechSynthesis.cancel();
+            
+        if (!text) return;
         
-        initRecording();
-        initAccessibility();
-        initHelp();
-        initReadButtons();
-        initFocusAnnouncements();
-        initFileUpload();
-
-        // Show first step and hide all others
-        Object.keys(stepContainers).forEach(stepId => {
-            stepContainers[stepId].hidden = (stepId !== 'step1');
-        });
+        // Create and configure utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+        utterance.voice = this.voice;
+        utterance.rate = this.currentRate;
+        utterance.pitch = 1;
+        utterance.volume = 1;
         
-        // Add direct submit button handler for step3c
-        const step3cSubmitBtn = document.querySelector('#playback3c .next-btn');
-        if (step3cSubmitBtn) {
-            console.log('Adding direct handler to step3c submit button');
-            step3cSubmitBtn.addEventListener('click', function() {
-                console.log('Step3c submit button clicked directly');
-                submitGrievance();
-            });
-        } else {
-            console.error('Could not find step3c submit button');
-        }
+        this.speaking = true;
+        this.updateSpeakingUI(true);
         
-        console.log('TTS disabled - welcome message not announced');
-        /* Original welcome message - disabled
-        const welcomeMessage = 
-            'Welcome to the Accessible Grievance Reporting system. ' +
-            'This interface will guide you through reporting a grievance step by step. ' +
-            'Use the Read Page button at the bottom to hear all instructions, or press the ' +
-            'speaker icons next to each step for specific guidance. ' +
-            'You can also press the Help button for more options. ' +
-            'To begin, press the Record Grievance button in Step 1.';
+        // When speech ends
+        utterance.onend = () => {
+            this.speaking = false;
+            this.updateSpeakingUI(false);
+        };
         
-        simpleSpeech(welcomeMessage, document.getElementById('rate').value);
-        */
+        utterance.onerror = (event) => {
+            console.error('Speech synthesis error:', event);
+            this.speaking = false;
+            this.updateSpeakingUI(false);
+        };
         
-        // Pre-check for microphone permission to avoid issues later
-        checkMicrophonePermission();
-    }
+        // Speak the text
+            window.speechSynthesis.speak(utterance);
+    },
     
-    // Check microphone permission proactively to avoid issues when recording
-    function checkMicrophonePermission() {
-        if (navigator.permissions && navigator.permissions.query) {
-            navigator.permissions.query({ name: 'microphone' })
-                .then(permissionStatus => {
-                    console.log('Microphone permission status:', permissionStatus.state);
-                    
-                    if (permissionStatus.state === 'denied') {
-                        simpleSpeech("Microphone access is denied. Please enable microphone access in your browser settings to use the recording feature.");
-                    }
-                    
-                    permissionStatus.onchange = function() {
-                        console.log('Microphone permission status changed to:', this.state);
-                    };
-                })
-                .catch(error => {
-                    console.error('Error checking microphone permission:', error);
-                });
+    updateSpeakingUI: function(isSpeaking) {
+        const readBtn = document.getElementById('readPageBtn');
+        if (isSpeaking) {
+            readBtn.classList.add('active');
+            readBtn.classList.remove('inactive');
         } else {
-            console.log('Permissions API not supported, will check mic when recording starts');
+            if (this.autoRead) {
+                readBtn.classList.add('active');
+                readBtn.classList.remove('inactive');
+            } else {
+                readBtn.classList.remove('active');
+                readBtn.classList.add('inactive');
+            }
+        }
+    },
+    
+    toggleAutoRead: function() {
+        this.autoRead = !this.autoRead;
+        const readBtn = document.getElementById('readPageBtn');
+        if (this.autoRead) {
+            readBtn.classList.add('active');
+            readBtn.classList.remove('inactive');
+            // Read current content if auto-read is turned on
+            const currentStep = document.querySelector('.step:not([hidden])');
+            if (currentStep) {
+                this.speak(currentStep.textContent);
+            }
+        } else {
+            readBtn.classList.remove('active');
+            readBtn.classList.add('inactive');
+            window.speechSynthesis.cancel();
+        }
+        // Save preference
+        this.savePreferences();
+        // Announce change for screen readers
+        UIModule.announceToScreenReader(`Auto read ${this.autoRead ? 'enabled' : 'disabled'}`);
+    },
+    
+    toggleSpeedDropdown: function(event, forceClose = false) {
+        const dropdown = document.getElementById('speedDropdown');
+        const speedBtn = document.getElementById('speedBtn');
+        
+        if (dropdown.hidden && !forceClose) {
+            // Position dropdown above the speed button in the footer
+            const buttonRect = speedBtn.getBoundingClientRect();
+            dropdown.style.bottom = (window.innerHeight - buttonRect.top + 5) + 'px';
+            dropdown.style.right = (window.innerWidth - buttonRect.right) + 'px';
+            
+            dropdown.hidden = false;
+        } else {
+            dropdown.hidden = true;
+        }
+        
+        if (event) {
+            event.stopPropagation();
+        }
+    },
+    
+    setRate: function(rate) {
+        this.currentRate = rate;
+        
+        // Update button text
+        document.querySelector('#speedBtn .icon').textContent = rate + 'x';
+        
+        // Update selected option in dropdown
+        const options = document.querySelectorAll('.speed-option');
+        options.forEach(option => {
+            if (parseFloat(option.dataset.rate) === rate) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+        
+        // Save preference
+        this.savePreferences();
+        
+        // Announce change for screen readers
+        UIModule.announceToScreenReader(`Speech rate set to ${rate}`);
+    },
+    
+    savePreferences: function() {
+        try {
+            localStorage.setItem('speechRate', this.currentRate);
+            localStorage.setItem('autoRead', this.autoRead ? 'true' : 'false');
+        } catch (e) {
+            console.error('Failed to save preferences:', e);
+        }
+    },
+    
+    loadPreferences: function() {
+        try {
+            const savedRate = localStorage.getItem('speechRate');
+            if (savedRate) {
+                this.currentRate = parseFloat(savedRate);
+            }
+            
+            const savedAutoRead = localStorage.getItem('autoRead');
+            if (savedAutoRead) {
+                this.autoRead = savedAutoRead === 'true';
+            }
+        } catch (e) {
+            console.error('Failed to load preferences:', e);
         }
     }
+};
 
-    // Add focus announcements
-    function initFocusAnnouncements() {
-        // TEMPORARILY DISABLED FOCUS SOUNDS
-        console.log('Focus announcements disabled');
-        return;
+/**
+ * Accessibility Module - Handles accessibility features
+ */
+AccessibilityModule = {
+    highContrast: false,
+    fontSize: null,
+    fontSizeOptions: null,
+    
+    init: function() {
+        this.fontSizeOptions = APP_CONFIG.accessibility.fontSize;
+        this.fontSize = this.fontSizeOptions.default;
         
-        /* ORIGINAL CODE COMMENTED OUT
-        // Add audio feedback for focus
-        const focusSound = new Audio();
-        focusSound.src = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABMYXZjNTguMTMuMTAwAGRhdGEAAAAA';
+        this.loadPreferences();
+        this.setupAccessibilityControls();
+        this.applySettings();
+    },
+    
+        toggleContrast: function() {
+        this.highContrast = !this.highContrast;
+        document.body.classList.toggle('high-contrast', this.highContrast);
+        this.savePreferences();
         
-        // Add focus announcement for all buttons
-        const buttons = document.querySelectorAll('button');
-        buttons.forEach(button => {
-            button.addEventListener('focus', () => {
-                // Play subtle focus sound
-                focusSound.play().catch(e => console.log('Could not play focus sound', e));
-                
-                // Don't announce too frequently (debounce)
-                if (Date.now() - state.lastAnnouncement > 1500) {
-                    state.lastAnnouncement = Date.now();
-                    
-                    // Get the button's accessible name from aria-label or text content
-                    const buttonName = button.getAttribute('aria-label') || button.textContent;
-                    
-                    // Don't announce read buttons to avoid conflict with their own action
-                    if (!button.classList.contains('read-btn')) {
-                        const announcement = `${buttonName}. Press Enter to activate.`;
-                        simpleSpeech(announcement, document.getElementById('rate').value);
-                    }
-                }
-            });
+        // Update button state
+        const contrastBtn = document.getElementById('contrastToggleBtn');
+        if (contrastBtn) {
+            contrastBtn.classList.toggle('active', this.highContrast);
             
-            // Add keyboard activation for better accessibility
-            button.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    button.click();
-                }
-            });
-        });
-        */
-    }
-
-    // Recording functionality
-    function initRecording() {
-        console.log('Initializing recording buttons');
-        
-        // Setup recording for each step
-        Object.keys(stepElements).forEach(stepKey => {
-            const step = stepElements[stepKey];
-            
-            if (!step.recordBtn) {
-                console.error(`Record button for ${stepKey} not found`);
-                return;
+            // Update tooltip text
+            const tooltip = contrastBtn.querySelector('.tooltip');
+            if (tooltip) {
+                tooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
             }
-            
-            // Use direct event handlers
-            step.recordBtn.addEventListener('click', function() {
-                console.log(`Record button for ${stepKey} clicked, recording state:`, state.recording);
-                if (state.recording) {
-                    stopRecording(stepKey);
+        }
+    },
+    
+    increaseFontSize: function() {
+        if (this.fontSize < this.fontSizeOptions.max) {
+            this.fontSize += this.fontSizeOptions.step;
+            this.applyFontSize();
+            this.savePreferences();
+        }
+    },
+    
+    decreaseFontSize: function() {
+        if (this.fontSize > this.fontSizeOptions.default) {
+            this.fontSize -= this.fontSizeOptions.step;
+            this.applyFontSize();
+            this.savePreferences();
+        }
+    },
+    
+    applyFontSize: function() {
+        document.body.style.fontSize = `${this.fontSize}px`;
+        
+        // Update font size button state
+        const fontBtn = document.getElementById('fontSizeBtn');
+        if (fontBtn) {
+            // Add active class if font size is larger than default
+            fontBtn.classList.toggle('active', this.fontSize > this.fontSizeOptions.default);
+        }
+    },
+    
+    setupAccessibilityControls: function() {
+        const fontBtn = document.getElementById('fontSizeBtn');
+        const contrastBtn = document.getElementById('contrastToggleBtn');
+        
+        if (fontBtn) {
+            fontBtn.addEventListener('click', () => {
+                this.increaseFontSize();
+                if (this.fontSize >= this.fontSizeOptions.max) {
+                    // Reset to default if we've reached the maximum
+                    this.fontSize = this.fontSizeOptions.default;
+                    this.applyFontSize();
+                    this.savePreferences();
+                    
+                    // Update tooltip
+                    const tooltip = fontBtn.querySelector('.tooltip');
+                    if (tooltip) {
+                        tooltip.textContent = 'Reset Font Size';
+                        setTimeout(() => {
+                            tooltip.textContent = 'Increase Font Size';
+                        }, 2000);
+                    }
+                    
+                    // Announce for screen readers
+                    SpeechModule.speak("Font size reset to default");
                 } else {
-                    startRecording(stepKey);
+                    // Announce for screen readers
+                    SpeechModule.speak("Font size increased");
                 }
             });
-            
-            // Make sure buttons are visible and enabled
-            step.recordBtn.hidden = false;
-            step.recordBtn.disabled = false;
-            
-            if (step.retryBtn) {
-                step.retryBtn.addEventListener('click', function() {
-                    resetRecording(stepKey);
-                });
-            }
-            
-            if (step.nextBtn) {
-                step.nextBtn.addEventListener('click', function() {
-                    // Move to the next step in the sequence
-                    const currentIndex = state.stepSequence.indexOf(stepKey);
-                    if (currentIndex >= 0 && currentIndex < state.stepSequence.length - 1) {
-                        const nextStepId = state.stepSequence[currentIndex + 1];
-                        showStep(nextStepId);
-                    } else if (stepKey === 'step3c') {
-                        submitGrievance();
-                    }
-                });
-            }
-        });
+        }
         
-        // Setup the "New Grievance" button
+        if (contrastBtn) {
+            contrastBtn.addEventListener('click', () => {
+                this.toggleContrast();
+                const message = this.highContrast ? 
+                    "High contrast mode enabled" : 
+                    "High contrast mode disabled";
+                SpeechModule.speak(message);
+            });
+            
+            // Initialize high contrast button state
+            contrastBtn.classList.toggle('active', this.highContrast);
+            
+            // Set initial tooltip text
+            const contrastTooltip = contrastBtn.querySelector('.tooltip');
+            if (contrastTooltip) {
+                contrastTooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
+            }
+        }
+    },
+    
+    applySettings: function() {
+        this.applyFontSize();
+        document.body.classList.toggle('high-contrast', this.highContrast);
+    },
+    
+    savePreferences: function() {
+        try {
+            localStorage.setItem('accessibilitySettings', JSON.stringify({
+                highContrast: this.highContrast,
+                fontSize: this.fontSize
+            }));
+        } catch (error) {
+            console.error("Could not save accessibility preferences", error);
+        }
+    },
+    
+    loadPreferences: function() {
+        try {
+            const savedSettings = localStorage.getItem('accessibilitySettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                this.highContrast = settings.highContrast || false;
+                this.fontSize = settings.fontSize || this.fontSizeOptions.default;
+            }
+        } catch (error) {
+            console.error("Could not load accessibility preferences", error);
+            this.highContrast = false;
+            this.fontSize = this.fontSizeOptions.default;
+        }
+    }
+};
+
+/**
+ * UI Module - Handles UI state and navigation
+ */
+UIModule = {
+    steps: ['1', '2a', '2b', '3a', '3b', '3c', 'confirmation'],
+    currentStepIndex: 0,
+    
+    init: function() {
+        this.setupHelpDialog();
+        this.setupNavigation();
+        this.showCurrentStep();
+    },
+    
+    setupHelpDialog: function() {
+        const helpBtn = document.getElementById('helpBtn');
+        
+        if (helpBtn) {
+            helpBtn.addEventListener('click', () => {
+                const helpDialog = document.getElementById('helpDialog');
+                if (helpDialog) {
+                    helpDialog.showModal();
+                    
+                    const closeBtn = helpDialog.querySelector('button');
+                    if (closeBtn) {
+                        closeBtn.addEventListener('click', () => {
+                            helpDialog.close();
+                        });
+                    }
+                }
+            });
+        }
+    },
+    
+    setupNavigation: function() {
+        document.querySelectorAll('.next-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.goToNextStep();
+            });
+        });
+        document.querySelectorAll('.retry-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Logic for retry handled in RecordingModule
+            });
+        });
+        // Add skip button listeners
+        document.querySelectorAll('.skip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.goToNextStep(true); // pass skip=true
+            });
+        });
         const newBtn = document.getElementById('newBtn');
         if (newBtn) {
-            newBtn.addEventListener('click', function() {
-                resetAllAndStartOver();
+            newBtn.addEventListener('click', () => {
+                this.resetApp();
             });
         }
-    }
-
-    async function startRecording(stepKey) {
-        console.log(`Starting recording for ${stepKey}`);
-        const step = stepElements[stepKey];
-        
-        // Prevent multiple recording attempts
-        if (state.recording) {
-            console.log('Already recording, stopping current recording first');
-            stopRecording(stepKey);
-            return;
-        }
-        
-        try {
-            console.log('Requesting microphone access...');
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: true,
-                video: false // Explicitly specify no video to avoid unnecessary permission requests
+        // Setup exit button
+        const exitBtn = document.getElementById('exitBtn');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', () => {
+                this.showExitConfirmation();
             });
-            
-            console.log('Microphone access granted, creating MediaRecorder');
-            state.recording = true;
-            
-            // Set up MediaRecorder with appropriate options
-            const options = {
-                mimeType: 'audio/webm',
-                audioBitsPerSecond: 128000
-            };
-            
-            try {
-                state.recorder = new MediaRecorder(stream, options);
-            } catch (e) {
-                console.log('MediaRecorder with options failed, using default', e);
-            state.recorder = new MediaRecorder(stream);
-            }
-            
-            const chunks = [];
-
-            state.recorder.ondataavailable = e => {
-                console.log('Data available from recorder', e.data.size);
-                if (e.data.size > 0) {
-                    chunks.push(e.data);
-                }
-            };
-            
-            state.recorder.onstop = () => {
-                console.log('Recorder stopped, processing', chunks.length, 'chunks');
-                if (chunks.length > 0) {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
-                    state.audioBlobs[stepKey] = blob;
-                    
-                    // Create audio URL and update UI
-                    const audioURL = URL.createObjectURL(blob);
-                    if (step.audio) {
-                        step.audio.src = audioURL;
-                        step.playback.hidden = false;
-                    } else {
-                        console.error(`Audio element not found for ${stepKey}`);
-                    }
-                    
-                    if (step.status) {
-                        step.status.hidden = true;
-                    }
-                    
-                    if (step.recordBtn) {
-                        step.recordBtn.hidden = false;
-                        const originalLabel = step.recordBtn.getAttribute('aria-label') || 'Record';
-                        step.recordBtn.textContent = originalLabel.replace('Stop', '').trim();
-                    }
-                    
-                    // Stop tracks
-                stream.getTracks().forEach(track => track.stop());
-                    console.log(`Recording for ${stepKey} completed and ready for playback`);
-                    
-                    // Announce recording complete
-                    simpleSpeech("Recording complete. You can now play it back, retry, or continue.", 
-                        document.getElementById('rate').value);
-                } else {
-                    console.error('No data recorded');
-                    simpleSpeech("No audio was recorded. Please try again.", 
-                        document.getElementById('rate').value);
-                    resetRecording(stepKey);
-                }
-            };
-            
-            state.recorder.onerror = (event) => {
-                console.error('MediaRecorder error:', event);
-                simpleSpeech("There was an error while recording. Please try again.", 
-                    document.getElementById('rate').value);
-                resetRecording(stepKey);
-            };
-
-            // Start the recorder with timeslice to ensure we get data chunks
-            state.recorder.start(1000);
-            console.log('MediaRecorder started');
-            
-            // Update UI
-            if (step.recordBtn) {
-                step.recordBtn.textContent = 'Stop Recording';
-            }
-            
-            if (step.status) {
-                step.status.hidden = false;
-            }
-            
-            startTimer(stepKey);
-            
-            // Announce recording started
-            simpleSpeech("Recording started. Speak clearly and press the same button when finished.", 
-                document.getElementById('rate').value);
-
-        } catch (err) {
-            console.error('Recording error:', err);
-            state.recording = false;
-            
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                showError(config.errors.micPermission);
-                simpleSpeech("Microphone access was denied. Please allow microphone access to record your grievance.", 
-                    document.getElementById('rate').value);
-            } else if (err.name === 'NotFoundError') {
-                showError("No microphone found. Please connect a microphone and try again.");
-                simpleSpeech("No microphone found. Please connect a microphone and try again.", 
-                    document.getElementById('rate').value);
-            } else {
-                showError(config.errors.recording);
-                simpleSpeech("There was an error starting the recording. Please try again.", 
-                    document.getElementById('rate').value);
-            }
         }
-    }
-
-    function stopRecording(stepKey) {
-        console.log(`Stopping recording for ${stepKey}`);
-        const step = stepElements[stepKey];
-        
-        if (state.recorder && state.recording) {
-            try {
-            state.recorder.stop();
-                console.log('MediaRecorder stopped');
-            } catch (e) {
-                console.error('Error stopping MediaRecorder:', e);
-                
-                // Handle the error - force reset the state
-                state.recording = false;
-                
-                // Ensure stream tracks are stopped if we have access to them
-                if (state.recorder && state.recorder.stream) {
-                    state.recorder.stream.getTracks().forEach(track => track.stop());
-                }
-                
-                // Reset UI
-                if (step) {
-                    if (step.status) step.status.hidden = true;
-                    if (step.recordBtn) {
-                        const originalLabel = step.recordBtn.getAttribute('aria-label') || 'Record';
-                        step.recordBtn.textContent = originalLabel.replace('Stop', '').trim();
-                    }
-                }
-                
-                stopTimer();
-                return;
-            }
-            
-            state.recording = false;
-            
-            // Reset the recording button text
-            if (step && step.recordBtn) {
-                const originalLabel = step.recordBtn.getAttribute('aria-label') || 'Record';
-                step.recordBtn.textContent = originalLabel.replace('Stop', '').trim();
-            }
-            
-            stopTimer();
-        } else {
-            console.warn(`Attempted to stop recording for ${stepKey} but no active recorder found`);
-            
-            // Reset UI elements in case of inconsistent state
-            if (step) {
-                if (step.status) step.status.hidden = true;
-                if (step.recordBtn) {
-                    const originalLabel = step.recordBtn.getAttribute('aria-label') || 'Record';
-                    step.recordBtn.textContent = originalLabel.replace('Stop', '').trim();
-                }
-            }
-            
-            state.recording = false;
-            stopTimer();
-        }
-    }
-
-    function resetRecording(stepKey) {
-        console.log(`Resetting recording for ${stepKey}`);
-        const step = stepElements[stepKey];
-        
-        if (step) {
-            step.playback.hidden = true;
-            step.recordBtn.hidden = false;
-            step.recordBtn.disabled = false;
-            step.status.hidden = true;
-            state.audioBlobs[stepKey] = null;
-            
-            // Announce reset
-            simpleSpeech("Recording reset. You can now record again.", 
-                document.getElementById('rate').value);
-        }
-    }
-
-    // Reset everything and start over
-    function resetAllAndStartOver() {
-        console.log('Resetting all and starting over');
-        
-        // Clear all recordings
-        Object.keys(state.audioBlobs).forEach(key => {
-            state.audioBlobs[key] = null;
-        });
-        
-        // Reset UI for all steps
-        Object.keys(stepElements).forEach(stepKey => {
-            const step = stepElements[stepKey];
-            if (step) {
-                step.playback.hidden = true;
-                if (step.recordBtn) {
-                    step.recordBtn.hidden = false;
-                    step.recordBtn.disabled = false;
-                    const originalLabel = step.recordBtn.getAttribute('aria-label') || 'Record';
-                    step.recordBtn.textContent = originalLabel.replace('Stop', '').trim();
-                }
-                step.status.hidden = true;
-                if (step.audio) {
-                    step.audio.src = '';
-                }
-            }
-        });
-        
-        // Show first step, hide others
-        showStep('step1');
-        
-        // Announce new session
-        simpleSpeech("Starting a new grievance report. Please record your grievance.", 
-            document.getElementById('rate').value);
-    }
-
-    // Timer functionality
-    let timer;
-    function startTimer(stepKey) {
-        // Clear any existing timer first
-        stopTimer();
-        
-        const step = stepElements[stepKey];
-        if (!step || !step.timer) {
-            console.warn(`Timer element not found for ${stepKey}`);
-            return;
-        }
-        
-        let seconds = 0;
-        timer = setInterval(() => {
-            seconds++;
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            
-            if (step.timer) {
-                step.timer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-                if (seconds >= config.recording.maxDuration) {
-                    console.log(`Maximum recording duration reached for ${stepKey}`);
-                    stopRecording(stepKey);
-                }
-            } else {
-                console.warn(`Timer element disappeared for ${stepKey}`);
-                stopTimer();
-            }
-        }, 1000);
-    }
-
-    function stopTimer() {
-        if (timer) {
-        clearInterval(timer);
-            timer = null;
-        }
-    }
-
-    // Accessibility functionality
-    function initAccessibility() {
-        console.log('Initializing accessibility features');
-        
-        const readBtn = document.getElementById('readBtn');
-        console.log('Read button element:', readBtn);
-        
-        if (readBtn) {
-            readBtn.onclick = function() {
-                console.log('Read Page button clicked');
-                readCurrentStep();
-            };
-        } else {
-            console.error('Read Page button not found in the DOM!');
-        }
-        
-        document.getElementById('rate').oninput = e => {
-            const rate = e.target.value;
-            document.getElementById('rateValue').textContent = rate + 'x';
-            accessibility.savePreference('speechRate', rate);
-        };
-        
-        document.getElementById('fontBtn').onclick = toggleFontSize;
-        document.getElementById('contrastBtn').onclick = toggleContrast;
-
-        // Load saved preferences
-        const savedRate = accessibility.loadPreference('speechRate', '1.0');
-        if (savedRate) {
-            document.getElementById('rate').value = savedRate;
-            document.getElementById('rateValue').textContent = savedRate + 'x';
-        }
-    }
-
-    // Initialize read section buttons
-    function initReadButtons() {
-        console.log('Initializing read buttons - TTS disabled');
-        const readButtons = document.querySelectorAll('.read-btn');
-        console.log(`Found ${readButtons.length} read section buttons`);
-        
-        readButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                console.log('Read button clicked - TTS disabled');
-                const targetId = this.getAttribute('data-target');
-                const targetElement = document.getElementById(targetId);
-                if (targetElement) {
-                    const heading = targetElement.querySelector('h2');
-                    const content = targetElement.querySelector('.content p');
-                    
-                    if (heading && content) {
-                        const speechText = heading.textContent + '. ' + content.textContent;
-                        console.log('Would have read:', speechText);
-                        
-                        // Add visual indicator briefly
-                    this.classList.add('reading');
-                        setTimeout(() => {
-                        this.classList.remove('reading');
-                        }, 500);
-                    }
-                }
-            });
-        });
-    }
-
-    function readCurrentStep() {
-        // TEMPORARILY DISABLED
-        console.log('readCurrentStep called - TTS disabled');
-        
-        // Find the visible step
-        let visibleStepId = null;
-        Object.keys(stepContainers).forEach(stepId => {
-            if (!stepContainers[stepId].hidden) {
-                visibleStepId = stepId;
-            }
-        });
-        
-        console.log('Current visible step:', visibleStepId);
-        
-        if (!visibleStepId) {
-            return;
-        }
-        
-        const step = document.getElementById(visibleStepId);
-        if (step) {
-            const heading = step.querySelector('h2');
-            const content = step.querySelector('.content p');
-            
-            if (heading && content) {
-                const speechText = heading.textContent + '. ' + content.textContent;
-                console.log('Would have read current step content:', speechText);
-            }
-        }
-    }
-
-    // Help functionality
-    function initHelp() {
-        console.log('Initializing help dialog - TTS disabled');
-        const dialog = document.getElementById('helpDialog');
-        document.getElementById('helpBtn').onclick = () => {
-            dialog.showModal();
-            // Log instead of reading help content
-            const helpText = "Help and Instructions. " + 
-                         document.querySelector('#helpDialog ol').textContent + " " +
-                         document.querySelector('#helpDialog ul').textContent;
-            console.log('Would have read help content:', helpText);
-        };
-        dialog.querySelector('button').onclick = () => dialog.close();
-    }
-
-    // Navigation
-    function showStep(stepId) {
-        console.log('Showing step:', stepId);
-        console.log('Current step in state:', state.currentStep);
-        console.log('Audio blob for step1 exists:', !!state.audioBlobs['step1']);
-        console.log('Audio blobs keys:', Object.keys(state.audioBlobs));
-        
-        // Special handling when moving from step1 to step2a - create grievance ID
-        if (state.currentStep === 'step1' && stepId === 'step2a') {
-            // Only create grievance if we've recorded something
-            if (state.audioBlobs['step1']) {
-                console.log('Moving from step1 to step2a, creating grievance ID');
-                
-                // Create the grievance ID and then continue with navigation
-                createGrievance().then(id => {
-                    console.log('Created grievance ID:', id);
-                    
-                    // Update any UI that might need the ID
-                    updateUIWithGrievanceId(id);
-                    
-                    // Continue with navigation
-                    completeStepNavigation(stepId);
-                }).catch(err => {
-                    console.error('Failed to create grievance ID:', err);
-                    // Continue anyway with navigation
-                    completeStepNavigation(stepId);
-                });
-                
-                // Return early as we'll complete navigation in the Promise handlers
-                return;
-            } else {
-                console.warn('No recording for step1, skipping grievance creation');
-                // Continue with normal navigation
-            }
-        }
-        
-        // For all other transitions, proceed normally
-        completeStepNavigation(stepId);
-    }
+    },
     
-    // Helper function to update UI elements with grievance ID
-    function updateUIWithGrievanceId(id) {
-        console.log('Updating UI with grievance ID:', id);
-        // Store the ID in the span element on the result page
-        const idSpan = document.querySelector('#grievanceId span');
-        if (idSpan) {
-            idSpan.textContent = id;
-        }
-    }
-    
-    // Complete the step navigation process
-    function completeStepNavigation(stepId) {
+    showCurrentStep: function() {
         // Hide all steps
-        Object.keys(stepContainers).forEach(id => {
-            stepContainers[id].hidden = true;
-        });
+        this.hideAllSteps();
         
-        // Show the requested step
-        if (stepContainers[stepId]) {
-            stepContainers[stepId].hidden = false;
+        // Show current step
+        const step = this.steps[this.currentStepIndex];
+        state.currentStep = step;
+        const stepElement = document.getElementById(`step${step}`);
+        
+        if (stepElement) {
+            stepElement.hidden = false;
             
-            // Update the current step in the state
-            state.currentStep = stepId;
-            
-            const stepIndex = state.stepSequence.indexOf(stepId);
-            if (stepIndex >= 0) {
-                console.log(`Step ${stepId} is at position ${stepIndex+1} in the sequence`);
+            // Get step content for screen reader
+            const content = stepElement.querySelector('.content');
+            if (content && SpeechModule.autoRead) {
+                SpeechModule.speak(content.textContent);
             }
-            
-            // Log step change instead of announcing
-            const stepTitle = document.querySelector(`#${stepId} h2`)?.textContent;
-            const stepContent = document.querySelector(`#${stepId} .content p`)?.textContent;
-            if (stepTitle && stepContent) {
-                console.log(`Would have announced: Moving to ${stepTitle}. ${stepContent}`);
-            }
-        } else {
-            console.error(`Step container ${stepId} not found`);
-        }
-    }
-
-    // Create a grievance ID from the server when step 1 is completed
-    async function createGrievance() {
-        try {
-            console.log('Creating new grievance on server');
-            console.log('API base URL:', config.api.baseUrl);
-            
-            // Debug output for configuration
-            console.log('Current config:', {
-                baseUrl: config.api.baseUrl,
-                endpoints: config.api.endpoints
-            });
-            
-            // Always generate a local ID first in case the server request fails
-            const localId = generateLocalId();
-            
-            // Use the endpoint from config if available
-            const endpoint = config.api.endpoints.createGrievance || '/create-grievance';
-            console.log('Using endpoint:', endpoint);
-            console.log('Full URL:', config.api.baseUrl + endpoint);
-            
-            try {
-                // Make sure we're using the full server URL
-                const serverUrl = config.api.baseUrl;
-                const response = await fetch(`${serverUrl}${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        source: 'accessibility',
-                        timestamp: new Date().toISOString()
-                    })
+            // Re-attach .next-btn event listeners for this step
+            stepElement.querySelectorAll('.next-btn').forEach(btn => {
+                btn.disabled = false;
+                btn.onclick = null;
+                btn.addEventListener('click', () => {
+                    this.goToNextStep();
                 });
-
-                if (!response.ok) {
-                    console.error('Failed to create grievance:', response.status, response.statusText);
-                    // If the server returns an error, use the local ID
-                    console.log('Using local grievance ID due to server error:', localId);
-                    state.grievanceId = localId;
-                    return localId;
-                }
-
-                // Try to parse the response
-                try {
-                    const data = await response.json();
-                    console.log('Grievance created, response:', data);
-                    
-                    if (data.id || data.grievance_id) {
-                        // Store the ID in state for later use
-                        state.grievanceId = data.id || data.grievance_id;
-                        console.log('Grievance ID stored in state:', state.grievanceId);
-                        return state.grievanceId;
-                    } else {
-                        console.error('No grievance ID returned from server');
-                        // Use the local ID
-                        state.grievanceId = localId;
-                        console.log('Using local grievance ID due to missing ID in response:', localId);
-                        return localId;
-                    }
-                } catch (parseError) {
-                    console.error('Error parsing response from server:', parseError);
-                    // Use the local ID if we couldn't parse the response
-                    state.grievanceId = localId;
-                    console.log('Using local grievance ID due to parse error:', localId);
-                    return localId;
-                }
-            } catch (networkError) {
-                console.error('Network error creating grievance:', networkError);
-                // Use the local ID in case of network errors
-                state.grievanceId = localId;
-                console.log('Using local grievance ID due to network error:', localId);
-                return localId;
-            }
-        } catch (err) {
-            console.error('Unexpected error creating grievance:', err);
-            // Generate a fallback ID
-            const fallbackId = 'ERR-' + Date.now();
-            state.grievanceId = fallbackId;
-            console.log('Using fallback grievance ID due to unexpected error:', fallbackId);
-            return fallbackId;
+            });
         }
-    }
+    },
     
-    // Generate a local ID for grievances when server is unavailable
-    function generateLocalId() {
-        const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000);
-        return `GR-${timestamp}-${random}`;
-    }
-
-    // File upload functionality
-    function initFileUpload() {
-        console.log('Initializing file upload functionality');
+    hideAllSteps: function() {
+        this.steps.forEach(step => {
+            const element = document.getElementById(`step${step}`);
+            if (element) {
+                element.hidden = true;
+            }
+        });
+    },
+    
+    goToNextStep: function(skip = false) {
+        console.log('Going to next step from:', state.currentStep);
+        let nextStep;
+        if (state.currentStep === '3b') {
+            nextStep = '3c';
+            console.log('Special handling for step 3b -> 3c');
+        } else if (state.currentStep === '1') {
+            nextStep = '2a';
+        } else if (state.currentStep === '2a') {
+            nextStep = '2b';
+        } else if (state.currentStep === '2b') {
+            nextStep = '3a';
+        } else if (state.currentStep === '3a') {
+            nextStep = '3b';
+        } else if (state.currentStep === '3c') {
+            // Do not automatically submit; just show the playback and submit button
+            console.log('Step 3c: Waiting for user to submit.');
+            return;
+        } else {
+            const currentNum = parseInt(state.currentStep);
+            if (!isNaN(currentNum)) {
+                nextStep = (currentNum + 1).toString();
+            } else {
+                console.error('Unable to determine next step from:', state.currentStep);
+                return;
+            }
+        }
+        console.log('Next step determined as:', nextStep);
+        if (!skip) {
+            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+            if (!hasRecordings) {
+                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                this.showError('Please record your response before continuing, or use Skip.');
+                return;
+            }
+        }
+        state.currentStep = nextStep;
+        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+        UIModule.showCurrentStep();
+    },
+    
+    goToPreviousStep: function() {
+        if (this.currentStepIndex > 0) {
+            this.currentStepIndex--;
+            this.showCurrentStep();
+        }
+    },
+    
+    goToStep: function(stepIndex) {
+        if (stepIndex >= 0 && stepIndex < this.steps.length) {
+            this.currentStepIndex = stepIndex;
+            this.showCurrentStep();
+        }
         
-        const attachBtn = document.getElementById('attachFilesBtn');
-        const fileInput = document.getElementById('fileInput');
+        // Auto-read step content if enabled
+        if (SpeechModule.autoRead) {
+            setTimeout(() => {
+                const currentStep = document.querySelector('.step:not([hidden])');
+                if (currentStep) {
+                    SpeechModule.speak(currentStep.textContent);
+                }
+            }, 300);
+        }
+    },
+    
+    navigateToStep: function(stepName) {
+        const stepIndex = this.steps.indexOf(stepName);
+        if (stepIndex !== -1) {
+            this.goToStep(stepIndex);
+        } else {
+            console.error(`Step ${stepName} not found`);
+        }
+    },
+    
+    resetApp: function() {
+        console.log("Resetting application state");
+        
+        // Reset to initial state
+        this.currentStepIndex = 0;
+        state.currentStep = this.steps[0];
+        state.grievanceId = null;
+        
+        // Hide confirmation step
+        const confirmationStep = document.getElementById('confirmation');
+        if (confirmationStep) {
+            confirmationStep.hidden = true;
+        }
+        
+        // Reset the form
+        const form = document.getElementById('grievanceForm');
+        if (form) {
+            form.reset();
+        }
+        
+        // Clear recordings
+        RecordingModule.clearRecordings();
+        
+        // Clear files
+        FileUploadModule.clearFiles();
+        
+        // Reset UI elements related to file uploads
         const fileList = document.getElementById('fileList');
-        const fileListUl = fileList ? fileList.querySelector('ul') : null;
-        
-        if (!attachBtn || !fileInput || !fileList || !fileListUl) {
-            console.error('File upload elements not found in the DOM');
-            return;
+        if (fileList) {
+            fileList.hidden = true;
+            const ul = fileList.querySelector('ul');
+            if (ul) ul.innerHTML = '';
         }
         
-        // Show file input when attach button is clicked
-        attachBtn.addEventListener('click', function() {
-            console.log('Attach files button clicked');
-            fileInput.click();
+        const uploadedFilesSection = document.getElementById('uploadedFilesSection');
+        if (uploadedFilesSection) {
+            uploadedFilesSection.hidden = true;
+        }
+        
+        const uploadedFilesList = document.getElementById('uploadedFilesList');
+        if (uploadedFilesList) {
+            const ul = uploadedFilesList.querySelector('ul');
+            if (ul) ul.innerHTML = '';
+        }
+        
+        // Show first step
+        UIModule.showCurrentStep();
+    },
+    
+    showError: function(message) {
+        // Log the message but don't show overlay notifications
+        console.log('Error:', message);
+        
+        // Instead of showing a notification, update a status element on the page
+        // This is safer than modal popups
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = 'status-error';
+            statusElement.hidden = false;
+            
+            // Auto-hide after a few seconds
+            setTimeout(() => {
+                statusElement.hidden = true;
+            }, 3000);
+        }
+    },
+    
+    showSuccess: function(message, grievanceId) {
+        const confirmationElement = document.getElementById('confirmation');
+        const messageElement = document.getElementById('resultMessage');
+        const idElement = document.getElementById('grievanceId').querySelector('span');
+        
+        if (confirmationElement && messageElement && idElement) {
+            messageElement.textContent = message;
+            idElement.textContent = grievanceId;
+            confirmationElement.hidden = false;
+            
+            SpeechModule.speak(message + ". Your grievance ID is " + 
+                grievanceId.split('').join(' '));
+        }
+    },
+    
+    showLoading: function(message) {
+        // Log the message but don't show overlay notifications
+        console.log('Loading:', message);
+        
+        // Instead of showing a notification, update a status element on the page
+        // This is safer than modal popups
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message || 'Loading...';
+            statusElement.className = 'status-message';
+            statusElement.hidden = false;
+        }
+    },
+    
+    hideLoading: function() {
+        // Hide the status element
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.hidden = true;
+        }
+    },
+    
+    showConfirmationScreen: function(grievanceId) {
+        console.log("Showing confirmation screen for grievance ID:", grievanceId);
+        
+        // First completely hide ALL steps including step3c
+        document.querySelectorAll('.step').forEach(step => {
+            step.hidden = true;
+            step.style.display = 'none';
         });
         
-        // Handle file selection
-        fileInput.addEventListener('change', function() {
-            console.log('Files selected:', this.files.length);
-            if (this.files.length > 0) {
-                // Clear previous file list
-                fileListUl.innerHTML = '';
-                state.selectedFiles = Array.from(this.files);
-                
-                // Display selected files
-                state.selectedFiles.forEach((file, index) => {
-                    const fileSizeKB = Math.round(file.size / 1024);
-                    const fileItem = document.createElement('li');
-                    
-                    const fileNameSpan = document.createElement('span');
-                    fileNameSpan.className = 'file-name';
-                    fileNameSpan.textContent = file.name;
-                    
-                    const fileSizeSpan = document.createElement('span');
-                    fileSizeSpan.className = 'file-size';
-                    fileSizeSpan.textContent = `${fileSizeKB} KB`;
-                    
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-file';
-                    removeBtn.textContent = '×';
-                    removeBtn.setAttribute('aria-label', `Remove file ${file.name}`);
-                    removeBtn.addEventListener('click', function() {
-                        removeFile(index);
-                    });
-                    
-                    fileItem.appendChild(fileNameSpan);
-                    fileItem.appendChild(fileSizeSpan);
-                    fileItem.appendChild(removeBtn);
-                    fileListUl.appendChild(fileItem);
+        // Get the confirmation screen element
+        const confirmationElement = document.getElementById('confirmation');
+        
+        if (!confirmationElement) {
+            console.error("Confirmation element not found!");
+                return;
+            }
+            
+        // Update the grievance ID
+        const idElement = document.getElementById('grievanceId');
+        if (idElement) {
+            const span = idElement.querySelector('span');
+            if (span) {
+                span.textContent = grievanceId;
+            }
+        }
+        
+        // Update the success message
+        const resultMessage = document.getElementById('resultMessage');
+        if (resultMessage) {
+            resultMessage.textContent = "Your voice grievance has been submitted successfully. You can now attach photos or documents.";
+        }
+        
+        // Ensure attachment instructions are visible
+        const attachmentInstructions = document.getElementById('attachmentInstructions');
+        if (attachmentInstructions) {
+            attachmentInstructions.hidden = false;
+        }
+        
+        // Make the confirmation screen visible
+        confirmationElement.hidden = false;
+        confirmationElement.style.display = 'block';
+        
+        // Force a repaint to ensure visibility
+        confirmationElement.offsetHeight;
+        
+        // Update the current step state
+        this.currentStepIndex = this.steps.indexOf('confirmation');
+        state.currentStep = 'confirmation';
+        
+        // Scroll to the top to ensure visibility
+        window.scrollTo(0, 0);
+        
+        console.log("Confirmation screen should now be the only visible step");
+    },
+    
+    showExitConfirmation: function() {
+        console.log("User chose to exit");
+        window.location.href = '/';
+    },
+    
+    closeExitDialog: function() {
+        console.log("Exit dialog would be closed");
+    },
+    
+    executeExit: function() {
+        // First try using window.close()
+        window.close();
+        
+        // As a fallback if window.close() doesn't work
+        // (which can happen due to browser security restrictions)
+        setTimeout(() => {
+            const message = document.createElement('div');
+            message.setAttribute('role', 'alert');
+            message.style.position = 'fixed';
+            message.style.top = '0';
+            message.style.left = '0';
+            message.style.width = '100%';
+            message.style.height = '100%';
+            message.style.backgroundColor = '#fff';
+            message.style.display = 'flex';
+            message.style.flexDirection = 'column';
+            message.style.justifyContent = 'center';
+            message.style.alignItems = 'center';
+            message.style.zIndex = '9999';
+            message.innerHTML = `
+                <h1>Thank You for Your Submission</h1>
+                <p>Your grievance ID is: <strong>${state.grievanceId || 'N/A'}</strong></p>
+                <p>It is now safe to close this window.</p>
+                <button id="close-tab-btn" style="margin-top:20px; padding:10px 20px; background-color:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer;">
+                    Close Tab
+                </button>
+            `;
+            document.body.innerHTML = '';
+            document.body.appendChild(message);
+            
+            // Add event listener to the close tab button
+            const closeTabBtn = document.getElementById('close-tab-btn');
+            if (closeTabBtn) {
+                closeTabBtn.addEventListener('click', () => {
+                    window.close();
                 });
                 
-                // Show the file list
-                fileList.hidden = false;
-                
-                // Announce files selected
-                simpleSpeech(`${this.files.length} files selected.`, document.getElementById('rate').value);
-            } else {
-                // Hide the file list if no files are selected
-                fileList.hidden = true;
-                state.selectedFiles = [];
+                // Focus on the button for keyboard users
+                closeTabBtn.focus();
             }
+            
+            // Announce completion for screen readers
+            SpeechModule.speak("Thank you for your submission. Your grievance ID is " + 
+                (state.grievanceId ? state.grievanceId.split('').join(' ') : 'not available') + 
+                ". It is now safe to close this window.");
+        }, 300);
+    },
+    
+    showLoadingOverlay: function(message) {
+        // Log the message but don't show overlay notifications
+        console.log('Loading:', message);
+        
+        // Instead of showing a notification, update a status element on the page
+        // This is safer than modal popups
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message || 'Loading...';
+            statusElement.className = 'status-message';
+            statusElement.hidden = false;
+        }
+    },
+    
+    hideLoadingOverlay: function() {
+        // Hide the status element
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.hidden = true;
+        }
+    }
+};
+
+/**
+ * API Module - Handles all API interactions
+ */
+APIModule = {
+    baseUrl: '',
+    endpoints: {},
+    
+    init: function() {
+        this.baseUrl = APP_CONFIG.api.baseUrl || '';
+        this.endpoints = APP_CONFIG.api.endpoints || {};
+    },
+    
+    /**
+     * Makes a fetch request to the specified endpoint
+     * @param {string} endpoint - The API endpoint path
+     * @param {Object} options - Fetch options
+     * @returns {Promise} - Fetch promise
+     */
+    request: async function(endpoint, options = {}) {
+        const url = this.baseUrl + endpoint;
+        
+        // Don't set Content-Type for FormData - browser will set it with proper boundary
+        if (!(options.body instanceof FormData) && !options.headers) {
+            options.headers = {
+                'Content-Type': 'application/json'
+            };
+        }
+        
+        console.log(`API request to ${url}`, options);
+        
+        try {
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status} ${response.statusText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
+    },
+    
+    /**
+     * Creates a new grievance
+     * @param {Object} formData - FormData object with grievance details
+     * @returns {Promise} - Promise with grievance creation result
+     */
+    createGrievance: async function(formData) {
+        return this.request(this.endpoints.submitGrievance, {
+            method: 'POST',
+            body: formData,
         });
-    }
-
-    // Remove a file from the selected files
-    function removeFile(index) {
-        console.log('Removing file at index:', index);
-        if (index >= 0 && index < state.selectedFiles.length) {
-            const fileName = state.selectedFiles[index].name;
-            
-            // Remove from state
-            state.selectedFiles.splice(index, 1);
-            
-            // Update the UI
-            const fileListUl = document.querySelector('#fileList ul');
-            if (fileListUl) {
-                fileListUl.innerHTML = ''; // Clear the list
-                
-                // Rebuild the list with updated files
-                state.selectedFiles.forEach((file, idx) => {
-                    const fileSizeKB = Math.round(file.size / 1024);
-                    const fileItem = document.createElement('li');
-                    
-                    const fileNameSpan = document.createElement('span');
-                    fileNameSpan.className = 'file-name';
-                    fileNameSpan.textContent = file.name;
-                    
-                    const fileSizeSpan = document.createElement('span');
-                    fileSizeSpan.className = 'file-size';
-                    fileSizeSpan.textContent = `${fileSizeKB} KB`;
-                    
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-file';
-                    removeBtn.textContent = '×';
-                    removeBtn.setAttribute('aria-label', `Remove file ${file.name}`);
-                    removeBtn.addEventListener('click', function() {
-                        removeFile(idx);
-                    });
-                    
-                    fileItem.appendChild(fileNameSpan);
-                    fileItem.appendChild(fileSizeSpan);
-                    fileItem.appendChild(removeBtn);
-                    fileListUl.appendChild(fileItem);
-                });
-                
-                // Hide the file list if no files are left
-                if (state.selectedFiles.length === 0) {
-                    document.getElementById('fileList').hidden = true;
-                }
-            }
-            
-            // Announce file removal
-            simpleSpeech(`Removed file ${fileName}.`, document.getElementById('rate').value);
-        }
-    }
-
-    // Form submission
-    async function submitGrievance() {
-        console.log('Submitting grievance');
-        try {
-            // Handle voice recordings submission
-            const formData = new FormData();
-            
-            // Use existing grievance ID if available
-            if (state.grievanceId) {
-                console.log('Using existing grievance ID:', state.grievanceId);
-                formData.append('grievance_id', state.grievanceId);
-            } else {
-                // Create a new ID if we don't have one yet
-                console.log('No grievance ID found, creating one');
-                const newId = await createGrievance();
-                console.log('Created new grievance ID for submission:', newId);
-                formData.append('grievance_id', newId);
-            }
-            
-            // Log how many audio blobs we have
-            console.log('Audio blobs to submit:', Object.keys(state.audioBlobs).length);
-            
-            // Add all audio recordings with database field names
-            Object.entries(state.audioBlobs).forEach(([key, blob]) => {
-                if (blob) {
-                    // Use database field names for each recording to match backend
-                    const fieldNameMap = {
-                        'step1': 'grievance_details',
-                        'step2a': 'user_full_name',
-                        'step2b': 'user_contact_phone',
-                        'step3a': 'user_municipality',
-                        'step3b': 'user_village',
-                        'step3c': 'user_address'
-                    };
-                    
-                    const fileName = fieldNameMap[key] || key;
-                    
-                    console.log(`Adding blob for ${key} as ${fileName}.webm (size: ${blob.size} bytes)`);
-                    formData.append(`${fileName}.webm`, blob);
-                }
-            });
-
-            const submissionUrl = config.api.baseUrl + config.api.endpoints.submitGrievance;
-            console.log('Submitting voice recordings to:', submissionUrl);
-            
-            try {
-                const response = await fetch(submissionUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    console.error('Voice submission failed with status:', response.status, response.statusText);
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText);
-                    throw new Error(config.errors.submission + ' (Status: ' + response.status + ')');
-                }
-                
-                console.log('Voice submission successful, parsing response');
-                const data = await response.json();
-                console.log('Voice submission response data:', data);
-                
-                // Use the grievance ID returned from the server or the one we already have
-                const grievanceId = data.grievance_id || data.id || state.grievanceId;
-                console.log('Using grievance ID for subsequent uploads:', grievanceId);
-                
-                // After successful voice submission, upload any attached files
-                if (state.selectedFiles && state.selectedFiles.length > 0) {
-                    await uploadFiles(grievanceId);
-                } else {
-                    console.log('No files selected for upload');
-                }
-                
-                // Set current step to result before showing the result screen
-                state.currentStep = 'result';
-                
-                // Hide all step containers
-                Object.keys(stepContainers).forEach(id => {
-                    stepContainers[id].hidden = (id !== 'result');
-                });
-                
-                // Display the grievance ID
-                if (grievanceId) {
-                    const idElement = document.getElementById('grievanceId');
-                    if (idElement) {
-                        const spanElement = idElement.querySelector('span');
-                        if (spanElement) {
-                            spanElement.textContent = grievanceId;
-                            idElement.hidden = false;
-                        } else {
-                            idElement.textContent = 'Your grievance ID is: ' + grievanceId;
-                            idElement.hidden = false;
-                        }
-                    }
-                }
-                
-                const resultMessage = document.getElementById('resultMessage');
-                if (resultMessage) {
-                    resultMessage.textContent = 'Your voice recordings have been received.';
-                    if (state.selectedFiles && state.selectedFiles.length > 0) {
-                        resultMessage.textContent += ' Your files have also been uploaded.';
-                    }
-                }
-                
-            } catch (fetchError) {
-                console.error('Fetch error during submission:', fetchError);
-                throw fetchError;
-            }
-            
-        } catch (err) {
-            console.error('Submission error:', err);
-            showError(err.message || config.errors.submission);
-        }
-    }
-
-    // Upload files after voice recording submission
-    async function uploadFiles(grievanceId) {
-        if (!state.selectedFiles || state.selectedFiles.length === 0) {
-            console.log('No files to upload');
-            return;
-        }
+    },
+    
+    /**
+     * Uploads a file for a grievance
+     * @param {string} grievanceId - The grievance ID
+     * @param {Object} formData - FormData object with file data
+     * @returns {Promise} - Promise with file upload result
+     */
+    uploadFile: async function(grievanceId, formData) {
+        console.log(`Uploading files for grievance ID: ${grievanceId}`);
         
-        console.log(`Uploading ${state.selectedFiles.length} files for grievance ID ${grievanceId}`);
-        
-        try {
-            const formData = new FormData();
+        // Make sure grievance_id is in the formData
+        if (!formData.has('grievance_id')) {
             formData.append('grievance_id', grievanceId);
+        }
+        
+        // Use accessible-file-upload endpoint for better handling of multiple files
+        const endpoint = this.endpoints.accessibleFileUpload;
+        const url = this.baseUrl + endpoint;
+        
+        console.log(`Sending files to endpoint: ${url}`);
+        
+        try {
+            // Log some debugging info about what's in the formData
+            console.log("FormData contents (keys only):");
+            for (const key of formData.keys()) {
+                if (key === 'files[]') {
+                    const files = formData.getAll('files[]');
+                    console.log(`- ${key}: ${files.length} files`);
+                    files.forEach((file, i) => {
+                        console.log(`  - File ${i+1}: ${file.name} (${file.size} bytes)`);
+                    });
+                } else {
+                    console.log(`- ${key}: ${formData.get(key)}`);
+                }
+            }
             
-            // Add all files to the FormData
-            state.selectedFiles.forEach((file, index) => {
-                console.log(`Adding file to upload: ${file.name} (${file.size} bytes)`);
-                formData.append('files[]', file);
-            });
-            
-            // Use the accessibleFileUpload endpoint from config
-            const uploadUrl = config.api.baseUrl + config.api.endpoints.accessibleFileUpload;
-            console.log('Uploading files to:', uploadUrl);
-            
-            const response = await fetch(uploadUrl, {
+            // Make the request
+            const response = await fetch(url, {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
             
             if (!response.ok) {
-                console.error('File upload failed with status:', response.status, response.statusText);
-                const errorText = await response.text();
-                console.error('Error response:', errorText);
-                throw new Error('File upload failed (Status: ' + response.status + ')');
+                console.error(`API error: ${response.status} ${response.statusText}`);
+                
+                // Try to get more detailed error info
+                let errorDetails;
+                try {
+                    errorDetails = await response.json();
+                    console.error("Error details:", errorDetails);
+            } catch (e) {
+                    // If response is not JSON, get text instead
+                    try {
+                        errorDetails = await response.text();
+                        console.error("Error response:", errorDetails);
+                    } catch (e2) {
+                        console.error("Could not parse error response");
+                    }
+                }
+                
+                throw new Error(`API error: ${response.status} ${response.statusText}`);
             }
             
-            const data = await response.json();
-            console.log('File upload successful:', data);
-            
-            return data;
+            const result = await response.json();
+            console.log("File upload result:", result);
+            return result;
         } catch (error) {
-            console.error('Error uploading files:', error);
-            // Don't throw the error - we still want to show the success screen for the voice recording
+            console.error('File upload request failed:', error);
+            throw error;
         }
-    }
-
-    // Utility functions
-    function showError(message) {
-        console.error('Showing error:', message);
+    },
+    
+    /**
+     * Checks the status of a grievance
+     * @param {string} grievanceId - The grievance ID
+     * @returns {Promise} - Promise with grievance status
+     */
+    checkGrievanceStatus: async function(grievanceId) {
+        const endpoint = `${this.endpoints.checkStatus}?grievance_id=${grievanceId}`;
         
-        // Hide all other steps
-        Object.keys(stepContainers).forEach(id => {
-            stepContainers[id].hidden = true;
+        return this.request(endpoint, {
+            method: 'GET',
+        });
+    }
+};
+
+/**
+ * File Upload Module - Handles file selection and uploads
+ */
+FileUploadModule = {
+    selectedFiles: [],
+    uploadedFiles: [],
+    maxFileSize: 0,
+    allowedFileTypes: [],
+    
+    init: function() {
+        this.maxFileSize = APP_CONFIG.upload.maxFileSize || 10 * 1024 * 1024; // 10MB default
+        this.allowedFileTypes = APP_CONFIG.upload.allowedTypes || [];
+        
+        this.setupFileInput();
+        this.setupFileDrop();
+        this.setupAttachmentButtons();
+    },
+    
+    setupFileInput: function() {
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        
+        if (fileInput && fileList) {
+            fileInput.addEventListener('change', (event) => {
+                this.handleFileSelection(event.target.files);
+            });
+        }
+    },
+    
+    setupAttachmentButtons: function() {
+        // Setup attach files button
+        const attachFilesBtn = document.getElementById('attachFilesBtn');
+        if (attachFilesBtn) {
+            attachFilesBtn.addEventListener('click', () => {
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            });
+        }
+        
+        // Setup submit files button
+        const submitFilesBtn = document.getElementById('submitFilesBtn');
+        if (submitFilesBtn) {
+            submitFilesBtn.addEventListener('click', () => {
+                this.submitSelectedFiles();
+            });
+        }
+        
+        // Setup attach more files button
+        const attachMoreBtn = document.getElementById('attachMoreBtn');
+        if (attachMoreBtn) {
+            attachMoreBtn.addEventListener('click', () => {
+                // Clear existing selected files first
+                this.selectedFiles = [];
+                this.updateFileList();
+                
+                // Then show attach button and trigger file input
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            });
+        }
+    },
+    
+    setupFileDrop: function() {
+        const dropZone = document.getElementById('dropZone');
+        
+        if (dropZone) {
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            // Highlight drop zone when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.add('highlight');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.remove('highlight');
+                }, false);
+            });
+            
+            // Handle dropped files
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                this.handleFileSelection(files);
+            }, false);
+        }
+    },
+    
+    handleFileSelection: function(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        
+        // Convert FileList to Array for easier manipulation
+        const files = Array.from(fileList);
+        
+        // Validate files
+        const validFiles = files.filter(file => this.validateFile(file));
+        
+        // Add valid files to selected files array
+        this.selectedFiles = [...this.selectedFiles, ...validFiles];
+        
+        // Update UI
+        this.updateFileList();
+        
+        // Show the file list
+        const fileListElement = document.getElementById('fileList');
+        if (fileListElement) {
+            fileListElement.hidden = false;
+        }
+        
+        // Announce for screen readers
+        SpeechModule.speak(`${validFiles.length} files selected. Review the files and click Submit Files when ready.`);
+    },
+    
+    validateFile: function(file) {
+        // Check file size
+        if (file.size > this.maxFileSize) {
+            UIModule.showError(`File ${file.name} is too large. Maximum size is ${this.maxFileSize / (1024 * 1024)}MB.`);
+            return false;
+        }
+        
+        // Check file type if restrictions exist
+        if (this.allowedFileTypes.length > 0) {
+            const fileType = file.type.toLowerCase();
+            const fileName = file.name.toLowerCase();
+            const isAllowed = this.allowedFileTypes.some(type => {
+                return fileType.includes(type) || fileName.endsWith(`.${type}`);
+            });
+            
+            if (!isAllowed) {
+                UIModule.showError(`File ${file.name} is not allowed. Allowed types: ${this.allowedFileTypes.join(', ')}`);
+                return false;
+            }
+        }
+        
+        return true;
+    },
+    
+    updateFileList: function() {
+        const fileListElement = document.getElementById('fileList');
+        if (!fileListElement) return;
+        
+        const listElement = fileListElement.querySelector('ul') || document.createElement('ul');
+        
+        // Clear existing list
+        listElement.innerHTML = '';
+        
+        // Add files to list
+        this.selectedFiles.forEach((file, index) => {
+            const listItem = document.createElement('li');
+            
+            // Format file size
+            const fileSize = file.size < 1024 * 1024
+                ? `${Math.round(file.size / 1024)} KB`
+                : `${Math.round(file.size / (1024 * 1024) * 10) / 10} MB`;
+            
+            listItem.textContent = `${file.name} (${fileSize})`;
+            
+            // Add remove button
+            const removeButton = document.createElement('button');
+            removeButton.textContent = 'Remove';
+            removeButton.setAttribute('type', 'button');
+            removeButton.setAttribute('aria-label', `Remove file ${file.name}`);
+            removeButton.classList.add('remove-file-btn');
+            
+            removeButton.addEventListener('click', () => {
+                this.removeFile(index);
+            });
+            
+            listItem.appendChild(removeButton);
+            listElement.appendChild(listItem);
         });
         
-        // Show result container with error
-        document.getElementById('result').hidden = false;
-        document.getElementById('resultMessage').textContent = message;
-        document.getElementById('resultMessage').style.color = 'var(--error-color)';
-        console.log(`Would have announced error: ${message}`);
-    }
-
-    function toggleFontSize() {
-        state.fontSize = state.fontSize === config.accessibility.fontSize.max ? 
-            config.accessibility.fontSize.default : 
-            Math.min(state.fontSize + config.accessibility.fontSize.step, config.accessibility.fontSize.max);
-        accessibility.setFontSize(state.fontSize);
+        // Add the list to the container if it's not already there
+        if (!fileListElement.contains(listElement)) {
+            fileListElement.appendChild(listElement);
+        }
         
-        // Log instead of announcing font size change
-        const fontSizeMessage = state.fontSize === config.accessibility.fontSize.default ? 
-            "Font size reset to default." : "Font size increased.";
-        console.log(`Would have announced: ${fontSizeMessage}`);
-    }
-
-    function toggleContrast() {
-        accessibility.toggleContrast();
+        // Show or hide the file list section based on whether there are files
+        fileListElement.hidden = this.selectedFiles.length === 0;
+    },
+    
+    removeFile: function(index) {
+        if (index >= 0 && index < this.selectedFiles.length) {
+            const fileName = this.selectedFiles[index].name;
+            this.selectedFiles.splice(index, 1);
+            this.updateFileList();
+            SpeechModule.speak(`File ${fileName} removed.`);
+        }
+    },
+    
+    submitSelectedFiles: async function() {
+        if (!state.grievanceId) {
+            UIModule.showError('No grievance ID found. Cannot upload files.');
+            return;
+        }
         
-        // Log instead of announcing contrast change
-        const contrastMode = document.body.classList.contains('high-contrast');
-        const contrastMessage = contrastMode ? 
-            "High contrast mode enabled." : "Normal contrast mode enabled.";
-        console.log(`Would have announced: ${contrastMessage}`);
+        if (this.selectedFiles.length === 0) {
+            UIModule.showError('No files selected for upload.');
+                return;
+            }
+            
+        try {
+            UIModule.showLoading('Uploading files...');
+            
+            const uploadResult = await this.uploadFiles(state.grievanceId);
+            
+            if (uploadResult.success) {
+                // Add to uploaded files list
+                this.uploadedFiles = [...this.uploadedFiles, ...uploadResult.results.map(result => ({
+                    fileName: result.fileName,
+                    fileSize: result.fileSize || 'Unknown size'
+                }))];
+                
+                // Show success message
+                const successMessage = document.getElementById('uploadSuccessMessage');
+                if (successMessage) {
+                    successMessage.textContent = `${this.selectedFiles.length} ${this.selectedFiles.length === 1 ? 'file' : 'files'} uploaded successfully!`;
+                }
+                
+                // Update uploaded files list
+                this.updateUploadedFilesList();
+                
+                // Show the uploaded files section
+                const uploadedFilesSection = document.getElementById('uploadedFilesSection');
+                if (uploadedFilesSection) {
+                    uploadedFilesSection.hidden = false;
+                }
+                
+                // Clear selected files for next upload if needed
+                this.selectedFiles = [];
+                this.updateFileList();
+                
+                // Hide file list section
+                const fileListElement = document.getElementById('fileList');
+                if (fileListElement) {
+                    fileListElement.hidden = true;
+                }
+                
+                // Announce success
+                SpeechModule.speak(`${uploadResult.results.length} files uploaded successfully. You can attach more files if needed.`);
+            } else {
+                UIModule.showError('Some files failed to upload. Please try again.');
+                SpeechModule.speak('Some files failed to upload. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error uploading files:', error);
+            UIModule.showError('Error uploading files. Please try again.');
+            SpeechModule.speak('Error uploading files. Please try again.');
+        } finally {
+            UIModule.hideLoading();
+        }
+    },
+    
+    updateUploadedFilesList: function() {
+        const uploadedFilesList = document.getElementById('uploadedFilesList');
+        if (!uploadedFilesList) return;
+        
+        const listElement = uploadedFilesList.querySelector('ul') || document.createElement('ul');
+        
+        // Clear existing list
+        listElement.innerHTML = '';
+        
+        // Add files to list
+        this.uploadedFiles.forEach((file) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = `${file.fileName} (${file.fileSize})`;
+            listElement.appendChild(listItem);
+        });
+        
+        // Add the list to the container if it's not already there
+        if (!uploadedFilesList.contains(listElement)) {
+            uploadedFilesList.appendChild(listElement);
+        }
+    },
+    
+    uploadFiles: async function(grievanceId) {
+        if (!grievanceId || this.selectedFiles.length === 0) {
+            return { success: true, message: 'No files to upload' };
+        }
+        
+        const results = [];
+        
+        try {
+            // Create a single FormData object for all files
+            const formData = new FormData();
+            
+            // Add grievance_id to FormData
+            formData.append('grievance_id', grievanceId);
+            
+            // Add interface language if available
+            const htmlLang = document.documentElement.lang || 'ne';
+            formData.append('interface_language', htmlLang);
+            
+            // Add all files under the 'files[]' key as expected by the server
+            for (const file of this.selectedFiles) {
+                formData.append('files[]', file);
+                console.log(`Adding file to FormData: ${file.name}, size: ${file.size} bytes`);
+            }
+            
+            // Upload all files in a single request
+            console.log(`Uploading ${this.selectedFiles.length} files for grievance ID: ${grievanceId}`);
+            const result = await APIModule.uploadFile(grievanceId, formData);
+            
+            // Process results
+            if (result && (result.status === 'success' || result.success)) {
+                // Handle successful upload
+                for (const file of this.selectedFiles) {
+                    results.push({
+                        fileName: file.name,
+                        fileSize: file.size < 1024 * 1024
+                            ? `${Math.round(file.size / 1024)} KB`
+                            : `${Math.round(file.size / (1024 * 1024) * 10) / 10} MB`,
+                        success: true
+                    });
+                }
+            } else {
+                // Handle error
+                throw new Error(result.error || result.message || "Failed to upload files");
+            }
+        } catch (error) {
+            console.error(`Error uploading files:`, error);
+            // Mark all files as failed
+            for (const file of this.selectedFiles) {
+                results.push({
+                    fileName: file.name,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+        
+        // Check if all uploads were successful
+        const allSuccessful = results.every(result => result.success);
+        
+        return {
+            success: allSuccessful,
+            results: results,
+            message: allSuccessful
+                ? 'All files uploaded successfully'
+                : 'Some files failed to upload'
+        };
+    },
+    
+    clearFiles: function() {
+        this.selectedFiles = [];
+        this.uploadedFiles = [];
+        this.updateFileList();
+        
+        const uploadedFilesSection = document.getElementById('uploadedFilesSection');
+        if (uploadedFilesSection) {
+            uploadedFilesSection.hidden = true;
+        }
+    }
+};
+
+/**
+ * Recording Module - Handles audio recording functionality
+ */
+RecordingModule = {
+    recorder: null,
+    stream: null,
+    isRecording: false,
+    chunks: [],
+    recordingType: null,
+    permissionGranted: false,
+    
+    init: function() {
+        this.setupRecordingControls();
+        this.requestMicrophonePermission();
+        console.log('Recording module initialized');
+    },
+    
+    /**
+     * Request microphone permission early to avoid disrupting the flow later
+     */
+    requestMicrophonePermission: function() {
+        // Show a subtle notification that we're requesting microphone access
+        const micPermissionNote = document.createElement('div');
+        micPermissionNote.className = 'mic-permission-note';
+        micPermissionNote.textContent = 'Requesting microphone access...';
+        micPermissionNote.style.position = 'fixed';
+        micPermissionNote.style.bottom = '10px';
+        micPermissionNote.style.right = '10px';
+        micPermissionNote.style.padding = '8px 12px';
+        micPermissionNote.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        micPermissionNote.style.color = 'white';
+        micPermissionNote.style.borderRadius = '4px';
+        micPermissionNote.style.fontSize = '14px';
+        micPermissionNote.style.zIndex = '9999';
+        document.body.appendChild(micPermissionNote);
+        
+        // Request microphone permission early
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                console.log('Microphone permission granted during initialization');
+                this.permissionGranted = true;
+                
+                // Stop tracks immediately, we just needed the permission
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Remove the notification
+                if (micPermissionNote.parentNode) {
+                    micPermissionNote.parentNode.removeChild(micPermissionNote);
+                }
+                
+                // Replace with success notification that fades out
+                const successNote = document.createElement('div');
+                successNote.className = 'mic-permission-success';
+                successNote.textContent = 'Microphone access granted';
+                successNote.style.position = 'fixed';
+                successNote.style.bottom = '10px';
+                successNote.style.right = '10px';
+                successNote.style.padding = '8px 12px';
+                successNote.style.backgroundColor = 'rgba(43,138,62,0.9)';
+                successNote.style.color = 'white';
+                successNote.style.borderRadius = '4px';
+                successNote.style.fontSize = '14px';
+                successNote.style.zIndex = '9999';
+                successNote.style.transition = 'opacity 1s ease-out';
+                document.body.appendChild(successNote);
+                
+                // Fade out and remove after 3 seconds
+                setTimeout(() => {
+                    successNote.style.opacity = '0';
+                    setTimeout(() => {
+                        if (successNote.parentNode) {
+                            successNote.parentNode.removeChild(successNote);
+            }
+        }, 1000);
+                }, 3000);
+            })
+            .catch(error => {
+                console.warn('Failed to get microphone permission during initialization:', error);
+                
+                // Remove the notification
+                if (micPermissionNote.parentNode) {
+                    micPermissionNote.parentNode.removeChild(micPermissionNote);
+                }
+                
+                // We'll try again when the user clicks record
+            });
+    },
+    
+    setupRecordingControls: function() {
+        // Target all recording buttons by their IDs
+        const recordingButtons = [
+            'recordBtn1',
+            'recordBtn2a',
+            'recordBtn2b',
+            'recordBtn3a',
+            'recordBtn3b',
+            'recordBtn3c'
+        ];
+        
+        // Set up click listeners for each recording button
+        recordingButtons.forEach(btnId => {
+            const button = document.getElementById(btnId);
+            if (button) {
+                let recordingType = this.getRecordingTypeFromId(btnId);
+                
+                button.addEventListener('click', () => {
+                    if (this.isRecording) {
+                        this.stopRecording();
+                    } else {
+                        this.startRecording(recordingType);
+                    }
+                });
+                
+                console.log(`Recording button set up: ${btnId} for type: ${recordingType}`);
+            } else {
+                console.warn(`Recording button not found: ${btnId}`);
+            }
+        });
+        
+        // Set up retry buttons
+        document.querySelectorAll('.retry-btn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                // Get the closest step element
+                const stepElement = event.target.closest('.step');
+                if (stepElement) {
+                    // Extract recording type from the step ID
+                    const stepId = stepElement.id;
+                    const recordingType = this.getRecordingTypeFromStepId(stepId);
+                    // Reset and start new recording
+                    this.startRecording(recordingType);
+                }
+            });
+        });
+    },
+    
+    getRecordingTypeFromId: function(buttonId) {
+        // Map button IDs to recording types
+        const typeMap = {
+            'recordBtn1': 'grievance_details',
+            'recordBtn2a': 'user_full_name',
+            'recordBtn2b': 'user_contact_phone',
+            'recordBtn3a': 'user_municipality',
+            'recordBtn3b': 'user_village',
+            'recordBtn3c': 'user_address'
+        };
+        
+        return typeMap[buttonId] || 'unknown';
+    },
+    
+    getRecordingTypeFromStepId: function(stepId) {
+        // Map step IDs to recording types
+        const typeMap = {
+            'step1': 'grievance_details',
+            'step2a': 'user_full_name',
+            'step2b': 'user_contact_phone',
+            'step3a': 'user_municipality',
+            'step3b': 'user_village',
+            'step3c': 'user_address'
+        };
+        
+        return typeMap[stepId] || 'unknown';
+    },
+    
+    /**
+     * Request microphone access and start recording
+     * @param {string} recordingType - Type of recording (e.g., 'grievance', 'name')
+     */
+    startRecording: async function(recordingType) {
+        if (this.isRecording) {
+            console.log('Already recording');
+            return;
+        }
+        
+        this.recordingType = recordingType;
+        console.log(`Starting recording for: ${recordingType}`);
+        
+        // Special handling for step3c visibility
+        if (recordingType === 'user_address') {
+            const step3c = document.getElementById('step3c');
+            if (step3c && step3c.hidden) {
+                console.log("Making step3c visible for recording");
+                
+                // Hide all other steps
+                document.querySelectorAll('.step').forEach(step => {
+                    if (step.id !== 'step3c') {
+                        step.hidden = true;
+                    }
+                });
+                
+                // Show step3c
+                step3c.hidden = false;
+                step3c.style.display = 'block';
+                
+                // Update state
+                state.currentStep = '3c';
+                UIModule.currentStepIndex = UIModule.steps.indexOf('3c');
+            }
+        }
+        
+        // Find the record button for this type
+        const stepId = this.getStepIdFromRecordingType(recordingType);
+        const recordBtn = document.getElementById(`recordBtn${stepId}`);
+        const statusEl = document.getElementById(`status${stepId}`);
+        const playbackContainer = document.getElementById(`playback${stepId}`);
+        
+        // Hide audio player during recording
+        if (playbackContainer) {
+            playbackContainer.hidden = true;
+        }
+        
+        if (recordBtn) {
+            // Update button text to indicate waiting for permission
+            recordBtn.textContent = this.permissionGranted ? "Preparing recording..." : "Waiting for microphone...";
+            recordBtn.classList.add("waiting");
+            recordBtn.disabled = true;
+        }
+        
+        if (statusEl) {
+            statusEl.hidden = false;
+            // Clear any existing content
+            statusEl.innerHTML = this.permissionGranted ? 
+                '<div class="recording-status">Preparing recorder...</div>' : 
+                '<div class="recording-status">Waiting for microphone access...</div>';
+        }
+        
+        try {
+            // Request microphone access
+            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.permissionGranted = true;
+            
+            // Create MediaRecorder
+            const options = { mimeType: 'audio/webm' };
+            try {
+                this.recorder = new MediaRecorder(this.stream, options);
+            } catch (e) {
+                console.warn(`MediaRecorder not available with specified options: ${e.message}`);
+                this.recorder = new MediaRecorder(this.stream);
+            }
+            
+            this.chunks = [];
+            
+            // Setup recorder event handlers
+            this.recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    this.chunks.push(event.data);
+                    console.log(`Recording chunk received: ${event.data.size} bytes`);
+                }
+            };
+            
+            this.recorder.onstop = () => {
+                const blob = new Blob(this.chunks, { type: 'audio/webm' });
+                console.log(`Recording stopped, blob size: ${blob.size} bytes`);
+                this.saveRecording(blob);
+                
+                // Release microphone
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            };
+            
+            // Start recording with timeslices to get data during recording
+            this.recorder.start(1000); // Get data every second
+            this.isRecording = true;
+            
+            // Start timer for recording duration
+            this.startTimer(recordingType);
+            
+            // Update UI to show recording state
+            this.updateRecordingUI(true);
+            
+            console.log(`Recording started for ${recordingType}`);
+            SpeechModule.speak('Recording started');
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            this.permissionGranted = false;
+            
+            // Reset button state
+            if (recordBtn) {
+                recordBtn.textContent = "Record";
+                recordBtn.classList.remove("waiting");
+                recordBtn.disabled = false;
+            }
+            
+            // Show error in status area
+            if (statusEl) {
+                statusEl.innerHTML = '<div class="recording-error">Microphone access denied. Please check permissions and try again.</div>';
+            }
+            
+            SpeechModule.speak('Could not access microphone. Please check permissions and try again.');
+        }
+    },
+    
+    startTimer: function(recordingType) {
+        // Find the correct status element based on recording type
+        let stepId = this.getStepIdFromRecordingType(recordingType);
+        const statusElement = document.getElementById(`status${stepId}`);
+        
+        if (!statusElement) {
+            console.warn(`Status element not found for recording type: ${recordingType}`);
+            return;
+        }
+        
+        // Show the status element
+        statusElement.hidden = false;
+        
+        // Create recording indicator with timer
+        statusElement.innerHTML = `
+            <div class="recording-indicator">
+                <div class="recording-pulse"></div>
+                <div class="recording-label">Recording:</div>
+                <div class="recording-timer">0:00</div>
+            </div>
+        `;
+        
+        // Get the timer element
+        const timerElement = statusElement.querySelector('.recording-timer');
+        
+        // Reset timer
+        let seconds = 0;
+        
+        // Clear any existing timer
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+        }
+        
+        // Start timer
+        this.timerInterval = setInterval(() => {
+            seconds++;
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const timeText = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            
+            if (timerElement) {
+                timerElement.textContent = timeText;
+            }
+            
+            console.log(`Recording time: ${timeText}`);
+        }, 1000);
+    },
+    
+    getStepIdFromRecordingType: function(recordingType) {
+        // Map recording types back to step IDs
+        const stepMap = {
+            'grievance_details': '1',
+            'user_full_name': '2a',
+            'user_contact_phone': '2b',
+            'user_municipality': '3a',
+            'user_village': '3b',
+            'user_address': '3c'
+        };
+        
+        return stepMap[recordingType] || '1';
+    },
+    
+    /**
+     * Stop the current recording
+     */
+    stopRecording: function() {
+        if (!this.isRecording || !this.recorder) {
+            console.log('Not recording');
+                return;
+        }
+        console.log('Stopping recording');
+        let finalTime = '0:00';
+        const stepId = this.getStepIdFromRecordingType(this.recordingType);
+        const statusElement = document.getElementById(`status${stepId}`);
+        if (statusElement) {
+            const timerElement = statusElement.querySelector('.recording-timer');
+            if (timerElement) {
+                finalTime = timerElement.textContent;
+                console.log(`Final recording time: ${finalTime}`);
+            }
+            statusElement.innerHTML = `
+                <div class="recording-complete">
+                    <div class="recording-complete-icon">✓</div>
+                    <div class="recording-complete-label">Recorded:</div>
+                    <div class="recording-complete-time">${finalTime}</div>
+                </div>
+            `;
+        }
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+        try {
+            this.recorder.stop();
+        } catch (e) {
+            console.error('Error stopping recorder:', e);
+        }
+        this.isRecording = false;
+        this.updateRecordingUI(false);
+        // Always show the playback and next action button (Continue or Submit), do not auto-advance or auto-submit
+        const playbackContainer = document.getElementById(`playback${stepId}`);
+        if (playbackContainer) {
+            playbackContainer.hidden = false;
+        }
+        // Optionally, focus the next action button for accessibility
+        let nextBtn = playbackContainer ? playbackContainer.querySelector('.next-btn, #submitGrievanceBtn') : null;
+        if (nextBtn) {
+            nextBtn.focus();
+        }
+        console.log(`Stopped recording for step ${stepId}, waiting for user action.`);
+        SpeechModule.speak('Recording stopped. Please review and continue.');
+    },
+    
+    /**
+     * Save the recorded audio blob
+     * @param {Blob} blob - The recorded audio blob
+     */
+    saveRecording: function(blob) {
+        // Save to the global recordedBlobs object with the recording type as key
+        if (!recordedBlobs) {
+            recordedBlobs = {};
+        }
+        
+        recordedBlobs[this.recordingType] = blob;
+        
+        // Create an audio element for preview
+        this.createAudioPreview(blob, this.recordingType);
+        
+        console.log(`Recording saved as ${this.recordingType}`);
+    },
+    
+    /**
+     * Create an audio element to preview the recording
+     * @param {Blob} blob - The audio blob
+     * @param {string} recordingType - Type of recording
+     */
+    createAudioPreview: function(blob, recordingType) {
+        const stepId = this.getStepIdFromRecordingType(recordingType);
+        const previewContainerId = `playback${stepId}`;
+        const container = document.getElementById(previewContainerId);
+        
+        if (container) {
+            // Get audio element
+            let audio = container.querySelector('audio');
+            if (!audio) {
+                audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'recording-player';
+                container.prepend(audio);
+            }
+            
+            // Remove recording-in-progress class if present
+            audio.classList.remove('recording-in-progress');
+            
+            // Remove data-recording attribute
+            audio.removeAttribute('data-recording');
+            
+            // Set the audio source
+            const audioURL = URL.createObjectURL(blob);
+            audio.src = audioURL;
+            
+            // Add play/pause event listeners
+            audio.addEventListener('play', () => {
+                if (SpeechModule.stopSpeaking) {
+                    SpeechModule.stopSpeaking();
+                }
+            });
+            
+            // Add aria-label
+            audio.setAttribute('aria-label', `${recordingType} recording preview`);
+            
+            // Show the container
+            container.hidden = false;
+        } else {
+            console.warn(`Preview container not found: ${previewContainerId}`);
+        }
+    },
+    
+    /**
+     * Update UI elements based on recording state
+     * @param {boolean} isRecording - Whether recording is in progress
+     */
+    updateRecordingUI: function(isRecording) {
+        // Update record buttons text and state
+        const recordButtons = document.querySelectorAll('[id^="recordBtn"]');
+        recordButtons.forEach(button => {
+            if (isRecording) {
+                button.textContent = 'Stop Recording';
+                button.classList.add('recording');
+                button.classList.remove('waiting');
+                button.disabled = false;
+        } else {
+                // Set plain text without icons to avoid confusion with the read button
+                button.textContent = button.id === 'recordBtn1' ? 'Record Grievance' : 'Record';
+                button.classList.remove('recording');
+                button.classList.remove('waiting');
+                button.disabled = false;
+            }
+        });
+        
+        // Show/hide recording indicators based on current state
+        const indicators = document.querySelectorAll('.recording-indicator');
+        indicators.forEach(indicator => {
+            indicator.hidden = !isRecording;
+        });
+    },
+    
+    /**
+     * Check if there are any recordings
+     * @returns {boolean} - Whether any recordings exist
+     */
+    hasRecordings: function() {
+        return recordedBlobs && Object.keys(recordedBlobs).length > 0;
+    },
+    
+    /**
+     * Clear all recordings
+     */
+    clearRecordings: function() {
+        recordedBlobs = {};
+        
+        // Clear all preview containers
+        const previewContainers = document.querySelectorAll('[id^="playback"]');
+        previewContainers.forEach(container => {
+            const audio = container.querySelector('audio');
+            if (audio) {
+                audio.src = '';
+            }
+            container.hidden = true;
+        });
+        
+        // Reset all status displays
+        const statusElements = document.querySelectorAll('[id^="status"]');
+        statusElements.forEach(element => {
+            const span = element.querySelector('span');
+            if (span) {
+                span.textContent = '0:00';
+            }
+            element.hidden = true;
+        });
+    },
+    
+    /**
+     * Returns the recording type key for a given step name (e.g., '1', '2a', ...)
+     */
+    getRecordingTypeForStep: function(step) {
+        const map = {
+            '1': 'grievance_details',
+            '2a': 'user_full_name',
+            '2b': 'user_contact_phone',
+            '3a': 'user_municipality',
+            '3b': 'user_village',
+            '3c': 'user_address'
+        };
+        return map[step] || null;
+    },
+    
+    /**
+     * Checks if a recording exists for the given type
+     */
+    hasRecording: function(type) {
+        return recordedBlobs && !!recordedBlobs[type];
+    }
+};
+
+/**
+ * Grievance Module - Handles grievance submission flow
+ */
+GrievanceModule = {
+    categories: [],
+    steps: ['1', '2a', '2b', '3a', '3b', '3c', 'confirmation'],
+    
+    init: function() {
+        console.log("Initializing Grievance Module");
+        this.loadCategories();
+        this.setupStepNavigation();
+        this.setupSubmitHandler();
+        
+        // Add direct handler for step3b continue button
+        this.setupDirectStepHandlers();
+        
+        console.log("Grievance Module initialized with steps:", this.steps);
+    },
+    
+    loadCategories: function() {
+        // Load categories from config or API
+        this.categories = APP_CONFIG.grievanceCategories || [];
+        this.populateCategoryDropdown();
+    },
+    
+    populateCategoryDropdown: function() {
+        const categorySelect = document.getElementById('grievanceCategory');
+        if (!categorySelect) return;
+        
+        // Clear existing options
+        categorySelect.innerHTML = '';
+        
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a category';
+        categorySelect.appendChild(defaultOption);
+        
+        // Add categories
+        this.categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.id || category.value || category;
+            option.textContent = category.label || category;
+            categorySelect.appendChild(option);
+        });
+    },
+    
+    setupStepNavigation: function() {
+        // Remove duplicate event listeners for .next-btn and .prev-step
+        // Navigation is now handled by UIModule.setupNavigation
+    },
+    
+    setupSubmitHandler: function() {
+        const submitForm = document.getElementById('grievanceForm');
+        const submitBtn = document.getElementById('submitGrievanceBtn');
+        
+        if (submitForm) {
+            console.log("Setting up submit handler for grievance form");
+            submitForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                console.log("Form submit event triggered, calling submitGrievance");
+                this.submitGrievance();
+            });
+                    } else {
+            console.warn("Grievance form not found in the document!");
+        }
+        
+        // Also set up a click handler for the submit button
+        if (submitBtn) {
+            console.log("Setting up click handler for submit button");
+            submitBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                console.log("Submit button clicked, calling submitGrievance");
+                this.submitGrievance();
+            });
+        } else {
+            console.warn("Submit button not found in the document!");
+        }
+    },
+    
+    validateCurrentStep: function() {
+        const currentStep = state.currentStep;
+        console.log('Validating step:', currentStep);
+        
+        // Map step IDs to recording types
+        const stepToRecordingType = {
+            '1': 'grievance_details',
+            '2a': 'user_full_name',
+            '2b': 'user_contact_phone',
+            '3a': 'user_municipality',
+            '3b': 'user_village',
+            '3c': 'user_address'
+        };
+        
+        // Get the recording type for the current step
+        const recordingType = stepToRecordingType[currentStep];
+        
+        // Check if recording exists for the current step
+        if (recordingType && !RecordingModule.hasRecording(recordingType)) {
+            console.warn(`Missing ${recordingType} recording, but proceeding anyway`);
+            return true; // Allow to proceed anyway
+        }
+        
+        return true; // Always return true to allow proceeding
+    },
+    
+    populateReviewScreen: function() {
+        const reviewContainer = document.getElementById('reviewDetails');
+        if (!reviewContainer) return;
+        
+        // Get form data
+        const formData = new FormData(document.getElementById('grievanceForm'));
+        
+        // Clear existing content
+        reviewContainer.innerHTML = '';
+        
+        // Create review items
+        for (const [key, value] of formData.entries()) {
+            // Skip files and empty values
+            if (value instanceof File || !value.trim()) continue;
+            
+            const item = document.createElement('div');
+            item.classList.add('review-item');
+            
+            const label = document.createElement('strong');
+            label.textContent = this.getFieldLabel(key) + ': ';
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = value;
+            
+            item.appendChild(label);
+            item.appendChild(valueSpan);
+            reviewContainer.appendChild(item);
+        }
+        
+        // Add recordings info
+        if (recordedBlobs && Object.keys(recordedBlobs).length > 0) {
+            const recordingsTitle = document.createElement('h3');
+            recordingsTitle.textContent = 'Voice Recordings';
+            reviewContainer.appendChild(recordingsTitle);
+            
+            const recordingsList = document.createElement('ul');
+            
+            for (const type in recordedBlobs) {
+                const item = document.createElement('li');
+                item.textContent = `${this.getRecordingLabel(type)} recording`;
+                recordingsList.appendChild(item);
+            }
+            
+            reviewContainer.appendChild(recordingsList);
+        }
+        
+        // Add files info
+        if (FileUploadModule.selectedFiles.length > 0) {
+            const filesTitle = document.createElement('h3');
+            filesTitle.textContent = 'Attached Files';
+            reviewContainer.appendChild(filesTitle);
+            
+            const filesList = document.createElement('ul');
+            
+            FileUploadModule.selectedFiles.forEach(file => {
+                const item = document.createElement('li');
+                item.textContent = file.name;
+                filesList.appendChild(item);
+            });
+            
+            reviewContainer.appendChild(filesList);
+        }
+    },
+    
+    getFieldLabel: function(fieldName) {
+        // Map field names to user-friendly labels
+        const labelMap = {
+            'name': 'Name',
+            'phone': 'Phone Number',
+            'email': 'Email',
+            'grievanceCategory': 'Grievance Category',
+            'location': 'Location',
+            'details': 'Additional Details'
+        };
+        
+        return labelMap[fieldName] || fieldName;
+    },
+    
+    getRecordingLabel: function(recordingType) {
+        // Map recording types to user-friendly labels
+        const labelMap = {
+            'grievance': 'Grievance',
+            'name': 'Name',
+            'contact': 'Contact Information',
+            'location': 'Location'
+        };
+        
+        return labelMap[recordingType] || recordingType;
+    },
+    
+    goToNextStep: function(skip = false) {
+        console.log('Going to next step from:', state.currentStep);
+        let nextStep;
+        if (state.currentStep === '3b') {
+            nextStep = '3c';
+            console.log('Special handling for step 3b -> 3c');
+        } else if (state.currentStep === '1') {
+            nextStep = '2a';
+        } else if (state.currentStep === '2a') {
+            nextStep = '2b';
+        } else if (state.currentStep === '2b') {
+            nextStep = '3a';
+        } else if (state.currentStep === '3a') {
+            nextStep = '3b';
+        } else if (state.currentStep === '3c') {
+            // Do not automatically submit; just show the playback and submit button
+            console.log('Step 3c: Waiting for user to submit.');
+            return;
+                    } else {
+            const currentNum = parseInt(state.currentStep);
+            if (!isNaN(currentNum)) {
+                nextStep = (currentNum + 1).toString();
+                } else {
+                console.error('Unable to determine next step from:', state.currentStep);
+                return;
+            }
+        }
+        console.log('Next step determined as:', nextStep);
+        if (!skip) {
+            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+            if (!hasRecordings) {
+                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                this.showError('Please record your response before continuing, or use Skip.');
+                return;
+            }
+        }
+        state.currentStep = nextStep;
+        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+        UIModule.showCurrentStep();
+    },
+    
+    goToPreviousStep: function() {
+        const currentIndex = this.steps.indexOf(state.currentStep);
+        if (currentIndex > 0) {
+            const prevStep = this.steps[currentIndex - 1];
+            UIModule.navigateToStep(prevStep);
+        }
+    },
+    
+    submitGrievance: async function() {
+        try {
+            console.log("Starting grievance submission process");
+            UIModule.showLoading('Submitting your grievance...');
+            
+            // Create form data from the form
+            const form = document.getElementById('grievanceForm');
+            if (!form) {
+                throw new Error("Grievance form not found!");
+            }
+            
+            const formData = new FormData(form);
+            
+            // Add interface language
+            // Get from html lang attribute, default to 'ne' if not found
+            const htmlLang = document.documentElement.lang || 'ne';
+            formData.append('interface_language', htmlLang);
+            
+            // Add voice recordings
+            let recordingsCount = 0;
+            for (const type in recordedBlobs) {
+                const blob = recordedBlobs[type];
+                const fileName = `${type}.webm`;
+                formData.append(type, blob, fileName);
+                recordingsCount++;
+            }
+            
+            console.log(`Adding ${recordingsCount} recordings to form data`);
+            
+            if (recordingsCount === 0) {
+                throw new Error("No voice recordings found!");
+            }
+            
+            // Submit grievance recordings
+            console.log("Sending API request to create grievance");
+            const response = await APIModule.createGrievance(formData);
+            console.log("API response:", response);
+            
+            if (!response.success && response.status !== 'success') {
+                throw new Error(response.message || response.error || 'Failed to submit grievance');
+            }
+            
+            // Store the grievance ID returned from the server
+            state.grievanceId = response.grievance_id || response.id;
+            console.log("Received grievance ID from server:", state.grievanceId);
+            
+            // First hide any visible steps to avoid UI state conflicts
+            console.log("Hiding all current steps before showing confirmation");
+            UIModule.hideAllSteps();
+            
+            // Slight delay to ensure UI updates properly
+            setTimeout(() => {
+                // Show confirmation screen using the UIModule function
+                console.log("Now showing confirmation screen");
+                UIModule.showConfirmationScreen(state.grievanceId);
+                
+                // Prepare file upload UI
+                const fileListElement = document.getElementById('fileList');
+                if (fileListElement) {
+                    fileListElement.hidden = true; // Hide initially until files are selected
+                }
+                
+                // Create a speech indicator element if it doesn't exist
+                let speechIndicator = document.getElementById('speechIndicator');
+                if (!speechIndicator) {
+                    speechIndicator = document.createElement('div');
+                    speechIndicator.id = 'speechIndicator';
+                    speechIndicator.className = 'speech-indicator';
+                    speechIndicator.innerHTML = '<span>Speaking...</span>';
+                    speechIndicator.style.position = 'fixed';
+                    speechIndicator.style.bottom = '20px';
+                    speechIndicator.style.right = '20px';
+                    speechIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                    speechIndicator.style.color = 'white';
+                    speechIndicator.style.padding = '10px 15px';
+                    speechIndicator.style.borderRadius = '5px';
+                    speechIndicator.style.zIndex = '1000';
+                    speechIndicator.style.display = 'none';
+                    document.body.appendChild(speechIndicator);
+                }
+                
+                // Show the speech indicator
+                speechIndicator.style.display = 'block';
+                
+                // Now announce the success with callback to hide the indicator when done
+                SpeechModule.speak('Your grievance has been submitted successfully. Your grievance ID is ' + 
+                    state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.', function() {
+                        // Hide the speech indicator when done speaking
+                        if (speechIndicator) {
+                            speechIndicator.style.display = 'none';
+                        }
+                    });
+            }, 100); // Short delay to ensure DOM updates properly
+                
+        } catch (error) {
+            console.error('Error submitting grievance:', error);
+            UIModule.showError('There was an error submitting your grievance. Please try again.');
+            SpeechModule.speak('There was an error submitting your grievance. Please try again.');
+        } finally {
+            UIModule.hideLoading();
+        }
+    },
+    
+    setupDirectStepHandlers: function() {
+        // Remove redundant handler for step3b's continue button
+        // Navigation is now handled by UIModule.goToNextStep
+    },
+    
+    showMessage: function(message, isError = false) {
+        // Log the message but don't show overlay notifications
+        console.log(isError ? 'Error:' : 'Message:', message);
+        
+        // Instead of showing a notification, update a status element on the page
+        // This is safer than modal popups
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = isError ? 'status-error' : 'status-message';
+            statusElement.hidden = false;
+            
+            // Auto-hide after a few seconds
+            setTimeout(() => {
+                statusElement.hidden = true;
+            }, 3000);
+        }
+    }
+};
+
+// Initialize the app on window load
+window.addEventListener('load', function() {
+    // Avoid double initialization
+    if (appInitialized) return;
+    
+    try {
+        // Initialize all modules
+        SpeechModule.init();
+        AccessibilityModule.init();
+        UIModule.init();
+        APIModule.init();
+        FileUploadModule.init();
+        RecordingModule.init();
+        GrievanceModule.init();
+        
+        // Mark as initialized
+        appInitialized = true;
+        console.log('App initialized');
+        // After showing the first step, read it if autoRead is true
+        setTimeout(() => {
+            if (SpeechModule.autoRead) {
+                const firstStep = document.querySelector('.step:not([hidden]) .content');
+                if (firstStep) {
+                    SpeechModule.speak(firstStep.textContent);
+                }
+            }
+        }, 300);
+    } catch (error) {
+        console.error("Error initializing app:", error);
+    }
+});
+
+// For backward compatibility with existing code
+window.nepalChatbot = window.nepalChatbot || {};
+// ... existing code ... 
+
+// --- Screen Reader Enable Dialog Logic ---
+let speechReady = false;
+window.addEventListener('DOMContentLoaded', function() {
+    const dialog = document.getElementById('screenReaderDialog');
+    if (dialog && typeof dialog.showModal === 'function') {
+        dialog.showModal();
+        // Trap focus in dialog for accessibility
+        dialog.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+            }
+        });
+        document.getElementById('enableScreenReaderBtn').addEventListener('click', function(event) {
+            // Only set speech state and close dialog
+            event.preventDefault();
+            event.stopPropagation();
+            speechReady = true;
+            SpeechModule.autoRead = true;
+            localStorage.setItem('autoRead', 'true');
+            dialog.close();
+            // Immediately read the current step
+            setTimeout(() => {
+                const firstStep = document.querySelector('.step:not([hidden]) .content');
+                if (firstStep) {
+                    SpeechModule.speak(firstStep.textContent);
+                }
+            }, 200);
+        });
+        document.getElementById('disableScreenReaderBtn').addEventListener('click', function(event) {
+            // Only set speech state and close dialog
+            event.preventDefault();
+            event.stopPropagation();
+            speechReady = false;
+            SpeechModule.autoRead = false;
+            localStorage.setItem('autoRead', 'false');
+            dialog.close();
+        });
+    } else {
+        // Fallback: allow speech
+        speechReady = true;
+    }
+});
+
+// Patch SpeechModule.speak to only allow after user enables
+const originalSpeak = SpeechModule.speak;
+SpeechModule.speak = function(text, retryCount = 0) {
+    if (!speechReady) {
+        console.warn('Speech synthesis blocked until user enables Screen Reader.');
+        return;
+    }
+    return originalSpeak.call(this, text, retryCount);
+};
+
+// Cancel button logic
+window.addEventListener('DOMContentLoaded', function() {
+  const cancelBtn = document.getElementById('cancelSubmissionBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function() {
+      if (submissionAbortController) submissionAbortController.abort();
+      hideSubmissionOverlay();
+      const submitBtn = document.getElementById('submitGrievanceBtn');
+      if (submitBtn) submitBtn.disabled = false;
+      alert('Submission cancelled. Please try again.');
+    });
+  }
+});
+
+// Modify the submit button click handler
+document.getElementById('submitGrievanceBtn').addEventListener('click', async function(e) {
+    console.log('[TRACE] Submit button clicked');
+    console.log('[DEBUG] Current step:', state.currentStep);
+    console.log('[DEBUG] Submit button state:', {
+        visible: this.offsetParent !== null,
+        enabled: !this.disabled,
+        text: this.textContent
+    });
+
+    // Prevent multiple submissions
+    if (isSubmitting) {
+        console.warn('[WARN] Submission already in progress, ignoring click');
+        return;
     }
 
-    // Start the application
-    console.log('Accessible interface: Starting application');
-    init();
-}); 
+    try {
+        isSubmitting = true;
+        this.disabled = true;
+        
+        // Show the submission overlay
+        showSubmissionOverlay();
+        
+        // Call submitGrievance
+        await submitGrievance();
+    } catch (error) {
+        console.error('[ERROR] Submission failed:', error);
+        // Re-enable the button if submission fails
+        this.disabled = false;
+        isSubmitting = false;
+        hideSubmissionOverlay();
+    }
+});
+
+// Modify submitGrievance function
+async function submitGrievance() {
+    console.log('[TRACE] Starting grievance submission process');
+    
+    try {
+        // Create FormData and add recordings
+        const formData = new FormData();
+        console.log('[DEBUG] Adding recordings to form data');
+        // Use recordedBlobs instead of recordings
+        for (const [type, blob] of Object.entries(recordedBlobs)) {
+            if (blob) {
+                formData.append(type, blob, `${type}.webm`);
+            }
+        }
+        // Send API request using the correct module
+        console.log('[DEBUG] Sending API request to create grievance');
+        const response = await APIModule.createGrievance(formData);
+        console.log('[DEBUG] API response:', response);
+        if (response.status === 'success' || response.success) {
+            const grievanceId = response.grievance_id || response.id;
+            console.log('[DEBUG] Received grievance ID from server:', grievanceId);
+            // Hide all current steps
+            UIModule.hideAllSteps();
+            // Show confirmation screen
+            UIModule.showConfirmationScreen(grievanceId);
+            // Hide the submission overlay
+            hideSubmissionOverlay();
+        } else {
+            throw new Error(response.message || 'Failed to submit grievance');
+        }
+    } catch (error) {
+        console.error('[ERROR] Grievance submission failed:', error);
+        // Show error message in the overlay
+        const overlay = document.getElementById('submissionOverlay');
+        if (overlay) {
+            const message = overlay.querySelector('.submission-message');
+            if (message) {
+                message.textContent = 'Failed to submit grievance. Please try again.';
+                message.style.color = '#e03131';
+            }
+            // Show retry button
+            const cancelBtn = overlay.querySelector('#cancelSubmissionBtn');
+            if (cancelBtn) {
+                cancelBtn.textContent = 'Retry';
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.onclick = () => {
+                    hideSubmissionOverlay();
+                    const submitBtn = document.getElementById('submitGrievanceBtn');
+                    if (submitBtn) submitBtn.disabled = false;
+                };
+            }
+        }
+        throw error;
+    } finally {
+        isSubmitting = false;
+    }
+}
