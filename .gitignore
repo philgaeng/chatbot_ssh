@@ -65,3 +65,6 @@ Thumbs.db
 # Project-specific
 aws/            # AWS related files
 awscliv2.zip    # AWS CLI installer
+
+# Records and attachments
+uploads/

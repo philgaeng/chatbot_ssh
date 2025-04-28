@@ -3,7 +3,7 @@ import logging
 import uuid
 import json
 import tempfile
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 from openai import OpenAI
@@ -34,11 +34,136 @@ except Exception as e:
 # Configure upload settings
 UPLOAD_FOLDER = 'uploads'
 AUDIO_EXTENSIONS = {'webm', 'mp3', 'wav', 'ogg', 'm4a'}
+VALID_EXTENSIONS = ['.webm', '.mp3', '.wav', '.ogg', '.m4a']
 MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB max size for audio files
 
 # Create uploads directory if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+# ------- Utility Functions -------
+
+def ensure_directory_exists(directory_path: str) -> None:
+    """Ensure that a directory exists, creating it if necessary"""
+    os.makedirs(directory_path, exist_ok=True)
+
+def create_grievance_directory(grievance_id: str, dir_type: str = None) -> str:
+    """Create and return a directory path for a specific grievance"""
+    if dir_type:
+        directory = os.path.join(UPLOAD_FOLDER, dir_type, grievance_id)
+    else:
+        directory = os.path.join(UPLOAD_FOLDER, grievance_id)
+    
+    ensure_directory_exists(directory)
+    return directory
+
+def get_recording_type_from_filename(filename: str) -> str:
+    """Determine recording type based on filename"""
+    filename = filename.lower()
+    
+    if 'grievance' in filename or 'grievance_details' in filename:
+        return 'details'
+    elif 'name' in filename or 'user_full_name' in filename:
+        return 'contact'
+    elif 'phone' in filename or 'user_contact_phone' in filename or 'contact' in filename:
+        return 'contact'
+    elif 'municipality' in filename or 'user_municipality' in filename:
+        return 'location'
+    elif 'village' in filename or 'user_village' in filename:
+        return 'location'
+    elif 'address' in filename or 'user_address' in filename:
+        return 'location'
+    
+    return 'details'  # Default
+
+def get_grievance_field_from_filename(filename: str) -> str:
+    """Map filename to corresponding grievance data field"""
+    filename = filename.lower()
+    
+    if 'grievance' in filename or 'grievance_details' in filename:
+        return 'grievance_details'
+    elif 'name' in filename or 'user_full_name' in filename:
+        return 'user_full_name'
+    elif 'phone' in filename or 'user_contact_phone' in filename:
+        return 'user_contact_phone'
+    elif 'municipality' in filename or 'user_municipality' in filename:
+        return 'user_municipality'
+    elif 'village' in filename or 'user_village' in filename:
+        return 'user_village'
+    elif 'address' in filename or 'user_address' in filename:
+        return 'user_address'
+    
+    return None  # No direct mapping
+
+def ensure_valid_filename(original_name: str, field_key: str = None) -> str:
+    """Ensure the filename has a valid extension and is secure"""
+    # First secure the filename
+    filename = secure_filename(original_name)
+    
+    # If 'blob' or empty, use the field_key if available
+    if not filename or filename == 'blob':
+        if field_key:
+            filename = secure_filename(field_key)
+        else:
+            filename = f"audio_{uuid.uuid4()}"
+    
+    # Check if the filename has a valid audio extension
+    has_valid_extension = any(filename.lower().endswith(ext) for ext in VALID_EXTENSIONS)
+    if not has_valid_extension:
+        filename += '.webm'  # Default to webm extension
+    
+    return filename
+
+def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, int]:
+    """Save an uploaded file and return the path and size"""
+    if not file_obj:
+        raise ValueError("No file provided")
+    
+    file_path = os.path.join(directory, filename)
+    file_obj.save(file_path)
+    file_size = os.path.getsize(file_path)
+    
+    # If file is empty, remove it and raise error
+    if file_size == 0:
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+        raise ValueError("File is empty")
+    
+    return file_path, file_size
+
+def transcribe_audio_file(file_path: str, language: str = None) -> str:
+    """Transcribe an audio file using OpenAI Whisper API"""
+    if not client:
+        raise RuntimeError("OpenAI client not available for transcription")
+    
+    try:
+        with open(file_path, "rb") as audio_data:
+            response = client.audio.transcriptions.create(
+                file=audio_data,
+                model="whisper-1",
+                language=language
+            )
+        return response.text
+    except Exception as e:
+        logger.error(f"Error transcribing audio file {file_path}: {str(e)}")
+        raise
+
+def store_recording_metadata(recording_data: Dict[str, Any]) -> Optional[str]:
+    """Store recording metadata in database and return recording ID"""
+    logger.info(f"Storing voice recording metadata: {recording_data['recording_id']}")
+    return db_manager.store_voice_recording(recording_data)
+
+def store_transcription_data(transcription_data: Dict[str, Any]) -> Optional[str]:
+    """Store transcription data in database and return transcription ID"""
+    return db_manager.store_transcription(transcription_data)
+
+def update_recording_status(recording_id: str, status: str) -> bool:
+    """Update the processing status of a recording"""
+    return db_manager.update_recording_status(recording_id, status)
+
+# ------- API Registration -------
 
 def register_voice_endpoints(app: Flask):
     """Register voice-related endpoints to the Flask app"""
@@ -78,7 +203,7 @@ def register_voice_endpoints(app: Flask):
                 return jsonify({"error": "Transcription service unavailable"}), 503
             
             # Create temp file name
-            filename = secure_filename(audio_file.filename or f"audio_{uuid.uuid4()}.webm")
+            filename = ensure_valid_filename(audio_file.filename)
             temp_path = os.path.join(UPLOAD_FOLDER, f"temp_{filename}")
             
             # Save temp file
@@ -87,15 +212,9 @@ def register_voice_endpoints(app: Flask):
             
             try:
                 # Transcribe with OpenAI Whisper
-                with open(temp_path, "rb") as audio_data:
-                    response = client.audio.transcriptions.create(
-                        file=audio_data,
-                        model="whisper-1",
-                        language=language
-                    )
+                transcription = transcribe_audio_file(temp_path, language)
                 
                 # Return transcription
-                transcription = response.text
                 logger.info(f"Transcription successful: {transcription[:50]}...")
                 return jsonify({"transcription": transcription}), 200
                 
@@ -118,13 +237,11 @@ def register_voice_endpoints(app: Flask):
             # Parse request data (optional source parameter)
             data = request.json or {}
             source = data.get('source', 'accessibility')
-            logger.info(f"Creating grievance with source: {source}")
             
             # Create grievance using the db_manager
-            logger.info("Calling db_manager.create_grievance now...")
             grievance_id = db_manager.create_grievance(source=source)
             if not grievance_id:
-                logger.error("Failed to create new grievance - db_manager.create_grievance returned None")
+                logger.error("Failed to create new grievance")
                 return jsonify({"error": "Failed to create grievance"}), 500
             
             logger.info(f"Successfully created new grievance with ID: {grievance_id}")
@@ -135,7 +252,6 @@ def register_voice_endpoints(app: Flask):
                 "message": "Grievance created successfully",
                 "id": grievance_id
             }
-            logger.info(f"Returning response with data: {response_data}")
             return jsonify(response_data), 200
                 
         except Exception as e:
@@ -153,11 +269,14 @@ def register_voice_endpoints(app: Flask):
             if grievance_id:
                 logger.info(f"Using provided grievance ID: {grievance_id}")
             
+            # Determine the interface language from the request
+            # Default to Nepali unless explicitly from English interface
+            interface_language = request.form.get('interface_language', 'ne')
+            
             # Check if this is a direct file upload from the accessible interface
             files = request.files
             if files:
-                logger.info(f"Received direct file upload with {len(files)} files")
-                return handle_direct_file_upload(files, grievance_id)
+                return handle_direct_file_upload(files, grievance_id, interface_language)
             
             # Parse request data for API clients
             data = request.json
@@ -167,7 +286,7 @@ def register_voice_endpoints(app: Flask):
             
             # Create new grievance if not provided
             if not grievance_id:
-                grievance_id = db_manager.create_grievance(source='accessibility')
+                grievance_id = db_manager.create_grievance(source='accessibility', language_code=interface_language)
                 if not grievance_id:
                     logger.error("Failed to create new grievance")
                     return jsonify({"error": "Failed to create grievance"}), 500
@@ -181,14 +300,12 @@ def register_voice_endpoints(app: Flask):
             
             # Process audio files for transcription
             transcription_results = process_voice_grievance(grievance_id, file_references)
-            
             if not transcription_results:
                 logger.error("Failed to process voice grievance")
                 return jsonify({"error": "Failed to process voice grievance"}), 500
             
             # Update grievance with transcriptions
             success = update_grievance_from_voice(grievance_id, transcription_results)
-            
             if not success:
                 logger.error(f"Failed to update grievance {grievance_id} with voice data")
                 return jsonify({"error": "Failed to update grievance"}), 500
@@ -215,8 +332,9 @@ def register_voice_endpoints(app: Flask):
             if not grievance_id:
                 logger.error("No grievance_id provided for file upload")
                 return jsonify({"error": "Grievance ID is required for file upload"}), 400
-                
-            logger.info(f"Using provided grievance ID for file upload: {grievance_id}")
+            
+            # Determine the interface language from the request
+            interface_language = request.form.get('interface_language', 'ne')
             
             # Check if files are provided
             if 'files[]' not in request.files:
@@ -224,32 +342,31 @@ def register_voice_endpoints(app: Flask):
                 return jsonify({"error": "No files provided under 'files[]' key"}), 400
                 
             files = request.files.getlist('files[]')
-            logger.info(f"Received {len(files)} files for upload")
-            
             if not files or len(files) == 0:
                 logger.error("No files provided in the request")
                 return jsonify({"error": "No files found in the request"}), 400
             
-            # Create the upload directory
-            upload_dir = os.path.join(UPLOAD_FOLDER, grievance_id)
-            os.makedirs(upload_dir, exist_ok=True)
-            logger.info(f"Created upload directory: {upload_dir}")
+            # Create the upload directory for this grievance
+            upload_dir = create_grievance_directory(grievance_id)
             
             # Process and save each file
             saved_files = []
             
             for file in files:
-                if file and file.filename:
-                    # Secure the filename
-                    filename = secure_filename(file.filename)
-                    
+                if not file or not file.filename:
+                    logger.warning("Invalid file provided")
+                    continue
+                
+                try:
                     # Generate a unique ID for the file
                     file_id = str(uuid.uuid4())
                     
+                    # Secure and ensure valid filename
+                    filename = ensure_valid_filename(file.filename)
+                    unique_filename = f"{file_id}_{filename}"
+                    
                     # Save the file
-                    file_path = os.path.join(upload_dir, f"{file_id}_{filename}")
-                    file.save(file_path)
-                    logger.info(f"Saved file: {file_path}, size: {os.path.getsize(file_path)} bytes")
+                    file_path, file_size = save_uploaded_file(file, upload_dir, unique_filename)
                     
                     # Determine file type from extension
                     file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
@@ -261,29 +378,28 @@ def register_voice_endpoints(app: Flask):
                         'file_name': filename,
                         'file_path': file_path,
                         'file_type': file.content_type or file_ext or 'application/octet-stream',
-                        'file_size': os.path.getsize(file_path)
+                        'file_size': file_size
                     }
                     
                     # Store in database
-                    logger.info(f"Storing file metadata in database: {file_data}")
                     success = db_manager.store_file_attachment(file_data)
                     if success:
                         logger.info(f"Successfully stored file metadata for: {file_id}")
                         saved_files.append({
                             'file_id': file_id,
                             'filename': filename,
-                            'file_size': os.path.getsize(file_path)
+                            'file_size': file_size
                         })
                     else:
                         logger.error(f"Failed to store file metadata for: {file_id}")
                         # Remove the file if db storage failed
                         try:
                             os.remove(file_path)
-                            logger.info(f"Removed file after db storage failure: {file_path}")
                         except Exception as e:
                             logger.error(f"Error removing file: {str(e)}")
-                else:
-                    logger.warning(f"Invalid file provided")
+                except Exception as e:
+                    logger.error(f"Error processing file {file.filename if file else 'unknown'}: {str(e)}")
+                    continue
             
             if saved_files:
                 response_data = {
@@ -292,7 +408,6 @@ def register_voice_endpoints(app: Flask):
                     "files": saved_files,
                     "grievance_id": grievance_id
                 }
-                logger.info(f"File upload successful: {response_data}")
                 return jsonify(response_data), 200
             else:
                 logger.error("No files were saved")
@@ -302,18 +417,19 @@ def register_voice_endpoints(app: Flask):
             logger.error(f"Error handling accessible file upload: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return jsonify({"error": f"Error handling file upload: {str(e)}"}), 500
+    
+    return app
 
-def handle_direct_file_upload(files, existing_grievance_id=None):
+def handle_direct_file_upload(files, existing_grievance_id=None, interface_language='ne'):
     """Handle direct voice recording uploads from the accessible interface"""
     try:
         logger.info("Processing voice recording upload")
-        logger.info(f"Received files: {', '.join(files.keys())}")
         
         # Use existing grievance ID or create a new one
         grievance_id = existing_grievance_id
         if not grievance_id:
             logger.info("No existing grievance ID provided, creating new one")
-            grievance_id = db_manager.create_grievance(source='accessibility')
+            grievance_id = db_manager.create_grievance(source='accessibility', language_code=interface_language)
             if not grievance_id:
                 logger.error("Failed to create new grievance")
                 return jsonify({"error": "Failed to create grievance"}), 500
@@ -321,48 +437,32 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
         logger.info(f"Using grievance ID: {grievance_id}")
         
         # Create voice recordings directory
-        # Don't use app.config as it might not be available
-        upload_dir = os.path.join(UPLOAD_FOLDER, 'voice_recordings', grievance_id)
-        os.makedirs(upload_dir, exist_ok=True)
-        logger.info(f"Created upload directory: {upload_dir}")
+        upload_dir = create_grievance_directory(grievance_id, 'voice_recordings')
         
         # Process and save each file
         saved_files = []
         file_paths = {}  # Store paths for transcription
         
         for file_key, file in files.items():
-            if file and file.filename:
-                # First try to use the file_key (form field name) if it's more descriptive than 'blob'
-                if file.filename == 'blob' or not file.filename:
-                    # Use the field name from the form instead, which is more descriptive
-                    logger.info(f"Using form field name ({file_key}) instead of generic filename ({file.filename})")
-                    filename = secure_filename(file_key)
-                else:
-                    # Use the file's own filename if it's proper
-                    filename = secure_filename(file.filename)
+            if not file or not file.filename:
+                logger.warning(f"Invalid file for key: {file_key}")
+                continue
                 
-                # Ensure voice recordings have .webm extension
-                if not filename.endswith('.webm'):
-                    filename += '.webm'
-                    
-                file_path = os.path.join(upload_dir, filename)
+            try:
+                # Create a proper filename based on the form field key
+                filename = ensure_valid_filename(file.filename, file_key)
                 
                 # Save the file
-                file.save(file_path)
-                logger.info(f"Saved file: {file_path}, size: {os.path.getsize(file_path)} bytes")
+                try:
+                    file_path, file_size = save_uploaded_file(file, upload_dir, filename)
+                    logger.info(f"Saved file: {file_path}, size: {file_size} bytes")
+                except ValueError as e:
+                    logger.warning(f"Skipping invalid file: {str(e)}")
+                    continue
                 
-                # Generate a file ID (UUID)
+                # Generate a recording ID and determine recording type
                 recording_id = str(uuid.uuid4())
-                
-                # Determine recording type based on filename
-                if 'grievance' in filename.lower() or 'grievance_details' in filename.lower():
-                    recording_type = 'details'
-                elif 'name' in filename.lower() or 'user_full_name' in filename.lower() or 'phone' in filename.lower() or 'user_contact_phone' in filename.lower() or 'contact' in filename.lower():
-                    recording_type = 'contact'
-                elif 'municipality' in filename.lower() or 'user_municipality' in filename.lower() or 'village' in filename.lower() or 'user_village' in filename.lower() or 'address' in filename.lower() or 'user_address' in filename.lower():
-                    recording_type = 'location'
-                else:
-                    recording_type = 'details'  # Default
+                recording_type = get_recording_type_from_filename(filename)
                 
                 # Store file metadata in grievance_voice_recordings table
                 recording_data = {
@@ -371,21 +471,21 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
                     'file_path': file_path,
                     'recording_type': recording_type,
                     'duration_seconds': None,  # We don't have this info
-                    'file_size_bytes': os.path.getsize(file_path),
-                    'processing_status': 'pending'
+                    'file_size_bytes': file_size,
+                    'processing_status': 'pending',
+                    'language_code': interface_language
                 }
                 
                 # Store recording metadata
-                logger.info(f"Storing voice recording metadata in database: {recording_data}")
-                stored_recording_id = db_manager.store_voice_recording(recording_data)
+                stored_recording_id = store_recording_metadata(recording_data)
                 if stored_recording_id:
-                    logger.info(f"Successfully stored voice recording metadata for: {stored_recording_id}")
                     saved_files.append(stored_recording_id)
                     file_paths[stored_recording_id] = {'file_path': file_path, 'file_name': filename}
                 else:
                     logger.error(f"Failed to store voice recording metadata for: {recording_id}")
-            else:
-                logger.warning(f"Invalid file for key: {file_key}")
+            except Exception as e:
+                logger.error(f"Error processing file {file_key}: {str(e)}")
+                continue
         
         if not saved_files:
             logger.error("No files were saved")
@@ -394,34 +494,18 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
         # Process transcriptions
         logger.info(f"Processing transcriptions for {len(file_paths)} voice recordings")
         try:
-            # Create a dictionary of file data for transcription
-            files_data = {}
-            for recording_id in file_paths:
-                file_data = {
-                    'recording_id': recording_id,
-                    'file_path': file_paths[recording_id]['file_path'],
-                    'file_name': file_paths[recording_id]['file_name'],
-                    'file_type': 'audio/webm'
-                }
-                files_data[recording_id] = file_data
-            
             # Transcribe audio files
             transcriptions = {}
-            for recording_id, file_data in files_data.items():
+            for recording_id, file_data in file_paths.items():
                 file_path = file_data['file_path']
                 
                 # Update processing status to transcribing
-                db_manager.update_recording_status(recording_id, 'transcribing')
+                update_recording_status(recording_id, 'transcribing')
                 
-                # Transcribe with OpenAI Whisper
                 try:
-                    with open(file_path, "rb") as audio_data:
-                        response = client.audio.transcriptions.create(
-                            file=audio_data,
-                            model="whisper-1"
-                        )
+                    # Transcribe the audio file
+                    transcription = transcribe_audio_file(file_path)
                     
-                    transcription = response.text
                     # Store the transcription in database
                     transcription_data = {
                         'transcription_id': str(uuid.uuid4()),
@@ -432,33 +516,20 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
                         'confidence_score': 1.0  # Default confidence
                     }
                     
-                    # Log the transcription data we're about to store
-                    logger.info(f"Storing transcription with data: {transcription_data}")
-                    
-                    # Store transcription and check result
-                    transcription_id = db_manager.store_transcription(transcription_data)
+                    # Store transcription
+                    transcription_id = store_transcription_data(transcription_data)
                     if transcription_id:
                         logger.info(f"Successfully stored transcription with ID: {transcription_id}")
                     else:
                         logger.error(f"Failed to store transcription for recording: {recording_id}")
                     
                     # Update recording status to transcribed
-                    db_manager.update_recording_status(recording_id, 'transcribed')
+                    update_recording_status(recording_id, 'transcribed')
                     
-                    # Determine the type of recording based on filename for mapping to grievance data
-                    file_name = file_data['file_name'].lower()
-                    if 'grievance' in file_name or 'grievance_details' in file_name:
-                        transcriptions['grievance_details'] = transcription
-                    elif 'name' in file_name or 'user_full_name' in file_name:
-                        transcriptions['user_full_name'] = transcription
-                    elif 'phone' in file_name or 'user_contact_phone' in file_name:
-                        transcriptions['user_contact_phone'] = transcription
-                    elif 'municipality' in file_name or 'user_municipality' in file_name:
-                        transcriptions['user_municipality'] = transcription
-                    elif 'village' in file_name or 'user_village' in file_name:
-                        transcriptions['user_village'] = transcription
-                    elif 'address' in file_name or 'user_address' in file_name:
-                        transcriptions['user_address'] = transcription
+                    # Map the transcription to the appropriate grievance field
+                    field_name = get_grievance_field_from_filename(file_data['file_name'])
+                    if field_name:
+                        transcriptions[field_name] = transcription
                     else:
                         # Default to recording_id as key
                         transcriptions[recording_id] = transcription
@@ -468,7 +539,7 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
                 except Exception as e:
                     logger.error(f"Error transcribing {file_path}: {str(e)}")
                     # Update recording status to failed
-                    db_manager.update_recording_status(recording_id, 'failed')
+                    update_recording_status(recording_id, 'failed')
                     continue
             
             # If we have enough data, try to update the grievance details
@@ -485,7 +556,7 @@ def handle_direct_file_upload(files, existing_grievance_id=None):
             "id": grievance_id,
             "grievance_id": grievance_id
         }
-        logger.info(f"Returning response with grievance ID: {response_data}")
+        logger.info(f"Returning response with grievance ID: {grievance_id}")
         return jsonify(response_data), 200
             
     except Exception as e:
@@ -520,23 +591,15 @@ def process_voice_grievance(grievance_id: str, file_references: List[str]) -> Op
             if file_ext not in AUDIO_EXTENSIONS:
                 logger.warning(f"Skipping non-audio file: {file_path}")
                 continue
-                
-            # Transcribe with OpenAI Whisper
+            
             try:
-                with open(file_path, "rb") as audio_data:
-                    response = client.audio.transcriptions.create(
-                        file=audio_data,
-                        model="whisper-1"
-                    )
+                # Transcribe the audio file
+                transcription = transcribe_audio_file(file_path)
                 
-                transcription = response.text
-                # Determine the type of recording based on filename
-                if 'grievance' in file_data['file_name'].lower():
-                    transcriptions['grievance'] = transcription
-                elif 'contact' in file_data['file_name'].lower():
-                    transcriptions['contact'] = transcription
-                elif 'address' in file_data['file_name'].lower():
-                    transcriptions['address'] = transcription
+                # Map to appropriate field based on filename
+                field_name = get_grievance_field_from_filename(file_data['file_name'])
+                if field_name:
+                    transcriptions[field_name] = transcription
                 else:
                     # Default to file_id as key
                     transcriptions[file_id] = transcription
@@ -579,14 +642,16 @@ def update_grievance_from_voice(grievance_id: str, transcriptions: Dict[str, str
         if user_address:
             combined_address += user_address
         
-        # Use OpenAI to classify and summarize grievance
-        classification_result = classify_grievance(grievance_details)
+        # Use OpenAI to classify and summarize grievance if we have grievance details
+        classification_result = {'summary': '', 'categories': []}
+        if grievance_details:
+            classification_result = classify_grievance(grievance_details)
         
         # Prepare grievance data
         grievance_data = {
             'grievance_id': grievance_id,
             'grievance_details': grievance_details,
-            'grievance_summary': classification_result.get('summary', grievance_details[:100] + '...'),
+            'grievance_summary': classification_result.get('summary', grievance_details[:100] + '...' if grievance_details else ''),
             'grievance_categories': classification_result.get('categories', []),
             'user_full_name': user_full_name,
             'user_contact_phone': user_contact_phone,
@@ -594,13 +659,13 @@ def update_grievance_from_voice(grievance_id: str, transcriptions: Dict[str, str
             'user_village': user_village,
             'user_address': user_address,
             'grievance_location': combined_address.strip(', ') if combined_address else user_address,
-            'status': GRIEVANCE_STATUS.PENDING,
+            'status': GRIEVANCE_STATUS["SUBMITTED"],
             'source': 'accessibility',
             'submission_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         # Update grievance in database
-        success = db_manager.update_grievance(grievance_id, grievance_data)
+        success = db_manager.update_grievance_db(grievance_data)
         
         if success:
             logger.info(f"Successfully updated grievance {grievance_id} with voice data")
@@ -694,3 +759,20 @@ def classify_grievance(grievance_text: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error classifying grievance: {str(e)}")
         return {'summary': '', 'categories': []}
+
+def update_recording_language(recording_id: str, language_code: str) -> bool:
+    """Update the detected language for a voice recording
+    
+    Args:
+        recording_id: The ID of the recording to update
+        language_code: The detected language code
+        
+    Returns:
+        bool: True if the update was successful, False otherwise
+    """
+    try:
+        logger.info(f"Updating language for recording {recording_id} to {language_code}")
+        return db_manager.update_recording_language(recording_id, language_code)
+    except Exception as e:
+        logger.error(f"Error updating recording language: {str(e)}")
+        return False

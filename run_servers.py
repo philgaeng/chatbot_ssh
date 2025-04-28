@@ -19,20 +19,121 @@ import subprocess
 import signal
 import psutil
 import socket
+from logging.handlers import TimedRotatingFileHandler
 
 # Add the project root directory to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(project_root)
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Default log retention period (in days)
+DEFAULT_LOG_RETENTION_DAYS = 90
+
+def setup_logging(log_retention_days=DEFAULT_LOG_RETENTION_DAYS):
+    """Set up logging with specified retention period"""
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(project_root, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+        print(f"Created logs directory: {logs_dir}")
+    
+    # Common log format for all loggers
+    log_format = '%(asctime)s - %(levelname)s - [%(name)s] - %(message)s'
+    log_formatter = logging.Formatter(log_format)
+    
+    # Root logger configuration (console output)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # Console handler for root logger
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    root_logger.addHandler(console_handler)
+    
+    # Create separate logger for main script
+    server_manager_logger = logging.getLogger('ServerManager')
+    # Create file handler for main script
+    main_log_file = os.path.join(logs_dir, 'server_manager.log')
+    main_file_handler = TimedRotatingFileHandler(
+        main_log_file,
+        when='midnight',
+        interval=1,
+        backupCount=log_retention_days  # Keep logs for specified days
+    )
+    main_file_handler.setFormatter(log_formatter)
+    server_manager_logger.addHandler(main_file_handler)
+    
+    # Create loggers for each component
+    rasa_server_logger = logging.getLogger('RasaServer')
+    rasa_action_logger = logging.getLogger('RasaActionServer')
+    file_server_logger = logging.getLogger('FileServer')
+    accessible_logger = logging.getLogger('AccessibleServer')
+    
+    # Set up file handlers for each component
+    rasa_server_log_file = os.path.join(logs_dir, 'rasa_server.log')
+    rasa_action_log_file = os.path.join(logs_dir, 'actions_server.log')
+    file_server_log_file = os.path.join(logs_dir, 'file_server.log')
+    accessible_log_file = os.path.join(logs_dir, 'accessible_server.log')
+    
+    # Rasa server file handler
+    rasa_server_file_handler = TimedRotatingFileHandler(
+        rasa_server_log_file,
+        when='midnight',
+        interval=1,
+        backupCount=log_retention_days
+    )
+    rasa_server_file_handler.setFormatter(log_formatter)
+    rasa_server_logger.addHandler(rasa_server_file_handler)
+    
+    # Rasa action server file handler
+    rasa_action_file_handler = TimedRotatingFileHandler(
+        rasa_action_log_file,
+        when='midnight',
+        interval=1,
+        backupCount=log_retention_days
+    )
+    rasa_action_file_handler.setFormatter(log_formatter)
+    rasa_action_logger.addHandler(rasa_action_file_handler)
+    
+    # File server file handler
+    file_server_file_handler = TimedRotatingFileHandler(
+        file_server_log_file,
+        when='midnight',
+        interval=1,
+        backupCount=log_retention_days
+    )
+    file_server_file_handler.setFormatter(log_formatter)
+    file_server_logger.addHandler(file_server_file_handler)
+    
+    # Accessible server file handler
+    accessible_file_handler = TimedRotatingFileHandler(
+        accessible_log_file,
+        when='midnight',
+        interval=1,
+        backupCount=log_retention_days
+    )
+    accessible_file_handler.setFormatter(log_formatter)
+    accessible_logger.addHandler(accessible_file_handler)
+    
+    print(f"Logging initialized with {log_retention_days} days retention")
+    return (
+        server_manager_logger,
+        rasa_server_logger,
+        rasa_action_logger,
+        file_server_logger,
+        accessible_logger,
+        # Return handlers for Flask apps to use
+        file_server_file_handler,
+        accessible_file_handler
+    )
+
+# Initialize global logger variables
+logger = None
+rasa_server_logger = None
+rasa_action_logger = None
+file_server_logger = None
+accessible_logger = None
+file_server_file_handler = None
+accessible_file_handler = None
 
 def init_database():
     """Initialize the database"""
@@ -50,7 +151,7 @@ def init_database():
 
 def start_file_server(port=5001):
     """Start the file server for handling uploads"""
-    logger.info(f"Starting file server on port {port}...")
+    file_server_logger.info(f"Starting file server on port {port}...")
     
     try:
         # First, ensure actions_server is imported and initialized
@@ -63,29 +164,41 @@ def start_file_server(port=5001):
         uploads_dir = os.path.join(project_root, 'uploads')
         if not os.path.exists(uploads_dir):
             os.makedirs(uploads_dir)
-            logger.info(f"Created uploads directory: {uploads_dir}")
+            file_server_logger.info(f"Created uploads directory: {uploads_dir}")
+        
+        # Set up logging for Flask app
+        import logging as flask_logging
+        flask_app_logger = flask_logging.getLogger('werkzeug')
+        flask_app_logger.setLevel(flask_logging.INFO)
+        flask_app_logger.addHandler(file_server_file_handler)
         
         # Start the file server
         file_server_app.run(host='0.0.0.0', port=port, use_reloader=False, debug=False)
     except Exception as e:
-        logger.error(f"Error starting file server: {str(e)}", exc_info=True)
+        file_server_logger.error(f"Error starting file server: {str(e)}", exc_info=True)
 
 def start_accessible_app(port=5006):
     """Start the accessibility web app"""
-    logger.info(f"Starting accessibility app on port {port}...")
+    accessible_logger.info(f"Starting accessibility app on port {port}...")
     
     try:
         # Import the accessibility app
         from actions_server.app import app as accessibility_app
         
+        # Set up logging for Flask app
+        import logging as flask_logging
+        flask_app_logger = flask_logging.getLogger('werkzeug')
+        flask_app_logger.setLevel(flask_logging.INFO)
+        flask_app_logger.addHandler(accessible_file_handler)
+        
         # Start the accessibility app
         accessibility_app.run(host='0.0.0.0', port=port, use_reloader=False, debug=False)
     except Exception as e:
-        logger.error(f"Error starting accessibility app: {str(e)}", exc_info=True)
+        accessible_logger.error(f"Error starting accessibility app: {str(e)}", exc_info=True)
 
 def start_rasa_action_server(port=5050):
     """Start the Rasa action server"""
-    logger.info(f"Starting Rasa action server on port {port}...")
+    rasa_action_logger.info(f"Starting Rasa action server on port {port}...")
     
     try:
         import subprocess
@@ -96,17 +209,17 @@ def start_rasa_action_server(port=5050):
             sock.bind(('0.0.0.0', port))
             sock.close()
         except OSError as e:
-            logger.error(f"Port {port} is not available for Rasa action server: {e}")
+            rasa_action_logger.error(f"Port {port} is not available for Rasa action server: {e}")
             # Try to find what's using the port
             try:
                 result = subprocess.run(["lsof", "-i", f":{port}"], capture_output=True, text=True)
                 if result.stdout:
-                    logger.error(f"Port {port} is in use by:\n{result.stdout}")
+                    rasa_action_logger.error(f"Port {port} is in use by:\n{result.stdout}")
                     # Try one last kill
                     subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
                     time.sleep(2)
             except Exception as e:
-                logger.error(f"Error checking port {port}: {e}")
+                rasa_action_logger.error(f"Error checking port {port}: {e}")
             return None
         
         # Start the Rasa action server with the specified port
@@ -126,27 +239,27 @@ def start_rasa_action_server(port=5050):
         # Log output in a separate thread
         def log_output():
             for line in process.stdout:
-                logger.info(f"Rasa Action Server: {line.strip()}")
+                rasa_action_logger.info(line.strip())
             for line in process.stderr:
-                logger.error(f"Rasa Action Server Error: {line.strip()}")
+                rasa_action_logger.error(line.strip())
                 
         threading.Thread(target=log_output, daemon=True).start()
         
         # Give Rasa a moment to start and check if it's running
         time.sleep(5)
         if process.poll() is not None:
-            logger.error(f"Rasa action server failed to start, exit code: {process.poll()}")
+            rasa_action_logger.error(f"Rasa action server failed to start, exit code: {process.poll()}")
             return None
             
-        logger.info(f"Rasa action server started on port {port}")
+        rasa_action_logger.info(f"Rasa action server started on port {port}")
         return process
     except Exception as e:
-        logger.error(f"Error starting Rasa action server: {str(e)}", exc_info=True)
+        rasa_action_logger.error(f"Error starting Rasa action server: {str(e)}", exc_info=True)
         return None
 
 def start_rasa_server(port=5005):
     """Start the main Rasa server"""
-    logger.info(f"Starting Rasa server on port {port}...")
+    rasa_server_logger.info(f"Starting Rasa server on port {port}...")
     
     try:
         import subprocess
@@ -157,17 +270,17 @@ def start_rasa_server(port=5005):
             sock.bind(('0.0.0.0', port))
             sock.close()
         except OSError as e:
-            logger.error(f"Port {port} is not available for Rasa server: {e}")
+            rasa_server_logger.error(f"Port {port} is not available for Rasa server: {e}")
             # Try to find what's using the port
             try:
                 result = subprocess.run(["lsof", "-i", f":{port}"], capture_output=True, text=True)
                 if result.stdout:
-                    logger.error(f"Port {port} is in use by:\n{result.stdout}")
+                    rasa_server_logger.error(f"Port {port} is in use by:\n{result.stdout}")
                     # Try one last kill
                     subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
                     time.sleep(2)
             except Exception as e:
-                logger.error(f"Error checking port {port}: {e}")
+                rasa_server_logger.error(f"Error checking port {port}: {e}")
             return None
         
         # Start the main Rasa server
@@ -188,22 +301,22 @@ def start_rasa_server(port=5005):
         # Log output in a separate thread
         def log_output():
             for line in process.stdout:
-                logger.info(f"Rasa Server: {line.strip()}")
+                rasa_server_logger.info(line.strip())
             for line in process.stderr:
-                logger.error(f"Rasa Server Error: {line.strip()}")
+                rasa_server_logger.error(line.strip())
                 
         threading.Thread(target=log_output, daemon=True).start()
         
         # Give Rasa a moment to start and check if it's running
         time.sleep(5)
         if process.poll() is not None:
-            logger.error(f"Rasa server failed to start, exit code: {process.poll()}")
+            rasa_server_logger.error(f"Rasa server failed to start, exit code: {process.poll()}")
             return None
             
-        logger.info(f"Rasa server started on port {port}")
+        rasa_server_logger.info(f"Rasa server started on port {port}")
         return process
     except Exception as e:
-        logger.error(f"Error starting Rasa server: {str(e)}", exc_info=True)
+        rasa_server_logger.error(f"Error starting Rasa server: {str(e)}", exc_info=True)
         return None
 
 def check_server(url, name, max_attempts=5):
@@ -324,8 +437,17 @@ def main():
     parser.add_argument('--rasa-action-only', action='store_true', help='Run only the Rasa action server')
     parser.add_argument('--rasa-server-only', action='store_true', help='Run only the main Rasa server')
     parser.add_argument('--all', action='store_true', help='Run all servers')
+    parser.add_argument('--log-retention', type=int, default=DEFAULT_LOG_RETENTION_DAYS, 
+                      help=f'Log retention period in days (default: {DEFAULT_LOG_RETENTION_DAYS})')
     
     args = parser.parse_args()
+    
+    # Initialize logging with specified retention
+    global logger, rasa_server_logger, rasa_action_logger, file_server_logger, accessible_logger
+    global file_server_file_handler, accessible_file_handler
+    
+    logger, rasa_server_logger, rasa_action_logger, file_server_logger, accessible_logger, \
+    file_server_file_handler, accessible_file_handler = setup_logging(args.log_retention)
     
     # If no specific server is selected, show help
     if not (args.file_server_only or args.accessibility_only or args.rasa_action_only or args.rasa_server_only or args.all):
@@ -406,6 +528,7 @@ def main():
             time.sleep(2)
     
     # Start accessibility app if requested
+    accessibility_thread = None
     if args.accessibility_only or args.all:
         # Run accessibility app in a separate thread if we're running multiple servers
         if args.all:
@@ -427,6 +550,10 @@ def main():
         while True:
             if file_server_thread and not file_server_thread.is_alive():
                 logger.error("File server thread has stopped")
+                break
+                
+            if accessibility_thread and not accessibility_thread.is_alive():
+                logger.error("Accessibility app thread has stopped")
                 break
                 
             if rasa_action_process and rasa_action_process.poll() is not None:

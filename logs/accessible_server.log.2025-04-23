@@ -1,0 +1,110 @@
+2025-04-23 01:46:11,532 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 01:46:11,554 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 01:46:11,554 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 01:46:58,017 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:46:58] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 01:47:31,092 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:47:31] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 01:47:46,469 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:47:46] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-23 01:55:47,329 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:55:47] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 01:56:18,719 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:56:18] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-23 01:56:21,807 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:56:21] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 01:58:01,488 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 01:58:01] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-23 02:06:43,915 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:06:43] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 02:07:18,117 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:07:18] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 02:07:21,789 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:07:21] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-23 02:16:15,372 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:16:15] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 02:16:50,857 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:16:50] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-23 02:16:51,375 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 02:16:51] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 03:33:00,456 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 03:33:00,477 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 03:33:00,478 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 03:38:39,950 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 03:38:39] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 03:39:17,673 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 03:39:17] "[31m[1mPOST /submit-voice-grievance HTTP/1.0[0m" 400 -
+2025-04-23 03:56:01,248 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 03:56:01,265 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 03:56:01,265 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 04:04:11,977 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 04:04:11,995 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 04:04:11,996 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 04:05:14,258 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 04:05:14] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 04:05:38,633 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 04:05:38] "[31m[1mPOST /submit-voice-grievance HTTP/1.0[0m" 400 -
+2025-04-23 06:24:36,302 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 06:24:36] "POST /create-grievance HTTP/1.0" 200 -
+2025-04-23 06:25:04,079 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 06:25:04] "[31m[1mPOST /submit-voice-grievance HTTP/1.0[0m" 400 -
+2025-04-23 08:18:03,641 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 08:18:03,661 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 08:18:03,662 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 08:19:01,450 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 08:19:01] "POST /create-grievance HTTP/1.1" 200 -
+2025-04-23 08:19:01,531 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 08:19:01] "[31m[1mPOST /submit-voice-grievance HTTP/1.1[0m" 400 -
+2025-04-23 09:56:15,854 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 09:56:15] "POST /create-grievance HTTP/1.1" 200 -
+2025-04-23 09:56:15,913 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 09:56:15] "[31m[1mPOST /submit-voice-grievance HTTP/1.1[0m" 400 -
+2025-04-23 09:57:58,048 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 09:57:58,065 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 09:57:58,066 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 09:58:07,014 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 09:58:07] "POST /create-grievance HTTP/1.1" 200 -
+2025-04-23 09:58:07,100 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 09:58:07] "[31m[1mPOST /submit-voice-grievance HTTP/1.1[0m" 400 -
+2025-04-23 13:49:17,433 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 13:49:17,452 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 13:49:17,455 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 14:31:05,602 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 14:31:05,614 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 14:31:05,615 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 15:30:34,521 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 15:30:34] "[35m[1mPOST /create-grievance HTTP/1.0[0m" 500 -
+2025-04-23 15:36:43,505 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 15:36:43,520 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 15:36:43,521 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 15:38:06,612 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 15:38:06] "[35m[1mPOST /create-grievance HTTP/1.0[0m" 500 -
+2025-04-23 15:50:56,321 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 15:50:56] "[31m[1mPOST /submit-voice-grievance HTTP/1.0[0m" 400 -
+2025-04-23 15:57:20,984 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 15:57:20] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:12:22,561 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 16:12:22,578 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 16:12:22,579 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 16:13:25,918 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:13:25] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:20:46,023 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:20:46] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:25:38,868 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 16:25:38,884 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 16:25:38,885 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 16:26:18,259 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:26:18] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:42:21,215 - INFO - [AccessibleServer] - Starting accessibility app on port 5006...
+2025-04-23 16:42:21,230 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-23 16:42:21,230 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-23 16:42:53,084 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:42:53] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:49:24,602 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:49:24] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:49:53,799 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:49:53] "[31m[1mPOST /accessible-file-upload HTTP/1.0[0m" 400 -
+2025-04-23 16:50:04,039 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:50:04] "[31m[1mPOST /accessible-file-upload HTTP/1.0[0m" 400 -
+2025-04-23 16:57:59,565 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:57:59] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-23 16:58:17,391 - INFO - [werkzeug] - 127.0.0.1 - - [23/Apr/2025 16:58:17] "[31m[1mPOST /accessible-file-upload HTTP/1.0[0m" 400 -
