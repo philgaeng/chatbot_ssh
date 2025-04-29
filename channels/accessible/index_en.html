@@ -11,6 +11,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/shared/images/favicon-16x16.png">
     <link rel="manifest" href="/shared/images/site.webmanifest">
     <meta name="description" content="Accessible grievance reporting system for the Department of Roads, Nepal">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <a href="#main" class="skip-link">Skip to main content</a>
@@ -39,13 +40,32 @@
                     <h2 id="step1-heading">Step 1: Record Your Grievance</h2>
                     <div class="content">
                         <p>Please explain your grievance related to roads or transportation.</p>
-                        <button id="recordBtn1" class="record-btn" aria-label="Record your grievance" type="button">Record Grievance</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn1" class="record-btn" aria-label="Record your grievance" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Next</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status1" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback1" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your grievance" type="button">Retry</button>
-                            <button class="next-btn primary-btn" aria-label="Continue to next step" type="button">Continue</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording" disabled>
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step" disabled>
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -55,13 +75,32 @@
                     <h2 id="step2a-heading">Step 2A: Your Name</h2>
                     <div class="content">
                         <p>Please state your full name.</p>
-                        <button id="recordBtn2a" class="record-btn" aria-label="Record your full name" type="button">Record</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn2a" class="record-btn" aria-label="Record your full name" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" data-tooltip="Skip" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Skip</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status2a" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback2a" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your name" type="button">Retry</button>
-                            <button class="next-btn primary-btn" aria-label="Continue to next step" type="button">Continue</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording">
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -70,13 +109,32 @@
                     <h2 id="step2b-heading">Step 2B: Contact Number</h2>
                     <div class="content">
                         <p>Please state your phone number.</p>
-                        <button id="recordBtn2b" class="record-btn" aria-label="Record your phone number" type="button">Record</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn2b" class="record-btn" aria-label="Record your phone number" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" data-tooltip="Skip" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Skip</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status2b" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback2b" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your phone number" type="button">Retry</button>
-                            <button class="next-btn primary-btn" aria-label="Continue to next step" type="button">Continue</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording">
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -86,13 +144,32 @@
                     <h2 id="step3a-heading">Step 3A: Municipality</h2>
                     <div class="content">
                         <p>Please state your municipality.</p>
-                        <button id="recordBtn3a" class="record-btn" aria-label="Record your municipality" type="button">Record</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn3a" class="record-btn" aria-label="Record your municipality" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" data-tooltip="Skip" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Skip</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status3a" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback3a" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your municipality" type="button">Retry</button>
-                            <button class="next-btn primary-btn" aria-label="Continue to next step" type="button">Continue</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording">
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -101,13 +178,32 @@
                     <h2 id="step3b-heading">Step 3B: Village</h2>
                     <div class="content">
                         <p>Please state your village name.</p>
-                        <button id="recordBtn3b" class="record-btn" aria-label="Record your village" type="button">Record</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn3b" class="record-btn" aria-label="Record your village" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" data-tooltip="Skip" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Skip</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status3b" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback3b" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your village" type="button">Retry</button>
-                            <button class="next-btn primary-btn" aria-label="Continue to next step" type="button">Continue</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording">
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -116,13 +212,36 @@
                     <h2 id="step3c-heading">Step 3C: Street Address</h2>
                     <div class="content">
                         <p>Please state your street address or location details.</p>
-                        <button id="recordBtn3c" class="record-btn" aria-label="Record your street address" type="button">Record</button>
-                        <button class="skip-btn secondary-btn" aria-label="Skip this step" type="button">Skip</button>
+                        <div class="step-nav">
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    <span class="tooltip">Previous</span>
+                                </button>
+                            </div>
+                            <button id="recordBtn3c" class="record-btn" aria-label="Record your street address" type="button">Record</button>
+                            <div class="nav-group">
+                                <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
+                                    <i class="fas fa-chevron-right"></i>
+                                    <span class="tooltip">Next</span>
+                                </button>
+                                <button id="submitGrievanceBtn" class="nav-btn" data-action="submit" aria-label="Submit your grievance" type="button">
+                                    <i class="fas fa-check"></i>
+                                    <span class="tooltip">Submit</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="status3c" class="status" hidden>Recording: <span>0:00</span></div>
                         <div id="playback3c" class="playback" hidden>
                             <audio controls></audio>
-                            <button class="retry-btn secondary-btn" aria-label="Retry recording your street address" type="button">Retry</button>
-                            <button id="submitGrievanceBtn" class="next-btn primary-btn" aria-label="Submit your grievance" type="button">Submit Grievance</button>
+                            <button class="nav-btn" data-action="retry" aria-label="Retry recording">
+                                <i class="fas fa-undo"></i>
+                                <span class="tooltip">Retry</span>
+                            </button>
+                            <button class="nav-btn" data-action="continue" aria-label="Continue to next step" disabled>
+                                <i class="fas fa-chevron-right"></i>
+                                <span class="tooltip">Continue</span>
+                            </button>
                         </div>
                     </div>
                 </div>

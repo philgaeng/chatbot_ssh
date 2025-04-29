@@ -1,0 +1,34 @@
+2025-04-28 01:49:48,133 - INFO - [ServerManager] - Stopping all Rasa processes...
+2025-04-28 01:49:50,157 - INFO - [ServerManager] - Checking for existing processes on ports: [5001, 5006, 5050, 5005]
+2025-04-28 01:49:50,170 - INFO - [ServerManager] - Port 5001 is now available
+2025-04-28 01:49:50,180 - INFO - [ServerManager] - Port 5006 is now available
+2025-04-28 01:49:50,190 - INFO - [ServerManager] - Port 5050 is now available
+2025-04-28 01:49:50,200 - INFO - [ServerManager] - Port 5005 is now available
+2025-04-28 01:49:50,200 - INFO - [ServerManager] - Initializing database...
+2025-04-28 01:49:50,269 - INFO - [ServerManager] - Database initialized successfully
+2025-04-28 01:49:50,270 - INFO - [ServerManager] - File server thread started with port 5001
+2025-04-28 01:49:52,345 - INFO - [ServerManager] - File server is running at http://localhost:5001
+2025-04-28 01:50:06,362 - INFO - [ServerManager] - Accessibility app thread started with port 5006
+2025-04-28 02:49:49,957 - INFO - [ServerManager] - Stopping all Rasa processes...
+2025-04-28 02:49:51,986 - INFO - [ServerManager] - Checking for existing processes on ports: [5001, 5006, 5050, 5005]
+2025-04-28 02:49:52,004 - INFO - [ServerManager] - Stopping process python3 (PID: 73675) on port 5001
+2025-04-28 02:49:53,006 - INFO - [ServerManager] - Port 5001 is now available
+2025-04-28 02:49:53,022 - INFO - [ServerManager] - Port 5006 is now available
+2025-04-28 02:49:53,032 - INFO - [ServerManager] - Port 5050 is now available
+2025-04-28 02:49:53,048 - INFO - [ServerManager] - Port 5005 is now available
+2025-04-28 02:49:53,049 - INFO - [ServerManager] - Initializing database...
+2025-04-28 02:49:53,115 - INFO - [ServerManager] - Database initialized successfully
+2025-04-28 02:49:53,116 - INFO - [ServerManager] - File server thread started with port 5001
+2025-04-28 02:49:55,192 - INFO - [ServerManager] - File server is running at http://localhost:5001
+2025-04-28 02:50:09,208 - INFO - [ServerManager] - Accessibility app thread started with port 5006
+2025-04-28 03:49:01,767 - INFO - [ServerManager] - Stopping all Rasa processes...
+2025-04-28 03:49:03,791 - INFO - [ServerManager] - Checking for existing processes on ports: [5001, 5006, 5050, 5005]
+2025-04-28 03:49:03,804 - INFO - [ServerManager] - Port 5001 is now available
+2025-04-28 03:49:03,815 - INFO - [ServerManager] - Port 5006 is now available
+2025-04-28 03:49:03,866 - INFO - [ServerManager] - Port 5050 is now available
+2025-04-28 03:49:03,881 - INFO - [ServerManager] - Port 5005 is now available
+2025-04-28 03:49:03,882 - INFO - [ServerManager] - Initializing database...
+2025-04-28 03:49:03,957 - INFO - [ServerManager] - Database initialized successfully
+2025-04-28 03:49:03,958 - INFO - [ServerManager] - File server thread started with port 5001
+2025-04-28 03:49:06,033 - INFO - [ServerManager] - File server is running at http://localhost:5001
+2025-04-28 03:49:20,048 - INFO - [ServerManager] - Accessibility app thread started with port 5006

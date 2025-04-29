@@ -37,6 +37,9 @@ let overlayMutationObserver = null;
 // Add at the top of the file
 let isSubmitting = false;
 
+// Add this near the top of the file where other state variables are defined
+let isSpeechIndicatorEnabled = true;
+
 function setupOverlayObserver() {
     const overlay = document.getElementById('submissionOverlay');
     if (!overlay) {
@@ -524,34 +527,50 @@ UIModule = {
     },
     
     setupNavigation: function() {
-        document.querySelectorAll('.next-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.goToNextStep();
-            });
+        // Single setup for all navigation buttons
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('.nav-btn');
+            if (!button) return;
+            
+            const action = button.getAttribute('data-action');
+            if (!action) return;
+            
+            // Prevent actions during recording
+            if (RecordingModule.isRecording) return;
+            
+            switch(action) {
+                case 'next':
+                case 'continue':
+                    this.goToNextStep();
+                    break;
+                case 'prev':
+                    this.goToPreviousStep();
+                    break;
+                case 'retry':
+                    // Handled by RecordingModule
+                    break;
+                case 'submit':
+                    // Prevent submission if we just navigated to 3c
+                    if (this.isNavigatingTo3c || this.isTransitioning) {
+                        console.log('Preventing submission during navigation');
+                        return;
+                    }
+                    if (!isSubmitting) {
+                        GrievanceModule.submitGrievance();
+                    }
+                    break;
+            }
         });
-        document.querySelectorAll('.retry-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Logic for retry handled in RecordingModule
-            });
-        });
-        // Add skip button listeners
-        document.querySelectorAll('.skip-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.goToNextStep(true); // pass skip=true
-            });
-        });
+
+        // Setup other navigation-related buttons
         const newBtn = document.getElementById('newBtn');
         if (newBtn) {
-            newBtn.addEventListener('click', () => {
-                this.resetApp();
-            });
+            newBtn.addEventListener('click', () => this.resetApp());
         }
-        // Setup exit button
+
         const exitBtn = document.getElementById('exitBtn');
         if (exitBtn) {
-            exitBtn.addEventListener('click', () => {
-                this.showExitConfirmation();
-            });
+            exitBtn.addEventListener('click', () => this.showExitConfirmation());
         }
     },
     
@@ -572,13 +591,13 @@ UIModule = {
             if (content && SpeechModule.autoRead) {
                 SpeechModule.speak(content.textContent);
             }
-            // Re-attach .next-btn event listeners for this step
-            stepElement.querySelectorAll('.next-btn').forEach(btn => {
-                btn.disabled = false;
-                btn.onclick = null;
-                btn.addEventListener('click', () => {
-                    this.goToNextStep();
-                });
+            
+            // Update button states for the new step
+            const recordingType = RecordingModule.getRecordingTypeForStep(step);
+            this.updateButtonStates({
+                isRecording: RecordingModule.isRecording,
+                hasRecording: RecordingModule.hasRecording(recordingType),
+                isSubmitting: isSubmitting
             });
         }
     },
@@ -594,43 +613,111 @@ UIModule = {
     
     goToNextStep: function(skip = false) {
         console.log('Going to next step from:', state.currentStep);
-        let nextStep;
-        if (state.currentStep === '3b') {
-            nextStep = '3c';
-            console.log('Special handling for step 3b -> 3c');
-        } else if (state.currentStep === '1') {
-            nextStep = '2a';
-        } else if (state.currentStep === '2a') {
-            nextStep = '2b';
-        } else if (state.currentStep === '2b') {
-            nextStep = '3a';
-        } else if (state.currentStep === '3a') {
-            nextStep = '3b';
-        } else if (state.currentStep === '3c') {
-            // Do not automatically submit; just show the playback and submit button
-            console.log('Step 3c: Waiting for user to submit.');
+        
+        // Prevent multiple rapid transitions
+        if (this.isTransitioning) {
+            console.log('Already transitioning, ignoring call');
             return;
-        } else {
-            const currentNum = parseInt(state.currentStep);
-            if (!isNaN(currentNum)) {
-                nextStep = (currentNum + 1).toString();
+        }
+        
+        let nextStep;
+        
+        // Special handling for step 3c - never proceed beyond it
+        if (state.currentStep === '3c') {
+            console.log('On step 3c - no next step available');
+            return;
+        }
+        
+        // Set transitioning flag
+        this.isTransitioning = true;
+        
+        try {
+            // Determine next step
+            if (state.currentStep === '3b') {
+                nextStep = '3c';
+                console.log('Special handling for step 3b -> 3c');
+                // Add delay before enabling submit functionality
+                this.isNavigatingTo3c = true;
+            } else if (state.currentStep === '1') {
+                nextStep = '2a';
+            } else if (state.currentStep === '2a') {
+                nextStep = '2b';
+            } else if (state.currentStep === '2b') {
+                nextStep = '3a';
+            } else if (state.currentStep === '3a') {
+                nextStep = '3b';
             } else {
                 console.error('Unable to determine next step from:', state.currentStep);
                 return;
             }
-        }
-        console.log('Next step determined as:', nextStep);
-        if (!skip) {
-            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
-            if (!hasRecordings) {
-                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
-                this.showError('Please record your response before continuing, or use Skip.');
-                return;
+            
+            console.log('Next step determined as:', nextStep);
+            
+            // Check for recording if not skipping
+            if (!skip) {
+                const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+                if (!hasRecordings) {
+                    console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                    this.showError('Please record your response before continuing, or use Skip.');
+                    return;
+                }
             }
+            
+            // Update state and show next step
+            const previousStep = state.currentStep;
+            state.currentStep = nextStep;
+            UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+            
+            // Hide previous step before showing next
+            const prevStepElement = document.getElementById(`step${previousStep}`);
+            if (prevStepElement) {
+                prevStepElement.hidden = true;
+            }
+            
+            // Show next step
+            const nextStepElement = document.getElementById(`step${nextStep}`);
+            if (nextStepElement) {
+                nextStepElement.hidden = false;
+                
+                // Get step content for screen reader
+                const content = nextStepElement.querySelector('.content');
+                if (content && SpeechModule.autoRead) {
+                    SpeechModule.speak(content.textContent);
+                }
+            }
+            
+            // Update button states for the new step
+            const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
+            this.updateButtonStates({
+                isRecording: RecordingModule.isRecording,
+                hasRecording: RecordingModule.hasRecording(recordingType),
+                isSubmitting: isSubmitting
+            });
+            
+            // If navigating to 3c, add a delay before enabling submit functionality
+            if (nextStep === '3c') {
+                setTimeout(() => {
+                    console.log('Navigation delay complete, enabling submit functionality');
+                    this.isNavigatingTo3c = false;
+                    this.isTransitioning = false;
+                    // Update button states again after delay
+                    this.updateButtonStates({
+                        isRecording: RecordingModule.isRecording,
+                        hasRecording: RecordingModule.hasRecording(recordingType),
+                        isSubmitting: isSubmitting
+                    });
+                }, 1000); // 1 second delay
+            } else {
+                // For other steps, clear transitioning flag after shorter delay
+                setTimeout(() => {
+                    this.isTransitioning = false;
+                }, 300);
+            }
+        } catch (error) {
+            console.error('Error in goToNextStep:', error);
+            this.isNavigatingTo3c = false;
+            this.isTransitioning = false;
         }
-        state.currentStep = nextStep;
-        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
-        UIModule.showCurrentStep();
     },
     
     goToPreviousStep: function() {
@@ -774,7 +861,10 @@ UIModule = {
     showConfirmationScreen: function(grievanceId) {
         console.log("Showing confirmation screen for grievance ID:", grievanceId);
         
-        // First completely hide ALL steps including step3c
+        // First hide the submission overlay
+        hideSubmissionOverlay();
+        
+        // Then completely hide ALL steps including step3c
         document.querySelectorAll('.step').forEach(step => {
             step.hidden = true;
             step.style.display = 'none';
@@ -785,8 +875,8 @@ UIModule = {
         
         if (!confirmationElement) {
             console.error("Confirmation element not found!");
-                return;
-            }
+            return;
+        }
             
         // Update the grievance ID
         const idElement = document.getElementById('grievanceId');
@@ -904,6 +994,108 @@ UIModule = {
         if (statusElement) {
             statusElement.hidden = true;
         }
+    },
+    
+    updateButtonStates: function(options = {}) {
+        const {
+            isRecording = false,
+            currentStep = state.currentStep,
+            hasRecording = false,
+            isSubmitting = false
+        } = options;
+        
+        // Get current step info
+        const currentStepElement = document.querySelector('.step:not([hidden])');
+        if (!currentStepElement) return;
+        
+        const stepId = currentStepElement.id;
+        const currentStepNumber = stepId.replace('step', '');
+        const recordingType = RecordingModule.getRecordingTypeForStep(currentStepNumber);
+        
+        // Update record buttons
+        const recordButtons = document.querySelectorAll('[id^="recordBtn"]');
+        recordButtons.forEach(button => {
+            // Disable record buttons during submission
+            if (isSubmitting) {
+                button.disabled = true;
+                return;
+            }
+            
+            if (isRecording) {
+                button.textContent = 'Stop Recording';
+                button.classList.add('recording');
+                button.classList.remove('waiting');
+                button.disabled = false;
+            } else {
+                button.textContent = 'Record';
+                button.classList.remove('recording', 'waiting');
+                button.disabled = false;
+            }
+        });
+        
+        // Update navigation buttons
+        const navButtons = currentStepElement.querySelectorAll('.nav-btn');
+        navButtons.forEach(button => {
+            const action = button.getAttribute('data-action');
+            
+            // During recording or submission, all navigation is disabled
+            if (isRecording || isSubmitting) {
+                button.disabled = true;
+                return;
+            }
+            
+            switch (action) {
+                case 'prev':
+                    button.disabled = (currentStepNumber === '1');
+                    button.style.display = '';
+                    break;
+                    
+                case 'next':
+                case 'continue':
+                    if (currentStepNumber === '3c') {
+                        button.style.display = 'none';
+                    } else {
+                        button.disabled = !hasRecording;
+                        button.style.display = '';
+                    }
+                    break;
+                    
+                case 'retry':
+                    button.disabled = isRecording;
+                    button.style.display = '';
+                    break;
+                    
+                case 'submit':
+                    if (currentStepNumber === '3c') {
+                        button.style.display = '';
+                        // Only enable submit if we have all required recordings
+                        button.disabled = isSubmitting || !(
+                            RecordingModule.hasRecording('grievance_details') &&
+                            RecordingModule.hasRecording('user_full_name') &&
+                            RecordingModule.hasRecording('user_contact_phone') &&
+                            RecordingModule.hasRecording('user_municipality') &&
+                            RecordingModule.hasRecording('user_village') &&
+                            RecordingModule.hasRecording('user_address')
+                        );
+                    } else {
+                        button.style.display = 'none';
+                        button.disabled = true;
+                    }
+                    break;
+            }
+            
+            // Add visual indication of disabled state
+            if (button.disabled) {
+                button.classList.add('disabled');
+            } else {
+                button.classList.remove('disabled');
+            }
+        });
+        
+        // Show/hide recording indicators
+        document.querySelectorAll('.recording-indicator').forEach(indicator => {
+            indicator.hidden = !isRecording;
+        });
     }
 };
 
@@ -1506,49 +1698,30 @@ RecordingModule = {
     },
     
     setupRecordingControls: function() {
-        // Target all recording buttons by their IDs
-        const recordingButtons = [
-            'recordBtn1',
-            'recordBtn2a',
-            'recordBtn2b',
-            'recordBtn3a',
-            'recordBtn3b',
-            'recordBtn3c'
-        ];
-        
-        // Set up click listeners for each recording button
-        recordingButtons.forEach(btnId => {
-            const button = document.getElementById(btnId);
-            if (button) {
-                let recordingType = this.getRecordingTypeFromId(btnId);
-                
-                button.addEventListener('click', () => {
-                    if (this.isRecording) {
-                        this.stopRecording();
-                    } else {
-                        this.startRecording(recordingType);
-                    }
-                });
-                
-                console.log(`Recording button set up: ${btnId} for type: ${recordingType}`);
+        // Use event delegation for recording buttons
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('[id^="recordBtn"]');
+            if (!button) return;
+            
+            const recordingType = this.getRecordingTypeFromId(button.id);
+            if (this.isRecording) {
+                this.stopRecording();
             } else {
-                console.warn(`Recording button not found: ${btnId}`);
+                this.startRecording(recordingType);
             }
         });
         
-        // Set up retry buttons
-        document.querySelectorAll('.retry-btn').forEach(button => {
-            button.addEventListener('click', (event) => {
-                // Get the closest step element
-                const stepElement = event.target.closest('.step');
-                if (stepElement) {
-                    // Extract recording type from the step ID
-                    const stepId = stepElement.id;
-                    const recordingType = this.getRecordingTypeFromStepId(stepId);
-                    // Reset and start new recording
-                    this.startRecording(recordingType);
-                }
-            });
+        // Use event delegation for retry buttons
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('.retry-btn');
+            if (!button) return;
+            
+            const stepElement = button.closest('.step');
+            if (stepElement) {
+                const stepId = stepElement.id;
+                const recordingType = this.getRecordingTypeFromStepId(stepId);
+                this.startRecording(recordingType);
+            }
         });
     },
     
@@ -1776,7 +1949,7 @@ RecordingModule = {
     stopRecording: function() {
         if (!this.isRecording || !this.recorder) {
             console.log('Not recording');
-                return;
+            return;
         }
         console.log('Stopping recording');
         let finalTime = '0:00';
@@ -1806,37 +1979,34 @@ RecordingModule = {
             console.error('Error stopping recorder:', e);
         }
         this.isRecording = false;
-        this.updateRecordingUI(false);
-        // Always show the playback and next action button (Continue or Submit), do not auto-advance or auto-submit
+        
+        // Show playback container
         const playbackContainer = document.getElementById(`playback${stepId}`);
         if (playbackContainer) {
             playbackContainer.hidden = false;
         }
-        // Optionally, focus the next action button for accessibility
-        let nextBtn = playbackContainer ? playbackContainer.querySelector('.next-btn, #submitGrievanceBtn') : null;
-        if (nextBtn) {
-            nextBtn.focus();
-        }
+        
+        // Update UI after recording stops
+        this.updateRecordingUI(false);
+        
         console.log(`Stopped recording for step ${stepId}, waiting for user action.`);
         SpeechModule.speak('Recording stopped. Please review and continue.');
     },
     
-    /**
-     * Save the recorded audio blob
-     * @param {Blob} blob - The recorded audio blob
-     */
     saveRecording: function(blob) {
-        // Save to the global recordedBlobs object with the recording type as key
         if (!recordedBlobs) {
             recordedBlobs = {};
         }
         
         recordedBlobs[this.recordingType] = blob;
         
-        // Create an audio element for preview
+        // Create audio element for preview
         this.createAudioPreview(blob, this.recordingType);
         
         console.log(`Recording saved as ${this.recordingType}`);
+        
+        // Let updateRecordingUI handle all button states
+        this.updateRecordingUI(false);
     },
     
     /**
@@ -1891,27 +2061,10 @@ RecordingModule = {
      * @param {boolean} isRecording - Whether recording is in progress
      */
     updateRecordingUI: function(isRecording) {
-        // Update record buttons text and state
-        const recordButtons = document.querySelectorAll('[id^="recordBtn"]');
-        recordButtons.forEach(button => {
-            if (isRecording) {
-                button.textContent = 'Stop Recording';
-                button.classList.add('recording');
-                button.classList.remove('waiting');
-                button.disabled = false;
-        } else {
-                // Set plain text without icons to avoid confusion with the read button
-                button.textContent = button.id === 'recordBtn1' ? 'Record Grievance' : 'Record';
-                button.classList.remove('recording');
-                button.classList.remove('waiting');
-                button.disabled = false;
-            }
-        });
-        
-        // Show/hide recording indicators based on current state
-        const indicators = document.querySelectorAll('.recording-indicator');
-        indicators.forEach(indicator => {
-            indicator.hidden = !isRecording;
+        UIModule.updateButtonStates({
+            isRecording: isRecording,
+            hasRecording: this.hasRecording(this.recordingType),
+            isSubmitting: isSubmitting
         });
     },
     
@@ -2026,31 +2179,8 @@ GrievanceModule = {
     },
     
     setupSubmitHandler: function() {
-        const submitForm = document.getElementById('grievanceForm');
-        const submitBtn = document.getElementById('submitGrievanceBtn');
-        
-        if (submitForm) {
-            console.log("Setting up submit handler for grievance form");
-            submitForm.addEventListener('submit', (event) => {
-                event.preventDefault();
-                console.log("Form submit event triggered, calling submitGrievance");
-                this.submitGrievance();
-            });
-                    } else {
-            console.warn("Grievance form not found in the document!");
-        }
-        
-        // Also set up a click handler for the submit button
-        if (submitBtn) {
-            console.log("Setting up click handler for submit button");
-            submitBtn.addEventListener('click', (event) => {
-                event.preventDefault();
-                console.log("Submit button clicked, calling submitGrievance");
-                this.submitGrievance();
-            });
-        } else {
-            console.warn("Submit button not found in the document!");
-        }
+        // Remove form submission handler since we handle submission through button clicks
+        console.log('Form submission now handled through button click handlers only');
     },
     
     validateCurrentStep: function() {
@@ -2171,43 +2301,111 @@ GrievanceModule = {
     
     goToNextStep: function(skip = false) {
         console.log('Going to next step from:', state.currentStep);
-        let nextStep;
-        if (state.currentStep === '3b') {
-            nextStep = '3c';
-            console.log('Special handling for step 3b -> 3c');
-        } else if (state.currentStep === '1') {
-            nextStep = '2a';
-        } else if (state.currentStep === '2a') {
-            nextStep = '2b';
-        } else if (state.currentStep === '2b') {
-            nextStep = '3a';
-        } else if (state.currentStep === '3a') {
-            nextStep = '3b';
-        } else if (state.currentStep === '3c') {
-            // Do not automatically submit; just show the playback and submit button
-            console.log('Step 3c: Waiting for user to submit.');
+        
+        // Prevent multiple rapid transitions
+        if (this.isTransitioning) {
+            console.log('Already transitioning, ignoring call');
             return;
-                    } else {
-            const currentNum = parseInt(state.currentStep);
-            if (!isNaN(currentNum)) {
-                nextStep = (currentNum + 1).toString();
-                } else {
+        }
+        
+        let nextStep;
+        
+        // Special handling for step 3c - never proceed beyond it
+        if (state.currentStep === '3c') {
+            console.log('On step 3c - no next step available');
+            return;
+        }
+        
+        // Set transitioning flag
+        this.isTransitioning = true;
+        
+        try {
+            // Determine next step
+            if (state.currentStep === '3b') {
+                nextStep = '3c';
+                console.log('Special handling for step 3b -> 3c');
+                // Add delay before enabling submit functionality
+                this.isNavigatingTo3c = true;
+            } else if (state.currentStep === '1') {
+                nextStep = '2a';
+            } else if (state.currentStep === '2a') {
+                nextStep = '2b';
+            } else if (state.currentStep === '2b') {
+                nextStep = '3a';
+            } else if (state.currentStep === '3a') {
+                nextStep = '3b';
+            } else {
                 console.error('Unable to determine next step from:', state.currentStep);
                 return;
             }
-        }
-        console.log('Next step determined as:', nextStep);
-        if (!skip) {
-            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
-            if (!hasRecordings) {
-                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
-                this.showError('Please record your response before continuing, or use Skip.');
-                return;
+            
+            console.log('Next step determined as:', nextStep);
+            
+            // Check for recording if not skipping
+            if (!skip) {
+                const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+                if (!hasRecordings) {
+                    console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                    this.showError('Please record your response before continuing, or use Skip.');
+                    return;
+                }
             }
+            
+            // Update state and show next step
+            const previousStep = state.currentStep;
+            state.currentStep = nextStep;
+            UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+            
+            // Hide previous step before showing next
+            const prevStepElement = document.getElementById(`step${previousStep}`);
+            if (prevStepElement) {
+                prevStepElement.hidden = true;
+            }
+            
+            // Show next step
+            const nextStepElement = document.getElementById(`step${nextStep}`);
+            if (nextStepElement) {
+                nextStepElement.hidden = false;
+                
+                // Get step content for screen reader
+                const content = nextStepElement.querySelector('.content');
+                if (content && SpeechModule.autoRead) {
+                    SpeechModule.speak(content.textContent);
+                }
+            }
+            
+            // Update button states for the new step
+            const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
+            this.updateButtonStates({
+                isRecording: RecordingModule.isRecording,
+                hasRecording: RecordingModule.hasRecording(recordingType),
+                isSubmitting: isSubmitting
+            });
+            
+            // If navigating to 3c, add a delay before enabling submit functionality
+            if (nextStep === '3c') {
+                setTimeout(() => {
+                    console.log('Navigation delay complete, enabling submit functionality');
+                    this.isNavigatingTo3c = false;
+                    this.isTransitioning = false;
+                    // Update button states again after delay
+                    this.updateButtonStates({
+                        isRecording: RecordingModule.isRecording,
+                        hasRecording: RecordingModule.hasRecording(recordingType),
+                        isSubmitting: isSubmitting
+                    });
+                }, 1000); // 1 second delay
+            } else {
+                // For other steps, clear transitioning flag after shorter delay
+                setTimeout(() => {
+                    this.isTransitioning = false;
+                }, 300);
+            }
+        } catch (error) {
+            console.error('Error in goToNextStep:', error);
+            this.isNavigatingTo3c = false;
+            this.isTransitioning = false;
         }
-        state.currentStep = nextStep;
-        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
-        UIModule.showCurrentStep();
     },
     
     goToPreviousStep: function() {
@@ -2220,8 +2418,22 @@ GrievanceModule = {
     
     submitGrievance: async function() {
         try {
+            // Prevent submission if recording is in progress or we're still navigating
+            if (RecordingModule.isRecording || this.isNavigatingTo3c || this.isTransitioning) {
+                console.log("Cannot submit: recording in progress or navigation not complete");
+                UIModule.showError('Please wait for navigation to complete before submitting.');
+                return;
+            }
+
+            // Check if we're on the final step
+            if (state.currentStep !== '3c') {
+                console.log("Cannot submit from step:", state.currentStep);
+                UIModule.showError('Please complete all steps before submitting.');
+                return;
+            }
+
             console.log("Starting grievance submission process");
-            UIModule.showLoading('Submitting your grievance...');
+            showSubmissionOverlay();
             
             // Create form data from the form
             const form = document.getElementById('grievanceForm');
@@ -2232,7 +2444,6 @@ GrievanceModule = {
             const formData = new FormData(form);
             
             // Add interface language
-            // Get from html lang attribute, default to 'ne' if not found
             const htmlLang = document.documentElement.lang || 'ne';
             formData.append('interface_language', htmlLang);
             
@@ -2268,56 +2479,32 @@ GrievanceModule = {
             console.log("Hiding all current steps before showing confirmation");
             UIModule.hideAllSteps();
             
-            // Slight delay to ensure UI updates properly
-            setTimeout(() => {
-                // Show confirmation screen using the UIModule function
-                console.log("Now showing confirmation screen");
-                UIModule.showConfirmationScreen(state.grievanceId);
-                
-                // Prepare file upload UI
-                const fileListElement = document.getElementById('fileList');
-                if (fileListElement) {
-                    fileListElement.hidden = true; // Hide initially until files are selected
-                }
-                
-                // Create a speech indicator element if it doesn't exist
-                let speechIndicator = document.getElementById('speechIndicator');
-                if (!speechIndicator) {
-                    speechIndicator = document.createElement('div');
-                    speechIndicator.id = 'speechIndicator';
-                    speechIndicator.className = 'speech-indicator';
-                    speechIndicator.innerHTML = '<span>Speaking...</span>';
-                    speechIndicator.style.position = 'fixed';
-                    speechIndicator.style.bottom = '20px';
-                    speechIndicator.style.right = '20px';
-                    speechIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                    speechIndicator.style.color = 'white';
-                    speechIndicator.style.padding = '10px 15px';
-                    speechIndicator.style.borderRadius = '5px';
-                    speechIndicator.style.zIndex = '1000';
-                    speechIndicator.style.display = 'none';
-                    document.body.appendChild(speechIndicator);
-                }
-                
-                // Show the speech indicator
-                speechIndicator.style.display = 'block';
-                
-                // Now announce the success with callback to hide the indicator when done
-                SpeechModule.speak('Your grievance has been submitted successfully. Your grievance ID is ' + 
-                    state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.', function() {
-                        // Hide the speech indicator when done speaking
-                        if (speechIndicator) {
-                            speechIndicator.style.display = 'none';
-                        }
-                    });
-            }, 100); // Short delay to ensure DOM updates properly
+            // Hide submission overlay before showing confirmation screen
+            hideSubmissionOverlay();
+            
+            // Show confirmation screen using the UIModule function
+            console.log("Now showing confirmation screen");
+            UIModule.showConfirmationScreen(state.grievanceId);
+            
+            // Prepare file upload UI
+            const fileListElement = document.getElementById('fileList');
+            if (fileListElement) {
+                fileListElement.hidden = true;
+            }
+            
+            // Now announce the success with callback to hide the indicator when done
+            SpeechModule.speak('Your grievance has been submitted successfully. Your grievance ID is ' + 
+                state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.', function() {
+                    if (speechIndicator && isSpeechIndicatorEnabled) {
+                        speechIndicator.classList.remove('active');
+                    }
+                });
                 
         } catch (error) {
             console.error('Error submitting grievance:', error);
             UIModule.showError('There was an error submitting your grievance. Please try again.');
             SpeechModule.speak('There was an error submitting your grievance. Please try again.');
-        } finally {
-            UIModule.hideLoading();
+            hideSubmissionOverlay();
         }
     },
     
@@ -2451,6 +2638,8 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // Modify the submit button click handler
 document.getElementById('submitGrievanceBtn').addEventListener('click', async function(e) {
+    e.preventDefault(); // Prevent form submission
+    
     console.log('[TRACE] Submit button clicked');
     console.log('[DEBUG] Current step:', state.currentStep);
     console.log('[DEBUG] Submit button state:', {
@@ -2458,6 +2647,20 @@ document.getElementById('submitGrievanceBtn').addEventListener('click', async fu
         enabled: !this.disabled,
         text: this.textContent
     });
+
+    // Prevent submission if recording is in progress
+    if (RecordingModule.isRecording) {
+        console.warn('[WARN] Cannot submit while recording is in progress');
+        UIModule.showError('Please finish or stop your recording before submitting.');
+        return;
+    }
+
+    // Prevent submission if not on the final step
+    if (state.currentStep !== '3c') {
+        console.warn('[WARN] Cannot submit from step:', state.currentStep);
+        UIModule.showError('Please complete all steps before submitting.');
+        return;
+    }
 
     // Prevent multiple submissions
     if (isSubmitting) {
@@ -2473,7 +2676,7 @@ document.getElementById('submitGrievanceBtn').addEventListener('click', async fu
         showSubmissionOverlay();
         
         // Call submitGrievance
-        await submitGrievance();
+        await GrievanceModule.submitGrievance();
     } catch (error) {
         console.error('[ERROR] Submission failed:', error);
         // Re-enable the button if submission fails
@@ -2483,60 +2686,15 @@ document.getElementById('submitGrievanceBtn').addEventListener('click', async fu
     }
 });
 
-// Modify submitGrievance function
-async function submitGrievance() {
-    console.log('[TRACE] Starting grievance submission process');
-    
-    try {
-        // Create FormData and add recordings
-        const formData = new FormData();
-        console.log('[DEBUG] Adding recordings to form data');
-        // Use recordedBlobs instead of recordings
-        for (const [type, blob] of Object.entries(recordedBlobs)) {
-            if (blob) {
-                formData.append(type, blob, `${type}.webm`);
-            }
-        }
-        // Send API request using the correct module
-        console.log('[DEBUG] Sending API request to create grievance');
-        const response = await APIModule.createGrievance(formData);
-        console.log('[DEBUG] API response:', response);
-        if (response.status === 'success' || response.success) {
-            const grievanceId = response.grievance_id || response.id;
-            console.log('[DEBUG] Received grievance ID from server:', grievanceId);
-            // Hide all current steps
-            UIModule.hideAllSteps();
-            // Show confirmation screen
-            UIModule.showConfirmationScreen(grievanceId);
-            // Hide the submission overlay
-            hideSubmissionOverlay();
-        } else {
-            throw new Error(response.message || 'Failed to submit grievance');
-        }
-    } catch (error) {
-        console.error('[ERROR] Grievance submission failed:', error);
-        // Show error message in the overlay
-        const overlay = document.getElementById('submissionOverlay');
-        if (overlay) {
-            const message = overlay.querySelector('.submission-message');
-            if (message) {
-                message.textContent = 'Failed to submit grievance. Please try again.';
-                message.style.color = '#e03131';
-            }
-            // Show retry button
-            const cancelBtn = overlay.querySelector('#cancelSubmissionBtn');
-            if (cancelBtn) {
-                cancelBtn.textContent = 'Retry';
-                cancelBtn.style.display = 'inline-block';
-                cancelBtn.onclick = () => {
-                    hideSubmissionOverlay();
-                    const submitBtn = document.getElementById('submitGrievanceBtn');
-                    if (submitBtn) submitBtn.disabled = false;
-                };
-            }
-        }
-        throw error;
-    } finally {
-        isSubmitting = false;
+// Add these functions to manage the speech indicator
+function disableSpeechIndicator() {
+    isSpeechIndicatorEnabled = false;
+    const indicator = document.getElementById('speechIndicator');
+    if (indicator) {
+        indicator.remove();
     }
+}
+
+function enableSpeechIndicator() {
+    isSpeechIndicatorEnabled = true;
 }

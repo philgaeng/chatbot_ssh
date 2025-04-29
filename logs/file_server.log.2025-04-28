@@ -1,0 +1,88 @@
+2025-04-28 01:49:50,269 - INFO - [FileServer] - Starting file server on port 5001...
+2025-04-28 01:49:51,062 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://172.31.29.189:5001
+2025-04-28 01:49:51,062 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 01:49:52,344 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 01:49:52] "GET / HTTP/1.1" 200 -
+2025-04-28 01:50:06,375 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-28 01:50:06,376 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 02:17:00,912 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 02:17:00] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 02:17:22,030 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 02:17:22] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-28 02:49:53,116 - INFO - [FileServer] - Starting file server on port 5001...
+2025-04-28 02:49:53,906 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://172.31.29.189:5001
+2025-04-28 02:49:53,906 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 02:49:55,191 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 02:49:55] "GET / HTTP/1.1" 200 -
+2025-04-28 02:50:09,220 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-28 02:50:09,220 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 02:51:45,022 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 02:51:45] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 03:49:03,957 - INFO - [FileServer] - Starting file server on port 5001...
+2025-04-28 03:49:04,739 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://172.31.29.189:5001
+2025-04-28 03:49:04,739 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 03:49:06,032 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 03:49:06] "GET / HTTP/1.1" 200 -
+2025-04-28 03:49:20,063 - INFO - [werkzeug] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5006
+ * Running on http://172.31.29.189:5006
+2025-04-28 03:49:20,063 - INFO - [werkzeug] - [33mPress CTRL+C to quit[0m
+2025-04-28 06:38:52,231 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 06:38:52] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 06:39:04,430 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 06:39:04] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-28 08:27:09,205 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 08:27:09] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 11:43:49,939 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 11:43:49] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 11:44:09,741 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 11:44:09] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-28 13:04:31,605 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:04:31] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:05:44,272 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:05:44] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:07:56,168 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:07:56] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:16:21,515 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:16:21] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:25:37,741 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:25:37] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:25:43,220 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:25:43] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:25:44,959 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:25:44] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:25:46,669 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:25:46] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:27:04,773 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:27:04] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:32:53,448 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:32:53] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:34:12,067 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:34:12] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:34:21,583 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:34:21] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-28 13:41:10,537 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:10] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:11,390 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:11] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:11,950 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:11] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:12,146 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:12] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:12,332 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:12] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:13,415 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:13] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:19,113 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:19] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:21,593 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:21] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:25,505 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:25] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:41:57,177 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:41:57] "POST /accessible-file-upload HTTP/1.0" 200 -
+2025-04-28 13:43:34,229 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:34] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:43:35,789 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:35] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:43:36,936 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:36] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:43:37,727 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:37] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:43:39,695 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:39] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 13:43:42,270 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 13:43:42] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 14:36:07,578 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 14:36:07] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 14:36:17,968 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 14:36:17] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 14:41:44,973 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 14:41:44] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 14:54:00,472 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 14:54:00] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:02:36,142 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:02:36] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:04:19,064 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:04:19] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:08:47,539 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:08:47] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:08:47,764 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:08:47] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:10:57,129 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:10:57] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:10:57,272 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:10:57] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:12:30,686 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:12:30] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:12:31,930 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:12:31] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:15:16,182 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:15:16] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:15:17,728 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:15:17] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:16:07,681 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:16:07] "POST /submit-voice-grievance HTTP/1.0" 200 -
+2025-04-28 15:16:07,839 - INFO - [werkzeug] - 127.0.0.1 - - [28/Apr/2025 15:16:07] "POST /submit-voice-grievance HTTP/1.0" 200 -
