@@ -67,4 +67,4 @@ aws/            # AWS related files
 awscliv2.zip    # AWS CLI installer
 
 # Records and attachments
-uploads/
+uploads/awscliv2.zip
