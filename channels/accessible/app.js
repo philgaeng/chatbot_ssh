@@ -550,11 +550,6 @@ UIModule = {
                     // Handled by RecordingModule
                     break;
                 case 'submit':
-                    // Prevent submission if we just navigated to 3c
-                    if (this.isNavigatingTo3c || this.isTransitioning) {
-                        console.log('Preventing submission during navigation');
-                        return;
-                    }
                     if (!isSubmitting) {
                         GrievanceModule.submitGrievance();
                     }
@@ -614,12 +609,6 @@ UIModule = {
     goToNextStep: function(skip = false) {
         console.log('Going to next step from:', state.currentStep);
         
-        // Prevent multiple rapid transitions
-        if (this.isTransitioning) {
-            console.log('Already transitioning, ignoring call');
-            return;
-        }
-        
         let nextStep;
         
         // Special handling for step 3c - never proceed beyond it
@@ -628,96 +617,64 @@ UIModule = {
             return;
         }
         
-        // Set transitioning flag
-        this.isTransitioning = true;
+        // Determine next step
+        if (state.currentStep === '3b') {
+            nextStep = '3c';
+        } else if (state.currentStep === '1') {
+            nextStep = '2a';
+        } else if (state.currentStep === '2a') {
+            nextStep = '2b';
+        } else if (state.currentStep === '2b') {
+            nextStep = '3a';
+        } else if (state.currentStep === '3a') {
+            nextStep = '3b';
+        } else {
+            console.error('Unable to determine next step from:', state.currentStep);
+            return;
+        }
         
-        try {
-            // Determine next step
-            if (state.currentStep === '3b') {
-                nextStep = '3c';
-                console.log('Special handling for step 3b -> 3c');
-                // Add delay before enabling submit functionality
-                this.isNavigatingTo3c = true;
-            } else if (state.currentStep === '1') {
-                nextStep = '2a';
-            } else if (state.currentStep === '2a') {
-                nextStep = '2b';
-            } else if (state.currentStep === '2b') {
-                nextStep = '3a';
-            } else if (state.currentStep === '3a') {
-                nextStep = '3b';
-            } else {
-                console.error('Unable to determine next step from:', state.currentStep);
+        console.log('Next step determined as:', nextStep);
+        
+        // Check for recording if not skipping
+        if (!skip) {
+            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+            if (!hasRecordings) {
+                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                this.showError('Please record your response before continuing, or use Skip.');
                 return;
             }
-            
-            console.log('Next step determined as:', nextStep);
-            
-            // Check for recording if not skipping
-            if (!skip) {
-                const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
-                if (!hasRecordings) {
-                    console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
-                    this.showError('Please record your response before continuing, or use Skip.');
-                    return;
-                }
-            }
-            
-            // Update state and show next step
-            const previousStep = state.currentStep;
-            state.currentStep = nextStep;
-            UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
-            
-            // Hide previous step before showing next
-            const prevStepElement = document.getElementById(`step${previousStep}`);
-            if (prevStepElement) {
-                prevStepElement.hidden = true;
-            }
-            
-            // Show next step
-            const nextStepElement = document.getElementById(`step${nextStep}`);
-            if (nextStepElement) {
-                nextStepElement.hidden = false;
-                
-                // Get step content for screen reader
-                const content = nextStepElement.querySelector('.content');
-                if (content && SpeechModule.autoRead) {
-                    SpeechModule.speak(content.textContent);
-                }
-            }
-            
-            // Update button states for the new step
-            const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
-            this.updateButtonStates({
-                isRecording: RecordingModule.isRecording,
-                hasRecording: RecordingModule.hasRecording(recordingType),
-                isSubmitting: isSubmitting
-            });
-            
-            // If navigating to 3c, add a delay before enabling submit functionality
-            if (nextStep === '3c') {
-                setTimeout(() => {
-                    console.log('Navigation delay complete, enabling submit functionality');
-                    this.isNavigatingTo3c = false;
-                    this.isTransitioning = false;
-                    // Update button states again after delay
-                    this.updateButtonStates({
-                        isRecording: RecordingModule.isRecording,
-                        hasRecording: RecordingModule.hasRecording(recordingType),
-                        isSubmitting: isSubmitting
-                    });
-                }, 1000); // 1 second delay
-            } else {
-                // For other steps, clear transitioning flag after shorter delay
-                setTimeout(() => {
-                    this.isTransitioning = false;
-                }, 300);
-            }
-        } catch (error) {
-            console.error('Error in goToNextStep:', error);
-            this.isNavigatingTo3c = false;
-            this.isTransitioning = false;
         }
+        
+        // Update state and show next step
+        const previousStep = state.currentStep;
+        state.currentStep = nextStep;
+        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+        
+        // Hide previous step before showing next
+        const prevStepElement = document.getElementById(`step${previousStep}`);
+        if (prevStepElement) {
+            prevStepElement.hidden = true;
+        }
+        
+        // Show next step
+        const nextStepElement = document.getElementById(`step${nextStep}`);
+        if (nextStepElement) {
+            nextStepElement.hidden = false;
+            
+            // Get step content for screen reader
+            const content = nextStepElement.querySelector('.content');
+            if (content && SpeechModule.autoRead) {
+                SpeechModule.speak(content.textContent);
+            }
+        }
+        
+        // Update button states for the new step
+        const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
+        this.updateButtonStates({
+            isRecording: RecordingModule.isRecording,
+            hasRecording: RecordingModule.hasRecording(recordingType),
+            isSubmitting: isSubmitting
+        });
     },
     
     goToPreviousStep: function() {
@@ -2302,12 +2259,6 @@ GrievanceModule = {
     goToNextStep: function(skip = false) {
         console.log('Going to next step from:', state.currentStep);
         
-        // Prevent multiple rapid transitions
-        if (this.isTransitioning) {
-            console.log('Already transitioning, ignoring call');
-            return;
-        }
-        
         let nextStep;
         
         // Special handling for step 3c - never proceed beyond it
@@ -2316,96 +2267,64 @@ GrievanceModule = {
             return;
         }
         
-        // Set transitioning flag
-        this.isTransitioning = true;
+        // Determine next step
+        if (state.currentStep === '3b') {
+            nextStep = '3c';
+        } else if (state.currentStep === '1') {
+            nextStep = '2a';
+        } else if (state.currentStep === '2a') {
+            nextStep = '2b';
+        } else if (state.currentStep === '2b') {
+            nextStep = '3a';
+        } else if (state.currentStep === '3a') {
+            nextStep = '3b';
+        } else {
+            console.error('Unable to determine next step from:', state.currentStep);
+            return;
+        }
         
-        try {
-            // Determine next step
-            if (state.currentStep === '3b') {
-                nextStep = '3c';
-                console.log('Special handling for step 3b -> 3c');
-                // Add delay before enabling submit functionality
-                this.isNavigatingTo3c = true;
-            } else if (state.currentStep === '1') {
-                nextStep = '2a';
-            } else if (state.currentStep === '2a') {
-                nextStep = '2b';
-            } else if (state.currentStep === '2b') {
-                nextStep = '3a';
-            } else if (state.currentStep === '3a') {
-                nextStep = '3b';
-            } else {
-                console.error('Unable to determine next step from:', state.currentStep);
+        console.log('Next step determined as:', nextStep);
+        
+        // Check for recording if not skipping
+        if (!skip) {
+            const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
+            if (!hasRecordings) {
+                console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
+                this.showError('Please record your response before continuing, or use Skip.');
                 return;
             }
-            
-            console.log('Next step determined as:', nextStep);
-            
-            // Check for recording if not skipping
-            if (!skip) {
-                const hasRecordings = RecordingModule.hasRecording(RecordingModule.getRecordingTypeForStep(state.currentStep));
-                if (!hasRecordings) {
-                    console.warn(`No recording found for step ${state.currentStep}, not proceeding`);
-                    this.showError('Please record your response before continuing, or use Skip.');
-                    return;
-                }
-            }
-            
-            // Update state and show next step
-            const previousStep = state.currentStep;
-            state.currentStep = nextStep;
-            UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
-            
-            // Hide previous step before showing next
-            const prevStepElement = document.getElementById(`step${previousStep}`);
-            if (prevStepElement) {
-                prevStepElement.hidden = true;
-            }
-            
-            // Show next step
-            const nextStepElement = document.getElementById(`step${nextStep}`);
-            if (nextStepElement) {
-                nextStepElement.hidden = false;
-                
-                // Get step content for screen reader
-                const content = nextStepElement.querySelector('.content');
-                if (content && SpeechModule.autoRead) {
-                    SpeechModule.speak(content.textContent);
-                }
-            }
-            
-            // Update button states for the new step
-            const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
-            this.updateButtonStates({
-                isRecording: RecordingModule.isRecording,
-                hasRecording: RecordingModule.hasRecording(recordingType),
-                isSubmitting: isSubmitting
-            });
-            
-            // If navigating to 3c, add a delay before enabling submit functionality
-            if (nextStep === '3c') {
-                setTimeout(() => {
-                    console.log('Navigation delay complete, enabling submit functionality');
-                    this.isNavigatingTo3c = false;
-                    this.isTransitioning = false;
-                    // Update button states again after delay
-                    this.updateButtonStates({
-                        isRecording: RecordingModule.isRecording,
-                        hasRecording: RecordingModule.hasRecording(recordingType),
-                        isSubmitting: isSubmitting
-                    });
-                }, 1000); // 1 second delay
-            } else {
-                // For other steps, clear transitioning flag after shorter delay
-                setTimeout(() => {
-                    this.isTransitioning = false;
-                }, 300);
-            }
-        } catch (error) {
-            console.error('Error in goToNextStep:', error);
-            this.isNavigatingTo3c = false;
-            this.isTransitioning = false;
         }
+        
+        // Update state and show next step
+        const previousStep = state.currentStep;
+        state.currentStep = nextStep;
+        UIModule.currentStepIndex = UIModule.steps.indexOf(nextStep);
+        
+        // Hide previous step before showing next
+        const prevStepElement = document.getElementById(`step${previousStep}`);
+        if (prevStepElement) {
+            prevStepElement.hidden = true;
+        }
+        
+        // Show next step
+        const nextStepElement = document.getElementById(`step${nextStep}`);
+        if (nextStepElement) {
+            nextStepElement.hidden = false;
+            
+            // Get step content for screen reader
+            const content = nextStepElement.querySelector('.content');
+            if (content && SpeechModule.autoRead) {
+                SpeechModule.speak(content.textContent);
+            }
+        }
+        
+        // Update button states for the new step
+        const recordingType = RecordingModule.getRecordingTypeForStep(nextStep);
+        this.updateButtonStates({
+            isRecording: RecordingModule.isRecording,
+            hasRecording: RecordingModule.hasRecording(recordingType),
+            isSubmitting: isSubmitting
+        });
     },
     
     goToPreviousStep: function() {
