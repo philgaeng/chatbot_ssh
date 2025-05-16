@@ -3,7 +3,7 @@
 
 // Server Configuration
 const SERVER_CONFIG = {
-    HOST: 'chatbot-dev.facets-ai.com',
+    HOST: 'nepal-gms-chatbot.facets-ai.com',
     PORT: 5005,
     PATH: '/socket.io/',
     TRANSPORTS: ['websocket']
@@ -11,7 +11,7 @@ const SERVER_CONFIG = {
 
 // WebSocket Configuration
 const WEBSOCKET_CONFIG = {
-    URL: `//${SERVER_CONFIG.HOST}`,
+    URL: `wss://${SERVER_CONFIG.HOST}`,
     OPTIONS: {
         path: SERVER_CONFIG.PATH,
         transports: SERVER_CONFIG.TRANSPORTS

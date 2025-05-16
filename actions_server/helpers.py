@@ -7,7 +7,7 @@ from rasa_sdk import Tracker
 from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import re
 from icecream import ic
 
@@ -22,10 +22,6 @@ from actions_server.constants import (
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-
-
-
 
 
 

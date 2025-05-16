@@ -189,7 +189,62 @@ DIC_LOCATION_MAPPING = {
     }
 }
 
-# File upload settings
+# File type categories
+FILE_TYPES = {
+    'IMAGE': {
+        'extensions': {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'heif'},
+        'mime_types': {'image/png', 'image/jpeg', 'image/gif', 'image/bmp', 'image/webp', 'image/heic', 'image/heif'},
+        'max_size_mb': 5
+    },
+    'VIDEO': {
+        'extensions': {'mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'webm', 'm4v'},
+        'mime_types': {'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/x-ms-wmv', 'video/x-flv', 'video/webm'},
+        'max_size_mb': 50
+    },
+    'AUDIO': {
+        'extensions': {'mp3', 'wav', 'ogg', 'm4a', 'aac', 'wma', 'flac', 'webm'},
+        'mime_types': {'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/aac', 'audio/x-ms-wma', 'audio/flac', 'audio/webm'},
+        'max_size_mb': 10
+    },
+    'DOCUMENT': {
+        'extensions': {
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            'txt', 'rtf', 'csv', 'odt', 'ods', 'odp'
+        },
+        'mime_types': {
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'text/plain',
+            'application/rtf',
+            'text/csv',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+        },
+        'max_size_mb': 2
+    },
+    'ARCHIVE': {
+        'extensions': {'zip', 'rar', '7z', 'tar', 'gz'},
+        'mime_types': {'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed', 'application/x-tar', 'application/gzip'},
+        'max_size_mb': 20
+    }
+}
+
+# Get all allowed extensions
+ALLOWED_EXTENSIONS = {ext for type_info in FILE_TYPES.values() for ext in type_info['extensions']}
+
+# Get all allowed mime types
+ALLOWED_MIME_TYPES = {mime for type_info in FILE_TYPES.values() for mime in type_info['mime_types']}
+
+# Get max file size for each type
+FILE_TYPE_MAX_SIZES = {file_type: info['max_size_mb'] * 1024 * 1024 for file_type, info in FILE_TYPES.items()}
+
+# Default max file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
 # File Paths
@@ -252,3 +307,9 @@ def update_lookup_table(categories):
 # Load classification data and categories as constants
 CLASSIFICATION_DATA = load_classification_data()
 LIST_OF_CATEGORIES = [cat.strip("-").strip() for cat in load_categories_from_lookup()]
+
+# Get Redis configuration from environment variables
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+REDIS_DB = os.getenv('REDIS_DB', '0')

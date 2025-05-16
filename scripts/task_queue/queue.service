@@ -1,0 +1,29 @@
+[Unit]
+Description=Nepal Chatbot Queue System
+After=redis.service
+Requires=redis.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/nepal_chatbot
+ExecStart=/home/ubuntu/nepal_chatbot/scripts/queue/run.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/nepal_chatbot/logs/queue_service.log
+StandardError=append:/home/ubuntu/nepal_chatbot/logs/queue_service.error.log
+
+# Security settings
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=65535
+
+[Install]
+WantedBy=multi-user.target 

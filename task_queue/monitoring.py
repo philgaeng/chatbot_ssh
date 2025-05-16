@@ -57,21 +57,40 @@ def setup_logger(name: str, log_file: str, level: int = logging.INFO) -> logging
     
     return logger
 
-# Create separate loggers for each service
-voice_processor_logger = setup_logger('voice_processor', 'voice_processor.log')
-file_processor_logger = setup_logger('file_processor', 'file_processor.log')
-contact_processor_logger = setup_logger('contact_processor', 'contact_processor.log')
-queue_system_logger = setup_logger('queue_system', 'queue_system.log')
+# Dynamic logger registry
+logger_registry = {}
 
-# Database operation loggers
-db_operations_logger = setup_logger('db_operations', 'db_operations.log')
-db_migrations_logger = setup_logger('db_migrations', 'db_migrations.log')
-db_backup_logger = setup_logger('db_backup', 'db_backup.log')
+def register_logger(service_name: str) -> logging.Logger:
+    """
+    Register a new logger for a service
+    
+    Args:
+        service_name: Name of the service (will be used for log file name)
+        
+    Returns:
+        Configured logger instance
+    """
+    if service_name not in logger_registry:
+        logger_registry[service_name] = setup_logger(
+            service_name,
+            f"{service_name.lower()}.log"
+        )
+    return logger_registry[service_name]
 
-# Ticketing system loggers
-ticket_processor_logger = setup_logger('ticket_processor', 'ticket_processor.log')
-ticket_notifications_logger = setup_logger('ticket_notifications', 'ticket_notifications.log')
-ticket_assignments_logger = setup_logger('ticket_assignments', 'ticket_assignments.log')
+# Initialize default loggers
+default_services = {
+    'llm_processor': 'llm_processor.log',
+    'queue_system': 'queue_system.log',
+    'db_operations': 'db_operations.log',
+    'db_migrations': 'db_migrations.log',
+    'db_backup': 'db_backup.log',
+    'ticket_processor': 'ticket_processor.log',
+    'ticket_notifications': 'ticket_notifications.log',
+    'ticket_assignments': 'ticket_assignments.log'
+}
+
+for service, log_file in default_services.items():
+    register_logger(service)
 
 # Metrics collection
 class MetricsCollector:
@@ -127,7 +146,7 @@ def send_error_notification(task_name: str, error_message: str, task_id: Optiona
         task_id: Optional task ID
     """
     if not all([SMTP_USERNAME, SMTP_PASSWORD, ADMIN_EMAIL]):
-        queue_system_logger.warning("Email configuration incomplete. Skipping email notification.")
+        register_logger('queue_system').warning("Email configuration incomplete. Skipping email notification.")
         return
 
     try:
@@ -154,14 +173,14 @@ def send_error_notification(task_name: str, error_message: str, task_id: Optiona
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)
             
-        queue_system_logger.info(f"Error notification sent for task {task_name}")
+        register_logger('queue_system').info(f"Error notification sent for task {task_name}")
         
         # Record metric
         metrics_collector.record_task_metric(task_name, 'error_notifications', 
             metrics_collector.get_task_metrics(task_name).get('error_notifications', 0) + 1)
             
     except Exception as e:
-        queue_system_logger.error(f"Failed to send error notification: {str(e)}")
+        register_logger('queue_system').error(f"Failed to send error notification: {str(e)}")
 
 def log_task_event(task_name: str, event_type: str, details: Optional[Dict[str, Any]] = None, 
                   service: str = 'queue_system') -> None:
@@ -178,24 +197,8 @@ def log_task_event(task_name: str, event_type: str, details: Optional[Dict[str, 
     if details:
         log_message += f" - Details: {json.dumps(details)}"
     
-    # Select appropriate logger based on service
-    logger = {
-        # Processing services
-        'voice_processor': voice_processor_logger,
-        'file_processor': file_processor_logger,
-        'contact_processor': contact_processor_logger,
-        'queue_system': queue_system_logger,
-        
-        # Database services
-        'db_operations': db_operations_logger,
-        'db_migrations': db_migrations_logger,
-        'db_backup': db_backup_logger,
-        
-        # Ticketing services
-        'ticket_processor': ticket_processor_logger,
-        'ticket_notifications': ticket_notifications_logger,
-        'ticket_assignments': ticket_assignments_logger
-    }.get(service, queue_system_logger)
+    # Get or create logger for the service
+    logger = logger_registry.get(service, register_logger(service))
     
     # Log the event
     logger.info(log_message)

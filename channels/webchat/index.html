@@ -11,66 +11,61 @@
     <link rel="icon" type="image/png" sizes="16x16" href="../shared/images/favicon-16x16.png">
     <link rel="manifest" href="../shared/images/site.webmanifest">
     <meta name="description" content="Chat with our bot to report road-related grievances">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script type="module" src="app.js"></script>
 </head>
 <body>
     <a href="#main" class="skip-link">Skip to main content</a>
 
+    <!-- Add DOR logo with link -->
+    <a href="https://www.dor.gov.np/home" target="_blank" rel="noopener noreferrer">
+        <img src="../shared/images/DOR-logo.png" alt="Department of Roads Logo" class="dor-logo">
+    </a>
+
+    <!-- Welcome container -->
     <div class="container">
-        <header>
-            <img src="../shared/images/DOR-logo.png" alt="Department of Roads Logo" width="200">
-            <h1>Nepal Roads Grievance Chatbot</h1>
-            <p>Report issues related to roads and transportation</p>
-        </header>
-
-        <main id="main">
-            <div id="chat-container">
-                <div id="chat-messages"></div>
-                <div id="typing-indicator" class="hidden">
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-        </div>
-                <form id="message-form">
-                    <input type="text" id="user-input" placeholder="Type your message..." aria-label="Type your message">
-                    <button type="submit" class="primary-btn">Send</button>
-                </form>
-                <div id="attachment-preview" class="hidden"></div>
-                <div id="attachment-controls" class="hidden">
-                    <button id="attachment-btn" class="secondary-btn">
-                        <span>Attach File</span>
-                </button>
-                    <input type="file" id="file-input" class="hidden" accept="image/*,.pdf,.doc,.docx">
-                </div>
-            </div>
-        </main>
-
-        <div class="controls" role="toolbar">
-            <button id="clearBtn" class="secondary-btn">Clear Chat</button>
-            <button id="accessibilityBtn" class="secondary-btn">Accessibility</button>
-            <button id="accessibleModeBtn" class="primary-btn">Switch to Accessible Interface</button>
-            <button id="helpBtn" class="secondary-btn">Help</button>
-        </div>
-
-        <dialog id="helpDialog">
-            <h2>Help & Instructions</h2>
-            <p>Use this chat interface to report grievances related to roads or transportation:</p>
-            <ol>
-                <li>Describe your issue in the chat</li>
-                <li>Provide location details when prompted</li>
-                <li>Attach photos if available</li>
-                <li>Submit your grievance through the chat</li>
-            </ol>
-            <p>For a more accessible interface with voice recording capabilities, click "Switch to Accessible Interface".</p>
-            <button class="primary-btn">Close</button>
-        </dialog>
-        
-        <footer>
-            <p>&copy; 2025 Department of Roads, Nepal. All rights reserved.</p>
-        </footer>
+        <h4>नेपाल सरकार - Nepal Government</h4>
+        <h4>भौतिक पूर्वाधार तथा यातायात मन्त्रालय - Ministry of Physical Infrastructure & Transport</h4>
+        <h3>सडक विभाग - Department of Roads</h3>
+        <h1>गुनासो व्यवस्थापन च्याटबोटमा स्वागत छ
+            Welcome to the Grievance Management Chatbot</h1>
+        <p>नीचे दिए गए नीले विजेट पर क्लिक करके आपका प्रकार शुरू हो जाएगा।</p>
+        <p>Click on the blue widget at the bottom right to initiate your process.</p>
+        <p class="version">Version 1.0</p>
     </div>
 
+    <div id="chat-widget" style="display: none;">
+        <div class="chat-header">
+            <span>Grievance Management Chatbot</span>
+            <button class="close-button">&times;</button>
+        </div>
+        <div id="messages"></div>
+        <form id="form">
+            <div class="input-container">
+                <button type="button" id="attachment-button" class="attachment-button">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <textarea id="message-input" placeholder="Type your message here..." autocomplete="off" rows="1"></textarea>
+                <input type="file" id="file-input" style="display: none;" multiple />
+            </div>
+            <button type="submit" class="send-button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </form>
+    </div>
+
+    <!-- Launcher button -->
+    <button id="chat-launcher">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+        </svg>
+    </button>
+
     <script src="../shared/scripts/utils.js"></script>
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script src="config.js" type="module"></script>
 </body>
 </html> 
