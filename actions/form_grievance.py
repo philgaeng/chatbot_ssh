@@ -28,6 +28,7 @@ import io
 import tempfile
 import base64
 from datetime import datetime, timedelta
+from actions_server.LLM_helpers import classify_and_summarize_grievance_task
 
 #define and load variables
 
@@ -112,97 +113,38 @@ class ActionStartGrievanceProcess(BaseAction):
 class ActionCallOpenAI(BaseAction):
     def name(self) -> Text:
         return "action_call_openai_classification"
-    
-    def parse_summary_and_category(self, response: str):
-        """
-        Parses OpenAI response directly into a structured dictionary.
-        """
-        print("############# parse_summary_and_category #######")
-
-        try:
-            result_dict = json.loads(response)  # Convert JSON string to dictionary
-            return {
-                "grievance_summary": result_dict.get("grievance_summary", ""),
-                "list_categories": result_dict.get("list_categories", [])
-            }
-        except json.JSONDecodeError:
-            print("⚠ Error: Response is not valid JSON")
-            return {"grievance_summary": "", "list_categories": []}  # Return default empty values
-        
-
-    async def _call_openai_for_classification(self, grievance_details: str):
-        """
-        Calls OpenAI API to classify the grievance details into predefined categories.
-        """
-        category_list_str = "\n".join(f"- {c}" for c in CLASSIFICATION_DATA)
-
-        try:            
-            client = OpenAI(api_key=open_ai_key)
-
-            response = client.chat.completions.create(  # Removed await since OpenAI client handles async
-                messages=[
-                    {"role": "system", "content": "You are an assistant helping to categorize grievances."},
-                    {"role": "user", "content": f"""
-                        Step 1:
-                        Categorize this grievance: "{grievance_details}"
-                        Only choose from the following categories:
-                        {category_list_str}
-                        Do not create new categories.
-                        Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
-                        [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt
-                        Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
-                        For the summary, reply in the language of the grievance.
-                        Finally,
-                        Return the response in **strict JSON format** like this:
-                        {{
-                            "grievance_summary": "Summarized grievance text",
-                            "list_categories": ["Category 1", "Category 2"]
-                        }}
-                    """}
-                ],
-                model="gpt-4",
-            )
-
-            return response.choices[0].message.content.strip()
-
-        except Exception as e:
-            print(f"OpenAI API Error: {e}")
-            return None
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        
         language_code = tracker.get_slot("language_code") or "en"
         grievance_details = tracker.get_slot("grievance_temp")
         print(f"grievance_details_from_grievance_temp: {grievance_details}")
         
         if not grievance_details:
-            
             utterance = get_utterance("grievance_form", self.name(), 1, language_code)
             buttons = get_buttons("grievance_form", self.name(), 1, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
             return {}
 
         print(f"Raw - grievance_details: {grievance_details}")
-        # Step 1: Call OpenAI for classification
-        result = await self._call_openai_for_classification(grievance_details)
         
-        if result is None:
+        # Call the helper function for classification and summarization
+        result = classify_and_summarize_grievance_task.delay(grievance_details, language_code)
+        
+        if result["status"] == "error":
             utterance = get_utterance("grievance_form", self.name(), 2, language_code)
             buttons = get_buttons("grievance_form", self.name(), 2, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
             return {}
 
-        print(f"Raw - gpt message: {result}")
+        print(f"Processed result: {result}")
 
-        # Step 2: Parse the results and fill the slots
-        result_dict = self.parse_summary_and_category(result)
-        
-        list_of_cat = result_dict["list_categories"] if result_dict["list_categories"] else []
-        
+        # Prepare slots for Rasa
         grievance_open_ai_slots = {
             "grievance_details": grievance_details,
-            "grievance_summary_temp": result_dict["grievance_summary"],
-            "grievance_categories": list_of_cat
+            "grievance_summary_temp": result["grievance_summary"],
+            "grievance_categories": result["list_categories"],
+            "classification_status": result["status"],
+            "language_code": result["language_code"]
         }
         
         ic(grievance_open_ai_slots)

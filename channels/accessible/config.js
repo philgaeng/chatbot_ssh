@@ -102,7 +102,7 @@ window.APP_CONFIG = {
             'http://localhost:5001' : 
             'https://' + window.location.hostname + '/accessible-api',
         endpoints: {
-            submitGrievance: '/submit-voice-grievance',
+            submitGrievance: '/submit-grievance',
             fileUpload: '/upload-files',
             accessibleFileUpload: '/accessible-file-upload',
             checkStatus: '/check-status'
