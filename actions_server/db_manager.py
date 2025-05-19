@@ -266,6 +266,46 @@ class TaskManager(BaseDatabaseManager):
             operations_logger.error(f"Failed to get pending tasks: {str(e)}")
             return []
 
+    def update_task(self, execution_id: int, update_data: dict) -> bool:
+        """
+        Generic method to update any field(s) in task_executions.
+        Args:
+            execution_id: The ID of the task execution to update
+            update_data: Dictionary of field names and new values to update
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        if not update_data:
+            operations_logger.warning("No fields to update provided for task execution")
+            return False
+
+        set_clauses = []
+        values = []
+        for field, value in update_data.items():
+            set_clauses.append(f"{field} = %s")
+            values.append(value)
+        values.append(execution_id)
+
+        query = f"""
+            UPDATE task_executions
+            SET {', '.join(set_clauses)},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """
+        try:
+            with self.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(query, values)
+                if cur.rowcount == 0:
+                    operations_logger.warning(f"No task execution found with id {execution_id}")
+                    return False
+                conn.commit()
+                operations_logger.info(f"Successfully updated task execution {execution_id}")
+                return True
+        except Exception as e:
+            operations_logger.error(f"Error updating task execution {execution_id}: {str(e)}")
+            return False
+
 class TableManager(BaseDatabaseManager):
     """Handles schema creation and migration"""
     def init_db(self):
@@ -328,7 +368,53 @@ class TableManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
+        
+         # Initialize default statuses if table is empty
+        cur.execute("SELECT COUNT(*) FROM grievance_statuses")
+        if cur.fetchone()[0] == 0:
+            migrations_logger.info("Initializing default grievance statuses...")
+            cur.execute("""
+                INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES
+                ('TEMP', 'Temporary', 'अस्थायी', 'Initial temporary status for new grievances', 'नयाँ गुनासोहरूको लागि प्रारम्भिक अस्थायी स्थिति', 0),
+                ('PENDING', 'Pending', 'प्रतीक्षामा', 'Grievance is pending review', 'गुनासो समीक्षाको लागि प्रतीक्षामा छ', 1),
+                ('IN_REVIEW', 'In Review', 'समीक्षामा', 'Grievance is being reviewed', 'गुनासो समीक्षा भइरहेको छ', 2),
+                ('IN_PROGRESS', 'In Progress', 'प्रगतिमा', 'Grievance is being addressed', 'गुनासो समाधान भइरहेको छ', 3),
+                ('RESOLVED', 'Resolved', 'समाधान भएको', 'Grievance has been resolved', 'गुनासो समाधान भएको छ', 4),
+                ('CLOSED', 'Closed', 'बन्द भएको', 'Grievance case is closed', 'गुनासो केस बन्द भएको छ', 5),
+                ('REJECTED', 'Rejected', 'अस्वीकृत', 'Grievance has been rejected', 'गुनासो अस्वीकृत भएको छ', 6)
+            """)
+            
+        
+        # Processing statuses table
+        migrations_logger.info("Creating/recreating processing_statuses table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS processing_statuses (
+                status_code TEXT PRIMARY KEY,
+                status_name TEXT NOT NULL,
+                description TEXT,
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Insert default processing statuses if not present
+        cur.execute("SELECT COUNT(*) FROM processing_statuses")
+        if cur.fetchone()[0] == 0:
+            migrations_logger.info("Initializing default processing statuses...")
+            cur.execute("""
+                INSERT INTO processing_statuses (status_code, status_name, description) VALUES
+                ('PENDING', 'Pending', 'Processing is pending'),
+                ('PROCESSING', 'Processing', 'Processing is in progress'),
+                ('COMPLETED', 'Completed', 'Processing is completed'),
+                ('FAILED', 'Failed', 'Processing failed'),
+                ('FOR VERIFICATION', 'For Verification', 'Processing is for verification by dedicated team'),
+                ('VERIFICATION IN PROGRESS', 'Verification In Progress', 'Verification is in progress by dedicated team'),
+                ('VERIFIED', 'Verified', 'Processing is verified by dedicated team'),
+                ('VERIFIED AND AMENDED', 'Verified and Amended', 'Results have been verified and amended by dedicated team')
+            """)
+        
+        
         # Task statuses table
         migrations_logger.info("Creating/recreating task_statuses table...")
         cur.execute("""
@@ -341,6 +427,8 @@ class TableManager(BaseDatabaseManager):
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
+      
+        
         # Insert default statuses if not present
         cur.execute("SELECT COUNT(*) FROM task_statuses")
         if cur.fetchone()[0] == 0:
@@ -356,6 +444,38 @@ class TableManager(BaseDatabaseManager):
                 ('CANCELLED', 'Cancelled task', 'Task was cancelled')
             """)
 
+        # Field types table
+        migrations_logger.info("Creating/recreating field_types table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS field_types (
+                field_type TEXT PRIMARY KEY,
+                description TEXT
+        """)
+        
+        # Insert default field types if not present
+        cur.execute("SELECT COUNT(*) FROM field_types")
+        if cur.fetchone()[0] == 0:
+            migrations_logger.info("Initializing default field types...")
+            cur.execute("""
+                INSERT INTO field_types (field_type, description) VALUES
+                ('grievance_details', 'Grievance details'),
+                ('user_full_name', 'User full name'),
+                ('user_contact_phone', 'User contact phone'),
+                ('user_contact_email', 'User contact email'),
+                ('user_municipality', 'User municipality'),
+                ('user_village', 'User village'),
+                ('user_address', 'User address'),
+                ('user_province', 'User province'),
+                ('user_district', 'User district'),
+                ('user_ward', 'User ward'),
+                ('grievance_summary', 'Grievance summary'),
+                ('grievance_categories', 'Grievance categories'),
+                ('grievance_location', 'Grievance location'),
+                ('grievance_claimed_amount', 'Grievance claimed amount'),
+                
+            """)
+        
+        
         # Task executions table
         migrations_logger.info("Creating/recreating task_executions table...")
         cur.execute("""
@@ -392,6 +512,8 @@ class TableManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+
 
         # Main grievances table with language_code field
         migrations_logger.info("Creating/recreating grievances table...")
@@ -464,10 +586,10 @@ class TableManager(BaseDatabaseManager):
                 recording_id UUID PRIMARY KEY,
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 file_path TEXT NOT NULL,
-                recording_type TEXT NOT NULL CHECK (recording_type IN ('details', 'contact', 'location')),
+                recording_type TEXT NOT NULL CHECK (recording_type IN (SELECT field_type FROM field_types)),
                 duration_seconds INTEGER,
                 file_size_bytes INTEGER,
-                processing_status TEXT DEFAULT 'pending' CHECK (processing_status IN ('pending', 'transcribing', 'transcribed', 'failed')),
+                processing_status TEXT DEFAULT 'pending' CHECK (processing_status IN (SELECT status_code FROM processing_statuses)),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -484,7 +606,7 @@ class TableManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+                verification_status TEXT DEFAULT 'pending' CHECK (verification_status IN (SELECT status_code FROM processing_statuses)),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -514,20 +636,7 @@ class TableManager(BaseDatabaseManager):
             )
         """)
 
-        # Initialize default statuses if table is empty
-        cur.execute("SELECT COUNT(*) FROM grievance_statuses")
-        if cur.fetchone()[0] == 0:
-            migrations_logger.info("Initializing default grievance statuses...")
-            cur.execute("""
-                INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES
-                ('TEMP', 'Temporary', 'अस्थायी', 'Initial temporary status for new grievances', 'नयाँ गुनासोहरूको लागि प्रारम्भिक अस्थायी स्थिति', 0),
-                ('PENDING', 'Pending', 'प्रतीक्षामा', 'Grievance is pending review', 'गुनासो समीक्षाको लागि प्रतीक्षामा छ', 1),
-                ('IN_REVIEW', 'In Review', 'समीक्षामा', 'Grievance is being reviewed', 'गुनासो समीक्षा भइरहेको छ', 2),
-                ('IN_PROGRESS', 'In Progress', 'प्रगतिमा', 'Grievance is being addressed', 'गुनासो समाधान भइरहेको छ', 3),
-                ('RESOLVED', 'Resolved', 'समाधान भएको', 'Grievance has been resolved', 'गुनासो समाधान भएको छ', 4),
-                ('CLOSED', 'Closed', 'बन्द भएको', 'Grievance case is closed', 'गुनासो केस बन्द भएको छ', 5),
-                ('REJECTED', 'Rejected', 'अस्वीकृत', 'Grievance has been rejected', 'गुनासो अस्वीकृत भएको छ', 6)
-            """)
+
 
     def _create_indexes(self, cur):
         # Task statuses indexes
@@ -875,22 +984,7 @@ class GrievanceManager(BaseDatabaseManager):
             operations_logger.error(f"Error validating grievance ID: {str(e)}")
             return False
             
-    def get_transcription_for_recording_id(self, recording_id: str) -> str:
-        query = """
-            SELECT grievance_id, language_code, automated_transcript, field_name FROM grievance_transcriptions WHERE recording_id = %s
-        """
-        try:
-            results = self.execute_query(query, (recording_id,), "get_grievance_transcription_for_recording_id")
-            return {
-                'grievance_id': results[0].get('grievance_id'),
-                'language_code': results[0].get('language_code'),
-                'automated_transcript': results[0].get('automated_transcript'),
-                'field_name': results[0].get('field_name')
-            } if results else None
-        except Exception as e:
-            operations_logger.error(f"Error retrieving grievance transcription for recording ID: {str(e)}")
-            return None
-            
+    
     
     def update_translation(self, grievance_id: str, update_data: Dict[str, Any]) -> bool:
         """
@@ -1251,6 +1345,49 @@ class FileManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving file by ID: {str(e)}")
             return None
 
+class RecordingManager(BaseDatabaseManager):
+    """Handles voice recording CRUD and lookup logic"""
+    def store_recording(self, recording_data: Dict) -> bool:
+        query = """
+            INSERT INTO grievance_voice_recordings (
+                recording_id, grievance_id, file_path, file_name, file_type, recording_type,
+                duration_seconds, file_size_bytes, processing_status, language_code
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        try:
+            self.execute_update(query, (
+                recording_data['recording_id'],
+                recording_data['grievance_id'],
+                recording_data['file_path'],
+                recording_data['file_name'],
+                recording_data['file_type'],
+                recording_data['recording_type'],
+                recording_data.get('duration_seconds'),
+                recording_data.get('file_size_bytes'),
+                recording_data.get('processing_status', 'pending'),
+                recording_data.get('language_code', 'ne'),
+            ), "store_recording")
+            return True
+        except Exception as e:
+            operations_logger.error(f"Error storing voice recording: {str(e)}")
+            return False
+        
+    def get_transcription_for_recording_id(self, recording_id: str) -> str:
+        query = """
+            SELECT grievance_id, language_code, automated_transcript, field_name, recording_type FROM grievance_transcriptions LEFT JOIN grievance_voice_recordings ON grievance_transcriptions.recording_id = grievance_voice_recordings.recording_id WHERE recording_id = %s
+        """
+        try:
+            results = self.execute_query(query, (recording_id,), "get_grievance_transcription_for_recording_id")
+            return {
+                'grievance_id': results[0].get('grievance_id'),
+                'language_code': results[0].get('language_code'),
+                'automated_transcript': results[0].get('automated_transcript'),
+                'field_name': results[0].get('field_name')
+            } if results else None
+        except Exception as e:
+            operations_logger.error(f"Error retrieving grievance transcription for recording ID: {str(e)}")
+            return None
+
 class DatabaseManagers:
     """Unified access point for all database managers"""
     def __init__(self):
@@ -1259,6 +1396,7 @@ class DatabaseManagers:
         self.task = TaskManager()
         self.user = UserManager()
         self.file = FileManager()
+        self.recording = RecordingManager()
 
 # Individual manager instances (kept for backward compatibility)
 file_manager = FileManager()

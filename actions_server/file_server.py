@@ -22,8 +22,6 @@ from typing import Dict, Any, Optional, List
 # Define service name for logging
 SERVICE_NAME = "file_processor"
 
-# Default language
-language = 'ne'
 
 # Configure upload settings
 UPLOAD_FOLDER = 'uploads'
@@ -137,12 +135,12 @@ def process_file_upload(grievance_id: str, file_data: Dict[str, Any]) -> Dict[st
     """Process an uploaded file"""
     log_task_event('process_file_upload', 'started', {
         'grievance_id': grievance_id,
-        'file': file_data['filename']
+        'file': file_data['file_name']
     }, service=SERVICE_NAME)
     
     try:
         # Get file type
-        file_type = get_file_type(file_data['filename'])
+        file_type = get_file_type(file_data['file_name'])
         
         # Add metadata
         file_data.update({
@@ -190,7 +188,7 @@ def process_file_upload(grievance_id: str, file_data: Dict[str, Any]) -> Dict[st
         }, service=SERVICE_NAME)
         raise
 
-def process_batch_files(grievance_id: str, file_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def process_batch_files(grievance_id: str, file_list: List[Dict[str, Any]], allowed_extensions=ALLOWED_EXTENSIONS) -> Dict[str, Any]:
     """Process a batch of files for a grievance"""
     log_task_event('process_batch_files', 'started', {
         'grievance_id': grievance_id,
@@ -200,6 +198,11 @@ def process_batch_files(grievance_id: str, file_list: List[Dict[str, Any]]) -> D
     try:
         results = []
         for file_data in file_list:
+            ext = file_data['file_type']
+            mimetype = file_data.get('mimetype')
+            if allowed_extensions and ext not in allowed_extensions:
+                # skip or log error
+                continue
             try:
                 result = process_file_upload(grievance_id, file_data)
                 results.append(result)
@@ -234,9 +237,6 @@ def process_batch_files(grievance_id: str, file_list: List[Dict[str, Any]]) -> D
         }, service=SERVICE_NAME)
         raise
 
-def allowed_file(filename):
-    """Check if file extension is allowed"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def allowed_mime_type(mime_type):
     """Check if mime type is allowed"""

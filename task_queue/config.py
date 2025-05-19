@@ -287,6 +287,9 @@ QUEUE_HIGH = 'high_priority'
 QUEUE_MEDIUM = 'medium_priority'
 QUEUE_LOW = 'low_priority'
 
+QUEUE_LLM = 'llm_queue'
+QUEUE_DEFAULT = 'default'
+
 # Create Celery instance
 celery_app = Celery(QUEUE_FOLDER)
 
@@ -322,33 +325,27 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     
     # Default queue settings
-    task_default_queue=QUEUE_MEDIUM,
-    task_default_exchange=QUEUE_MEDIUM,
-    task_default_routing_key=QUEUE_MEDIUM,
-    
-    # Queue definitions
+    task_default_queue=QUEUE_DEFAULT,
     task_queues=(
-        Queue(QUEUE_HIGH, Exchange(QUEUE_HIGH), routing_key=QUEUE_HIGH, 
-              queue_arguments={'x-max-priority': 10}),
-        Queue(QUEUE_MEDIUM, Exchange(QUEUE_MEDIUM), routing_key=QUEUE_MEDIUM, 
-              queue_arguments={'x-max-priority': 10}),
-        Queue(QUEUE_LOW, Exchange(QUEUE_LOW), routing_key=QUEUE_LOW, 
-              queue_arguments={'x-max-priority': 10}),
+        Queue(QUEUE_LLM, Exchange(QUEUE_LLM), routing_key=QUEUE_LLM),
+        Queue(QUEUE_DEFAULT, Exchange(QUEUE_DEFAULT), routing_key=QUEUE_DEFAULT),
     ),
     
     # Task routing
-    task_routes={
-        'task_queue.tasks.high_priority_task': {'queue': QUEUE_HIGH, 'routing_key': QUEUE_HIGH},
-        'task_queue.tasks.medium_priority_task': {'queue': QUEUE_MEDIUM, 'routing_key': QUEUE_MEDIUM},
-        'task_queue.tasks.low_priority_task': {'queue': QUEUE_LOW, 'routing_key': QUEUE_LOW},
-    }
+    task_routes=(lambda name, args, kwargs, options, task=None, **kw: {
+        'queue': getattr(task, 'queue', QUEUE_DEFAULT)
+    }),
 )
+
+# Import registered_tasks to ensure all tasks are registered
+from .registered_tasks import TASK_REGISTRY
 
 # Log configuration
 logger.info(f"Celery configured with broker: {redis_url}")
 logger.info(f"Task time limit: {TaskConfig().time_limit}s")
 logger.info(f"Worker concurrency: {worker_config.concurrency}")
 logger.info(f"Log level: {logging_config.level}")
+logger.info(f"Registered tasks: {', '.join(TASK_REGISTRY.keys())}")
 
 # Update shell config when this module is imported
 update_shell_config() 

@@ -1,0 +1,80 @@
+2025-05-19 01:49:36,920 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 01:49:37,034 - db_operations - INFO - Starting database transaction
+2025-05-19 01:49:37,034 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 01:49:37,054 - db_operations - INFO - create_task_execution completed in 0.13s
+2025-05-19 01:49:37,060 - db_operations - INFO - Transaction committed successfully
+2025-05-19 01:49:37,060 - db_operations - INFO - Database connection closed. Duration: 0.14s
+2025-05-19 01:53:15,488 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 01:53:15,539 - db_operations - INFO - Starting database transaction
+2025-05-19 01:53:15,540 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 01:53:15,548 - db_operations - INFO - create_task_execution completed in 0.06s
+2025-05-19 01:53:15,552 - db_operations - INFO - Transaction committed successfully
+2025-05-19 01:53:15,553 - db_operations - INFO - Database connection closed. Duration: 0.06s
+2025-05-19 04:55:37,414 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 04:55:37,474 - db_operations - INFO - Starting database transaction
+2025-05-19 04:55:37,474 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 04:55:37,495 - db_operations - INFO - create_task_execution completed in 0.08s
+2025-05-19 04:55:37,505 - db_operations - INFO - Transaction committed successfully
+2025-05-19 04:55:37,505 - db_operations - INFO - Database connection closed. Duration: 0.09s
+2025-05-19 05:03:10,390 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 05:03:10,455 - db_operations - INFO - Starting database transaction
+2025-05-19 05:03:10,455 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 05:03:10,474 - db_operations - INFO - create_task_execution completed in 0.08s
+2025-05-19 05:03:10,484 - db_operations - INFO - Transaction committed successfully
+2025-05-19 05:03:10,484 - db_operations - INFO - Database connection closed. Duration: 0.09s
+2025-05-19 05:04:52,264 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 05:04:52,316 - db_operations - INFO - Starting database transaction
+2025-05-19 05:04:52,316 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 05:04:52,321 - db_operations - INFO - create_task_execution completed in 0.06s
+2025-05-19 05:04:52,335 - db_operations - INFO - Transaction committed successfully
+2025-05-19 05:04:52,335 - db_operations - INFO - Database connection closed. Duration: 0.07s
+2025-05-19 05:09:30,315 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 05:09:30,380 - db_operations - INFO - Starting database transaction
+2025-05-19 05:09:30,381 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 05:09:30,396 - db_operations - INFO - create_task_execution completed in 0.08s
+2025-05-19 05:09:30,400 - db_operations - INFO - Transaction committed successfully
+2025-05-19 05:09:30,400 - db_operations - INFO - Database connection closed. Duration: 0.09s
+2025-05-19 05:11:52,898 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 05:11:52,989 - db_operations - INFO - Starting database transaction
+2025-05-19 05:11:52,989 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 05:11:53,001 - db_operations - INFO - create_task_execution completed in 0.10s
+2025-05-19 05:11:53,005 - db_operations - INFO - Transaction committed successfully
+2025-05-19 05:11:53,005 - db_operations - INFO - Database connection closed. Duration: 0.11s
+2025-05-19 05:16:04,831 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 05:16:04,894 - db_operations - INFO - Starting database transaction
+2025-05-19 05:16:04,894 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 05:16:04,912 - db_operations - INFO - create_task_execution completed in 0.08s
+2025-05-19 05:16:04,920 - db_operations - INFO - Transaction committed successfully
+2025-05-19 05:16:04,920 - db_operations - INFO - Database connection closed. Duration: 0.09s
+2025-05-19 06:59:53,253 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 06:59:53,305 - db_operations - INFO - Starting database transaction
+2025-05-19 06:59:53,305 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 06:59:53,324 - db_operations - INFO - create_task_execution completed in 0.07s
+2025-05-19 06:59:53,336 - db_operations - INFO - Transaction committed successfully
+2025-05-19 06:59:53,338 - db_operations - INFO - Database connection closed. Duration: 0.08s
+2025-05-19 07:22:16,745 - db_operations - INFO - Connecting to database: grievance_db
+2025-05-19 07:22:16,824 - db_operations - INFO - Starting database transaction
+2025-05-19 07:22:16,824 - db_operations - INFO - Executing create_task_execution: 
+            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
+      ...
+2025-05-19 07:22:16,844 - db_operations - INFO - create_task_execution completed in 0.10s
+2025-05-19 07:22:16,851 - db_operations - INFO - Transaction committed successfully
+2025-05-19 07:22:16,852 - db_operations - INFO - Database connection closed. Duration: 0.11s

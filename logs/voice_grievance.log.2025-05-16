@@ -1,0 +1,18 @@
+2025-05-16 12:33:15,856 - voice_grievance - INFO - Task: submit_grievance - Event: started
+2025-05-16 12:33:15,963 - voice_grievance - INFO - Task: submit_grievance - Event: failed - Details: {"error": "'DatabaseManagers' object has no attribute 'store_file_attachment'"}
+2025-05-16 12:42:48,882 - voice_grievance - INFO - Task: submit_grievance - Event: started
+2025-05-16 12:42:49,400 - voice_grievance - INFO - Task: orchestrate_voice_processing - Event: failed - Details: {"error": "'_io.BufferedReader' object has no attribute 'filename'"}
+2025-05-16 12:42:49,400 - voice_grievance - INFO - Task: submit_grievance - Event: failed - Details: {"error": "'_io.BufferedReader' object has no attribute 'filename'"}
+2025-05-16 12:48:18,962 - voice_grievance - INFO - Task: submit_grievance - Event: started
+2025-05-16 12:48:19,505 - voice_grievance - INFO - Task: orchestrate_voice_processing - Event: failed - Details: {"error": "'_io.BufferedReader' object has no attribute 'get'"}
+2025-05-16 12:48:19,508 - voice_grievance - INFO - Task: submit_grievance - Event: failed - Details: {"error": "'_io.BufferedReader' object has no attribute 'get'"}
+2025-05-16 12:52:37,341 - voice_grievance - INFO - Task: submit_grievance - Event: started
+2025-05-16 12:52:37,461 - voice_grievance - INFO - Task: submit_grievance - Event: failed - Details: {"error": "'DatabaseManagers' object has no attribute 'store_file_attachment'"}
+2025-05-16 13:02:07,847 - voice_grievance - INFO - Task: submit_grievance - Event: started
+2025-05-16 13:02:08,343 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/grievance_details.webm"}
+2025-05-16 13:02:08,461 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/user_full_name.webm"}
+2025-05-16 13:02:08,473 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/user_contact_phone.webm"}
+2025-05-16 13:02:08,485 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/user_municipality.webm"}
+2025-05-16 13:02:08,498 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/user_village.webm"}
+2025-05-16 13:02:08,508 - voice_grievance - INFO - Task: process_single_audio_file - Event: file_saved - Details: {"file_path": "uploads/GR2025051620CFCA_A/user_address.webm"}
+2025-05-16 13:02:08,517 - voice_grievance - INFO - Task: submit_grievance - Event: completed - Details: {"grievance_id": "GR2025051620CFCA_A", "user_id": 119, "tasks": {"grievance_details.webm": {"task_id": "bd3bc857-2ecf-4bea-8427-3078edfbb2be", "type": "grievance_details", "status": "pending"}, "user_full_name.webm": {"task_id": "6b538d7d-4d49-4517-bb80-33647b660827", "type": "contact_info", "status": "pending"}, "user_contact_phone.webm": {"task_id": "96678532-dc00-40c5-9e7b-40363612737a", "type": "contact_info", "status": "pending"}, "user_municipality.webm": {"task_id": "0c77d82e-37f4-4de4-ad8e-e9825a7fa962", "type": "contact_info", "status": "pending"}, "user_village.webm": {"task_id": "5ee435ca-90b4-4fef-aefb-a1983c157115", "type": "contact_info", "status": "pending"}, "user_address.webm": {"task_id": "7568ef06-6208-4fd2-9d73-6d7199b63e4b", "type": "contact_info", "status": "pending"}}}
