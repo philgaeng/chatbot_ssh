@@ -1,13 +1,25 @@
 {
   "submit_grievance": {
-    "start_time": 1747399957.3418217,
-    "failed_tasks": 4
+    "start_time": 1747639336.4819674,
+    "failed_tasks": 4,
+    "last_duration": 0.28670382499694824,
+    "total_tasks": 11
   },
   "orchestrate_voice_processing": {
     "failed_tasks": 2
   },
   "transcribe_audio_file_task": {
-    "start_time": 1747400590.8341687,
-    "failed_tasks": 4
+    "start_time": 1747534177.4577897,
+    "failed_tasks": 54,
+    "retry_failures": 9
+  },
+  "accessible_file_upload": {
+    "start_time": 1747639348.828742,
+    "last_duration": 0.0580592155456543,
+    "total_tasks": 8
+  },
+  "process_batch_files": {
+    "start_time": 1747641185.1211972,
+    "failed_tasks": 2
   }
 }

@@ -1,0 +1,36 @@
+2025-05-18 01:50:20,056 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:50:20,066 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:51:24,284 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:51:24,286 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:53:34,035 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:53:34,036 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:53:34,058 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:53:34,060 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:54:39,594 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:54:39,598 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:56:50,270 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:56:50,274 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:56:50,323 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:56:50,331 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:57:54,103 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 01:57:54,105 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:00:05,610 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:00:05,612 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:00:05,628 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:00:05,631 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:01:08,500 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:01:08,502 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:03:18,708 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:03:18,710 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:03:18,724 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:03:18,726 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:04:23,354 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:04:23,356 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:06:29,393 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:06:29,395 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:06:29,421 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:06:29,424 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:07:33,544 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:07:33,546 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:09:37,457 - file_processor - INFO - Task: transcribe_audio_file_task - Event: started - Details: {"priority": "high"}
+2025-05-18 02:09:37,459 - file_processor - INFO - Task: transcribe_audio_file_task - Event: failed - Details: {"priority": "high", "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}

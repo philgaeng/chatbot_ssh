@@ -15,7 +15,6 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import traceback
 from dotenv import load_dotenv
-from task_queue.tasks import high_priority_task
 from task_queue.monitoring import log_task_event
 from task_queue.registered_tasks import (
     transcribe_audio_file_task,
@@ -24,13 +23,14 @@ from task_queue.registered_tasks import (
     translate_grievance_to_english_task,
     store_user_info_task,
     store_grievance_task,
-    store_transcription_task
+    store_transcription_task,
+    process_batch_files_task
 )
 from celery import chain, group
 
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
-from actions_server.constants import GRIEVANCE_STATUS
+from actions_server.constants import GRIEVANCE_STATUS, ALLOWED_EXTENSIONS, AUDIO_EXTENSIONS
 
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
@@ -43,8 +43,6 @@ load_dotenv('/home/ubuntu/nepal_chatbot/.env')
 
 # Configure upload settings
 UPLOAD_FOLDER = 'uploads'
-AUDIO_EXTENSIONS = {'webm', 'mp3', 'wav', 'ogg', 'm4a'}
-VALID_EXTENSIONS = ['.webm', '.mp3', '.wav', '.ogg', '.m4a']
 MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB max size for audio files
 
 # Create uploads directory if it doesn't exist
@@ -105,7 +103,7 @@ def get_grievance_field_from_filename(filename: str) -> str:
     
     return None  # No direct mapping
 
-def ensure_valid_filename(original_name: str, field_key: str = None) -> str:
+def ensure_valid_audio_filename(original_name: str, field_key: str = None) -> str:
     """Ensure the filename has a valid extension and is secure"""
     # First secure the filename
     filename = secure_filename(original_name)
@@ -118,11 +116,12 @@ def ensure_valid_filename(original_name: str, field_key: str = None) -> str:
             filename = f"audio_{uuid.uuid4()}"
     
     # Check if the filename has a valid audio extension
-    has_valid_extension = any(filename.lower().endswith(ext) for ext in VALID_EXTENSIONS)
+    has_valid_extension = any(filename.lower().endswith(ext) for ext in AUDIO_EXTENSIONS)
     if not has_valid_extension:
         filename += '.webm'  # Default to webm extension
+    recording_type = get_recording_type_from_filename(filename)
     
-    return filename
+    return filename, recording_type
 
 def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, int]:
     """Save an uploaded file and return the path and size"""
@@ -143,8 +142,6 @@ def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, in
     
     return file_path, file_size
 
-
-
 @voice_grievance_bp.route('/accessible-file-upload', methods=['POST'])
 def accessible_file_upload():
     """Handle file uploads from the accessible interface directly"""
@@ -157,84 +154,61 @@ def accessible_file_upload():
             log_task_event('accessible_file_upload', 'failed', {'error': 'No grievance_id provided'}, service=SERVICE_NAME)
             return jsonify({"error": "Grievance ID is required for file upload"}), 400
         
-        # Determine the interface language from the request
-        interface_language = request.form.get('interface_language', 'ne')
         
         # Check if files are provided
-        if 'files[]' not in request.files:
-            log_task_event('accessible_file_upload', 'failed', {'error': "No files[] in request.files"}, service=SERVICE_NAME)
-            return jsonify({"error": "No files provided under 'files[]' key"}), 400
-        
         files = request.files.getlist('files[]')
-        if not files or len(files) == 0:
+        if not files:
             log_task_event('accessible_file_upload', 'failed', {'error': "No files found in the request"}, service=SERVICE_NAME)
-            return jsonify({"error": "No files found in the request"}), 400
+            return jsonify({"error": "No files provided"}), 400
         
         # Create the upload directory for this grievance
         upload_dir = create_grievance_directory(grievance_id)
         
         # Process and save each file
-        saved_files = []
-        has_voice_recording = False
-        
+        files_data = []
+        audio_files = []
         for file in files:
             if file and file.filename:
-                # Ensure valid filename
-                filename = ensure_valid_filename(file.filename)
+                filename = secure_filename(file.filename)
+                ext = '.' + filename.rsplit('.', 1)[-1].lower()
+                mimetype = file.mimetype
                 file_path = os.path.join(upload_dir, filename)
-                
-                # Save file
                 file.save(file_path)
-                log_task_event('accessible_file_upload', 'file_saved', {'file_path': file_path}, service=SERVICE_NAME)
-                
-                # Check if it's a voice recording
-                if filename.lower().endswith(tuple(AUDIO_EXTENSIONS)):
-                    has_voice_recording = True
-                
-                # Store file metadata
-                file_data = {
+                files_data.append({
                     'file_id': str(uuid.uuid4()),
                     'grievance_id': grievance_id,
                     'file_name': filename,
                     'file_path': file_path,
-                    'file_type': filename.rsplit('.', 1)[1].lower(),
+                    'file_type': ext,
                     'file_size': os.path.getsize(file_path),
                     'upload_date': datetime.now().isoformat(),
-                    'language_code': interface_language
-                }
-                
-                # Store in database
-                success = db_manager.file.store_file_attachment(file_data)
-                if success:
-                    saved_files.append({
-                        'file_id': file_data['file_id'],
-                        'file_name': filename,
-                        'file_type': file_data['file_type']
-                    })
+                    'mimetype': mimetype
+                })
+                if ext in AUDIO_EXTENSIONS:
+                    audio_files.append(filename)
         
-        if not saved_files:
+        if not files_data:
             log_task_event('accessible_file_upload', 'failed', {'error': 'Failed to save any files'}, service=SERVICE_NAME)
             return jsonify({
                 'status': 'error',
                 'error': 'Failed to save any files'
             }), 500
         
-        if has_voice_recording:
-            log_task_event('accessible_file_upload', 'completed', {'grievance_id': grievance_id, 'files': saved_files, 'has_voice_recording': True}, service=SERVICE_NAME)
-            return jsonify({
-                'status': 'SUCCESS',
-                'message': 'Files uploaded successfully, however if you want to complete the grievance process, please use the voice grievance collection process instead of direct file upload.',
-                'grievance_id': grievance_id,
-                'files': saved_files
-            }), 200
-        
-        log_task_event('accessible_file_upload', 'completed', {'grievance_id': grievance_id, 'files': saved_files, 'has_voice_recording': False}, service=SERVICE_NAME)
-        return jsonify({
-            'status': 'SUCCESS',
-            'message': 'Files uploaded successfully',
+        # Enqueue batch processing task
+        process_batch_files_task.delay(grievance_id, files_data)
+
+        response = {
+            'status': 'processing',
+            'message': 'Files are being processed. You will be notified when processing is complete.',
             'grievance_id': grievance_id,
-            'files': saved_files
-        })
+            'files': [f['file_name'] for f in files_data]
+        }
+
+        if audio_files:
+            response['warning'] = 'Note: Audio files uploaded as attachments will not be transcribed and should not be used for submitting grievances.'
+        
+        return jsonify(response), 202
+    
     except Exception as e:
         log_task_event('accessible_file_upload', 'failed', {'error': str(e)}, service=SERVICE_NAME)
         return jsonify({
@@ -298,30 +272,32 @@ def submit_grievance():
         for key in request.files:
             file = request.files[key]
             if file and file.filename:
-                filename = ensure_valid_filename(file.filename, key)
+                filename, recording_type = ensure_valid_audio_filename(file.filename, key)
                 upload_dir = create_grievance_directory(grievance_id)
                 file_path, file_size = save_uploaded_file(file, upload_dir, filename)
                 
-                # Create file data dictionary
-                file_data = {
-                    'file_id': str(uuid.uuid4()),
+                # Create recording data dictionary
+                recording_data = {
+                    'recording_id': str(uuid.uuid4()),
                     'grievance_id': grievance_id,
                     'file_name': filename,
+                    'recording_type': recording_type,
                     'file_path': file_path,
                     'file_type': filename.rsplit('.', 1)[1].lower(),
                     'file_size': file_size,
                     'upload_date': datetime.now().isoformat(),
-                    'language_code': request.form.get('language', 'en')
+                    'language_code': request.form.get('language_code', 'en'),
+                    'duration_seconds': request.form.get(f'duration')  # Get duration from form data
                 }
                 
                 # Store in database
-                success = db_manager.file.store_file_attachment(file_data)
+                success = db_manager.recording.store_recording(recording_data)
                 if success:
                     # Add to audio files list with the format expected by orchestrate_voice_processing
                     audio_files.append({
-                        'filename': filename,
+                        'file_name': filename,
                         'file_path': file_path,
-                        'file_data': file_data
+                        'file_data': recording_data
                     })
                 
         if not audio_files:
@@ -329,7 +305,7 @@ def submit_grievance():
             return jsonify({'status': 'error', 'error': 'No audio files provided'}), 400
             
         # Queue Celery tasks for each file
-        result = orchestrate_voice_processing(audio_files, language=request.form.get('language', 'en'))
+        result = orchestrate_voice_processing(audio_files, language=request.form.get('language_code', 'en'))
         
         emit_status_update(grievance_id, 'submitted', {
             'user_id': user_id,

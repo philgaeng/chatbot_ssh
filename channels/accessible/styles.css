@@ -1,3 +1,53 @@
+/* Header styles */
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+    padding: 1rem;
+}
+
+.language-selector {
+    margin-left: auto;
+    padding: 0.5rem;
+}
+
+.language-selector select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.language-selector select:hover {
+    border-color: #666;
+}
+
+.language-selector select:focus {
+    outline: 2px solid #007bff;
+    border-color: #007bff;
+}
+
+/* High contrast mode styles */
+.high-contrast .language-selector select {
+    border: 2px solid white;
+    background-color: black;
+    color: white;
+}
+
+.high-contrast .language-selector select:hover {
+    border-color: yellow;
+}
+
+.high-contrast .language-selector select:focus {
+    outline: 2px solid yellow;
+    border-color: yellow;
+} 
+
+
 /* Accessible Interface Specific Styles */
 
 /* Accessibility Toolbar */
@@ -508,4 +558,4 @@ body.high-contrast .speech-indicator {
         width: 100%;
         justify-content: center;
     }
-} 
+}

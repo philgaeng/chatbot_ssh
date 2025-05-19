@@ -237,6 +237,7 @@ FILE_TYPES = {
 
 # Get all allowed extensions
 ALLOWED_EXTENSIONS = {ext for type_info in FILE_TYPES.values() for ext in type_info['extensions']}
+AUDIO_EXTENSIONS = {ext for k, v in FILE_TYPES.items() for ext in v['extensions'] if k == 'AUDIO'}
 
 # Get all allowed mime types
 ALLOWED_MIME_TYPES = {mime for type_info in FILE_TYPES.values() for mime in type_info['mime_types']}

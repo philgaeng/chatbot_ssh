@@ -1,0 +1,18 @@
+2025-05-18 01:51:22,056 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:53:31,698 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:53:31,704 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.
+2025-05-18 01:54:32,456 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:56:37,972 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:56:37,976 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.
+2025-05-18 01:57:40,080 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:59:50,622 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 01:59:50,631 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.
+2025-05-18 02:00:54,133 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:02:56,159 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:02:56,164 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.
+2025-05-18 02:03:56,728 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:06:04,423 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:06:04,428 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.
+2025-05-18 02:07:07,339 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 1, "max_retries": 3, "delay": 60, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:09:15,771 - queue_system - INFO - Task: transcribe_audio_file_task - Event: retry - Details: {"attempt": 2, "max_retries": 3, "delay": 120, "error": "'DatabaseManagers' object has no attribute 'record_task_start'"}
+2025-05-18 02:09:15,775 - queue_system - WARNING - Email configuration incomplete. Skipping email notification.

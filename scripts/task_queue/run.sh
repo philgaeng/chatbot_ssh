@@ -350,9 +350,8 @@ sleep 2
 
 # Start workers
 log "Starting workers..."
-start_worker "high_priority" "high_priority" || exit 1
-start_worker "medium_priority" "medium_priority" || exit 1
-start_worker "low_priority" "low_priority" || exit 1
+start_worker "llm_worker" "$LLM_QUEUE" || exit 1
+start_worker "default_worker" "$DEFAULT_QUEUE" || exit 1
 
 # Verify all workers are running
 if ! check_workers; then
@@ -378,10 +377,10 @@ while true; do
     check_system_resources
     
     # Check and restart workers if needed
-    for worker in "high_priority" "medium_priority" "low_priority"; do
+    for worker in "llm_worker" "default_worker"; do
         if ! check_worker_health "$worker"; then
             log_warning "Restarting $worker worker..."
-            restart_worker "$worker" "$worker"
+            restart_worker "$worker" "${worker/_worker/}"
         fi
     done
     

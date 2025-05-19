@@ -264,6 +264,48 @@ stop_redis() {
     return 0
 }
 
+# Refactored function to stop a Celery worker for a given queue
+stop_celery_worker() {
+    local queue_name=$1
+    local pid_file="$LOG_DIR/celery_${queue_name}.pid"
+    echo "Stopping celery_$queue_name worker..."
+    
+    # First try graceful shutdown if PID file exists
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if ps -p $pid > /dev/null 2>&1; then
+            echo "Sending TERM signal to celery_$queue_name (PID: $pid)..."
+            kill -TERM $pid
+            sleep 2
+            if ps -p $pid > /dev/null 2>&1; then
+                echo "Force stopping celery_$queue_name..."
+                kill -9 $pid
+                sleep 2
+            fi
+        fi
+        rm -f "$pid_file"
+    fi
+
+    # Find and kill any processes by queue name
+    local worker_pids=$(pgrep -f "celery.*worker.*$queue_name" 2>/dev/null)
+    if [ ! -z "$worker_pids" ]; then
+        echo "Found additional celery_$queue_name processes: $worker_pids"
+        for pid in $worker_pids; do
+            kill -9 $pid 2>/dev/null
+        done
+        sleep 2
+    fi
+
+    # Verify worker is stopped
+    if ! pgrep -f "celery.*worker.*$queue_name" > /dev/null; then
+        echo "✅ celery_$queue_name stopped"
+        return 0
+    else
+        echo "❌ Failed to stop celery_$queue_name"
+        return 1
+    fi
+}
+
 # Stop all services
 echo "Stopping all services..."
 
@@ -275,8 +317,10 @@ for service in rasa rasa_actions flask_server; do
     stop_service $service
 done
 
-# Stop Celery worker
-stop_celery
+# Stop Celery workers first
+echo "Stopping Celery workers..."
+stop_celery_worker "default"
+stop_celery_worker "llm_queue"
 
 # Stop Flower monitoring
 stop_flower
@@ -289,6 +333,13 @@ kill_process_by_port 5055  # Action server
 kill_process_by_port 5555  # Flower monitoring
 kill_process_by_port 6379  # Redis server
 
+# Final cleanup of any remaining Celery processes
+echo "Performing final Celery cleanup..."
+pkill -f "celery.*worker" 2>/dev/null
+sleep 2
+pkill -9 -f "celery.*worker" 2>/dev/null
+sleep 2
+
 # Verify all services are stopped
 echo -e "\nVerifying all services are stopped..."
 services=(
@@ -296,7 +347,6 @@ services=(
     "rasa"
     "rasa_actions"
     "flask_server"
-    "celery"
     "flower"
 )
 
@@ -322,5 +372,14 @@ for port in 5001 5005 5055 5555 6379; do
         echo "✅ Port $port is free"
     fi
 done
+
+# Final verification of Celery workers
+echo -e "\nFinal verification of Celery workers..."
+if ! pgrep -f "celery.*worker" > /dev/null; then
+    echo "✅ All Celery workers are stopped"
+else
+    echo "❌ Some Celery workers are still running:"
+    ps -ef | grep "celery.*worker" | grep -v grep
+fi
 
 echo -e "\nAll services have been stopped" 

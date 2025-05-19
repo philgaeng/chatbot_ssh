@@ -21,6 +21,14 @@
             <div class="header-content">
                 <img src="/shared/images/DOR-logo.png" alt="Department of Roads Logo" width="50">
                 <h1>Accessible Grievance Reporting</h1>
+                <div class="language-selector">
+                    <select id="languageSelect" aria-label="Select language">
+                        <option value="en" selected>English</option>
+                        <option value="ne">नेपाली (Nepali)</option>
+                        <option value="hi">हिंदी (Hindi)</option>
+                        <option value="fr">Français (French)</option>
+                    </select>
+                </div>
             </div>
         </header>
 
@@ -36,7 +44,7 @@
         <main id="main">
             <!-- Step 1: Grievance Details -->
             <div id="grievance-grievanceDetails" class="step" role="region" aria-label="Grievance: Grievance Details">
-                <h3>Grievance <span style="font-weight: normal;">– Grievance Details</span></h3>
+                <h2>Step 1: Grievance</h2><h3 style="display: inline; font-weight: normal;">– Grievance Details</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
@@ -75,7 +83,7 @@
 
             <!-- Step 2: Personal Info - Full Name -->
             <div id="personalInfo-fullName" class="step" hidden role="region" aria-label="Personal Info: Full Name">
-                <h3>Personal Info <span style="font-weight: normal;">– Full Name</span></h3>
+                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Full Name</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -114,7 +122,7 @@
 
             <!-- Step 2: Personal Info - Phone -->
             <div id="personalInfo-phone" class="step" hidden role="region" aria-label="Personal Info: Phone">
-                <h3>Personal Info <span style="font-weight: normal;">– Phone</span></h3>
+                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Phone</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -153,7 +161,7 @@
 
             <!-- Step 2: Personal Info - Municipality -->
             <div id="personalInfo-municipality" class="step" hidden role="region" aria-label="Personal Info: Municipality">
-                <h3>Personal Info <span style="font-weight: normal;">– Municipality</span></h3>
+                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Municipality</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -192,7 +200,7 @@
 
             <!-- Step 2: Personal Info - Village -->
             <div id="personalInfo-village" class="step" hidden role="region" aria-label="Personal Info: Village">
-                <h3>Personal Info <span style="font-weight: normal;">– Village</span></h3>
+                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Village</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -231,7 +239,7 @@
 
             <!-- Step 2: Personal Info - Address -->
             <div id="personalInfo-address" class="step" hidden role="region" aria-label="Personal Info: Address">
-                <h3>Personal Info <span style="font-weight: normal;">– Address</span></h3>
+                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Address</h3>
                 <div class="content">
                     <div class="nav-row">
                         <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -272,15 +280,16 @@
                 </div>
             </div>
 
-            <!-- Confirmation Step -->
-            <div id="confirmation-confirmation" class="step" hidden role="region" aria-label="Confirmation of Submission">
-                <h2 id="confirmation-heading">Voice Grievance Submitted</h2>
+            <!-- Attachment Step -->
+            <div id="attachments-attachments" class="step" hidden role="region" aria-label="attachments-attachments">
+                <h2>Step 3: Attachment</h2>
                 <div class="content">
                     
                     <!-- Success Message and Grievance ID -->
                     <div class="confirmation-message">
+                        <h4 id="confirmation-heading">Voice Grievance Submitted</h4>
                         <p id="resultMessage">Your voice recordings have been submitted successfully.</p>
-                        <p id="grievanceId">Your grievance ID is <span></span></p>
+                        <p>Your grievance ID is </p><h4 id="grievanceId"><span></span></h4>
                         <p>Please save this ID for your reference.</p>
                         <p>You can now review your transcript and attach supporting documents to your grievance.</p>
                     </div>
@@ -294,13 +303,45 @@
                             <span class="tooltip">Next</span>
                         </button>
                     </div>
+                    <!-- Attachment Section -->
+                    <div class="attachment-instructions" id="attachmentInstructions">
+                        <h4>Attach your files</h4>
+                        <p>You can attach photos or documents to provide more details about your grievance.</p>
+                        <p>This step is optional but recommended to help us better understand your issue.</p>
+                        <div class="button-container">
+                            <button id="attachFilesBtn" class="secondary-btn" aria-label="Attach photos or documents" type="button">Attach Files</button>
+                        </div>
+                    </div>
+                    
+                    <div class="file-upload-container">
+                        <input type="file" id="fileInput" multiple accept="image/*,application/pdf,video/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden>
+                        <div id="fileList" class="file-list" hidden>
+                            <h3>Selected Files:</h3>
+                            <ul></ul>
+                            <button id="submitFilesBtn" class="secondary-btn" aria-label="Submit your selected files" type="button">Submit Files</button>
+                        </div>
+                    </div>
+                    
+                    <div id="uploadedFilesSection" class="uploaded-files-section" hidden>
+                        <h3>Uploaded Files</h3>
+                        <div id="uploadedFilesList" class="uploaded-files-list">
+                            <ul></ul>
+                        </div>
+                        <p class="upload-success-message" id="uploadSuccessMessage">Files uploaded successfully!</p>
+                        <div class="button-container">
+                            <button id="attachMoreBtn" class="secondary-btn" aria-label="Attach more files" type="button">Attach More Files</button>
+                        </div>
+                    </div>
+                    <div class="button-container">
+                        <button id="newBtn" class="primary-btn" data-action="new" aria-label="Start a new grievance report" type="button">New Grievance</button>
+                        <button id="exitBtn" class="exit-btn" data-action="exit" aria-label="Exit application" type="button">Exit</button>
+                    </div>
                 </div>
             </div>
                 <!-- Review Steps -->
             <div id="review-reviewGrievance" class="step" hidden role="region" aria-label="review-reviewGrievance">
                 <div class="review-steps">
-                   
-                    <h3 id="review-reviewGrievance-heading">Step 3.a: Review your Submission</h3>
+                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Grievance Details</h3>
                     <div class="review-content">
                         <div class="nav-row">
                             <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -348,7 +389,7 @@
             <div id="review-reviewDetails" class="step" hidden role="region" aria-label="review-reviewDetails">
                 <div class="review-steps">
                     
-                    <h3 id="review-reviewDetails-heading">Step 3.b: Review your Details</h3>
+                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Personal Info</h3>
                     <div class="review-content">
                         <div class="nav-row">
                             <button class="nav-btn" data-action="prev" aria-label="Previous step">
@@ -417,44 +458,7 @@
                     </div>
                 </div>
 
-                <!-- Attachment Section -->
-                <div id="attachments-attachments" class="step" hidden role="region" aria-label="attachments-attachments">
-                    <h3>Step 4: Attachment Options</h3>
-                    <div class="attachment-instructions" id="attachmentInstructions">
-                        <p>You can attach photos or documents to provide more details about your grievance.</p>
-                        <p>This step is optional but recommended to help us better understand your issue.</p>
-                        <div class="button-container">
-                            <button id="attachFilesBtn" class="secondary-btn" aria-label="Attach photos or documents" type="button">Attach Files</button>
-                        </div>
-                    </div>
-                    
-                    <div class="file-upload-container">
-                        <input type="file" id="fileInput" multiple accept="image/*,application/pdf,video/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden>
-                        <div id="fileList" class="file-list" hidden>
-                            <h3>Selected Files:</h3>
-                            <ul></ul>
-                            <button id="submitFilesBtn" class="secondary-btn" aria-label="Submit your selected files" type="button">Submit Files</button>
-                        </div>
-                    </div>
-                    
-                    <div id="uploadedFilesSection" class="uploaded-files-section" hidden>
-                        <h3>Uploaded Files</h3>
-                        <div id="uploadedFilesList" class="uploaded-files-list">
-                            <ul></ul>
-                        </div>
-                        <p class="upload-success-message" id="uploadSuccessMessage">Files uploaded successfully!</p>
-                        <div class="button-container">
-                            <button id="attachMoreBtn" class="secondary-btn" aria-label="Attach more files" type="button">Attach More Files</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="button-container">
-                    <button id="newBtn" class="primary-btn" data-action="new" aria-label="Start a new grievance report" type="button">New Grievance</button>
-                    <button id="exitBtn" class="exit-btn" data-action="exit" aria-label="Exit application" type="button">Exit</button>
-                </div>
-            </div>
-        </main>
+
 
         <!-- Ensure the help dialog is properly set up to work with showModal() -->
         <dialog id="helpDialog" aria-labelledby="helpDialogHeading">

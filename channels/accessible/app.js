@@ -8,9 +8,39 @@ let SpeechModule = {};
 let AccessibilityModule = {};
 let UIModule = {};
 let APIModule = {};
-let RecordingModule = {};
 let FileUploadModule = {};
+let RecordingModule = {};
 let GrievanceModule = {};
+let ModifyModule = {};
+let EventModule = {};
+
+// Language Module
+let LanguageModule = {
+    currentLanguage: 'en',
+    languageSelect: null,
+
+    init: function() {
+        this.languageSelect = document.getElementById('languageSelect');
+        
+        // Initialize language from localStorage if available
+        if (localStorage.getItem('language_code')) {
+            this.currentLanguage = localStorage.getItem('language_code');
+            this.languageSelect.value = this.currentLanguage;
+        }
+
+        // Update language when selection changes
+        this.languageSelect.addEventListener('change', (event) => {
+            this.currentLanguage = event.target.value;
+            localStorage.setItem('language_code', this.currentLanguage);
+            // You can add additional language change handling here
+            // For example, triggering a page reload or updating content
+        });
+    },
+
+    getCurrentLanguage: function() {
+        return this.currentLanguage;
+    }
+};
 
 // Global state
 let state = {
@@ -53,11 +83,6 @@ const APP_STEPS = {
         windows: ['fullName', 'phone', 'municipality', 'village', 'address'],
         requiresRecording: true
     },
-    confirmation: {
-        name: 'Voice Grievance Submitted',
-        windows: ['confirmation'],
-        requiresRecording: false
-    },
     review: {
         name: 'Review your Submission',
         windows: ['reviewGrievance', 'reviewDetails'],
@@ -75,7 +100,7 @@ const SUBMISSION_STEP_WINDOW = ['personalInfo', 'address'];
 
 // Add a helper function to get step order
 function getStepOrder() {
-    return ['grievance', 'personalInfo', 'review', 'attachments'];
+    return ['grievance', 'personalInfo', 'attachments', 'review'];
 }
 
 // At the top of the file, after the windowToRecordingTypeMap
@@ -494,7 +519,6 @@ UIModule = {
     stepOrder: getStepOrder(),
     currentStepIndex: 0,
     currentWindowIndex: 0,
-    hasTranscriptionErrors: false,
 
     // Add the helper function
     getCurrentWindow: function() {
@@ -539,20 +563,13 @@ UIModule = {
     
     Navigation:{
         showCurrentWindow: function() {
+            let currentStepKey, currentWindow;
             try {
                 const { step, window } = UIModule.getCurrentWindow();
-                const currentStepKey = UIModule.stepOrder[UIModule.currentStepIndex];
+                currentStepKey = UIModule.stepOrder[UIModule.currentStepIndex];
                 const currentStep = UIModule.steps[currentStepKey];
-                const currentWindow = currentStep ? currentStep.windows[UIModule.currentWindowIndex] : undefined;
+                currentWindow = currentStep ? currentStep.windows[UIModule.currentWindowIndex] : undefined;
                 
-                if (step === 'confirmation') {
-                    UIModule.showConfirmationScreen(state.grievanceId);
-                    return;
-                }
-                if (step === 'attachments') {
-                    UIModule.showAttachmentsStep();
-                    return;
-                }
                 // Default logic for other steps
                 document.querySelectorAll('.step').forEach(stepEl => {
                     stepEl.hidden = true;
@@ -563,6 +580,16 @@ UIModule = {
                 if (el) {
                     el.hidden = false;
                     el.style.display = 'block';
+                    // If we're on the attachments step, update the grievanceId span
+                    if (currentStepKey === 'attachments') {
+                        const idElement = document.getElementById('grievanceId');
+                        if (idElement) {
+                            const span = idElement.querySelector('span');
+                            if (span) {
+                                span.textContent = state.grievanceId || '';
+                            }
+                        }
+                    }
                     const content = el.querySelector('.content');
                     if (content && SpeechModule.autoRead) {
                         SpeechModule.speak(content.textContent);
@@ -574,59 +601,17 @@ UIModule = {
         },
 
         goToNextWindow: function() {
-            if (isTransitioning || RecordingModule.isRecording) return;
-            isTransitioning = true;
-
+            const { step, window } = UIModule.getCurrentWindow();
             const currentStepKey = UIModule.stepOrder[UIModule.currentStepIndex];
-            console.log('[NAV] goToNextWindow - currentStepKey:', currentStepKey, 'currentWindowIndex:', UIModule.currentWindowIndex);
-            
-            if (!currentStepKey) {
-                UIModule.showMessage('Navigation error: invalid step index.', true);
-                isTransitioning = false;
-                return;
-            }
-            
             const currentStep = UIModule.steps[currentStepKey];
-            if (!currentStep) {
-                UIModule.showMessage('Navigation error: invalid step configuration.', true);
-                isTransitioning = false;
-                return;
-            }
-            
-            const currentWindow = currentStep.windows[UIModule.currentWindowIndex];
-            if (!currentWindow) {
-                UIModule.showMessage('Navigation error: invalid window index.', true);
-                isTransitioning = false;
-                return;
-            }
-            console.log('[NAV] goToNextWindow - currentStep:', UIModule.currentStepIndex, currentStepKey, currentStep, 'currentWindow:', UIModule.currentWindowIndex, currentWindow);
-
-            // Check if we can proceed based on recording state
-            if (currentStep.requiresRecording && RecordingModule.isRecording) {
-                UIModule.showMessage('Cannot proceed while recording is in progress.', true);
-                isTransitioning = false;
-                return;
-            }
-            
-            // Check if we have a recording for the current window if required
-            const recordingType = getRecordingTypeForWindow(currentStepKey, currentWindow);
-            if (currentStep.requiresRecording && recordingType && !RecordingModule.hasRecording(recordingType)) {
-                UIModule.showMessage('Please record before continuing.', true);
-                isTransitioning = false;
-                return;
-            }
-            
-            // Proceed with navigation
+            // If there are more windows in this step, move to next window
             if (UIModule.currentWindowIndex < currentStep.windows.length - 1) {
-                // If there are more windows in this step, move to next window
                 UIModule.currentWindowIndex++;
-                state.currentStep = currentStepKey; // Keep state in sync
                 this.showCurrentWindow();
             } else {
                 // If we're at the last window of this step, move to next step
                 this.goToNextStep();
             }
-            isTransitioning = false;
         },
 
         goToPrevWindow: function() {
@@ -647,25 +632,16 @@ UIModule = {
                 UIModule.showMessage('Already at last step.', true);
                 return;
             }
-            // transition from confirmation to attachments if there are transcription errors
-            if (currentStepKey === 'confirmation' && UIModule.hasTranscriptionErrors) {
-                UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
-                state.currentStep = 'attachments';
-                UIModule.currentWindowIndex = 0;
-                this.showCurrentWindow();
-                return;
-            }
+
 
             // Special handling for transition from personalInfo to confirmation
-            if (currentStepKey === 'personalInfo' && nextStepKey === 'review') {
+            if (currentStepKey === 'personalInfo' && nextStepKey === 'attachments') {
                 console.log('[NAV] goToNextStep - starting submission');
                 GrievanceModule.submitGrievance().then(result => {
-                    UIModule.hasTranscriptionErrors = result.hasTranscriptionErrors || false;
-                    // Always go to confirmation after submission
-                    UIModule.currentStepIndex = UIModule.stepOrder.indexOf('confirmation');
-                    state.currentStep = 'confirmation';
+                    UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
+                    state.currentStep = 'attachments';
                     UIModule.currentWindowIndex = 0;
-                    console.log('[NAV] goToNextStep - going to confirmation');
+                    console.log('[NAV] goToNextStep - going to attachments');
                     this.showCurrentWindow();
                 }).catch(error => {
                     UIModule.showMessage('Failed to submit grievance.', true);
@@ -721,54 +697,9 @@ UIModule = {
         });
     },
     
-    showConfirmationScreen: function(grievanceId) {
-        console.log("Showing confirmation screen for grievance ID:", grievanceId);
-
-        // Hide the submission overlay
-        UIModule.Overlay.hideSubmissionOverlay();
-
-        // Hide all steps
-        UIModule.hideAllSteps();
-
-        // Show the confirmation screen
-        const confirmationElement = document.getElementById('confirmation-confirmation');
-        if (!confirmationElement) {
-            console.error("Confirmation element not found!");
-            return;
-        }
-
-        // Update the grievance ID
-        const idElement = document.getElementById('grievanceId');
-        if (idElement) {
-            const span = idElement.querySelector('span');
-            if (span) {
-                span.textContent = grievanceId;
-            }
-        }
-
-        // Update the success message
-        const resultMessage = document.getElementById('resultMessage');
-        if (resultMessage) {
-            resultMessage.textContent = "Your voice grievance has been submitted successfully.";
-        }
-
-        // Ensure attachment instructions are visible
-        const attachmentInstructions = document.getElementById('attachmentInstructions');
-        if (attachmentInstructions) {
-            attachmentInstructions.hidden = false;
-        }
-
-        // Show the confirmation screen
-        confirmationElement.hidden = false;
-        confirmationElement.style.display = 'block';
-        window.scrollTo(0, 0);
-        console.log("Confirmation screen should now be the only visible step");
-    },
-    
     resetApp: function() {
         this.currentStepIndex = 0;
         this.currentWindowIndex = 0;
-        this.hasTranscriptionErrors = false;
         UIModule.Navigation.showCurrentWindow();
     },
     
@@ -1042,6 +973,10 @@ APIModule = {
         // Add all recordings as separate files
         Object.entries(recordings).forEach(([type, blob]) => {
             formData.append(type, blob, `${type}.webm`);
+            // Add duration if available
+            if (blob.duration) {
+                formData.append(`duration`, blob.duration);
+            }
         });
         // POST to /submit-grievance
         return this.request(this.endpoints.submitGrievance, {
@@ -1438,10 +1373,6 @@ FileUploadModule = {
             // Add grievance_id to FormData
             formData.append('grievance_id', grievanceId);
             
-            // Add interface language if available
-            const htmlLang = document.documentElement.lang || 'ne';
-            formData.append('interface_language', htmlLang);
-            
             // Add all files under the 'files[]' key as expected by the server
             for (const file of this.selectedFiles) {
                 formData.append('files[]', file);
@@ -1453,7 +1384,7 @@ FileUploadModule = {
             const result = await APIModule.uploadFile(grievanceId, formData);
             
             // Process results
-            if (result && (result.status === 'success' || result.success)) {
+            if (result && (result.status === 'success' || result.status === 'processing')) {
                 // Handle successful upload
                 for (const file of this.selectedFiles) {
                     results.push({
@@ -1464,32 +1395,26 @@ FileUploadModule = {
                         success: true
                     });
                 }
+                
+                // Show appropriate message based on status
+                if (result.status === 'processing') {
+                    UIModule.showMessage('Files are being processed. You will be notified when processing is complete.', false);
+                    if (result.warning) {
+                        UIModule.showMessage(result.warning, false);
+                    }
+                } else {
+                    UIModule.showMessage('Files uploaded successfully.', false);
+                }
+                
+                return { success: true, results };
             } else {
                 // Handle error
                 throw new Error(result.error || result.message || "Failed to upload files");
             }
         } catch (error) {
-            console.error(`Error uploading files:`, error);
-            // Mark all files as failed
-            for (const file of this.selectedFiles) {
-                results.push({
-                    fileName: file.name,
-                    success: false,
-                    error: error.message
-                });
-            }
+            console.error('Error uploading files:', error);
+            throw error;
         }
-        
-        // Check if all uploads were successful
-        const allSuccessful = results.every(result => result.success);
-        
-        return {
-            success: allSuccessful,
-            results: results,
-            message: allSuccessful
-                ? 'All files uploaded successfully'
-                : 'Some files failed to upload'
-        };
     },
     
     clearFiles: function() {
@@ -1878,6 +1803,14 @@ RecordingModule = {
             const audioURL = URL.createObjectURL(blob);
             audio.src = audioURL;
             
+            // Add metadata loaded event listener to get duration
+            audio.addEventListener('loadedmetadata', () => {
+                // Store duration in the recordedBlobs object
+                if (!recordedBlobs[recordingType].duration) {
+                    recordedBlobs[recordingType].duration = Math.round(audio.duration);
+                }
+            });
+            
             // Add play/pause event listeners
             audio.addEventListener('play', () => {
                 if (SpeechModule.stopSpeaking) {
@@ -2044,16 +1977,16 @@ GrievanceModule = {
                 UIModule.showMessage('Please complete all steps before submitting.', true);
                 return;
             }
-            UIModule.Overlay.showSubmissionOverlay();
             // Add interface language
-            const htmlLang = document.documentElement.lang || 'ne';
+            const formData = new FormData();
+            formData.append('language_code', LanguageModule.getCurrentLanguage());
             // Submit all recordings (no userInfo)
-            const result = await APIModule.submitGrievance({}, recordedBlobs, htmlLang);
+            const result = await APIModule.submitGrievance({}, recordedBlobs, formData);
             if (result.status === 'success') {
                 state.grievanceId = result.grievance_id;
-                UIModule.hideAllSteps();
-                UIModule.Overlay.hideSubmissionOverlay();
-                UIModule.showConfirmationScreen(state.grievanceId);
+                UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
+                UIModule.currentWindowIndex = 0;
+                UIModule.Navigation.showCurrentWindow();
                 // Announce success
                 SpeechModule.speak('Your grievance has been submitted successfully. Your grievance ID is ' + 
                     state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.');
@@ -2062,14 +1995,12 @@ GrievanceModule = {
             } else {
                 UIModule.showMessage(result.error || result.message || 'Failed to submit grievance', true);
                 SpeechModule.speak('There was an error submitting your grievance. Please try again.');
-                UIModule.Overlay.hideSubmissionOverlay();
             }
-            return {hasTranscriptionErrors: false, grievanceId: state.grievanceId};
+            return {grievanceId: state.grievanceId};
         } catch (error) {
             console.error('Error submitting grievance:', error);
             UIModule.showMessage('There was an error submitting your grievance. Please try again.', true);
             SpeechModule.speak('There was an error submitting your grievance. Please try again.');
-            UIModule.Overlay.hideSubmissionOverlay();
         } finally {
             isTransitioning = false;
         }
@@ -2381,8 +2312,6 @@ EventModule = {
         try {
             isSubmitting = true;
             e.target.disabled = true;
-            // Show the submission overlay
-            UIModule.Overlay.showSubmissionOverlay();
             // Call submitGrievance
             await GrievanceModule.submitGrievance();
         } catch (error) {
@@ -2390,7 +2319,6 @@ EventModule = {
             // Re-enable the button if submission fails
             e.target.disabled = false;
             isSubmitting = false;
-            UIModule.Overlay.hideSubmissionOverlay();
         }
     },
 
@@ -2554,7 +2482,6 @@ window.addEventListener('DOMContentLoaded', function() {
   if (cancelBtn) {
     cancelBtn.addEventListener('click', function() {
       if (submissionAbortController) submissionAbortController.abort();
-      UIModule.Overlay.hideSubmissionOverlay();
       const submitBtn = document.getElementById('submitGrievanceBtn');
       if (submitBtn) submitBtn.disabled = false;
       alert('Submission cancelled. Please try again.');
@@ -2649,51 +2576,6 @@ function populateReviewUI(data) {
     document.getElementById('userAddressReview').textContent = data.user_address || '';
 }
 
-// On entering confirmation/review, fetch and populate
-function setupReviewStepData() {
-    const confirmation = document.getElementById('confirmation');
-    if (!confirmation) return;
-    const observer = new MutationObserver(() => {
-        if (!confirmation.hidden) {
-            const grievanceId = document.getElementById('grievanceId').querySelector('span').textContent;
-            if (grievanceId) {
-                fetchReviewData(grievanceId).then(data => {
-                    window._reviewData = data; // store for later update
-                    populateReviewUI(data);
-                });
-            }
-        }
-    });
-    observer.observe(confirmation, { attributes: true, attributeFilter: ['hidden'] });
-}
-setupReviewStepData();
-
-// On confirmation, send all updates
-function setupReviewConfirmation() {
-    const confirmation = document.getElementById('confirmation');
-    if (!confirmation) return;
-    // Add a confirm button if not present
-    let confirmBtn = document.getElementById('confirmReviewBtn');
-    if (!confirmBtn) {
-        confirmBtn = document.createElement('button');
-        confirmBtn.id = 'confirmReviewBtn';
-        confirmBtn.textContent = 'Confirm and Save Changes';
-        confirmBtn.className = 'primary-btn';
-        confirmation.querySelector('.content').appendChild(confirmBtn);
-    }
-    confirmBtn.onclick = async () => {
-        const grievanceId = document.getElementById('grievanceId').querySelector('span').textContent;
-        if (grievanceId && window._reviewData) {
-            const result = await updateReviewData(grievanceId, window._reviewData);
-            if (result && result.message) {
-                alert('Changes saved successfully!');
-            } else {
-                alert('Failed to save changes.');
-            }
-        }
-    };
-}
-setupReviewConfirmation();
 
 window.addEventListener('DOMContentLoaded', function() {
     // Initialize all modules
@@ -2705,5 +2587,23 @@ window.addEventListener('DOMContentLoaded', function() {
     RecordingModule.init();
     GrievanceModule.init();
     ModifyModule.init();
-    EventModule.init(); // <-- THIS IS CRUCIAL
+    EventModule.init();
+    LanguageModule.init(); // Initialize language module
+});
+
+// Add WebSocket status update handling
+socket.on('grievance_status_update', function(data) {
+    if (data.grievance_id === state.grievanceId) {
+        switch (data.status) {
+            case 'processing':
+                UIModule.showMessage('Processing your files...', false);
+                break;
+            case 'completed':
+                UIModule.showMessage('Files processed successfully.', false);
+                break;
+            case 'failed':
+                UIModule.showMessage(`Error processing files: ${data.data.error || 'Unknown error'}`, true);
+                break;
+        }
+    }
 });
