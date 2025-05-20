@@ -1,26 +1,25 @@
 from flask import Flask
 from flask_cors import CORS
-from flask_socketio import SocketIO
-from actions_server.file_server import file_server_bp
+from actions_server.file_server import FileServerAPI, file_server_bp, FileServerCore
 from accessible_server.voice_grievance import voice_grievance_bp
-from task_queue.task_status import get_task_status, get_task_info
+from actions_server.websocket_utils import socketio, emit_status_update
+from actions_server.constants import ALLOWED_EXTENSIONS
+import os
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio.init_app(app, cors_allowed_origins="*")
+
+# Initialize core and API instances
+file_server_core = FileServerCore(
+    upload_folder=os.getenv('UPLOAD_FOLDER', 'uploads'),
+    allowed_extensions=ALLOWED_EXTENSIONS
+)
+file_server = FileServerAPI(core=file_server_core)
 
 # Register blueprints
 app.register_blueprint(file_server_bp)
 app.register_blueprint(voice_grievance_bp)
-
-# Provide the emit_status_update function to file_server
-def emit_status_update(grievance_id, status, data):
-    """Emit status updates through WebSocket"""
-    socketio.emit('grievance_status_update', {
-        'grievance_id': grievance_id,
-        'status': status,
-        'data': data
-    }, room=grievance_id)
 
 # Make the function available to the file_server blueprint
 file_server_bp.emit_status_update = emit_status_update

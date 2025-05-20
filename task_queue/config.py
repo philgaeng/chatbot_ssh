@@ -19,7 +19,6 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass
 from functools import lru_cache
-import json
 
 # Queue system configuration
 QUEUE_FOLDER = 'task_queue'  # Name of the queue system folder
@@ -29,7 +28,12 @@ TASK_TIME_LIMIT = 3600  # 1 hour
 TASK_SOFT_TIME_LIMIT = 3300  # 55 minutes
 MAX_RETRIES = 3
 RETRY_DELAY = 60  # 1 minute
-WORKER_CONCURRENCY = 4
+
+# Worker configuration
+WORKER_CONCURRENCY = {
+    'llm_queue': 6,  # LLM tasks are light-weight and can handle more concurrency since they are API calls
+    'default': 4     # Default queue for other tasks
+}
 
 @dataclass
 class ServiceConfig:
@@ -54,7 +58,6 @@ class WorkerConfig:
     health_check_interval: int = 30
     prefetch_multiplier: int = 1
     max_tasks_per_child: int = 1000
-    concurrency: int = 4
     log_level: str = 'INFO'
     log_file: str = 'worker.log'
     pid_file: str = 'worker.pid'
@@ -110,7 +113,10 @@ class ErrorPatterns:
                 "TimeoutError",
                 "ConnectionError",
                 "AuthenticationError",
-                "ResourceExhausted"
+                "ResourceExhausted",
+                "TaskRevokedError",
+                "TaskTimeoutError",
+                "MaxRetriesExceededError"
             ]
 
 @dataclass
@@ -277,16 +283,7 @@ redis_url = f'redis://{redis_config.host}:{redis_config.port}/{redis_config.db}'
 if redis_config.password:
     redis_url = f'redis://:{redis_config.password}@{redis_config.host}:{redis_config.port}/{redis_config.db}'
 
-# Priority levels (these are fixed constants, not configurable)
-PRIORITY_HIGH = 0
-PRIORITY_MEDIUM = 1
-PRIORITY_LOW = 2
-
 # Queue names (these are fixed constants, not configurable)
-QUEUE_HIGH = 'high_priority'
-QUEUE_MEDIUM = 'medium_priority'
-QUEUE_LOW = 'low_priority'
-
 QUEUE_LLM = 'llm_queue'
 QUEUE_DEFAULT = 'default'
 
@@ -318,7 +315,6 @@ celery_app.conf.update(
     # Worker settings
     worker_prefetch_multiplier=worker_config.prefetch_multiplier,
     worker_max_tasks_per_child=worker_config.max_tasks_per_child,
-    worker_concurrency=worker_config.concurrency,
     
     # Task acknowledgment
     task_acks_late=True,
@@ -332,20 +328,36 @@ celery_app.conf.update(
     ),
     
     # Task routing
-    task_routes=(lambda name, args, kwargs, options, task=None, **kw: {
-        'queue': getattr(task, 'queue', QUEUE_DEFAULT)
-    }),
+    task_routes={
+        'task_queue.registered_tasks.*_llm_*': {'queue': QUEUE_LLM},
+        'task_queue.registered_tasks.*_transcribe_*': {'queue': QUEUE_LLM},
+        'task_queue.registered_tasks.*_classify_*': {'queue': QUEUE_LLM},
+        'task_queue.registered_tasks.*_extract_*': {'queue': QUEUE_LLM},
+        'task_queue.registered_tasks.*_translate_*': {'queue': QUEUE_LLM},
+    },
 )
 
-# Import registered_tasks to ensure all tasks are registered
-from .registered_tasks import TASK_REGISTRY
+# Initialize TASK_REGISTRY as empty
+TASK_REGISTRY = {}
 
-# Log configuration
-logger.info(f"Celery configured with broker: {redis_url}")
-logger.info(f"Task time limit: {TaskConfig().time_limit}s")
-logger.info(f"Worker concurrency: {worker_config.concurrency}")
-logger.info(f"Log level: {logging_config.level}")
-logger.info(f"Registered tasks: {', '.join(TASK_REGISTRY.keys())}")
+def register_all_tasks():
+    """Register all tasks with Celery after all modules are loaded"""
+    from .task_manager import TaskManager
+    from .registered_tasks import (
+        process_file_upload_task,
+        process_batch_files_task,
+        send_sms_task,
+        send_email_task,
+        transcribe_audio_file_task,
+        classify_and_summarize_grievance_task,
+        extract_contact_info_task,
+        translate_grievance_to_english_task,
+        store_user_info_task,
+        store_grievance_task,
+        store_transcription_task,
+        update_task_execution_task
+    )
+    return TaskManager.TASK_REGISTRY
 
 # Update shell config when this module is imported
 update_shell_config() 
