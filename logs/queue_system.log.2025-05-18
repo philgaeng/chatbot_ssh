@@ -1,0 +1,12 @@
+2025-05-20 08:10:45,157 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "process_file_upload_task", "task_type": "FileUpload", "queue": "default", "priority": "medium"}
+2025-05-20 08:10:45,160 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "process_batch_files_task", "task_type": "FileUpload", "queue": "default", "priority": "medium"}
+2025-05-20 08:10:45,160 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "send_sms_task", "task_type": "Messaging", "queue": "default", "priority": "high"}
+2025-05-20 08:10:45,160 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "send_email_task", "task_type": "Messaging", "queue": "default", "priority": "high"}
+2025-05-20 08:10:45,161 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "transcribe_audio_file_task", "task_type": "LLM", "queue": "llm_queue", "priority": "high"}
+2025-05-20 08:10:45,161 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "classify_and_summarize_grievance_task", "task_type": "LLM", "queue": "llm_queue", "priority": "high"}
+2025-05-20 08:10:45,161 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "extract_contact_info_task", "task_type": "LLM", "queue": "llm_queue", "priority": "high"}
+2025-05-20 08:10:45,162 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "translate_grievance_to_english_task", "task_type": "LLM", "queue": "llm_queue", "priority": "high"}
+2025-05-20 08:10:45,163 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "store_user_info_task", "task_type": "Database", "queue": "default", "priority": "high"}
+2025-05-20 08:10:45,164 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "store_grievance_task", "task_type": "Database", "queue": "default", "priority": "high"}
+2025-05-20 08:10:45,165 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "store_transcription_task", "task_type": "Database", "queue": "default", "priority": "high"}
+2025-05-20 08:10:45,166 - queue_system - INFO - Task: task_registry - Event: registered - Details: {"task_name": "update_task_execution_task", "task_type": "Database", "queue": "default", "priority": "high"}

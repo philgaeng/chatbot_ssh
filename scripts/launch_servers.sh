@@ -145,70 +145,45 @@ wait_for_worker_ready() {
 # Function to clean up Celery worker files
 cleanup_celery_worker() {
     local queue_name=$1
-    local log_file="$LOG_DIR/celery_${queue_name}.log"
     local pid_file="$LOG_DIR/celery_${queue_name}.pid"
+    local log_file="$LOG_DIR/celery_${queue_name}.log"
     
-    echo "Cleaning up $queue_name worker files..."
+    echo "Cleaning up ${queue_name} worker files..."
     
-    # Stop any running processes
+    # Kill any existing process using the PID file
     if [ -f "$pid_file" ]; then
         local pid=$(cat "$pid_file")
-        echo "Found PID file with PID: $pid"
         if ps -p $pid > /dev/null 2>&1; then
-            echo "Stopping existing worker (PID: $pid)..."
-            kill -TERM $pid 2>/dev/null
+            echo "Killing existing process (PID: $pid)..."
+            kill -9 $pid 2>/dev/null
             sleep 2
-            if ps -p $pid > /dev/null 2>&1; then
-                echo "Force stopping worker..."
-                kill -9 $pid 2>/dev/null
-                sleep 2
-            fi
-        else
-            echo "PID $pid is not running"
         fi
+        rm -f "$pid_file"
     fi
     
     # Find and kill any processes by queue name
     local worker_pids=$(pgrep -f "celery.*worker.*$queue_name" 2>/dev/null)
     if [ ! -z "$worker_pids" ]; then
-        echo "Found additional celery_$queue_name processes: $worker_pids"
+        echo "Found additional celery_${queue_name} processes: $worker_pids"
         for pid in $worker_pids; do
-            echo "Stopping process $pid..."
             kill -9 $pid 2>/dev/null
         done
         sleep 2
     fi
     
-    # Remove all worker files with force
-    echo "Removing worker files..."
-    rm -f "$log_file" "$pid_file"
-    
-    # Double check and force remove if needed
-    if [ -f "$pid_file" ]; then
-        echo "PID file still exists, forcing removal..."
-        rm -f "$pid_file"
-    fi
+    # Remove log file if it exists
     if [ -f "$log_file" ]; then
-        echo "Log file still exists, forcing removal..."
         rm -f "$log_file"
     fi
     
-    # Verify cleanup
-    if [ -f "$pid_file" ] || [ -f "$log_file" ]; then
-        echo "❌ Failed to clean up worker files. Please check permissions."
-        ls -l "$LOG_DIR/celery_${queue_name}.*" 2>/dev/null
+    # Verify no processes are running
+    if ! pgrep -f "celery.*worker.*$queue_name" > /dev/null; then
+        echo "✅ ${queue_name} worker files cleaned up"
+        return 0
+    else
+        echo "❌ Failed to clean up ${queue_name} worker files"
         return 1
     fi
-    
-    # Final check for any remaining processes
-    worker_pids=$(pgrep -f "celery.*worker.*$queue_name" 2>/dev/null)
-    if [ ! -z "$worker_pids" ]; then
-        echo "❌ Found remaining processes after cleanup: $worker_pids"
-        return 1
-    fi
-    
-    echo "✅ $queue_name worker files cleaned up"
-    return 0
 }
 
 # Function to start a Celery worker
@@ -280,10 +255,26 @@ start_service() {
     if check_port $(echo $command | grep -oP '(?<=:)\d+'); then
         cd "$BASE_DIR" && source "$VENV_DIR/bin/activate" && \
         PYTHONPATH=$BASE_DIR \
+        FLASK_APP=actions_server/app.py \
+        FLASK_ENV=development \
+        UPLOAD_FOLDER=$UPLOAD_DIR \
         nohup $command > "$log_file" 2>&1 &
+        
+        # Store the PID
         echo $! > "$pid_file"
-        echo "$name started with PID $(cat $pid_file)"
-        return 0
+        
+        # Wait a moment for the process to start
+        sleep 2
+        
+        # Check if process started successfully
+        if ps -p $(cat "$pid_file") > /dev/null 2>&1; then
+            echo "$name started with PID $(cat $pid_file)"
+            return 0
+        else
+            echo "❌ Failed to start $name. Check logs at $log_file"
+            rm -f "$pid_file"
+            return 1
+        fi
     fi
     echo "Failed to start $name"
     return 1
@@ -343,7 +334,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "flask_server")
-            if ! start_service "$service" "env PYTHONPATH=$BASE_DIR UPLOAD_FOLDER=$UPLOAD_DIR python3 actions_server/app.py"; then
+            if ! start_service "$service" "python3 -m flask run --host=0.0.0.0 --port=5001"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi

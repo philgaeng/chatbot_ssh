@@ -12,6 +12,7 @@ import json
 import traceback
 from contextlib import contextmanager
 import sys
+import time
 
 # Load environment variables from .env file
 load_dotenv()
@@ -157,157 +158,95 @@ class BaseDatabaseManager:
         except Exception as e:
             operations_logger.error(f"{operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
-
-class TaskManager(BaseDatabaseManager):
-    """Manager for task-related database operations"""
+        
     
-    def create_task_status(self, status_code: str, status_name: str, description: str = None) -> bool:
-        """Create a new task status"""
-        query = """
-            INSERT INTO task_statuses (status_code, status_name, description)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (status_code) DO UPDATE
-            SET status_name = EXCLUDED.status_name,
-                description = EXCLUDED.description,
-                updated_at = CURRENT_TIMESTAMP
-        """
+    def generate_id(self, type: str='grievance_id', suffix=None):
+        """Generate a unique ID with format: {prefix}{date}{random_letter}{random_hex}{suffix}"""
         try:
-            self.execute_update(query, (status_code, status_name, description), "create_task_status")
-            return True
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to create task status: {str(e)}")
-            return False
-
-    def get_task_status(self, status_code: str) -> Optional[Dict]:
-        """Get task status by code"""
-        query = "SELECT * FROM task_statuses WHERE status_code = %s"
-        try:
-            results = self.execute_query(query, (status_code,), "get_task_status")
-            return results[0] if results else None
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to get task status: {str(e)}")
-            return None
-
-    def create_task_execution(self, task_id: str, grievance_id: str, celery_task_id: str = None) -> Optional[int]:
-        """Create a new task execution record"""
-        query = """
-            INSERT INTO task_executions (task_id, grievance_id, celery_task_id, status_code)
-            VALUES (%s, %s, %s, 'PENDING')
-            RETURNING id
-        """
-        try:
-            result = self.execute_insert(query, (task_id, grievance_id, celery_task_id), "create_task_execution")
-            if not result:
-                return None
-            return result[0]
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to create task execution: {str(e)}")
-            return None
-
-    def update_task_execution_status(self, execution_id: int, status_code: str, error_message: str = None) -> bool:
-        """Update task execution status"""
-        query = """
-            UPDATE task_executions
-            SET status_code = %s,
-                error_message = %s,
-                completed_at = CASE WHEN %s IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE NULL END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        """
-        try:
-            self.execute_update(query, (status_code, error_message, status_code, execution_id), "update_task_execution")
-            return True
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to update task execution: {str(e)}")
-            return False
+            date = datetime.now().strftime('%Y%m%d')
+            # Generate random letter A-Z
+            random_letter = chr(ord('A') + (uuid.uuid4().int % 26))
+            # Generate random hex string, ensuring we have enough characters
+            random_hex = uuid.uuid4().hex
+            if len(random_hex) < 5:
+                raise ValueError("Generated UUID hex string is too short")
+            random_hex = random_hex[:5].upper()
+            prefix = type.upper()[:2]
+            # Construct the ID
+            id_parts = [prefix, date, random_letter, random_hex]
+            if suffix:
+                suffix = suffix.upper()[0]
+                id_parts.append(f"_{suffix}")
             
-    def get_task_execution(self, execution_id: int) -> Optional[Dict]:
-        """Get task execution by ID"""
-        query = """
-            SELECT te.*, ts.status_name
-            FROM task_executions te
-            JOIN task_statuses ts ON te.status_code = ts.status_code
-            WHERE te.id = %s
-        """
-        try:
-            results = self.execute_query(query, (execution_id,), "get_task_execution")
-            return results[0] if results else None
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to get task execution: {str(e)}")
-            return None
+            return "".join(id_parts)
+        except Exception as e:
+            migrations_logger.error(f"Error generating ID: {str(e)}")
+            # Fallback to a simpler ID format if UUID generation fails
+            timestamp = int(time.time() * 1000)
+            return f"{prefix}{timestamp}{f'_{suffix}' if suffix else ''}"
 
-    def get_task_executions_by_grievance(self, grievance_id: str) -> List[Dict]:
-        """Get all task executions for a grievance"""
-        query = """
-            SELECT te.*, ts.status_name
-            FROM task_executions te
-            JOIN task_statuses ts ON te.status_code = ts.status_code
-            WHERE te.grievance_id = %s
-            ORDER BY te.created_at DESC
-        """
-        try:
-            return self.execute_query(query, (grievance_id,), "get_task_executions_by_grievance")
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to get task executions: {str(e)}")
-            return []
 
-    def get_pending_tasks(self) -> List[Dict]:
-        """Get all pending tasks"""
-        query = """
-            SELECT te.*, ts.status_name
-            FROM task_executions te
-            JOIN task_statuses ts ON te.status_code = ts.status_code
-            WHERE te.status_code = 'PENDING'
-            ORDER BY te.created_at ASC
-        """
-        try:
-            return self.execute_query(query, operation="get_pending_tasks")
-        except DatabaseError as e:
-            operations_logger.error(f"Failed to get pending tasks: {str(e)}")
-            return []
+class TableDbManager(BaseDatabaseManager):
+    """Handles schema creation and migration"""
+    
+    # List of all tables in the correct order (dependencies first)
+    ALL_TABLES = [
+        'grievance_statuses',
+        'processing_statuses',
+        'task_statuses',
+        'field_types',
+        'users',
+        'tasks',
+        'grievances',
+        'task_entities',
+        'grievance_status_history',
+        'grievance_history',
+        'file_attachments',
+        'grievance_voice_recordings',
+        'grievance_transcriptions',
+        'grievance_translations'
+    ]
 
-    def update_task(self, execution_id: int, update_data: dict) -> bool:
-        """
-        Generic method to update any field(s) in task_executions.
-        Args:
-            execution_id: The ID of the task execution to update
-            update_data: Dictionary of field names and new values to update
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        if not update_data:
-            operations_logger.warning("No fields to update provided for task execution")
-            return False
+    def get_all_tables(self) -> List[str]:
+        """Get list of all tables in the correct order"""
+        return self.ALL_TABLES
 
-        set_clauses = []
-        values = []
-        for field, value in update_data.items():
-            set_clauses.append(f"{field} = %s")
-            values.append(value)
-        values.append(execution_id)
-
-        query = f"""
-            UPDATE task_executions
-            SET {', '.join(set_clauses)},
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        """
+    def table_exists(self, table_name: str) -> bool:
+        """Check if a table exists in the database"""
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute(query, values)
-                if cur.rowcount == 0:
-                    operations_logger.warning(f"No task execution found with id {execution_id}")
-                    return False
-                conn.commit()
-                operations_logger.info(f"Successfully updated task execution {execution_id}")
-                return True
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = %s
+                    )
+                """, (table_name,))
+                return cur.fetchone()[0]
         except Exception as e:
-            operations_logger.error(f"Error updating task execution {execution_id}: {str(e)}")
+            migrations_logger.error(f"Error checking if table {table_name} exists: {str(e)}")
             return False
 
-class TableManager(BaseDatabaseManager):
-    """Handles schema creation and migration"""
+    def recreate_all_tables(self) -> bool:
+        """Recreate all tables in the correct order"""
+        try:
+            with self.get_connection() as conn:
+                cur = conn.cursor()
+                # Drop tables in reverse order of dependency
+                migrations_logger.info("Dropping tables in reverse order...")
+                for table in reversed(self.ALL_TABLES):
+                    cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+                
+                # Create tables and indexes
+                self._create_tables(cur)
+                self._create_indexes(cur)
+                conn.commit()
+                migrations_logger.info("All tables and indexes recreated successfully")
+                return True
+        except Exception as e:
+            migrations_logger.error(f"Error recreating all tables: {str(e)}")
+            return False
+
     def init_db(self):
         try:
             with self.get_connection() as conn:
@@ -353,7 +292,6 @@ class TableManager(BaseDatabaseManager):
             return False
 
     def _create_tables(self, cur):
-        # ... (copy the table creation SQL from your current _create_tables) ...
         # Status tables
         migrations_logger.info("Creating/recreating grievance_statuses table...")
         cur.execute("""
@@ -450,6 +388,7 @@ class TableManager(BaseDatabaseManager):
             CREATE TABLE IF NOT EXISTS field_types (
                 field_type TEXT PRIMARY KEY,
                 description TEXT
+            )
         """)
         
         # Insert default field types if not present
@@ -458,47 +397,27 @@ class TableManager(BaseDatabaseManager):
             migrations_logger.info("Initializing default field types...")
             cur.execute("""
                 INSERT INTO field_types (field_type, description) VALUES
-                ('grievance_details', 'Grievance details'),
-                ('user_full_name', 'User full name'),
-                ('user_contact_phone', 'User contact phone'),
-                ('user_contact_email', 'User contact email'),
-                ('user_municipality', 'User municipality'),
-                ('user_village', 'User village'),
-                ('user_address', 'User address'),
-                ('user_province', 'User province'),
-                ('user_district', 'User district'),
-                ('user_ward', 'User ward'),
-                ('grievance_summary', 'Grievance summary'),
-                ('grievance_categories', 'Grievance categories'),
-                ('grievance_location', 'Grievance location'),
-                ('grievance_claimed_amount', 'Grievance claimed amount'),
-                
+                    ('grievance_details', 'Grievance details'),
+                    ('user_full_name', 'User full name'),
+                    ('user_contact_phone', 'User contact phone'),
+                    ('user_contact_email', 'User contact email'),
+                    ('user_municipality', 'User municipality'),
+                    ('user_village', 'User village'),
+                    ('user_address', 'User address'),
+                    ('user_province', 'User province'),
+                    ('user_district', 'User district'),
+                    ('user_ward', 'User ward'),
+                    ('grievance_summary', 'Grievance summary'),
+                    ('grievance_categories', 'Grievance categories'),
+                    ('grievance_location', 'Grievance location'),
+                    ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
         
-        
-        # Task executions table
-        migrations_logger.info("Creating/recreating task_executions table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS task_executions (
-                id SERIAL PRIMARY KEY,
-                task_id TEXT NOT NULL,
-                celery_task_id TEXT,
-                grievance_id TEXT REFERENCES grievances(grievance_id),
-                status_code TEXT REFERENCES task_statuses(status_code),
-                started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP WITH TIME ZONE,
-                error_message TEXT,
-                retry_count INTEGER DEFAULT 0,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
         # Users table
         migrations_logger.info("Creating/recreating users table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
+                id TEXT PRIMARY KEY,
                 user_unique_id TEXT UNIQUE,
                 user_full_name TEXT,
                 user_contact_phone TEXT,
@@ -512,15 +431,29 @@ class TableManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
 
+        # Tasks table
+        migrations_logger.info("Creating/recreating tasks table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                task_id TEXT PRIMARY KEY,  -- This will store Celery's task ID
+                task_name TEXT NOT NULL,
+                status_code TEXT REFERENCES task_statuses(status_code),
+                started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP WITH TIME ZONE,
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
         # Main grievances table with language_code field
         migrations_logger.info("Creating/recreating grievances table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievances (
                 grievance_id TEXT PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
+                user_id TEXT REFERENCES users(id),
                 grievance_categories TEXT,
                 grievance_summary TEXT,
                 grievance_details TEXT,
@@ -549,7 +482,7 @@ class TableManager(BaseDatabaseManager):
                 FOREIGN KEY (grievance_id) REFERENCES grievances(grievance_id)
             )
         """)
-
+                
         # For backward compatibility - legacy history table
         migrations_logger.info("Creating/recreating grievance_history table...")
         cur.execute("""
@@ -586,10 +519,10 @@ class TableManager(BaseDatabaseManager):
                 recording_id UUID PRIMARY KEY,
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 file_path TEXT NOT NULL,
-                recording_type TEXT NOT NULL CHECK (recording_type IN (SELECT field_type FROM field_types)),
+                recording_type TEXT NOT NULL REFERENCES field_types(field_type),
                 duration_seconds INTEGER,
                 file_size_bytes INTEGER,
-                processing_status TEXT DEFAULT 'pending' CHECK (processing_status IN (SELECT status_code FROM processing_statuses)),
+                processing_status TEXT DEFAULT 'pending' REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -606,7 +539,7 @@ class TableManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT 'pending' CHECK (verification_status IN (SELECT status_code FROM processing_statuses)),
+                verification_status TEXT DEFAULT 'pending' REFERENCES processing_statuses(status_code),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -634,6 +567,31 @@ class TableManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        # Task entities junction table
+        migrations_logger.info("Creating/recreating task_entities table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS task_entities (
+                task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+                entity_type TEXT NOT NULL CHECK (entity_type IN ('grievance', 'user', 'report', 'file', 'recording')),
+                entity_id TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (task_id, entity_type, entity_id),
+                CONSTRAINT fk_entity_grievance 
+                    FOREIGN KEY (entity_id) 
+                    REFERENCES grievances(grievance_id) 
+                    ON DELETE CASCADE
+            )
+        """)
+        
+        # Create indexes for entity relationships
+        migrations_logger.info("Creating task entity indexes...")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_task_entities_entity ON task_entities(entity_type, entity_id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_code);
+            CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
+            CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at);
         """)
 
 
@@ -733,7 +691,176 @@ class TableManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_translations_created ON grievance_translations(created_at);
         """)
 
-class GrievanceManager(BaseDatabaseManager):
+class TaskDbManager(BaseDatabaseManager):
+    """Manager for task-related database operations"""
+    
+    VALID_ENTITY_TYPES = {'grievance', 'user', 'report', 'file', 'recording'}
+    
+    def create_task(self, task_id: str, task_name: str, entity_type: str, entity_id: str) -> Optional[str]:
+        """Create a new task record with entity relationship
+        
+        Args:
+            task_id: Celery's generated task ID
+            task_name: Name of the task
+            entity_type: Type of entity (grievance, user, etc.)
+            entity_id: ID of the entity
+            
+        Returns:
+            The task ID if successful, None otherwise
+        """
+        if entity_type not in self.VALID_ENTITY_TYPES:
+            operations_logger.error(f"Invalid entity type: {entity_type}")
+            return None
+            
+        try:
+            with self.transaction() as conn:
+                cur = conn.cursor()
+                # Create task
+                task_query = """
+                    INSERT INTO tasks (
+                        task_id, task_name, status_code
+                    ) VALUES (%s, %s, 'PENDING')
+                    RETURNING task_id
+                """
+                cur.execute(task_query, (task_id, task_name))
+                task_result = cur.fetchone()
+                
+                if not task_result:
+                    return None
+                    
+                # Create entity relationship
+                entity_query = """
+                    INSERT INTO task_entities (
+                        task_id, entity_type, entity_id
+                    ) VALUES (%s, %s, %s)
+                """
+                cur.execute(entity_query, (task_id, entity_type, entity_id))
+                
+                return task_id
+                
+        except DatabaseError as e:
+            operations_logger.error(f"Failed to create task: {str(e)}")
+            return None
+
+    def get_task(self, task_id: str) -> Optional[Dict]:
+        """Get task by ID with its entity relationships"""
+        query = """
+            SELECT t.*, ts.status_name,
+                   json_agg(json_build_object(
+                       'entity_type', te.entity_type,
+                       'entity_id', te.entity_id
+                   )) as entities
+            FROM tasks t
+            JOIN task_statuses ts ON t.status_code = ts.status_code
+            LEFT JOIN task_entities te ON t.task_id = te.task_id
+            WHERE t.task_id = %s
+            GROUP BY t.task_id, ts.status_name
+        """
+        try:
+            results = self.execute_query(query, (task_id,), "get_task")
+            return results[0] if results else None
+        except DatabaseError as e:
+            operations_logger.error(f"Failed to get task: {str(e)}")
+            return None
+
+    def get_tasks_by_entity(self, entity_type: str, entity_id: str) -> List[Dict]:
+        """Get all tasks for a specific entity"""
+        if entity_type not in self.VALID_ENTITY_TYPES:
+            operations_logger.error(f"Invalid entity type: {entity_type}")
+            return []
+            
+        query = """
+            SELECT t.*, ts.status_name,
+                   json_agg(json_build_object(
+                       'entity_type', te.entity_type,
+                       'entity_id', te.entity_id
+                   )) as entities
+            FROM tasks t
+            JOIN task_statuses ts ON t.status_code = ts.status_code
+            JOIN task_entities te ON t.task_id = te.task_id
+            WHERE te.entity_type = %s AND te.entity_id = %s
+            GROUP BY t.task_id, ts.status_name
+            ORDER BY t.created_at DESC
+        """
+        try:
+            return self.execute_query(query, (entity_type, entity_id), "get_tasks_by_entity")
+        except DatabaseError as e:
+            operations_logger.error(f"Failed to get tasks: {str(e)}")
+            return []
+
+    def get_pending_tasks(self, entity_type: str = None) -> List[Dict]:
+        """Get all pending tasks, optionally filtered by entity type"""
+        query = """
+            SELECT t.*, ts.status_name,
+                   json_agg(json_build_object(
+                       'entity_type', te.entity_type,
+                       'entity_id', te.entity_id
+                   )) as entities
+            FROM tasks t
+            JOIN task_statuses ts ON t.status_code = ts.status_code
+            LEFT JOIN task_entities te ON t.task_id = te.task_id
+            WHERE t.status_code = 'PENDING'
+            {entity_type_filter}
+            GROUP BY t.task_id, ts.status_name
+            ORDER BY t.created_at ASC
+        """
+        
+        try:
+            if entity_type:
+                if entity_type not in self.VALID_ENTITY_TYPES:
+                    operations_logger.error(f"Invalid entity type: {entity_type}")
+                    return []
+                query = query.format(entity_type_filter="AND te.entity_type = %s")
+                return self.execute_query(query, (entity_type,), "get_pending_tasks")
+            else:
+                query = query.format(entity_type_filter="")
+                return self.execute_query(query, operation="get_pending_tasks")
+        except DatabaseError as e:
+            operations_logger.error(f"Failed to get pending tasks: {str(e)}")
+            return []
+
+    def update_task(self, task_id: str, update_data: dict) -> bool:
+        """
+        Generic method to update any field(s) in tasks.
+        Args:
+            task_id: The ID of the task to update
+            update_data: Dictionary of field names and new values to update
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        if not update_data:
+            operations_logger.warning("No fields to update provided for task")
+            return False
+
+        set_clauses = []
+        values = []
+        for field, value in update_data.items():
+            set_clauses.append(f"{field} = %s")
+            values.append(value)
+        values.append(task_id)
+
+        query = f"""
+            UPDATE tasks
+            SET {', '.join(set_clauses)},
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = CASE WHEN status_code IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
+            WHERE task_id = %s
+        """
+        try:
+            with self.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(query, values)
+                if cur.rowcount == 0:
+                    operations_logger.warning(f"No task found with id {task_id}")
+                    return False
+                conn.commit()
+                operations_logger.info(f"Successfully updated task {task_id}")
+                return True
+        except Exception as e:
+            operations_logger.error(f"Error updating task {task_id}: {str(e)}")
+            return False
+
+class GrievanceDbManager(BaseDatabaseManager):
     """Handles grievance CRUD and business logic"""
     
     # Whitelist of fields that can be updated
@@ -750,16 +877,15 @@ class GrievanceManager(BaseDatabaseManager):
         'classification_status'
     }
 
-    def generate_grievance_id(self, source: str = 'bot') -> str:
-        suffix = '_A' if source == 'accessibility' else '_B'
-        return f"GR{datetime.now(self.nepal_tz).strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}{suffix}"
 
+    
+    
     def create_grievance(self, 
                          user_id: int,
                          source: str = 'bot',
                          language_code: str = 'ne') -> Optional[str]:
         try:
-            grievance_id = self.generate_grievance_id(source)
+            grievance_id = self.generate_id(type='grievance_id', suffix=source)
             nepal_today = datetime.now(self.nepal_tz).strftime('%Y-%m-%d %H:%M:%S')
             query = """
                 INSERT INTO grievances (
@@ -1039,7 +1165,7 @@ class GrievanceManager(BaseDatabaseManager):
             operations_logger.error(f"Error updating translation for grievance {grievance_id}: {str(e)}")
             return False
             
-class UserManager(BaseDatabaseManager):
+class UserDbManager(BaseDatabaseManager):
     """Handles user CRUD and lookup logic"""
     
     # Whitelist of fields that can be updated
@@ -1089,18 +1215,22 @@ class UserManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving user by id: {str(e)}")
             return None
 
-    def create_user(self, user_data: Dict) -> Optional[int]:
+    def create_user(self, user_data: Dict = dict()) -> Optional[int]:
         query = """
             INSERT INTO users (
-                user_unique_id, user_full_name, user_contact_phone,
+                id, user_unique_id, user_full_name, user_contact_phone,
                 user_contact_email, user_province, user_district,
                 user_municipality, user_ward, user_village, user_address
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """
         try:
+            user_id = self.generate_id(type='user_id')
+            nepal_today = datetime.now(self.nepal_tz).strftime('%Y-%m-%d %H:%M:%S')
+         
             result = self.execute_insert(query, (
-                user_data.get('user_unique_id'),
+                user_id,  # Use the generated ID as both id and user_unique_id
+                user_id,  # Use the same ID for user_unique_id
                 user_data.get('user_full_name', ''),
                 user_data.get('user_contact_phone', ''),
                 user_data.get('user_contact_email', ''),
@@ -1111,6 +1241,7 @@ class UserManager(BaseDatabaseManager):
                 user_data.get('user_village', ''),
                 user_data.get('user_address', '')
             ), "create_user")
+                
             return result[0] if result else None
         except Exception as e:
             operations_logger.error(f"Error creating user: {str(e)}")
@@ -1295,7 +1426,7 @@ class UserManager(BaseDatabaseManager):
 
 
 
-class FileManager(BaseDatabaseManager):
+class FileDbManager(BaseDatabaseManager):
     """Handles file attachment CRUD and lookup logic"""
     def store_file_attachment(self, file_data: Dict) -> bool:
         query = """
@@ -1345,7 +1476,7 @@ class FileManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving file by ID: {str(e)}")
             return None
 
-class RecordingManager(BaseDatabaseManager):
+class RecordingDbManager(BaseDatabaseManager):
     """Handles voice recording CRUD and lookup logic"""
     def store_recording(self, recording_data: Dict) -> bool:
         query = """
@@ -1391,19 +1522,19 @@ class RecordingManager(BaseDatabaseManager):
 class DatabaseManagers:
     """Unified access point for all database managers"""
     def __init__(self):
-        self.table = TableManager()
-        self.grievance = GrievanceManager()
-        self.task = TaskManager()
-        self.user = UserManager()
-        self.file = FileManager()
-        self.recording = RecordingManager()
+        self.table = TableDbManager()
+        self.grievance = GrievanceDbManager()
+        self.task = TaskDbManager()
+        self.user = UserDbManager()
+        self.file = FileDbManager()
+        self.recording = RecordingDbManager()
 
 # Individual manager instances (kept for backward compatibility)
-file_manager = FileManager()
-schema_manager = TableManager()
-grievance_manager = GrievanceManager()
-task_manager = TaskManager()
-user_manager = UserManager()
-
+file_manager = FileDbManager()
+schema_manager = TableDbManager()
+grievance_manager = GrievanceDbManager()
+task_manager = TaskDbManager()
+user_manager = UserDbManager()
+recording_manager = RecordingDbManager()
 # Unified manager instance
 db_manager = DatabaseManagers() 

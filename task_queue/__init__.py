@@ -11,42 +11,51 @@ __author__ = 'Nepal Chatbot Team'
 from typing import List, Dict, Any, Optional
 from .config import (
     celery_app,
-    PRIORITY_HIGH,
-    PRIORITY_MEDIUM,
-    PRIORITY_LOW,
+    QUEUE_LLM,
+    QUEUE_DEFAULT,
     TASK_TIME_LIMIT,
     TASK_SOFT_TIME_LIMIT,
     MAX_RETRIES,
     RETRY_DELAY,
-    WORKER_CONCURRENCY
+    WORKER_CONCURRENCY,
+    service_config,
+    queue_system_config,
+    worker_config,
+    resource_config,
+    logging_config,
+    directory_config,
+    health_check_config,
+    error_patterns,
+    redis_config,
+    TASK_REGISTRY,
+    register_all_tasks,
+    TaskConfig,
+    WorkerConfig,
+    LoggingConfig,
+    ResourceConfig,
+    HealthCheckConfig,
+    ErrorPatterns,
+    RedisConfig,
+    QueueSystemConfig,
+    ServiceConfig,
+    DirectoryConfig
 )
-from .tasks import (
-    high_priority_task,
-    medium_priority_task,
-    low_priority_task,
-    task_with_retry
+from .logger import TaskLogger
+from .task_manager import (
+    TaskManager,
+    DatabaseTaskManager,
+    RetryConfig,
+    MonitoringConfig
 )
-from .monitoring import (
-    log_task_event,
-    send_error_notification,
-    setup_logger
-)
-from .workers import (
-    start_high_priority_worker,
-    start_medium_priority_worker,
-    start_low_priority_worker,
-    start_all_workers,
-    start_flower
-)
-from .example_tasks import (
-    process_voice_recording,
-    extract_contact_info,
-    process_file_upload,
-    generate_file_metadata,
-    cleanup_old_files,
-    generate_usage_report,
-    run_example_tasks
-)
+
+# Import task registry and utilities from TaskManager
+TASK_TYPE_CONFIG = TaskManager.TASK_TYPE_CONFIG
+register_task = TaskManager.register_task
+get_task_function = TaskManager.get_task_function
+get_task_metadata = TaskManager.get_task_metadata
+
+# Initialize empty task registry
+task_registry = {}
 
 # Export all public symbols
 __all__: List[str] = [
@@ -56,39 +65,98 @@ __all__: List[str] = [
     
     # Configuration
     'celery_app',
-    'PRIORITY_HIGH',
-    'PRIORITY_MEDIUM',
-    'PRIORITY_LOW',
+    'QUEUE_LLM',
+    'QUEUE_DEFAULT',
     'TASK_TIME_LIMIT',
     'TASK_SOFT_TIME_LIMIT',
     'MAX_RETRIES',
     'RETRY_DELAY',
     'WORKER_CONCURRENCY',
     
-    # Task decorators
-    'high_priority_task',
-    'medium_priority_task',
-    'low_priority_task',
-    'task_with_retry',
+    # Config objects
+    'service_config',
+    'queue_system_config',
+    'worker_config',
+    'resource_config',
+    'logging_config',
+    'directory_config',
+    'health_check_config',
+    'error_patterns',
+    'redis_config',
     
-    # Monitoring
-    'log_task_event',
-    'send_error_notification',
-    'setup_logger',
+    # Task Management
+    'TaskManager',
+    'TaskLogger',
+    'DatabaseTaskManager',
+    'MonitoringConfig',
+    'RetryConfig',
     
-    # Worker management
-    'start_high_priority_worker',
-    'start_medium_priority_worker',
-    'start_low_priority_worker',
-    'start_all_workers',
-    'start_flower',
+    # Task Registry
+    'TASK_REGISTRY',
+    'TASK_TYPE_CONFIG',
+    'register_task',
+    'get_task_function',
+    'get_task_metadata',
     
-    # Example tasks
-    'process_voice_recording',
-    'extract_contact_info',
-    'process_file_upload',
-    'generate_file_metadata',
-    'cleanup_old_files',
-    'generate_usage_report',
-    'run_example_tasks'
-] 
+    # Registered Tasks (will be populated after registration)
+    'process_file_upload_task',
+    'process_batch_files_task',
+    'send_sms_task',
+    'send_email_task',
+    'transcribe_audio_file_task',
+    'classify_and_summarize_grievance_task',
+    'extract_contact_info_task',
+    'translate_grievance_to_english_task',
+    'store_user_info_task',
+    'store_grievance_task',
+    'store_transcription_task',
+    'update_task_execution_task'
+]
+
+# Lazy initialization of tasks
+def _get_registered_tasks():
+    """Get registered tasks, initializing them if needed"""
+    if not task_registry:
+        from .registered_tasks import (
+            process_file_upload_task,
+            process_batch_files_task,
+            send_sms_task,
+            send_email_task,
+            transcribe_audio_file_task,
+            classify_and_summarize_grievance_task,
+            extract_contact_info_task,
+            translate_grievance_to_english_task,
+            store_user_info_task,
+            store_grievance_task,
+            store_transcription_task,
+            update_task_execution_task
+        )
+        
+        # Update the task registry
+        task_registry.update(register_all_tasks())
+        
+        # Update globals with registered tasks
+        globals().update({
+            'process_file_upload_task': process_file_upload_task,
+            'process_batch_files_task': process_batch_files_task,
+            'send_sms_task': send_sms_task,
+            'send_email_task': send_email_task,
+            'transcribe_audio_file_task': transcribe_audio_file_task,
+            'classify_and_summarize_grievance_task': classify_and_summarize_grievance_task,
+            'extract_contact_info_task': extract_contact_info_task,
+            'translate_grievance_to_english_task': translate_grievance_to_english_task,
+            'store_user_info_task': store_user_info_task,
+            'store_grievance_task': store_grievance_task,
+            'store_transcription_task': store_transcription_task,
+            'update_task_execution_task': update_task_execution_task
+        })
+    
+    return task_registry
+
+# Initialize tasks when first accessed
+def __getattr__(name):
+    """Lazy load tasks when accessed"""
+    if name in __all__:
+        _get_registered_tasks()
+        return globals().get(name)
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'") 

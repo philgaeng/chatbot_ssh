@@ -36,6 +36,9 @@ ERROR_PATTERNS=(
     "ConnectionError"
     "AuthenticationError"
     "ResourceExhausted"
+    "TaskRevokedError"
+    "TaskTimeoutError"
+    "MaxRetriesExceededError"
 )
 
 # Export all variables

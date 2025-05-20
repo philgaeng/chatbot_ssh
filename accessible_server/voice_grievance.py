@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import traceback
 from dotenv import load_dotenv
-from task_queue.monitoring import log_task_event
+from task_queue.logger import TaskLogger
 from task_queue.registered_tasks import (
     transcribe_audio_file_task,
     classify_and_summarize_grievance_task,
@@ -31,7 +31,11 @@ from celery import chain, group
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
 from actions_server.constants import GRIEVANCE_STATUS, ALLOWED_EXTENSIONS, AUDIO_EXTENSIONS
+from actions_server.websocket_utils import emit_status_update
+from actions_server.file_server import FileServerCore
 
+# Initialize FileServerCore
+file_server_core = FileServerCore()
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
 
@@ -153,7 +157,6 @@ def accessible_file_upload():
         if not grievance_id:
             log_task_event('accessible_file_upload', 'failed', {'error': 'No grievance_id provided'}, service=SERVICE_NAME)
             return jsonify({"error": "Grievance ID is required for file upload"}), 400
-        
         
         # Check if files are provided
         files = request.files.getlist('files[]')
@@ -458,11 +461,3 @@ def orchestrate_voice_processing(audio_files: List[Any], language: str = 'en') -
             except Exception as cleanup_error:
                 log_task_event('orchestrate_voice_processing', 'failed', {'error': str(cleanup_error)}, service=SERVICE_NAME)
         raise
-
-def emit_status_update(grievance_id, status, data):
-    """Emit a status update via Socket.IO server (import or implement as needed)"""
-    try:
-        from actions_server.file_server import emit_status_update as file_server_emit_status_update
-        file_server_emit_status_update(grievance_id, status, data)
-    except Exception as e:
-        log_task_event('emit_status_update', 'failed', {'error': str(e)}, service=SERVICE_NAME)

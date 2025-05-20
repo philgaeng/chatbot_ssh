@@ -9,9 +9,11 @@
     "failed_tasks": 2
   },
   "transcribe_audio_file_task": {
-    "start_time": 1747534177.4577897,
-    "failed_tasks": 54,
-    "retry_failures": 9
+    "start_time": 1747748785.1965122,
+    "failed_tasks": 63,
+    "retry_failures": 9,
+    "last_duration": 4868.184021949768,
+    "total_tasks": 2
   },
   "accessible_file_upload": {
     "start_time": 1747639348.828742,
@@ -21,5 +23,10 @@
   "process_batch_files": {
     "start_time": 1747641185.1211972,
     "failed_tasks": 2
+  },
+  "unknown_task": {
+    "failed_tasks": 19,
+    "last_duration": 0.00020074844360351562,
+    "total_tasks": 1
   }
 }

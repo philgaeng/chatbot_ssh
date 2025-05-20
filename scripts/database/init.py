@@ -72,7 +72,7 @@ def setup_logging() -> logging.Logger:
     if config['LOG_FORMAT'] == 'json':
         file_format = logging.Formatter('%(message)s')
     else:
-    file_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     
     file_handler.setFormatter(file_format)
     
