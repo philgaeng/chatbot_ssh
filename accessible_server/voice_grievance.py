@@ -21,10 +21,8 @@ from task_queue.registered_tasks import (
     classify_and_summarize_grievance_task,
     extract_contact_info_task,
     translate_grievance_to_english_task,
-    store_user_info_task,
-    store_grievance_task,
-    store_transcription_task,
-    process_batch_files_task
+    process_batch_files_task,
+    store_result_to_db_task
 )
 from celery import chain, group
 
@@ -52,6 +50,9 @@ MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB max size for audio files
 # Create uploads directory if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+# Create a TaskLogger instance at module level
+task_logger = TaskLogger(service_name='voice_grievance')
 
 # ------- Utility Functions -------
 
@@ -150,18 +151,18 @@ def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, in
 def accessible_file_upload():
     """Handle file uploads from the accessible interface directly"""
     try:
-        log_task_event('accessible_file_upload', 'started', {}, service=SERVICE_NAME)
+        task_logger.log_task_event('accessible_file_upload', 'started', {})
         
         # Check if grievance_id is provided
         grievance_id = request.form.get('grievance_id')
         if not grievance_id:
-            log_task_event('accessible_file_upload', 'failed', {'error': 'No grievance_id provided'}, service=SERVICE_NAME)
+            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': 'No grievance_id provided'})
             return jsonify({"error": "Grievance ID is required for file upload"}), 400
         
         # Check if files are provided
         files = request.files.getlist('files[]')
         if not files:
-            log_task_event('accessible_file_upload', 'failed', {'error': "No files found in the request"}, service=SERVICE_NAME)
+            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': "No files found in the request"})
             return jsonify({"error": "No files provided"}), 400
         
         # Create the upload directory for this grievance
@@ -191,7 +192,7 @@ def accessible_file_upload():
                     audio_files.append(filename)
         
         if not files_data:
-            log_task_event('accessible_file_upload', 'failed', {'error': 'Failed to save any files'}, service=SERVICE_NAME)
+            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': 'Failed to save any files'})
             return jsonify({
                 'status': 'error',
                 'error': 'Failed to save any files'
@@ -213,7 +214,7 @@ def accessible_file_upload():
         return jsonify(response), 202
     
     except Exception as e:
-        log_task_event('accessible_file_upload', 'failed', {'error': str(e)}, service=SERVICE_NAME)
+        task_logger.log_task_event('accessible_file_upload', 'failed', {'error': str(e)})
         return jsonify({
             'status': 'error',
             'error': str(e)
@@ -245,7 +246,7 @@ def get_grievance_status(grievance_id):
         })
         
     except Exception as e:
-        log_task_event('get_grievance_status', 'failed', {'error': str(e)}, service=SERVICE_NAME)
+        task_logger.log_task_event('get_grievance_status', 'failed', {'error': str(e)})
         return jsonify({
             'status': 'error',
             'error': str(e)
@@ -255,19 +256,19 @@ def get_grievance_status(grievance_id):
 def submit_grievance():
     """Unified endpoint for submitting a grievance with user info and audio recordings"""
     try:
-        log_task_event('submit_grievance', 'started', {}, service=SERVICE_NAME)
+        task_logger.log_task_event('submit_grievance', 'started', {})
         
         # Initialize the grievance and user
         # Merge or create user
         user_id = db_manager.user.create_user(dict())
         if not user_id:
-            log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'}, service=SERVICE_NAME)
+            task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'})
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
             
         # Create grievance
         grievance_id = db_manager.grievance.create_grievance(user_id=user_id, source='accessibility')
         if not grievance_id:
-            log_task_event('submit_grievance', 'failed', {'error': 'Failed to create grievance'}, service=SERVICE_NAME)
+            task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create grievance'})
             return jsonify({'status': 'error', 'error': 'Failed to create grievance'}), 500
             
         # Save audio files and collect their data
@@ -294,7 +295,7 @@ def submit_grievance():
                 }
                 
                 # Store in database
-                success = db_manager.recording.store_recording(recording_data)
+                success = store_result_to_db_task.delay('recording', recording_data)
                 if success:
                     # Add to audio files list with the format expected by orchestrate_voice_processing
                     audio_files.append({
@@ -304,7 +305,7 @@ def submit_grievance():
                     })
                 
         if not audio_files:
-            log_task_event('submit_grievance', 'failed', {'error': 'No audio files provided in submission'}, service=SERVICE_NAME)
+            task_logger.log_task_event('submit_grievance', 'failed', {'error': 'No audio files provided in submission'})
             return jsonify({'status': 'error', 'error': 'No audio files provided'}), 400
             
         # Queue Celery tasks for each file
@@ -316,11 +317,11 @@ def submit_grievance():
         })
         
         # Return response
-        log_task_event('submit_grievance', 'completed', {
+        task_logger.log_task_event('submit_grievance', 'completed', {
             'grievance_id': grievance_id,
             'user_id': user_id,
             'tasks': result.get('files', {})
-        }, service=SERVICE_NAME)
+        })
         
         return jsonify({
             'status': 'success',
@@ -331,7 +332,7 @@ def submit_grievance():
         }), 200
         
     except Exception as e:
-        log_task_event('submit_grievance', 'failed', {'error': str(e)}, service=SERVICE_NAME)
+        task_logger.log_task_event('submit_grievance', 'failed', {'error': str(e)})
         return jsonify({
             'status': 'error',
             'error': str(e)
@@ -351,7 +352,7 @@ def process_single_audio_file(file_path: str, filename: str, language: str = 'en
     Returns:
         Dict containing task chain information
     """
-    log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path}, service=SERVICE_NAME)
+    task_logger.log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path})
 
     # Determine if this is a contact info or grievance details file
     is_contact_info = 'user' in filename.lower()
@@ -372,28 +373,41 @@ def process_single_audio_file(file_path: str, filename: str, language: str = 'en
 
     # Create the base transcription task
     transcription_task = transcribe_audio_file_task.s(file_path, language)
-
+    
     # Build the task chain based on file type
     if is_contact_info:
-        # Chain: transcribe -> extract contact -> store
+        # First get transcription
+        transcription_result = transcription_task.s(file_path, language, grievance_id)
+        
+        # Then parallelize classification and DB storage
+        # DB storage can run independently and doesn't need to complete before next step
         task_chain['tasks'] = chain(
-            transcription_task,
+            transcription_result,
+            group(
+                classify_and_summarize_grievance_task.s(),
+                store_result_to_db_task.s('transcription')
+            ),
             extract_contact_info_task.s(),
-            store_user_info_task.s(task_chain['file_data'])
+            group(
+                translate_grievance_to_english_task.s(),
+                store_result_to_db_task.s('translation')
+            ),
+            store_result_to_db_task.s('user')
         ).apply_async()
         task_chain['type'] = 'contact_info'
-        
     elif is_grievance_details:
-        # Chain: transcribe -> classify -> translate (if needed) -> store
+        # Chain: transcribe -> store transcription -> classify -> translate (if needed) -> store
         chain_tasks = [
-            transcription_task,
-            classify_and_summarize_grievance_task.s(language)
+            transcription_task, 
+            store_result_to_db_task.s('transcription'),
+            classify_and_summarize_grievance_task.s(),
+            store_result_to_db_task.s('grievance')
         ]
         
         if language != 'en':
             chain_tasks.append(translate_grievance_to_english_task.s())
+        chain_tasks.append(store_result_to_db_task.s('translation'))
             
-        chain_tasks.append(store_grievance_task.s(task_chain['file_data']))
         task_chain['tasks'] = chain(*chain_tasks).apply_async()
         task_chain['type'] = 'grievance_details'
         
@@ -401,7 +415,7 @@ def process_single_audio_file(file_path: str, filename: str, language: str = 'en
         # Just transcription and store
         task_chain['tasks'] = chain(
             transcription_task,
-            store_transcription_task.s(task_chain['file_data'])
+            store_result_to_db_task.s('transcription')
         ).apply_async()
         task_chain['type'] = 'transcription_only'
 
@@ -452,12 +466,12 @@ def orchestrate_voice_processing(audio_files: List[Any], language: str = 'en') -
         }
             
     except Exception as e:
-        log_task_event('orchestrate_voice_processing', 'failed', {'error': str(e)}, service=SERVICE_NAME)
+        task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(e)})
         # Clean up any temp files that were created
         for temp_path in temp_paths:
             try:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
             except Exception as cleanup_error:
-                log_task_event('orchestrate_voice_processing', 'failed', {'error': str(cleanup_error)}, service=SERVICE_NAME)
+                task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(cleanup_error)})
         raise

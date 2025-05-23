@@ -80,28 +80,32 @@ class RetryConfig:
             'initial_delay': 2,
             'max_delay': 30,
             'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError']
+            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError'],
+            'bind': True
         },
         'file_processing': {
             'max_retries': 2,
             'initial_delay': 1,
             'max_delay': 10,
             'backoff_factor': 2,
-            'retry_on': ['IOError', 'FileNotFoundError']
+            'retry_on': ['IOError', 'FileNotFoundError'],
+            'bind': True
         },
         'database': {
             'max_retries': 3,
             'initial_delay': 1,
             'max_delay': 20,
             'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError', 'DeadlockError']
+            'retry_on': ['ConnectionError', 'TimeoutError', 'DeadlockError'],
+            'bind': True
         },
         'messaging': {
             'max_retries': 2,
             'initial_delay': 2,
             'max_delay': 15,
             'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError']
+            'retry_on': ['ConnectionError', 'TimeoutError'],
+            'bind': True
         }
     }
 
@@ -201,28 +205,45 @@ class TaskManager:
         if not self._should_retry(error):
             return False, None
             
-        self.retry_count += 1
-        self.last_retry_time = datetime.datetime.utcnow()
+        # Get current retry count from database using simpler query
+        task_info = self.db_task.get_task_status(self.task_id)
+        if not task_info:
+            return False, None
+            
+        current_retry_count = task_info.get('retry_count', 0)
+        new_retry_count = current_retry_count + 1
         
-        # Record retry attempt
+        # Update retry count and history in database
         retry_info = {
-            'retry_count': self.retry_count,
+            'retry_count': new_retry_count,
             'error': str(error),
             'error_type': type(error).__name__,
-            'timestamp': self.last_retry_time.isoformat()
+            'timestamp': datetime.datetime.utcnow().isoformat()
         }
-        self.retry_history.append(retry_info)
         
-        # Update task status
-        self.db_task.update_task(
+        # Get existing retry history or initialize empty list
+        retry_history = json.loads(task_info.get('retry_history', '[]'))
+        retry_history.append(retry_info)
+        retry_history_json = json.dumps(retry_history)
+        
+        # Update task status with new retry count and history
+        updated = self.db_task.update_task(
             self.task_id,
             {
                 'status_code': 'RETRYING',
-                'retry_count': self.retry_count,
-                'last_error': str(error),
-                'retry_history': self.retry_history
+                'retry_count': new_retry_count,
+                'error_message': str(error),
+                'retry_history': retry_history_json
             }
         )
+        
+        if not updated:
+            return False, None
+            
+        # Update instance variables to match database state
+        self.retry_count = new_retry_count
+        self.retry_history = retry_history
+        self.last_retry_time = datetime.datetime.utcnow()
         
         # Log retry attempt
         self.monitoring.log_task_event(
@@ -231,7 +252,7 @@ class TaskManager:
             {
                 'entity_type': self.entity_type,
                 'entity_id': self.entity_id,
-                'retry_count': self.retry_count,
+                'retry_count': new_retry_count,
                 'error': str(error),
                 'next_retry_delay': self._calculate_retry_delay()
             },
@@ -243,7 +264,7 @@ class TaskManager:
             self.entity_id,
             'retrying',
             {
-                'retry_count': self.retry_count,
+                'retry_count': new_retry_count,
                 'error': str(error),
                 'next_retry_delay': self._calculate_retry_delay()
             }
@@ -312,12 +333,12 @@ class TaskManager:
         """Mark task as complete and record the result. Optionally emit WebSocket status."""
         try:
             self.end_time = datetime.datetime.utcnow()
-            self.status = 'COMPLETED'
+            self.status = 'SUCCESS'
             self.result = result
             updated = self.db_task.update_task(
                 self.task_id,
                 {
-                    'status_code': 'COMPLETED',
+                    'status_code': 'SUCCESS',
                     'result': result,
                     'retry_count': self.retry_count,
                     'retry_history': self.retry_history
@@ -419,10 +440,21 @@ class TaskManager:
         config = cls.TASK_TYPE_CONFIG[task_type]
         def decorator(func: Callable):
             @functools.wraps(func)
-            def wrapper(*args, **kwargs):
+            def wrapper(self, *args, **kwargs):
+                # Ensure service is set from config if not provided
                 if 'service' not in kwargs:
                     kwargs['service'] = config['queue']
-                return func(*args, **kwargs)
+                
+                # Ensure task instance is available
+                if not hasattr(self, 'request'):
+                    raise ValueError("Task instance not properly bound. Make sure to use bind=True in Celery task.")
+                
+                # Get task ID from request
+                task_id = getattr(self.request, 'id', None)
+                if not task_id:
+                    raise ValueError("No Celery task ID available")
+                
+                return func(self, *args, **kwargs)
                 
             # Register in TASK_REGISTRY
             cls.TASK_REGISTRY[func.__name__] = {
@@ -446,9 +478,9 @@ class TaskManager:
                 }
             )
             
-            # Register with Celery
+            # Register with Celery with proper binding
             celery_task = celery_app.task(
-                bind=config.get('bind', False),
+                bind=True,  # Always bind the task
                 name=func.__name__,
                 queue=config['queue']
             )(wrapper)
@@ -481,8 +513,8 @@ class DatabaseTaskManager(TaskManager):
     Specialized TaskManager for database operations.
     Handles database-specific task lifecycle and error handling.
     """
-    def __init__(self, task=None, emit_websocket=False):
-        super().__init__(task=task, emit_websocket=emit_websocket, service='db_operations')
+    def __init__(self, task=None, emit_websocket=False, service='db_operations'):
+        super().__init__(task=task, emit_websocket=emit_websocket, service=service)
         
     def validate_ids(self, operation: str, file_data: dict) -> tuple:
         """Validate required IDs in file_data"""
@@ -511,38 +543,104 @@ class DatabaseTaskManager(TaskManager):
             
         return None, None, None, None
         
-    def handle_db_operation(self, operation: str, data: dict, file_data: dict) -> dict:
+    def prepare_task_result_data_to_db(self, operation: str, input_data: dict) -> dict:
+        """Extract and prepare data from task results for database operations
+        
+        Args:
+            operation: Type of database operation (user, grievance, transcription, etc.)
+            result: Standardized task result data containing operation, field, value, etc.
+            file_data: File metadata and context data
+            
+        Returns:
+            dict: Prepared data ready for database operation
+            
+        Raises:
+            ValueError: If required fields are missing or invalid
+        """
+        # Validate result has required fields
+        required_fields = ['status', 'operation', 'field_name', 'value', 'entity_key', 'id']
+        missing_fields = [field for field in required_fields if field not in input_data]
+        if missing_fields:
+            raise ValueError(f"Task result missing required fields: {missing_fields}")
+            
+        # Validate operation matches
+        if input_data['operation'] != operation:
+            raise ValueError(f"Task result operation '{input_data['operation']}' doesn't match expected '{operation}'")
+            
+        # Start with file_data as base
+        update_data = dict()
+        
+        # Add entity ID from result
+        update_data[input_data['entity_key']] = input_data['id']
+        
+        
+        # Add result data based on operation type
+        if operation == 'transcription':
+            update_data.update({
+                'automated_transcript': input_data['value'],
+                'language_code': input_data.get('language_code', 'ne')
+            })
+            
+        elif operation == 'translation':
+            update_data.update({
+                'grievance_details_en': input_data['value'],
+                'translation_method': input_data.get('method', 'auto'),
+                'confidence_score': input_data.get('confidence_score')
+            })
+        elif operation == 'user':
+            # Map field to user data fields
+            field_mapping = {
+                'user_full_name': 'full_name',
+                'user_contact_phone': 'phone',
+                'user_contact_email': 'email',
+                'user_province': 'province',
+                'user_district': 'district',
+                'user_municipality': 'municipality',
+                'user_ward': 'ward',
+                'user_village': 'village',
+                'user_address': 'address'
+            }
+            update_data[input_data['field_name']] = input_data['value']
+        elif operation == 'grievance':
+            if 'dict' in input_data['field_name']:
+                for key, value in input_data['field_name'].items():
+                    update_data[key] = value
+            else:
+                update_data[input_data['field_name']] = input_data['value']
+        if 'language_code' in input_data:
+                update_data['language_code'] = input_data['language_code']
+            
+        return update_data
+
+    def handle_db_operation(self, operation: str, input_data: dict) -> dict:
         """Handle database operations with consistent error handling"""
         try:
-            entity_type, entity_id, recording_id, execution_id = self.validate_ids(operation, file_data)
+            update_data = self.prepare_task_result_data_to_db(operation, input_data)
+            entity_type = input_data['entity_key']
+            entity_id = input_data['id']
             
             # Start task with appropriate entity type and ID
             self.start_task(entity_type, entity_id, stage=f'db_{operation}')
             
             # Perform the database operation
-            if operation == 'user_info':
-                db_manager.user.update_user(entity_id, data)
+            if operation == 'user':
+                db_result = ('user_id', db_manager.user.create_or_update_user(update_data))
             elif operation == 'grievance':
-                db_manager.grievance.update_grievance(entity_id, data)
+                db_result = ('grievance_id', db_manager.grievance.create_or_update_grievance(update_data))
+            elif operation == 'recording':
+                db_result = ('recording_id', db_manager.recording.create_or_update_recording(update_data))
             elif operation == 'transcription':
-                db_manager.recording.update_transcription(entity_id, data)
-            elif operation == 'task':
-                success = db_manager.task.update_task(
-                    entity_id,  # Use execution_id as task_id
-                    {
-                        'status_code': data.get('status_code'),
-                        'error_message': data.get('error_message')
-                    }
-                )
-                if not success:
-                    raise Exception('Update failed')
+                db_result = ('transcription_id', db_manager.recording.create_or_update_transcription(update_data))
+            elif operation == 'translation':
+                db_result = ('translation_id', db_manager.translation.create_or_update_translation(update_data))
             else:
                 raise ValueError(f"Unknown database operation: {operation}")
-                
+            
             result = {
                 'status': 'success',
-                'recording_id': recording_id,
-                'execution_id': execution_id if operation == 'task' else None
+                'operation': operation,
+                'entity_key': db_result[0],
+                'entity_id': db_result[1],
             }
             self.complete_task(result, stage=f'db_{operation}')
             return result
@@ -551,3 +649,32 @@ class DatabaseTaskManager(TaskManager):
             error_msg = f"Error in {operation} operation: {str(e)}"
             self.fail_task(error_msg, stage=f'db_{operation}')
             return {'status': 'error', 'error': error_msg}
+
+
+    def handle_task_db_operations(self,task_result: dict) -> dict:
+        """Handle database operations with consistent error handling"""
+        try:
+            execution_id = task_result['execution_id']
+            self.start_task('task', execution_id, stage='db_task')
+            success = db_manager.task.update_task(
+                execution_id,  # Use execution_id as task_id
+                {
+                    'status_code': task_result.get('status_code'),
+                    'error_message': task_result.get('error_message')
+                }
+            )
+            if not success:
+                raise Exception('Update failed')
+            self.complete_task(stage='db_task')
+            return {'status': 'success',
+                    'operation': 'task',
+                    'entity_key': 'execution_id',
+                    'entity_id': execution_id}
+            
+        except Exception as e:
+            error_msg = f"Error in db_task operation: {str(e)}"
+            self.fail_task(error_msg, stage='db_task')
+            return {'status': 'error', 'error': error_msg}
+
+        
+        

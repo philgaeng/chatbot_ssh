@@ -12,9 +12,20 @@ import os
 import shutil
 import uuid
 from typing import Dict, Any
+from datetime import datetime
+from celery import group
 
 # Import test configuration
 from .test_config import redis_config
+from .config import celery_app
+
+# Configure Celery to use eager mode for testing
+celery_app.conf.update(
+    task_always_eager=True,  # Run tasks synchronously
+    task_eager_propagates=True,  # Propagate exceptions
+    result_backend='cache',  # Use simple cache backend for testing
+    cache_backend='memory'  # Use in-memory cache
+)
 
 # Import task modules
 from .registered_tasks import (
@@ -24,10 +35,7 @@ from .registered_tasks import (
     classify_and_summarize_grievance_task,
     extract_contact_info_task,
     translate_grievance_to_english_task,
-    store_user_info_task,
-    store_grievance_task,
-    store_transcription_task,
-    update_task_execution_task
+    store_result_to_db_task
 )
 
 # Import database manager
@@ -39,15 +47,19 @@ class TestGrievanceWorkflow(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         # First create the user
-        self.test_user_id = db_manager.user.create_user()
+        self.test_user_id = db_manager.user.create_or_update_user()
+        print(f"Test user ID: {self.test_user_id}")
+        test_dict = {
+            'user_id': self.test_user_id,
+            'source': 'acc'
+        }
         
         if not self.test_user_id:
             raise Exception("Failed to create test user")
         
         # Create grievance entry
-        self.test_grievance_id = db_manager.grievance.create_grievance(
-            self.test_user_id, 
-            source='acc'
+        self.test_grievance_id = db_manager.grievance.create_or_update_grievance(
+            test_dict
         )
         
         if not self.test_grievance_id:
@@ -91,92 +103,164 @@ class TestGrievanceWorkflow(unittest.TestCase):
                     'file_name': filename
                 })
     
+    # def test_simple_workflow(self):
+    #     """Test a simplified workflow focusing on basic task execution"""
+    #     # Create test data
+    #     test_data = {
+    #         'grievance_id': self.test_grievance_id,
+    #         'user_id': self.test_user_id,
+    #         'grievance_details': 'Test grievance details',
+    #         'grievance_summary': 'Test summary',
+    #         'grievance_categories': 'Test category',
+    #         'grievance_location': 'Test location',
+    #         'grievance_claimed_amount': 1000.00,
+    #         'entity_key': 'grievance_id',
+    #         'entity_id': self.test_grievance_id
+    #     }
+        
+    #     # Start the workflow
+    #     result = classify_and_summarize_grievance_task.delay(test_data)
+        
+    #     # Get the actual result value from EagerResult
+    #     if hasattr(result, 'get'):
+    #         result = result.get()
+    #     elif hasattr(result, 'result'):
+    #         result = result.result
+        
+    #     # Verify the result
+    #     self.assertIsNotNone(result)
+    #     self.assertIn('status', result)
+    #     self.assertEqual(result['status'], 'SUCCESS')
+    #     self.assertIn('operation', result)
+    #     self.assertEqual(result['operation'], 'classification')
+    #     self.assertIn('value', result)
+    #     self.assertIn('entity_key', result)
+    #     self.assertEqual(result['entity_key'], 'grievance_id')
+    #     self.assertEqual(result['id'], test_data['grievance_id'])
+
     def test_complete_workflow(self):
         """Test the complete workflow of processing a grievance"""
         print("\n=== Starting Grievance Processing Workflow ===")
         
-        # Generate a test task ID
-        test_task_id = f"test_task_{uuid.uuid4().hex[:8]}"
-        
         language_code = "en"
-        # Step 2: Transcribe grievance details
-        print("\n2. Transcribing Grievance...")
-        grievance_file = os.path.join(self.sample_dir, 'grievance_details.webm')
-        transcription_result = transcribe_audio_file_task(
-            grievance_file,
-            language_code,  
-            self.test_grievance_id,
-            service='llm_queue',
-            task_id=test_task_id  # Pass the test task ID
-        )
-        self.assertIsNotNone(transcription_result)
-        self.assertIn('status', transcription_result)
-        self.assertIn('transcription', transcription_result)
-        print("\nTranscription Details:")
-        print(f"Status: {transcription_result['status']}")
-        print(f"Transcription: {transcription_result['transcription']}")
-        if 'confidence' in transcription_result:
-            print(f"Confidence: {transcription_result['confidence']}")
-        if 'language' in transcription_result:
-            print(f"Language: {transcription_result['language']}")
+        # Use the grievance_id that was created in setUp
+        test_grievance_id = self.test_grievance_id
+        print(f"Using grievance ID from setUp: {test_grievance_id}")
         
-        # Step 3: Classify and summarize grievance
-        print("\n3. Classifying Grievance...")
-        classification_result = classify_and_summarize_grievance_task(
-            self.test_grievance_id,
-            task_id=test_task_id  # Pass the test task ID
-        )
-        self.assertIsNotNone(classification_result)
-        self.assertIn('status', classification_result)
-        self.assertIn('summary', classification_result)
-        self.assertIn('categories', classification_result)
-        print("\nClassification Details:")
-        print(f"Status: {classification_result['status']}")
-        print(f"Summary: {classification_result['summary']}")
-        print("\nCategories:")
-        for category in classification_result['categories']:
-            print(f"- {category}")
-        if 'priority' in classification_result:
-            print(f"Priority: {classification_result['priority']}")
-        if 'sentiment' in classification_result:
-            print(f"Sentiment: {classification_result['sentiment']}")
+        # Test grievance details workflow
+        print("\n=== Testing Grievance Details Workflow ===")
+        grievance_path = os.path.join(self.sample_dir, 'grievance_details.webm')
+        print(f"Processing grievance file: {grievance_path}")
         
-        # Step 4: Store user information
-        print("\n4. Storing User Information...")
-        user_info = {
-            'name': 'Test User',
-            'phone': '+1234567890',
-            'address': 'Test Address',
-            'village': 'Test Village',
-            'municipality': 'Test Municipality'
+        # Initialize task chain
+        task_chain = {
+            'file_data': {
+                'file_name': 'grievance_details.webm',
+                'file_path': grievance_path,
+                'file_type': 'webm',
+                'file_size': os.path.getsize(grievance_path),
+                'upload_date': datetime.now().isoformat(),
+                'language_code': language_code,
+                'grievance_id': test_grievance_id
+            }
         }
-        user_result = store_user_info_task(
-            user_info,
-            {'grievance_id': self.test_grievance_id, 'task_id': test_task_id}
-        )
-        self.assertIsNotNone(user_result)
-        self.assertIn('status', user_result)
-        print(f"User Info Storage Result: {user_result}")
         
-        # Step 5: Store grievance information
-        print("\n5. Storing Grievance Information...")
-        grievance_result = store_grievance_task(
-            user_info,
-            {'grievance_id': self.test_grievance_id, 'task_id': test_task_id}
+        # Test parallel processing workflow
+        print("\n1. Starting transcription...")
+        transcription_result = transcribe_audio_file_task.delay(
+            file_path=grievance_path,
+            language=language_code,
+            grievance_id=test_grievance_id,
+            service='llm_queue'
         )
-        self.assertIsNotNone(grievance_result)
-        self.assertIn('status', grievance_result)
-        print(f"Grievance Storage Result: {grievance_result}")
         
-        # Step 6: Update task execution status
-        print("\n6. Updating Task Status...")
-        update_result = update_task_execution_task(
-            test_task_id,  # Use the test task ID
-            {'status': 'completed'}
+        # Handle EagerResult
+        if hasattr(transcription_result, 'get'):
+            transcription_result = transcription_result.get()
+        elif hasattr(transcription_result, 'result'):
+            transcription_result = transcription_result.result
+            
+        self.assertIsNotNone(transcription_result)
+        self.assertEqual(transcription_result['status'], 'SUCCESS')
+        self.assertEqual(transcription_result['operation'], 'transcription')
+        print(f"Transcription: {transcription_result['value']}")
+        print(f"\n\n Transcription result: {transcription_result}")
+        
+        # Test parallel classification and storage
+        print("\n2. Starting parallel classification and storage...")
+        classification_group = group(
+            classify_and_summarize_grievance_task.s(transcription_result, emit_websocket=False),  # Disable websocket
+            store_result_to_db_task.s('transcription', transcription_result)
         )
-        self.assertIsNotNone(update_result)
-        self.assertIn('status', update_result)
-        print(f"Task Update Result: {update_result}")
+        classification_group_results = classification_group.apply()
+        
+        # Handle group results
+        results = []
+        for result in classification_group_results:
+            if hasattr(result, 'get'):
+                results.append(result.get())
+            elif hasattr(result, 'result'):
+                results.append(result.result)
+            else:
+                results.append(result)
+                
+        print(f"Classification group results: {results}")
+        # Verify classification results
+        for result in results:
+            self.assertIsNotNone(result)
+            self.assertIn('status', result)
+            if result['operation'] == 'classification':
+                self.assertIn('value', result)
+                print(f"Classification: {result['value']}")
+                classification_result = result
+                print(f"Classification result: {classification_result}")
+            elif result['operation'] == 'transcription':
+                self.assertEqual(result['status'], 'success')
+                print("Transcription stored successfully")
+        
+        # Test contact info workflow
+        print("\n=== Testing Contact Info Workflow ===")
+        contact_path = os.path.join(self.sample_dir, 'user_contact.webm')
+        print(f"Processing contact file: {contact_path}")
+        
+        # Update task chain for contact info
+        task_chain['file_data'].update({
+            'file_name': 'user_contact.webm',
+            'file_path': contact_path,
+            'file_size': os.path.getsize(contact_path)
+        })
+        
+        # Test contact info workflow
+        print("\n1. Starting contact info transcription...")
+        contact_transcription = transcribe_audio_file_task.delay(
+            file_path=contact_path,
+            language=language_code,
+            grievance_id=test_grievance_id,
+            service='llm_queue'
+        )
+        self.assertIsNotNone(contact_transcription)
+        self.assertEqual(contact_transcription['status'], 'SUCCESS')
+        self.assertEqual(contact_transcription['operation'], 'transcription')
+        print(f"Contact Transcription: {contact_transcription['value']}")
+        
+        # Test parallel contact info processing
+        print("\n2. Starting parallel contact info processing...")
+        contact_group = group(
+            extract_contact_info_task.s(),  # Will receive contact_transcription as transcription_data
+            store_result_to_db_task.s('transcription')  # Will receive contact_transcription as input_data
+        )
+        contact_results = contact_group.apply()
+        
+        # Verify contact info results
+        for result in contact_results:
+            self.assertIsNotNone(result)
+            self.assertIn('status', result)
+            if result['operation'] == 'contact_extraction':
+                self.assertIn('value', result)
+                print(f"Contact Info: {result['value']}")
+            elif result['operation'] == 'transcription':
+                self.assertEqual(result['status'], 'success')
+                print("Contact transcription stored successfully")
         
         print("\n=== Grievance Processing Workflow Completed ===")
 
