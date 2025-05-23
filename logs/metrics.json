@@ -9,11 +9,11 @@
     "failed_tasks": 2
   },
   "transcribe_audio_file_task": {
-    "start_time": 1747748785.1965122,
-    "failed_tasks": 63,
+    "start_time": 1748012640.2973862,
+    "failed_tasks": 120,
     "retry_failures": 9,
-    "last_duration": 4868.184021949768,
-    "total_tasks": 2
+    "last_duration": 4.859518766403198,
+    "total_tasks": 34
   },
   "accessible_file_upload": {
     "start_time": 1747639348.828742,
@@ -25,8 +25,14 @@
     "failed_tasks": 2
   },
   "unknown_task": {
-    "failed_tasks": 19,
+    "failed_tasks": 26,
     "last_duration": 0.00020074844360351562,
     "total_tasks": 1
+  },
+  "classify_and_summarize_grievance_task": {
+    "start_time": 1748012645.2853281,
+    "failed_tasks": 6,
+    "last_duration": 2.7626447677612305,
+    "total_tasks": 3
   }
 }

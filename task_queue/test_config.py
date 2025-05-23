@@ -5,6 +5,7 @@ This module provides test configurations that don't require actual services.
 """
 
 from typing import Dict, Any
+import os
 
 class TestRedisConfig:
     """Mock Redis configuration for testing"""
@@ -12,7 +13,7 @@ class TestRedisConfig:
         self.host = "localhost"
         self.port = 6379
         self.db = 0
-        self.password = None
+        self.password = os.getenv('REDIS_PASSWORD', 'test_password')
         self.ssl = False
         self.retry_on_timeout = True
         self.socket_timeout = 5
@@ -30,7 +31,6 @@ redis_config = TestRedisConfig()
 
 # Import redis_url from the correct path
 from .config import redis_url
-import os
 
 print("Environment variables:")
 print(f"REDIS_PASSWORD from env: {os.getenv('REDIS_PASSWORD')}")

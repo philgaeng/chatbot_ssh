@@ -146,12 +146,15 @@ class RedisConfig:
             raise ValueError("REDIS_DB must be a valid integer")
             
         password = os.getenv('REDIS_PASSWORD')
+        if not password:
+            logger.warning("REDIS_PASSWORD not set in environment variables")
         
         return cls(
             host=host,
             port=port,
             db=db,
-            password=password
+            password=password,
+            require_password=True
         )
     
     def validate(self) -> None:
@@ -352,10 +355,8 @@ def register_all_tasks():
         classify_and_summarize_grievance_task,
         extract_contact_info_task,
         translate_grievance_to_english_task,
-        store_user_info_task,
-        store_grievance_task,
-        store_transcription_task,
-        update_task_execution_task
+        store_result_to_db_task,
+        store_task_result_to_db_task
     )
     return TaskManager.TASK_REGISTRY
 

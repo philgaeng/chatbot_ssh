@@ -160,25 +160,27 @@ class BaseDatabaseManager:
             raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
         
     
-    def generate_id(self, type: str='grievance_id', suffix=None):
+    def generate_id(self, type: str='grievance_id', province= 'KO', district= 'JH',  suffix=None):
         """Generate a unique ID with format: {prefix}{date}{random_letter}{random_hex}{suffix}"""
         try:
             date = datetime.now().strftime('%Y%m%d')
-            # Generate random letter A-Z
-            random_letter = chr(ord('A') + (uuid.uuid4().int % 26))
+            prefix = type.upper()[:2]
+            province = province.upper()[:2]
+            district = district.upper()[:2]
+            identifier = province + district + date
+            
             # Generate random hex string, ensuring we have enough characters
             random_hex = uuid.uuid4().hex
-            if len(random_hex) < 5:
+            if len(random_hex) < 4:
                 raise ValueError("Generated UUID hex string is too short")
-            random_hex = random_hex[:5].upper()
-            prefix = type.upper()[:2]
+            random_hex = random_hex[:4].upper()
             # Construct the ID
-            id_parts = [prefix, date, random_letter, random_hex]
+            id_parts = [prefix, identifier, random_hex]
             if suffix:
-                suffix = suffix.upper()[0]
-                id_parts.append(f"_{suffix}")
+                id_parts.append(suffix.upper()[0])
             
-            return "".join(id_parts)
+            
+            return "-".join(id_parts)
         except Exception as e:
             migrations_logger.error(f"Error generating ID: {str(e)}")
             # Fallback to a simpler ID format if UUID generation fails
@@ -442,7 +444,9 @@ class TableDbManager(BaseDatabaseManager):
                 started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 completed_at TIMESTAMP WITH TIME ZONE,
                 error_message TEXT,
+                result JSONB,  -- Store task results as JSONB
                 retry_count INTEGER DEFAULT 0,
+                retry_history JSONB DEFAULT '[]'::jsonb,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
@@ -555,7 +559,8 @@ class TableDbManager(BaseDatabaseManager):
         migrations_logger.info("Creating/recreating grievance_translations table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_translations (
-                grievance_id TEXT PRIMARY KEY REFERENCES grievances(grievance_id),
+                translation_id UUID PRIMARY KEY,
+                grievance_id TEXT REFERENCES grievances(grievance_id),
                 grievance_details_en TEXT,
                 grievance_summary_en TEXT,
                 grievance_categories_en TEXT,
@@ -565,7 +570,8 @@ class TableDbManager(BaseDatabaseManager):
                 verified_by TEXT,
                 verified_at TIMESTAMP WITH TIME ZONE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(grievance_id, translation_method)
             )
         """)
 
@@ -860,6 +866,33 @@ class TaskDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error updating task {task_id}: {str(e)}")
             return False
 
+    def get_task_status(self, task_id: str) -> Optional[Dict]:
+        """Get basic task status information without joins
+        
+        Args:
+            task_id: The ID of the task to retrieve
+            
+        Returns:
+            Dict containing task_id, status_code, retry_count, retry_history, error_message
+            or None if task not found
+        """
+        query = """
+            SELECT 
+                task_id,
+                status_code,
+                retry_count,
+                retry_history,
+                error_message
+            FROM tasks 
+            WHERE task_id = %s
+        """
+        try:
+            results = self.execute_query(query, (task_id,), "get_task_status")
+            return results[0] if results else None
+        except DatabaseError as e:
+            operations_logger.error(f"Failed to get task status: {str(e)}")
+            return None
+
 class GrievanceDbManager(BaseDatabaseManager):
     """Handles grievance CRUD and business logic"""
     
@@ -880,78 +913,66 @@ class GrievanceDbManager(BaseDatabaseManager):
 
     
     
-    def create_grievance(self, 
-                         user_id: int,
-                         source: str = 'bot',
-                         language_code: str = 'ne') -> Optional[str]:
+    def create_or_update_grievance(self, data: Dict[str, Any] = None) -> Optional[str]:
+        """Create or update a grievance record"""
         try:
-            grievance_id = self.generate_id(type='grievance_id', suffix=source)
-            nepal_today = datetime.now(self.nepal_tz).strftime('%Y-%m-%d %H:%M:%S')
-            query = """
-                INSERT INTO grievances (
-                    grievance_id, grievance_creation_date, grievance_modification_date, is_temporary, source, language_code
-                ) VALUES (%s, %s, %s, TRUE, %s, %s)
-                RETURNING grievance_id
-            """
-            result = self.execute_insert(query, (grievance_id, nepal_today, nepal_today, source, language_code), "create_grievance")
-            if not result:
-                return None
-            return grievance_id
+            if not data:
+                data = dict()
+            grievance_id = data.get('grievance_id')
+            if grievance_id:
+                # Update existing record
+                update_query = """
+                    UPDATE grievances 
+                    SET grievance_categories = %s,
+                        grievance_summary = %s,
+                        grievance_details = %s,
+                        grievance_claimed_amount = %s,
+                        grievance_location = %s,
+                        language_code = %s,
+                        grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                """
+                result = self.execute_update(update_query, (
+                    data.get('grievance_categories'),
+                    data.get('grievance_summary'),
+                    data.get('grievance_details'),
+                    data.get('grievance_claimed_amount'),
+                    data.get('grievance_location'),
+                    data.get('language_code', 'ne'),
+                    grievance_id
+                ))
+                return grievance_id if result > 0 else None
+            else:
+                # Create new record
+                user_id = data.get('user_id')
+                if not user_id:
+                    user_id = db_manager.user.create_or_update_user() # a user_id is required to create a grievance
+                new_grievance_id = self.generate_id(type='grievance_id', suffix=data.get('source', 'bot'))
+                insert_query = """
+                    INSERT INTO grievances (
+                        grievance_id, user_id, grievance_categories,
+                        grievance_summary, grievance_details, grievance_claimed_amount,
+                        grievance_location, language_code, is_temporary, source
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING grievance_id
+                """
+                result = self.execute_insert(insert_query, (
+                    new_grievance_id,
+                    data.get('user_id'),
+                    data.get('grievance_categories'),
+                    data.get('grievance_summary'),
+                    data.get('grievance_details'),
+                    data.get('grievance_claimed_amount'),
+                    data.get('grievance_location'),
+                    data.get('language_code', 'ne'),
+                    data.get('is_temporary', True),
+                    data.get('source', 'bot')
+                ))
+                return result['grievance_id'] if result else new_grievance_id
         except Exception as e:
-            operations_logger.error(f"Error creating grievance: {str(e)}")
+            operations_logger.error(f"Error in create_or_update_grievance: {str(e)}")
             return None
-            
-    def update_grievance(self, grievance_id: str, update_data: Dict[str, Any]) -> bool:
-        """
-        Generic method to update grievance fields.
-        
-        Args:
-            grievance_id: The ID of the grievance to update
-            update_data: Dictionary of field names and new values to update
-            
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        # Validate that all fields in update_data are allowed
-        invalid_fields = set(update_data.keys()) - self.ALLOWED_UPDATE_FIELDS
-        if invalid_fields:
-            operations_logger.error(f"Attempted to update invalid fields: {invalid_fields}")
-            return False
-        
-        if not update_data:
-            operations_logger.warning("No fields to update provided")
-            return False
-        
-        # Build the dynamic update query
-        set_clauses = []
-        values = []
-        for field, value in update_data.items():
-            set_clauses.append(f"{field} = %s")
-            values.append(value)
-        
-        # Add grievance_id to values list
-        values.append(grievance_id)
-        
-        query = f"""
-            UPDATE grievances 
-            SET {', '.join(set_clauses)},
-                grievance_modification_date = CURRENT_TIMESTAMP
-                WHERE grievance_id = %s
-        """
-        
-        try:
-            with self.get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(query, values)
-                if cur.rowcount == 0:
-                    operations_logger.warning(f"No grievance found with id {grievance_id}")
-                    return False
-                conn.commit()
-                operations_logger.info(f"Successfully updated grievance {grievance_id}")
-                return True
-        except Exception as e:
-            operations_logger.error(f"Error updating grievance {grievance_id}: {str(e)}")
-            return False
 
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
@@ -1110,60 +1131,6 @@ class GrievanceDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error validating grievance ID: {str(e)}")
             return False
             
-    
-    
-    def update_translation(self, grievance_id: str, update_data: Dict[str, Any]) -> bool:
-        """
-        Update English translation fields for a grievance.
-        Args:
-            grievance_id: The ID of the grievance to update translation for
-            update_data: Dictionary of translation fields to update
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        # Allowed fields for update
-        allowed_fields = {
-            'grievance_details_en',
-            'grievance_summary_en',
-            'grievance_categories_en',
-            'translation_method',
-            'confidence_score',
-            'source_language',
-            'verified_by',
-            'verified_at'
-        }
-        invalid_fields = set(update_data.keys()) - allowed_fields
-        if invalid_fields:
-            operations_logger.error(f"Attempted to update invalid translation fields: {invalid_fields}")
-            return False
-        if not update_data:
-            operations_logger.warning("No translation fields to update provided")
-            return False
-        set_clauses = []
-        values = []
-        for field, value in update_data.items():
-            set_clauses.append(f"{field} = %s")
-            values.append(value)
-        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-        values.append(grievance_id)
-        query = f"""
-            UPDATE grievance_translations
-            SET {', '.join(set_clauses)}
-            WHERE grievance_id = %s
-        """
-        try:
-            with self.get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(query, values)
-                if cur.rowcount == 0:
-                    operations_logger.warning(f"No translation found for grievance_id {grievance_id}")
-                    return False
-            conn.commit()
-            operations_logger.info(f"Successfully updated translation for grievance {grievance_id}")
-            return True
-        except Exception as e:
-            operations_logger.error(f"Error updating translation for grievance {grievance_id}: {str(e)}")
-            return False
             
 class UserDbManager(BaseDatabaseManager):
     """Handles user CRUD and lookup logic"""
@@ -1215,110 +1182,74 @@ class UserDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving user by id: {str(e)}")
             return None
 
-    def create_user(self, user_data: Dict = dict()) -> Optional[int]:
-        query = """
-            INSERT INTO users (
-                id, user_unique_id, user_full_name, user_contact_phone,
-                user_contact_email, user_province, user_district,
-                user_municipality, user_ward, user_village, user_address
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """
+    def create_or_update_user(self,  data: Dict[str, Any] = None) -> Optional[str]:
+        """Create or update a user record"""
         try:
-            user_id = self.generate_id(type='user_id')
-            nepal_today = datetime.now(self.nepal_tz).strftime('%Y-%m-%d %H:%M:%S')
-         
-            result = self.execute_insert(query, (
-                user_id,  # Use the generated ID as both id and user_unique_id
-                user_id,  # Use the same ID for user_unique_id
-                user_data.get('user_full_name', ''),
-                user_data.get('user_contact_phone', ''),
-                user_data.get('user_contact_email', ''),
-                user_data.get('user_province', ''),
-                user_data.get('user_district', ''),
-                user_data.get('user_municipality', ''),
-                user_data.get('user_ward', ''),
-                user_data.get('user_village', ''),
-                user_data.get('user_address', '')
-            ), "create_user")
-                
-            return result[0] if result else None
-        except Exception as e:
-            operations_logger.error(f"Error creating user: {str(e)}")
-            return None
-
-    def get_or_create_user(self, user_data: Dict) -> Optional[int]:
-        """Get a user by phone/name or create if not exists. Returns user id."""
-        phone = user_data.get('user_contact_phone')
-        name = user_data.get('user_full_name')
-        try:
-            if name:
-                query = "SELECT id FROM users WHERE user_contact_phone = %s AND user_full_name = %s"
-                results = self.execute_query(query, (phone, name), "get_user_by_phone_and_name")
-            elif phone:
-                query = "SELECT id FROM users WHERE user_contact_phone = %s"
-                results = self.execute_query(query, (phone,), "get_user_by_phone")
+            if not data:
+                data = dict()
+            if not data.get('user_id'):
+                print(f"Creating new user")
+                # Create new record
+                new_user_id = self.generate_id(type='user_id')
+                print(f"New user ID: {new_user_id}")
+                insert_query = """
+                    INSERT INTO users (
+                        id, user_unique_id, user_full_name,
+                        user_contact_phone, user_contact_email,
+                        user_province, user_district, user_municipality,
+                        user_ward, user_village, user_address
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """
+                result = self.execute_insert(insert_query, (
+                    new_user_id,
+                    new_user_id,  # Use same ID for user_unique_id
+                    data.get('user_full_name'),
+                    data.get('user_contact_phone'),
+                    data.get('user_contact_email'),
+                    data.get('user_province'),
+                    data.get('user_district'),
+                    data.get('user_municipality'),
+                    data.get('user_ward'),
+                    data.get('user_village'),
+                    data.get('user_address')
+                ))
+                return result['id'] if result else new_user_id
             else:
-                return self.create_user(user_data)
-            if results:
-                user_id = results[0]['id']
-                # Optionally update user info
-                self.update_user(user_id, user_data)
-                return user_id
+                user_id = data.get('user_id')
+                print(f"Updating user with ID: {data.get('user_id')}")
+                # Update existing record
+                update_query = """
+                    UPDATE users 
+                    SET user_full_name = %s,
+                        user_contact_phone = %s,
+                        user_contact_email = %s,
+                        user_province = %s,
+                        user_district = %s,
+                        user_municipality = %s,
+                        user_ward = %s,
+                        user_village = %s,
+                        user_address = %s
+                    WHERE id = %s
+                    RETURNING id
+                """
+                result = self.execute_update(update_query, (
+                    data.get('user_full_name'),
+                    data.get('user_contact_phone'),
+                    data.get('user_contact_email'),
+                    data.get('user_province'),
+                    data.get('user_district'),
+                    data.get('user_municipality'),
+                    data.get('user_ward'),
+                    data.get('user_village'),
+                    data.get('user_address'),
+                    user_id
+                ))
+                return user_id if result > 0 else None
+            
         except Exception as e:
-            operations_logger.error(f"Error in get_or_create_user: {str(e)}")
+            operations_logger.error(f"Error in create_or_update_user: {str(e)}")
             return None
-        
-    def update_user(self, user_id: str, update_data: Dict[str, Any]) -> bool:
-        """
-        Generic method to update user fields.
-        
-        Args:
-            user_id: The ID of the user to update
-            update_data: Dictionary of field names and new values to update
-                
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        # Validate that all fields in update_data are allowed
-        invalid_fields = set(update_data.keys()) - self.ALLOWED_UPDATE_FIELDS
-        if invalid_fields:
-            operations_logger.error(f"Attempted to update invalid fields: {invalid_fields}")
-            return False
-            
-        if not update_data:
-            operations_logger.warning("No fields to update provided")
-            return False
-
-        # Build the dynamic update query
-        set_clauses = []
-        values = []
-        for field, value in update_data.items():
-            set_clauses.append(f"{field} = %s")
-            values.append(value)
-        
-        # Add user_id to values list
-        values.append(user_id)
-            
-        query = f"""
-            UPDATE users 
-            SET {', '.join(set_clauses)}
-            WHERE id = %s
-        """
-        
-        try:
-            with self.get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(query, values)
-                if cur.rowcount == 0:
-                    operations_logger.warning(f"No user found with id {user_id}")
-                    return False
-            conn.commit()
-            operations_logger.info(f"Successfully updated user {user_id}")
-            return True
-        except Exception as e:
-            operations_logger.error(f"Error updating user {user_id}: {str(e)}")
-            return False
             
     def get_user_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
@@ -1478,34 +1409,103 @@ class FileDbManager(BaseDatabaseManager):
 
 class RecordingDbManager(BaseDatabaseManager):
     """Handles voice recording CRUD and lookup logic"""
-    def store_recording(self, recording_data: Dict) -> bool:
-        query = """
-            INSERT INTO grievance_voice_recordings (
-                recording_id, grievance_id, file_path, file_name, file_type, recording_type,
-                duration_seconds, file_size_bytes, processing_status, language_code
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    def create_or_update_recording(self, recording_data: Dict) -> Optional[str]:
+        """Create or update a voice recording record
+        
+        Args:
+            recording_data: Dictionary containing recording data including:
+                - recording_id: ID of the recording (optional for updates)
+                - grievance_id: ID of the grievance (required)
+                - file_path: Path to the recording file
+                - file_name: Name of the recording file
+                - recording_type: Type of recording (e.g., 'details', 'contact')
+                - file_type: Type of file (e.g., 'webm', 'mp3')
+                - file_size_bytes: Size of the file in bytes
+                - duration_seconds: Duration of the recording in seconds
+                - language_code: Language code (defaults to 'ne')
+                - processing_status: Status of processing (defaults to 'pending')
+                
+        Returns:
+            str: The recording_id if successful, None otherwise
         """
         try:
-            self.execute_update(query, (
-                recording_data['recording_id'],
-                recording_data['grievance_id'],
-                recording_data['file_path'],
-                recording_data['file_name'],
-                recording_data['file_type'],
-                recording_data['recording_type'],
-                recording_data.get('duration_seconds'),
-                recording_data.get('file_size_bytes'),
-                recording_data.get('processing_status', 'pending'),
-                recording_data.get('language_code', 'ne'),
-            ), "store_recording")
-            return True
+            recording_id = recording_data.get('recording_id')
+            grievance_id = recording_data.get('grievance_id')
+            
+            # Validate required fields
+            if not grievance_id:
+                operations_logger.error("Missing required field: grievance_id")
+                return None
+                
+            if not recording_data.get('file_path') or not recording_data.get('file_name'):
+                operations_logger.error("Missing required fields: file_path and file_name")
+                return None
+            
+            if recording_id:
+                # Update existing record
+                update_query = """
+                    UPDATE grievance_voice_recordings 
+                    SET file_path = %s,
+                        file_name = %s,
+                        recording_type = %s,
+                        file_type = %s,
+                        file_size_bytes = %s,
+                        duration_seconds = %s,
+                        language_code = %s,
+                        processing_status = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE recording_id = %s
+                    RETURNING recording_id
+                """
+                result = self.execute_update(update_query, (
+                    recording_data['file_path'],
+                    recording_data['file_name'],
+                    recording_data.get('recording_type'),
+                    recording_data.get('file_type'),
+                    recording_data.get('file_size_bytes'),
+                    recording_data.get('duration_seconds'),
+                    recording_data.get('language_code', 'ne'),
+                    recording_data.get('processing_status', 'pending'),
+                    recording_id
+                ))
+                return recording_id if result > 0 else None
+            else:
+                # Create new record
+                recording_id = str(uuid.uuid4())  # Generate new UUID
+                insert_query = """
+                    INSERT INTO grievance_voice_recordings (
+                        recording_id, grievance_id, file_path,
+                        file_name, recording_type, file_type,
+                        file_size_bytes, duration_seconds,
+                        processing_status, language_code
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING recording_id
+                """
+                result = self.execute_insert(insert_query, (
+                    recording_id,
+                    grievance_id,
+                    recording_data['file_path'],
+                    recording_data['file_name'],
+                    recording_data.get('recording_type'),
+                    recording_data.get('file_type'),
+                    recording_data.get('file_size_bytes'),
+                    recording_data.get('duration_seconds'),
+                    recording_data.get('processing_status', 'pending'),
+                    recording_data.get('language_code', 'ne')
+                ))
+                return result['recording_id'] if result else recording_id
+            
         except Exception as e:
-            operations_logger.error(f"Error storing voice recording: {str(e)}")
-            return False
-        
+            operations_logger.error(f"Error in store_recording: {str(e)}")
+            return None
+
     def get_transcription_for_recording_id(self, recording_id: str) -> str:
         query = """
-            SELECT grievance_id, language_code, automated_transcript, field_name, recording_type FROM grievance_transcriptions LEFT JOIN grievance_voice_recordings ON grievance_transcriptions.recording_id = grievance_voice_recordings.recording_id WHERE recording_id = %s
+            SELECT grievance_id, language_code, automated_transcript, field_name, recording_type 
+            FROM grievance_transcriptions 
+            LEFT JOIN grievance_voice_recordings 
+            ON grievance_transcriptions.recording_id = grievance_voice_recordings.recording_id 
+            WHERE recording_id = %s
         """
         try:
             results = self.execute_query(query, (recording_id,), "get_grievance_transcription_for_recording_id")
@@ -1519,6 +1519,223 @@ class RecordingDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving grievance transcription for recording ID: {str(e)}")
             return None
 
+    def create_or_update_transcription(self, data: Dict[str, Any]) -> Optional[str]:
+        """Create or update a transcription record
+        
+        Args:
+            data: Dictionary containing transcription data including:
+                - recording_id: ID of the recording
+                - grievance_id: ID of the grievance
+                - field_name: Name of the field being transcribed
+                - automated_transcript: The transcription text
+                - language_code: Language code (defaults to 'ne')
+                
+        Returns:
+            str: The transcription_id if successful, None otherwise
+        """
+        try:
+            transcription_id = data.get('transcription_id')
+            recording_id = data.get('recording_id')
+            
+            # Validate required fields
+            if not recording_id:
+                if (data.get('grievance_id') and data.get('field_name')):
+                    recording_id = db_manager.recording.get_recording_id_for_grievance_id_and_field_name(data['grievance_id'], data['field_name'])
+                else:
+                    operations_logger.error("Missing required fields for transcription")
+                    return None
+            
+            if not transcription_id:
+                # Check if recording exists
+                transcription_id = self.get_transcription_for_recording_id(recording_id)
+            
+            if transcription_id:
+                # Update existing record
+                update_query = """
+                    UPDATE grievance_transcriptions 
+                    SET automated_transcript = %s,
+                        language_code = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE recording_id = %s
+                    RETURNING transcription_id
+                """
+                result = self.execute_update(update_query, (
+                    data['automated_transcript'],
+                    data.get('language_code', 'ne'),
+                    recording_id
+                ))
+                if result > 0:
+                    # Update verification status in the new verification_statuses table
+                    verification_query = """
+                        INSERT INTO grievance_verifications (
+                            grievance_id, verification_type, status_code
+                        ) VALUES (%s, 'transcription', 'PENDING')
+                        ON CONFLICT (grievance_id, verification_type) 
+                        DO UPDATE SET 
+                            status_code = 'PENDING',
+                            updated_at = CURRENT_TIMESTAMP
+                    """
+                    self.execute_update(verification_query, (data['grievance_id'],))
+                    return transcription_id
+                return None
+            else:
+                # Create new record
+                insert_query = """
+                    INSERT INTO grievance_transcriptions (
+                        recording_id, grievance_id,
+                        field_name, automated_transcript, language_code
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    RETURNING transcription_id
+                """
+                result = self.execute_insert(insert_query, (
+                    recording_id,
+                    data['grievance_id'],
+                    data['field_name'],
+                    data['automated_transcript'],
+                    data.get('language_code', 'ne')
+                ))
+                if result:
+                    # Update verification status in the new verification_statuses table
+                    verification_query = """
+                        INSERT INTO grievance_verifications (
+                            grievance_id, verification_type, status_code
+                        ) VALUES (%s, 'transcription', 'PENDING')
+                        ON CONFLICT (grievance_id, verification_type) 
+                        DO UPDATE SET 
+                            status_code = 'PENDING',
+                            updated_at = CURRENT_TIMESTAMP
+                    """
+                    self.execute_update(verification_query, (data['grievance_id'],))
+                    return result['transcription_id']
+                return None
+                
+        except Exception as e:
+            operations_logger.error(f"Error in create_or_update_transcription: {str(e)}")
+            return None
+
+class TranslationDbManager(BaseDatabaseManager):
+    def create_or_update_translation(self, data: Dict[str, Any]) -> Optional[str]:
+        """Create or update a translation record
+        
+        Args:
+            data: Dictionary containing translation data including:
+                - grievance_id: ID of the grievance (required)
+                - grievance_details_en: English translation of details
+                - grievance_summary_en: English translation of summary
+                - grievance_categories_en: English translation of categories
+                - translation_method: Method used for translation
+                - confidence_score: Confidence score of translation
+                - source_language: Source language code (defaults to 'ne')
+                
+        Returns:
+            str: The grievance_id if successful, None otherwise
+        """
+        try:
+            # Validate required fields
+            if not data.get('grievance_id'):
+                operations_logger.error("Missing required field: grievance_id")
+                return None
+
+            # Validate allowed fields
+            allowed_fields = {
+                'grievance_id',
+                'grievance_details_en',
+                'grievance_summary_en',
+                'grievance_categories_en',
+                'translation_method',
+                'confidence_score',
+                'source_language'
+            }
+            invalid_fields = set(data.keys()) - allowed_fields
+            if invalid_fields:
+                operations_logger.error(f"Attempted to update invalid translation fields: {invalid_fields}")
+                return None
+
+            grievance_id = data['grievance_id']
+            
+            # Check if translation exists
+            check_query = """
+                SELECT grievance_id FROM grievance_translations 
+                WHERE grievance_id = %s
+            """
+            result = self.execute_query(check_query, (grievance_id,))
+            
+            if result:
+                # Update existing record
+                update_query = """
+                    UPDATE grievance_translations 
+                    SET grievance_details_en = %s,
+                        grievance_summary_en = %s,
+                        grievance_categories_en = %s,
+                        translation_method = %s,
+                        confidence_score = %s,
+                        source_language = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING translation_id
+                """
+                result = self.execute_update(update_query, (
+                    data.get('grievance_details_en'),
+                    data.get('grievance_summary_en'),
+                    data.get('grievance_categories_en'),
+                    data.get('translation_method'),
+                    data.get('confidence_score'),
+                    data.get('source_language', 'ne'),
+                    grievance_id
+                ))
+                if result > 0:
+                    # Update verification status in the verification table
+                    verification_query = """
+                        INSERT INTO grievance_verifications (
+                            translation_id, verification_type, status_code
+                        ) VALUES (%s, 'translation', 'PENDING')
+                        ON CONFLICT (translation_id, verification_type) 
+                        DO UPDATE SET 
+                            status_code = 'PENDING',
+                            updated_at = CURRENT_TIMESTAMP
+                    """
+                    self.execute_update(verification_query, (result,))
+                    return result
+                return None
+            else:
+                # Create new record
+                insert_query = """
+                    INSERT INTO grievance_translations (
+                        grievance_id, grievance_details_en,
+                        grievance_summary_en, grievance_categories_en,
+                        source_language, translation_method,
+                        confidence_score
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING translation_id
+                """
+                result = self.execute_insert(insert_query, (
+                    grievance_id,
+                    data.get('grievance_details_en'),
+                    data.get('grievance_summary_en'),
+                    data.get('grievance_categories_en'),
+                    data.get('source_language', 'ne'),
+                    data.get('translation_method'),
+                    data.get('confidence_score')
+                ))
+                if result:
+                    # Update verification status in the verification table
+                    verification_query = """
+                        INSERT INTO grievance_verifications (
+                            translation_id, verification_type, status_code
+                        ) VALUES (%s, 'translation', 'PENDING')
+                        ON CONFLICT (translation_id, verification_type) 
+                        DO UPDATE SET 
+                            status_code = 'PENDING',
+                            updated_at = CURRENT_TIMESTAMP
+                    """
+                    self.execute_update(verification_query, (result,))
+                    return result['translation_id']
+                return None
+                
+        except Exception as e:
+            operations_logger.error(f"Error in create_or_update_translation: {str(e)}")
+            return None
+
 class DatabaseManagers:
     """Unified access point for all database managers"""
     def __init__(self):
@@ -1528,6 +1745,7 @@ class DatabaseManagers:
         self.user = UserDbManager()
         self.file = FileDbManager()
         self.recording = RecordingDbManager()
+        self.translation = TranslationDbManager()
 
 # Individual manager instances (kept for backward compatibility)
 file_manager = FileDbManager()
@@ -1536,5 +1754,6 @@ grievance_manager = GrievanceDbManager()
 task_manager = TaskDbManager()
 user_manager = UserDbManager()
 recording_manager = RecordingDbManager()
+translation_manager = TranslationDbManager()
 # Unified manager instance
 db_manager = DatabaseManagers() 

@@ -71,3 +71,7 @@ aws/            # AWS related files
 /logs/              # Ignore entire logs directory
 /task_queue/logs/   # Ignore entire logs directory
 /models/            # Ignore entire models directory
+uploads/            # Ignore entire uploads directory
+logs/               # Ignore entire logs directory
+task_queue/logs/    # Ignore entire logs directory
+models/             # Ignore entire models directory

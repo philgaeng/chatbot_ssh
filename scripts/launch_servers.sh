@@ -226,6 +226,7 @@ start_celery_worker() {
         --without-gossip \
         --without-mingle \
         --without-heartbeat \
+        -n "celery@${queue_name}.%h" \
         --detach &
 
     # Store PID and wait a moment for the process to start
@@ -340,7 +341,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "flower")
-            if ! start_service "$service" "celery -A task_queue flower --broker=redis://:3fduLmg25%40k@localhost:6379/0 --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
+            if ! start_service "$service" "celery -A task_queue --broker=redis://:3fduLmg25%40k@localhost:6379/0 flower --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi
