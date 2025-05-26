@@ -41,7 +41,7 @@ from .config import (
     DirectoryConfig
 )
 from .logger import TaskLogger
-from .task_manager_re import (
+from .task_manager import (
     TaskManager,
     DatabaseTaskManager,
     MonitoringConfig

@@ -252,6 +252,23 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
 DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
 
+#Field Mapping for recording tasks
+FIELD_MAPPING = {
+            'user_full_name': 'full_name',
+            'user_contact_phone': 'contact_phone',
+            'user_contact_email': 'contact_email',
+            'user_province': 'province',
+            'user_district': 'district',
+            'user_municipality': 'municipality',
+            'user_ward': 'ward',
+            'user_village': 'village',
+            'user_address': 'address',
+            'grievance_details': 'grievance',
+            'grievance_details_en': 'grievance_en',
+            'grievance_summary': 'summary',
+            'grievance_categories': 'categories'
+        } 
+
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""
     try:

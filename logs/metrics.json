@@ -1,10 +1,17 @@
 {
   "submit_grievance": {
-    "start_time": 1748241919.183167,
-    "last_duration": 0.20199084281921387,
-    "total_tasks": 1
+    "start_time": 1748266199.0100331,
+    "last_duration": 0.1565999984741211,
+    "total_tasks": 2,
+    "failed_tasks": 6
   },
   "accessible_file_upload": {
-    "start_time": 1748241931.7141206
+    "start_time": 1748266222.7369812
+  },
+  "process_single_audio_file": {
+    "failed_tasks": 2
+  },
+  "orchestrate_voice_processing": {
+    "failed_tasks": 2
   }
 }
