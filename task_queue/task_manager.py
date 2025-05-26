@@ -543,7 +543,7 @@ class DatabaseTaskManager(TaskManager):
             
         return None, None, None, None
         
-    def prepare_task_result_data_to_db(self, operation: str, input_data: dict) -> dict:
+    def prepare_task_result_data_to_db(self, input_data: dict) -> dict:
         """Extract and prepare data from task results for database operations
         
         Args:
@@ -558,66 +558,85 @@ class DatabaseTaskManager(TaskManager):
             ValueError: If required fields are missing or invalid
         """
         # Validate result has required fields
-        required_fields = ['status', 'operation', 'field_name', 'value', 'entity_key', 'id']
-        missing_fields = [field for field in required_fields if field not in input_data]
-        if missing_fields:
-            raise ValueError(f"Task result missing required fields: {missing_fields}")
+        try:
+            required_fields = ['status',  'field_name', 'value', 'entity_key', 'id']
+            missing_fields = [field for field in required_fields if field not in input_data]
+            if missing_fields:
+                raise ValueError(f"Task result missing required fields: {missing_fields}")
+                
+            entity_key = input_data['entity_key']
+            entity_id = input_data['id']
+            # Start with file_data as base
+            update_data = dict()
             
-        # Validate operation matches
-        if input_data['operation'] != operation:
-            raise ValueError(f"Task result operation '{input_data['operation']}' doesn't match expected '{operation}'")
+            # Add entity ID from result
+            update_data[entity_key] = entity_id
             
-        # Start with file_data as base
+            
+            
+            # Add result data based on operation type
+            if entity_key == 'transcription_id':
+                update_data.update({
+                    'automated_transcript': input_data['value'],
+                    'language_code': input_data.get('language_code', 'ne')
+                })
+                
+            elif entity_key == 'translation_id':
+                update_data.update({
+                    'grievance_details_en': input_data['value'],
+                    'translation_method': input_data.get('method', 'auto'),
+                    'confidence_score': input_data.get('confidence_score')
+                })
+                
+            else:
+                value_fields = self._extract_value_and_field_from_input_data(input_data)
+                update_data.update(value_fields)
+
+            if 'language_code' in input_data:
+                    update_data['language_code'] = input_data['language_code']
+                
+            return update_data
+        except Exception as e:
+            self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)}"})   
+            raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)}")
+        
+    def _extract_value_and_field_from_input_data(self, input_data: dict) -> tuple:
+        """Extract value and field from input data"""
+       # Map field to user data fields
+        field_mapping = {
+            'full_name': 'user_full_name',
+            'contact_phone': 'user_contact_phone',
+            'contact_email': 'user_contact_email',
+            'province': 'user_province',
+            'district': 'user_district',
+            'municipality': 'user_municipality',
+            'ward': 'user_ward',
+            'village': 'user_village',
+            'address': 'user_address'
+        } 
         update_data = dict()
         
-        # Add entity ID from result
-        update_data[input_data['entity_key']] = input_data['id']
+        value = input_data['value']
+        field_name = input_data['field_name']
+        if isinstance(value, dict):
+            for key, val in value.items():
+                if key in field_name:
+                    if key in field_mapping.keys(): #future proofing for fields not aligned between task and database
+                        update_data[field_mapping[key]] = val
+                    else:
+                        update_data[key] = val
+        else:
+            update_data[field_name] = value
         
-        
-        # Add result data based on operation type
-        if operation == 'transcription':
-            update_data.update({
-                'automated_transcript': input_data['value'],
-                'language_code': input_data.get('language_code', 'ne')
-            })
-            
-        elif operation == 'translation':
-            update_data.update({
-                'grievance_details_en': input_data['value'],
-                'translation_method': input_data.get('method', 'auto'),
-                'confidence_score': input_data.get('confidence_score')
-            })
-        elif operation == 'user':
-            # Map field to user data fields
-            field_mapping = {
-                'user_full_name': 'full_name',
-                'user_contact_phone': 'phone',
-                'user_contact_email': 'email',
-                'user_province': 'province',
-                'user_district': 'district',
-                'user_municipality': 'municipality',
-                'user_ward': 'ward',
-                'user_village': 'village',
-                'user_address': 'address'
-            }
-            update_data[input_data['field_name']] = input_data['value']
-        elif operation == 'grievance':
-            if 'dict' in input_data['field_name']:
-                for key, value in input_data['field_name'].items():
-                    update_data[key] = value
-            else:
-                update_data[input_data['field_name']] = input_data['value']
-        if 'language_code' in input_data:
-                update_data['language_code'] = input_data['language_code']
-            
         return update_data
 
-    def handle_db_operation(self, operation: str, input_data: dict) -> dict:
+    def handle_db_operation(self, input_data: dict) -> dict:
         """Handle database operations with consistent error handling"""
         try:
-            update_data = self.prepare_task_result_data_to_db(operation, input_data)
+            update_data = self.prepare_task_result_data_to_db(input_data)
             entity_type = input_data['entity_key']
             entity_id = input_data['id']
+            operation = entity_type.split('_')[0]
             
             # Start task with appropriate entity type and ID
             self.start_task(entity_type, entity_id, stage=f'db_{operation}')

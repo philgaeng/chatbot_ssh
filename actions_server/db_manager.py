@@ -1253,9 +1253,10 @@ class UserDbManager(BaseDatabaseManager):
             
     def get_user_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
-            SELECT user_id
-            FROM grievances
-            WHERE grievance_id = %s
+            SELECT u.*
+            FROM users u
+            JOIN grievances g ON u.id = g.user_id
+            WHERE g.grievance_id = %s
         """
         try:
             results = self.execute_query(query, (grievance_id,), "get_user_from_grievance_id")
@@ -1263,7 +1264,20 @@ class UserDbManager(BaseDatabaseManager):
         except Exception as e:
             operations_logger.error(f"Error retrieving user from grievance id: {str(e)}")
             return None
-            
+        
+    def get_user_id_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
+        query = """
+            SELECT user_id
+            FROM grievances
+            WHERE grievance_id = %s
+        """
+        try:
+            results = self.execute_query(query, (grievance_id,), "get_user_id_from_grievance_id")
+            return results[0] if results else None
+        except Exception as e:
+            operations_logger.error(f"Error retrieving user from grievance id: {str(e)}")
+            return None
+        
     #create a function to merge different users with same phone number
     def merge_users_with_same_phone_number(self, user_id: int, target_user_id: int) -> bool:
         query = """

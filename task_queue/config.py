@@ -345,7 +345,7 @@ TASK_REGISTRY = {}
 
 def register_all_tasks():
     """Register all tasks with Celery after all modules are loaded"""
-    from .task_manager import TaskManager
+    from .task_manager_re import TaskManager
     from .registered_tasks import (
         process_file_upload_task,
         process_batch_files_task,

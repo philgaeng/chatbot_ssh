@@ -44,19 +44,24 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
         # Use OpenAI to extract structured information
         if not client:
             raise ValueError("OpenAI client not available for contact info extraction")
-        k, v = contact_data.items()
+            
+        # Get the first key-value pair from contact_data
+        field_name = next(iter(contact_data))
+        field_value = contact_data[field_name]
+        language_code = contact_data.get('language_code', 'ne')
+        
         message_input = f"""
-            Extract the {k.replace("_", " ")} from {v}.
+            Extract the {field_name.replace("_", " ")} from {field_value}.
             Return the response in **strict JSON format** like this:
             {{
-                "{k}": "value"
+                "{field_name}": "value"
             }}
         """
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Extract the person's contact and location information in the language of the text."},
+                {"role": "system", "content": f"Extract the person's contact and location information in the language which language_code is {language_code}."},
                 {"role": "user", "content": message_input}
             ],
             response_format={"type": "json_object"}
@@ -64,14 +69,13 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
         
         result_dict = json.loads(response.choices[0].message.content)
         result = dict()
-        result[k] = result_dict.get(k, "")
+        result[field_name] = result_dict.get(field_name, "")
         return result
         
-            
     except Exception as e:
-        logger.error(f"Error extracting contact info")
+        logger.error(f"Error extracting contact info: {str(e)}")
         return {
-            k: "",
+            field_name: "",
         }
         
 

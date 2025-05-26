@@ -107,23 +107,44 @@ def send_email_task(to_emails, subject, body, grievance_id: str = None):
 
 # LLM Tasks
 @TaskManager.register_task(task_type='LLM')
-def transcribe_audio_file_task(self, file_path: str, language: str = None, grievance_id: str = None, service: str = None) -> Dict[str, Any]:
+def transcribe_audio_file_task(self, input_data: Dict[str, Any], emit_websocket: bool = True) -> Dict[str, Any]:
     """Transcribe an audio file."""
     # Get the Celery task ID from the current task
     task_id = self.request.id if hasattr(self, 'request') else None
     
     # Create task manager with the current task instance and proper websocket handling
-    task_mgr = TaskManager(task=self, emit_websocket=True, service=service)
-    if grievance_id:
+    task_mgr = TaskManager(task=self, emit_websocket=True)
+    try:
+        if 'grievance' in input_data.get('field_name'):
+            entity_type = 'grievance'
+            entity_id = input_data.get('grievance_id')
+            entity_key = 'grievance_id'
+        elif 'user' in input_data.get('field_name'):
+            entity_type = 'user'
+            entity_id = input_data.get('user_id')
+            entity_key = 'user_id'
+        else:
+            raise ValueError(f"Invalid field name: {input_data.get('field_name')}")
+    except Exception as e:
+        task_mgr.fail_task(str(e), stage='transcription')
+        return {
+            'status': 'error',
+            'operation': 'transcription',
+            'error': f"Missing key fields in input data: {str(e)}",
+        }
+   
+    try:
+        file_path = input_data['file_path']
+        language_code = input_data['language_code']
+        
         task_mgr.start_task(
-            entity_type='grievance',
-            entity_id=grievance_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
             stage='transcription',
             extra_data={'file_path': file_path}
         )
-    try:
         from actions_server.LLM_helpers import transcribe_audio_file
-        transcription = transcribe_audio_file(file_path, language)
+        transcription = transcribe_audio_file(file_path, language_code)
         
         result = {
             'status': 'SUCCESS',
@@ -131,14 +152,12 @@ def transcribe_audio_file_task(self, file_path: str, language: str = None, griev
             'field_name': 'grievance_details',
             'value': transcription,
             'file_path': file_path,
-            'language_code': language,
+            'language_code': language_code,
             'task_id': task_id,
-            'entity_key': 'grievance_id',
-            'id': grievance_id
+            'entity_key': entity_key,
+            'id': entity_id
         }
-        if grievance_id:
-            # Convert result to JSON string for database storage
-            task_mgr.complete_task(json.dumps(result), stage='transcription')
+        task_mgr.complete_task(result, stage='transcription')
         return result
     except Exception as e:
         error_result = {
@@ -146,29 +165,26 @@ def transcribe_audio_file_task(self, file_path: str, language: str = None, griev
             'operation': 'transcription',
             'error': str(e),
             'task_id': task_id,
-            'file_path': file_path
+            'file_path': file_path,
+            'entity_key': entity_key,
+            'id': entity_id
         }
-        if grievance_id:
-            error_result.update({
-                'entity_key': 'grievance_id',
-                'id': grievance_id
-            })
-            task_mgr.fail_task(str(e), stage='transcription')
+
+        task_mgr.fail_task(error_result, stage='transcription')
         return error_result
 
 @TaskManager.register_task(task_type='LLM')
 def classify_and_summarize_grievance_task(self, 
                                           file_data: Dict[str, Any], 
-                                          service: str = 'llm_queue', 
                                           emit_websocket: bool = True) -> Dict[str, Any]:
     """Classify and summarize a grievance text using the transcription result."""
     
-     # Get the Celery task ID from the current task
+    # Get the Celery task ID from the current task
     task_id = self.request.id if hasattr(self, 'request') else None
     
-    task_mgr = TaskManager(task=self, service=service, emit_websocket=emit_websocket)
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     print(f"Classify and summarize grievance task called with file_data: {file_data}")
-    # Extract data directly from file_data (transcription result))  # In this case, id is the grievance_id
+    # Extract data directly from file_data (transcription result)
     language_code = file_data.get('language_code', 'ne')
     grievance_details = file_data.get('value')  # The transcription text
     result = {'operation': 'classification',
@@ -198,84 +214,82 @@ def classify_and_summarize_grievance_task(self,
         # Return results in standardized format
         result.update({'status': 'SUCCESS',
                        'field_name': 'grievance_categories, grievance_summary',
-                       'value': json.dumps(temp_result)})
-        
-        task_mgr.complete_task(json.dumps(result), stage='classification')
+                       'value': temp_result})
+        task_mgr.complete_task(result, stage='classification')
         return result
-    except Exception as db_error:
+    except Exception as e:
         result.update({'status': 'error',
-                       'error': str(db_error)})
+                       'error': str(e)})
+        task_mgr.fail_task(str(e), stage='classification')
         return result
 
 @TaskManager.register_task(task_type='LLM')
-def extract_contact_info_task(self, transcription_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract user information from text"""
-    task_mgr = TaskManager(task=self, emit_websocket=True, service='llm_queue')
+def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_websocket: bool = False) -> Dict[str, Any]:
+    """Extract contact information from transcription result."""
+    # Get the Celery task ID from the current task
     
-    # Extract data directly from transcription result
-    contact_text = transcription_data.get('value')  # The transcription text
-    grievance_id = transcription_data.get('id')
-    language_code = transcription_data.get('language_code', 'ne')
-    field_name = transcription_data.get('field_name', 'user_contact')
+    task_id = self.request.id if hasattr(self, 'request') else None
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     
-    if not contact_text:
+    try:    
+        # Extract data directly from transcription result
+        field_name = transcription_data.get('field_name')
+        contact_text = transcription_data.get('value')  # The transcription text
+        language_code = transcription_data.get('language_code', 'ne')
+        entity_type = 'grievance' if 'grievance' in field_name else 'user' if 'user' in field_name else None
+        entity_id = transcription_data.get('id')
+        entity_key = 'grievance_id' if 'grievance' in field_name else 'user_id' if 'user' in field_name else None
+        result = {'operation': 'contact_extraction',
+              'field_name': field_name,
+              'entity_key': entity_key,
+              'id': entity_id,
+              'transcription_task_id': transcription_data.get('task_id'),
+              'task_id': task_id,
+              'language_code': language_code}
+        
+    except Exception as e:
+        task_mgr.fail_task(str(e), stage='contact_info')
         return {
             'status': 'error',
             'operation': 'contact_extraction',
-            'error': 'No transcription text found in input data',
-            'entity_key': 'grievance_id',
-            'id': grievance_id
+            'error': f"Missing key fields in input data: {str(e)}",
         }
     
-    task_mgr.start_task(entity_type='grievance', entity_id=grievance_id, stage='contact_extraction')
     try:
-        from actions_server.LLM_helpers import extract_contact_info
-        contact_data = {field_name: contact_text}
-        result = extract_contact_info(contact_data)
-    except Exception as llm_error:
-        return {
-            'status': 'error',
-            'operation': 'contact_extraction',
-            'error': str(llm_error),
-            'entity_key': 'grievance_id',
-            'id': grievance_id
-        }
     
-    if result[field_name] == '':
-        return {
-            'status': 'error',
-            'operation': 'contact_extraction',
-            'error': f"No result found for field {field_name}",
-            'entity_key': 'grievance_id',
-            'id': grievance_id
+        task_mgr.start_task(entity_type=entity_type, 
+                        entity_id=entity_id,
+                        stage='contact_info')
+    
+        from actions_server.LLM_helpers import extract_contact_info
+        input_data = {
+            'field_name': field_name,
+            'value': contact_text,
+            'language_code': language_code
         }
-    else:
-        try:
-            # Return results in standardized format
-            result = {
-                'status': 'SUCCESS',
-                'operation': 'contact_extraction',
-                'field_name': field_name,
-                'value': result[field_name],
-                'language_code': language_code,
-                'entity_key': 'grievance_id',
-                'id': grievance_id
-            }
-            task_mgr.complete_task(json.dumps(result), stage='contact_extraction')
-            return result
-        except Exception as db_error:
-            return {
-                'status': 'error',
-                'operation': 'contact_extraction',
-                'error': str(db_error),
-                'entity_key': 'grievance_id',
-                'id': grievance_id
-            }
+        contact_info = extract_contact_info(input_data)
+    
+    except Exception as llm_error:
+        result.update({'status': 'error',
+                       'error': str(llm_error)})
+        return result   
+    
+    try:
+        # Return results in standardized format
+        result.update({'status': 'SUCCESS',
+                       'value': contact_info})
+        task_mgr.complete_task(result, stage='contact_info')
+        return result
+    except Exception as e:
+        result.update({'status': 'error',
+                       'error': str(e)})
+        task_mgr.fail_task(str(e), stage='contact_info')
+        return result
 
 @TaskManager.register_task(task_type='LLM')
-def translate_grievance_to_english_task(self, grievance_id: str, service: str = 'llm_queue') -> Dict[str, Any]:
+def translate_grievance_to_english_task(self, grievance_id: str, emit_websocket: bool = True) -> Dict[str, Any]:
     """Translate a grievance to English and save it to the database"""
-    task_mgr = TaskManager(task=self, emit_websocket=True, service='llm_queue')
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     task_mgr.start_task(entity_type='grievance', entity_id=grievance_id)
     try:
         from actions_server.LLM_helpers import translate_grievance_to_english
@@ -303,12 +317,22 @@ def translate_grievance_to_english_task(self, grievance_id: str, service: str = 
         }
 
 @TaskManager.register_task(task_type='Database')
-def store_result_to_db_task(input_data: Dict[str, Any],
-                            operation: str, 
-                            service: str = None) -> Dict[str, Any]:
-    """Dynamically store any result of a task in the dedicated table in the database"""
-    task_mgr = DatabaseTaskManager(emit_websocket=False, service=service)
-    return task_mgr.handle_db_operation(operation, input_data)
+def store_result_to_db_task(input_data: Dict[str, Any], emit_websocket: bool = False) -> Dict[str, Any]:
+    """Store task result in database."""
+    task_mgr = DatabaseTaskManager(emit_websocket=emit_websocket)
+    task_mgr.start_task(entity_type=input_data.get('entity_key'), entity_id=input_data.get('id'))
+    try:
+        result = task_mgr.handle_task_db_operations(input_data)
+        task_mgr.complete_task(result, stage='store_result')
+        return result
+    except Exception as e:
+        task_mgr.fail_task(str(e), stage='store_result')
+        error_result = {
+            'status': 'error',
+            'operation': 'store_result',
+            'error': str(e)
+        }
+        return error_result
 
 def store_task_result_to_db_task(input_data: Dict[str, Any],
                                 operation: str, 
