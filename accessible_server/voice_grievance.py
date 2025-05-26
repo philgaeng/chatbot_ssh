@@ -260,13 +260,14 @@ def submit_grievance():
         
         # Initialize the grievance and user
         # Merge or create user
-        user_id = db_manager.user.create_user(dict())
+        user_id = db_manager.user.create_or_update_user()
         if not user_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'})
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
             
         # Create grievance
-        grievance_id = db_manager.grievance.create_grievance(user_id=user_id, source='accessibility')
+        grievance_id = db_manager.grievance.create_grievance({'user_id': user_id, 
+                                                              'source': 'accessibility'})
         if not grievance_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create grievance'})
             return jsonify({'status': 'error', 'error': 'Failed to create grievance'}), 500
@@ -283,11 +284,12 @@ def submit_grievance():
                 # Create recording data dictionary
                 recording_data = {
                     'recording_id': str(uuid.uuid4()),
+                    'user_id': user_id,
                     'grievance_id': grievance_id,
                     'file_name': filename,
                     'recording_type': recording_type,
                     'file_path': file_path,
-                    'file_type': filename.rsplit('.', 1)[1].lower(),
+                    'field_name': filename.rsplit('.', 1)[1].lower(),
                     'file_size': file_size,
                     'upload_date': datetime.now().isoformat(),
                     'language_code': request.form.get('language_code', 'en'),
@@ -309,7 +311,7 @@ def submit_grievance():
             return jsonify({'status': 'error', 'error': 'No audio files provided'}), 400
             
         # Queue Celery tasks for each file
-        result = orchestrate_voice_processing(audio_files, language=request.form.get('language_code', 'en'))
+        result = orchestrate_voice_processing(audio_files, recording_data)
         
         emit_status_update(grievance_id, 'submitted', {
             'user_id': user_id,
@@ -339,92 +341,94 @@ def submit_grievance():
         }), 500
 
 
-
-def process_single_audio_file(file_path: str, filename: str, language: str = 'en') -> Dict[str, Any]:
+def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process a single audio file and return its task chain.
 
     Args:
-        file_path: Path to the audio file
-        filename: Original filename
-        language: Language code for processing
+        recording_data: Dictionary containing recording data passed from the submit_grievance endpoint
         
     Returns:
         Dict containing task chain information
     """
+    file_path = recording_data.get('file_path')
+    language = recording_data.get('language_code')
     task_logger.log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path})
 
-    # Determine if this is a contact info or grievance details file
-    is_contact_info = 'user' in filename.lower()
-    is_grievance_details = 'grievance' in filename.lower() or 'details' in filename.lower()
+    # Extract the field name from the recording data
+    field_mapping = {'user_full_name': 'full_name',
+                     'user_contact_phone': 'contact_phone',
+                     'user_contact_email': 'contact_email',
+                     'user_province': 'province',
+                     'user_district': 'district',
+                     'user_municipality': 'municipality',
+                     'user_ward': 'ward',
+                     'user_village': 'village',
+                     'user_address': 'address',
+                     'grievance_details': 'grievance'}
+    
+    field_name = field_mapping.get(recording_data.get('field_name'))
+    if field_name not in field_mapping.keys() and field_name in field_mapping.values():
+        field_name = field_mapping.get(recording_data.get('field_name'))
+        recording_data['field_name'] = field_name
+    else:
+        task_logger.log_task_event('process_single_audio_file', 'failed', {'error': f"Invalid field name: {recording_data.get('field_name')}"})
+        raise ValueError(f"Invalid field name: {recording_data.get('field_name')}")
+    
+    is_contact_info = 'user' in recording_data.get('file_name')
+    is_grievance_details = 'grievance' in recording_data.get('file_name')
 
     # Initialize task chain
     task_chain = {
         'temp_path': file_path,  # Store path for cleanup
-        'file_data': {
-            'file_name': filename,
-            'file_path': file_path,
-            'file_type': filename.rsplit('.', 1)[1].lower() if '.' in filename else 'webm',
-            'file_size': os.path.getsize(file_path),
-            'upload_date': datetime.now().isoformat(),
-            'language_code': language
-        }
+        'file_data': recording_data
     }
 
-    # Create the base transcription task
-    transcription_task = transcribe_audio_file_task.s(file_path, language)
+    # Start with transcription task
+    chain_tasks = [transcribe_audio_file_task.s(recording_data)]
     
     # Build the task chain based on file type
     if is_contact_info:
-        # First get transcription
-        transcription_result = transcription_task.s(file_path, language, grievance_id)
-        
-        # Then parallelize classification and DB storage
-        # DB storage can run independently and doesn't need to complete before next step
-        task_chain['tasks'] = chain(
-            transcription_result,
-            group(
-                classify_and_summarize_grievance_task.s(),
-                store_result_to_db_task.s('transcription')
-            ),
-            extract_contact_info_task.s(),
-            group(
-                translate_grievance_to_english_task.s(),
-                store_result_to_db_task.s('translation')
-            ),
-            store_result_to_db_task.s('user')
-        ).apply_async()
         task_chain['type'] = 'contact_info'
+        # After transcription, extract contact info and store in parallel
+        chain_tasks.extend([
+            group(
+                extract_contact_info_task.s(),
+                store_result_to_db_task.s()
+            )
+        ])
+        
     elif is_grievance_details:
-        # Chain: transcribe -> store transcription -> classify -> translate (if needed) -> store
-        chain_tasks = [
-            transcription_task, 
-            store_result_to_db_task.s('transcription'),
-            classify_and_summarize_grievance_task.s(),
-            store_result_to_db_task.s('grievance')
-        ]
-        
-        if language != 'en':
-            chain_tasks.append(translate_grievance_to_english_task.s())
-        chain_tasks.append(store_result_to_db_task.s('translation'))
-            
-        task_chain['tasks'] = chain(*chain_tasks).apply_async()
         task_chain['type'] = 'grievance_details'
+        # After transcription, store and classify in parallel
+        chain_tasks.extend([
+            group(
+                store_result_to_db_task.s(),
+                classify_and_summarize_grievance_task.s()
+            )
+        ])
         
+        # Add translation if needed
+        if language != 'en':
+            chain_tasks.extend([
+                translate_grievance_to_english_task.s(),
+                store_result_to_db_task.s()
+            ])
     else:
-        # Just transcription and store
-        task_chain['tasks'] = chain(
-            transcription_task,
-            store_result_to_db_task.s('transcription')
-        ).apply_async()
         task_chain['type'] = 'transcription_only'
-
+        # Just store the transcription
+        chain_tasks.append(store_result_to_db_task.s())
+    
+    # Create and execute the final chain
+    final_chain = chain(*chain_tasks)
+    result = final_chain.delay()
+    
     # Store the final task ID for tracking
-    task_chain['task_id'] = task_chain['tasks'].id
+    task_chain['task_id'] = result.id
 
     return task_chain
 
-def orchestrate_voice_processing(audio_files: List[Any], language: str = 'en') -> Dict[str, Any]:
+def orchestrate_voice_processing(audio_files: List[Any], recording_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Orchestrate parallel processing of multiple audio files.
 
@@ -449,7 +453,7 @@ def orchestrate_voice_processing(audio_files: List[Any], language: str = 'en') -
                 if not file_path:
                     continue
                     
-                task_chain = process_single_audio_file(file_path, filename, language)
+                task_chain = process_single_audio_file(recording_data)
                 file_tasks[filename] = {
                     'task_id': task_chain['task_id'],
                     'type': task_chain['type'],
