@@ -28,7 +28,7 @@ from celery import chain, group
 
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
-from actions_server.constants import GRIEVANCE_STATUS, ALLOWED_EXTENSIONS, AUDIO_EXTENSIONS
+from actions_server.constants import GRIEVANCE_STATUS, ALLOWED_EXTENSIONS, AUDIO_EXTENSIONS, FIELD_MAPPING
 from actions_server.websocket_utils import emit_status_update
 from actions_server.file_server import FileServerCore
 
@@ -70,46 +70,12 @@ def create_grievance_directory(grievance_id: str, dir_type: str = None) -> str:
     ensure_directory_exists(directory)
     return directory
 
-def get_recording_type_from_filename(filename: str) -> str:
-    """Determine recording type based on filename"""
-    filename = filename.lower()
-    
-    if 'grievance' in filename or 'grievance_details' in filename:
-        return 'details'
-    elif 'name' in filename or 'user_full_name' in filename:
-        return 'contact'
-    elif 'phone' in filename or 'user_contact_phone' in filename or 'contact' in filename:
-        return 'contact'
-    elif 'municipality' in filename or 'user_municipality' in filename:
-        return 'location'
-    elif 'village' in filename or 'user_village' in filename:
-        return 'location'
-    elif 'address' in filename or 'user_address' in filename:
-        return 'location'
-    
-    return 'details'  # Default
 
-def get_grievance_field_from_filename(filename: str) -> str:
-    """Map filename to corresponding grievance data field"""
-    filename = filename.lower()
-    
-    if 'grievance' in filename or 'grievance_details' in filename:
-        return 'grievance_details'
-    elif 'name' in filename or 'user_full_name' in filename:
-        return 'user_full_name'
-    elif 'phone' in filename or 'user_contact_phone' in filename:
-        return 'user_contact_phone'
-    elif 'municipality' in filename or 'user_municipality' in filename:
-        return 'user_municipality'
-    elif 'village' in filename or 'user_village' in filename:
-        return 'user_village'
-    elif 'address' in filename or 'user_address' in filename:
-        return 'user_address'
-    
-    return None  # No direct mapping
 
-def ensure_valid_audio_filename(original_name: str, field_key: str = None) -> str:
-    """Ensure the filename has a valid extension and is secure"""
+def ensure_valid_audio_filename(original_name: str, field_key: str = None, field_mapping: dict = FIELD_MAPPING) -> str:
+    """Ensure the filename has a valid extension and is secure
+    and returns the needed parameters for the recording data
+    field_name and filename"""
     # First secure the filename
     filename = secure_filename(original_name)
     
@@ -122,11 +88,20 @@ def ensure_valid_audio_filename(original_name: str, field_key: str = None) -> st
     
     # Check if the filename has a valid audio extension
     has_valid_extension = any(filename.lower().endswith(ext) for ext in AUDIO_EXTENSIONS)
+    
     if not has_valid_extension:
         filename += '.webm'  # Default to webm extension
-    recording_type = get_recording_type_from_filename(filename)
+    field_name = None
+
+    for key, value in field_mapping.items():
+        if key or value in filename:
+            field_name = key
+            break
+            
+    if not field_name:
+        raise ValueError(f"Invalid file name: {original_name}")
     
-    return filename, recording_type
+    return filename, field_name
 
 def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, int]:
     """Save an uploaded file and return the path and size"""
@@ -266,7 +241,7 @@ def submit_grievance():
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
             
         # Create grievance
-        grievance_id = db_manager.grievance.create_grievance({'user_id': user_id, 
+        grievance_id = db_manager.grievance.create_or_update_grievance({'user_id': user_id, 
                                                               'source': 'accessibility'})
         if not grievance_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create grievance'})
@@ -277,7 +252,7 @@ def submit_grievance():
         for key in request.files:
             file = request.files[key]
             if file and file.filename:
-                filename, recording_type = ensure_valid_audio_filename(file.filename, key)
+                filename, field_name = ensure_valid_audio_filename(file.filename, key)
                 upload_dir = create_grievance_directory(grievance_id)
                 file_path, file_size = save_uploaded_file(file, upload_dir, filename)
                 
@@ -287,9 +262,8 @@ def submit_grievance():
                     'user_id': user_id,
                     'grievance_id': grievance_id,
                     'file_name': filename,
-                    'recording_type': recording_type,
                     'file_path': file_path,
-                    'field_name': filename.rsplit('.', 1)[1].lower(),
+                    'field_name': field_name,
                     'file_size': file_size,
                     'upload_date': datetime.now().isoformat(),
                     'language_code': request.form.get('language_code', 'en'),
@@ -355,25 +329,25 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
     language = recording_data.get('language_code')
     task_logger.log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path})
 
-    # Extract the field name from the recording data
-    field_mapping = {'user_full_name': 'full_name',
-                     'user_contact_phone': 'contact_phone',
-                     'user_contact_email': 'contact_email',
-                     'user_province': 'province',
-                     'user_district': 'district',
-                     'user_municipality': 'municipality',
-                     'user_ward': 'ward',
-                     'user_village': 'village',
-                     'user_address': 'address',
-                     'grievance_details': 'grievance'}
+    # # Extract the field name from the recording data
+    # field_mapping = {'user_full_name': 'full_name',
+    #                  'user_contact_phone': 'contact_phone',
+    #                  'user_contact_email': 'contact_email',
+    #                  'user_province': 'province',
+    #                  'user_district': 'district',
+    #                  'user_municipality': 'municipality',
+    #                  'user_ward': 'ward',
+    #                  'user_village': 'village',
+    #                  'user_address': 'address',
+    #                  'grievance_details': 'grievance'}
     
-    field_name = field_mapping.get(recording_data.get('field_name'))
-    if field_name not in field_mapping.keys() and field_name in field_mapping.values():
-        field_name = field_mapping.get(recording_data.get('field_name'))
-        recording_data['field_name'] = field_name
-    else:
-        task_logger.log_task_event('process_single_audio_file', 'failed', {'error': f"Invalid field name: {recording_data.get('field_name')}"})
-        raise ValueError(f"Invalid field name: {recording_data.get('field_name')}")
+    # field_name = field_mapping.get(recording_data.get('field_name'))
+    # if field_name not in field_mapping.keys() and field_name in field_mapping.values():
+    #     field_name = field_mapping.get(recording_data.get('field_name'))
+    #     recording_data['field_name'] = field_name
+    # else:
+    #     task_logger.log_task_event('process_single_audio_file', 'failed', {'error': f"Invalid field name: {recording_data.get('field_name')}"})
+    #     raise ValueError(f"Invalid field name: {recording_data.get('field_name')}")
     
     is_contact_info = 'user' in recording_data.get('file_name')
     is_grievance_details = 'grievance' in recording_data.get('file_name')
