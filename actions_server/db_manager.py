@@ -17,7 +17,7 @@ import time
 # Load environment variables from .env file
 load_dotenv()
 
-# Configure logging
+# Configure loggingError in db_task operation
 def setup_logger(name: str, log_file: str) -> logging.Logger:
     """Setup a logger with file and console handlers"""
     logger = logging.getLogger(name)
@@ -841,15 +841,27 @@ class TaskDbManager(BaseDatabaseManager):
         set_clauses = []
         values = []
         for field, value in update_data.items():
-            set_clauses.append(f"{field} = %s")
-            values.append(value)
+            if field in ['task_name',
+                'status_code',
+                'started_at',
+                'completed_at',
+                'error_message',
+                'retry_count',
+                'created_at',
+                'updated_at']:
+                set_clauses.append(f"{field} = %s")
+                # Only JSON-serialize fields that should be JSON
+                if field in ['result', 'metadata'] and isinstance(value, dict):  # Add any other fields that should be JSON
+                    values.append(json.dumps(value))
+                else:
+                    values.append(value)
         values.append(task_id)
 
         query = f"""
             UPDATE tasks
             SET {', '.join(set_clauses)},
                 updated_at = CURRENT_TIMESTAMP,
-                completed_at = CASE WHEN status_code IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
+                completed_at = CASE WHEN status_code IN ('SUCCESS', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
             WHERE task_id = %s
         """
         try:

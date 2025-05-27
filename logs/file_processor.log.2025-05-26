@@ -1,0 +1,3 @@
+2025-05-27 09:14:48,157 - file_processor - INFO - Service: {'grievance_id': 'GR-KOJH20250527-C25F-A', 'file_count': 1} - Task or function: file_processor - Event: process_batch_files - Details: "started"
+2025-05-27 09:14:48,160 - file_processor - INFO - Service: {'grievance_id': 'GR-KOJH20250527-C25F-A', 'file': 'QR_Jhapa_district.png'} - Task or function: file_processor - Event: process_file_upload - Details: "started"
+2025-05-27 09:14:48,162 - file_processor - INFO - Service: {'grievance_id': 'GR-KOJH20250527-C25F-A', 'error': "'filename'"} - Task or function: file_processor - Event: process_batch_files - Details: "failed"

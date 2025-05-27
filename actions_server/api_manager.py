@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
-from task_queue.logger import TaskLogger
+from logger.logger import TaskLogger
 from flask import jsonify
+import inspect
 
 class APIManager:
     """Manager class for API endpoints with common functionality"""
@@ -11,10 +12,16 @@ class APIManager:
     
     def log_event(self, event_type: str, details: Optional[Dict[str, Any]] = None) -> None:
         """Log an event with consistent formatting"""
+        # Get the name of the calling function
+        frame = inspect.currentframe()
+        outer_frames = inspect.getouterframes(frame)
+        # The caller is at index 1
+        function_name = outer_frames[1].function
         self.logger.log_task_event(
-            self.service_name,
-            event_type,
-            details
+            service_name=self.service_name,
+            task_name=function_name,
+            event_type=event_type,
+            details=details
         )
     
     def success_response(self, data: Dict[str, Any], message: str = "Success") -> Dict[str, Any]:

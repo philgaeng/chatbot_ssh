@@ -11,14 +11,15 @@ Only sensitive and environment-specific settings should be set via environment v
 All other settings use sensible defaults defined in the code.
 """
 
-from celery import Celery
-from kombu import Exchange, Queue
 import os
 from typing import Dict, Any, Optional, List
 import logging
 from pathlib import Path
 from dataclasses import dataclass
 from functools import lru_cache
+from .settings import *  # Import all Celery/queue constants from settings.py
+from .celery_app import celery_app  # Import celery_app from celery_app.py
+from .registered_tasks import *  # Eagerly import all tasks for Celery registration
 
 # Queue system configuration
 QUEUE_FOLDER = 'task_queue'  # Name of the queue system folder
@@ -290,75 +291,8 @@ if redis_config.password:
 QUEUE_LLM = 'llm_queue'
 QUEUE_DEFAULT = 'default'
 
-# Create Celery instance
-celery_app = Celery(QUEUE_FOLDER)
-
-# Configure Celery
-celery_app.conf.update(
-    # Broker and backend
-    broker_url=redis_url,
-    result_backend=redis_url,
-    
-    # Serialization
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    
-    # Time and timezone
-    timezone='UTC',
-    enable_utc=True,
-    
-    # Task settings
-    task_track_started=True,
-    task_time_limit=TaskConfig().time_limit,
-    task_soft_time_limit=TaskConfig().soft_time_limit,
-    task_default_retry_delay=TaskConfig().retry_delay,
-    task_max_retries=TaskConfig().max_retries,
-    
-    # Worker settings
-    worker_prefetch_multiplier=worker_config.prefetch_multiplier,
-    worker_max_tasks_per_child=worker_config.max_tasks_per_child,
-    
-    # Task acknowledgment
-    task_acks_late=True,
-    task_reject_on_worker_lost=True,
-    
-    # Default queue settings
-    task_default_queue=QUEUE_DEFAULT,
-    task_queues=(
-        Queue(QUEUE_LLM, Exchange(QUEUE_LLM), routing_key=QUEUE_LLM),
-        Queue(QUEUE_DEFAULT, Exchange(QUEUE_DEFAULT), routing_key=QUEUE_DEFAULT),
-    ),
-    
-    # Task routing
-    task_routes={
-        'task_queue.registered_tasks.*_llm_*': {'queue': QUEUE_LLM},
-        'task_queue.registered_tasks.*_transcribe_*': {'queue': QUEUE_LLM},
-        'task_queue.registered_tasks.*_classify_*': {'queue': QUEUE_LLM},
-        'task_queue.registered_tasks.*_extract_*': {'queue': QUEUE_LLM},
-        'task_queue.registered_tasks.*_translate_*': {'queue': QUEUE_LLM},
-    },
-)
-
 # Initialize TASK_REGISTRY as empty
 TASK_REGISTRY = {}
-
-def register_all_tasks():
-    """Register all tasks with Celery after all modules are loaded"""
-    from .task_manager import TaskManager
-    from .registered_tasks import (
-        process_file_upload_task,
-        process_batch_files_task,
-        send_sms_task,
-        send_email_task,
-        transcribe_audio_file_task,
-        classify_and_summarize_grievance_task,
-        extract_contact_info_task,
-        translate_grievance_to_english_task,
-        store_result_to_db_task,
-        store_task_result_to_db_task
-    )
-    return TaskManager.TASK_REGISTRY
 
 # Update shell config when this module is imported
 update_shell_config() 

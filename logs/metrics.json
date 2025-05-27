@@ -1,17 +1,30 @@
 {
-  "submit_grievance": {
-    "start_time": 1748266199.0100331,
-    "last_duration": 0.1565999984741211,
-    "total_tasks": 2,
-    "failed_tasks": 6
+  "store_result_to_db_task": {
+    "failed_tasks": 35,
+    "last_duration": 0.00017952919006347656,
+    "total_tasks": 19
   },
   "accessible_file_upload": {
-    "start_time": 1748266222.7369812
+    "start_time": 1748357766.2294838
   },
-  "process_single_audio_file": {
-    "failed_tasks": 2
+  "process_batch_files_task": {
+    "start_time": 1748357766.3396595,
+    "last_duration": 0.053255558013916016,
+    "total_tasks": 6,
+    "failed_tasks": 8
   },
-  "orchestrate_voice_processing": {
-    "failed_tasks": 2
+  "process_file_upload_task": {
+    "start_time": 1748357766.4366727,
+    "last_duration": 0.053400516510009766,
+    "total_tasks": 6,
+    "failed_tasks": 8
+  },
+  "process_file_upload": {
+    "start_time": 1748357766.443418
+  },
+  "submit_grievance": {
+    "start_time": 1748357757.8600585,
+    "last_duration": 0.17015767097473145,
+    "total_tasks": 3
   }
 }
