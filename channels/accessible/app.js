@@ -2607,3 +2607,5 @@ socket.on('grievance_status_update', function(data) {
         }
     }
 });
+
+const socket = io('https://nepal-gms-chatbot.facets-ai.com:5001'); // Initialize Socket.IO connection to backend

@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
-from actions_server.file_server import FileServerAPI, file_server_bp, FileServerCore
+from actions_server.file_server_api import FileServerAPI, file_server_bp
+from actions_server.file_server_core import FileServerCore
 from accessible_server.voice_grievance import voice_grievance_bp
 from actions_server.websocket_utils import socketio, emit_status_update
 from actions_server.constants import ALLOWED_EXTENSIONS

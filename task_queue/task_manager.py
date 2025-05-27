@@ -16,7 +16,74 @@ import json
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
-from .logger import TaskLogger
+from logger.logger import TaskLogger
+from actions_server.constants import FIELD_MAPPING
+from .celery_app import celery_app  # Safe to import at module level now
+
+# Task type names (single source of truth)
+TASK_TYPE_LLM = "LLM"
+TASK_TYPE_FILEUPLOAD = "FileUpload"
+TASK_TYPE_MESSAGING = "Messaging"
+TASK_TYPE_DATABASE = "Database"
+TASK_TYPE_DEFAULT = "Default"
+
+TASK_CONFIG = {
+    TASK_TYPE_LLM: {'service': 'llm_processor', 
+        'queue': {"priority": "high", "queue": "llm_queue", "bind": True},
+        'retries': {
+            'max_retries': 3,
+            'initial_delay': 2,
+            'max_delay': 30,
+            'backoff_factor': 2,
+            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError'],
+            'bind': True
+        }
+    },
+    TASK_TYPE_FILEUPLOAD: {'service': 'queue_system',
+                           'queue': {"priority": "medium", "queue": "default", "bind": False},
+                           'retries': {
+                            'max_retries': 2,
+                            'initial_delay': 1,
+                            'max_delay': 10,
+                            'backoff_factor': 2,
+                            'retry_on': ['IOError', 'FileNotFoundError'],
+                            'bind': True
+                        }
+                    },
+    TASK_TYPE_DATABASE: {'service': 'db_operations',
+                         'queue': {"priority": "high", "queue": "default", "bind": False},
+                         'retries': {
+                            'max_retries': 3,
+                            'initial_delay': 1,
+                            'max_delay': 20,
+                            'backoff_factor': 2,
+                            'retry_on': ['ConnectionError', 'TimeoutError', 'DeadlockError'],
+                            'bind': True
+                        },
+                    },
+    TASK_TYPE_MESSAGING: {'service': 'messaging_service',
+                          'queue': {"priority": "high", "queue": "default", "bind": False},
+                            'retries': {
+                            'max_retries': 2,
+                            'initial_delay': 2,
+                            'max_delay': 15,
+                            'backoff_factor': 2,
+                            'retry_on': ['ConnectionError', 'TimeoutError'],
+                            'bind': True
+                        },
+                    },
+    TASK_TYPE_DEFAULT: {'service': 'queue_system',
+                        'queue': {"priority": "medium", "queue": "default", "bind": False},
+                        'retries': {
+                            'max_retries': 2,
+                            'initial_delay': 1,
+                            'max_delay': 10,
+                            'backoff_factor': 2,
+                            'retry_on': ['Exception'],
+                            'bind': True
+                        },
+                    },
+}
 
 class MonitoringConfig:
     """Configuration for task monitoring and logging"""
@@ -74,53 +141,15 @@ class RetryConfig:
     DEFAULT_BACKOFF_FACTOR = 2
     
     # Task-specific configurations
-    TASK_CONFIGS = {
-        'llm': {
-            'max_retries': 3,
-            'initial_delay': 2,
-            'max_delay': 30,
-            'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError'],
-            'bind': True
-        },
-        'file_processing': {
-            'max_retries': 2,
-            'initial_delay': 1,
-            'max_delay': 10,
-            'backoff_factor': 2,
-            'retry_on': ['IOError', 'FileNotFoundError'],
-            'bind': True
-        },
-        'database': {
-            'max_retries': 3,
-            'initial_delay': 1,
-            'max_delay': 20,
-            'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError', 'DeadlockError'],
-            'bind': True
-        },
-        'messaging': {
-            'max_retries': 2,
-            'initial_delay': 2,
-            'max_delay': 15,
-            'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError'],
-            'bind': True
-        }
-    }
+    TASK_RETRY_CONFIGS = {k: v['retries'] for k, v in TASK_CONFIG.items()}
 
 class TaskManager:
     # Class-level registry and configuration
     TASK_REGISTRY = {}
-    TASK_TYPE_CONFIG = {
-        "LLM": {"priority": "high", "queue": "llm_queue", "bind": True},
-        "FileUpload": {"priority": "medium", "queue": "default", "bind": False},
-        "Messaging": {"priority": "high", "queue": "default", "bind": False},
-        "Database": {"priority": "high", "queue": "default", "bind": False},
-    }
+    TASK_TYPE_CONFIG = {k:v['queue'] for k, v in TASK_CONFIG.items()}
     monitoring = MonitoringConfig()  # Initialize as class-level attribute
     
-    def __init__(self, task=None, emit_websocket=False, service='queue_system'):
+    def __init__(self, task=None, task_type='Default', emit_websocket=False, service='queue_system'):
         self.task = task
         self.emit_websocket = emit_websocket
         self.service = service  # Service name for logging
@@ -135,6 +164,7 @@ class TaskManager:
         self.error = None
         self.db_task = db_manager.task
         self.task_name = task.name if task else 'unknown_task'
+        self.task_type = task_type
         
         # Retry tracking
         self.retry_count = 0
@@ -144,8 +174,7 @@ class TaskManager:
 
     def _get_retry_config(self) -> Dict[str, Any]:
         """Get retry configuration based on task type"""
-        task_type = self._get_task_type()
-        return RetryConfig.TASK_CONFIGS.get(task_type, {
+        return RetryConfig.TASK_RETRY_CONFIGS.get(self.task_type, {
             'max_retries': RetryConfig.DEFAULT_MAX_RETRIES,
             'initial_delay': RetryConfig.DEFAULT_INITIAL_DELAY,
             'max_delay': RetryConfig.DEFAULT_MAX_DELAY,
@@ -153,18 +182,6 @@ class TaskManager:
             'retry_on': ['Exception']
         })
 
-    def _get_task_type(self) -> str:
-        """Determine task type from task name"""
-        task_name = self.task_name.lower()
-        if any(x in task_name for x in ['llm', 'transcribe', 'classify', 'extract', 'translate']):
-            return 'llm'
-        elif any(x in task_name for x in ['file', 'upload', 'process']):
-            return 'file_processing'
-        elif any(x in task_name for x in ['db', 'store', 'update']):
-            return 'database'
-        elif any(x in task_name for x in ['sms', 'email', 'message']):
-            return 'messaging'
-        return 'default'
 
     def _should_retry(self, error: Exception) -> bool:
         """Determine if task should be retried based on error type and retry count"""
@@ -339,7 +356,7 @@ class TaskManager:
                 self.task_id,
                 {
                     'status_code': 'SUCCESS',
-                    'result': result,
+                    'result': json.dumps(result),
                     'retry_count': self.retry_count,
                     'retry_history': self.retry_history
                 }
@@ -429,21 +446,20 @@ class TaskManager:
     @classmethod
     def register_task(cls, task_type: str):
         """Decorator to register a task in the TASK_REGISTRY and apply Celery task."""
-        # Import celery_app here to avoid circular import
-        from .config import celery_app
-        
         if task_type not in cls.TASK_TYPE_CONFIG:
             error_msg = f"Unknown task_type '{task_type}'. Please add it to TASK_TYPE_CONFIG."
             cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
             raise ValueError(error_msg)
             
         config = cls.TASK_TYPE_CONFIG[task_type]
+        queue = config.get('queue', 'default')
+        
         def decorator(func: Callable):
             @functools.wraps(func)
             def wrapper(self, *args, **kwargs):
                 # Ensure service is set from config if not provided
                 if 'service' not in kwargs:
-                    kwargs['service'] = config['queue']
+                    kwargs['service'] = queue
                 
                 # Ensure task instance is available
                 if not hasattr(self, 'request'):
@@ -482,7 +498,7 @@ class TaskManager:
             celery_task = celery_app.task(
                 bind=True,  # Always bind the task
                 name=func.__name__,
-                queue=config['queue']
+                queue=queue
             )(wrapper)
             
             cls.TASK_REGISTRY[func.__name__]['celery_task'] = celery_task
@@ -513,8 +529,8 @@ class DatabaseTaskManager(TaskManager):
     Specialized TaskManager for database operations.
     Handles database-specific task lifecycle and error handling.
     """
-    def __init__(self, task=None, emit_websocket=False, service='db_operations'):
-        super().__init__(task=task, emit_websocket=emit_websocket, service=service)
+    def __init__(self, task=None, task_type='Database', emit_websocket=False, service='db_operations'):
+        super().__init__(task=task, task_type=task_type, emit_websocket=emit_websocket, service=service)
         
     def validate_ids(self, operation: str, file_data: dict) -> tuple:
         """Validate required IDs in file_data"""
@@ -600,20 +616,10 @@ class DatabaseTaskManager(TaskManager):
             self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)}"})   
             raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)}")
         
-    def _extract_value_and_field_from_input_data(self, input_data: dict) -> tuple:
+    def _extract_value_and_field_from_input_data(self, input_data: dict, field_mapping: dict = FIELD_MAPPING) -> tuple:
         """Extract value and field from input data"""
        # Map field to user data fields
-        field_mapping = {
-            'full_name': 'user_full_name',
-            'contact_phone': 'user_contact_phone',
-            'contact_email': 'user_contact_email',
-            'province': 'user_province',
-            'district': 'user_district',
-            'municipality': 'user_municipality',
-            'ward': 'user_ward',
-            'village': 'user_village',
-            'address': 'user_address'
-        } 
+        
         update_data = dict()
         
         value = input_data['value']
@@ -656,7 +662,7 @@ class DatabaseTaskManager(TaskManager):
                 raise ValueError(f"Unknown database operation: {operation}")
             
             result = {
-                'status': 'success',
+                'status': 'SUCCESS',
                 'operation': operation,
                 'entity_key': db_result[0],
                 'entity_id': db_result[1],
@@ -675,20 +681,21 @@ class DatabaseTaskManager(TaskManager):
         try:
             execution_id = task_result['execution_id']
             self.start_task('task', execution_id, stage='db_task')
+            result = {'status_code': task_result.get('status_code')
+                      }
+            if task_result.get('error_message'):
+                result['error_message'] = task_result.get('error_message')
+                result['status_code'] = 'FAILED'
             success = db_manager.task.update_task(
                 execution_id,  # Use execution_id as task_id
-                {
-                    'status_code': task_result.get('status_code'),
-                    'error_message': task_result.get('error_message')
-                }
+                result
             )
+            result['entity_key'] = 'execution_id'
+            result['entity_id'] = execution_id
             if not success:
                 raise Exception('Update failed')
-            self.complete_task(stage='db_task')
-            return {'status': 'success',
-                    'operation': 'task',
-                    'entity_key': 'execution_id',
-                    'entity_id': execution_id}
+            self.complete_task(result, stage='db_task')
+            return result
             
         except Exception as e:
             error_msg = f"Error in db_task operation: {str(e)}"

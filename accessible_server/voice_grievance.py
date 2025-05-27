@@ -7,124 +7,32 @@ including file uploads, transcription, and processing.
 
 import os
 import uuid
-import json
-import tempfile
-from typing import Dict, Any, List, Optional, Tuple
 from flask import request, jsonify, Blueprint
-from werkzeug.utils import secure_filename
 from datetime import datetime
-import traceback
-from dotenv import load_dotenv
-from task_queue.logger import TaskLogger
-from task_queue.registered_tasks import (
-    transcribe_audio_file_task,
-    classify_and_summarize_grievance_task,
-    extract_contact_info_task,
-    translate_grievance_to_english_task,
-    process_batch_files_task,
-    store_result_to_db_task
-)
-from celery import chain, group
-
+from logger.logger import TaskLogger
+from werkzeug.utils import secure_filename
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
-from actions_server.constants import GRIEVANCE_STATUS, ALLOWED_EXTENSIONS, AUDIO_EXTENSIONS, FIELD_MAPPING
 from actions_server.websocket_utils import emit_status_update
-from actions_server.file_server import FileServerCore
+from .voice_grievance_helpers import *
+from .voice_grievance_orchestration import *
+from task_queue.registered_tasks import process_batch_files_task, store_result_to_db_task
 
-# Initialize FileServerCore
-file_server_core = FileServerCore()
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
 
 # Define service name for logging
 SERVICE_NAME = "voice_grievance"
 
-# Load environment variables
-load_dotenv('/home/ubuntu/nepal_chatbot/.env')
-
-# Configure upload settings
-UPLOAD_FOLDER = 'uploads'
-MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB max size for audio files
-
-# Create uploads directory if it doesn't exist
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
 # Create a TaskLogger instance at module level
 task_logger = TaskLogger(service_name='voice_grievance')
 
-# ------- Utility Functions -------
 
-def ensure_directory_exists(directory_path: str) -> None:
-    """Ensure that a directory exists, creating it if necessary"""
-    os.makedirs(directory_path, exist_ok=True)
-
-def create_grievance_directory(grievance_id: str, dir_type: str = None) -> str:
-    """Create and return a directory path for a specific grievance"""
-    if dir_type:
-        directory = os.path.join(UPLOAD_FOLDER, dir_type, grievance_id)
-    else:
-        directory = os.path.join(UPLOAD_FOLDER, grievance_id)
-    
-    ensure_directory_exists(directory)
-    return directory
-
-
-
-def ensure_valid_audio_filename(original_name: str, field_key: str = None, field_mapping: dict = FIELD_MAPPING) -> str:
-    """Ensure the filename has a valid extension and is secure
-    and returns the needed parameters for the recording data
-    field_name and filename"""
-    # First secure the filename
-    filename = secure_filename(original_name)
-    
-    # If 'blob' or empty, use the field_key if available
-    if not filename or filename == 'blob':
-        if field_key:
-            filename = secure_filename(field_key)
-        else:
-            filename = f"audio_{uuid.uuid4()}"
-    
-    # Check if the filename has a valid audio extension
-    has_valid_extension = any(filename.lower().endswith(ext) for ext in AUDIO_EXTENSIONS)
-    
-    if not has_valid_extension:
-        filename += '.webm'  # Default to webm extension
-    field_name = None
-
-    for key, value in field_mapping.items():
-        if key or value in filename:
-            field_name = key
-            break
-            
-    if not field_name:
-        raise ValueError(f"Invalid file name: {original_name}")
-    
-    return filename, field_name
-
-def save_uploaded_file(file_obj, directory: str, filename: str) -> Tuple[str, int]:
-    """Save an uploaded file and return the path and size"""
-    if not file_obj:
-        raise ValueError("No file provided")
-    
-    file_path = os.path.join(directory, filename)
-    file_obj.save(file_path)
-    file_size = os.path.getsize(file_path)
-    
-    # If file is empty, remove it and raise error
-    if file_size == 0:
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
-        raise ValueError("File is empty")
-    
-    return file_path, file_size
 
 @voice_grievance_bp.route('/accessible-file-upload', methods=['POST'])
 def accessible_file_upload():
     """Handle file uploads from the accessible interface directly"""
+    
     try:
         task_logger.log_task_event('accessible_file_upload', 'started', {})
         
@@ -149,21 +57,19 @@ def accessible_file_upload():
         for file in files:
             if file and file.filename:
                 filename = secure_filename(file.filename)
-                ext = '.' + filename.rsplit('.', 1)[-1].lower()
-                mimetype = file.mimetype
                 file_path = os.path.join(upload_dir, filename)
-                file.save(file_path)
+                file.save(file_path) #save the file to the upload directory
                 files_data.append({
                     'file_id': str(uuid.uuid4()),
                     'grievance_id': grievance_id,
                     'file_name': filename,
                     'file_path': file_path,
-                    'file_type': ext,
+                    'file_type': filename.rsplit('.', 1)[-1].lower(),
                     'file_size': os.path.getsize(file_path),
                     'upload_date': datetime.now().isoformat(),
-                    'mimetype': mimetype
+                    'mimetype': file.mimetype
                 })
-                if ext in AUDIO_EXTENSIONS:
+                if _is_audio_file(filename):
                     audio_files.append(filename)
         
         if not files_data:
@@ -271,7 +177,7 @@ def submit_grievance():
                 }
                 
                 # Store in database
-                success = store_result_to_db_task.delay('recording', recording_data)
+                success = store_result_to_db_task.delay(recording_data)
                 if success:
                     # Add to audio files list with the format expected by orchestrate_voice_processing
                     audio_files.append({
@@ -315,141 +221,3 @@ def submit_grievance():
         }), 500
 
 
-def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Process a single audio file and return its task chain.
-
-    Args:
-        recording_data: Dictionary containing recording data passed from the submit_grievance endpoint
-        
-    Returns:
-        Dict containing task chain information
-    """
-    file_path = recording_data.get('file_path')
-    language = recording_data.get('language_code')
-    task_logger.log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path})
-
-    # # Extract the field name from the recording data
-    # field_mapping = {'user_full_name': 'full_name',
-    #                  'user_contact_phone': 'contact_phone',
-    #                  'user_contact_email': 'contact_email',
-    #                  'user_province': 'province',
-    #                  'user_district': 'district',
-    #                  'user_municipality': 'municipality',
-    #                  'user_ward': 'ward',
-    #                  'user_village': 'village',
-    #                  'user_address': 'address',
-    #                  'grievance_details': 'grievance'}
-    
-    # field_name = field_mapping.get(recording_data.get('field_name'))
-    # if field_name not in field_mapping.keys() and field_name in field_mapping.values():
-    #     field_name = field_mapping.get(recording_data.get('field_name'))
-    #     recording_data['field_name'] = field_name
-    # else:
-    #     task_logger.log_task_event('process_single_audio_file', 'failed', {'error': f"Invalid field name: {recording_data.get('field_name')}"})
-    #     raise ValueError(f"Invalid field name: {recording_data.get('field_name')}")
-    
-    is_contact_info = 'user' in recording_data.get('file_name')
-    is_grievance_details = 'grievance' in recording_data.get('file_name')
-
-    # Initialize task chain
-    task_chain = {
-        'temp_path': file_path,  # Store path for cleanup
-        'file_data': recording_data
-    }
-
-    # Start with transcription task
-    chain_tasks = [transcribe_audio_file_task.s(recording_data)]
-    
-    # Build the task chain based on file type
-    if is_contact_info:
-        task_chain['type'] = 'contact_info'
-        # After transcription, extract contact info and store in parallel
-        chain_tasks.extend([
-            group(
-                extract_contact_info_task.s(),
-                store_result_to_db_task.s()
-            )
-        ])
-        
-    elif is_grievance_details:
-        task_chain['type'] = 'grievance_details'
-        # After transcription, store and classify in parallel
-        chain_tasks.extend([
-            group(
-                store_result_to_db_task.s(),
-                classify_and_summarize_grievance_task.s()
-            )
-        ])
-        
-        # Add translation if needed
-        if language != 'en':
-            chain_tasks.extend([
-                translate_grievance_to_english_task.s(),
-                store_result_to_db_task.s()
-            ])
-    else:
-        task_chain['type'] = 'transcription_only'
-        # Just store the transcription
-        chain_tasks.append(store_result_to_db_task.s())
-    
-    # Create and execute the final chain
-    final_chain = chain(*chain_tasks)
-    result = final_chain.delay()
-    
-    # Store the final task ID for tracking
-    task_chain['task_id'] = result.id
-
-    return task_chain
-
-def orchestrate_voice_processing(audio_files: List[Any], recording_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Orchestrate parallel processing of multiple audio files.
-
-    Args:
-        audio_files: List of uploaded audio files
-        language: Language code for processing
-        
-    Returns:
-        Dict containing task IDs and status for all files
-    """
-    try:
-        # Process each file and collect task chains
-        file_tasks = {}
-        temp_paths = []
-        
-        for audio_file in audio_files:
-            if audio_file:
-                # Get the original filename from the file_data if available
-                filename = audio_file.get('filename', f"audio_{uuid.uuid4()}")
-                file_path = audio_file.get('file_path')
-                
-                if not file_path:
-                    continue
-                    
-                task_chain = process_single_audio_file(recording_data)
-                file_tasks[filename] = {
-                    'task_id': task_chain['task_id'],
-                    'type': task_chain['type'],
-                    'status': 'pending'
-                }
-                temp_paths.append(task_chain['temp_path'])
-        
-        if not file_tasks:
-            raise ValueError("No valid audio files provided")
-        
-        return {
-            'status': 'SUCCESS',
-            'files': file_tasks
-        }
-            
-    except Exception as e:
-        task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(e)})
-        # Clean up any temp files that were created
-        for temp_path in temp_paths:
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            except Exception as cleanup_error:
-                task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(cleanup_error)})
-        raise
