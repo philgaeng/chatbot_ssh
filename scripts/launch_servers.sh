@@ -120,7 +120,7 @@ check_redis() {
 wait_for_worker_ready() {
     local queue_name=$1
     local log_file="$LOG_DIR/celery_${queue_name}.log"
-    local max_wait_time=60
+    local max_wait_time=25
     local check_interval=2
     local elapsed=0
 
@@ -335,7 +335,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "flask_server")
-            if ! start_service "$service" "python3 -m flask run --host=0.0.0.0 --port=5001"; then
+            if ! start_service "$service" "python3 actions_server/app.py"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi

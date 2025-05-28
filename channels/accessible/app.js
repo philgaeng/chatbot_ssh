@@ -2591,21 +2591,64 @@ window.addEventListener('DOMContentLoaded', function() {
     LanguageModule.init(); // Initialize language module
 });
 
-// Add WebSocket status update handling
-socket.on('grievance_status_update', function(data) {
-    if (data.grievance_id === state.grievanceId) {
-        switch (data.status) {
-            case 'processing':
-                UIModule.showMessage('Processing your files...', false);
-                break;
-            case 'completed':
-                UIModule.showMessage('Files processed successfully.', false);
-                break;
-            case 'failed':
-                UIModule.showMessage(`Error processing files: ${data.data.error || 'Unknown error'}`, true);
-                break;
-        }
+
+// Initialize Socket.IO with detailed logging
+const socket = io('https://nepal-gms-chatbot.facets-ai.com', {
+    path: '/accessible-socket.io',
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 3600,  // Match server ping_timeout
+    pingInterval: 25000,  // Match server ping_interval
+    pingTimeout: 3600,  // Match server ping_timeout
+    debug: true,
+    forceNew: true,
+    // Add these options for more detailed logging
+    autoConnect: true,
+    extraHeaders: {
+        'X-Debug': 'true'
     }
 });
 
-const socket = io('https://nepal-gms-chatbot.facets-ai.com:5001'); // Initialize Socket.IO connection to backend
+// Add detailed connection logging
+socket.on('connect', () => {
+    console.log('Socket.IO connected successfully');
+    console.log('Transport:', socket.io.engine.transport.name);
+    console.log('Protocol version:', socket.io.engine.protocol);
+    console.log('Session ID:', socket.id);
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Socket.IO connection error:', error);
+    console.log('Transport:', socket.io.engine?.transport?.name);
+    console.log('Protocol version:', socket.io.engine?.protocol);
+});
+
+socket.on('error', (error) => {
+    console.error('Socket.IO error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Socket.IO disconnected:', reason);
+});
+
+// Send a test message
+socket.emit('test', {message: 'Hello'}, (response) => {
+    console.log('Test response:', response);
+});
+
+// Listen for all events
+socket.onAny((eventName, ...args) => {
+    console.log('Received event:', eventName, args);
+});
+
+// Listen for status updates
+socket.on('status_update', function(data) {
+    console.log('Received status update:', data);
+    // Handle the status update
+    if (data.status === 'submitted') {
+        console.log('Grievance submitted:', data);
+        // Update UI or show notification
+    }
+});
