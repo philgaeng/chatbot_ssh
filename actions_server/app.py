@@ -8,8 +8,9 @@ from actions_server.constants import ALLOWED_EXTENSIONS
 import os
 
 app = Flask(__name__)
-CORS(app)
-socketio.init_app(app, cors_allowed_origins="*")
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio.init_app(app
+)
 
 # Initialize core and API instances
 file_server_core = FileServerCore(
@@ -26,6 +27,8 @@ app.register_blueprint(voice_grievance_bp)
 file_server_bp.emit_status_update = emit_status_update
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5001, allow_unsafe_werkzeug=True)
+    import eventlet
+    import eventlet.wsgi
+    socketio.run(app, host='0.0.0.0', port=5001)
 
 
