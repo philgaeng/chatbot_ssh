@@ -26,6 +26,9 @@ def connect():
         print('Protocol version:', sio.eio.protocol)
     print('Session ID:', sio.sid)
     print('===========================\n')
+    # Join the room with the session ID
+    sio.emit('join', {'room': sio.sid})
+    logger.debug(f"Joined room: {sio.sid}")
 
 @sio.event
 def connect_error(error):
@@ -59,6 +62,7 @@ def status_update(data):
     print('\n=== Status Update ===')
     print('Status:', data.get('status'))
     print('Message:', data.get('message'))
+    print('Session ID:', sio.sid)
     print('===========================\n')
 
 @sio.on('*')

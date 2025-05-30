@@ -1,14 +1,33 @@
 {
+  "store_result_to_db_task": {
+    "failed_tasks": 28,
+    "last_duration": 0.00018930435180664062,
+    "total_tasks": 14
+  },
+  "accessible_file_upload": {
+    "start_time": 1748567138.7220845
+  },
   "process_batch_files_task": {
-    "last_duration": 0.00016164779663085938,
-    "total_tasks": 1
+    "start_time": 1748567138.7901847,
+    "last_duration": 0.07980012893676758,
+    "total_tasks": 2
   },
   "process_file_upload_task": {
-    "start_time": 1748439002.7056847,
-    "last_duration": 0.05166268348693848,
+    "start_time": 1748567138.9286854,
+    "last_duration": 0.3265247344970703,
     "total_tasks": 2
   },
   "process_file_upload": {
-    "start_time": 1748439002.7115498
+    "start_time": 1748567139.2306185
+  },
+  "submit_grievance": {
+    "start_time": 1748608136.360912,
+    "failed_tasks": 3
+  },
+  "generate_ids": {
+    "start_time": 1748608082.5342422,
+    "failed_tasks": 1,
+    "last_duration": 0.002160787582397461,
+    "total_tasks": 2
   }
 }

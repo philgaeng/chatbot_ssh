@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass
 from functools import lru_cache
-from .settings import *  # Import all Celery/queue constants from settings.py
+from .settings import *  # Import all Celery/queue constants and env variables from settings.py
 from .celery_app import celery_app  # Import celery_app from celery_app.py
 from .registered_tasks import *  # Eagerly import all tasks for Celery registration
 
@@ -46,8 +46,8 @@ class ServiceConfig:
 @dataclass
 class QueueSystemConfig:
     """Queue system configuration settings"""
-    redis_host: str = os.getenv('REDIS_HOST', 'localhost')
-    redis_port: int = int(os.getenv('REDIS_PORT', '6379'))
+    redis_host: str = REDIS_HOST
+    redis_port: int = REDIS_PORT
     flower_port: int = int(os.getenv('FLOWER_PORT', '5555'))
 
 @dataclass
@@ -286,10 +286,6 @@ redis_config.validate()
 redis_url = f'redis://{redis_config.host}:{redis_config.port}/{redis_config.db}'
 if redis_config.password:
     redis_url = f'redis://:{redis_config.password}@{redis_config.host}:{redis_config.port}/{redis_config.db}'
-
-# Queue names (these are fixed constants, not configurable)
-QUEUE_LLM = 'llm_queue'
-QUEUE_DEFAULT = 'default'
 
 # Initialize TASK_REGISTRY as empty
 TASK_REGISTRY = {}

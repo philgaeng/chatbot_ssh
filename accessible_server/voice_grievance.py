@@ -139,16 +139,30 @@ def submit_grievance():
     try:
         task_logger.log_task_event('submit_grievance', 'started', {})
         
+        # Extract user_id and grievance_id from the form data
+        user_id = request.form.get('user_id')
+        grievance_id = request.form.get('grievance_id')
+        
+        task_logger.log_task_event('submit_grievance', 'processing', {
+            'received_user_id': user_id,
+            'received_grievance_id': grievance_id,
+            'form_keys': list(request.form.keys()),
+            'files_keys': list(request.files.keys())
+        })
+        
         # Initialize the grievance and user
         # Merge or create user
-        user_id = db_manager.user.create_or_update_user()
+        user_id = db_manager.user.create_or_update_user(user_id)
         if not user_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'})
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
             
         # Create grievance
-        grievance_id = db_manager.grievance.create_or_update_grievance({'user_id': user_id, 
-                                                              'source': 'accessibility'})
+        grievance_id = db_manager.grievance.create_or_update_grievance({
+            'user_id': user_id, 
+            'grievance_id': grievance_id,
+            'source': 'accessibility'
+        })
         if not grievance_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create grievance'})
             return jsonify({'status': 'error', 'error': 'Failed to create grievance'}), 500

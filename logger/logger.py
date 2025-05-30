@@ -97,3 +97,22 @@ class TaskLogger:
             except json.JSONDecodeError:
                 pass
         return default 
+    
+    def log_event(self, message: str, extra_data: Optional[Dict[str, Any]] = None, level: str = "info"):
+        """General-purpose logging with consistent formatting."""
+        log_message = f"Service: {self.service_name} - Message: {message}"
+        if extra_data:
+            log_message += f" - Extra Data: {json.dumps(extra_data)}"
+        
+        if level == "debug":
+            self.logger.debug(log_message)
+        if level == "debug":
+            self.logger.debug(message)
+        elif level == "warning":
+            self.logger.warning(message)
+        elif level == "error":
+            self.logger.error(message)
+        elif level == "critical":
+            self.logger.critical(message)
+        else:
+            self.logger.info(message)

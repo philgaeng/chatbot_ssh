@@ -3,6 +3,11 @@
  * Modular structure based on refactoring plan
  */
 
+// Debug: Check if script starts loading
+console.log('🔍 Starting to load app.js...');
+
+import socket from './socket.js';
+
 // Module namespaces
 let SpeechModule = {};
 let AccessibilityModule = {};
@@ -45,7 +50,8 @@ let LanguageModule = {
 // Global state
 let state = {
     currentStep: '1',  // Start with first step as string
-    grievanceId: null
+    grievanceId: null,
+    userId: null
 };
 let recordedBlobs = {};
 let appInitialized = false;
@@ -957,19 +963,24 @@ APIModule = {
      * Submits the main grievance (user info + recordings)
      * @param {Object} userInfo - User info fields
      * @param {Object} recordings - Map of recordingType -> Blob
-     * @param {string} [language] - Optional language code
+     * @param {FormData} [additionalFormData] - Optional FormData with additional fields like grievance_id, user_id, language_code
      * @returns {Promise}
      */
-    submitGrievance: async function(userInfo, recordings, language) {
+    submitGrievance: async function(userInfo, recordings, additionalFormData) {
         const formData = new FormData();
+        
         // Add user info fields
         Object.entries(userInfo).forEach(([key, value]) => {
             formData.append(key, value);
         });
-        // Add language if provided
-        if (language) {
-            formData.append('language', language);
+        
+        // Add additional form data if provided (grievance_id, user_id, language_code, etc.)
+        if (additionalFormData && additionalFormData instanceof FormData) {
+            for (const [key, value] of additionalFormData.entries()) {
+                formData.append(key, value);
+            }
         }
+        
         // Add all recordings as separate files
         Object.entries(recordings).forEach(([type, blob]) => {
             formData.append(type, blob, `${type}.webm`);
@@ -978,6 +989,17 @@ APIModule = {
                 formData.append(`duration`, blob.duration);
             }
         });
+        
+        // Debug: Log what we're sending
+        console.log('Submitting grievance with FormData contents:');
+        for (const [key, value] of formData.entries()) {
+            if (value instanceof File || value instanceof Blob) {
+                console.log(`- ${key}: ${value.constructor.name} (${value.size} bytes)`);
+            } else {
+                console.log(`- ${key}: ${value}`);
+            }
+        }
+        
         // POST to /submit-grievance
         return this.request(this.endpoints.submitGrievance, {
             method: 'POST',
@@ -1067,6 +1089,22 @@ APIModule = {
         return this.request(endpoint, {
             method: 'GET',
         });
+    },
+    
+    /**
+     * Generates grievance_id and user_id using centralized logic
+     * @param {string} province - Province code (e.g., 'KO', 'Koshi')
+     * @param {string} district - District code (e.g., 'JH', 'Jhapa')
+     * @returns {Promise} - Promise with generated IDs
+     */
+    generateIds: async function(province, district) {
+        return this.request(this.endpoints.generateIds, {
+            method: 'POST',
+            body: JSON.stringify({
+                province: province,
+                district: district
+            })
+        });
     }
 },
 
@@ -1078,6 +1116,7 @@ FileUploadModule = {
     uploadedFiles: [],
     maxFileSize: 0,
     allowedFileTypes: [],
+    uploadedFileNames: [],
     
     init: function() {
         this.maxFileSize = APP_CONFIG.upload.maxFileSize || 10 * 1024 * 1024; // 10MB default
@@ -1086,6 +1125,9 @@ FileUploadModule = {
         this.setupFileInput();
         this.setupFileDrop();
         this.setupAttachmentButtons();
+        
+        // Register event-specific status update handler for file uploads
+        socket.on('status_update:file_upload', this.handleStatusUpdateFileUpload.bind(this));
     },
     
     setupFileInput: function() {
@@ -1425,6 +1467,28 @@ FileUploadModule = {
         const uploadedFilesSection = document.getElementById('uploadedFilesSection');
         if (uploadedFilesSection) {
             uploadedFilesSection.hidden = true;
+        }
+    },
+    
+    handleStatusUpdateFileUpload: function(data) {
+        console.log('Received status_update:file_upload:', data);
+        // Check if this is a completed file upload
+        if (data.status === 'completed' && data.message && data.message.results) {
+            // Extract file names from the results array
+            const newFiles = data.message.results
+                .filter(result => result.status === 'success' && result.operation === 'file_upload' && result.value && result.value.file_name)
+                .map(result => result.value.file_name);
+            // Append new file names to the global list
+            this.uploadedFileNames = [...this.uploadedFileNames, ...newFiles];
+            // Update the upload success message
+            const successMessageElement = document.getElementById('uploadSuccessMessage');
+            if (successMessageElement) {
+                if (this.uploadedFileNames.length > 0) {
+                    successMessageElement.textContent = `Files uploaded successfully: ${this.uploadedFileNames.join(', ')}`;
+                } else {
+                    successMessageElement.textContent = 'Files uploaded successfully!';
+                }
+            }
         }
     }
 };
@@ -1977,13 +2041,23 @@ GrievanceModule = {
                 UIModule.showMessage('Please complete all steps before submitting.', true);
                 return;
             }
-            // Add interface language
+            
+            // Check if IDs are available
+            if (!state.grievanceId || !state.userId) {
+                UIModule.showMessage('Session not properly initialized. Please refresh the page.', true);
+                return;
+            }
+            
+            // Add interface language and IDs to formData
             const formData = new FormData();
             formData.append('language_code', LanguageModule.getCurrentLanguage());
-            // Submit all recordings (no userInfo)
+            formData.append('grievance_id', state.grievanceId);
+            formData.append('user_id', state.userId);
+            
+            // Submit all recordings with the pre-generated IDs
             const result = await APIModule.submitGrievance({}, recordedBlobs, formData);
             if (result.status === 'success') {
-                state.grievanceId = result.grievance_id;
+                // IDs are already set and room already joined, just proceed to attachments
                 UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
                 UIModule.currentWindowIndex = 0;
                 UIModule.Navigation.showCurrentWindow();
@@ -1996,7 +2070,6 @@ GrievanceModule = {
                 UIModule.showMessage(result.error || result.message || 'Failed to submit grievance', true);
                 SpeechModule.speak('There was an error submitting your grievance. Please try again.');
             }
-            return {grievanceId: state.grievanceId};
         } catch (error) {
             console.error('Error submitting grievance:', error);
             UIModule.showMessage('There was an error submitting your grievance. Please try again.', true);
@@ -2324,7 +2397,12 @@ EventModule = {
 
     setupRecordButtons: function() {
         // Handle record buttons
-        document.querySelectorAll('.record-btn').forEach(btn => {
+        console.log('setupRecordButtons called');
+        const recordButtons = document.querySelectorAll('.record-btn');
+        console.log(`Found ${recordButtons.length} record buttons`);
+        
+        recordButtons.forEach((btn, index) => {
+            console.log(`Setting up listener for button ${index + 1}:`, btn.id);
             btn.addEventListener('click', () => {
                 if (RecordingModule.isRecording) {
                     RecordingModule.stopRecording();
@@ -2337,6 +2415,7 @@ EventModule = {
                 }
             });
         });
+        console.log('setupRecordButtons completed');
     },
 
     setupFileUploadButtons: function() {
@@ -2578,77 +2657,328 @@ function populateReviewUI(data) {
 
 
 window.addEventListener('DOMContentLoaded', function() {
-    // Initialize all modules
-    SpeechModule.init();
-    AccessibilityModule.init();
-    UIModule.init();
-    APIModule.init();
-    FileUploadModule.init();
-    RecordingModule.init();
-    GrievanceModule.init();
-    ModifyModule.init();
-    EventModule.init();
-    LanguageModule.init(); // Initialize language module
-});
-
-
-// Initialize Socket.IO with detailed logging
-const socket = io('https://nepal-gms-chatbot.facets-ai.com', {
-    path: '/accessible-socket.io',
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    timeout: 3600,  // Match server ping_timeout
-    pingInterval: 25000,  // Match server ping_interval
-    pingTimeout: 3600,  // Match server ping_timeout
-    debug: true,
-    forceNew: true,
-    // Add these options for more detailed logging
-    autoConnect: true,
-    extraHeaders: {
-        'X-Debug': 'true'
+    // Initialize all modules with error handling
+    try {
+        console.log('Initializing SpeechModule...');
+        SpeechModule.init();
+        console.log('✅ SpeechModule initialized');
+    } catch (error) {
+        console.error('❌ SpeechModule failed:', error);
     }
-});
-
-// Add detailed connection logging
-socket.on('connect', () => {
-    console.log('Socket.IO connected successfully');
-    console.log('Transport:', socket.io.engine.transport.name);
-    console.log('Protocol version:', socket.io.engine.protocol);
-    console.log('Session ID:', socket.id);
-});
-
-socket.on('connect_error', (error) => {
-    console.error('Socket.IO connection error:', error);
-    console.log('Transport:', socket.io.engine?.transport?.name);
-    console.log('Protocol version:', socket.io.engine?.protocol);
-});
-
-socket.on('error', (error) => {
-    console.error('Socket.IO error:', error);
-});
-
-socket.on('disconnect', (reason) => {
-    console.log('Socket.IO disconnected:', reason);
-});
-
-// Send a test message
-socket.emit('test', {message: 'Hello'}, (response) => {
-    console.log('Test response:', response);
-});
-
-// Listen for all events
-socket.onAny((eventName, ...args) => {
-    console.log('Received event:', eventName, args);
-});
-
-// Listen for status updates
-socket.on('status_update', function(data) {
-    console.log('Received status update:', data);
-    // Handle the status update
-    if (data.status === 'submitted') {
-        console.log('Grievance submitted:', data);
-        // Update UI or show notification
+    
+    try {
+        console.log('Initializing AccessibilityModule...');
+        AccessibilityModule.init();
+        console.log('✅ AccessibilityModule initialized');
+    } catch (error) {
+        console.error('❌ AccessibilityModule failed:', error);
     }
+    
+    try {
+        console.log('Initializing UIModule...');
+        UIModule.init();
+        console.log('✅ UIModule initialized');
+    } catch (error) {
+        console.error('❌ UIModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing APIModule...');
+        APIModule.init();
+        console.log('✅ APIModule initialized');
+    } catch (error) {
+        console.error('❌ APIModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing FileUploadModule...');
+        FileUploadModule.init();
+        console.log('✅ FileUploadModule initialized');
+    } catch (error) {
+        console.error('❌ FileUploadModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing RecordingModule...');
+        RecordingModule.init();
+        console.log('✅ RecordingModule initialized');
+    } catch (error) {
+        console.error('❌ RecordingModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing GrievanceModule...');
+        GrievanceModule.init();
+        console.log('✅ GrievanceModule initialized');
+    } catch (error) {
+        console.error('❌ GrievanceModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing ModifyModule...');
+        ModifyModule.init();
+        console.log('✅ ModifyModule initialized');
+    } catch (error) {
+        console.error('❌ ModifyModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing LanguageModule...');
+        LanguageModule.init();
+        console.log('✅ LanguageModule initialized');
+    } catch (error) {
+        console.error('❌ LanguageModule failed:', error);
+    }
+    
+    // Initialize EventModule with a slight delay to ensure all DOM elements are ready
+    setTimeout(() => {
+        try {
+            console.log('Initializing EventModule...');
+            EventModule.init();
+            console.log('✅ EventModule initialized after DOM ready');
+        } catch (error) {
+            console.error('❌ EventModule failed:', error);
+        }
+    }, 100);
+    
+    // Generate grievanceId and userId after all modules are initialized
+    setTimeout(() => {
+        try {
+            console.log('🔍 Generating grievanceId and userId...');
+            
+            // Get province and district from URL parameters if available
+            const urlParams = new URLSearchParams(window.location.search);
+            const province = urlParams.get('province') || 'KO';  // Default to 'KO'
+            const district = urlParams.get('district') || 'JH';   // Default to 'JH'
+            
+            console.log(`Using province: ${province}, district: ${district} for ID generation`);
+            
+            // Call the API to generate IDs using the APIModule
+            APIModule.generateIds(province, district)
+            .then(data => {
+                console.log('🔍 Generated IDs:', data);
+                if (data.status === 'success') {
+                    state.grievanceId = data.grievance_id;
+                    state.userId = data.user_id;
+                    
+                    console.log('Generated grievanceId:', state.grievanceId);
+                    console.log('Generated userId:', state.userId);
+                    
+                    // Join the room for this grievance
+                    socket.emit('join_room', { room: state.grievanceId });
+                    console.log('Joined room:', state.grievanceId);
+                } else {
+                    console.error('❌ Failed to generate IDs:', data.message);
+                    // Fallback to client-side generation if API fails
+                    const timestamp = Date.now();
+                    const randomId = Math.random().toString(36).substr(2, 9);
+                    state.grievanceId = `GRV_${timestamp}_${randomId}`;
+                    state.userId = `USR_${timestamp}_${randomId}`;
+                    
+                    console.log('Fallback grievanceId:', state.grievanceId);
+                    console.log('Fallback userId:', state.userId);
+                    
+                    socket.emit('join_room', { room: state.grievanceId });
+                    console.log('Joined room:', state.grievanceId);
+                }
+            })
+            .catch(error => {
+                console.error('❌ API call failed, using fallback:', error);
+                // Fallback to client-side generation if API call fails
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substr(2, 9);
+                state.grievanceId = `GRV_${timestamp}_${randomId}`;
+                state.userId = `USR_${timestamp}_${randomId}`;
+                
+                console.log('Fallback grievanceId:', state.grievanceId);
+                console.log('Fallback userId:', state.userId);
+                
+                socket.emit('join_room', { room: state.grievanceId });
+                console.log('Joined room:', state.grievanceId);
+            });
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize grievance session:', error);
+        }
+    }, 200);
 });
+
+// Attach modules to window for global access (needed for inline event handlers)
+window.SpeechModule = SpeechModule;
+window.AccessibilityModule = AccessibilityModule;
+window.UIModule = UIModule;
+window.APIModule = APIModule;
+window.FileUploadModule = FileUploadModule;
+window.RecordingModule = RecordingModule;
+window.GrievanceModule = GrievanceModule;
+window.ModifyModule = ModifyModule;
+window.EventModule = EventModule;
+window.LanguageModule = LanguageModule;
+
+// Test if script loads completely and we reach the DOMContentLoaded setup
+console.log('🔍 End of app.js reached - about to set up DOMContentLoaded listener');
+
+// Function to initialize all modules
+function initializeModules() {
+    console.log('🔍 Starting module initialization...');
+    
+    // Initialize all modules with error handling
+    try {
+        console.log('Initializing SpeechModule...');
+        SpeechModule.init();
+        console.log('✅ SpeechModule initialized');
+    } catch (error) {
+        console.error('❌ SpeechModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing AccessibilityModule...');
+        AccessibilityModule.init();
+        console.log('✅ AccessibilityModule initialized');
+    } catch (error) {
+        console.error('❌ AccessibilityModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing UIModule...');
+        UIModule.init();
+        console.log('✅ UIModule initialized');
+    } catch (error) {
+        console.error('❌ UIModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing APIModule...');
+        APIModule.init();
+        console.log('✅ APIModule initialized');
+    } catch (error) {
+        console.error('❌ APIModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing FileUploadModule...');
+        FileUploadModule.init();
+        console.log('✅ FileUploadModule initialized');
+    } catch (error) {
+        console.error('❌ FileUploadModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing RecordingModule...');
+        RecordingModule.init();
+        console.log('✅ RecordingModule initialized');
+    } catch (error) {
+        console.error('❌ RecordingModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing GrievanceModule...');
+        GrievanceModule.init();
+        console.log('✅ GrievanceModule initialized');
+    } catch (error) {
+        console.error('❌ GrievanceModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing ModifyModule...');
+        ModifyModule.init();
+        console.log('✅ ModifyModule initialized');
+    } catch (error) {
+        console.error('❌ ModifyModule failed:', error);
+    }
+    
+    try {
+        console.log('Initializing LanguageModule...');
+        LanguageModule.init();
+        console.log('✅ LanguageModule initialized');
+    } catch (error) {
+        console.error('❌ LanguageModule failed:', error);
+    }
+    
+    // Initialize EventModule with a slight delay to ensure all DOM elements are ready
+    setTimeout(() => {
+        try {
+            console.log('Initializing EventModule...');
+            EventModule.init();
+            console.log('✅ EventModule initialized after DOM ready');
+        } catch (error) {
+            console.error('❌ EventModule failed:', error);
+        }
+    }, 100);
+}
+
+// Function to generate IDs and join socket room
+function initializeGrievanceSession() {
+    try {
+        console.log('🔍 Generating grievanceId and userId...');
+        
+        // Get province and district from URL parameters if available
+        const urlParams = new URLSearchParams(window.location.search);
+        const province = urlParams.get('province') || 'KO';  // Default to 'KO'
+        const district = urlParams.get('district') || 'JH';   // Default to 'JH'
+        
+        console.log(`Using province: ${province}, district: ${district} for ID generation`);
+        
+        // Call the API to generate IDs using the APIModule
+        APIModule.generateIds(province, district)
+        .then(data => {
+            console.log('🔍 Generated IDs:', data);
+            if (data.status === 'success') {
+                state.grievanceId = data.grievance_id;
+                state.userId = data.user_id;
+                
+                console.log('Generated grievanceId:', state.grievanceId);
+                console.log('Generated userId:', state.userId);
+                
+                // Join the room for this grievance
+                socket.emit('join_room', { room: state.grievanceId });
+                console.log('Joined room:', state.grievanceId);
+            } else {
+                console.error('❌ Failed to generate IDs:', data.message);
+                // Fallback to client-side generation if API fails
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substr(2, 9);
+                state.grievanceId = `GRV_${timestamp}_${randomId}`;
+                state.userId = `USR_${timestamp}_${randomId}`;
+                
+                console.log('Fallback grievanceId:', state.grievanceId);
+                console.log('Fallback userId:', state.userId);
+                
+                socket.emit('join_room', { room: state.grievanceId });
+                console.log('Joined room:', state.grievanceId);
+            }
+        })
+        .catch(error => {
+            console.error('❌ API call failed, using fallback:', error);
+            // Fallback to client-side generation if API call fails
+            const timestamp = Date.now();
+            const randomId = Math.random().toString(36).substr(2, 9);
+            state.grievanceId = `GRV_${timestamp}_${randomId}`;
+            state.userId = `USR_${timestamp}_${randomId}`;
+            
+            console.log('Fallback grievanceId:', state.grievanceId);
+            console.log('Fallback userId:', state.userId);
+            
+            socket.emit('join_room', { room: state.grievanceId });
+            console.log('Joined room:', state.grievanceId);
+        });
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize grievance session:', error);
+    }
+}
+
+// Check if DOM is already ready or wait for it
+if (document.readyState === 'loading') {
+    console.log('🔍 DOM is still loading, waiting for DOMContentLoaded...');
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeModules();
+        // Generate IDs after modules are initialized
+        setTimeout(initializeGrievanceSession, 200);
+    });
+} else {
+    console.log('🔍 DOM is already ready, initializing immediately...');
+    initializeModules();
+    // Generate IDs after modules are initialized
+    setTimeout(initializeGrievanceSession, 200);
+}

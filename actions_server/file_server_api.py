@@ -13,7 +13,7 @@ from actions_server.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
 from actions_server.api_manager import APIManager
 from actions_server.file_server_core import FileServerCore
-from task_queue.registered_tasks import process_batch_files_task
+from task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
 
 file_server_core = FileServerCore()
 
@@ -33,6 +33,7 @@ class FileServerAPI:
         """Register all routes with the blueprint"""
         self.blueprint.route('/')(self.health_check)
         self.blueprint.route('/test-db')(self.test_db)
+        self.blueprint.route('/generate-ids', methods=['POST'])(self.generate_ids)
         self.blueprint.route('/upload-files', methods=['POST'])(self.upload_files)
         self.blueprint.route('/files/<grievance_id>', methods=['GET'])(self.get_files)
         self.blueprint.route('/download/<file_id>', methods=['GET'])(self.download_file)
@@ -88,6 +89,42 @@ class FileServerAPI:
             return jsonify({
                 "status": "error", 
                 "message": f"Database connection error: {str(e)}"
+            }), 500
+            
+    def generate_ids(self):
+        """Generate grievance_id and user_id using centralized ID generation"""
+        try:
+            self.core.log_event(event_type='started', details={'method': 'POST', 'endpoint': '/generate-ids'})
+            
+            # Get optional parameters from request
+            data = request.get_json() or {}
+            province = data.get('province', 'KO')  # Default to 'KO' if not provided
+            district = data.get('district', 'JH')  # Default to 'JH' if not provided
+            
+            # Generate both IDs using the centralized function
+            grievance_id = db_manager.base.generate_id(type='grievance_id', province=province, district=district)
+            user_id = db_manager.base.generate_id(type='user_id', province=province, district=district)
+            
+            self.core.log_event(event_type='completed', details={
+                'grievance_id': grievance_id,
+                'user_id': user_id,
+                'province': province,
+                'district': district
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'grievance_id': grievance_id,
+                'user_id': user_id,
+                'province': province,
+                'district': district
+            }), 200
+            
+        except Exception as e:
+            self.core.log_event(event_type='failed', details={'error': str(e)})
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to generate IDs: {str(e)}'
             }), 500
             
     def validate_files(self, files: List[Any]) -> bool:
@@ -183,8 +220,10 @@ class FileServerAPI:
                 self.core.log_event(event_type='failed', details={'error': "All files were invalid"})
 
             else:
-                # Process files in batch
-                result = process_batch_files_task.delay(grievance_id, uploaded_files)
+                # # Process files in batch
+                # result = process_batch_files_task.delay(grievance_id, uploaded_files)
+                file = uploaded_files[0]
+                result = process_file_upload_task.delay(grievance_id, file)
 
                 response_data = jsonify({
                     "status": "processing",

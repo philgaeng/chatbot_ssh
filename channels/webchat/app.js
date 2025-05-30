@@ -282,6 +282,7 @@ function extractGrievanceId(response) {
         if (grievanceMatch) {
             return grievanceMatch[1];
         }
+
     }
     return null;
 }
@@ -802,4 +803,5 @@ function updateTaskStatus(taskId, data) {
 }
 
 // Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeChat); 
 document.addEventListener('DOMContentLoaded', initializeChat); 

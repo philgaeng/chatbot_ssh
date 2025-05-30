@@ -6,14 +6,19 @@ QUEUE_LLM = 'llm_queue'
 QUEUE_DEFAULT = 'default'
 
 # Redis configuration
-redis_host = os.getenv('REDIS_HOST', 'localhost')
-redis_port = int(os.getenv('REDIS_PORT', '6379'))
-redis_db = int(os.getenv('REDIS_DB', '0'))
-redis_password = os.getenv('REDIS_PASSWORD')
-redis_url = f'redis://{redis_host}:{redis_port}/{redis_db}'
-if redis_password:
-    redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}' 
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+if REDIS_PASSWORD:
+    REDIS_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}' 
     
+
+# Celery configuration: use environment variables for broker and backend
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
+
 
 @dataclass
 class TaskConfig:

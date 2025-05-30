@@ -2,7 +2,8 @@ from celery import Celery
 from kombu import Exchange, Queue
 from .settings import (
     QUEUE_FOLDER,
-    redis_url,
+    CELERY_BROKER_URL,
+    CELERY_RESULT_BACKEND,
     QUEUE_LLM,
     QUEUE_DEFAULT,
     task_config,
@@ -13,8 +14,8 @@ celery_app = Celery(QUEUE_FOLDER)
 
 celery_app.conf.update(
     # Broker and backend
-    broker_url=redis_url,
-    result_backend=redis_url,
+    broker_url=CELERY_BROKER_URL,
+    result_backend=CELERY_RESULT_BACKEND,
     # Serialization
     task_serializer='json',
     accept_content=['json'],

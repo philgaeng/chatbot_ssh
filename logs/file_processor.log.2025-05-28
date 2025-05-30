@@ -1,0 +1,2 @@
+2025-05-29 00:09:31,217 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250529-9C36-A", "file": "QR_Jhapa_district.png"}
+2025-05-29 00:17:47,960 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250529-B257-A", "file": "QR_Jhapa_district.png"}
