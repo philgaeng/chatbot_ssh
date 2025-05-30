@@ -1772,6 +1772,7 @@ class DatabaseManagers:
         self.file = FileDbManager()
         self.recording = RecordingDbManager()
         self.translation = TranslationDbManager()
+        self.base = BaseDatabaseManager()
 
 # Individual manager instances (kept for backward compatibility)
 file_manager = FileDbManager()
@@ -1781,5 +1782,6 @@ task_manager = TaskDbManager()
 user_manager = UserDbManager()
 recording_manager = RecordingDbManager()
 translation_manager = TranslationDbManager()
+base_manager = BaseDatabaseManager()
 # Unified manager instance
 db_manager = DatabaseManagers() 

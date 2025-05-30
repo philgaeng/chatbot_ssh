@@ -1,5 +1,6 @@
 // Accessible Interface Configuration
 
+
 // API Configuration
 const API_CONFIG = {
     // Base URL for the API
@@ -12,7 +13,8 @@ const API_CONFIG = {
         SUBMIT_GRIEVANCE: '/submit-voice-grievance',
         TRANSCRIBE: '/transcribe-audio',
         FILE_UPLOAD: '/upload-files',
-        CREATE_GRIEVANCE: '/create-grievance'
+        CREATE_GRIEVANCE: '/create-grievance',
+        GENERATE_ID: '/generate-ids'
     },
     
     // Request headers
@@ -105,7 +107,8 @@ window.APP_CONFIG = {
             submitGrievance: '/submit-grievance',
             fileUpload: '/upload-files',
             accessibleFileUpload: '/accessible-file-upload',
-            checkStatus: '/check-status'
+            checkStatus: '/check-status',
+            generateIds: '/generate-ids'
         }
     },
     recording: {

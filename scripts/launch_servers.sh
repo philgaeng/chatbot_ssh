@@ -11,7 +11,17 @@ export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export REDIS_DB=0
 export REDIS_PASSWORD="3fduLmg25@k"
-export CELERY_BROKER_URL="redis://:3fduLmg25%40k@localhost:6379/0"
+
+# Build dependent Redis URLs for Socket.IO and Celery
+if [ -n "$REDIS_PASSWORD" ]; then
+    export SOCKETIO_REDIS_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
+    export CELERY_BROKER_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
+    export CELERY_RESULT_BACKEND="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
+else
+    export SOCKETIO_REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
+    export CELERY_BROKER_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+    export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
+fi
 
 # Create necessary directories
 mkdir -p "$LOG_DIR" "$UPLOAD_DIR"
@@ -259,6 +269,8 @@ start_service() {
         FLASK_APP=actions_server/app.py \
         FLASK_ENV=development \
         UPLOAD_FOLDER=$UPLOAD_DIR \
+        SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
+        REDIS_PASSWORD="$REDIS_PASSWORD" \
         nohup $command > "$log_file" 2>&1 &
         
         # Store the PID
