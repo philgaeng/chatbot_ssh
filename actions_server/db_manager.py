@@ -969,7 +969,7 @@ class GrievanceDbManager(BaseDatabaseManager):
         try:
             operations_logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
             
-                update_query = """
+            update_query = """
                     UPDATE grievances 
                     SET grievance_categories = %s,
                         grievance_summary = %s,
@@ -981,7 +981,7 @@ class GrievanceDbManager(BaseDatabaseManager):
                     WHERE grievance_id = %s
                     RETURNING grievance_id
                 """
-                result = self.execute_update(update_query, (
+            result = self.execute_update(update_query, (
                     data.get('grievance_categories'),
                     data.get('grievance_summary'),
                     data.get('grievance_details'),
@@ -1012,7 +1012,7 @@ class GrievanceDbManager(BaseDatabaseManager):
                     # Grievance exists, update it
                     success = self.update_grievance(grievance_id, data)
                     return grievance_id if success else None
-            else:
+                else:
                     # Grievance doesn't exist, create it with provided ID
                     return self.create_grievance(data)
             else:
@@ -1241,7 +1241,7 @@ class UserDbManager(BaseDatabaseManager):
             user_id = data.get('user_id') or self.generate_id(type='user_id')
             operations_logger.info(f"create_user: Creating user with ID: {user_id}")
             
-                insert_query = """
+            insert_query = """
                     INSERT INTO users (
                         id, user_unique_id, user_full_name,
                         user_contact_phone, user_contact_email,
@@ -1250,7 +1250,7 @@ class UserDbManager(BaseDatabaseManager):
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """
-                result = self.execute_insert(insert_query, (
+            result = self.execute_insert(insert_query, (
                 user_id,
                 user_id,  # Use same ID for user_unique_id
                     data.get('user_full_name'),
@@ -1275,7 +1275,7 @@ class UserDbManager(BaseDatabaseManager):
         try:
             operations_logger.info(f"update_user: Updating user with ID: {user_id}")
             
-                update_query = """
+            update_query = """
                     UPDATE users 
                     SET user_full_name = %s,
                         user_contact_phone = %s,
@@ -1289,7 +1289,7 @@ class UserDbManager(BaseDatabaseManager):
                     WHERE id = %s
                     RETURNING id
                 """
-                result = self.execute_update(update_query, (
+            result = self.execute_update(update_query, (
                     data.get('user_full_name'),
                     data.get('user_contact_phone'),
                     data.get('user_contact_email'),

@@ -1,33 +1,10 @@
 {
-  "store_result_to_db_task": {
-    "last_duration": 0.0001838207244873047,
-    "total_tasks": 11,
-    "failed_tasks": 19
-  },
-  "accessible_file_upload": {
-    "start_time": 1748662235.5595424
-  },
-  "process_batch_files_task": {
-    "start_time": 1748662235.5965395,
-    "last_duration": 0.03090500831604004,
-    "total_tasks": 2
-  },
-  "process_file_upload": {
-    "start_time": 1748662235.6342742
-  },
-  "process_file_upload_task": {
-    "last_duration": 0.022210359573364258,
-    "total_tasks": 2,
-    "start_time": 1748662235.6310248
-  },
-  "generate_ids": {
-    "start_time": 1748662206.1637852,
-    "last_duration": 0.0019001960754394531,
-    "total_tasks": 1
-  },
   "submit_grievance": {
-    "start_time": 1748662225.948675,
-    "last_duration": 0.14182424545288086,
     "total_tasks": 1
+  },
+  "store_result_to_db_task": {
+    "failed_tasks": 8,
+    "last_duration": 0.00017499923706054688,
+    "total_tasks": 5
   }
 }

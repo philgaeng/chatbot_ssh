@@ -958,7 +958,7 @@ APIModule = {
         if (additionalFormData && additionalFormData instanceof FormData) {
             for (const [key, value] of additionalFormData.entries()) {
                 formData.append(key, value);
-            }
+        }
         }
         
         // Add all recordings as separate files
@@ -2223,7 +2223,7 @@ GrievanceModule = {
                 error: 'Session not properly initialized. Please refresh the page.',
                 type: 'session'
             };
-        }
+            }
         
         try {
             // Add interface language and IDs to formData
@@ -2659,7 +2659,7 @@ EventModule = {
                             } else if (result && result.success) {
                                 console.log('[EventModule] Submission successful');
                             }
-                            break;
+                        break;
                     case 'retry':
                 const { step, window } = UIModule.getCurrentWindow();
                 const recordingType = getRecordingTypeForWindow(step, window);
@@ -3117,8 +3117,8 @@ function setupStateChangeListeners() {
             } else {
                 btn.classList.remove('submitting');
                 // Don't auto-enable - let validation determine if it should be enabled
-            }
-        });
+    }
+});
     });
     
     console.log('✅ State change listeners initialized');
@@ -3192,7 +3192,7 @@ if (document.readyState === 'loading') {
         initializeModules();
         // Generate IDs after modules are initialized
         setTimeout(initializeGrievanceSession, 200);
-    });
+});
 } else {
     console.log('🔍 DOM is already ready, initializing immediately...');
     initializeModules();
