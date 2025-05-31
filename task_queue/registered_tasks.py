@@ -78,7 +78,7 @@ def process_batch_files_task(self,
     task_mgr.start_task(entity_type='grievance', entity_id=grievance_id, stage='batch_file_processing')
     try:
         upload_group = group(
-            process_file_upload_task.s(grievance_id, file_data, service=service)
+            process_file_upload_task.s(grievance_id, file_data, emit_websocket=False, service=service)
             for file_data in files_data
         )
         # The callback will be called with the list of results
