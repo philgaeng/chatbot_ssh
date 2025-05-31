@@ -67,11 +67,10 @@ aws/            # AWS related files
 
 # AWS CLI and uploads
 **/awscliv2.zip    # Ignore awscliv2.zip in any directory
-/uploads/           # Ignore entire uploads directory
 /logs/              # Ignore entire logs directory
 /task_queue/logs/   # Ignore entire logs directory
 /models/            # Ignore entire models directory
-uploads/            # Ignore entire uploads directory
 logs/               # Ignore entire logs directory
 task_queue/logs/    # Ignore entire logs directory
 models/             # Ignore entire models directory
+uploads/

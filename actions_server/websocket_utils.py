@@ -51,7 +51,7 @@ def handle_disconnect():
 
 @socketio.on('error')
 def handle_error(error):
-    task_logger.log_error("Socket.IO error", error=error)
+    task_logger.log_event(message="error", extra_data={"error": str(error)})
 
 def emit_status_update(session_id, status, message):
     """Emit a status update to a specific session"""
@@ -64,7 +64,7 @@ def emit_status_update(session_id, status, message):
         logger.debug(f"Room to emit to: {session_id}")
         emit_key = 'status_update'
         # Emit the event
-        if 'operation' in message['results'].keys():
+        if isinstance(message, dict) and 'results' in message and 'operation' in message['results']:
             operation = message['results']['operation']
             emit_key = f'status_update:{operation}'
         socketio.emit(emit_key, {
@@ -76,5 +76,5 @@ def emit_status_update(session_id, status, message):
         task_logger.log_event(f"Status update emitted successfully - session_id: {session_id}")
         logger.debug(f"Event emitted to room: {session_id}")
     except Exception as e:
-        task_logger.log_error(f"Error emitting status update - session_id: {session_id}", error=e)
+        task_logger.log_event(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
         logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 

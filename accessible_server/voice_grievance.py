@@ -152,13 +152,13 @@ def submit_grievance():
         
         # Initialize the grievance and user
         # Merge or create user
-        user_id = db_manager.user.create_or_update_user(user_id)
+        user_id = db_manager.user.create_user({'user_id': user_id})
         if not user_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'})
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
             
         # Create grievance
-        grievance_id = db_manager.grievance.create_or_update_grievance({
+        grievance_id = db_manager.grievance.create_grievance({
             'user_id': user_id, 
             'grievance_id': grievance_id,
             'source': 'accessibility'

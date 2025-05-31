@@ -47,37 +47,25 @@ let LanguageModule = {
     }
 };
 
-// Global state
+// Global state and configuration
 let state = {
-    currentStep: '1',  // Start with first step as string
+    currentStep: 'grievance',
+    language: 'ne', // Default to Nepali
     grievanceId: null,
     userId: null
 };
+
+let speechReady = false;
+let speechQueue = [];
 let recordedBlobs = {};
-let appInitialized = false;
-
-// --- Submission Overlay Logic ---
-// 1. Show overlay on submit
-// 2. Prevent multiple submissions
-// 3. Show Cancel button after 5s
-// 4. AbortController for fetch
-// 5. Hide overlay and re-enable UI on completion/cancel
-
-// Add these variables at the top level
-let submissionAbortController = null;
-let cancelBtnTimeout = null;
-
-// Add at the start of the file, after any imports
+let isSpeechIndicatorEnabled = true;
 let overlayMutationObserver = null;
-
-// Add at the top of the file
-let isSubmitting = false;
+let cancelBtnTimeout = null;
 let isTransitioning = false;
 
-// Add this near the top of the file where other state variables are defined
-let isSpeechIndicatorEnabled = true;
+const SUBMISSION_STEP_WINDOW = ['personalInfo', 'address'];
 
-// Replace the APP_STEPS array with a dictionary
+// Define the APP_STEPS structure for application flow
 const APP_STEPS = {
     grievance: {
         name: 'Record your Grievance',
@@ -88,6 +76,11 @@ const APP_STEPS = {
         name: 'Record your Details',
         windows: ['fullName', 'phone', 'municipality', 'village', 'address'],
         requiresRecording: true
+    },
+    confirmation: {
+        name: 'Voice Grievance Submitted',
+        windows: ['confirmation'],
+        requiresRecording: false
     },
     review: {
         name: 'Review your Submission',
@@ -101,12 +94,9 @@ const APP_STEPS = {
     }
 };
 
-// Define the submission step as a constant
-const SUBMISSION_STEP_WINDOW = ['personalInfo', 'address'];
-
-// Add a helper function to get step order
+// Helper function to get step order for navigation
 function getStepOrder() {
-    return ['grievance', 'personalInfo', 'attachments', 'review'];
+    return ['grievance', 'personalInfo', 'review', 'attachments'];
 }
 
 // At the top of the file, after the windowToRecordingTypeMap
@@ -122,6 +112,7 @@ const windowToRecordingTypeMap = {
         'address': 'user_address'
     }
 };
+
 const stepWindowList = Object.entries(windowToRecordingTypeMap).map(([k, v]) => [k, Object.keys(v)]);
 
 // Optionally, generate the reverse mapping automatically:
@@ -639,25 +630,9 @@ UIModule = {
                 return;
             }
 
-
-            // Special handling for transition from personalInfo to confirmation
-            if (currentStepKey === 'personalInfo' && nextStepKey === 'attachments') {
-                console.log('[NAV] goToNextStep - starting submission');
-                GrievanceModule.submitGrievance().then(result => {
-                    UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
-                    state.currentStep = 'attachments';
-                    UIModule.currentWindowIndex = 0;
-                    console.log('[NAV] goToNextStep - going to attachments');
-                    this.showCurrentWindow();
-                }).catch(error => {
-                    UIModule.showMessage('Failed to submit grievance.', true);
-                    isTransitioning = false;
-                });
-                return; // Early return as we're handling the transition asynchronously
-            } else {
+            // Navigation logic only - submission is handled by GrievanceModule.handleSubmission
                 UIModule.currentStepIndex = nextStepIndex;
                 state.currentStep = nextStepKey;
-            }
             UIModule.currentWindowIndex = 0;
             console.log('[NAV] goToNextStep - navigation done showing window for step:', nextStepKey);
             this.showCurrentWindow();
@@ -798,7 +773,7 @@ UIModule = {
         const {
             isRecording = false,
             hasRecording = false,
-            isSubmitting = false
+            isSubmitting = GrievanceModule.isSubmitting // Use centralized state
         } = options;
     
         // Get current step/window info
@@ -860,14 +835,19 @@ UIModule = {
                 case 'submit':
                     if (step === 'personalInfo' && window === 'address') {
                         button.style.display = '';
-                        button.disabled = isSubmitting || !(
-                            RecordingModule.hasRecording('grievance_details') &&
-                            RecordingModule.hasRecording('user_full_name') &&
-                            RecordingModule.hasRecording('user_contact_phone') &&
-                            RecordingModule.hasRecording('user_municipality') &&
-                            RecordingModule.hasRecording('user_village') &&
-                            RecordingModule.hasRecording('user_address')
-                        );
+                        
+                        // Use centralized validation from GrievanceModule
+                        const validation = GrievanceModule.canSubmit();
+                        button.disabled = !validation.canSubmit;
+                        
+                        // Add tooltip or aria-label with validation reason
+                        if (!validation.canSubmit) {
+                            button.setAttribute('title', validation.reason);
+                            button.setAttribute('aria-label', `Submit (disabled: ${validation.reason})`);
+                        } else {
+                            button.removeAttribute('title');
+                            button.setAttribute('aria-label', 'Submit grievance');
+                        }
                     } else {
                         button.style.display = 'none';
                         button.disabled = true;
@@ -1117,8 +1097,15 @@ FileUploadModule = {
     maxFileSize: 0,
     allowedFileTypes: [],
     uploadedFileNames: [],
+    isInitialized: false, // Add initialization flag
     
     init: function() {
+        // Prevent double initialization
+        if (this.isInitialized) {
+            console.log('FileUploadModule already initialized, skipping...');
+            return;
+        }
+        
         this.maxFileSize = APP_CONFIG.upload.maxFileSize || 10 * 1024 * 1024; // 10MB default
         this.allowedFileTypes = APP_CONFIG.upload.allowedTypes || [];
         
@@ -1128,6 +1115,9 @@ FileUploadModule = {
         
         // Register event-specific status update handler for file uploads
         socket.on('status_update:file_upload', this.handleStatusUpdateFileUpload.bind(this));
+        
+        this.isInitialized = true;
+        console.log('✅ FileUploadModule initialized successfully');
     },
     
     setupFileInput: function() {
@@ -1135,17 +1125,26 @@ FileUploadModule = {
         const fileList = document.getElementById('fileList');
         
         if (fileInput && fileList) {
-            fileInput.addEventListener('change', (event) => {
+            // Remove ALL event listeners by replacing the element with a clone
+            const newFileInput = fileInput.cloneNode(true);
+            fileInput.parentNode.replaceChild(newFileInput, fileInput);
+            
+            // Add event listener to the new clean element
+            newFileInput.addEventListener('change', (event) => {
                 this.handleFileSelection(event.target.files);
             });
         }
     },
     
     setupAttachmentButtons: function() {
-        // Setup attach files button
+        // Clean and setup attach files button
         const attachFilesBtn = document.getElementById('attachFilesBtn');
         if (attachFilesBtn) {
-            attachFilesBtn.addEventListener('click', () => {
+            // Remove all event listeners by replacing with clone
+            const newAttachFilesBtn = attachFilesBtn.cloneNode(true);
+            attachFilesBtn.parentNode.replaceChild(newAttachFilesBtn, attachFilesBtn);
+            
+            newAttachFilesBtn.addEventListener('click', () => {
                 const fileInput = document.getElementById('fileInput');
                 if (fileInput) {
                     fileInput.click();
@@ -1153,18 +1152,26 @@ FileUploadModule = {
             });
         }
         
-        // Setup submit files button
+        // Clean and setup submit files button
         const submitFilesBtn = document.getElementById('submitFilesBtn');
         if (submitFilesBtn) {
-            submitFilesBtn.addEventListener('click', () => {
+            // Remove all event listeners by replacing with clone
+            const newSubmitFilesBtn = submitFilesBtn.cloneNode(true);
+            submitFilesBtn.parentNode.replaceChild(newSubmitFilesBtn, submitFilesBtn);
+            
+            newSubmitFilesBtn.addEventListener('click', () => {
                 this.submitSelectedFiles();
             });
         }
         
-        // Setup attach more files button
+        // Clean and setup attach more files button
         const attachMoreBtn = document.getElementById('attachMoreBtn');
         if (attachMoreBtn) {
-            attachMoreBtn.addEventListener('click', () => {
+            // Remove all event listeners by replacing with clone
+            const newAttachMoreBtn = attachMoreBtn.cloneNode(true);
+            attachMoreBtn.parentNode.replaceChild(newAttachMoreBtn, attachMoreBtn);
+            
+            newAttachMoreBtn.addEventListener('click', () => {
                 // Clear existing selected files first
                 this.selectedFiles = [];
                 this.updateFileList();
@@ -1900,7 +1907,7 @@ RecordingModule = {
         UIModule.updateButtonStates({
             isRecording: isRecording,
             hasRecording: this.hasRecording(this.recordingType),
-            isSubmitting: isSubmitting
+            isSubmitting: GrievanceModule.isSubmitting // Use centralized state
         });
     },
     
@@ -1949,10 +1956,11 @@ RecordingModule = {
 };
 
 /**
- * Grievance Module - Handles grievance submission flow
+ * Grievance Module - Handles grievance-related business logic and state
  */
 GrievanceModule = {
     categories: [],
+    isSubmitting: false, // Centralized submission state
     
     init: function() {
         console.log("Initializing Grievance Module");
@@ -1989,6 +1997,165 @@ GrievanceModule = {
         });
     },
     
+    /**
+     * Centralized state management with event notifications
+     */
+    setSubmissionState: function(isSubmitting) {
+        const oldState = this.isSubmitting;
+        this.isSubmitting = isSubmitting;
+        
+        // Dispatch state change event for other modules to listen
+        if (oldState !== isSubmitting) {
+            window.dispatchEvent(new CustomEvent('submissionStateChanged', { 
+                detail: { 
+                    isSubmitting,
+                    previousState: oldState,
+                    timestamp: Date.now()
+                } 
+            }));
+            console.log(`[STATE] Submission state changed: ${oldState} → ${isSubmitting}`);
+        }
+    },
+
+    /**
+     * Centralized validation logic - single source of truth
+     */
+    canSubmit: function() {
+        // Check if already submitting
+        if (this.isSubmitting) {
+            console.warn('[VALIDATION] Cannot submit: already submitting');
+            return { canSubmit: false, reason: 'Already submitting' };
+        }
+
+        // Check if recording is in progress
+        if (RecordingModule.isRecording) {
+            console.warn('[VALIDATION] Cannot submit: recording in progress');
+            return { canSubmit: false, reason: 'Recording in progress' };
+        }
+
+        // Check current step/window
+        const { step, window } = UIModule.getCurrentWindow();
+        if (!(step === 'personalInfo' && window === 'address')) {
+            console.warn('[VALIDATION] Cannot submit: not at final step', { step, window });
+            return { canSubmit: false, reason: 'Not at final step' };
+        }
+
+        // Check if session is properly initialized
+        if (!state.grievanceId || !state.userId) {
+            console.warn('[VALIDATION] Cannot submit: session not initialized');
+            return { canSubmit: false, reason: 'Session not properly initialized' };
+        }
+
+        // Check if all required recordings exist
+        const requiredRecordings = [
+            'grievance_details',
+            'user_full_name', 
+            'user_contact_phone',
+            'user_municipality',
+            'user_village',
+            'user_address'
+        ];
+
+        const missingRecordings = requiredRecordings.filter(type => 
+            !RecordingModule.hasRecording(type)
+        );
+
+        if (missingRecordings.length > 0) {
+            console.warn('[VALIDATION] Missing recordings:', missingRecordings);
+            return { 
+                canSubmit: false, 
+                reason: `Missing recordings: ${missingRecordings.join(', ')}`,
+                missingRecordings 
+            };
+        }
+
+        console.log('[VALIDATION] All checks passed - can submit');
+        return { canSubmit: true, reason: 'All validations passed' };
+    },
+
+    /**
+     * Centralized submission handler - replaces EventModule.handleSubmit
+     */
+    handleSubmission: async function(e) {
+        if (e) {
+            e.preventDefault(); // Prevent form submission
+        }
+        
+        console.log('[TRACE] Submit button clicked - handled by GrievanceModule');
+        console.log('[DEBUG] Current step:', state.currentStep);
+        console.log('[DEBUG] Submit button state:', {
+            visible: e?.target?.offsetParent !== null,
+            enabled: !e?.target?.disabled,
+            text: e?.target?.textContent
+        });
+
+        // Use centralized validation - single validation call
+        const validation = this.canSubmit();
+        if (!validation.canSubmit) {
+            console.warn(`[WARN] Submission blocked: ${validation.reason}`);
+            UIModule.showMessage(`Cannot submit: ${validation.reason}`, true);
+            SpeechModule.speak(`Cannot submit: ${validation.reason}`);
+            return { success: false, reason: validation.reason, type: 'validation' };
+        }
+
+        // Set submission state using centralized method
+        this.setSubmissionState(true);
+        if (e?.target) {
+            e.target.disabled = true;
+        }
+        
+        try {
+            // Call the actual submission logic with validation result to avoid duplicate checks
+            const result = await this.submitGrievance(validation);
+            
+            if (result.success) {
+                // Handle successful submission
+                console.log('[SUCCESS] Submission completed successfully');
+                UIModule.showMessage(result.message, false);
+                
+                // Announce success with grievance ID
+                const successMessage = result.message + ' Your grievance ID is ' + 
+                    state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.';
+                SpeechModule.speak(successMessage);
+                
+                // Reset submission state after successful completion
+                this.setSubmissionState(false);
+                
+                return { success: true, result: result.result };
+            } else {
+                // Handle submission failure with type-specific handling
+                console.warn(`[WARN] Submission failed [${result.type}]: ${result.error}`);
+                this.handleSubmissionError(result);
+                
+                // Re-enable the button for retry
+                if (e?.target) {
+                    e.target.disabled = false;
+                }
+                
+                return { success: false, error: result.error, type: result.type };
+            }
+            
+        } catch (error) {
+            // This should rarely happen now since submitGrievance returns status objects
+            console.error('[ERROR] Unexpected error in submission:', error);
+            
+            // Re-enable the button if submission fails
+            if (e?.target) {
+                e.target.disabled = false;
+            }
+            
+            // Reset state on unexpected error
+            this.setSubmissionState(false);
+            
+            // Show user-friendly error using UIModule consistently
+            const errorMessage = error.message || 'An unexpected error occurred. Please try again.';
+            UIModule.showMessage(errorMessage, true);
+            SpeechModule.speak(errorMessage);
+            
+            return { success: false, error: errorMessage, type: 'unexpected' };
+        }
+        // Note: State reset is handled appropriately in each path
+    },
     
     validateCurrentStep: function() {
         const { step, window } = UIModule.getCurrentWindow();
@@ -2000,7 +2167,6 @@ GrievanceModule = {
         }
         return true; // Always return true to allow proceeding
     },
-    
     
     getFieldLabel: function(fieldName) {
         // Map field names to user-friendly labels
@@ -2029,25 +2195,37 @@ GrievanceModule = {
     },
     
     
-    submitGrievance: async function() {
-        try {
-            if (RecordingModule.isRecording) {
-                UIModule.showMessage('Please wait for navigation to complete before submitting.', true);
-                return;
-            }
-            isTransitioning = true;
+    submitGrievance: async function(validationResult = null) {
+        // Use passed validation result or perform validation if not provided (for backward compatibility)
+        const validation = validationResult || this.canSubmit();
+        if (!validation.canSubmit) {
+            console.warn(`[VALIDATION] Submit blocked: ${validation.reason}`);
+            return { 
+                success: false, 
+                error: validation.reason,
+                type: 'validation'
+            };
+        }
+        
             const { step, window } = UIModule.getCurrentWindow();
             if (!(step === 'personalInfo' && window === 'address')) {
-                UIModule.showMessage('Please complete all steps before submitting.', true);
-                return;
-            }
-            
-            // Check if IDs are available
-            if (!state.grievanceId || !state.userId) {
-                UIModule.showMessage('Session not properly initialized. Please refresh the page.', true);
-                return;
-            }
-            
+            return { 
+                success: false, 
+                error: 'Please complete all steps before submitting.',
+                type: 'validation'
+            };
+        }
+        
+        // Check if IDs are available
+        if (!state.grievanceId || !state.userId) {
+            return { 
+                success: false, 
+                error: 'Session not properly initialized. Please refresh the page.',
+                type: 'session'
+            };
+        }
+        
+        try {
             // Add interface language and IDs to formData
             const formData = new FormData();
             formData.append('language_code', LanguageModule.getCurrentLanguage());
@@ -2061,21 +2239,37 @@ GrievanceModule = {
                 UIModule.currentStepIndex = UIModule.stepOrder.indexOf('attachments');
                 UIModule.currentWindowIndex = 0;
                 UIModule.Navigation.showCurrentWindow();
-                // Announce success
-                SpeechModule.speak('Your grievance has been submitted successfully. Your grievance ID is ' + 
-                    state.grievanceId.split('').join(' ') + '. You can now attach photos or documents.');
+                
                 // Log all task status/progress to console
                 console.log('Task orchestration result:', result.tasks || result.files);
+                
+                // Don't reset submission state here - let the calling function handle success flow
+                return { 
+                    success: true, 
+                    result,
+                    message: 'Your grievance has been submitted successfully.'
+                };
             } else {
-                UIModule.showMessage(result.error || result.message || 'Failed to submit grievance', true);
-                SpeechModule.speak('There was an error submitting your grievance. Please try again.');
+                const errorMessage = result.error || result.message || 'Failed to submit grievance';
+                return { 
+                    success: false, 
+                    error: errorMessage,
+                    type: 'api'
+                };
             }
         } catch (error) {
             console.error('Error submitting grievance:', error);
-            UIModule.showMessage('There was an error submitting your grievance. Please try again.', true);
-            SpeechModule.speak('There was an error submitting your grievance. Please try again.');
+            return { 
+                success: false, 
+                error: error.message || 'There was an error submitting your grievance. Please try again.',
+                type: 'network'
+            };
         } finally {
-            isTransitioning = false;
+            // Always re-enable submit buttons, but don't reset state here
+            // State reset is handled by the calling function based on success/failure
+            document.querySelectorAll('[data-action="submit"]').forEach(btn => {
+                btn.disabled = false;
+            });
         }
     },
     
@@ -2114,7 +2308,11 @@ GrievanceModule = {
             });
             
             if (!response.success) {
-                throw new Error(response.message || 'Failed to load grievance data');
+                return {
+                    success: false,
+                    error: response.message || 'Failed to load grievance data',
+                    type: 'api'
+                };
             }
             
             // Store the data for later use
@@ -2126,9 +2324,21 @@ GrievanceModule = {
             // Show success message
             UIModule.showMessage('Grievance data loaded successfully');
             
+            return {
+                success: true,
+                data: response.data,
+                message: 'Grievance data loaded successfully'
+            };
+            
     } catch (error) {
             console.error('Error loading grievance data:', error);
-            UIModule.showMessage('Failed to load grievance data. Please try again.', true);
+            const errorType = this.getErrorType(error, 'network');
+            
+            return {
+                success: false,
+                error: error.message || 'Failed to load grievance data. Please try again.',
+                type: errorType
+            };
         } finally {
             UIModule.hideLoading();
         }
@@ -2170,7 +2380,106 @@ GrievanceModule = {
         });
     },
 
-    // ... rest of GrievanceModule ...
+
+
+    /**
+     * Helper method to check if submission is currently allowed
+     */
+    isSubmissionAllowed: function() {
+        return this.canSubmit().canSubmit;
+    },
+
+    /**
+     * Helper method to get validation status with details
+     */
+    getValidationStatus: function() {
+        return this.canSubmit();
+    },
+
+    /**
+     * Helper method to get current submission state
+     */
+    getSubmissionState: function() {
+        return {
+            isSubmitting: this.isSubmitting,
+            canSubmit: this.isSubmissionAllowed(),
+            validationDetails: this.getValidationStatus()
+        };
+    },
+
+    /**
+     * Handle submission errors with type-specific messaging and actions
+     */
+    handleSubmissionError: function(result) {
+        const { error, type } = result;
+        
+        // Log with error type for debugging
+        console.error(`[${type.toUpperCase()}] Submission error:`, error);
+        
+        // Type-specific error handling
+        switch (type) {
+            case 'validation':
+                // Validation errors - usually user action required
+                UIModule.showMessage(`Validation Error: ${error}`, true);
+                SpeechModule.speak(`Please fix the following: ${error}`);
+                break;
+                
+            case 'session':
+                // Session errors - may require page refresh
+                UIModule.showMessage(`Session Error: ${error}`, true);
+                SpeechModule.speak(`Session error: ${error}. You may need to refresh the page.`);
+                break;
+                
+            case 'api':
+                // API errors - server-side issues
+                UIModule.showMessage(`Server Error: ${error}`, true);
+                SpeechModule.speak(`Server error: ${error}. Please try again.`);
+                break;
+                
+            case 'network':
+                // Network errors - connectivity issues
+                UIModule.showMessage(`Network Error: ${error}`, true);
+                SpeechModule.speak(`Network error: ${error}. Please check your connection and try again.`);
+                break;
+                
+            default:
+                // Generic error handling
+                UIModule.showMessage(error, true);
+                SpeechModule.speak(error);
+        }
+        
+        // Reset submission state for all error types
+        this.setSubmissionState(false);
+    },
+
+    /**
+     * Helper method to determine error type from error object or result
+     */
+    getErrorType: function(error, defaultType = 'unknown') {
+        if (typeof error === 'object' && error.type) {
+            return error.type;
+        }
+        
+        // Categorize based on error message patterns
+        if (error && typeof error === 'string') {
+            const errorMessage = error.toLowerCase();
+            
+            if (errorMessage.includes('network') || errorMessage.includes('connection') || errorMessage.includes('fetch')) {
+                return 'network';
+            }
+            if (errorMessage.includes('validation') || errorMessage.includes('required') || errorMessage.includes('missing')) {
+                return 'validation';
+            }
+            if (errorMessage.includes('session') || errorMessage.includes('unauthorized') || errorMessage.includes('expired')) {
+                return 'session';
+            }
+            if (errorMessage.includes('server') || errorMessage.includes('api') || errorMessage.includes('500') || errorMessage.includes('400')) {
+                return 'api';
+            }
+        }
+        
+        return defaultType;
+    },
 };
 
 ModifyModule = {
@@ -2299,7 +2608,6 @@ EventModule = {
         this.setupModifyButtons();
         this.setupNavigationButtons();
         this.setupRecordButtons();
-        this.setupFileUploadButtons();
         this.setupAccessibilityButtons();
         this.setupDialogButtons();
         this.setupActionButtons(); // Add this line
@@ -2325,74 +2633,60 @@ EventModule = {
     setupNavigationButtons: function() {
         // Handle navigation buttons
         document.querySelectorAll('.nav-btn[data-action]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const action = btn.dataset.action;
-                if (RecordingModule.isRecording) return;
+                
+                // Prevent any action if recording is in progress
+                if (RecordingModule.isRecording) {
+                    console.warn('[EventModule] Action blocked: recording in progress');
+                    return;
+                }
 
+                try {
                 switch(action) {
                     case 'next':
                     case 'continue':
-                    case 'submit':
                         UIModule.Navigation.goToNextWindow();
                         break;
                     case 'prev':
                         UIModule.Navigation.goToPrevWindow();
                         break;
+                        case 'submit':
+                            console.log('[EventModule] Delegating submit to GrievanceModule');
+                            const result = await GrievanceModule.handleSubmission(e);
+                            if (result && !result.success) {
+                                console.warn('[EventModule] Submission failed:', result.reason || result.error);
+                            } else if (result && result.success) {
+                                console.log('[EventModule] Submission successful');
+                            }
+                            break;
                     case 'retry':
                 const { step, window } = UIModule.getCurrentWindow();
                 const recordingType = getRecordingTypeForWindow(step, window);
                 if (recordingType) {
                             RecordingModule.startRecording(recordingType);
+                            } else {
+                                console.warn('[EventModule] No recording type found for retry action');
                         }
                         break;
+                        default:
+                            console.warn('[EventModule] Unknown navigation action:', action);
+                    }
+                } catch (error) {
+                    console.error('[EventModule] Error handling navigation action:', action, error);
+                    
+                    // Show user-friendly error message
+                    const errorMessage = error.message || `Failed to ${action}. Please try again.`;
+                    UIModule.showMessage(errorMessage, true);
+                    SpeechModule.speak(errorMessage);
+                    
+                    // Re-enable button if it was disabled
+                    if (e.target && e.target.disabled) {
+            e.target.disabled = false;
+        }
                 }
             });
         });
-    },
-
-    handleSubmit: async function(e) {
-        e.preventDefault(); // Prevent form submission
-        
-        console.log('[TRACE] Submit button clicked');
-        console.log('[DEBUG] Current step:', state.currentStep);
-        console.log('[DEBUG] Submit button state:', {
-                visible: e.target.offsetParent !== null,
-                enabled: !e.target.disabled,
-                text: e.target.textContent
-        });
-
-        // Prevent submission if recording is in progress
-        if (RecordingModule.isRecording) {
-            console.warn('[WARN] Cannot submit while recording is in progress');
-            UIModule.showMessage('Please finish or stop your recording before submitting.', true);
-            return;
-        }
-
-        // Only allow submission at the correct step/window using SUBMISSION_STEP_WINDOW
-        const { step, window } = UIModule.getCurrentWindow();
-        if (!(step === SUBMISSION_STEP_WINDOW[0] && window === SUBMISSION_STEP_WINDOW[1])) {
-            console.warn('[WARN] Cannot submit from step:', step, window);
-            UIModule.showMessage('Please complete all steps before submitting.', true);
-            return;
-        }
-
-        // Prevent multiple submissions
-        if (isSubmitting) {
-            console.warn('[WARN] Submission already in progress, ignoring click');
-            return;
-        }
-
-        try {
-            isSubmitting = true;
-            e.target.disabled = true;
-            // Call submitGrievance
-            await GrievanceModule.submitGrievance();
-        } catch (error) {
-            console.error('[ERROR] Submission failed:', error);
-            // Re-enable the button if submission fails
-            e.target.disabled = false;
-            isSubmitting = false;
-        }
     },
 
     setupRecordButtons: function() {
@@ -2416,33 +2710,6 @@ EventModule = {
             });
         });
         console.log('setupRecordButtons completed');
-    },
-
-    setupFileUploadButtons: function() {
-        // Handle file upload buttons
-        const attachFilesBtn = document.getElementById('attachFilesBtn');
-        if (attachFilesBtn) {
-            attachFilesBtn.addEventListener('click', () => {
-                const fileInput = document.getElementById('fileInput');
-                if (fileInput) fileInput.click();
-            });
-        }
-
-        const submitFilesBtn = document.getElementById('submitFilesBtn');
-        if (submitFilesBtn) {
-            submitFilesBtn.addEventListener('click', () => {
-                FileUploadModule.submitSelectedFiles();
-            });
-        }
-
-        const attachMoreBtn = document.getElementById('attachMoreBtn');
-        if (attachMoreBtn) {
-            attachMoreBtn.addEventListener('click', () => {
-                FileUploadModule.clearFiles();
-                const fileInput = document.getElementById('fileInput');
-                if (fileInput) fileInput.click();
-            });
-        }
     },
 
     setupAccessibilityButtons: function() {
@@ -2656,153 +2923,6 @@ function populateReviewUI(data) {
 }
 
 
-window.addEventListener('DOMContentLoaded', function() {
-    // Initialize all modules with error handling
-    try {
-        console.log('Initializing SpeechModule...');
-        SpeechModule.init();
-        console.log('✅ SpeechModule initialized');
-    } catch (error) {
-        console.error('❌ SpeechModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing AccessibilityModule...');
-        AccessibilityModule.init();
-        console.log('✅ AccessibilityModule initialized');
-    } catch (error) {
-        console.error('❌ AccessibilityModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing UIModule...');
-        UIModule.init();
-        console.log('✅ UIModule initialized');
-    } catch (error) {
-        console.error('❌ UIModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing APIModule...');
-        APIModule.init();
-        console.log('✅ APIModule initialized');
-    } catch (error) {
-        console.error('❌ APIModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing FileUploadModule...');
-        FileUploadModule.init();
-        console.log('✅ FileUploadModule initialized');
-    } catch (error) {
-        console.error('❌ FileUploadModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing RecordingModule...');
-        RecordingModule.init();
-        console.log('✅ RecordingModule initialized');
-    } catch (error) {
-        console.error('❌ RecordingModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing GrievanceModule...');
-        GrievanceModule.init();
-        console.log('✅ GrievanceModule initialized');
-    } catch (error) {
-        console.error('❌ GrievanceModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing ModifyModule...');
-        ModifyModule.init();
-        console.log('✅ ModifyModule initialized');
-    } catch (error) {
-        console.error('❌ ModifyModule failed:', error);
-    }
-    
-    try {
-        console.log('Initializing LanguageModule...');
-        LanguageModule.init();
-        console.log('✅ LanguageModule initialized');
-    } catch (error) {
-        console.error('❌ LanguageModule failed:', error);
-    }
-    
-    // Initialize EventModule with a slight delay to ensure all DOM elements are ready
-    setTimeout(() => {
-        try {
-            console.log('Initializing EventModule...');
-            EventModule.init();
-            console.log('✅ EventModule initialized after DOM ready');
-        } catch (error) {
-            console.error('❌ EventModule failed:', error);
-        }
-    }, 100);
-    
-    // Generate grievanceId and userId after all modules are initialized
-    setTimeout(() => {
-        try {
-            console.log('🔍 Generating grievanceId and userId...');
-            
-            // Get province and district from URL parameters if available
-            const urlParams = new URLSearchParams(window.location.search);
-            const province = urlParams.get('province') || 'KO';  // Default to 'KO'
-            const district = urlParams.get('district') || 'JH';   // Default to 'JH'
-            
-            console.log(`Using province: ${province}, district: ${district} for ID generation`);
-            
-            // Call the API to generate IDs using the APIModule
-            APIModule.generateIds(province, district)
-            .then(data => {
-                console.log('🔍 Generated IDs:', data);
-                if (data.status === 'success') {
-                    state.grievanceId = data.grievance_id;
-                    state.userId = data.user_id;
-                    
-                    console.log('Generated grievanceId:', state.grievanceId);
-                    console.log('Generated userId:', state.userId);
-                    
-                    // Join the room for this grievance
-                    socket.emit('join_room', { room: state.grievanceId });
-                    console.log('Joined room:', state.grievanceId);
-                } else {
-                    console.error('❌ Failed to generate IDs:', data.message);
-                    // Fallback to client-side generation if API fails
-                    const timestamp = Date.now();
-                    const randomId = Math.random().toString(36).substr(2, 9);
-                    state.grievanceId = `GRV_${timestamp}_${randomId}`;
-                    state.userId = `USR_${timestamp}_${randomId}`;
-                    
-                    console.log('Fallback grievanceId:', state.grievanceId);
-                    console.log('Fallback userId:', state.userId);
-                    
-                    socket.emit('join_room', { room: state.grievanceId });
-                    console.log('Joined room:', state.grievanceId);
-                }
-            })
-            .catch(error => {
-                console.error('❌ API call failed, using fallback:', error);
-                // Fallback to client-side generation if API call fails
-                const timestamp = Date.now();
-                const randomId = Math.random().toString(36).substr(2, 9);
-                state.grievanceId = `GRV_${timestamp}_${randomId}`;
-                state.userId = `USR_${timestamp}_${randomId}`;
-                
-                console.log('Fallback grievanceId:', state.grievanceId);
-                console.log('Fallback userId:', state.userId);
-                
-                socket.emit('join_room', { room: state.grievanceId });
-                console.log('Joined room:', state.grievanceId);
-            });
-            
-        } catch (error) {
-            console.error('❌ Failed to initialize grievance session:', error);
-        }
-    }, 200);
-});
-
 // Attach modules to window for global access (needed for inline event handlers)
 window.SpeechModule = SpeechModule;
 window.AccessibilityModule = AccessibilityModule;
@@ -2825,7 +2945,7 @@ function initializeModules() {
     // Initialize all modules with error handling
     try {
         console.log('Initializing SpeechModule...');
-        SpeechModule.init();
+    SpeechModule.init();
         console.log('✅ SpeechModule initialized');
     } catch (error) {
         console.error('❌ SpeechModule failed:', error);
@@ -2833,7 +2953,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing AccessibilityModule...');
-        AccessibilityModule.init();
+    AccessibilityModule.init();
         console.log('✅ AccessibilityModule initialized');
     } catch (error) {
         console.error('❌ AccessibilityModule failed:', error);
@@ -2841,7 +2961,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing UIModule...');
-        UIModule.init();
+    UIModule.init();
         console.log('✅ UIModule initialized');
     } catch (error) {
         console.error('❌ UIModule failed:', error);
@@ -2849,7 +2969,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing APIModule...');
-        APIModule.init();
+    APIModule.init();
         console.log('✅ APIModule initialized');
     } catch (error) {
         console.error('❌ APIModule failed:', error);
@@ -2857,7 +2977,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing FileUploadModule...');
-        FileUploadModule.init();
+    FileUploadModule.init();
         console.log('✅ FileUploadModule initialized');
     } catch (error) {
         console.error('❌ FileUploadModule failed:', error);
@@ -2865,7 +2985,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing RecordingModule...');
-        RecordingModule.init();
+    RecordingModule.init();
         console.log('✅ RecordingModule initialized');
     } catch (error) {
         console.error('❌ RecordingModule failed:', error);
@@ -2873,7 +2993,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing GrievanceModule...');
-        GrievanceModule.init();
+    GrievanceModule.init();
         console.log('✅ GrievanceModule initialized');
     } catch (error) {
         console.error('❌ GrievanceModule failed:', error);
@@ -2881,7 +3001,7 @@ function initializeModules() {
     
     try {
         console.log('Initializing ModifyModule...');
-        ModifyModule.init();
+    ModifyModule.init();
         console.log('✅ ModifyModule initialized');
     } catch (error) {
         console.error('❌ ModifyModule failed:', error);
@@ -2895,16 +3015,113 @@ function initializeModules() {
         console.error('❌ LanguageModule failed:', error);
     }
     
-    // Initialize EventModule with a slight delay to ensure all DOM elements are ready
-    setTimeout(() => {
-        try {
-            console.log('Initializing EventModule...');
-            EventModule.init();
-            console.log('✅ EventModule initialized after DOM ready');
-        } catch (error) {
-            console.error('❌ EventModule failed:', error);
+    // Initialize EventModule with proper DOM readiness detection
+    initializeEventModule();
+    
+    // Set up global state change listeners
+    setupStateChangeListeners();
+}
+
+/**
+ * Initialize EventModule with proper DOM readiness detection
+ */
+function initializeEventModule() {
+    // Check if required DOM elements exist before initializing EventModule
+    const checkDOMReadiness = () => {
+        const requiredElements = [
+            '.nav-btn[data-action]',
+            '.record-btn',
+            '#contrastToggleBtn',
+            '#fontSizeBtn',
+            '#readPageBtn',
+            '#speedBtn'
+        ];
+        
+        const allElementsReady = requiredElements.every(selector => {
+            const elements = document.querySelectorAll(selector);
+            return elements.length > 0;
+        });
+        
+        if (allElementsReady) {
+            try {
+                console.log('Initializing EventModule...');
+                EventModule.init();
+                console.log('✅ EventModule initialized after DOM ready check');
+                return true;
+            } catch (error) {
+                console.error('❌ EventModule failed:', error);
+                return false;
+            }
         }
-    }, 100);
+        return false;
+    };
+    
+    // Try immediate initialization
+    if (checkDOMReadiness()) {
+        return;
+    }
+    
+    // If not ready, use MutationObserver to wait for DOM changes
+    console.log('🔍 DOM not ready for EventModule, waiting for elements...');
+    const observer = new MutationObserver((mutations) => {
+        if (checkDOMReadiness()) {
+            observer.disconnect();
+        }
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // Fallback timeout after 5 seconds
+    setTimeout(() => {
+        if (!checkDOMReadiness()) {
+            console.warn('⚠️ EventModule initialization timeout - forcing init');
+            try {
+                EventModule.init();
+                console.log('✅ EventModule initialized via timeout fallback');
+            } catch (error) {
+                console.error('❌ EventModule timeout fallback failed:', error);
+            }
+        }
+        observer.disconnect();
+    }, 5000);
+}
+
+/**
+ * Set up global state change listeners
+ */
+function setupStateChangeListeners() {
+    // Listen for submission state changes
+    window.addEventListener('submissionStateChanged', (event) => {
+        const { isSubmitting, previousState } = event.detail;
+        console.log(`[StateListener] Submission state: ${previousState} → ${isSubmitting}`);
+        
+        // Update UI components that depend on submission state
+        try {
+            UIModule.updateButtonStates({
+                isRecording: RecordingModule.isRecording,
+                hasRecording: RecordingModule.hasAnyRecording(),
+                isSubmitting: isSubmitting
+            });
+        } catch (error) {
+            console.error('[StateListener] Error updating button states:', error);
+        }
+        
+        // Update any other UI elements that depend on submission state
+        document.querySelectorAll('[data-action="submit"]').forEach(btn => {
+            if (isSubmitting) {
+                btn.disabled = true;
+                btn.classList.add('submitting');
+            } else {
+                btn.classList.remove('submitting');
+                // Don't auto-enable - let validation determine if it should be enabled
+            }
+        });
+    });
+    
+    console.log('✅ State change listeners initialized');
 }
 
 // Function to generate IDs and join socket room
@@ -2982,3 +3199,15 @@ if (document.readyState === 'loading') {
     // Generate IDs after modules are initialized
     setTimeout(initializeGrievanceSession, 200);
 }
+
+socket.on('processing_complete', (data) => {
+    console.log('Processing complete:', data);
+    UIModule.showMessage(`Processing complete: ${data.message}`, false);
+    
+    // Update UI state using centralized state management
+    UIModule.updateButtonStates({
+        isRecording: RecordingModule.isRecording,
+        hasRecording: RecordingModule.hasAnyRecording(),
+        isSubmitting: GrievanceModule.isSubmitting // Use centralized state
+    });
+});

@@ -1,33 +1,33 @@
 {
   "store_result_to_db_task": {
-    "failed_tasks": 28,
-    "last_duration": 0.00018930435180664062,
-    "total_tasks": 14
+    "last_duration": 0.0001838207244873047,
+    "total_tasks": 11,
+    "failed_tasks": 19
   },
   "accessible_file_upload": {
-    "start_time": 1748567138.7220845
+    "start_time": 1748662235.5595424
   },
   "process_batch_files_task": {
-    "start_time": 1748567138.7901847,
-    "last_duration": 0.07980012893676758,
-    "total_tasks": 2
-  },
-  "process_file_upload_task": {
-    "start_time": 1748567138.9286854,
-    "last_duration": 0.3265247344970703,
+    "start_time": 1748662235.5965395,
+    "last_duration": 0.03090500831604004,
     "total_tasks": 2
   },
   "process_file_upload": {
-    "start_time": 1748567139.2306185
+    "start_time": 1748662235.6342742
   },
-  "submit_grievance": {
-    "start_time": 1748608136.360912,
-    "failed_tasks": 3
+  "process_file_upload_task": {
+    "last_duration": 0.022210359573364258,
+    "total_tasks": 2,
+    "start_time": 1748662235.6310248
   },
   "generate_ids": {
-    "start_time": 1748608082.5342422,
-    "failed_tasks": 1,
-    "last_duration": 0.002160787582397461,
-    "total_tasks": 2
+    "start_time": 1748662206.1637852,
+    "last_duration": 0.0019001960754394531,
+    "total_tasks": 1
+  },
+  "submit_grievance": {
+    "start_time": 1748662225.948675,
+    "last_duration": 0.14182424545288086,
+    "total_tasks": 1
   }
 }

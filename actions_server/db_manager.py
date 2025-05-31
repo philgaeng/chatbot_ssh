@@ -922,17 +922,53 @@ class GrievanceDbManager(BaseDatabaseManager):
         'classification_status'
     }
 
-
-    
-    
-    def create_or_update_grievance(self, data: Dict[str, Any] = None) -> Optional[str]:
-        """Create or update a grievance record"""
+    def create_grievance(self, data: Dict[str, Any] = None) -> Optional[str]:
+        """Create a new grievance record"""
         try:
             if not data:
                 data = dict()
-            grievance_id = data.get('grievance_id')
-            if grievance_id:
-                # Update existing record
+            
+            # Use provided grievance_id or generate new one
+            grievance_id = data.get('grievance_id') or self.generate_id(type='grievance_id', suffix=data.get('source', 'bot'))
+            operations_logger.info(f"create_grievance: Creating grievance with ID: {grievance_id}")
+            
+            # Ensure we have a user_id
+            user_id = data.get('user_id')
+            if not user_id:
+                user_id = db_manager.user.create_or_update_user()  # a user_id is required to create a grievance
+            
+            insert_query = """
+                INSERT INTO grievances (
+                    grievance_id, user_id, grievance_categories,
+                    grievance_summary, grievance_details, grievance_claimed_amount,
+                    grievance_location, language_code, is_temporary, source
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING grievance_id
+            """
+            result = self.execute_insert(insert_query, (
+                grievance_id,
+                user_id,
+                data.get('grievance_categories'),
+                data.get('grievance_summary'),
+                data.get('grievance_details'),
+                data.get('grievance_claimed_amount'),
+                data.get('grievance_location'),
+                data.get('language_code', 'ne'),
+                data.get('is_temporary', True),
+                data.get('source', 'bot')
+            ))
+            operations_logger.info(f"create_grievance: Successfully created grievance with ID: {grievance_id}")
+            return result['grievance_id'] if result else grievance_id
+            
+        except Exception as e:
+            operations_logger.error(f"Error in create_grievance: {str(e)}")
+            return None
+    
+    def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> bool:
+        """Update an existing grievance record"""
+        try:
+            operations_logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
+            
                 update_query = """
                     UPDATE grievances 
                     SET grievance_categories = %s,
@@ -954,34 +990,35 @@ class GrievanceDbManager(BaseDatabaseManager):
                     data.get('language_code', 'ne'),
                     grievance_id
                 ))
-                return grievance_id if result > 0 else None
+            operations_logger.info(f"update_grievance: Updated grievance with ID: {grievance_id}, rows affected: {result}")
+            return result > 0
+            
+        except Exception as e:
+            operations_logger.error(f"Error in update_grievance: {str(e)}")
+            return False
+
+    def create_or_update_grievance(self, data: Dict[str, Any] = None) -> Optional[str]:
+        """Legacy method - creates or updates grievance based on whether it exists"""
+        try:
+            if not data:
+                data = dict()
+            
+            grievance_id = data.get('grievance_id')
+            operations_logger.info(f"create_or_update_grievance: Handling grievance with ID: {grievance_id}")
+            
+            if grievance_id:
+                # Check if grievance exists
+                if self.get_grievance_by_id(grievance_id):
+                    # Grievance exists, update it
+                    success = self.update_grievance(grievance_id, data)
+                    return grievance_id if success else None
             else:
-                # Create new record
-                user_id = data.get('user_id')
-                if not user_id:
-                    user_id = db_manager.user.create_or_update_user() # a user_id is required to create a grievance
-                new_grievance_id = self.generate_id(type='grievance_id', suffix=data.get('source', 'bot'))
-                insert_query = """
-                    INSERT INTO grievances (
-                        grievance_id, user_id, grievance_categories,
-                        grievance_summary, grievance_details, grievance_claimed_amount,
-                        grievance_location, language_code, is_temporary, source
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING grievance_id
-                """
-                result = self.execute_insert(insert_query, (
-                    new_grievance_id,
-                    data.get('user_id'),
-                    data.get('grievance_categories'),
-                    data.get('grievance_summary'),
-                    data.get('grievance_details'),
-                    data.get('grievance_claimed_amount'),
-                    data.get('grievance_location'),
-                    data.get('language_code', 'ne'),
-                    data.get('is_temporary', True),
-                    data.get('source', 'bot')
-                ))
-                return result['grievance_id'] if result else new_grievance_id
+                    # Grievance doesn't exist, create it with provided ID
+                    return self.create_grievance(data)
+            else:
+                # No grievance_id provided, create new one
+                return self.create_grievance(data)
+                
         except Exception as e:
             operations_logger.error(f"Error in create_or_update_grievance: {str(e)}")
             return None
@@ -1194,16 +1231,16 @@ class UserDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving user by id: {str(e)}")
             return None
 
-    def create_or_update_user(self,  data: Dict[str, Any] = None) -> Optional[str]:
-        """Create or update a user record"""
+    def create_user(self, data: Dict[str, Any] = None) -> Optional[str]:
+        """Create a new user record"""
         try:
             if not data:
                 data = dict()
-            if not data.get('user_id'):
-                print(f"Creating new user")
-                # Create new record
-                new_user_id = self.generate_id(type='user_id')
-                print(f"New user ID: {new_user_id}")
+            
+            # Use provided user_id or generate new one
+            user_id = data.get('user_id') or self.generate_id(type='user_id')
+            operations_logger.info(f"create_user: Creating user with ID: {user_id}")
+            
                 insert_query = """
                     INSERT INTO users (
                         id, user_unique_id, user_full_name,
@@ -1214,8 +1251,8 @@ class UserDbManager(BaseDatabaseManager):
                     RETURNING id
                 """
                 result = self.execute_insert(insert_query, (
-                    new_user_id,
-                    new_user_id,  # Use same ID for user_unique_id
+                user_id,
+                user_id,  # Use same ID for user_unique_id
                     data.get('user_full_name'),
                     data.get('user_contact_phone'),
                     data.get('user_contact_email'),
@@ -1226,11 +1263,18 @@ class UserDbManager(BaseDatabaseManager):
                     data.get('user_village'),
                     data.get('user_address')
                 ))
-                return result['id'] if result else new_user_id
-            else:
-                user_id = data.get('user_id')
-                print(f"Updating user with ID: {data.get('user_id')}")
-                # Update existing record
+            operations_logger.info(f"create_user: Successfully created user with ID: {user_id}")
+            return result['id'] if result else user_id
+            
+        except Exception as e:
+            operations_logger.error(f"Error in create_user: {str(e)}")
+            return None
+    
+    def update_user(self, user_id: str, data: Dict[str, Any]) -> bool:
+        """Update an existing user record"""
+        try:
+            operations_logger.info(f"update_user: Updating user with ID: {user_id}")
+            
                 update_query = """
                     UPDATE users 
                     SET user_full_name = %s,
@@ -1257,11 +1301,23 @@ class UserDbManager(BaseDatabaseManager):
                     data.get('user_address'),
                     user_id
                 ))
-                return user_id if result > 0 else None
+            operations_logger.info(f"update_user: Updated user with ID: {user_id}, rows affected: {result}")
+            return result > 0
             
         except Exception as e:
-            operations_logger.error(f"Error in create_or_update_user: {str(e)}")
-            return None
+            operations_logger.error(f"Error in update_user: {str(e)}")
+            return False
+
+    def create_or_update_user(self, data: Dict[str, Any] = None) -> Optional[str]:
+        """Legacy method - creates a user with provided or generated ID"""
+        operations_logger.info("create_or_update_user: Using legacy method, redirecting to create_user")
+        if data.get('user_id'):
+            if self.get_user_by_id(data.get('user_id')):
+                return self.update_user(data.get('user_id'), data)
+            else:
+                return self.create_user(data)
+        else:
+            return self.create_user(data)
             
     def get_user_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
