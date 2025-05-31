@@ -1,8 +1,50 @@
 """
-List of all registered tasks in the system.
+Registered Tasks Module - Clean Task Functions with Automatic Service Configuration
 
-This module serves as a central registry of all tasks that can be processed by Celery.
-Each task should be documented with its purpose, priority level, and any dependencies.
+This module contains all task functions registered with TaskManager using a centralized
+service configuration approach.
+
+Key Features:
+============
+
+1. **No Service Parameters Required**:
+   - Task functions don't include 'service' in their signatures
+   - Service is automatically set by @TaskManager.register_task() decorator
+   - Access service via self.service within task functions
+
+2. **Clean Business Logic Focus**:
+   - Functions contain only essential business parameters
+   - No configuration pollution in function signatures  
+   - Pure focus on task-specific logic
+
+3. **Automatic Service Assignment**:
+   - @TaskManager.register_task(task_type='LLM') sets self.service from TASK_CONFIG
+   - Service configuration centralized in task_manager.py TASK_CONFIG
+   - No need to pass or manage service manually
+
+4. **Task Type Categories**:
+   - LLM: Language model processing tasks (service: 'llm_processor')
+   - FileUpload: File processing tasks (service: 'queue_system')  
+   - Messaging: Email/SMS tasks (service: 'messaging_service')
+   - Database: Database operations (service: 'db_operations')
+
+Example Pattern:
+===============
+```python
+@TaskManager.register_task(task_type='LLM')
+def my_task(self, input_data: Dict[str, Any], emit_websocket: bool = True):
+    # self.service automatically set to 'llm_processor' from TASK_CONFIG
+    logger.info(f"Processing with service: {self.service}")
+    return result
+```
+
+Architecture Benefits:
+===================
+- Clean, focused function signatures
+- Centralized service management
+- Easy maintenance and updates
+- Consistent task registration pattern
+- No configuration duplication
 """
 
 from typing import Dict, Any, List, Tuple, Callable, Optional
@@ -36,8 +78,7 @@ file_server_core = FileServerCore()
 def process_file_upload_task(self, 
                              grievance_id: str, 
                              file_data: Dict[str, Any], 
-                             emit_websocket: bool = True,
-                             service: str = None) -> Dict[str, Any]:
+                             emit_websocket: bool = True) -> Dict[str, Any]:
     """
     Process a single file upload.
     
@@ -48,7 +89,7 @@ def process_file_upload_task(self,
     Returns:
         Dict containing processing results
     """
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=service)
+    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=self.service)
     task_mgr.start_task(entity_type='grievance', entity_id=grievance_id, stage='single_file_upload')
     try:
         file_data = file_server_core.process_file_upload(grievance_id, file_data)
@@ -69,20 +110,19 @@ def process_batch_files_task(self,
                              grievance_id: str, 
                              files_data: List[Dict[str, Any]], 
                              allowed_extensions: List[str] = ALLOWED_EXTENSIONS, 
-                             emit_websocket: bool = True,
-                             service: str = None):
+                             emit_websocket: bool = True):
     """
     Process multiple files in batch using Celery chord for per-file parallelism and aggregation.
     """
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=service)
+    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=self.service)
     task_mgr.start_task(entity_type='grievance', entity_id=grievance_id, stage='batch_file_processing')
     try:
         upload_group = group(
-            process_file_upload_task.s(grievance_id, file_data, emit_websocket=False, service=service)
+            process_file_upload_task.s(grievance_id, file_data, emit_websocket=False, service=self.service)
             for file_data in files_data
         )
         # The callback will be called with the list of results
-        callback = aggregate_batch_results.s(grievance_id, service=service)
+        callback = aggregate_batch_results.s(grievance_id)
         result = chord(upload_group)(callback)
         # Return the chord id for tracking
         summary = {
@@ -99,7 +139,7 @@ def process_batch_files_task(self,
         raise
 
 @TaskManager.register_task(task_type='FileUpload')
-def aggregate_batch_results(self, results, grievance_id, service=None):
+def aggregate_batch_results(self, results, grievance_id):
     """
     Aggregates results of all file upload tasks in a batch.
     """
@@ -114,16 +154,16 @@ def aggregate_batch_results(self, results, grievance_id, service=None):
         'failed_count': failed_count,
     }
     # Emit WebSocket message for batch completion
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=True, service=service)
+    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=True, service=self.service)
     task_mgr._emit_status(grievance_id, summary['status'], summary)
     return summary
 
 # Messaging Tasks
 @TaskManager.register_task(task_type='Messaging')
-def send_sms_task(self, phone_number: str, message: str, grievance_id: str = None, service: str = None):
+def send_sms_task(self, phone_number: str, message: str, grievance_id: str = None):
     """Send an SMS message"""
     from actions_server.messaging import SMSClient
-    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False, service=service)
+    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False, service=self.service)
     if grievance_id:
         task_mgr.start_task(
             entity_type='grievance',
@@ -145,7 +185,7 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
 def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
     """Send an email message"""
     from actions_server.messaging import EmailClient
-    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False)
+    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False, service=self.service)
     if grievance_id:
         task_mgr.start_task(
             entity_type='grievance',
@@ -165,13 +205,14 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
 
 # LLM Tasks
 @TaskManager.register_task(task_type='LLM')
-def transcribe_audio_file_task(self, input_data: Dict[str, Any], emit_websocket: bool = True) -> Dict[str, Any]:
+def transcribe_audio_file_task(self, input_data: Dict[str, Any], 
+                               emit_websocket: bool = True) -> Dict[str, Any]:
     """Transcribe an audio file."""
     # Get the Celery task ID from the current task
     task_id = self.request.id if hasattr(self, 'request') else None
     
     # Create task manager with the current task instance and proper websocket handling
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=True)
+    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     try:
         if 'grievance' in input_data.get('field_name'):
             entity_type = 'grievance'
@@ -240,7 +281,7 @@ def classify_and_summarize_grievance_task(self,
     # Get the Celery task ID from the current task
     task_id = self.request.id if hasattr(self, 'request') else None
     
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket)
+    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     print(f"Classify and summarize grievance task called with file_data: {file_data}")
     # Extract data directly from file_data (transcription result)
     language_code = file_data.get('language_code', 'ne')
@@ -287,7 +328,7 @@ def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_web
     # Get the Celery task ID from the current task
     
     task_id = self.request.id if hasattr(self, 'request') else None
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket)
+    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     
     try:    
         # Extract data directly from transcription result
@@ -347,7 +388,7 @@ def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_web
 @TaskManager.register_task(task_type='LLM')
 def translate_grievance_to_english_task(self, grievance_id: str, emit_websocket: bool = True) -> Dict[str, Any]:
     """Translate a grievance to English and save it to the database"""
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket)
+    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     task_mgr.start_task(entity_type='grievance', entity_id=grievance_id)
     try:
         from actions_server.LLM_helpers import translate_grievance_to_english
@@ -375,7 +416,7 @@ def translate_grievance_to_english_task(self, grievance_id: str, emit_websocket:
         }
 
 @TaskManager.register_task(task_type='Database')
-def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bool = False, service: str = None) -> Dict[str, Any]:
+def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bool = False,) -> Dict[str, Any]:
     """Store task result in database."""
     task_mgr = DatabaseTaskManager(task=self, task_type='Database', emit_websocket=emit_websocket)
     task_mgr.start_task(entity_type=input_data.get('entity_key'), entity_id=input_data.get('id'))
@@ -392,10 +433,9 @@ def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bo
         }
         return error_result
 
-def store_task_result_to_db_task(input_data: Dict[str, Any],
-                                operation: str, 
-                                service: str = None) -> Dict[str, Any]:
+@TaskManager.register_task(task_type='Database')
+def store_task_result_to_db_task(self, input_data: Dict[str, Any], operation: str) -> Dict[str, Any]:
     """Dynamically store any result of a task in the dedicated table in the database"""
-    task_mgr = DatabaseTaskManager(emit_websocket=False, service=service)
+    task_mgr = DatabaseTaskManager(emit_websocket=False, service=self.service)
     return task_mgr.handle_task_db_operations(input_data)
 

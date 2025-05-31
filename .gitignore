@@ -74,3 +74,4 @@ logs/               # Ignore entire logs directory
 task_queue/logs/    # Ignore entire logs directory
 models/             # Ignore entire models directory
 uploads/
+logs/*.log.*

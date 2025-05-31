@@ -1,8 +1,61 @@
 """
-Task queue management system.
+TaskManager Module - Centralized Task Management with Automatic Service Configuration
 
-This module provides task management functionality including task registration,
-execution tracking, and logging.
+This module provides a centralized task management system with automatic service configuration,
+monitoring, retries, and WebSocket status updates for async task processing.
+
+Key Design Principles:
+===================
+
+1. **Centralized Service Configuration**: 
+   - All service configurations are defined in TASK_CONFIG within this module
+   - Task functions don't need service parameters - they're automatically set by the decorator
+   - @TaskManager.register_task(task_type='LLM') automatically sets self.service from TASK_CONFIG['LLM']['service']
+
+2. **Automatic Task Registration**:
+   - Use @TaskManager.register_task(task_type='TaskType') decorator on task functions
+   - The decorator handles Celery registration, service assignment, and wrapper logic
+   - Task types must exist in TASK_CONFIG or registration will fail
+
+3. **Clean Function Signatures**:
+   - Task functions focus purely on business logic
+   - No service parameters needed in function signatures
+   - Service is automatically available as self.service within task methods
+
+4. **Configuration Management**:
+   - TASK_CONFIG defines all task types with their service, queue, and retry configurations
+   - Single source of truth for all task-related settings
+   - Easy to modify service assignments without touching individual task functions
+
+Example Usage:
+=============
+```python
+# In registered_tasks.py - Clean function signature, no service parameter
+@TaskManager.register_task(task_type='LLM')
+def my_llm_task(self, input_data: Dict[str, Any], emit_websocket: bool = True):
+    # self.service is automatically set to TASK_CONFIG['LLM']['service'] = 'llm_processor'
+    logger.info(f"Running LLM task with service: {self.service}")
+    return {"result": "success"}
+
+@TaskManager.register_task(task_type='Messaging')  
+def my_messaging_task(self, message: str):
+    # self.service is automatically set to TASK_CONFIG['Messaging']['service'] = 'messaging_service'
+    return {"sent": True}
+```
+
+Architecture Benefits:
+===================
+- Centralized configuration in TASK_CONFIG
+- Clean separation of concerns
+- Easy service reassignment
+- Consistent task registration
+- No parameter pollution in task functions
+
+Dependencies:
+============
+- Celery for async task processing
+- Redis for task queuing and WebSocket communication
+- WebSocket utilities for real-time status updates
 """
 
 import datetime
@@ -445,21 +498,42 @@ class TaskManager:
 
     @classmethod
     def register_task(cls, task_type: str):
-        """Decorator to register a task in the TASK_REGISTRY and apply Celery task."""
+        """
+        Decorator to register a task in the TASK_REGISTRY with automatic service configuration.
+        
+        This decorator automatically:
+        1. Validates that task_type exists in TASK_CONFIG
+        2. Sets self.service from TASK_CONFIG[task_type]['service'] 
+        3. Removes any 'service' parameter from kwargs to keep function signatures clean
+        4. Registers the task with Celery using the appropriate queue configuration
+        
+        Args:
+            task_type (str): Must match a key in TASK_CONFIG (e.g., 'LLM', 'Messaging', 'FileUpload')
+            
+        Raises:
+            ValueError: If task_type is not found in TASK_CONFIG
+            
+        Example:
+            @TaskManager.register_task(task_type='LLM')
+            def my_task(self, data: Dict[str, Any]):
+                # self.service automatically set to TASK_CONFIG['LLM']['service']
+                pass
+        """
         if task_type not in cls.TASK_TYPE_CONFIG:
             error_msg = f"Unknown task_type '{task_type}'. Please add it to TASK_TYPE_CONFIG."
             cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
             raise ValueError(error_msg)
             
-        config = cls.TASK_TYPE_CONFIG[task_type]
-        queue = config.get('queue', 'default')
+        config = TASK_CONFIG[task_type]  # Get full config from TASK_CONFIG
         
         def decorator(func: Callable):
             @functools.wraps(func)
             def wrapper(self, *args, **kwargs):
-                # Ensure service is set from config if not provided
-                if 'service' not in kwargs:
-                    kwargs['service'] = queue
+                # Automatically set service from TASK_CONFIG - no parameter needed
+                self.service = config.get('service', 'queue_system')
+                
+                # Remove service from kwargs if somehow passed (keeps function signatures clean)
+                kwargs.pop('service', None)
                 
                 # Ensure task instance is available
                 if not hasattr(self, 'request'):
@@ -498,7 +572,7 @@ class TaskManager:
             celery_task = celery_app.task(
                 bind=True,  # Always bind the task
                 name=func.__name__,
-                queue=queue
+                queue=config['queue']['queue']
             )(wrapper)
             
             cls.TASK_REGISTRY[func.__name__]['celery_task'] = celery_task
