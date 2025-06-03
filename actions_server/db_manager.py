@@ -260,6 +260,7 @@ class TableDbManager(BaseDatabaseManager):
         'users',
         'tasks',
         'grievances',
+
         'task_entities',
         'grievance_status_history',
         'grievance_history',

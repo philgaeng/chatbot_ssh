@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from flask import request
 import os
 from logger.logger import TaskLogger
-
+from actions_server.constants import FIELD_CATEGORIES_MAPPING
 # Create a task logger instance for socketio
 task_logger = TaskLogger(service_name='socketio')
 logger = task_logger.logger
@@ -64,9 +64,20 @@ def emit_status_update(session_id, status, message):
         logger.debug(f"Room to emit to: {session_id}")
         emit_key = 'status_update'
         # Emit the event
-        if isinstance(message, dict) and 'results' in message and 'operation' in message['results']:
-            operation = message['results']['operation']
-            emit_key = f'status_update:{operation}'
+        #prepare emit key based on operation or field name
+        emit_key = 'status_update'
+        #prepare emit key based on operation or field nam
+        if isinstance(message, dict):
+            if 'operation' in message.keys():
+                operation = message['operation']
+                emit_key = f'status_update:{operation}'
+            else:
+                for k in message.keys():
+                    operation = FIELD_CATEGORIES_MAPPING.get(k, None)
+                    if operation:
+                        emit_key = f'status_update:{operation}'
+                        break
+                    
         socketio.emit(emit_key, {
             'status': status,
             'message': message,

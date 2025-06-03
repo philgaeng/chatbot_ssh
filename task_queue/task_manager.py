@@ -70,7 +70,7 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
 from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
-from actions_server.constants import FIELD_MAPPING
+from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES
 from .celery_app import celery_app  # Safe to import at module level now
 
 # Task type names (single source of truth)
@@ -190,6 +190,8 @@ class TaskManager:
         self.task_id = None
         self.entity_key = None
         self.entity_id = None
+        self.grievance_id = None  # Always store grievance_id for websocket emissions
+        self.session_id = None    # Optional session identifier
         self.celery_task_id = None
         self.start_time = None
         self.end_time = None
@@ -239,9 +241,15 @@ class TaskManager:
         jitter = random.uniform(0, 0.1 * delay)
         return delay + jitter
 
-    def _emit_status(self, entity_id, status, data):
+    def _emit_status(self, status, data):
         if self.emit_websocket:
-            emit_status_update(entity_id, status, data)
+            # FIXED: Use stored grievance_id for consistent websocket room emission
+            # All tasks emit to the grievance_id room where the frontend listens
+            websocket_room_id = self.grievance_id 
+            
+
+            
+            emit_status_update(websocket_room_id, status, data)
 
     def retry_task(self, error: Exception) -> Tuple[bool, Optional[float]]:
         """
@@ -312,7 +320,6 @@ class TaskManager:
         
         # Emit retry status
         self._emit_status(
-            self.entity_id,
             'retrying',
             {
                 'retry_count': new_retry_count,
@@ -323,11 +330,26 @@ class TaskManager:
         
         return True, self._calculate_retry_delay()
 
-    def start_task(self, entity_key: str, entity_id: str, stage: str = None, extra_data=None) -> bool:
-        """Start a new task and record it in the database. Optionally emit WebSocket status."""
+    def start_task(self, entity_key: str, entity_id: str, grievance_id: str, 
+                   stage: str = None, extra_data=None, session_id: str = None) -> bool:
+        """Start a new task and record it in the database. Optionally emit WebSocket status.
+        
+        Args:
+            entity_key: Type of entity (user_id, grievance_id, etc.)
+            entity_id: ID of the entity
+            grievance_id: Grievance ID for websocket emissions (REQUIRED)
+            stage: Optional stage name for logging
+            extra_data: Optional extra data for logging
+            session_id: Optional session identifier for websocket emissions
+        """
         try:
+            if not grievance_id:
+                raise ValueError("grievance_id is required for all tasks")
+                
             self.entity_key = entity_key
             self.entity_id = entity_id
+            self.grievance_id = grievance_id
+            self.session_id = session_id or grievance_id  # Use grievance_id as session_id by default
             self.start_time = datetime.datetime.utcnow()
             self.status = 'PENDING'
             
@@ -347,6 +369,7 @@ class TaskManager:
                     {
                         'entity_key': entity_key,
                         'entity_id': entity_id,
+                        'grievance_id': self.grievance_id,
                         'stage': stage,
                         'task_id': self.task_id,
                         'retry_count': existing_task.get('retry_count', 0),
@@ -373,6 +396,7 @@ class TaskManager:
                     {
                         'entity_key': entity_key,
                         'entity_id': entity_id,
+                        'grievance_id': self.grievance_id,
                         'stage': stage,
                         'task_id': self.task_id,
                         **(extra_data or {})
@@ -381,7 +405,7 @@ class TaskManager:
                 )
             
             if stage:
-                self._emit_status(entity_id, 'processing', {'stage': stage, **(extra_data or {})})
+                self._emit_status('processing', {'stage': stage, **(extra_data or {})})
             return True
         except Exception as e:
             self.error = str(e)
@@ -391,6 +415,7 @@ class TaskManager:
                 {
                     'entity_key': entity_key,
                     'entity_id': entity_id,
+                    'grievance_id': self.grievance_id,
                     'stage': stage,
                     'error': str(e),
                     **(extra_data or {})
@@ -422,7 +447,7 @@ class TaskManager:
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
-                    'stage': stage,
+                    'status': 'SUCCESS',
                     'task_id': self.task_id,
                     'result': result,
                     'retry_count': self.retry_count
@@ -431,7 +456,7 @@ class TaskManager:
             )
             
             if stage:
-                self._emit_status(self.entity_id, 'completed', {'stage': stage, 'result': result})
+                self._emit_status('SUCCESS', result)
             return updated
         except Exception as e:
             self.error = str(e)
@@ -479,7 +504,7 @@ class TaskManager:
             )
             
             if stage:
-                self._emit_status(self.entity_id, 'failed', {'stage': stage, 'error': str(error)})
+                self._emit_status('FAILED', {'stage': stage, 'error': str(error)})
             return updated
         except Exception as e:
             self.error = str(e)
@@ -645,7 +670,7 @@ class DatabaseTaskManager(TaskManager):
         """
         # Validate result has required fields
         try:
-            required_fields = ['status',  'field_name', 'value', 'entity_key', 'id']
+            required_fields = ['status', 'entity_key', 'id']
             missing_fields = [field for field in required_fields if field not in input_data]
             if missing_fields:
                 raise ValueError(f"Task result missing required fields: {missing_fields} in input data: {input_data}")
@@ -686,24 +711,18 @@ class DatabaseTaskManager(TaskManager):
             self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)}"})   
             raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)}")
         
-    def _extract_value_and_field_from_input_data(self, input_data: dict, field_mapping: dict = FIELD_MAPPING) -> tuple:
+    def _extract_value_and_field_from_input_data(self, input_data: dict, valid_field_names: VALID_FIELD_NAMES) -> tuple:
         """Extract value and field from input data"""
        # Map field to user data fields
         
         update_data = dict()
         
-        value = input_data['value']
-        field_name = input_data['field_name']
-        if isinstance(value, dict):
-            for key, val in value.items():
-                if key in field_name:
-                    if key in field_mapping.keys(): #future proofing for fields not aligned between task and database
-                        update_data[field_mapping[key]] = val
-                    else:
-                        update_data[key] = val
-        else:
-            update_data[field_name] = value
-        
+        values = input_data['values']
+        if not isinstance(values, dict):
+            raise ValueError(f"Values is not a dict: {values}")
+        for key in values.keys():
+            if key in valid_field_names:
+                update_data[key] = values[key]
         return update_data
 
     def handle_db_operation(self, input_data: dict) -> dict:
@@ -721,7 +740,7 @@ class DatabaseTaskManager(TaskManager):
             operation = entity_key.split('_')[0]
             
             # Start task with appropriate entity type and ID
-            self.start_task(entity_key, entity_id, stage=f'db_{operation}')
+            self.start_task(entity_key, entity_id, grievance_id=self.grievance_id, stage=f'db_{operation}')
             
             # Perform the database operation
             if entity_key == 'user_id':

@@ -95,7 +95,7 @@ const APP_STEPS = {
     },
     review: {
         name: 'Review your Submission',
-        windows: ['reviewGrievance', 'reviewDetails'],
+        windows: ['reviewAll'],
         requiresRecording: false
     }
 };
@@ -203,9 +203,11 @@ UIModule = {
             let currentStepKey, currentWindow;
             try {
                 const { step, window } = UIModule.getCurrentWindow();
-                currentStepKey = UIModule.stepOrder[UIModule.currentStepIndex];
-                const currentStep = UIModule.steps[currentStepKey];
-                currentWindow = currentStep ? currentStep.windows[UIModule.currentWindowIndex] : undefined;
+                currentStepKey = step;
+                currentWindow = window;
+                
+                // Debug logging
+                console.log(`[NAV] showCurrentWindow: step='${currentStepKey}', window='${currentWindow}', stepIndex=${UIModule.currentStepIndex}, windowIndex=${UIModule.currentWindowIndex}`);
                 
                 // Default logic for other steps
                 document.querySelectorAll('.step').forEach(stepEl => {
@@ -213,10 +215,63 @@ UIModule = {
                     stepEl.style.display = 'none';
                 });
                 
-                const el = document.getElementById(`${currentStepKey}-${currentWindow}`);
+                const elementId = `${currentStepKey}-${currentWindow}`;
+                const el = document.getElementById(elementId);
+                console.log(`[NAV] Looking for element: ${elementId}, found: ${!!el}`);
+                
                 if (el) {
+                    console.log(`[NAV] Before changes - hidden: ${el.hidden}, display: ${el.style.display}`);
                     el.hidden = false;
                     el.style.display = 'block';
+                    console.log(`[NAV] After changes - hidden: ${el.hidden}, display: ${el.style.display}`);
+                    
+                    // Additional debugging - check if element is actually visible
+                    const rect = el.getBoundingClientRect();
+                    console.log(`[NAV] Element dimensions:`, rect);
+                    console.log(`[NAV] Element computed styles:`, {
+                        display: globalThis.getComputedStyle(el).display,
+                        visibility: globalThis.getComputedStyle(el).visibility,
+                        opacity: globalThis.getComputedStyle(el).opacity
+                    });
+                    
+                    // If this is the review element with zero dimensions, do detailed debugging
+                    if (currentStepKey === 'review' && rect.width === 0 && rect.height === 0) {
+                        console.log(`[NAV] DEBUGGING ZERO DIMENSIONS for element:`, elementId);
+                        const computedStyle = globalThis.getComputedStyle(el);
+                        console.log(`[NAV] Full computed style check:`, {
+                            width: computedStyle.width,
+                            height: computedStyle.height,
+                            minWidth: computedStyle.minWidth,
+                            minHeight: computedStyle.minHeight,
+                            maxWidth: computedStyle.maxWidth,
+                            maxHeight: computedStyle.maxHeight,
+                            padding: computedStyle.padding,
+                            margin: computedStyle.margin,
+                            border: computedStyle.border,
+                            boxSizing: computedStyle.boxSizing,
+                            overflow: computedStyle.overflow,
+                            position: computedStyle.position,
+                            float: computedStyle.float,
+                            fontSize: computedStyle.fontSize,
+                            lineHeight: computedStyle.lineHeight
+                        });
+                        
+                        // Check if the content inside has dimensions
+                        const contentElements = el.querySelectorAll('*');
+                        console.log(`[NAV] Found ${contentElements.length} child elements`);
+                        contentElements.forEach((child, index) => {
+                            const childRect = child.getBoundingClientRect();
+                            if (childRect.width > 0 || childRect.height > 0) {
+                                console.log(`[NAV] Child ${index} (${child.tagName}.${child.className}) has dimensions:`, childRect);
+                            }
+                        });
+                        
+                        // Check if there's actual text content
+                        console.log(`[NAV] Element innerHTML length:`, el.innerHTML.length);
+                        console.log(`[NAV] Element textContent length:`, el.textContent.length);
+                        console.log(`[NAV] Element textContent preview:`, el.textContent.substring(0, 200));
+                    }
+                    
                     // If we're on the attachments step, update the grievanceId span
                     if (currentStepKey === 'attachments') {
                         const idElement = document.getElementById('grievanceId');
@@ -227,10 +282,49 @@ UIModule = {
                             }
                         }
                     }
+                    
+                    // If we're on the review step, trigger review data population
+                    if (currentStepKey === 'review') {
+                        console.log('[NAV] On review step - triggering data population');
+                        
+                        // Try multiple ways to access the ReviewDataModule
+                        let reviewModule = null;
+                        if (window.debugReviewData) {
+                            reviewModule = window.debugReviewData;
+                            console.log('[NAV] Using debugReviewData');
+                        } else if (window.ReviewDataModule) {
+                            reviewModule = window.ReviewDataModule;
+                            console.log('[NAV] Using global ReviewDataModule');
+                        } else if (ReviewDataModule && typeof ReviewDataModule.updateReviewUI === 'function') {
+                            reviewModule = ReviewDataModule;
+                            console.log('[NAV] Using local ReviewDataModule');
+                        }
+                        
+                        if (reviewModule && typeof reviewModule.updateReviewUI === 'function') {
+                            console.log('[NAV] Review data available:', reviewModule.reviewData);
+                            console.log('[NAV] Calling updateReviewUI...');
+                            reviewModule.updateReviewUI();
+                        } else {
+                            console.warn('[NAV] ReviewDataModule not available or missing updateReviewUI function');
+                            console.log('[NAV] Available on window:', Object.keys(window).filter(k => k.includes('Review')));
+                        }
+                    }
+                    
                     const content = el.querySelector('.content');
                     if (content && SpeechModule.autoRead) {
                         SpeechModule.speak(content.textContent);
                     }
+                    
+                    // Update button states for the current step
+                    UIModule.updateButtonStates({
+                        isRecording: RecordingModule.isRecording,
+                        hasRecording: RecordingModule.hasAnyRecording(),
+                        isSubmitting: GrievanceModule.isSubmitting
+                    });
+                    
+                    console.log(`[NAV] Successfully showed window: ${elementId}`);
+                } else {
+                    console.error(`[NAV] Element not found: ${elementId}`);
                 }
             } catch(error) {
                 console.error('[ERROR] Navigation error:', error, 'currentStepKey:', currentStepKey, 'currentWindow:', currentWindow);
@@ -357,7 +451,7 @@ UIModule = {
             const message = overlay.querySelector('.submission-message');
             if (message) {
                 message.textContent = 'Submitting your grievance…';
-                message.style.color = '#045c94';
+                message.style.color = 'var(--primary-color)';
             }
             const cancelBtn = overlay.querySelector('#cancelSubmissionBtn');
             if (cancelBtn) {
@@ -459,6 +553,10 @@ UIModule = {
                     if (step === 'personalInfo' && window === 'address'){
                         button.style.display = 'none';
                         button.disabled = true;
+                    } else if (step === 'review') {
+                        // Review step doesn't require recordings - always enable Next
+                        button.disabled = false;
+                        button.style.display = '';
                     } else {
                         button.disabled = !hasRecording;
                         button.style.display = '';
@@ -978,8 +1076,8 @@ RecordingModule = {
         micPermissionNote.style.bottom = '10px';
         micPermissionNote.style.right = '10px';
         micPermissionNote.style.padding = '8px 12px';
-        micPermissionNote.style.backgroundColor = 'rgba(0,0,0,0.7)';
-        micPermissionNote.style.color = 'white';
+        micPermissionNote.style.backgroundColor = 'var(--dark-bg)';
+        micPermissionNote.style.color = 'var(--text-color)';
         micPermissionNote.style.borderRadius = '4px';
         micPermissionNote.style.fontSize = '14px';
         micPermissionNote.style.zIndex = '9999';
@@ -1007,8 +1105,8 @@ RecordingModule = {
                 successNote.style.bottom = '10px';
                 successNote.style.right = '10px';
                 successNote.style.padding = '8px 12px';
-                successNote.style.backgroundColor = 'rgba(43,138,62,0.9)';
-                successNote.style.color = 'white';
+                successNote.style.backgroundColor = 'var(--success-color)';
+                successNote.style.color = 'var(--text-color)';
                 successNote.style.borderRadius = '4px';
                 successNote.style.fontSize = '14px';
                 successNote.style.zIndex = '9999';
@@ -1959,13 +2057,6 @@ EventModule = {
                 ModifyModule.modifyRecording(type);
             });
         });
-
-        // Handle categories dropdown
-        document.querySelectorAll('.modify-btn[data-action="show-categories"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                UIModule.showCategoriesDropdown();
-            });
-        });
     },
 
     setupNavigationButtons: function() {
@@ -2051,13 +2142,13 @@ EventModule = {
     },
 
     setupAccessibilityButtons: function() {
-        // Handle accessibility buttons
-        const contrastBtn = document.getElementById('contrastToggleBtn');
-        if (contrastBtn) {
-            contrastBtn.addEventListener('click', () => {
-                AccessibilityModule.toggleContrast();
-            });
-        }
+        // Note: contrastToggleBtn is handled by AccessibilityModule directly
+        // const contrastBtn = document.getElementById('contrastToggleBtn');
+        // if (contrastBtn) {
+        //     contrastBtn.addEventListener('click', () => {
+        //         AccessibilityModule.toggleContrast();
+        //     });
+        // }
 
         const fontSizeBtn = document.getElementById('fontSizeBtn');
         if (fontSizeBtn) {
@@ -2066,12 +2157,12 @@ EventModule = {
             });
         }
 
-        const readPageBtn = document.getElementById('readPageBtn');
-        if (readPageBtn) {
-            readPageBtn.addEventListener('click', () => {
-                SpeechModule.toggleAutoRead();
-            });
-        }
+        // const readPageBtn = document.getElementById('readPageBtn');
+        // if (readPageBtn) {
+        //     readPageBtn.addEventListener('click', () => {
+        //         SpeechModule.toggleAutoRead();
+        //     });
+        // }
 
         const speedBtn = document.getElementById('speedBtn');
         if (speedBtn) {
@@ -2272,7 +2363,7 @@ window.GrievanceModule = GrievanceModule;
 window.ModifyModule = ModifyModule;
 window.EventModule = EventModule;
 window.LanguageModule = LanguageModule;
-window.ReviewDataModule = ReviewDataModule;
+// Note: ReviewDataModule is assigned after initialization
 
 // Test if script loads completely and we reach the DOMContentLoaded setup
 console.log('🔍 End of app.js reached - about to set up DOMContentLoaded listener');
@@ -2367,6 +2458,10 @@ function initializeModules() {
         // Create ReviewDataModule instance with dependencies
         ReviewDataModule = createReviewDataModule(socket, UIModule, RecordingModule, GrievanceModule);
         ReviewDataModule.init();
+        
+        // Make sure it's available on window for onclick handlers
+        window.ReviewDataModule = ReviewDataModule;
+        
         console.log('✅ ReviewDataModule initialized');
     } catch (error) {
         console.error('❌ ReviewDataModule failed:', error);

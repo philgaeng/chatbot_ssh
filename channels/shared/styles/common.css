@@ -40,35 +40,74 @@
     --transition: all 0.2s ease-in-out;
     
     /* Typography */
-    font-size: 16px;
+    --base-font-size: 16px;
+    font-size: var(--base-font-size);
 }
 
 /* High Contrast Theme */
 body.high-contrast {
-    --primary-color: #000080;
-    --primary-dark: #0000cd;
-    --primary-light: #e6e6fa;
-    --secondary-color: #006400;
-    --secondary-dark: #008000;
-    --secondary-light: #f0fff0;
-    --error-color: #800000;
-    --error-dark: #8b0000;
-    --error-light: #fff0f0;
-    --warning-color: #808000;
-    --warning-dark: #b8860b;
-    --warning-light: #fffacd;
-    --success-color: #006400;
-    --success-dark: #008000;
-    --success-light: #f0fff0;
-    --info-color: #000080;
-    --info-dark: #0000cd;
-    --info-light: #e6e6fa;
-    --text-color: #000000;
-    --text-muted: #696969;
-    --light-bg: #ffffff;
-    --dark-bg: #f5f5f5;
-    --border-color: #000000;
-    --box-shadow: 0 0 0 2px #000000;
+    /* Primary colors - Dark blue palette */
+    --primary-color: #2c3e50;        /* Dark blue-gray */
+    --primary-dark: #1a252f;         /* Darker blue-gray */
+    --primary-light: #34495e;        /* Lighter blue-gray */
+    
+    /* Secondary colors - Complementary teal */
+    --secondary-color: #16a085;      /* Dark teal */
+    --secondary-dark: #138d75;       /* Darker teal */
+    --secondary-light: #48c9b0;      /* Lighter teal */
+    
+    /* Status colors - High contrast but refined */
+    --error-color: #e74c3c;          /* Clear red (less harsh than pure red) */
+    --error-dark: #c0392b;           /* Darker red */
+    --error-light: #f1948a;          /* Lighter red */
+    
+    --warning-color: #f39c12;        /* High contrast orange (better than pure yellow) */
+    --warning-dark: #d68910;         /* Darker orange */
+    --warning-light: #f8c471;        /* Lighter orange */
+    
+    --success-color: #27ae60;        /* Clear green (less harsh than pure green) */
+    --success-dark: #229954;         /* Darker green */
+    --success-light: #58d68d;        /* Lighter green */
+    
+    --info-color: #3498db;           /* Clear blue (less harsh than cyan) */
+    --info-dark: #2980b9;            /* Darker blue */
+    --info-light: #85c1e9;           /* Lighter blue */
+    
+    /* Text colors - High contrast */
+    --text-color: #ffffff;           /* Pure white for maximum contrast */
+    --text-muted: #bdc3c7;           /* Light gray for secondary text */
+    
+    /* Background colors - Charcoal palette */
+    --light-bg: #1a1a1a;             /* Dark charcoal */
+    --dark-bg: #2c2c2c;              /* Slightly lighter charcoal */
+    
+    /* UI elements */
+    --border-color: #ffffff;          /* White borders for maximum contrast */
+    --box-shadow: 0 0 0 2px #ffffff; /* White shadows for clarity */
+}
+
+/* High contrast specific overrides for better readability */
+body.high-contrast h1,
+body.high-contrast h2,
+body.high-contrast h3,
+body.high-contrast h4,
+body.high-contrast h5,
+body.high-contrast h6 {
+    color: var(--warning-color) !important; /* Use bright orange for headings for maximum visibility */
+}
+
+body.high-contrast .step-instruction {
+    color: var(--text-color) !important; /* Ensure step instructions are white */
+}
+
+body.high-contrast p,
+body.high-contrast span,
+body.high-contrast div {
+    color: var(--text-color); /* Ensure all text is white by default */
+}
+
+body.high-contrast .header-content h1 {
+    color: var(--warning-color) !important; /* Make header title clearly visible */
 }
 
 /* Base Typography */
@@ -80,6 +119,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    font-size: var(--base-font-size);
 }
 
 /* Typography Scale */
@@ -91,21 +131,39 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.2;
 }
 
-h1 { font-size: 2.2rem; 
+h1 { 
+    font-size: calc(var(--base-font-size) * 1.375); 
     margin-top: 1.8rem;
     margin-bottom: 1.8rem;
 }
-h2 { font-size: 1.8rem; }
+h2 { font-size: calc(var(--base-font-size) * 1.125); }
 h3 { 
-    font-size: 1.5rem; 
+    font-size: calc(var(--base-font-size) * 0.9375); 
     color: var(--primary-dark);
 }
 h4 { 
-    font-size: 1.25rem;
+    font-size: calc(var(--base-font-size) * 0.78125);
     color: var(--primary-dark);
 }
-h5 { font-size: 1.1rem; }
-h6 { font-size: 1rem; }
+h5 { font-size: calc(var(--base-font-size) * 0.6875); }
+h6 { font-size: calc(var(--base-font-size) * 0.625); }
+
+/* Enhanced font scaling - other elements */
+p, div, span, button, input, select, textarea {
+    font-size: inherit;
+}
+
+.step-instruction {
+    font-size: calc(var(--base-font-size) * 1.1);
+}
+
+button {
+    font-size: var(--base-font-size);
+}
+
+input, select, textarea {
+    font-size: var(--base-font-size);
+}
 
 /* Common Container */
 .container {
@@ -173,7 +231,6 @@ button {
     border-radius: var(--border-radius);
     background-color: var(--primary-color);
     color: white;
-    font-size: 1rem;
     cursor: pointer;
     transition: var(--transition);
     margin-right: 10px;
@@ -263,7 +320,6 @@ input, textarea, select {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
-    font-size: 1rem;
     transition: var(--transition);
     width: 100%;
 }
@@ -403,42 +459,53 @@ dialog ul {
     top: 0;
 }
 
-/* High Contrast Overrides */
+/* Enhanced High Contrast Styles */
 body.high-contrast {
-    color: #ffffff;
-    background-color: #000000;
+    /* Let CSS variables handle all colors - no hardcoded overrides */
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    
+    /* Enhanced borders and contrast for better visibility */
+    border-color: var(--border-color);
 }
 
 body.high-contrast button {
-    border: 2px solid #ffffff;
+    border: 2px solid var(--border-color);
+    background-color: var(--primary-color);
+    color: var(--text-color);
+}
+
+body.high-contrast button:hover,
+body.high-contrast button:focus {
+    background-color: var(--primary-dark);
 }
 
 body.high-contrast input,
 body.high-contrast textarea,
 body.high-contrast select {
-    background: #000000;
-    color: #ffffff;
-    border: 2px solid #ffffff;
+    background-color: var(--light-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
 }
 
 body.high-contrast header,
 body.high-contrast footer {
-    background-color: #000000;
-    border-color: #ffffff;
+    background-color: var(--light-bg);
+    border-color: var(--border-color);
 }
 
 body.high-contrast .footer-content p {
-    color: #ffffff;
+    color: var(--text-muted) !important;
 }
 
 body.high-contrast dialog {
-    background-color: #000000;
-    color: #ffffff;
-    border: 2px solid #ffffff;
+    background-color: var(--light-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
 }
 
 body.high-contrast dialog h2 {
-    color: #ffff00;
+    color: var(--warning-color) !important;  /* Use warning color for dialog titles for better visibility */
 }
 
 body.high-contrast dialog::backdrop {
@@ -446,31 +513,45 @@ body.high-contrast dialog::backdrop {
 }
 
 body.high-contrast .tooltip {
-    background-color: #000000;
-    border: 1px solid #ffffff;
+    background-color: var(--dark-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
 }
 
 body.high-contrast .nav-btn {
-    border-color: #ffffff;
-    color: #ffffff;
+    border-color: var(--border-color);
+    color: var(--text-color);
+    background-color: transparent;
 }
 
 body.high-contrast .nav-btn:hover:not(:disabled),
 body.high-contrast .nav-btn:focus:not(:disabled) {
-    background: #ffffff;
-    color: #000000;
+    background-color: var(--primary-color);
+    color: var(--text-color);
 }
 
 body.high-contrast .nav-btn:disabled {
-    border-color: #555555;
-    color: #555555;
-    background-color: #333333;
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    background-color: var(--dark-bg);
+}
+
+/* Additional high contrast improvements */
+body.high-contrast .language-selector select {
+    background-color: var(--light-bg) !important;
+    color: var(--text-color) !important;
+    border: 2px solid var(--border-color) !important;
+}
+
+body.high-contrast .language-selector select option {
+    background-color: var(--light-bg) !important;
+    color: var(--text-color) !important;
 }
 
 /* Responsive Design */
 @media (max-width: 600px) {
     :root {
-        font-size: 14px;
+        --base-font-size: 15px;  /* Slightly smaller base on mobile */
     }
     
     .container {
@@ -480,7 +561,7 @@ body.high-contrast .nav-btn:disabled {
     }
     
     .header-content h1 {
-        font-size: 1.1rem;
+        font-size: calc(var(--base-font-size) * 1.1);  /* Smaller header on mobile */
     }
     
     .header-content img {
@@ -497,12 +578,6 @@ body.high-contrast .nav-btn:disabled {
         text-align: center;
     }
     
-    /* Regular buttons become full width on mobile */
-    /* button:not(.nav-btn) {
-        width: 75%;
-        margin-bottom: 10px;
-    } */
-
     /* Navigation buttons stay circular but slightly smaller */
     .nav-btn {
         width: 2.8rem;

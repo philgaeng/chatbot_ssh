@@ -339,115 +339,201 @@
                 </div>
             </div>
                 <!-- Review Steps -->
-            <div id="review-reviewGrievance" class="step" hidden role="region" aria-label="review-reviewGrievance">
+            <div id="review-reviewAll" class="step" hidden role="region" aria-label="review-reviewAll">
                 <div class="review-steps">
-                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Grievance Details</h3>
+                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Complete Review</h3>
                     <div class="review-content">
                         <div class="nav-row">
                             <button class="nav-btn" data-action="prev" aria-label="Previous step">
                                 <i class="fas fa-chevron-left"></i>
                                 <span class="tooltip">Previous</span>
                             </button>
-                            <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
+                            <button class="nav-btn" data-action="next" aria-label="Next step">
                                 <i class="fas fa-chevron-right"></i>
                                 <span class="tooltip">Next</span>
                             </button>
                         </div>
-                        <!-- Grievance Details -->
-                        <div class="review-section">
-                            <h4>Grievance Details</h4>
-                            <div class="review-text" id="grievanceDetailsReview"></div>
-                            <button data-recording-type="grievance_details" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
+                        
+                        <!-- Grievance Information Section -->
+                        <div style="margin-bottom: 40px;">
+                            <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 20px;">Grievance Information</h3>
+                            
+                            <!-- Grievance Details -->
+                            <div class="review-section">
+                                <h4>Grievance Details</h4>
+                                <div class="review-text" id="grievanceDetailsReview"></div>
+                                <div class="edit-area" id="grievanceDetailsEditArea" hidden>
+                                    <textarea id="grievanceDetailsEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="grievance_details">💾 Save</button>
+                                        <button class="cancel-btn" data-field="grievance_details">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="grievance_details">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="grievanceDetailsValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Grievance Summary -->
+                            <div class="review-section">
+                                <h4>Grievance Summary</h4>
+                                <div class="review-text" id="grievanceSummaryReview"></div>
+                                <div class="edit-area" id="grievanceSummaryEditArea" hidden>
+                                    <textarea id="grievanceSummaryEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="grievance_summary">💾 Save</button>
+                                        <button class="cancel-btn" data-field="grievance_summary">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="grievance_summary">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="grievanceSummaryValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Grievance Categories -->
+                            <div class="review-section">
+                                <h4>Grievance Categories</h4>
+                                <div class="review-text" id="grievanceCategoriesReview"></div>
+                                <button data-action="show-categories" class="modify-btn primary-btn" aria-label="Show categories">
+                                    <i class="fas fa-edit"></i> Modify Categories
+                                </button>
+                                <div id="categoriesDropdown" class="dropdown-content" hidden>
+                                    <!-- Categories will be populated from LIST_OF_CATEGORIES -->
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Grievance Summary -->
-                        <div class="review-section">
-                            <h4>Grievance Summary</h4>
-                            <div class="review-text" id="grievanceSummaryReview"></div>
-                            <button data-recording-type="grievance_summary" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
+                        <!-- Personal Information Section -->
+                        <div style="margin-bottom: 40px;">
+                            <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 20px;">Personal Information</h3>
+                            
+                            <!-- Full Name -->
+                            <div class="review-section">
+                                <h4>Full Name</h4>
+                                <div class="review-text" id="userNameReview"></div>
+                                <div class="edit-area" id="userNameEditArea" hidden>
+                                    <textarea id="userNameEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="user_full_name">💾 Save</button>
+                                        <button class="cancel-btn" data-field="user_full_name">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="user_full_name">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="userNameValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
 
-                        <!-- Grievance Categories -->
-                        <div class="review-section">
-                            <h4>Grievance Categories</h4>
-                            <div class="review-text" id="grievanceCategoriesReview"></div>
-                            <button data-action="show-categories" class="modify-btn primary-btn" aria-label="Show categories">
-                                <i class="fas fa-edit"></i> Modify Categories
-                            </button>
-                            <div id="categoriesDropdown" class="dropdown-content" hidden>
-                                <!-- Categories will be populated from LIST_OF_CATEGORIES -->
+                            <!-- Phone Number -->
+                            <div class="review-section">
+                                <h4>Phone Number</h4>
+                                <div class="review-text" id="userPhoneReview"></div>
+                                <div class="edit-area" id="userPhoneEditArea" hidden>
+                                    <textarea id="userPhoneEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="user_contact_phone">💾 Save</button>
+                                        <button class="cancel-btn" data-field="user_contact_phone">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="user_contact_phone">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="userPhoneValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Municipality -->
+                            <div class="review-section">
+                                <h4>Municipality</h4>
+                                <div class="review-text" id="userMunicipalityReview"></div>
+                                <div class="edit-area" id="userMunicipalityEditArea" hidden>
+                                    <textarea id="userMunicipalityEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="user_municipality">💾 Save</button>
+                                        <button class="cancel-btn" data-field="user_municipality">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="user_municipality">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="userMunicipalityValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Village -->
+                            <div class="review-section">
+                                <h4>Village</h4>
+                                <div class="review-text" id="userVillageReview"></div>
+                                <div class="edit-area" id="userVillageEditArea" hidden>
+                                    <textarea id="userVillageEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="user_village">💾 Save</button>
+                                        <button class="cancel-btn" data-field="user_village">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="user_village">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="userVillageValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Address -->
+                            <div class="review-section">
+                                <h4>Address / Landmark</h4>
+                                <div class="review-text" id="userAddressReview"></div>
+                                <div class="edit-area" id="userAddressEditArea" hidden>
+                                    <textarea id="userAddressEdit" placeholder="Edit your text here..."></textarea>
+                                    <div class="edit-buttons">
+                                        <button class="save-btn" data-field="user_address">💾 Save</button>
+                                        <button class="cancel-btn" data-field="user_address">❌ Cancel</button>
+                                    </div>
+                                </div>
+                                <div class="action-buttons">
+                                    <button class="edit-text-btn secondary-btn" data-field="user_address">📝 Edit Text</button>
+                                </div>
+                                <div class="validation-section">
+                                    <label class="validation-checkbox">
+                                        <input type="checkbox" id="userAddressValidated">
+                                        ✓ This information is correct
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Step 2: Personal Information Review -->
-            <div id="review-reviewDetails" class="step" hidden role="region" aria-label="review-reviewDetails">
-                <div class="review-steps">
                     
-                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Personal Info</h3>
-                    <div class="review-content">
-                        <div class="nav-row">
-                            <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                                <i class="fas fa-chevron-left"></i>
-                                <span class="tooltip">Previous</span>
-                            </button>
-                            <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                                <i class="fas fa-chevron-right"></i>
-                                <span class="tooltip">Next</span>
-                            </button>
-                        </div>
-                        <!-- Full Name -->
-                        <div class="review-section">
-                            <h4>Full Name</h4>
-                            <div class="review-text" id="userNameReview"></div>
-                            <button data-recording-type="user_full_name" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
-
-                        <!-- Phone Number -->
-                        <div class="review-section">
-                            <h4>Phone Number</h4>
-                            <div class="review-text" id="userPhoneReview"></div>
-                            <button data-recording-type="user_contact_phone" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
-                        <!-- Municipality -->
-                        <div class="review-section">
-                            <h4>Municipality</h4>
-                            <div class="review-text" id="userMunicipalityReview"></div>
-                            <button data-recording-type="user_municipality" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
-
-                        <!-- Village -->
-                        <div class="review-section">
-                            <h4>Village</h4>
-                            <div class="review-text" id="userVillageReview"></div>
-                            <button data-recording-type="user_village" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
-
-                        <!-- Address -->
-                        <div class="review-section">
-                            <h4>Address / Landmark</h4>
-                            <div class="review-text" id="userAddressReview"></div>
-                            <button data-recording-type="user_address" class="modify-btn primary-btn" aria-label="Modify recording">
-                                <i class="fas fa-edit"></i> Modify Recording
-                            </button>
-                        </div>
-                    </div>
                     <!-- Navigation Buttons -->
                     <div class="review-navigation">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
+                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
                             <i class="fas fa-chevron-left"></i>
                             <span class="tooltip">Previous</span>
                         </button>
@@ -457,8 +543,8 @@
                         </button>
                     </div>
                 </div>
-
-
+            </div>
+        </main>
 
         <!-- Ensure the help dialog is properly set up to work with showModal() -->
         <dialog id="helpDialog" aria-labelledby="helpDialogHeading">
