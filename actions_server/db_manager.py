@@ -161,31 +161,91 @@ class BaseDatabaseManager:
         
     
     def generate_id(self, type: str='grievance_id', province= 'KO', district= 'JH',  suffix=None):
-        """Generate a unique ID with format: {prefix}{date}{random_letter}{random_hex}{suffix}"""
+        """Generate a unique ID based on type, province, and district"""
+        import uuid
+        from datetime import datetime
+
+        # Define type mappings
+        type_prefixes = {
+            'grievance_id': 'GR',
+            'user_id': 'US',
+            'recording_id': 'REC',
+            'transcription_id': 'TR',
+            'translation_id': 'TL'
+        }
         try:
-            date = datetime.now().strftime('%Y%m%d')
-            prefix = type.upper()[:2]
+            prefix = type_prefixes.get(type)
+            date_str = datetime.now().strftime('%Y%m%d')
             province = province.upper()[:2]
             district = district.upper()[:2]
-            identifier = province + district + date
+            random_suffix = str(uuid.uuid4())[:4].upper()
+            suffix = '-' + suffix.upper()[0] if suffix else ''
             
-            # Generate random hex string, ensuring we have enough characters
-            random_hex = uuid.uuid4().hex
-            if len(random_hex) < 4:
-                raise ValueError("Generated UUID hex string is too short")
-            random_hex = random_hex[:4].upper()
-            # Construct the ID
-            id_parts = [prefix, identifier, random_hex]
-            if suffix:
-                id_parts.append(suffix.upper()[0])
-            
-            
-            return "-".join(id_parts)
+            return f"{prefix}-{date_str}-{province}-{district}-{random_suffix}{suffix}"
+
+
         except Exception as e:
             migrations_logger.error(f"Error generating ID: {str(e)}")
             # Fallback to a simpler ID format if UUID generation fails
             timestamp = int(time.time() * 1000)
             return f"{prefix}{timestamp}{f'_{suffix}' if suffix else ''}"
+
+    def check_entry_exists_for_entity_key(self, entity_key: str, entity_id: str) -> bool:
+        """Check if an entity exists in the database based on entity_key and entity_id
+        
+        Args:
+            entity_key: Type of entity (e.g., 'grievance_id', 'user_id', etc.)
+            entity_id: ID of the entity to check
+            
+        Returns:
+            bool: True if entity exists, False otherwise
+        """
+        try:
+            if entity_key == 'grievance_id':
+                result = self.execute_query(
+                    "SELECT grievance_id FROM grievances WHERE grievance_id = %s", 
+                    (entity_id,), 
+                    "check_grievance_exists"
+                )
+                
+            elif entity_key == 'user_id':
+                result = self.execute_query(
+                    "SELECT id FROM users WHERE id = %s", 
+                    (entity_id,), 
+                    "check_user_exists"
+                )
+                
+            elif entity_key == 'recording_id':
+                result = self.execute_query(
+                    "SELECT recording_id FROM grievance_recordings WHERE recording_id = %s", 
+                    (entity_id,), 
+                    "check_recording_exists"
+                )
+                
+            elif entity_key == 'transcription_id':
+                result = self.execute_query(
+                    "SELECT transcription_id FROM grievance_transcriptions WHERE transcription_id = %s", 
+                    (entity_id,), 
+                    "check_transcription_exists"
+                )
+                
+            elif entity_key == 'translation_id':
+                result = self.execute_query(
+                    "SELECT translation_id FROM grievance_translations WHERE translation_id = %s", 
+                    (entity_id,), 
+                    "check_translation_exists"
+                )
+                
+            else:
+                # For other entity types, assume they exist (can be expanded later)
+                operations_logger.warning(f"Unknown entity_key '{entity_key}', assuming entity exists")
+                return True
+                
+            return len(result) > 0
+            
+        except DatabaseError as e:
+            operations_logger.error(f"Error checking entity existence for {entity_key}={entity_id}: {str(e)}")
+            return False
 
 
 class TableDbManager(BaseDatabaseManager):
@@ -196,7 +256,7 @@ class TableDbManager(BaseDatabaseManager):
         'grievance_statuses',
         'processing_statuses',
         'task_statuses',
-        'field_types',
+        'field_names',
         'users',
         'tasks',
         'grievances',
@@ -385,20 +445,20 @@ class TableDbManager(BaseDatabaseManager):
             """)
 
         # Field types table
-        migrations_logger.info("Creating/recreating field_types table...")
+        migrations_logger.info("Creating/recreating field_names table...")
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS field_types (
-                field_type TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS field_names (
+                field_name TEXT PRIMARY KEY,
                 description TEXT
             )
         """)
         
         # Insert default field types if not present
-        cur.execute("SELECT COUNT(*) FROM field_types")
+        cur.execute("SELECT COUNT(*) FROM field_names")
         if cur.fetchone()[0] == 0:
             migrations_logger.info("Initializing default field types...")
             cur.execute("""
-                INSERT INTO field_types (field_type, description) VALUES
+                INSERT INTO field_names (field_name, description) VALUES
                     ('grievance_details', 'Grievance details'),
                     ('user_full_name', 'User full name'),
                     ('user_contact_phone', 'User contact phone'),
@@ -521,11 +581,12 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
                 recording_id UUID PRIMARY KEY,
+                user_id TEXT REFERENCES users(id),
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 file_path TEXT NOT NULL,
-                recording_type TEXT NOT NULL REFERENCES field_types(field_type),
+                field_name TEXT NOT NULL,
                 duration_seconds INTEGER,
-                file_size_bytes INTEGER,
+                file_size INTEGER,
                 processing_status TEXT DEFAULT 'pending' REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
@@ -580,21 +641,17 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS task_entities (
                 task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
-                entity_type TEXT NOT NULL CHECK (entity_type IN ('grievance', 'user', 'report', 'file', 'recording')),
+                entity_key TEXT NOT NULL CHECK (entity_key IN ('grievance_id', 'user_id', 'transcription_id', 'translation_id', 'recording_id', 'task_id', 'ticket_id')),
                 entity_id TEXT NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (task_id, entity_type, entity_id),
-                CONSTRAINT fk_entity_grievance 
-                    FOREIGN KEY (entity_id) 
-                    REFERENCES grievances(grievance_id) 
-                    ON DELETE CASCADE
+                PRIMARY KEY (task_id, entity_key, entity_id)
             )
         """)
         
         # Create indexes for entity relationships
         migrations_logger.info("Creating task entity indexes...")
         cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_task_entities_entity ON task_entities(entity_type, entity_id);
+            CREATE INDEX IF NOT EXISTS idx_task_entities_entity ON task_entities(entity_key, entity_id);
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_code);
             CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
             CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at);
@@ -671,7 +728,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_grievance_id ON grievance_voice_recordings(grievance_id);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_status ON grievance_voice_recordings(processing_status);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_type ON grievance_voice_recordings(recording_type);
+            CREATE INDEX IF NOT EXISTS idx_voice_recordings_type ON grievance_voice_recordings(field_name);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_created ON grievance_voice_recordings(created_at);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_language ON grievance_voice_recordings(language_code);
             CREATE INDEX IF NOT EXISTS idx_voice_recordings_detected_language ON grievance_voice_recordings(language_code_detect);
@@ -700,22 +757,33 @@ class TableDbManager(BaseDatabaseManager):
 class TaskDbManager(BaseDatabaseManager):
     """Manager for task-related database operations"""
     
-    VALID_ENTITY_TYPES = {'grievance', 'user', 'report', 'file', 'recording'}
+    VALID_ENTITY_KEYS = { 'grievance_id', 'user_id', 'recording_id', 'transcription_id', 'translation_id'}
     
-    def create_task(self, task_id: str, task_name: str, entity_type: str, entity_id: str) -> Optional[str]:
+    def is_valid_entity_key(self, entity_key: str) -> bool:
+        """Check if the entity key is valid"""
+        result = entity_key in self.VALID_ENTITY_KEYS
+        if not result:
+            operations_logger.error(f"Invalid entity key: {entity_key}")
+        return result
+    
+    def create_task(self, task_id: str, task_name: str, entity_key: str, entity_id: str) -> Optional[str]:
         """Create a new task record with entity relationship
         
         Args:
             task_id: Celery's generated task ID
             task_name: Name of the task
-            entity_type: Type of entity (grievance, user, etc.)
+            entity_key: Key of the entity (grievance_id, user_id, etc.) as reference in the task_entities table
             entity_id: ID of the entity
             
         Returns:
             The task ID if successful, None otherwise
         """
-        if entity_type not in self.VALID_ENTITY_TYPES:
-            operations_logger.error(f"Invalid entity type: {entity_type}")
+        if not self.is_valid_entity_key(entity_key):
+            return None
+            
+        # Check if the referenced entity exists before creating the task
+        if not self.check_entry_exists_for_entity_key(entity_key, entity_id):
+            operations_logger.warning(f"Cannot create task: {entity_key}={entity_id} does not exist in database")
             return None
             
         try:
@@ -737,11 +805,12 @@ class TaskDbManager(BaseDatabaseManager):
                 # Create entity relationship
                 entity_query = """
                     INSERT INTO task_entities (
-                        task_id, entity_type, entity_id
+                        task_id, entity_key, entity_id
                     ) VALUES (%s, %s, %s)
                 """
-                cur.execute(entity_query, (task_id, entity_type, entity_id))
+                cur.execute(entity_query, (task_id, entity_key, entity_id)) 
                 
+                operations_logger.info(f"Successfully created new task {task_id}")
                 return task_id
                 
         except DatabaseError as e:
@@ -753,7 +822,7 @@ class TaskDbManager(BaseDatabaseManager):
         query = """
             SELECT t.*, ts.status_name,
                    json_agg(json_build_object(
-                       'entity_type', te.entity_type,
+                       'entity_key', te.entity_key,
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
@@ -769,57 +838,55 @@ class TaskDbManager(BaseDatabaseManager):
             operations_logger.error(f"Failed to get task: {str(e)}")
             return None
 
-    def get_tasks_by_entity(self, entity_type: str, entity_id: str) -> List[Dict]:
+    def get_tasks_by_entity_key(self, entity_key: str, entity_id: str) -> List[Dict]:
         """Get all tasks for a specific entity"""
-        if entity_type not in self.VALID_ENTITY_TYPES:
-            operations_logger.error(f"Invalid entity type: {entity_type}")
+        if not self.is_valid_entity_key(entity_key):
             return []
             
         query = """
             SELECT t.*, ts.status_name,
                    json_agg(json_build_object(
-                       'entity_type', te.entity_type,
+                       'entity_key', te.entity_key,
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
             JOIN task_statuses ts ON t.status_code = ts.status_code
             JOIN task_entities te ON t.task_id = te.task_id
-            WHERE te.entity_type = %s AND te.entity_id = %s
+            WHERE te.entity_key = %s AND te.entity_id = %s
             GROUP BY t.task_id, ts.status_name
             ORDER BY t.created_at DESC
         """
         try:
-            return self.execute_query(query, (entity_type, entity_id), "get_tasks_by_entity")
+            return self.execute_query(query, (entity_key, entity_id), "get_tasks_by_entity")   
         except DatabaseError as e:
             operations_logger.error(f"Failed to get tasks: {str(e)}")
             return []
 
-    def get_pending_tasks(self, entity_type: str = None) -> List[Dict]:
+    def get_pending_tasks(self, entity_key: str = None) -> List[Dict]:
         """Get all pending tasks, optionally filtered by entity type"""
         query = """
             SELECT t.*, ts.status_name,
                    json_agg(json_build_object(
-                       'entity_type', te.entity_type,
+                       'entity_key', te.entity_key,
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
             JOIN task_statuses ts ON t.status_code = ts.status_code
             LEFT JOIN task_entities te ON t.task_id = te.task_id
             WHERE t.status_code = 'PENDING'
-            {entity_type_filter}
+            {entity_key_filter}
             GROUP BY t.task_id, ts.status_name
             ORDER BY t.created_at ASC
         """
         
         try:
-            if entity_type:
-                if entity_type not in self.VALID_ENTITY_TYPES:
-                    operations_logger.error(f"Invalid entity type: {entity_type}")
+            if entity_key:
+                if not self.is_valid_entity_key(entity_key):
                     return []
-                query = query.format(entity_type_filter="AND te.entity_type = %s")
-                return self.execute_query(query, (entity_type,), "get_pending_tasks")
+                query = query.format(entity_key_filter="AND te.entity_key = %s")
+                return self.execute_query(query, (entity_key,), "get_pending_tasks")
             else:
-                query = query.format(entity_type_filter="")
+                query = query.format(entity_key_filter="")
                 return self.execute_query(query, operation="get_pending_tasks")
         except DatabaseError as e:
             operations_logger.error(f"Failed to get pending tasks: {str(e)}")
@@ -1306,14 +1373,24 @@ class UserDbManager(BaseDatabaseManager):
             
         except Exception as e:
             operations_logger.error(f"Error in update_user: {str(e)}")
-            return False
+            return None
 
     def create_or_update_user(self, data: Dict[str, Any] = None) -> Optional[str]:
-        """Legacy method - creates a user with provided or generated ID"""
+        """Method called by task_manager to create or update a user, 
+        if a user_id is provided, it will update the user, otherwise it will create a new user
+        This method keeps create_user and update_user as strict request SQL methods
+        Args:
+            data: Dict[str, Any] - The data for the user
+        Returns:
+            Optional[str] - The user_id if successful, None otherwise
+        """
         operations_logger.info("create_or_update_user: Using legacy method, redirecting to create_user")
         if data.get('user_id'):
             if self.get_user_by_id(data.get('user_id')):
-                return self.update_user(data.get('user_id'), data)
+                if self.update_user(data.get('user_id'), data):
+                    return data.get('user_id')
+                else:
+                    return None
             else:
                 return self.create_user(data)
         else:
@@ -1499,11 +1576,9 @@ class RecordingDbManager(BaseDatabaseManager):
                 - recording_id: ID of the recording (optional for updates)
                 - grievance_id: ID of the grievance (required)
                 - file_path: Path to the recording file
-                - file_name: Name of the recording file
-                - recording_type: Type of recording (e.g., 'details', 'contact')
-                - file_type: Type of file (e.g., 'webm', 'mp3')
-                - file_size_bytes: Size of the file in bytes
-                - duration_seconds: Duration of the recording in seconds
+                - field_name: Name of the field being transcribed
+                - file_size: Size of the file in bytes
+                - duration_seconds: Duration of the recording in seconds (optional)
                 - language_code: Language code (defaults to 'ne')
                 - processing_status: Status of processing (defaults to 'pending')
                 
@@ -1519,71 +1594,75 @@ class RecordingDbManager(BaseDatabaseManager):
                 operations_logger.error("Missing required field: grievance_id")
                 return None
                 
-            if not recording_data.get('file_path') or not recording_data.get('file_name'):
-                operations_logger.error("Missing required fields: file_path and file_name")
+            if not recording_data.get('file_path') or not recording_data.get('field_name'):
+                operations_logger.error("Missing required fields: file_path and field_name")
                 return None
             
+            # Check if recording actually exists in database (not just if recording_id is provided)
+            existing_recording = None
             if recording_id:
+                try:
+                    check_query = "SELECT recording_id FROM grievance_voice_recordings WHERE recording_id = %s"
+                    result = self.execute_query(check_query, (recording_id,), "check_recording_exists")
+                    existing_recording = result[0] if result else None
+                except Exception as e:
+                    operations_logger.warning(f"Could not check if recording exists: {str(e)}")
+            
+            if existing_recording:
                 # Update existing record
                 update_query = """
                     UPDATE grievance_voice_recordings 
                     SET file_path = %s,
-                        file_name = %s,
-                        recording_type = %s,
-                        file_type = %s,
-                        file_size_bytes = %s,
-                        duration_seconds = %s,
+                        field_name = %s,
+                        file_size = %s,
                         language_code = %s,
                         processing_status = %s,
+                        duration_seconds = %s,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE recording_id = %s
                     RETURNING recording_id
                 """
                 result = self.execute_update(update_query, (
                     recording_data['file_path'],
-                    recording_data['file_name'],
-                    recording_data.get('recording_type'),
-                    recording_data.get('file_type'),
-                    recording_data.get('file_size_bytes'),
-                    recording_data.get('duration_seconds'),
+                    recording_data.get('field_name'),
+                    recording_data.get('file_size'),
                     recording_data.get('language_code', 'ne'),
                     recording_data.get('processing_status', 'pending'),
+                    recording_data.get('duration_seconds'),
                     recording_id
                 ))
                 return recording_id if result > 0 else None
             else:
-                # Create new record
-                recording_id = str(uuid.uuid4())  # Generate new UUID
+                # Create new record - generate new UUID if not provided or if provided UUID doesn't exist
+                new_recording_id = recording_id or str(uuid.uuid4())
                 insert_query = """
                     INSERT INTO grievance_voice_recordings (
                         recording_id, grievance_id, file_path,
-                        file_name, recording_type, file_type,
-                        file_size_bytes, duration_seconds,
+                        field_name,
+                        file_size, duration_seconds,
                         processing_status, language_code
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING recording_id
                 """
                 result = self.execute_insert(insert_query, (
-                    recording_id,
+                    new_recording_id,
                     grievance_id,
                     recording_data['file_path'],
-                    recording_data['file_name'],
-                    recording_data.get('recording_type'),
-                    recording_data.get('file_type'),
-                    recording_data.get('file_size_bytes'),
+                    recording_data.get('field_name'),
+                    recording_data.get('file_size'),
                     recording_data.get('duration_seconds'),
                     recording_data.get('processing_status', 'pending'),
                     recording_data.get('language_code', 'ne')
                 ))
-                return result['recording_id'] if result else recording_id
+                return result['recording_id'] if result else new_recording_id
             
         except Exception as e:
-            operations_logger.error(f"Error in store_recording: {str(e)}")
+            operations_logger.error(f"Error in create_or_update_recording: {str(e)}")
             return None
 
     def get_transcription_for_recording_id(self, recording_id: str) -> str:
         query = """
-            SELECT grievance_id, language_code, automated_transcript, field_name, recording_type 
+            SELECT grievance_id, language_code, automated_transcript, field_name
             FROM grievance_transcriptions 
             LEFT JOIN grievance_voice_recordings 
             ON grievance_transcriptions.recording_id = grievance_voice_recordings.recording_id 
@@ -1657,7 +1736,7 @@ class RecordingDbManager(BaseDatabaseManager):
                             status_code = 'PENDING',
                             updated_at = CURRENT_TIMESTAMP
                     """
-                    self.execute_update(verification_query, (data['grievance_id'],))
+                    self.execute_update(verification_query, (data['grievance_id']))
                     return transcription_id
                 return None
             else:
@@ -1687,14 +1766,23 @@ class RecordingDbManager(BaseDatabaseManager):
                             status_code = 'PENDING',
                             updated_at = CURRENT_TIMESTAMP
                     """
-                    self.execute_update(verification_query, (data['grievance_id'],))
+                    self.execute_update(verification_query, (data['grievance_id']))
                     return result['transcription_id']
                 return None
                 
         except Exception as e:
             operations_logger.error(f"Error in create_or_update_transcription: {str(e)}")
             return None
-
+        
+    def get_field_names(self) -> List[str]:
+        """Get all field names from the field_names table"""
+        try:
+            query = "SELECT field_name FROM field_names"
+            return self.execute_query(query, operation="get_field_names")
+        except Exception as e:
+            operations_logger.error(f"Error getting field names: {str(e)}")
+            return []
+        
 class TranslationDbManager(BaseDatabaseManager):
     def create_or_update_translation(self, data: Dict[str, Any]) -> Optional[str]:
         """Create or update a translation record
@@ -1740,7 +1828,7 @@ class TranslationDbManager(BaseDatabaseManager):
                 SELECT grievance_id FROM grievance_translations 
                 WHERE grievance_id = %s
             """
-            result = self.execute_query(check_query, (grievance_id,))
+            result = self.execute_query(check_query, (grievance_id))
             
             if result:
                 # Update existing record
@@ -1776,8 +1864,8 @@ class TranslationDbManager(BaseDatabaseManager):
                             status_code = 'PENDING',
                             updated_at = CURRENT_TIMESTAMP
                     """
-                    self.execute_update(verification_query, (result,))
-                    return result
+                    self.execute_update(verification_query, (result))
+                    return result['translation_id']
                 return None
             else:
                 # Create new record
@@ -1810,7 +1898,7 @@ class TranslationDbManager(BaseDatabaseManager):
                             status_code = 'PENDING',
                             updated_at = CURRENT_TIMESTAMP
                     """
-                    self.execute_update(verification_query, (result,))
+                    self.execute_update(verification_query, (result))
                     return result['translation_id']
                 return None
                 

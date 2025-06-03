@@ -1,4 +1,0 @@
-2025-05-28 01:01:13,433 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250528-0635-A", "file": "QR_Jhapa_district.png"}
-2025-05-28 01:07:54,668 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250528-5738-A", "file": "QR_Jhapa_district.png"}
-2025-05-28 01:12:02,215 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250528-B97B-A", "file": "QR_Jhapa_district.png"}
-2025-05-28 01:20:49,475 - file_processor - INFO - Service: file_processor - Task or function: process_file_upload - Event: started - Details: {"grievance_id": "GR-KOJH20250528-144B-A", "file": "QR_Jhapa_district.png"}

@@ -9,27 +9,71 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from logging.handlers import TimedRotatingFileHandler
 
+class LoggingConfig:
+    """Centralized logging configuration for the entire system"""
+    
+    # Directory and file settings
+    LOG_DIR = "logs"
+    LOG_MAX_SIZE_MB = 100
+    LOG_MAX_FILES = 5
+    
+    # Format settings
+    LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    LOG_LEVEL = 'INFO'
+    
+    # Metrics configuration
+    METRICS_FILE = 'metrics.json'
+    
+    # Default services to monitor (centralized service registry)
+    DEFAULT_SERVICES = {
+        'llm_processor': 'llm_processor.log',
+        'queue_system': 'queue_system.log',
+        'db_operations': 'db_operations.log',
+        'db_migrations': 'db_migrations.log',
+        'db_backup': 'db_backup.log',
+        'ticket_processor': 'ticket_processor.log',
+        'ticket_notifications': 'ticket_notifications.log',
+        'ticket_assignments': 'ticket_assignments.log',
+        'monitoring_config': 'monitoring_config.log',
+        'socketio': 'socketio.log',
+        'voice_grievance': 'voice_grievance.log',
+        'api_manager': 'api_manager.log'
+    }
+    
+    @classmethod
+    def get_log_path(cls, service_name: str) -> Path:
+        """Get the full log file path for a service"""
+        log_dir = Path(cls.LOG_DIR)
+        log_dir.mkdir(exist_ok=True)
+        filename = cls.DEFAULT_SERVICES.get(service_name, f'{service_name}.log')
+        return log_dir / filename
+    
+    @classmethod
+    def get_metrics_path(cls) -> Path:
+        """Get the full metrics file path"""
+        return Path(cls.LOG_DIR) / cls.METRICS_FILE
+
 class TaskLogger:
     """Centralized task logging functionality"""
     
     def __init__(self, service_name: str = 'queue_system'):
         self.service_name = service_name
+        self.config = LoggingConfig()
         self.logger = self._setup_logger()
         
     def _setup_logger(self) -> logging.Logger:
         """Set up the logger with file and console handlers"""
         logger = logging.getLogger(self.service_name)
         if not logger.handlers:
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            formatter = logging.Formatter(self.config.LOG_FORMAT)
             
-            # File handler
-            log_dir = Path('logs')
-            log_dir.mkdir(exist_ok=True)
+            # File handler using centralized config
+            log_file_path = self.config.get_log_path(self.service_name)
             file_handler = TimedRotatingFileHandler(
-                filename=log_dir / f'{self.service_name}.log',
+                filename=log_file_path,
                 when='midnight',
                 interval=1,
-                backupCount=5,
+                backupCount=self.config.LOG_MAX_FILES,
                 encoding='utf-8'
             )
             file_handler.setFormatter(formatter)
@@ -40,13 +84,13 @@ class TaskLogger:
             
             logger.addHandler(file_handler)
             logger.addHandler(console_handler)
-            logger.setLevel(logging.INFO)
+            logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
             
         return logger
     
     def log_task_event(self, task_name: str, event_type: str, details: Optional[Dict[str, Any]] = None, service_name: str = None) -> None:
         """Log task events with consistent formatting"""
-        log_message = f"Service: {service_name} - Task or function: {task_name} - Event: {event_type}"
+        log_message = f"Service: {service_name or self.service_name} - Task or function: {task_name} - Event: {event_type}"
         if details:
             log_message += f" - Details: {json.dumps(details)}"
         
@@ -70,7 +114,7 @@ class TaskLogger:
     
     def _record_metric(self, task_name: str, metric_name: str, value: float):
         """Record a metric for a task"""
-        metrics_file = Path('logs/metrics.json')
+        metrics_file = self.config.get_metrics_path()
         metrics = {}
         if metrics_file.exists():
             try:
@@ -88,7 +132,7 @@ class TaskLogger:
     
     def _get_metric(self, task_name: str, metric_name: str, default: Any = None) -> Any:
         """Get a metric value for a task"""
-        metrics_file = Path('logs/metrics.json')
+        metrics_file = self.config.get_metrics_path()
         if metrics_file.exists():
             try:
                 with open(metrics_file, 'r') as f:
@@ -106,13 +150,11 @@ class TaskLogger:
         
         if level == "debug":
             self.logger.debug(log_message)
-        if level == "debug":
-            self.logger.debug(message)
         elif level == "warning":
-            self.logger.warning(message)
+            self.logger.warning(log_message)
         elif level == "error":
-            self.logger.error(message)
+            self.logger.error(log_message)
         elif level == "critical":
-            self.logger.critical(message)
+            self.logger.critical(log_message)
         else:
-            self.logger.info(message)
+            self.logger.info(log_message)

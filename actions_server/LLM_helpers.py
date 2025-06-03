@@ -46,14 +46,15 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("OpenAI client not available for contact info extraction")
             
         # Get the first key-value pair from contact_data
-        field_name = next(iter(contact_data))
-        field_value = contact_data[field_name]
+        field_name = contact_data.get('field_name')
+        field_value = contact_data.get('value')
         language_code = contact_data.get('language_code', 'ne')
         
         message_input = f"""
             Extract the {field_name.replace("_", " ")} from {field_value}.
             Return the response in **strict JSON format** like this:
             {{
+                "field_name": "{field_name}",
                 "{field_name}": "value"
             }}
         """
@@ -67,15 +68,25 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
             response_format={"type": "json_object"}
         )
         
-        result_dict = json.loads(response.choices[0].message.content)
-        result = dict()
-        result[field_name] = result_dict.get(field_name, "")
-        return result
+        # Get the full ChatGPT response content
+        full_response = response.choices[0].message.content
+        result = json.loads(full_response)
+         # FIXED: Use full ChatGPT response instead of just extracted field
+        
+        return result  # FIXED: Return result instead of result_dict
         
     except Exception as e:
-        logger.error(f"Error extracting contact info: {str(e)}")
+        if not response:
+            logger.error(f"No response from OpenAI API")
+            return {
+                field_name: "",
+                'value': ""
+            }
+        else:
+            logger.error(f"Error in extracting contact info from OpenAI API response: {str(e)}")
         return {
             field_name: "",
+            'value': ""  # Add 'value' field to error response as well
         }
         
 
@@ -193,7 +204,6 @@ def classify_and_summarize_grievance(
 
         # Parse the response
         result = parse_llm_response("grievance_response", response.choices[0].message.content.strip())
-        result["status"] = "success"
         return result
 
     except Exception as e:

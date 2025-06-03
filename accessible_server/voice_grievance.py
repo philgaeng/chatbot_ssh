@@ -14,9 +14,10 @@ from werkzeug.utils import secure_filename
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
 from actions_server.websocket_utils import emit_status_update
+from actions_server.constants import VALID_FIELD_NAMES
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
-from task_queue.registered_tasks import process_batch_files_task, store_result_to_db_task
+from task_queue.registered_tasks import process_batch_files_task
 
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
@@ -26,7 +27,6 @@ SERVICE_NAME = "voice_grievance"
 
 # Create a TaskLogger instance at module level
 task_logger = TaskLogger(service_name='voice_grievance')
-
 
 
 @voice_grievance_bp.route('/accessible-file-upload', methods=['POST'])
@@ -175,37 +175,51 @@ def submit_grievance():
                 filename, field_name = ensure_valid_audio_filename(file.filename, key)
                 upload_dir = create_grievance_directory(grievance_id)
                 file_path, file_size = save_uploaded_file(file, upload_dir, filename)
+                field_name = next((field for field in VALID_FIELD_NAMES if field in file_path), None)
+                if not field_name:
+                    task_logger.log_task_event('submit_grievance', 'failed', {'error': f'No field name found for file {file_path}'})
+                    return jsonify({'status': 'error', 'error': f'No field name found for file {file_path}'}), 400
+                #sanitize duration to int
+                duration = request.form.get(f'duration', None)
+                if duration in ['float', 'int']:
+                    duration = int(duration)
+                else:
+                    duration = None
+                
                 
                 # Create recording data dictionary
                 recording_data = {
                     'recording_id': str(uuid.uuid4()),
                     'user_id': user_id,
                     'grievance_id': grievance_id,
-                    'file_name': filename,
                     'file_path': file_path,
                     'field_name': field_name,
                     'file_size': file_size,
                     'upload_date': datetime.now().isoformat(),
                     'language_code': request.form.get('language_code', 'en'),
-                    'duration_seconds': request.form.get(f'duration')  # Get duration from form data
+                    'processing_status': 'COMPLETED' 
                 }
+                if duration and duration is not None:
+                    recording_data['duration_seconds'] = duration
+                task_logger.log_task_event('submit_grievance', 'processing', f"has_duration: {'TRUE' if duration else 'FALSE'}")
                 
-                # Store in database
-                success = store_result_to_db_task.delay(recording_data)
-                if success:
+                # Store recording in database directly (not using result storage task)
+                recording_id = db_manager.recording.create_or_update_recording(recording_data)
+                if recording_id:
                     # Add to audio files list with the format expected by orchestrate_voice_processing
-                    audio_files.append({
-                        'file_name': filename,
-                        'file_path': file_path,
-                        'file_data': recording_data
-                    })
-                
+                    audio_files.append(recording_data)
+                else:
+                    task_logger.log_task_event('submit_grievance', 'failed', {'error': f'Failed to create recording {recording_data}'})
+                    return jsonify({'status': 'error', 'error': f'Failed to create recording {recording_data}'}), 500
+                    
         if not audio_files:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'No audio files provided in submission'})
             return jsonify({'status': 'error', 'error': 'No audio files provided'}), 400
+        else:
+            task_logger.log_task_event('submit_grievance', 'processing', f"audio_files: {audio_files}")
             
         # Queue Celery tasks for each file
-        result = orchestrate_voice_processing(audio_files, recording_data)
+        result = orchestrate_voice_processing(audio_files)
         
         emit_status_update(grievance_id, 'submitted', {
             'user_id': user_id,
@@ -226,7 +240,7 @@ def submit_grievance():
             'user_id': user_id,
             'tasks': result.get('files', {})
         }), 200
-        
+            
     except Exception as e:
         task_logger.log_task_event('submit_grievance', 'failed', {'error': str(e)})
         return jsonify({
