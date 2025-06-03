@@ -559,3 +559,21 @@ body.high-contrast .speech-indicator {
         justify-content: center;
     }
 }
+
+/* Category tags in review */
+.category-tag {
+    display: inline-block;
+    background-color: #e3f2fd;
+    color: #1565c0;
+    padding: 4px 8px;
+    margin: 2px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    border: 1px solid #bbdefb;
+}
+
+.high-contrast .category-tag {
+    background-color: #000;
+    color: #fff;
+    border: 2px solid #fff;
+}

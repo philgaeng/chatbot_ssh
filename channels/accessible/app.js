@@ -6,7 +6,12 @@
 // Debug: Check if script starts loading
 console.log('🔍 Starting to load app.js...');
 
-import socket from './socket.js';
+import socket from './modules/socket.js';
+import createReviewDataModule from './modules/reviewData.js';
+import createSpeechModule from './modules/speech.js';
+import createAccessibilityModule from './modules/accessibility.js';
+import createAPIModule from './modules/api.js';
+import createModifyModule from './modules/modify.js';
 
 // Module namespaces
 let SpeechModule = {};
@@ -18,6 +23,7 @@ let RecordingModule = {};
 let GrievanceModule = {};
 let ModifyModule = {};
 let EventModule = {};
+let ReviewDataModule = {};
 
 // Language Module
 let LanguageModule = {
@@ -82,21 +88,21 @@ const APP_STEPS = {
         windows: ['confirmation'],
         requiresRecording: false
     },
-    review: {
-        name: 'Review your Submission',
-        windows: ['reviewGrievance', 'reviewDetails'],
-        requiresRecording: false
-    },
     attachments: {
         name: 'Attachments',
         windows: ['attachments'],
+        requiresRecording: false
+    },
+    review: {
+        name: 'Review your Submission',
+        windows: ['reviewGrievance', 'reviewDetails'],
         requiresRecording: false
     }
 };
 
 // Helper function to get step order for navigation
 function getStepOrder() {
-    return ['grievance', 'personalInfo', 'review', 'attachments'];
+    return ['grievance', 'personalInfo', 'attachments', 'review'];
 }
 
 // At the top of the file, after the windowToRecordingTypeMap
@@ -145,372 +151,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-/**
- * Speech Module - Handles text-to-speech functionality
- */
-SpeechModule = {
-    voice: null,
-    voices: [],
-    speaking: false,
-    autoRead: true, // default to true
-    currentRate: 1,
-    
-    init: function() {
-        this.loadPreferences();
-        // If no preference, default to true
-        if (localStorage.getItem('autoRead') === null) {
-            this.autoRead = true;
-        }
-        
-        // Set up speech synthesis
-        if ('speechSynthesis' in window) {
-            this.setupVoices();
-            
-            // Handle speech rate dropdown
-            document.getElementById('speedBtn').addEventListener('click', this.toggleSpeedDropdown.bind(this));
-            
-            // Set up speech rate options
-            const speedOptions = document.querySelectorAll('.speed-option');
-            speedOptions.forEach(option => {
-                option.addEventListener('click', (e) => {
-                    const rate = parseFloat(e.target.dataset.rate);
-                    this.setRate(rate);
-                    this.toggleSpeedDropdown();
-                });
-            });
-            
-            // Set up the read page button
-            document.getElementById('readPageBtn').addEventListener('click', this.toggleAutoRead.bind(this));
-            
-            // Close the dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                const dropdown = document.getElementById('speedDropdown');
-                const speedBtn = document.getElementById('speedBtn');
-                if (dropdown && !dropdown.hidden && e.target !== speedBtn && !speedBtn.contains(e.target) && 
-                    e.target !== dropdown && !dropdown.contains(e.target)) {
-                    this.toggleSpeedDropdown(null, true);
-                }
-            });
-            
-            // Update button text with saved rate
-            document.querySelector('#speedBtn .icon').textContent = this.currentRate + 'x';
-        } else {
-            console.error('Speech synthesis not supported');
-            document.getElementById('readPageBtn').disabled = true;
-            document.getElementById('speedBtn').disabled = true;
-        }
-    },
-    
-    setupVoices: function() {
-        // Setup voices when they're loaded
-        window.speechSynthesis.onvoiceschanged = () => {
-            this.voices = window.speechSynthesis.getVoices();
-            
-            // Find a suitable voice (prefer English)
-            this.voice = this.voices.find(voice => voice.lang.startsWith('en')) || this.voices[0];
-            console.log('Selected voice:', this.voice);
-        };
-        
-        // Check if voices are already loaded
-        this.voices = window.speechSynthesis.getVoices();
-        if (this.voices.length > 0) {
-            this.voice = this.voices.find(voice => voice.lang.startsWith('en')) || this.voices[0];
-            console.log('Voices already loaded, selected:', this.voice);
-        }
-    },
-    
-    speak: function(text) {
-        if (!('speechSynthesis' in window)) {
-            console.error('Speech synthesis not supported');
-            return;
-        }
-        
-        // Stop any current speech
-            window.speechSynthesis.cancel();
-            
-        if (!text) return;
-        
-        // Create and configure utterance
-            const utterance = new SpeechSynthesisUtterance(text);
-        utterance.voice = this.voice;
-        utterance.rate = this.currentRate;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        
-        this.speaking = true;
-        this.updateSpeakingUI(true);
-        
-        // When speech ends
-        utterance.onend = () => {
-            this.speaking = false;
-            this.updateSpeakingUI(false);
-        };
-        
-        utterance.onerror = (event) => {
-            console.error('Speech synthesis error:', event);
-            this.speaking = false;
-            this.updateSpeakingUI(false);
-        };
-        
-        // Speak the text
-            window.speechSynthesis.speak(utterance);
-    },
-    
-    updateSpeakingUI: function(isSpeaking) {
-        const readBtn = document.getElementById('readPageBtn');
-        if (isSpeaking) {
-            readBtn.classList.add('active');
-            readBtn.classList.remove('inactive');
-        } else {
-            if (this.autoRead) {
-                readBtn.classList.add('active');
-                readBtn.classList.remove('inactive');
-            } else {
-                readBtn.classList.remove('active');
-                readBtn.classList.add('inactive');
-            }
-        }
-    },
-    
-    toggleAutoRead: function() {
-        this.autoRead = !this.autoRead;
-        const readBtn = document.getElementById('readPageBtn');
-        if (this.autoRead) {
-            readBtn.classList.add('active');
-            readBtn.classList.remove('inactive');
-            // Read current content if auto-read is turned on
-            const currentStep = document.querySelector('.step:not([hidden])');
-            if (currentStep) {
-                this.speak(currentStep.textContent);
-            }
-        } else {
-            readBtn.classList.remove('active');
-            readBtn.classList.add('inactive');
-            window.speechSynthesis.cancel();
-        }
-        // Save preference
-        this.savePreferences();
-        // Announce change for screen readers
-        UIModule.announceToScreenReader(`Auto read ${this.autoRead ? 'enabled' : 'disabled'}`);
-    },
-    
-    toggleSpeedDropdown: function(event, forceClose = false) {
-        const dropdown = document.getElementById('speedDropdown');
-        const speedBtn = document.getElementById('speedBtn');
-        
-        if (dropdown.hidden && !forceClose) {
-            // Position dropdown above the speed button in the footer
-            const buttonRect = speedBtn.getBoundingClientRect();
-            dropdown.style.bottom = (window.innerHeight - buttonRect.top + 5) + 'px';
-            dropdown.style.right = (window.innerWidth - buttonRect.right) + 'px';
-            
-            dropdown.hidden = false;
-        } else {
-            dropdown.hidden = true;
-        }
-        
-        if (event) {
-            event.stopPropagation();
-        }
-    },
-    
-    setRate: function(rate) {
-        this.currentRate = rate;
-        
-        // Update button text
-        document.querySelector('#speedBtn .icon').textContent = rate + 'x';
-        
-        // Update selected option in dropdown
-        const options = document.querySelectorAll('.speed-option');
-        options.forEach(option => {
-            if (parseFloat(option.dataset.rate) === rate) {
-                option.classList.add('selected');
-            } else {
-                option.classList.remove('selected');
-            }
-        });
-        
-        // Save preference
-        this.savePreferences();
-        
-        // Announce change for screen readers
-        UIModule.announceToScreenReader(`Speech rate set to ${rate}`);
-    },
-    
-    savePreferences: function() {
-        try {
-            localStorage.setItem('speechRate', this.currentRate);
-            localStorage.setItem('autoRead', this.autoRead ? 'true' : 'false');
-        } catch (e) {
-            console.error('Failed to save preferences:', e);
-        }
-    },
-    
-    loadPreferences: function() {
-        try {
-            const savedRate = localStorage.getItem('speechRate');
-            if (savedRate) {
-                this.currentRate = parseFloat(savedRate);
-            }
-            
-            const savedAutoRead = localStorage.getItem('autoRead');
-            if (savedAutoRead) {
-                this.autoRead = savedAutoRead === 'true';
-            }
-        } catch (e) {
-            console.error('Failed to load preferences:', e);
-        }
-    }
-};
-
-/**
- * Accessibility Module - Handles accessibility features
- */
-AccessibilityModule = {
-    highContrast: false,
-    fontSize: null,
-    fontSizeOptions: null,
-    
-    init: function() {
-        this.fontSizeOptions = APP_CONFIG.accessibility.fontSize;
-        this.fontSize = this.fontSizeOptions.default;
-        
-        this.loadPreferences();
-        this.setupAccessibilityControls();
-        this.applySettings();
-    },
-    
-        toggleContrast: function() {
-        this.highContrast = !this.highContrast;
-        document.body.classList.toggle('high-contrast', this.highContrast);
-        this.savePreferences();
-        
-        // Update button state
-        const contrastBtn = document.getElementById('contrastToggleBtn');
-        if (contrastBtn) {
-            contrastBtn.classList.toggle('active', this.highContrast);
-            
-            // Update tooltip text
-            const tooltip = contrastBtn.querySelector('.tooltip');
-            if (tooltip) {
-                tooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
-            }
-        }
-    },
-    
-    increaseFontSize: function() {
-        if (this.fontSize < this.fontSizeOptions.max) {
-            this.fontSize += this.fontSizeOptions.step;
-            this.applyFontSize();
-            this.savePreferences();
-        }
-    },
-    
-    decreaseFontSize: function() {
-        if (this.fontSize > this.fontSizeOptions.default) {
-            this.fontSize -= this.fontSizeOptions.step;
-            this.applyFontSize();
-            this.savePreferences();
-        }
-    },
-    
-    applyFontSize: function() {
-        document.body.style.fontSize = `${this.fontSize}px`;
-        
-        // Update font size button state
-        const fontBtn = document.getElementById('fontSizeBtn');
-        if (fontBtn) {
-            // Add active class if font size is larger than default
-            fontBtn.classList.toggle('active', this.fontSize > this.fontSizeOptions.default);
-        }
-    },
-    
-    setupAccessibilityControls: function() {
-        const fontBtn = document.getElementById('fontSizeBtn');
-        const contrastBtn = document.getElementById('contrastToggleBtn');
-        
-        if (fontBtn) {
-            fontBtn.addEventListener('click', () => {
-                this.increaseFontSize();
-                if (this.fontSize >= this.fontSizeOptions.max) {
-                    // Reset to default if we've reached the maximum
-                    this.fontSize = this.fontSizeOptions.default;
-                    this.applyFontSize();
-                    this.savePreferences();
-                    
-                    // Update tooltip
-                    const tooltip = fontBtn.querySelector('.tooltip');
-                    if (tooltip) {
-                        tooltip.textContent = 'Reset Font Size';
-                        setTimeout(() => {
-                            tooltip.textContent = 'Increase Font Size';
-                        }, 2000);
-                    }
-                    
-                    // Announce for screen readers
-                    SpeechModule.speak("Font size reset to default");
-                } else {
-                    // Announce for screen readers
-                    SpeechModule.speak("Font size increased");
-                }
-            });
-        }
-        
-        if (contrastBtn) {
-            contrastBtn.addEventListener('click', () => {
-                this.toggleContrast();
-                const message = this.highContrast ? 
-                    "High contrast mode enabled" : 
-                    "High contrast mode disabled";
-                SpeechModule.speak(message);
-            });
-            
-            // Initialize high contrast button state
-            contrastBtn.classList.toggle('active', this.highContrast);
-            
-            // Set initial tooltip text
-            const contrastTooltip = contrastBtn.querySelector('.tooltip');
-            if (contrastTooltip) {
-                contrastTooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
-            }
-        }
-    },
-    
-    applySettings: function() {
-        this.applyFontSize();
-        document.body.classList.toggle('high-contrast', this.highContrast);
-    },
-    
-    savePreferences: function() {
-        try {
-            localStorage.setItem('accessibilitySettings', JSON.stringify({
-                highContrast: this.highContrast,
-                fontSize: this.fontSize
-            }));
-        } catch (error) {
-            console.error("Could not save accessibility preferences", error);
-        }
-    },
-    
-    loadPreferences: function() {
-        try {
-            const savedSettings = localStorage.getItem('accessibilitySettings');
-            if (savedSettings) {
-                const settings = JSON.parse(savedSettings);
-                this.highContrast = settings.highContrast || false;
-                this.fontSize = settings.fontSize || this.fontSizeOptions.default;
-            }
-        } catch (error) {
-            console.error("Could not load accessibility preferences", error);
-            this.highContrast = false;
-            this.fontSize = this.fontSizeOptions.default;
-        }
-    }
-};
-
-/**
- * UI Module - Handles UI state and navigation
- */
 UIModule = {
     steps: APP_STEPS,
     stepOrder: getStepOrder(),
@@ -897,196 +537,6 @@ UIModule = {
 },
  
 
-/**
- * API Module - Handles all API interactions
- */
-APIModule = {
-    baseUrl: '',
-    endpoints: {},
-    
-    init: function() {
-        this.baseUrl = APP_CONFIG.api.baseUrl || '';
-        this.endpoints = APP_CONFIG.api.endpoints || {};
-        // Add configurable submitGrievance endpoint
-        if (!this.endpoints.submitGrievance) {
-            this.endpoints.submitGrievance = '/accessible-api/submit-grievance';
-        }
-    },
-    
-    /**
-     * Makes a fetch request to the specified endpoint
-     * @param {string} endpoint - The API endpoint path
-     * @param {Object} options - Fetch options
-     * @returns {Promise} - Fetch promise
-     */
-    request: async function(endpoint, options = {}) {
-        const url = this.baseUrl + endpoint;
-        // Don't set Content-Type for FormData - browser will set it with proper boundary
-        if (!(options.body instanceof FormData) && !options.headers) {
-            options.headers = {
-                'Content-Type': 'application/json'
-            };
-        }
-        try {
-            const response = await fetch(url, options);
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status} ${response.statusText}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('API request failed:', error);
-            throw error;
-        }
-    },
-    
-    /**
-     * Submits the main grievance (user info + recordings)
-     * @param {Object} userInfo - User info fields
-     * @param {Object} recordings - Map of recordingType -> Blob
-     * @param {FormData} [additionalFormData] - Optional FormData with additional fields like grievance_id, user_id, language_code
-     * @returns {Promise}
-     */
-    submitGrievance: async function(userInfo, recordings, additionalFormData) {
-        const formData = new FormData();
-        
-        // Add user info fields
-        Object.entries(userInfo).forEach(([key, value]) => {
-            formData.append(key, value);
-        });
-        
-        // Add additional form data if provided (grievance_id, user_id, language_code, etc.)
-        if (additionalFormData && additionalFormData instanceof FormData) {
-            for (const [key, value] of additionalFormData.entries()) {
-                formData.append(key, value);
-        }
-        }
-        
-        // Add all recordings as separate files
-        Object.entries(recordings).forEach(([type, blob]) => {
-            formData.append(type, blob, `${type}.webm`);
-            // Add duration if available
-            if (blob.duration) {
-                formData.append(`duration`, blob.duration);
-            }
-        });
-        
-        // Debug: Log what we're sending
-        console.log('Submitting grievance with FormData contents:');
-        for (const [key, value] of formData.entries()) {
-            if (value instanceof File || value instanceof Blob) {
-                console.log(`- ${key}: ${value.constructor.name} (${value.size} bytes)`);
-            } else {
-                console.log(`- ${key}: ${value}`);
-            }
-        }
-        
-        // POST to /submit-grievance
-        return this.request(this.endpoints.submitGrievance, {
-            method: 'POST',
-            body: formData
-        });
-    },
-    
-    /**
-     * Uploads a file for a grievance
-     * @param {string} grievanceId - The grievance ID
-     * @param {Object} formData - FormData object with file data
-     * @returns {Promise} - Promise with file upload result
-     */
-    uploadFile: async function(grievanceId, formData) {
-        console.log(`Uploading files for grievance ID: ${grievanceId}`);
-        
-        // Make sure grievance_id is in the formData
-        if (!formData.has('grievance_id')) {
-            formData.append('grievance_id', grievanceId);
-        }
-        
-        // Use accessible-file-upload endpoint for better handling of multiple files
-        const endpoint = this.endpoints.accessibleFileUpload;
-        const url = this.baseUrl + endpoint;
-        
-        console.log(`Sending files to endpoint: ${url}`);
-        
-        try {
-            // Log some debugging info about what's in the formData
-            console.log("FormData contents (keys only):");
-            for (const key of formData.keys()) {
-                if (key === 'files[]') {
-                    const files = formData.getAll('files[]');
-                    console.log(`- ${key}: ${files.length} files`);
-                    files.forEach((file, i) => {
-                        console.log(`  - File ${i+1}: ${file.name} (${file.size} bytes)`);
-                    });
-                } else {
-                    console.log(`- ${key}: ${formData.get(key)}`);
-                }
-            }
-            
-            // Make the request
-            const response = await fetch(url, {
-                method: 'POST',
-                body: formData,
-            });
-            
-            if (!response.ok) {
-                console.error(`API error: ${response.status} ${response.statusText}`);
-                
-                // Try to get more detailed error info
-                let errorDetails;
-                try {
-                    errorDetails = await response.json();
-                    console.error("Error details:", errorDetails);
-            } catch (e) {
-                    // If response is not JSON, get text instead
-                    try {
-                        errorDetails = await response.text();
-                        console.error("Error response:", errorDetails);
-                    } catch (e2) {
-                        console.error("Could not parse error response");
-                    }
-                }
-                
-                throw new Error(`API error: ${response.status} ${response.statusText}`);
-            }
-            
-            const result = await response.json();
-            console.log("File upload result:", result);
-            return result;
-        } catch (error) {
-            console.error('File upload request failed:', error);
-            throw error;
-        }
-    },
-    
-    /**
-     * Checks the status of a grievance
-     * @param {string} grievanceId - The grievance ID
-     * @returns {Promise} - Promise with grievance status
-     */
-    checkGrievanceStatus: async function(grievanceId) {
-        const endpoint = `${this.endpoints.checkStatus}?grievance_id=${grievanceId}`;
-        
-        return this.request(endpoint, {
-            method: 'GET',
-        });
-    },
-    
-    /**
-     * Generates grievance_id and user_id using centralized logic
-     * @param {string} province - Province code (e.g., 'KO', 'Koshi')
-     * @param {string} district - District code (e.g., 'JH', 'Jhapa')
-     * @returns {Promise} - Promise with generated IDs
-     */
-    generateIds: async function(province, district) {
-        return this.request(this.endpoints.generateIds, {
-            method: 'POST',
-            body: JSON.stringify({
-                province: province,
-                district: district
-            })
-        });
-    }
-},
 
 /**
  * File Upload Module - Handles file selection and uploads
@@ -1920,6 +1370,14 @@ RecordingModule = {
     },
     
     /**
+     * Check if there are any recordings (alias for hasRecordings)
+     * @returns {boolean} - Whether any recordings exist
+     */
+    hasAnyRecording: function() {
+        return this.hasRecordings();
+    },
+    
+    /**
      * Clear all recordings
      */
     clearRecordings: function() {
@@ -2482,126 +1940,6 @@ GrievanceModule = {
     },
 };
 
-ModifyModule = {
-    init: function() {
-        this.setupModifyUI();
-        this.setupEventListeners();
-    },
-
-    setupModifyUI: function() {
-        // Create modification interface
-        const modifyContainer = document.createElement('div');
-        modifyContainer.id = 'modifyContainer';
-        modifyContainer.className = 'modify-container';
-        modifyContainer.hidden = true;
-        
-        // Add transcript display
-        const transcriptArea = document.createElement('div');
-        transcriptArea.id = 'transcriptArea';
-        transcriptArea.className = 'transcript-area';
-        transcriptArea.contentEditable = true;
-        
-        // Add controls
-        const controls = document.createElement('div');
-        controls.className = 'modify-controls';
-        controls.innerHTML = `
-            <button class="save-btn">Save Changes</button>
-            <button class="cancel-btn">Cancel</button>
-        `;
-        
-        modifyContainer.appendChild(transcriptArea);
-        modifyContainer.appendChild(controls);
-        document.body.appendChild(modifyContainer);
-    },
-
-    setupEventListeners: function() {
-        // Handle save/cancel buttons
-        document.querySelector('.save-btn').addEventListener('click', () => this.saveChanges());
-        document.querySelector('.cancel-btn').addEventListener('click', () => this.hideModifyInterface());
-    },
-
-    modifyRecording: async function(recordingType) {
-        try {
-            // Show loading state
-            UIModule.showLoading('Loading transcript...');
-            
-            // Get transcript from API
-            const transcript = await this.getTranscript(recordingType);
-            
-            // Show modification interface
-            this.showModifyInterface(transcript);
-            
-            // Store current recording type
-            this.currentRecordingType = recordingType;
-            
-        } catch (error) {
-            console.error('Error loading transcript:', error);
-            UIModule.showMessage('Failed to load transcript. Please try again.', true);
-        } finally {
-            UIModule.hideLoading();
-        }
-    },
-
-    getTranscript: async function(recordingType) {
-        // API call to get transcript
-        const response = await APIModule.request('/api/transcript', {
-            method: 'GET',
-            params: { recordingType }
-        });
-        return response.transcript;
-    },
-
-    saveChanges: async function() {
-        try {
-            const transcript = document.getElementById('transcriptArea').textContent;
-            
-            // Save to API
-            await APIModule.request('/api/transcript', {
-                method: 'POST',
-                body: {
-                    recordingType: this.currentRecordingType,
-                    transcript
-                }
-            });
-            
-            // Hide interface
-            this.hideModifyInterface();
-            
-            // Show success message
-            UIModule.showMessage('Changes saved successfully');
-            
-        } catch (error) {
-            console.error('Error saving changes:', error);
-            UIModule.showMessage('Failed to save changes. Please try again.', true);
-        }
-    },
-
-    showModifyInterface: function(transcript) {
-        const container = document.getElementById('modifyContainer');
-        const transcriptArea = document.getElementById('transcriptArea');
-        
-        // Set transcript content
-        transcriptArea.textContent = transcript;
-        
-        // Show container
-        container.hidden = false;
-        
-        // Focus transcript area
-        transcriptArea.focus();
-    },
-
-    hideModifyInterface: function() {
-        const container = document.getElementById('modifyContainer');
-        container.hidden = true;
-        
-        // Clear current recording type
-        this.currentRecordingType = null;
-    }
-};
-
-/**
- * Event Module - Centralizes all event listeners
- */
 EventModule = {
     init: function() {
         console.log('EventModule.init called');
@@ -2934,6 +2272,7 @@ window.GrievanceModule = GrievanceModule;
 window.ModifyModule = ModifyModule;
 window.EventModule = EventModule;
 window.LanguageModule = LanguageModule;
+window.ReviewDataModule = ReviewDataModule;
 
 // Test if script loads completely and we reach the DOMContentLoaded setup
 console.log('🔍 End of app.js reached - about to set up DOMContentLoaded listener');
@@ -2945,6 +2284,8 @@ function initializeModules() {
     // Initialize all modules with error handling
     try {
         console.log('Initializing SpeechModule...');
+        // Create SpeechModule instance
+        SpeechModule = createSpeechModule();
     SpeechModule.init();
         console.log('✅ SpeechModule initialized');
     } catch (error) {
@@ -2953,6 +2294,8 @@ function initializeModules() {
     
     try {
         console.log('Initializing AccessibilityModule...');
+        // Create AccessibilityModule instance with SpeechModule dependency
+        AccessibilityModule = createAccessibilityModule(SpeechModule);
     AccessibilityModule.init();
         console.log('✅ AccessibilityModule initialized');
     } catch (error) {
@@ -2969,6 +2312,8 @@ function initializeModules() {
     
     try {
         console.log('Initializing APIModule...');
+        // Create APIModule instance
+        APIModule = createAPIModule();
     APIModule.init();
         console.log('✅ APIModule initialized');
     } catch (error) {
@@ -3001,6 +2346,8 @@ function initializeModules() {
     
     try {
         console.log('Initializing ModifyModule...');
+        // Create ModifyModule instance with dependencies
+        ModifyModule = createModifyModule(APIModule, UIModule);
     ModifyModule.init();
         console.log('✅ ModifyModule initialized');
     } catch (error) {
@@ -3015,6 +2362,16 @@ function initializeModules() {
         console.error('❌ LanguageModule failed:', error);
     }
     
+    try {
+        console.log('Initializing ReviewDataModule...');
+        // Create ReviewDataModule instance with dependencies
+        ReviewDataModule = createReviewDataModule(socket, UIModule, RecordingModule, GrievanceModule);
+        ReviewDataModule.init();
+        console.log('✅ ReviewDataModule initialized');
+    } catch (error) {
+        console.error('❌ ReviewDataModule failed:', error);
+    }
+
     // Initialize EventModule with proper DOM readiness detection
     initializeEventModule();
     

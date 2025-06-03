@@ -29,8 +29,10 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
     language = recording_data.get('language_code')
     task_logger.log_task_event('process_single_audio_file', 'file_saved', {'file_path': file_path})
     
-    is_contact_info = 'user' in recording_data.get('file_name')
-    is_grievance_details = 'grievance' in recording_data.get('file_name')
+    # Use field_name instead of file_name, and add null safety
+    field_name = recording_data.get('field_name', '')
+    is_contact_info = 'user' in field_name if field_name else False
+    is_grievance_details = 'grievance' in field_name if field_name else False
 
     # Initialize task chain
     task_chain = {
@@ -47,6 +49,7 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
         # After transcription, extract contact info and store in parallel
         chain_tasks.extend([
             group(
+                store_result_to_db_task.s(),
                 extract_contact_info_task.s(),
                 store_result_to_db_task.s()
             )
@@ -57,8 +60,8 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
         # After transcription, store and classify in parallel
         chain_tasks.extend([
             group(
+                classify_and_summarize_grievance_task.s(),
                 store_result_to_db_task.s(),
-                classify_and_summarize_grievance_task.s()
             )
         ])
         
@@ -82,13 +85,13 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
 
     return task_chain
 
-def orchestrate_voice_processing(audio_files: List[Any], recording_data: Dict[str, Any]) -> Dict[str, Any]:
+def orchestrate_voice_processing(audio_files: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Orchestrate parallel processing of multiple audio files.
 
     Args:
-        audio_files: List of uploaded audio files
-        language: Language code for processing
+        audio_files: List of uploaded audio files in format:
+            [{'field_name': str, 'file_path': str, 'file_data': dict}, ...]
         
     Returns:
         Dict containing task IDs and status for all files
@@ -98,22 +101,22 @@ def orchestrate_voice_processing(audio_files: List[Any], recording_data: Dict[st
         file_tasks = {}
         temp_paths = []
         
-        for audio_file in audio_files:
-            if audio_file:
-                # Get the original filename from the file_data if available
-                filename = audio_file.get('filename', f"audio_{uuid.uuid4()}")
-                file_path = audio_file.get('file_path')
+        for recording_data in audio_files:
+             
+            # Use field_name as the filename for task tracking
+            filename = recording_data.get('field_name', f"audio_{uuid.uuid4()}")
+            file_path = recording_data.get('file_path')
+            
+            if not file_path:
+                continue
                 
-                if not file_path:
-                    continue
-                    
-                task_chain = process_single_audio_file(recording_data)
-                file_tasks[filename] = {
-                    'task_id': task_chain['task_id'],
-                    'type': task_chain['type'],
-                    'status': 'pending'
-                }
-                temp_paths.append(task_chain['temp_path'])
+            task_chain = process_single_audio_file(recording_data)
+            file_tasks[filename] = {
+                'task_id': task_chain['task_id'],
+                'type': task_chain['type'],
+                'status': 'pending'
+            }
+            temp_paths.append(task_chain['temp_path'])
         
         if not file_tasks:
             raise ValueError("No valid audio files provided")

@@ -38,7 +38,7 @@ from .config import (
     ServiceConfig,
     DirectoryConfig
 )
-from logger.logger import TaskLogger
+from logger.logger import TaskLogger, LoggingConfig as CentralizedLoggingConfig
 from .task_manager import (
     TaskManager,
     DatabaseTaskManager,
@@ -56,6 +56,8 @@ __all__ = [
     'TaskManager',
     'DatabaseTaskManager',
     'MonitoringConfig',
+    'CentralizedLoggingConfig',
+    'TaskLogger',
     'task_registry',
     'celery_app',
     'QUEUE_LLM',

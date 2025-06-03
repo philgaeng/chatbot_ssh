@@ -252,22 +252,29 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
 DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
 
-#Field Mapping for recording tasks
-FIELD_MAPPING = {
-            'user_full_name': 'full_name',
-            'user_contact_phone': 'contact_phone',
-            'user_contact_email': 'contact_email',
-            'user_province': 'province',
-            'user_district': 'district',
-            'user_municipality': 'municipality',
-            'user_ward': 'ward',
-            'user_village': 'village',
-            'user_address': 'address',
-            'grievance_details': 'grievance',
-            'grievance_details_en': 'grievance_en',
-            'grievance_summary': 'summary',
-            'grievance_categories': 'categories'
-        } 
+# Enhanced field configuration with categories and metadata
+FIELD_CONFIG = {
+        'user_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
+        'user_contact_phone': {'alias': 'contact_phone', 'required': True, 'category': 'user'},
+        'user_contact_email': {'alias': 'contact_email', 'required': False, 'category': 'user'},
+        'user_province': {'alias': 'province', 'required': True, 'category': 'user'},
+        'user_district': {'alias': 'district', 'required': True, 'category': 'user'},
+        'user_municipality': {'alias': 'municipality', 'required': True, 'category': 'user'},
+        'user_ward': {'alias': 'ward', 'required': False, 'category': 'user'},
+        'user_village': {'alias': 'village', 'required': False, 'category': 'user'},
+        'user_address': {'alias': 'address', 'required': False, 'category': 'user'},
+        'grievance_details': {'alias': 'grievance', 'required': True, 'category': 'grievance'},
+        'grievance_details_en': {'alias': 'grievance_en', 'required': False, 'category': 'grievance'},
+        'grievance_summary': {'alias': 'summary', 'required': False, 'category': 'grievance'},
+        'grievance_categories': {'alias': 'categories', 'required': True, 'category': 'grievance'},
+    }
+
+FIELD_MAPPING = {k:v['alias'] for k,v in FIELD_CONFIG.items()}
+# Derived constants for backward compatibility and easy access
+VALID_FIELD_NAMES = list(FIELD_MAPPING.keys())
+USER_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'user']
+GRIEVANCE_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'grievance']
+REQUIRED_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['required']]
 
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""

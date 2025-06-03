@@ -69,7 +69,7 @@ import json
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
-from logger.logger import TaskLogger
+from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
 from actions_server.constants import FIELD_MAPPING
 from .celery_app import celery_app  # Safe to import at module level now
 
@@ -82,14 +82,13 @@ TASK_TYPE_DEFAULT = "Default"
 
 TASK_CONFIG = {
     TASK_TYPE_LLM: {'service': 'llm_processor', 
-        'queue': {"priority": "high", "queue": "llm_queue", "bind": True},
+        'queue': {"priority": "high", "queue": "llm_queue"},
         'retries': {
             'max_retries': 3,
             'initial_delay': 2,
             'max_delay': 30,
             'backoff_factor': 2,
-            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError'],
-            'bind': True
+            'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError']
         }
     },
     TASK_TYPE_FILEUPLOAD: {'service': 'queue_system',
@@ -140,34 +139,16 @@ TASK_CONFIG = {
 
 class MonitoringConfig:
     """Configuration for task monitoring and logging"""
-    # Logging configuration
-    LOG_DIR = "logs"
-    LOG_MAX_SIZE_MB = 100
-    LOG_MAX_FILES = 5
-    LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    LOG_LEVEL = 'INFO'
-    
-    # Metrics configuration
-    METRICS_FILE = 'metrics.json'
-    
-    # Default services to monitor
-    DEFAULT_SERVICES = {
-        'llm_processor': 'llm_processor.log',
-        'queue_system': 'queue_system.log',
-        'db_operations': 'db_operations.log',
-        'db_migrations': 'db_migrations.log',
-        'db_backup': 'db_backup.log',
-        'ticket_processor': 'ticket_processor.log',
-        'ticket_notifications': 'ticket_notifications.log',
-        'ticket_assignments': 'ticket_assignments.log'
-    }
     
     def __init__(self):
+        # Use centralized logging configuration
+        self.config = LoggingConfig()
+        
         # Initialize logger registry
         self.logger_registry = {}
         
-        # Initialize default loggers
-        for service in self.DEFAULT_SERVICES:
+        # Initialize default loggers using centralized config
+        for service in self.config.DEFAULT_SERVICES:
             self.register_logger(service)
     
     def register_logger(self, service_name: str) -> TaskLogger:
@@ -183,7 +164,7 @@ class MonitoringConfig:
         logger = self.logger_registry.get(service, self.register_logger(service))
         
         # Log the event
-        logger.log_task_event(task_name, event_type, details)
+        logger.log_task_event(task_name, event_type, details, service_name=service)
 
 class RetryConfig:
     """Configuration for task retries"""
@@ -207,7 +188,7 @@ class TaskManager:
         self.emit_websocket = emit_websocket
         self.service = service  # Service name for logging
         self.task_id = None
-        self.entity_type = None
+        self.entity_key = None
         self.entity_id = None
         self.celery_task_id = None
         self.start_time = None
@@ -320,7 +301,7 @@ class TaskManager:
             self.task_name,
             'retrying',
             {
-                'entity_type': self.entity_type,
+                'entity_key': self.entity_key,
                 'entity_id': self.entity_id,
                 'retry_count': new_retry_count,
                 'error': str(error),
@@ -342,10 +323,10 @@ class TaskManager:
         
         return True, self._calculate_retry_delay()
 
-    def start_task(self, entity_type: str, entity_id: str, stage: str = None, extra_data=None) -> bool:
+    def start_task(self, entity_key: str, entity_id: str, stage: str = None, extra_data=None) -> bool:
         """Start a new task and record it in the database. Optionally emit WebSocket status."""
         try:
-            self.entity_type = entity_type
+            self.entity_key = entity_key
             self.entity_id = entity_id
             self.start_time = datetime.datetime.utcnow()
             self.status = 'PENDING'
@@ -355,30 +336,49 @@ class TaskManager:
             if not celery_task_id:
                 raise ValueError("No Celery task ID available")
             
-            # Create task record using Celery's task ID
-            self.task_id = self.db_task.create_task(
-                task_id=celery_task_id,
-                task_name=self.task_name,
-                entity_type=entity_type,
-                entity_id=entity_id
-            )
-            
-            if not self.task_id:
-                raise ValueError("Failed to create task record")
-            
-            # Log task start
-            self.monitoring.log_task_event(
-                self.task_name,
-                'started',
-                {
-                    'entity_type': entity_type,
-                    'entity_id': entity_id,
-                    'stage': stage,
-                    'task_id': self.task_id,
-                    **(extra_data or {})
-                },
-                service=self.service
-            )
+            # Check if this is a retry - task might already exist in database
+            existing_task = self.db_task.get_task(celery_task_id)
+            if existing_task:
+                # Task already exists (retry scenario), use existing task ID
+                self.task_id = celery_task_id
+                self.monitoring.log_task_event(
+                    self.task_name,
+                    'retry_start',
+                    {
+                        'entity_key': entity_key,
+                        'entity_id': entity_id,
+                        'stage': stage,
+                        'task_id': self.task_id,
+                        'retry_count': existing_task.get('retry_count', 0),
+                        **(extra_data or {})
+                    },
+                    service=self.service
+                )
+            else:
+                # Create new task record using Celery's task ID
+                self.task_id = self.db_task.create_task(
+                    task_id=celery_task_id,
+                    task_name=self.task_name,
+                    entity_key=entity_key,
+                    entity_id=entity_id
+                )
+                
+                if not self.task_id:
+                    raise ValueError("Failed to create task record")
+                
+                # Log task start for new tasks
+                self.monitoring.log_task_event(
+                    self.task_name,
+                    'started',
+                    {
+                        'entity_key': entity_key,
+                        'entity_id': entity_id,
+                        'stage': stage,
+                        'task_id': self.task_id,
+                        **(extra_data or {})
+                    },
+                    service=self.service
+                )
             
             if stage:
                 self._emit_status(entity_id, 'processing', {'stage': stage, **(extra_data or {})})
@@ -389,7 +389,7 @@ class TaskManager:
                 self.task_name,
                 'failed',
                 {
-                    'entity_type': entity_type,
+                    'entity_key': entity_key,
                     'entity_id': entity_id,
                     'stage': stage,
                     'error': str(e),
@@ -420,7 +420,7 @@ class TaskManager:
                 self.task_name,
                 'completed',
                 {
-                    'entity_type': self.entity_type,
+                    'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
                     'stage': stage,
                     'task_id': self.task_id,
@@ -439,7 +439,7 @@ class TaskManager:
                 self.task_name,
                 'failed',
                 {
-                    'entity_type': self.entity_type,
+                    'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
                     'stage': stage,
                     'error': str(e)
@@ -469,7 +469,7 @@ class TaskManager:
                 self.task_name,
                 'failed',
                 {
-                    'entity_type': self.entity_type,
+                    'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
                     'stage': stage,
                     'error': error,
@@ -487,7 +487,7 @@ class TaskManager:
                 self.task_name,
                 'failed',
                 {
-                    'entity_type': self.entity_type,
+                    'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
                     'stage': stage,
                     'error': f"Failed to record failure: {str(e)}"
@@ -523,13 +523,17 @@ class TaskManager:
             error_msg = f"Unknown task_type '{task_type}'. Please add it to TASK_TYPE_CONFIG."
             cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
             raise ValueError(error_msg)
-            
-        config = TASK_CONFIG[task_type]  # Get full config from TASK_CONFIG
         
+        # Extract config from TASK_CONFIG
+        config = TASK_CONFIG[task_type]  # Get full config from TASK_CONFIG
+        queue_config = config.get('queue', {})
+        retry_config = config.get('retry', {})
+                
+                
         def decorator(func: Callable):
             @functools.wraps(func)
             def wrapper(self, *args, **kwargs):
-                # Automatically set service from TASK_CONFIG - no parameter needed
+                # Extract config from TASK_CONFIG
                 self.service = config.get('service', 'queue_system')
                 
                 # Remove service from kwargs if somehow passed (keeps function signatures clean)
@@ -550,9 +554,9 @@ class TaskManager:
             cls.TASK_REGISTRY[func.__name__] = {
                 'name': func.__name__.replace('_', ' ').title(),
                 'description': func.__doc__ or '',
-                'priority': config['priority'],
+                'priority': queue_config['priority'],
                 'type': task_type,
-                'queue': config['queue'],
+                'queue': queue_config['queue'],
                 'task': wrapper
             }
             
@@ -563,17 +567,35 @@ class TaskManager:
                 {
                     'task_name': func.__name__,
                     'task_type': task_type,
-                    'queue': config['queue'],
-                    'priority': config['priority']
+                    'queue': queue_config['queue'],
+                    'priority': queue_config['priority']
                 }
             )
             
-            # Register with Celery with proper binding
-            celery_task = celery_app.task(
-                bind=True,  # Always bind the task
-                name=func.__name__,
-                queue=config['queue']['queue']
-            )(wrapper)
+            # Prepare Celery task options
+            celery_options = {
+                'bind': True,  # Always bind the task
+                'name': func.__name__,
+                'queue': queue_config['queue']
+            }
+            
+            # Add retry configuration if available
+            if retry_config:
+                celery_options.update({
+                    'max_retries': retry_config.get('max_retries', 3),
+                    'default_retry_delay': retry_config.get('initial_delay', 1),
+                    'retry_backoff': retry_config.get('backoff_factor', 2),
+                    'retry_backoff_max': retry_config.get('max_delay', 60),
+                    'autoretry_for': tuple(getattr(__builtins__, exc, Exception) for exc in retry_config.get('retry_on', ['Exception']))
+                })
+            
+            # Add priority if available (Celery uses 0-9, with 9 being highest)
+            priority_mapping = {'low': 3, 'medium': 5, 'high': 7, 'critical': 9}
+            if queue_config.get('priority'):
+                celery_options['priority'] = priority_mapping.get(queue_config['priority'], 5)
+            
+            # Register with Celery
+            celery_task = celery_app.task(**celery_options)(wrapper)
             
             cls.TASK_REGISTRY[func.__name__]['celery_task'] = celery_task
             return celery_task
@@ -605,33 +627,7 @@ class DatabaseTaskManager(TaskManager):
     """
     def __init__(self, task=None, task_type='Database', emit_websocket=False, service='db_operations'):
         super().__init__(task=task, task_type=task_type, emit_websocket=emit_websocket, service=service)
-        
-    def validate_ids(self, operation: str, file_data: dict) -> tuple:
-        """Validate required IDs in file_data"""
-        grievance_id = file_data.get('grievance_id')
-        recording_id = file_data.get('task_id')
-        execution_id = file_data.get('execution_id')
-        
-        if operation in ['transcription']:
-            if not grievance_id or not recording_id:
-                error_msg = "Missing grievance_id or recording_id in file_data"
-                self.fail_task(error_msg)
-                raise ValueError(error_msg)
-            return 'grievance', grievance_id, recording_id, execution_id
-        elif operation in ['user_info', 'grievance']:
-            if not grievance_id:
-                error_msg = "Missing grievance_id in file_data"
-                self.fail_task(error_msg)
-                raise ValueError(error_msg)
-            return 'grievance', grievance_id, recording_id, execution_id
-        elif operation in ['task']:
-            if not execution_id:
-                error_msg = "Missing execution_id in file_data"
-                self.fail_task(error_msg)
-                raise ValueError(error_msg)
-            return 'task', execution_id, recording_id, execution_id
-            
-        return None, None, None, None
+
         
     def prepare_task_result_data_to_db(self, input_data: dict) -> dict:
         """Extract and prepare data from task results for database operations
@@ -652,7 +648,7 @@ class DatabaseTaskManager(TaskManager):
             required_fields = ['status',  'field_name', 'value', 'entity_key', 'id']
             missing_fields = [field for field in required_fields if field not in input_data]
             if missing_fields:
-                raise ValueError(f"Task result missing required fields: {missing_fields}")
+                raise ValueError(f"Task result missing required fields: {missing_fields} in input data: {input_data}")
                 
             entity_key = input_data['entity_key']
             entity_id = input_data['id']
@@ -664,7 +660,7 @@ class DatabaseTaskManager(TaskManager):
             
             
             
-            # Add result data based on operation type
+            # Add result data based on entity key
             if entity_key == 'transcription_id':
                 update_data.update({
                     'automated_transcript': input_data['value'],
@@ -713,27 +709,31 @@ class DatabaseTaskManager(TaskManager):
     def handle_db_operation(self, input_data: dict) -> dict:
         """Handle database operations with consistent error handling"""
         try:
+            operation = 'default'
             update_data = self.prepare_task_result_data_to_db(input_data)
-            entity_type = input_data['entity_key']
+            entity_key = input_data['entity_key']
             entity_id = input_data['id']
-            operation = entity_type.split('_')[0]
+            if not entity_key:
+                raise ValueError(f"Missing entity key in input data: {input_data}")
+            if not db_manager.task.is_valid_entity_key(entity_key):
+                raise ValueError(f"Invalid entity key: {entity_key} in input data: {input_data}")
+            
+            operation = entity_key.split('_')[0]
             
             # Start task with appropriate entity type and ID
-            self.start_task(entity_type, entity_id, stage=f'db_{operation}')
+            self.start_task(entity_key, entity_id, stage=f'db_{operation}')
             
             # Perform the database operation
-            if operation == 'user':
-                db_result = ('user_id', db_manager.user.create_or_update_user(update_data))
-            elif operation == 'grievance':
-                db_result = ('grievance_id', db_manager.grievance.create_or_update_grievance(update_data))
-            elif operation == 'recording':
-                db_result = ('recording_id', db_manager.recording.create_or_update_recording(update_data))
-            elif operation == 'transcription':
-                db_result = ('transcription_id', db_manager.recording.create_or_update_transcription(update_data))
-            elif operation == 'translation':
-                db_result = ('translation_id', db_manager.translation.create_or_update_translation(update_data))
-            else:
-                raise ValueError(f"Unknown database operation: {operation}")
+            if entity_key == 'user_id':
+                db_result = (entity_key, db_manager.user.create_or_update_user(update_data))
+            elif entity_key == 'grievance_id':
+                db_result = (entity_key, db_manager.grievance.create_or_update_grievance(update_data))
+            elif entity_key == 'recording_id':
+                db_result = (entity_key, db_manager.recording.create_or_update_recording(update_data))
+            elif entity_key == 'transcription_id':
+                db_result = (entity_key, db_manager.recording.create_or_update_transcription(update_data))
+            elif entity_key == 'translation_id':
+                db_result = (entity_key, db_manager.translation.create_or_update_translation(update_data))
             
             result = {
                 'status': 'SUCCESS',
@@ -747,33 +747,6 @@ class DatabaseTaskManager(TaskManager):
         except Exception as e:
             error_msg = f"Error in {operation} operation: {str(e)}"
             self.fail_task(error_msg, stage=f'db_{operation}')
-            return {'status': 'error', 'error': error_msg}
-
-
-    def handle_task_db_operations(self,task_result: dict) -> dict:
-        """Handle database operations with consistent error handling"""
-        try:
-            execution_id = task_result['execution_id']
-            self.start_task('task', execution_id, stage='db_task')
-            result = {'status_code': task_result.get('status_code')
-                      }
-            if task_result.get('error_message'):
-                result['error_message'] = task_result.get('error_message')
-                result['status_code'] = 'FAILED'
-            success = db_manager.task.update_task(
-                execution_id,  # Use execution_id as task_id
-                result
-            )
-            result['entity_key'] = 'execution_id'
-            result['entity_id'] = execution_id
-            if not success:
-                raise Exception('Update failed')
-            self.complete_task(result, stage='db_task')
-            return result
-            
-        except Exception as e:
-            error_msg = f"Error in db_task operation: {str(e)}"
-            self.fail_task(error_msg, stage='db_task')
             return {'status': 'error', 'error': error_msg}
 
         
