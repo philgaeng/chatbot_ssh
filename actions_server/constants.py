@@ -275,6 +275,7 @@ VALID_FIELD_NAMES = list(FIELD_MAPPING.keys())
 USER_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'user']
 GRIEVANCE_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'grievance']
 REQUIRED_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['required']]
+FIELD_CATEGORIES_MAPPING = {k:v['category'] for k, v in FIELD_CONFIG.items()}
 
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""

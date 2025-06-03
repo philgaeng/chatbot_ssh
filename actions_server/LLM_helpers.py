@@ -54,7 +54,6 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
             Extract the {field_name.replace("_", " ")} from {field_value}.
             Return the response in **strict JSON format** like this:
             {{
-                "field_name": "{field_name}",
                 "{field_name}": "value"
             }}
         """
@@ -79,14 +78,12 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
         if not response:
             logger.error(f"No response from OpenAI API")
             return {
-                field_name: "",
-                'value': ""
+                field_name: ""
             }
         else:
             logger.error(f"Error in extracting contact info from OpenAI API response: {str(e)}")
         return {
-            field_name: "",
-            'value': ""  # Add 'value' field to error response as well
+            field_name: ""
         }
         
 
@@ -203,7 +200,7 @@ def classify_and_summarize_grievance(
         )
 
         # Parse the response
-        result = parse_llm_response("grievance_response", response.choices[0].message.content.strip())
+        result = parse_llm_response("grievance_response", response.choices[0].message.content.strip(), language_code)
         return result
 
     except Exception as e:
@@ -216,7 +213,7 @@ def classify_and_summarize_grievance(
         }
         
         
-def parse_llm_response(type: str, response: str) -> Dict[str, Any]:
+def parse_llm_response(type: str, response: str, language_code: str = 'ne') -> Dict[str, Any]:
     """
     Parse the LLM response into a structured format.
     type can be "grievance_response" or "contact_response"
@@ -229,6 +226,19 @@ def parse_llm_response(type: str, response: str) -> Dict[str, Any]:
         "contact_response": ["user_contact_phone", "user_full_name", "user_district", "user_municipality", "user_village", "user_address"]
     }
     try:
+        error_response_dict = {
+            'en': "not enough information to proceed",
+            'ne': "अपेक्षित जानकारी अपुरुष है",
+            'hi': "पूर्ण जानकारी अपुरुष है",
+            'fr': "Information insuffisante pour procéder",
+        }
+        error_response = error_response_dict.get(language_code, "not enough information to proceed")
+        if response == "{}":
+            if type == "grievance_response":
+                return {
+                    "grievance_summary": error_response,
+                    "grievance_categories": [error_response]
+                }
         result_dict = json.loads(response)
         for field in fields[type]:
             result_dict[field] = result_dict.get(field, "")

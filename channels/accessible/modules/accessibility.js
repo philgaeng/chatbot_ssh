@@ -8,24 +8,35 @@ export default function createAccessibilityModule(SpeechModule) {
         fontSizeOptions: null,
         
         init: function() {
+            console.log('[Accessibility] Starting initialization...');
+            
             // Set default font size options if APP_CONFIG is not available
             this.fontSizeOptions = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.accessibility?.fontSize) 
                 ? APP_CONFIG.accessibility.fontSize 
                 : {
                     default: 16,
-                    max: 24,
+                    min: 14,
+                    max: 28,      // Increased from 24
                     step: 2
                 };
             this.fontSize = this.fontSizeOptions.default;
             
             this.loadPreferences();
+            console.log('[Accessibility] Loaded preferences:', { highContrast: this.highContrast, fontSize: this.fontSize });
+            
             this.setupAccessibilityControls();
             this.applySettings();
+            
+            console.log('[Accessibility] Initialization complete');
         },
         
         toggleContrast: function() {
             this.highContrast = !this.highContrast;
+            console.log('[Accessibility] High contrast toggled:', this.highContrast);
+            
             document.body.classList.toggle('high-contrast', this.highContrast);
+            console.log('[Accessibility] Body classes after toggle:', document.body.classList.toString());
+            
             this.savePreferences();
             
             // Update button state
@@ -38,6 +49,8 @@ export default function createAccessibilityModule(SpeechModule) {
                 if (tooltip) {
                     tooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
                 }
+                
+                console.log('[Accessibility] Button state updated, active:', contrastBtn.classList.contains('active'));
             }
         },
         
@@ -58,6 +71,11 @@ export default function createAccessibilityModule(SpeechModule) {
         },
         
         applyFontSize: function() {
+            // Use CSS custom property instead of direct body style
+            // This allows better cascade and inheritance
+            document.documentElement.style.setProperty('--base-font-size', `${this.fontSize}px`);
+            
+            // Also set body font-size as fallback
             document.body.style.fontSize = `${this.fontSize}px`;
             
             // Update font size button state
@@ -65,46 +83,68 @@ export default function createAccessibilityModule(SpeechModule) {
             if (fontBtn) {
                 // Add active class if font size is larger than default
                 fontBtn.classList.toggle('active', this.fontSize > this.fontSizeOptions.default);
+                
+                // Update tooltip to show current size
+                const tooltip = fontBtn.querySelector('.tooltip');
+                if (tooltip) {
+                    tooltip.textContent = `Font Size: ${this.fontSize}px`;
+                }
             }
+            
+            console.log(`[Accessibility] Applied font size: ${this.fontSize}px`);
         },
         
         setupAccessibilityControls: function() {
+            console.log('[Accessibility] Setting up controls...');
+            
             const fontBtn = document.getElementById('fontSizeBtn');
             const contrastBtn = document.getElementById('contrastToggleBtn');
             
+            console.log('[Accessibility] Found elements:', { 
+                fontBtn: !!fontBtn, 
+                contrastBtn: !!contrastBtn 
+            });
+            
             if (fontBtn) {
                 fontBtn.addEventListener('click', () => {
-                    this.increaseFontSize();
+                    // Cycle through font sizes: default -> larger sizes -> back to default
                     if (this.fontSize >= this.fontSizeOptions.max) {
                         // Reset to default if we've reached the maximum
                         this.fontSize = this.fontSizeOptions.default;
-                        this.applyFontSize();
-                        this.savePreferences();
-                        
-                        // Update tooltip
-                        const tooltip = fontBtn.querySelector('.tooltip');
-                        if (tooltip) {
-                            tooltip.textContent = 'Reset Font Size';
-                            setTimeout(() => {
-                                tooltip.textContent = 'Increase Font Size';
-                            }, 2000);
-                        }
-                        
-                        // Announce for screen readers
-                        if (SpeechModule && SpeechModule.speak) {
-                            SpeechModule.speak("Font size reset to default");
-                        }
                     } else {
-                        // Announce for screen readers
-                        if (SpeechModule && SpeechModule.speak) {
-                            SpeechModule.speak("Font size increased");
+                        // Increase font size
+                        this.fontSize += this.fontSizeOptions.step;
+                    }
+                    
+                    this.applyFontSize();
+                    this.savePreferences();
+                    
+                    // Update tooltip and announce
+                    const tooltip = fontBtn.querySelector('.tooltip');
+                    if (tooltip) {
+                        if (this.fontSize === this.fontSizeOptions.default) {
+                            tooltip.textContent = 'Font Size: Default';
+                        } else {
+                            tooltip.textContent = `Font Size: ${this.fontSize}px`;
+                        }
+                    }
+                    
+                    // Announce for screen readers
+                    if (SpeechModule && SpeechModule.speak) {
+                        if (this.fontSize === this.fontSizeOptions.default) {
+                            SpeechModule.speak("Font size reset to default");
+                        } else {
+                            SpeechModule.speak(`Font size set to ${this.fontSize} pixels`);
                         }
                     }
                 });
             }
             
             if (contrastBtn) {
+                console.log('[Accessibility] Setting up contrast button event handler...');
+                
                 contrastBtn.addEventListener('click', () => {
+                    console.log('[Accessibility] Contrast button clicked!');
                     this.toggleContrast();
                     const message = this.highContrast ? 
                         "High contrast mode enabled" : 
@@ -116,12 +156,15 @@ export default function createAccessibilityModule(SpeechModule) {
                 
                 // Initialize high contrast button state
                 contrastBtn.classList.toggle('active', this.highContrast);
+                console.log('[Accessibility] Initial contrast button state set, active:', this.highContrast);
                 
                 // Set initial tooltip text
                 const contrastTooltip = contrastBtn.querySelector('.tooltip');
                 if (contrastTooltip) {
                     contrastTooltip.textContent = this.highContrast ? 'Disable High Contrast' : 'Enable High Contrast';
                 }
+            } else {
+                console.warn('[Accessibility] Contrast button not found!');
             }
         },
         

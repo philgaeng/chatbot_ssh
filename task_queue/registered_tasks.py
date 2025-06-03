@@ -48,7 +48,7 @@ Architecture Benefits:
 """
 
 from typing import Dict, Any, List, Tuple, Callable, Optional
-from actions_server.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS
+from actions_server.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
 from actions_server.db_manager import db_manager
 from actions_server.messaging import CommunicationClient
 from actions_server.file_server_core import FileServerCore
@@ -213,14 +213,21 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
     # Create task manager with the current task instance and proper websocket handling
     task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     try:
+        grievance_id = input_data.get('grievance_id')
         if 'grievance' in input_data.get('field_name'):
             entity_key = 'grievance_id'
             entity_id = input_data.get('grievance_id')
         elif 'user' in input_data.get('field_name'):
             entity_key = 'user_id'
             entity_id = input_data.get('user_id')
+            # For user fields, grievance_id should be in input_data
+           
         else:
             raise ValueError(f"Invalid field name: {input_data.get('field_name')}")
+        
+        if not grievance_id:
+            raise ValueError(f"grievance_id is required but not found in input data: {input_data}")
+            
     except Exception as e:
         task_mgr.fail_task(str(e), stage='transcription')
         return {
@@ -236,7 +243,8 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
             entity_key=entity_key,
             entity_id=entity_id,
             stage='transcription',
-            extra_data={'file_path': file_path}
+            extra_data={'file_path': file_path},
+            grievance_id=grievance_id
         )
         from actions_server.LLM_helpers import transcribe_audio_file
         transcription = transcribe_audio_file(file_path, language_code)
@@ -250,7 +258,8 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
             'language_code': language_code,
             'task_id': task_id,
             'entity_key': entity_key,
-            'id': entity_id
+            'id': entity_id,
+            'grievance_id': grievance_id
         }
         task_mgr.complete_task(result, stage='transcription')
         return result
@@ -279,32 +288,40 @@ def classify_and_summarize_grievance_task(self,
     
     task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
     print(f"Classify and summarize grievance task called with file_data: {file_data}")
+    
+    # Extract grievance_id from the file_data
+    grievance_id = file_data.get('grievance_id')
+    if not grievance_id:
+        raise ValueError(f"Missing grievance_id in input data: {file_data}")
+    
     # Extract data directly from file_data (transcription result)
     language_code = file_data.get('language_code', 'ne')
     grievance_details = file_data.get('value')  # The transcription text
-    result = {'operation': 'classification',
-              'field_name': 'grievance_details',
-              'entity_key': file_data.get('entity_key'),
-              'id': file_data.get('id'),
-              'transcription_task_id': file_data.get('task_id'),
-              'task_id': task_id}
+
         
     if not grievance_details:
         raise ValueError(f"No transcription text found in input data: {grievance_details}")
     
     task_mgr.start_task(entity_key='grievance_id', 
-                        entity_id=file_data.get('id'),
-                        stage='classification')
+                        entity_id=grievance_id,
+                        grievance_id=grievance_id)
     try:
         from actions_server.LLM_helpers import classify_and_summarize_grievance
-        temp_result = classify_and_summarize_grievance(grievance_details, language_code)
-        if not temp_result:
-            raise ValueError(f"No result found in classify_and_summarize_grievance: {temp_result}")
+        values = classify_and_summarize_grievance(grievance_details, language_code) #values is a dict with keys: grievance_summary, grievance_categories
+        if not values:
+            raise ValueError(f"No result found in classify_and_summarize_grievance: {values}")
 
-        result.update({'status': 'SUCCESS',
-                       'field_name': 'grievance_categories, grievance_summary',
-                       'value': temp_result})
-        task_mgr.complete_task(result, stage='classification')
+        # Flatten the classification results into the main result for frontend
+        values.update({'grievance_details': grievance_details})
+        result = {'status': 'SUCCESS',  
+                  'operation': 'classification',
+                  'entity_key': file_data.get('entity_key'),
+                  'id': file_data.get('id'),
+                  'task_id': task_id,
+                  'grievance_id': grievance_id,
+                  'values': values}
+        
+        task_mgr.complete_task(values, stage='classification')
         return result
     except Exception as e:
         task_mgr.fail_task(str(e), stage='classification')
@@ -326,10 +343,6 @@ def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_web
     
     try:    
         # Extract data directly from transcription result
-
-        
-        # FIXED: Use the entity_key from transcription data instead of inferring from field_name
-        # The transcription_data already contains the correct entity_key
         entity_key = transcription_data.get('entity_key')
         field_name = transcription_data.get('field_name')
         if not entity_key:
@@ -339,28 +352,42 @@ def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_web
         else:
             entity_id = transcription_data.get('id')
         
-        result = {k:v for k,v in transcription_data.items() if k in ['field_name', 'entity_key', 'id', 'transcription_task_id', 'task_id', 'language_code']}
-        result.update({'operation': 'contact_extraction'})
-    
-        task_mgr.start_task(entity_key='user_id', 
-                        entity_id=entity_id,
-                        stage='contact_info')
+        # FIXED: Extract grievance_id from transcription_data
+        # The transcription task should have passed this along
+        grievance_id = transcription_data.get('grievance_id')
+        if not grievance_id and entity_key == 'grievance_id':
+            grievance_id = entity_id
+        if not grievance_id:
+            raise ValueError(f"Missing grievance_id in transcription_data: {transcription_data}")
+        
+        # TaskManager will use grievance_id for websocket emissions
+        task_mgr.start_task(
+            entity_key=entity_key, 
+            entity_id=entity_id,
+            grievance_id=grievance_id,
+            stage='contact_info'
+        )
     
         from actions_server.LLM_helpers import extract_contact_info
         input_data = {k:v for k,v in transcription_data.items() if k in ['field_name', 'value', 'language_code']}
         contact_info = extract_contact_info(input_data)
         
-        if contact_info.get('field_name') is None:
-            raise ValueError(f"No field name found in contact info: {contact_info}")
-        elif contact_info.get('field_name') != field_name:
-            raise ValueError(f"Mismatched in contact info extraction: {contact_info.get('field_name')} different from input field name: {field_name}")
-        else:
-            result.update({'value': contact_info})  # Use contact_info directly
+        incorrect_fields = [k for k in contact_info.keys() if k not in USER_FIELDS]
+        if incorrect_fields:
+            raise ValueError(f"Incorrect fields found in contact info: {incorrect_fields}")
+        
+        result= {'status': 'SUCCESS',
+                 'operation': 'contact_info',
+                 'entity_key': entity_key,
+                 'id': entity_id,
+                 'language_code': transcription_data.get('language_code'),
+                 'task_id': task_id,
+                 'grievance_id': grievance_id,
+                 'values': contact_info}
+            # result.update({'result': contact_info})  # Use contact_info direc
     
-        # Return results in standardized format
-        result.update({'status': 'SUCCESS',
-                       'value': contact_info})
-        task_mgr.complete_task(result, stage='contact_info')
+ 
+        task_mgr.complete_task(contact_info, stage='contact_info')
         return result
     
     except Exception as e:
@@ -373,7 +400,7 @@ def extract_contact_info_task(self, transcription_data: Dict[str, Any], emit_web
 def translate_grievance_to_english_task(self, grievance_id: str, emit_websocket: bool = True) -> Dict[str, Any]:
     """Translate a grievance to English and save it to the database"""
     task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
-    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id)
+    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id)
     try:
         from actions_server.LLM_helpers import translate_grievance_to_english
         result = translate_grievance_to_english(grievance_id)
@@ -386,9 +413,10 @@ def translate_grievance_to_english_task(self, grievance_id: str, emit_websocket:
             'value': result.get('details', ''),
             'language_code': 'en',
             'entity_key': 'grievance_id',
-            'id': grievance_id
+            'id': grievance_id,
+            'grievance_id': grievance_id
         }
-        task_mgr.complete_task(standardized_result)
+        task_mgr.complete_task(standardized_result, stage='translation')
         return standardized_result
     except Exception as e:
         return {
@@ -425,7 +453,7 @@ def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bo
         }
     """
     task_mgr = DatabaseTaskManager(task=self, task_type='Database', emit_websocket=emit_websocket)
-    task_mgr.start_task(entity_key=input_data.get('entity_key'), entity_id=input_data.get('id'))
+    task_mgr.start_task(entity_key=input_data.get('entity_key'), entity_id=input_data.get('id'), grievance_id=input_data.get('grievance_id'))
     try:
         result = task_mgr.handle_db_operation(input_data)
         task_mgr.complete_task(result, stage='store_result')
