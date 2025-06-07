@@ -9,7 +9,7 @@ task_logger = TaskLogger(service_name='socketio')
 logger = task_logger.logger
 
 # Define Socket.IO path constant
-SOCKETIO_PATH = '/socket.io'
+SOCKETIO_PATH = '/accessible-socket.io'
 
 # Use SOCKETIO_REDIS_URL from environment, default to DB 0
 SOCKETIO_REDIS_URL = os.getenv('SOCKETIO_REDIS_URL', 'redis://localhost:6379/0')
