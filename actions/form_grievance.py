@@ -28,7 +28,7 @@ import io
 import tempfile
 import base64
 from datetime import datetime, timedelta
-from actions_server.LLM_helpers import classify_and_summarize_grievance_task
+from actions_server.LLM_helpers import classify_and_summarize_grievance
 
 #define and load variables
 

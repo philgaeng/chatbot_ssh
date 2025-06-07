@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 # Update imports to use actions_server
 from actions_server.db_manager import db_manager
 from actions_server.websocket_utils import emit_status_update
-from actions_server.constants import VALID_FIELD_NAMES
+from actions_server.constants import VALID_FIELD_NAMES, DEFAULT_PROVINCE, DEFAULT_DISTRICT
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
 from task_queue.registered_tasks import process_batch_files_task
@@ -139,9 +139,11 @@ def submit_grievance():
     try:
         task_logger.log_task_event('submit_grievance', 'started', {})
         
-        # Extract user_id and grievance_id from the form data
+        # Extract user_id, grievance_id, province, and district from the form data
         user_id = request.form.get('user_id')
         grievance_id = request.form.get('grievance_id')
+        province = request.form.get('province', DEFAULT_PROVINCE)
+        district = request.form.get('district', DEFAULT_DISTRICT)
         
         task_logger.log_task_event('submit_grievance', 'processing', {
             'received_user_id': user_id,
@@ -152,7 +154,9 @@ def submit_grievance():
         
         # Initialize the grievance and user
         # Merge or create user
-        user_id = db_manager.user.create_user({'user_id': user_id})
+        user_id = db_manager.user.create_user({'user_id': user_id,
+                                               'user_province': province,
+                                               'user_district': district})
         if not user_id:
             task_logger.log_task_event('submit_grievance', 'failed', {'error': 'Failed to create or merge user'})
             return jsonify({'status': 'error', 'error': 'Failed to create user'}), 500
@@ -192,6 +196,8 @@ def submit_grievance():
                     'recording_id': str(uuid.uuid4()),
                     'user_id': user_id,
                     'grievance_id': grievance_id,
+                    'user_province': province,
+                    'user_district': district,
                     'file_path': file_path,
                     'field_name': field_name,
                     'file_size': file_size,

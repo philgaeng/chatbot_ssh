@@ -544,6 +544,41 @@
                     </div>
                 </div>
             </div>
+            <div id="outro-outro" class="step" hidden role="region" aria-label="Outro">
+                <div class="review-steps">
+                    <h2>Submission Complete</h2>
+                    <div class="review-content">
+                        <div class="review-section">
+                            <table class="outro-table" style="width:100%; margin-bottom:2em; table-layout:fixed;">
+                                <colgroup>
+                                    <col style="width:33%;">
+                                    <col style="width:67%;">
+                                </colgroup>
+                                <tbody>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Number :</td><td id="outroGrievanceId" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Details :</td><td id="outroGrievanceDetails" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Summary :</td><td id="outroGrievanceSummary" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Categories :</td><td id="outroGrievanceCategories" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Full Name :</td><td id="outroUserName" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Phone Number :</td><td id="outroUserPhone" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Municipality :</td><td id="outroUserMunicipality" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Village :</td><td id="outroUserVillage" style="text-align:left;"></td></tr>
+                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Address / Landmark :</td><td id="outroUserAddress" style="text-align:left;"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="review-section" style="margin-bottom:2em;">
+                            <h2 style="margin-bottom:1em;">Next Step</h2>
+                            <div style="margin-bottom:0.5em; text-align:left; padding-left:1em;">Our team will review it shortly and contact you if more information is needed.</div>
+                            <div style="text-align:left; padding-left:1em;">The standard resolution time for a grievance is 15 days. Expected resolution date: <span id="expectedResolutionDate"></span></div>
+                        </div>
+                        <div class="button-container">
+                            <button id="newBtnOutro" class="primary-btn" data-action="new" aria-label="Start a new grievance report" type="button">New Grievance</button>
+                            <button id="exitBtnOutro" class="exit-btn" data-action="exit" aria-label="Exit application" type="button">Exit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Ensure the help dialog is properly set up to work with showModal() -->

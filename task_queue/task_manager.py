@@ -203,7 +203,7 @@ class TaskManager:
         self.task_type = task_type
         
         # Retry tracking
-        self.retry_count = 0
+        self.retry_count = getattr(task.request, 'retries', 0) if task and hasattr(task, 'request') else 0
         self.last_retry_time = None
         self.retry_config = self._get_retry_config()
         self.retry_history: List[Dict[str, Any]] = []
@@ -332,7 +332,8 @@ class TaskManager:
 
     def start_task(self, entity_key: str, entity_id: str, grievance_id: str, 
                    stage: str = None, extra_data=None, session_id: str = None) -> bool:
-        """Start a new task and record it in the database. Optionally emit WebSocket status.
+        """Start a new task with logging and websocket emission only - no database interaction.
+        Database task record will be created later by store_result_to_db_task when entity exists.
         
         Args:
             entity_key: Type of entity (user_id, grievance_id, etc.)
@@ -353,65 +354,50 @@ class TaskManager:
             self.start_time = datetime.datetime.utcnow()
             self.status = 'PENDING'
             
-            # Get Celery's task ID
+            # Get Celery's task ID for tracking
             celery_task_id = getattr(self.task.request, 'id', None)
             if not celery_task_id:
                 raise ValueError("No Celery task ID available")
             
-            # Check if this is a retry - task might already exist in database
-            existing_task = self.db_task.get_task(celery_task_id)
-            if existing_task:
-                # Task already exists (retry scenario), use existing task ID
-                self.task_id = celery_task_id
-                self.monitoring.log_task_event(
-                    self.task_name,
-                    'retry_start',
-                    {
-                        'entity_key': entity_key,
-                        'entity_id': entity_id,
-                        'grievance_id': self.grievance_id,
-                        'stage': stage,
-                        'task_id': self.task_id,
-                        'retry_count': existing_task.get('retry_count', 0),
-                        **(extra_data or {})
-                    },
-                    service=self.service
-                )
-            else:
-                # Create new task record using Celery's task ID
-                self.task_id = self.db_task.create_task(
-                    task_id=celery_task_id,
-                    task_name=self.task_name,
-                    entity_key=entity_key,
-                    entity_id=entity_id
-                )
-                
-                if not self.task_id:
-                    raise ValueError("Failed to create task record")
-                
-                # Log task start for new tasks
-                self.monitoring.log_task_event(
-                    self.task_name,
-                    'started',
-                    {
-                        'entity_key': entity_key,
-                        'entity_id': entity_id,
-                        'grievance_id': self.grievance_id,
-                        'stage': stage,
-                        'task_id': self.task_id,
-                        **(extra_data or {})
-                    },
-                    service=self.service
-                )
+            self.task_id = celery_task_id
             
+            # Check if this is a retry by looking at Celery's retry count
+            # (This is for logging purposes only - database logic is in handle_db_operation)
+            celery_retry_count = getattr(self.task.request, 'retries', 0)
+            is_retry = celery_retry_count > 0
+            
+            # Log task start (no database interaction)
+            log_event_type = 'retry_started' if is_retry else 'started'
+            log_details = {
+                'entity_key': entity_key,
+                'entity_id': entity_id,
+                'grievance_id': self.grievance_id,
+                'stage': stage,
+                'task_id': self.task_id,
+                'celery_retry_count': celery_retry_count,
+                'note': f'Task {"retry" if is_retry else "execution"} started - database record will be created when results are stored',
+                **(extra_data or {})
+            }
+            
+            self.monitoring.log_task_event(
+                self.task_name,
+                log_event_type,
+                log_details,
+                service=self.service
+            )
+            
+            # Emit websocket status for UI updates
             if stage:
-                self._emit_status('processing', {'stage': stage, **(extra_data or {})})
+                websocket_data = {'stage': stage, **(extra_data or {})}
+                if is_retry:
+                    websocket_data['retry_count'] = celery_retry_count
+                self._emit_status('processing', websocket_data)
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed',
+                'failed_to_start',
                 {
                     'entity_key': entity_key,
                     'entity_id': entity_id,
@@ -425,22 +411,15 @@ class TaskManager:
             return False
 
     def complete_task(self, result=None, stage: str = None) -> bool:
-        """Mark task as complete and record the result. Optionally emit WebSocket status."""
+        """Mark task as complete with logging and websocket emission only - no database interaction.
+        Database task record will be created/updated later by store_result_to_db_task.
+        """
         try:
             self.end_time = datetime.datetime.utcnow()
             self.status = 'SUCCESS'
             self.result = result
-            updated = self.db_task.update_task(
-                self.task_id,
-                {
-                    'status_code': 'SUCCESS',
-                    'result': json.dumps(result),
-                    'retry_count': self.retry_count,
-                    'retry_history': self.retry_history
-                }
-            )
             
-            # Log task completion
+            # Log task completion (no database interaction)
             self.monitoring.log_task_event(
                 self.task_name,
                 'completed',
@@ -450,19 +429,21 @@ class TaskManager:
                     'status': 'SUCCESS',
                     'task_id': self.task_id,
                     'result': result,
-                    'retry_count': self.retry_count
+                    'retry_count': self.retry_count,
+                    'note': 'Task completed - database record will be created when results are stored'
                 },
                 service=self.service
             )
             
+            # Emit websocket status for UI updates
             if stage:
                 self._emit_status('SUCCESS', result)
-            return updated
+            return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed',
+                'failed_to_complete',
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
@@ -474,22 +455,15 @@ class TaskManager:
             return False
 
     def fail_task(self, error: str, stage: str = None) -> bool:
-        """Mark task as failed and record the error. Optionally emit WebSocket status."""
+        """Mark task as failed with logging and websocket emission only - no database interaction.
+        Database task record will be created/updated later by store_result_to_db_task.
+        """
         try:
             self.end_time = datetime.datetime.utcnow()
             self.status = 'FAILED'
             self.error = error
-            updated = self.db_task.update_task(
-                self.task_id,
-                {
-                    'status_code': 'FAILED',
-                    'error_message': error,
-                    'retry_count': self.retry_count,
-                    'retry_history': self.retry_history
-                }
-            )
             
-            # Log task failure
+            # Log task failure (no database interaction)
             self.monitoring.log_task_event(
                 self.task_name,
                 'failed',
@@ -498,19 +472,21 @@ class TaskManager:
                     'entity_id': self.entity_id,
                     'stage': stage,
                     'error': error,
-                    'retry_count': self.retry_count
+                    'retry_count': self.retry_count,
+                    'note': 'Task failed - database record will be created when results are stored'
                 },
                 service=self.service
             )
             
+            # Emit websocket status for UI updates
             if stage:
                 self._emit_status('FAILED', {'stage': stage, 'error': str(error)})
-            return updated
+            return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed',
+                'failed_to_record_failure',
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
@@ -670,7 +646,7 @@ class DatabaseTaskManager(TaskManager):
         """
         # Validate result has required fields
         try:
-            required_fields = ['status', 'entity_key', 'id']
+            required_fields = ['status', 'entity_key', 'id', 'values', 'grievance_id', 'user_id']
             missing_fields = [field for field in required_fields if field not in input_data]
             if missing_fields:
                 raise ValueError(f"Task result missing required fields: {missing_fields} in input data: {input_data}")
@@ -678,57 +654,55 @@ class DatabaseTaskManager(TaskManager):
             entity_key = input_data['entity_key']
             entity_id = input_data['id']
             # Start with file_data as base
-            update_data = dict()
-            
+            update_data = input_data['values']
+            if 'language_code' in input_data and not 'language_code' in update_data:
+                update_data['language_code'] = input_data['language_code']
+                
             # Add entity ID from result
             update_data[entity_key] = entity_id
-            
-            
+            if entity_key not in ['user_id', 'grievance_id']:
+                update_data['grievance_id'] = input_data['grievance_id']
+                update_data['user_id'] = input_data['user_id']
+                update_data['task_id'] = input_data['task_id']
             
             # Add result data based on entity key
             if entity_key == 'transcription_id':
-                update_data.update({
-                    'automated_transcript': input_data['value'],
-                    'language_code': input_data.get('language_code', 'ne')
-                })
+                try:
+                    field_name = input_data['field_name']
+                    update_data['automated_transcript'] = input_data[field_name]
+                    # Remove the field_name entry from update_data
+                    del update_data[field_name]
+                except Exception as e:
+                    self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
+                    raise ValueError(f"Error in prepare_task_result_data_to_db: transcription - {str(e)} - input_data: {input_data} - update_data: {update_data}")
+                
+            
                 
             elif entity_key == 'translation_id':
-                update_data.update({
-                    'grievance_details_en': input_data['value'],
-                    'translation_method': input_data.get('method', 'auto'),
-                    'confidence_score': input_data.get('confidence_score')
-                })
+                update_data['source_language'] = input_data['language_code']
+                # Remove the language_code entry from update_data
+                del update_data['language_code']
                 
-            else:
-                value_fields = self._extract_value_and_field_from_input_data(input_data)
-                update_data.update(value_fields)
-
-            if 'language_code' in input_data:
-                    update_data['language_code'] = input_data['language_code']
-                
+            
             return update_data
         except Exception as e:
-            self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)}"})   
-            raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)}")
-        
-    def _extract_value_and_field_from_input_data(self, input_data: dict, valid_field_names: VALID_FIELD_NAMES) -> tuple:
-        """Extract value and field from input data"""
-       # Map field to user data fields
-        
-        update_data = dict()
-        
-        values = input_data['values']
-        if not isinstance(values, dict):
-            raise ValueError(f"Values is not a dict: {values}")
-        for key in values.keys():
-            if key in valid_field_names:
-                update_data[key] = values[key]
-        return update_data
+            
+            self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
+            raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data} - update_data: {update_data}")
+    
+
 
     def handle_db_operation(self, input_data: dict) -> dict:
-        """Handle database operations with consistent error handling"""
+        """Handle database operations with retroactive task record creation.
+        
+        This method:
+        1. Creates/updates the entity in the relevant table first
+        2. Then creates or updates the task record (handling retries)
+        3. This solves the chicken-and-egg problem where entities need to exist before task creation
+        """
+        operation = 'default'
+        task_name = 'unknown_task'
         try:
-            operation = 'default'
             update_data = self.prepare_task_result_data_to_db(input_data)
             entity_key = input_data['entity_key']
             entity_id = input_data['id']
@@ -738,34 +712,93 @@ class DatabaseTaskManager(TaskManager):
                 raise ValueError(f"Invalid entity key: {entity_key} in input data: {input_data}")
             
             operation = entity_key.split('_')[0]
+            task_name = f"{operation}_task"
             
-            # Start task with appropriate entity type and ID
-            self.start_task(entity_key, entity_id, grievance_id=self.grievance_id, stage=f'db_{operation}')
-            
-            # Perform the database operation
+            # STEP 1: Create/update the entity first
             if entity_key == 'user_id':
-                db_result = (entity_key, db_manager.user.create_or_update_user(update_data))
+                actual_entity_id = db_manager.user.create_or_update_user(update_data)
             elif entity_key == 'grievance_id':
-                db_result = (entity_key, db_manager.grievance.create_or_update_grievance(update_data))
+                actual_entity_id = db_manager.grievance.create_or_update_grievance(update_data)
             elif entity_key == 'recording_id':
-                db_result = (entity_key, db_manager.recording.create_or_update_recording(update_data))
+                actual_entity_id = db_manager.recording.create_or_update_recording(update_data)
             elif entity_key == 'transcription_id':
-                db_result = (entity_key, db_manager.recording.create_or_update_transcription(update_data))
+                actual_entity_id = db_manager.transcription.create_or_update_transcription(update_data)
             elif entity_key == 'translation_id':
-                db_result = (entity_key, db_manager.translation.create_or_update_translation(update_data))
+                actual_entity_id = db_manager.translation.create_or_update_translation(update_data)
+            else:
+                raise ValueError(f"Unsupported entity_key: {entity_key}")
+            
+            if not actual_entity_id:
+                raise ValueError(f"Failed to create/update entity for {entity_key}")
+            
+            # STEP 2: Handle task record creation/update (including retry scenarios)
+            task_id = input_data.get('task_id')  # Get original task ID from input_data
+            if task_id:
+
+                if self.retry_count == 0:
+                    # FIRST EXECUTION: Create new task record
+                    created_task_id = db_manager.task.create_task(
+                        task_id=task_id,
+                        task_name=task_name,
+                        entity_key=entity_key,
+                        entity_id=actual_entity_id
+                    )
+                    
+                    if not created_task_id:
+                        raise ValueError(f"Failed to create task record even after entity creation")
+                    
+                # Update task status 
+                status_code = 'SUCCESS' if input_data.get('status') == 'SUCCESS' else 'FAILED'
+                error_message = input_data.get('error') if status_code == 'FAILED' else None
+                
+                db_manager.task.update_task(
+                    task_id,
+                    {
+                        'status_code': status_code,
+                        'result': json.dumps(input_data.get('value', {})),
+                        'error_message': error_message,
+                        'retry_count': self.retry_count  # First execution
+                    }
+                )
+                
+                self.monitoring.log_task_event(
+                    task_name,
+                    'first_execution_completed',
+                    {
+                        'entity_key': entity_key,
+                        'entity_id': actual_entity_id,
+                        'task_id': task_id,
+                        'status': status_code,
+                        'retry_count': self.retry_count,
+                    },
+                    service=self.service
+                )
             
             result = {
                 'status': 'SUCCESS',
                 'operation': operation,
-                'entity_key': db_result[0],
-                'entity_id': db_result[1],
+                'entity_key': entity_key,
+                'entity_id': actual_entity_id,
+                'task_id': task_id,
+                'retry_count': self.retry_count,
             }
-            self.complete_task(result, stage=f'db_{operation}')
+            
             return result
             
         except Exception as e:
-            error_msg = f"Error in {operation} operation: {str(e)}"
-            self.fail_task(error_msg, stage=f'db_{operation}')
+            error_msg = f"Error in {operation} operation: {str(e)} - input_data: {input_data} - update_data: {update_data}"
+            self.monitoring.log_task_event(
+                task_name,
+                'operation_failed',
+                {
+                    'entity_key': input_data.get('entity_key', 'unknown'),
+                    'entity_id': input_data.get('id', 'unknown'),
+                    'task_id': input_data.get('task_id', 'unknown'),
+                    'error': error_msg,
+                    'note': 'Database operation failed'
+                },
+                service=self.service
+            )
             return {'status': 'error', 'error': error_msg}
 
         

@@ -4,7 +4,7 @@ import json
 from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
-from .constants import CLASSIFICATION_DATA
+from .constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT
 from .db_manager import db_manager
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def transcribe_audio_file(file_path: str, language: str = None) -> str:
         logger.error(f"Error transcribing audio file {file_path}: {str(e)}")
         raise
     
-def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
+def extract_contact_info(contact_data: Dict[str, Any], language_code: str = 'ne', user_district: str = DEFAULT_DISTRICT, user_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
     try:
         # Use OpenAI to extract structured information
@@ -46,9 +46,12 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("OpenAI client not available for contact info extraction")
             
         # Get the first key-value pair from contact_data
-        field_name = contact_data.get('field_name')
-        field_value = contact_data.get('value')
-        language_code = contact_data.get('language_code', 'ne')
+        field_name = [i for i in contact_data.keys() if i in USER_FIELDS][0]
+        if not field_name:
+            raise ValueError(f"Missing valid field_name in contact_data: {contact_data}")
+        field_value = contact_data.get(field_name)
+        if not field_value:
+            raise ValueError(f"Missing {field_name} in contact_data: {contact_data}")
         
         message_input = f"""
             Extract the {field_name.replace("_", " ")} from {field_value}.
@@ -61,7 +64,7 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": f"Extract the person's contact and location information in the language which language_code is {language_code}."},
+                {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {user_district} in the province of {user_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
                 {"role": "user", "content": message_input}
             ],
             response_format={"type": "json_object"}
@@ -87,7 +90,7 @@ def extract_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
         }
         
 
-def extract_all_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
+def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 'ne', user_district: str = DEFAULT_DISTRICT, user_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
     try:
         # Use OpenAI to extract structured information
@@ -102,7 +105,7 @@ def extract_all_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
                 {"role": "user", "content": f"""
                     Extract the phone number from {contact_data['user_contact_phone']}. 
                     Extract the full name from {contact_data['user_full_name']}.
-                    Extract the municipality in the district {contact_data['user_district']} of Nepal from {contact_data['contact_municipality']}.
+                    Extract the municipality in the district {user_district} of {user_province}, Nepal from {contact_data['contact_municipality']}.
                     Extract the village inside the municipality from {contact_data['contact_village']}.
                     Extract the address from {contact_data['contact_address']}.
                 Return the response in **strict JSON format** like this:
@@ -137,6 +140,8 @@ def extract_all_contact_info(contact_data: Dict[str, Any]) -> Dict[str, Any]:
 def classify_and_summarize_grievance(
     grievance_text: str,
     language_code: str = 'ne',
+    user_district: str = DEFAULT_DISTRICT,
+    user_province: str = DEFAULT_PROVINCE,
     categories: List[str] = CLASSIFICATION_DATA
 ) -> Dict[str, Any]:
     """
@@ -177,7 +182,7 @@ def classify_and_summarize_grievance(
         # Make API call
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are an assistant helping to categorize grievances."},
+                {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {user_district} in the province of {user_province}."},
                 {"role": "user", "content": f"""
                     Step 1:
                     Categorize this grievance: "{grievance_text}"
@@ -249,7 +254,7 @@ def parse_llm_response(type: str, response: str, language_code: str = 'ne') -> D
     
     
 
-def translate_grievance_to_english_LLM(grievance_data: Dict[str, Any]) -> str:
+def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> str:
     """Translate a grievance to English using OpenAI API
     Args:
         grievance_data: Dict containing grievance data: {grievance_id, language_code, grievance_details, grievance_summary, grievance_categories}
@@ -258,16 +263,22 @@ def translate_grievance_to_english_LLM(grievance_data: Dict[str, Any]) -> str:
     """
     if not client:
         raise RuntimeError("OpenAI client not available for translation")
-    
+    grievance_details = input_data.get('grievance_details')
+    grievance_summary = input_data.get('grievance_summary')
+    language_code = input_data.get('language_code')
+    if not grievance_details or not language_code:
+        raise ValueError("grievance_details and language_code are required")
+    if not grievance_summary:
+        raise Warning("grievance_summary is missing")
     try:
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": f"You are an assistant helping to translate grievances to English from {grievance_data['language_code']}."},
+                {"role": "system", "content": f"You are an assistant helping to translate grievances to English from {input_data['language_code']}. The grievance is related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {input_data['user_district']} in the province of {input_data['user_province']}."},
                 {"role": "user", "content": f"""
                     Translate the following grievance to English:
-                    {grievance_data['grievance_details']}
+                    {input_data['grievance_details']}
                     and its summary:
-                    {grievance_data['grievance_summary']}
+                    {input_data['grievance_summary']}
                     
                     Make sure that the summary from the translation is not too long and is aligned with the details, if it is too long make it shorter, if it is not aligned with the details, create a new summary from the translated details.
                     Return the response in **strict JSON format** like this:
@@ -280,20 +291,89 @@ def translate_grievance_to_english_LLM(grievance_data: Dict[str, Any]) -> str:
             ],
             model="gpt-4",
         )
+        if not response:
+            raise ValueError("No response from OpenAI API")
         
+        if response.choices[0].message.content == "{}":
+            raise ValueError("Missing information, response from OpenAI is empty or invalid, check input data: {input_data}")
         
         # Parse the response
-        result = json.loads(response.choices[0].message.content.strip())
-        result["grievance_id"] = grievance_data["grievance_id"]
-        result["source_language"] = grievance_data["language_code"]
+        result = {}
+        try:
+            result = json.loads(response.choices[0].message.content.strip())
+        except Exception as e:
+            raise ValueError(f"Error parsing LLM response: {str(e)} - input_data: {input_data} - result: {result}")
+        result["grievance_id"] = input_data["grievance_id"]
+        result["source_language"] = input_data["language_code"]
         result["translation_method"] = "LLM"
-        result["grievance_categories_en"] = grievance_data["grievance_categories"]
+        result["grievance_categories_en"] = input_data["grievance_categories"]
         return result
     
     except Exception as e:
+        raise ValueError(f"Error translating grievance to English: {str(e)} - input_data: {input_data} - result: {result}")
         logger.error(f"Error translating grievance to English: {str(e)}")
         return None
+
+def extract_input_data_for_translation(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract the input data for translation from nested data structures
     
+    This function recursively searches through nested dictionaries and lists
+    to find the required fields: grievance_id, language_code, grievance_details, grievance_summary
+    
+    Args:
+        input_data: Nested data structure (can be from group() results)
+        
+    Returns:
+        Dict with extracted fields for translation
+    """
+    
+    def recursive_extract(data, target_keys, found_values=None):
+        """Recursively search for target keys in nested data structure"""
+        if found_values is None:
+            found_values = {}
+            
+        # If we've found all keys, return early
+        if len(found_values) == len(target_keys):
+            return found_values
+            
+        if isinstance(data, dict):
+            # Check current level for target keys
+            for key in target_keys:
+                if key in data and key not in found_values:
+                    found_values[key] = data[key]
+            
+            # Recursively search nested dictionaries
+            for key, value in data.items():
+                if len(found_values) < len(target_keys):
+                    recursive_extract(value, target_keys, found_values)
+                    
+        elif isinstance(data, list):
+            # Search through list items
+            for item in data:
+                if len(found_values) < len(target_keys):
+                    recursive_extract(item, target_keys, found_values)
+                    
+        return found_values
+    
+    # Target keys we need for translation
+    target_keys = ['grievance_id', 'language_code', 'grievance_details', 'grievance_summary']
+    
+    # Extract the values
+    extracted = recursive_extract(input_data, target_keys)
+    
+    # Validate we got the required fields
+    required_fields = ['grievance_id', 'language_code', 'grievance_details']
+    missing_fields = [field for field in required_fields if field not in extracted]
+    
+    if missing_fields:
+        raise ValueError(f"Missing required fields for translation: {missing_fields}. Available keys: {list(extracted.keys())}")
+    
+    # grievance_summary is optional, set default if missing
+    if 'grievance_summary' not in extracted:
+        logger.warning("grievance_summary not found, using grievance_details as summary")
+        extracted['grievance_summary'] = extracted['grievance_details'][:200] + "..."  # Truncated version
+    
+    return extracted
 
 def translate_grievance_to_english(grievance_id: str) -> Dict[str, Any]:
     """Translate a grievance to English and save it to the database
