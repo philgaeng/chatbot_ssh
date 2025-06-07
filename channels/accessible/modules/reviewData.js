@@ -3,7 +3,14 @@
  */
 export default function createReviewDataModule(socket, UIModule, RecordingModule, GrievanceModule) {
     return {
-        reviewData: {},
+        // Use getter/setter for reviewData to access global data
+        get reviewData() {
+            return window.reviewData || {};
+        },
+        set reviewData(value) {
+            window.reviewData = value;
+        },
+        
         editedData: {}, // Store user-edited versions
         taskCompletionStatus: {},
         firstSuccessTime: null,
@@ -130,6 +137,7 @@ export default function createReviewDataModule(socket, UIModule, RecordingModule
                 const currentText = this.editedData[fieldName] || this.reviewData[fieldName] || '';
                 textarea.value = currentText;
                 editArea.hidden = false;
+                editArea.style.display = 'block';
                 textarea.focus();
                 
                 // Add Delete All button if it doesn't exist
@@ -178,16 +186,14 @@ export default function createReviewDataModule(socket, UIModule, RecordingModule
             
             if (textarea && reviewElement) {
                 const editedText = textarea.value.trim();
-                
                 // Store the edited version
                 this.editedData[fieldName] = editedText;
-                
+                // Update reviewData immediately
+                this.reviewData[fieldName] = editedText;
                 // Update the display with edited text
                 reviewElement.textContent = editedText;
-                
                 // Hide edit area
                 this.hideEditArea(fieldName);
-                
                 console.log(`[ReviewData] Saved edited text for ${fieldName}: ${editedText}`);
             }
         },
@@ -298,7 +304,6 @@ export default function createReviewDataModule(socket, UIModule, RecordingModule
             let extractedData = {};
             
             // NEW: Handle direct result structure (from simplified websocket format)
-            // The result object directly contains the field data
             Object.entries(result).forEach(([key, value]) => {
                 if (this.fieldMapping[key]) {
                     extractedData[key] = value;
@@ -334,12 +339,17 @@ export default function createReviewDataModule(socket, UIModule, RecordingModule
                 }
             }
             
-            // Store the extracted data
+            // Store the extracted data in global reviewData
             Object.entries(extractedData).forEach(([key, value]) => {
-                this.reviewData[key] = value;
+                window.reviewData[key] = value;
                 this.taskCompletionStatus[key] = 'completed';
                 console.log(`[ReviewData] Stored ${key}: ${value}`);
             });
+            console.log('[DEBUG] window.reviewData after storeTaskResult:', window.reviewData);
+            if (window.reviewData && Object.keys(window.reviewData).length > 0) {
+                localStorage.setItem('reviewData', JSON.stringify(window.reviewData));
+                console.log('[DEBUG] Auto-saved reviewData to localStorage:', window.reviewData);
+            }
         },
         
         updateReviewUI: function(result) {
@@ -448,21 +458,18 @@ export default function createReviewDataModule(socket, UIModule, RecordingModule
             };
         },
         
-        // Public method to get final data for submission (edited versions take priority)
-        getFinalData: function() {
-            const finalData = { ...this.reviewData };
-            // Override with edited versions where they exist
-            Object.entries(this.editedData).forEach(([key, value]) => {
-                if (value && value.trim()) {
-                    finalData[key] = value;
-                }
-            });
-            return finalData;
-        },
-        
         // Public method to reset data (for new grievance)
         reset: function() {
-            this.reviewData = {};
+            window.reviewData = {
+                grievance_details: '',
+                grievance_summary: '',
+                grievance_categories: [],
+                user_full_name: '',
+                user_contact_phone: '',
+                user_municipality: '',
+                user_village: '',
+                user_address: ''
+            };
             this.editedData = {};
             this.taskCompletionStatus = {};
             this.stopDataCollection();

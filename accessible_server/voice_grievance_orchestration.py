@@ -40,45 +40,34 @@ def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
         'file_data': recording_data
     }
 
-    # Start with transcription task
-    chain_tasks = [transcribe_audio_file_task.s(recording_data)]
-    
     # Build the task chain based on file type
     if is_contact_info:
         task_chain['type'] = 'contact_info'
-        # After transcription, extract contact info and store in parallel
-        chain_tasks.extend([
-            group(
-                store_result_to_db_task.s(),
-                extract_contact_info_task.s(),
-                store_result_to_db_task.s()
-            )
-        ])
+        # Simple sequential chain: transcription → contact extraction
+        result = chain(
+            transcribe_audio_file_task.s(recording_data),
+            extract_contact_info_task.s(),
+        ).delay()
         
     elif is_grievance_details:
         task_chain['type'] = 'grievance_details'
-        # After transcription, store and classify in parallel
-        chain_tasks.extend([
-            group(
-                classify_and_summarize_grievance_task.s(),
-                store_result_to_db_task.s(),
-            )
-        ])
-        
-        # Add translation if needed
+        # Simple sequential chain: transcription → classification [→ translation]
         if language != 'en':
-            chain_tasks.extend([
+            result = chain(
+                transcribe_audio_file_task.s(recording_data),
+                classify_and_summarize_grievance_task.s(),
                 translate_grievance_to_english_task.s(),
-                store_result_to_db_task.s()
-            ])
+            ).delay()
+        else:
+            result = chain(
+                transcribe_audio_file_task.s(recording_data),
+                classify_and_summarize_grievance_task.s(),
+            ).delay()
+        
     else:
         task_chain['type'] = 'transcription_only'
-        # Just store the transcription
-        chain_tasks.append(store_result_to_db_task.s())
-    
-    # Create and execute the final chain
-    final_chain = chain(*chain_tasks)
-    result = final_chain.delay()
+        # Simple transcription only
+        result = transcribe_audio_file_task.s(recording_data).delay()
     
     # Store the final task ID for tracking
     task_chain['task_id'] = result.id

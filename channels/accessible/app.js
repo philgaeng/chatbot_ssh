@@ -55,11 +55,26 @@ let LanguageModule = {
 
 // Global state and configuration
 let state = {
-    currentStep: 'grievance',
-    language: 'ne', // Default to Nepali
-    grievanceId: null,
-    userId: null
+    currentStep: 'welcome',
+    currentWindow: 'welcome-welcome',
+    isRecording: false,
+    hasRecording: false,
+    isSubmitting: false,
+    grievanceId: null
 };
+
+// Global review data storage
+window.reviewData = {
+    grievance_details: '',
+    grievance_summary: '',
+    grievance_categories: [],
+    user_full_name: '',
+    user_contact_phone: '',
+    user_municipality: '',
+    user_village: '',
+    user_address: ''
+};
+console.log('[DEBUG] window.reviewData initialized/reset in app.js:', window.reviewData);
 
 let speechReady = false;
 let speechQueue = [];
@@ -97,12 +112,17 @@ const APP_STEPS = {
         name: 'Review your Submission',
         windows: ['reviewAll'],
         requiresRecording: false
+    },
+    outro: {
+        name: 'Submission Complete',
+        windows: ['outro'],
+        requiresRecording: false
     }
 };
 
 // Helper function to get step order for navigation
 function getStepOrder() {
-    return ['grievance', 'personalInfo', 'attachments', 'review'];
+    return ['grievance', 'personalInfo', 'attachments', 'review', 'outro'];
 }
 
 // At the top of the file, after the windowToRecordingTypeMap
@@ -202,9 +222,9 @@ UIModule = {
         showCurrentWindow: function() {
             let currentStepKey, currentWindow;
             try {
-                const { step, window } = UIModule.getCurrentWindow();
+                const { step, window: stepWindow } = UIModule.getCurrentWindow();
                 currentStepKey = step;
-                currentWindow = window;
+                currentWindow = stepWindow;
                 
                 // Debug logging
                 console.log(`[NAV] showCurrentWindow: step='${currentStepKey}', window='${currentWindow}', stepIndex=${UIModule.currentStepIndex}, windowIndex=${UIModule.currentWindowIndex}`);
@@ -220,6 +240,38 @@ UIModule = {
                 console.log(`[NAV] Looking for element: ${elementId}, found: ${!!el}`);
                 
                 if (el) {
+                    // Remove any previous non-mandatory message
+                    const oldMsg = el.querySelector('.non-mandatory-message');
+                    if (oldMsg) oldMsg.remove();
+
+                    // Insert non-mandatory message if needed
+                    const recordingType = getRecordingTypeForWindow(currentStepKey, currentWindow);
+                    // Use the requiredRecordings from GrievanceModule.canSubmit (keep in sync)
+                    const requiredRecordings = [
+                        'grievance_details',
+                        'user_contact_phone',
+                        'user_municipality',
+                        'user_village',
+                    ];
+                    // Only show if this window is recordable and not required
+                    if (recordingType && !requiredRecordings.includes(recordingType)) {
+                        // Find the h2 and nav-row
+                        const h2 = el.querySelector('h2');
+                        const navRow = el.querySelector('.nav-row');
+                        if (h2 && navRow) {
+                            // Create the message element
+                            const msg = document.createElement('div');
+                            msg.className = 'non-mandatory-message accent-text';
+                            msg.style.margin = '8px 0 0 0';
+                            msg.style.fontWeight = '500';
+                            msg.style.fontSize = '1rem';
+                            msg.style.color = 'var(--warning-color, #f08c00)'; // fallback to warning color
+                            msg.textContent = 'Field not mandatory - You can skip by pressing next';
+                            // Insert after h2, before nav-row
+                            h2.insertAdjacentElement('afterend', msg);
+                        }
+                    }
+
                     console.log(`[NAV] Before changes - hidden: ${el.hidden}, display: ${el.style.display}`);
                     el.hidden = false;
                     el.style.display = 'block';
@@ -323,6 +375,106 @@ UIModule = {
                     });
                     
                     console.log(`[NAV] Successfully showed window: ${elementId}`);
+                    // Outro page population
+                    if (currentStepKey === 'outro') {
+                        // Restore reviewData from localStorage if missing
+                        try {
+                        if (!window.reviewData) {
+                            console.log('[DEBUG] No reviewData found in window, checking localStorage');
+                            console.log('[DEBUG] localStorage:', localStorage);
+                            const saved = localStorage.getItem('reviewData');
+                            console.log('[DEBUG] saved:', saved);
+                            console.log('[DEBUG] typeof window before assignment:', typeof window, window);
+                            try {
+                            if (saved) {
+                                try {
+                                    const parsed = JSON.parse(saved);
+                                    console.log('[DEBUG] parsed:', parsed);
+                                } catch(e) {
+                                    console.warn('[WARN] Failed to parse reviewData from localStorage, using empty object.', e);
+                                }
+                                try {
+                                    window.reviewData = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+                                    console.log('[DEBUG] Restored reviewData from localStorage:', window.reviewData);
+                                } catch (e) {
+                                    window.reviewData = {};
+                                    console.warn('[WARN] Failed to parse reviewData from localStorage, using empty object.', e);
+                                }
+                            } else {
+                                try {
+                                    window.reviewData = {};
+                                    console.warn('[WARN] No reviewData found in localStorage, using empty object.');
+                                } catch(e) {
+                                    console.warn('[WARN] Failed to restore reviewData from localStorage, using empty object.', e);
+                                }
+                            }
+                        } catch(e) {
+                            console.warn('[WARN] failed when doing if (saved)', e);
+                        }
+                    }
+
+                    } catch(e) {
+                        console.warn('[WARN] Failed to get reviewData from localStorage', e);
+                    }
+                        // Defensive type check after restore
+                        console.log('[DEBUG] After restore, typeof window.reviewData:', typeof window.reviewData, window.reviewData);
+                        if (typeof window.reviewData !== 'object' || window.reviewData === null || Array.isArray(window.reviewData)) {
+                            window.reviewData = {};
+                            console.warn('[WARN] window.reviewData was not an object after restore, reset to empty object.');
+                        }
+                        // Optionally clear reviewData from localStorage after rendering
+                        localStorage.removeItem('reviewData');
+                        console.log('[DEBUG] window.reviewData at OUTRO:', window.reviewData);
+                        const outroFieldMap = {
+                            grievance_number: 'outroGrievanceId',
+                            grievance_details: 'outroGrievanceDetails',
+                            grievance_summary: 'outroGrievanceSummary',
+                            grievance_categories: 'outroGrievanceCategories',
+                            user_full_name: 'outroUserName',
+                            user_contact_phone: 'outroUserPhone',
+                            user_municipality: 'outroUserMunicipality',
+                            user_village: 'outroUserVillage',
+                            user_address: 'outroUserAddress'
+                        };
+                        const reviewData = window.reviewData || {};
+                        Object.entries(outroFieldMap).forEach(([dataKey, domId]) => {
+                            const el = document.getElementById(domId);
+                            let value;
+                            if (dataKey === 'grievance_number') {
+                                value = state.grievanceId || '– Skipped';
+                            } else {
+                                value = reviewData[dataKey];
+                            }
+                            if (dataKey === 'grievance_categories' && Array.isArray(value)) {
+                                value = value.join(', ');
+                            }
+                            if (!value || (Array.isArray(value) && value.length === 0)) value = '– Skipped';
+                            console.log('Setting', domId, 'to', value);
+                            if (el) el.textContent = value;
+                        });
+                        // Calculate expected resolution date
+                        const date = new Date();
+                        date.setDate(date.getDate() + 15);
+                        const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                        document.getElementById('expectedResolutionDate').textContent = dateStr;
+                        console.log('Populating outro fields:', reviewData);
+                        console.log('Calling outroData with state:', state);
+                        // // Save reviewData to localStorage before navigating to outro
+                        // let dataToSave = window.reviewData;
+                        // if (window.ReviewDataModule && typeof window.ReviewDataModule.getReviewData === 'function') {
+                        //     // Prefer the module's merged data if available
+                        //     const reviewModuleData = window.ReviewDataModule.getReviewData();
+                        //     if (reviewModuleData && reviewModuleData.data) {
+                        //         dataToSave = reviewModuleData.data;
+                        //     }
+                        // }
+                        // if (dataToSave && Object.keys(dataToSave).length > 0) {
+                        //     localStorage.setItem('reviewData', JSON.stringify(dataToSave));
+                        //     console.log('[DEBUG] Saved reviewData to localStorage:', dataToSave);
+                        // } else {
+                        //     console.warn('[WARN] Tried to save empty or undefined reviewData to localStorage:', dataToSave);
+                        // }
+                    }
                 } else {
                     console.error(`[NAV] Element not found: ${elementId}`);
                 }
@@ -340,16 +492,39 @@ UIModule = {
                 UIModule.currentWindowIndex++;
                 this.showCurrentWindow();
             } else {
-                // If we're at the last window of this step, move to next step
-                this.goToNextStep();
+                // Special case: after review, go to outro
+                if (currentStepKey === 'review') {
+                    // Check for open edit areas
+                    const openEditAreas = document.querySelectorAll('.edit-area:not([hidden])');
+                    if (openEditAreas.length > 0) {
+                        UIModule.showMessage('You have unsaved changes. Please save or cancel your edits before continuing.', true);
+                        return;
+                    }
+                    // // Save reviewData to localStorage before navigating to outro
+                    // try {
+                    //     if (dataToSave && Object.keys(dataToSave).length > 0) {
+                    //         localStorage.setItem('reviewData', JSON.stringify(dataToSave));
+                    //         console.log('[DEBUG] Saved reviewData to localStorage:', dataToSave);
+                    //     } else {
+                    //         console.warn('[WARN] Tried to save empty or undefined reviewData to localStorage:', dataToSave);
+                    //     }
+                    // } catch (e) {
+                    //     console.warn('[WARN] Could not save reviewData to localStorage:', e);
+                    // }
+                    UIModule.currentStepIndex = UIModule.stepOrder.indexOf('outro');
+                    UIModule.currentWindowIndex = 0;
+                    this.showCurrentWindow();
+                } else {
+                    this.goToNextStep();
+                }
             }
         },
 
         goToPrevWindow: function() {
-            if (this.currentWindowIndex > 0) {
-                this.currentWindowIndex--;
+            if (UIModule.currentWindowIndex > 0) {
+                UIModule.currentWindowIndex--;
                 this.showCurrentWindow();
-            } else if (this.currentStepIndex > 0) {
+            } else if (UIModule.currentStepIndex > 0) {
                 this.goToPrevStep();
             }
         },
@@ -373,11 +548,11 @@ UIModule = {
         },
 
         goToPrevStep: function() {
-            if (this.currentStepIndex > 0) {
-                this.currentStepIndex--;
-                const currentStepKey = this.stepOrder[this.currentStepIndex];
-            const currentStep = this.steps[currentStepKey];
-                this.currentWindowIndex = currentStep.windows.length - 1;
+            if (UIModule.currentStepIndex > 0) {
+                UIModule.currentStepIndex--;
+                const currentStepKey = UIModule.stepOrder[UIModule.currentStepIndex];
+                const currentStep = UIModule.steps[currentStepKey];
+                UIModule.currentWindowIndex = currentStep.windows.length - 1;
                 this.showCurrentWindow();
             }
         },
@@ -1605,11 +1780,9 @@ GrievanceModule = {
         // Check if all required recordings exist
         const requiredRecordings = [
             'grievance_details',
-            'user_full_name', 
             'user_contact_phone',
             'user_municipality',
             'user_village',
-            'user_address'
         ];
 
         const missingRecordings = requiredRecordings.filter(type => 
@@ -1787,6 +1960,8 @@ GrievanceModule = {
             formData.append('language_code', LanguageModule.getCurrentLanguage());
             formData.append('grievance_id', state.grievanceId);
             formData.append('user_id', state.userId);
+            formData.append('province', state.province);
+            formData.append('district', state.district);
             
             // Submit all recordings with the pre-generated IDs
             const result = await APIModule.submitGrievance({}, recordedBlobs, formData);
@@ -1872,10 +2047,11 @@ GrievanceModule = {
             }
             
             // Store the data for later use
-            this.reviewData = response.data;
+            window.reviewData = response.data;
             
             // Populate the review UI
             this.populateReviewUI(response.data);
+            console.log('[DEBUG] Review data loaded:', response.data);
             
             // Show success message
             UIModule.showMessage('Grievance data loaded successfully');
@@ -2072,14 +2248,14 @@ EventModule = {
                 }
 
                 try {
-                switch(action) {
-                    case 'next':
-                    case 'continue':
-                        UIModule.Navigation.goToNextWindow();
-                        break;
-                    case 'prev':
-                        UIModule.Navigation.goToPrevWindow();
-                        break;
+                    switch(action) {
+                        case 'next':
+                        case 'continue':
+                            UIModule.Navigation.goToNextWindow();
+                            break;
+                        case 'prev':
+                            UIModule.Navigation.goToPrevWindow();
+                            break;
                         case 'submit':
                             console.log('[EventModule] Delegating submit to GrievanceModule');
                             const result = await GrievanceModule.handleSubmission(e);
@@ -2088,16 +2264,16 @@ EventModule = {
                             } else if (result && result.success) {
                                 console.log('[EventModule] Submission successful');
                             }
-                        break;
-                    case 'retry':
-                const { step, window } = UIModule.getCurrentWindow();
-                const recordingType = getRecordingTypeForWindow(step, window);
-                if (recordingType) {
-                            RecordingModule.startRecording(recordingType);
+                            break;
+                        case 'retry':
+                            const { step, window } = UIModule.getCurrentWindow();
+                            const recordingType = getRecordingTypeForWindow(step, window);
+                            if (recordingType) {
+                                RecordingModule.startRecording(recordingType);
                             } else {
                                 console.warn('[EventModule] No recording type found for retry action');
-                        }
-                        break;
+                            }
+                            break;
                         default:
                             console.warn('[EventModule] Unknown navigation action:', action);
                     }
@@ -2111,8 +2287,8 @@ EventModule = {
                     
                     // Re-enable button if it was disabled
                     if (e.target && e.target.disabled) {
-            e.target.disabled = false;
-        }
+                        e.target.disabled = false;
+                    }
                 }
             });
         });
@@ -2583,8 +2759,8 @@ function initializeGrievanceSession() {
         
         // Get province and district from URL parameters if available
         const urlParams = new URLSearchParams(window.location.search);
-        const province = urlParams.get('province') || 'KO';  // Default to 'KO'
-        const district = urlParams.get('district') || 'JH';   // Default to 'JH'
+        const province = urlParams.get('province') || 'Koshi';  // Default to 'KO'
+        const district = urlParams.get('district') || 'Jhapa';   // Default to 'JH'
         
         console.log(`Using province: ${province}, district: ${district} for ID generation`);
         
@@ -2595,7 +2771,8 @@ function initializeGrievanceSession() {
             if (data.status === 'success') {
                 state.grievanceId = data.grievance_id;
                 state.userId = data.user_id;
-                
+                state.province = province;
+                state.district = district;
                 console.log('Generated grievanceId:', state.grievanceId);
                 console.log('Generated userId:', state.userId);
                 

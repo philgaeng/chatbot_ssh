@@ -8,8 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 # Location Constants
-QR_PROVINCE = "KOSHI"
+QR_PROVINCE = "Koshi"
 QR_DISTRICT = "Jhapa"
+DEFAULT_PROVINCE = "Koshi"
+DEFAULT_DISTRICT = "Jhapa"
 DISTRICT_LIST = ['Jhapa', 'Morang', 'Sunsari']
 USE_QR_CODE = True
 CUT_OFF_FUZZY_MATCH_LOCATION = 75
