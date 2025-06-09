@@ -382,4 +382,39 @@ else
     ps -ef | grep "celery.*worker" | grep -v grep
 fi
 
-echo -e "\nAll services have been stopped" 
+echo -e "\nAll services have been stopped"
+
+# --- ADDITION: Ensure ports are truly free ---
+ensure_port_free() {
+    local port=$1
+    local max_attempts=5
+    local attempt=1
+    while [ $attempt -le $max_attempts ]; do
+        if sudo lsof -i :$port > /dev/null 2>&1; then
+            echo "Port $port is still in use. Attempting to kill process..."
+            local pid=$(sudo lsof -t -i :$port)
+            sudo kill $pid
+            sleep 2
+            # Force kill if still running
+            if sudo lsof -i :$port > /dev/null 2>&1; then
+                echo "Force killing process on port $port..."
+                sudo kill -9 $pid
+            fi
+            sleep 2
+        else
+            echo "✅ Port $port is free (post-stop verification)"
+            return 0
+        fi
+        attempt=$((attempt+1))
+        sleep 2
+    done
+    # Final check
+    if sudo lsof -i :$port > /dev/null 2>&1; then
+        echo "❌ Port $port could not be freed after $max_attempts attempts. Manual intervention may be required."
+    fi
+}
+
+# Call ensure_port_free for all relevant ports
+for port in 5001 5005 5055 5555 6379; do
+    ensure_port_free $port
+done 

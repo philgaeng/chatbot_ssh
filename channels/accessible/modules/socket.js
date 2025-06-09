@@ -17,7 +17,7 @@ await loadSocketIoClient();
 
 // Use the global 'io' provided by the CDN script
 const socket = io('https://nepal-gms-chatbot.facets-ai.com', {
-    path: '/socket.io',
+    path: '/accessible-socket.io',
     transports: ['websocket'],
     reconnection: true,
     reconnectionAttempts: 5,

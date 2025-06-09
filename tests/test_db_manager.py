@@ -3,6 +3,10 @@ import os
 from datetime import datetime
 import uuid
 from actions_server.db_manager import db_manager, DatabaseManagers, file_manager, schema_manager, grievance_manager, task_manager, user_manager
+import sys
+
+# Add the actions_server directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'actions_server'))
 
 class TestDatabaseManagers:
     @pytest.fixture(autouse=True)
@@ -164,6 +168,59 @@ class TestDatabaseManagers:
         })
         assert success is False
 
+    def test_database_managers_initialization(self):
+        """Test that all database managers are properly initialized"""
+        assert isinstance(db_manager, DatabaseManagers)
+        assert db_manager.file is not None
+        assert db_manager.schema is not None
+        assert db_manager.grievance is not None
+        assert db_manager.task is not None
+        assert db_manager.user is not None
+
+    def test_generate_id(self):
+        """Test ID generation for different types"""
+        # Test grievance ID generation
+        grievance_id = db_manager.grievance.generate_id(type='grievance_id')
+        assert grievance_id.startswith('GR-')
+        
+        # Test user ID generation
+        user_id = db_manager.user.generate_id(type='user_id')
+        assert user_id.startswith('US-')
+        
+        # Test file ID generation
+        file_id = db_manager.file.generate_id(type='file_id')
+        assert file_id.startswith('FL-')
+
+    def test_create_grievance_with_specific_data(self):
+        """Test create_grievance with specific data"""
+        try:
+            data = {
+                'grievance_id': 'GR-20250608-KO-JH-A91C-B',
+                'user_id': 'US-20250608-KO-JH-6783',
+                'source': 'bot'
+            }
+            
+            # Call create_grievance
+            result = db_manager.grievance.create_grievance(source='bot')
+            
+            # Assertions
+            assert result is not None, "create_grievance should not return None"
+            assert result == data['grievance_id'], f"Expected grievance_id {data['grievance_id']}, got {result}"
+            
+            # Verify the grievance was created in the database
+            grievance = db_manager.grievance.get_grievance_by_id(data['grievance_id'])
+            assert grievance is not None, "Grievance should exist in database"
+            assert grievance['grievance_id'] == data['grievance_id'], "Grievance ID should match"
+            assert grievance['user_id'] == data['user_id'], "User ID should match"
+            assert grievance['source'] == data['source'], "Source should match"
+            
+            print(f"Test passed: Successfully created grievance with ID: {result}")
+            
+        except Exception as e:
+            print(f"Test failed with error: {str(e)}")
+            raise
+
 if __name__ == '__main__':
-    pytest.main() 
+    test = TestDatabaseManagers()
+    test.test_create_grievance_with_specific_data() 
  
