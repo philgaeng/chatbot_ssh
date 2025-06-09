@@ -13,6 +13,7 @@ from actions_server.constants import (
     ALLOWED_MIME_TYPES, 
     FILE_TYPE_MAX_SIZES,
     FILE_TYPES,
+    
 )
 from actions_server.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
@@ -21,10 +22,7 @@ from actions_server.api_manager import APIManager
 # Define service name for logging
 SERVICE_NAME = "file_processor"
 
-# Configure upload settings
-UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads'))
-
-
+UPLOAD_FOLDER = 'uploads'
 
 
         

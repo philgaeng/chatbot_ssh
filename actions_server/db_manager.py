@@ -1044,8 +1044,11 @@ class GrievanceDbManager(BaseDatabaseManager):
         try:
             operations_logger.info(f"create_grievance: Creating grievance with data: {data}")
             if not data:
+                operations_logger.info(f"No data provided to create_grievance - generating new grievance and new user")
                 grievance_id = self.generate_id(type='grievance_id', suffix=source)
+                operations_logger.info(f"create_grievance: Generated grievance ID: {grievance_id}")
                 user_id = db_manager.user.create_or_update_user()
+                operations_logger.info(f"create_grievance: launch create_user - result user ID: {user_id}")
                 data = {
                     'grievance_id': grievance_id,
                     'user_id': user_id,
@@ -1478,7 +1481,7 @@ class UserDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving user from grievance id: {str(e)}")
             return None
         
-    def get_user_id_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_id_from_grievance_id(self, grievance_id: str) -> Optional[str]:
         query = """
             SELECT user_id
             FROM grievances
@@ -1486,7 +1489,7 @@ class UserDbManager(BaseDatabaseManager):
         """
         try:
             results = self.execute_query(query, (grievance_id,), "get_user_id_from_grievance_id")
-            return results[0] if results else None
+            return results[0]['user_id'] if results else None
         except Exception as e:
             operations_logger.error(f"Error retrieving user from grievance id: {str(e)}")
             return None
