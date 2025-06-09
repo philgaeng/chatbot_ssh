@@ -247,6 +247,11 @@ slots:
     influence_conversation: true
     mappings:
     - type: custom
+  user_id:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: custom
   utter_count:
     type: float
     initial_value: 0

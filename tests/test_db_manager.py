@@ -1,12 +1,16 @@
-import pytest
+import sys
 import os
+
+# Add the project root directory to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+import pytest
 from datetime import datetime
 import uuid
-from actions_server.db_manager import db_manager, DatabaseManagers, file_manager, schema_manager, grievance_manager, task_manager, user_manager
-import sys
+from actions_server.db_manager import DatabaseManagers
 
-# Add the actions_server directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'actions_server'))
+db_manager = DatabaseManagers()
 
 class TestDatabaseManagers:
     @pytest.fixture(autouse=True)
@@ -219,8 +223,19 @@ class TestDatabaseManagers:
         except Exception as e:
             print(f"Test failed with error: {str(e)}")
             raise
+        
+    def test_create_user(self):
+        """Test create_user"""
+        user = db_manager.user.create_user()
+        assert user is not None
+        
+    def test_create_grievance(self):
+        """Test create_grievance"""
+        grievance = db_manager.grievance.create_grievance()
+        
+        assert grievance is not None
 
 if __name__ == '__main__':
     test = TestDatabaseManagers()
-    test.test_create_grievance_with_specific_data() 
+    test.test_create_grievance()
  

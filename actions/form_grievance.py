@@ -85,15 +85,11 @@ class ActionStartGrievanceProcess(BaseAction):
         print("---------------------------------------------")
         
         # Create the grievance with temporary status and specify source as 'bot'
-        grievance_id= self.db.base.generate_id(type='grievance_id', suffix='bot')
-        user_id = self.db.base.generate_id(type='user_id', suffix='bot')
-        data = {
-            'grievance_id': grievance_id,
-            'user_id': user_id,
-            'source': 'bot'
-        }
-        self.db.grievance.create_grievance(data)
-        # grievance_id = self.db.grievance.create_grievance(source='bot')
+        user_id = self.db.user.create_user()
+        ic(f"Created user with ID: {user_id}")
+        grievance_id = self.db.grievance.create_grievance(data={'source':'bot',
+                                                           'user_id':user_id})
+        
         ic(f"Created temporary grievance with ID: {grievance_id}")
         
         # Get language code from tracker
@@ -187,6 +183,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):
         if tracker.get_slot("grievance_new_detail") == "completed":
             print("######################### DEACTIVATING FORM ##############")
             print("value of slot grievance_details", tracker.get_slot("grievance_details"))
+            print("value of slot user_id", tracker.get_slot("user_id"))
             print("########################################################")
             return []  # This will deactivate the form
         
@@ -998,7 +995,6 @@ class ActionSubmitGrievance(BaseAction):
         ic("Debug - All tracker slots:", tracker.slots)
         ic("Debug - grievance_id from tracker:", self.grievance_id)
         ic("Debug - user_id from tracker:", self.user_id)
-        ic("Debug - Current conversation state:", tracker.current_state())
         
         try:
             # Collect grievance data
@@ -1017,6 +1013,9 @@ class ActionSubmitGrievance(BaseAction):
                 ic(f"Traceback: {traceback.format_exc()}")
                 raise Exception("Failed to update grievance in the database")
             try:
+                ic(f"Updating user with ID: {self.user_id}")
+                if not self.user_id:
+                    self.user_id = self.db.user.get_user_id_from_grievance_id(self.grievance_id)
                 self.db.user.update_user(user_id=self.user_id,
                                          data=user_data_for_db)
             except Exception as e:
