@@ -1,33 +1,22 @@
 {
   "transcribe_audio_file_task": {
-    "start_time": 1749311580.218657,
-    "last_duration": 3.0143818855285645,
-    "total_tasks": 20
-  },
-  "submit_grievance": {
-    "last_duration": 0.36632800102233887,
-    "total_tasks": 4,
-    "start_time": 1749311579.856256
+    "start_time": 1749472587.0664165,
+    "last_duration": 11.361649990081787,
+    "total_tasks": 5
   },
   "extract_contact_info_task": {
-    "start_time": 1749311583.2533035,
-    "last_duration": 4.705291748046875,
-    "total_tasks": 12,
-    "failed_tasks": 4
+    "start_time": 1749472591.916119,
+    "last_duration": 1.6550638675689697,
+    "total_tasks": 4
   },
   "classify_and_summarize_grievance_task": {
-    "start_time": 1749311581.7325912,
-    "last_duration": 1.9663519859313965,
-    "total_tasks": 3,
+    "start_time": 1749472598.445302,
     "failed_tasks": 1
   },
   "translate_grievance_to_english_task": {
-    "start_time": 1749311583.7165384,
-    "failed_tasks": 4
+    "failed_tasks": 1
   },
-  "generate_ids": {
-    "start_time": 1749311556.459977,
-    "last_duration": 0.002140522003173828,
-    "total_tasks": 6
+  "accessible_file_upload": {
+    "start_time": 1749472606.9084735
   }
 }

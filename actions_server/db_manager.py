@@ -13,6 +13,7 @@ import traceback
 from contextlib import contextmanager
 import sys
 import time
+from icecream import ic
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1038,20 +1039,28 @@ class GrievanceDbManager(BaseDatabaseManager):
         'classification_status'
     }
 
-    def create_grievance(self, data: Dict[str, Any] = None) -> Optional[str]:
+    def create_grievance(self, data: Dict[str, Any] = None, source: str = 'bot') -> Optional[str]:
         """Create a new grievance record"""
         try:
+            operations_logger.info(f"create_grievance: Creating grievance with data: {data}")
             if not data:
-                data = dict()
-            
-            # Use provided grievance_id or generate new one
-            grievance_id = data.get('grievance_id') or self.generate_id(type='grievance_id', suffix=data.get('source', 'bot'))
+                grievance_id = self.generate_id(type='grievance_id', suffix=source)
+                user_id = db_manager.user.create_or_update_user()
+                data = {
+                    'grievance_id': grievance_id,
+                    'user_id': user_id,
+                    'source': source
+                }
+                operations_logger.info(f"No data provided to create_grievance - generated {data}")
+                ic(data)
+            else:
+                source = data.get('source', 'bot')
+                grievance_id = data.get('grievance_id') if data.get('grievance_id') else self.generate_id(type='grievance_id', suffix=source)
+                user_id = data.get('user_id') if data.get('user_id') else db_manager.user.create_or_update_user()
+                
+            ic(data)  
+                
             operations_logger.info(f"create_grievance: Creating grievance with ID: {grievance_id}")
-            
-            # Ensure we have a user_id
-            user_id = data.get('user_id')
-            if not user_id:
-                user_id = db_manager.user.create_or_update_user()  # a user_id is required to create a grievance
             
             insert_query = """
                 INSERT INTO grievances (
@@ -1075,9 +1084,10 @@ class GrievanceDbManager(BaseDatabaseManager):
             ))
             operations_logger.info(f"create_grievance: Successfully created grievance with ID: {grievance_id}")
             return result['grievance_id'] if result else grievance_id
-            
+
         except Exception as e:
             operations_logger.error(f"Error in create_grievance: {str(e)}")
+            operations_logger.error(f"Traceback: {traceback.format_exc()}")
             return None
     
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> bool:
@@ -1351,10 +1361,14 @@ class UserDbManager(BaseDatabaseManager):
         """Create a new user record"""
         try:
             if not data:
-                data = dict()
-            
-            # Use provided user_id or generate new one
-            user_id = data.get('user_id') or self.generate_id(type='user_id')
+                user_id = self.generate_id(type='user_id')
+                data = {'user_id': user_id}
+                operations_logger.info(f"No data provided to create_user - generating new user id - {data}")
+                ic(data)
+            else:
+                user_id = data.get('user_id')
+                operations_logger.info(f"Data provided to create_user - using existing user id - {data}")
+                
             operations_logger.info(f"create_user: Creating user with ID: {user_id}")
             
             insert_query = """
@@ -1433,18 +1447,23 @@ class UserDbManager(BaseDatabaseManager):
         Returns:
             Optional[str] - The user_id if successful, None otherwise
         """
-        operations_logger.info("create_or_update_user: Using legacy method, redirecting to create_user")
-        if data.get('user_id'):
-            if self.get_user_by_id(data.get('user_id')):
-                if self.update_user(data.get('user_id'), data):
-                    return data.get('user_id')
+        operations_logger.info("create_or_update_user: Using legacy method, redirecting to create_user or update_user")
+        if data:
+            if data.get('user_id'):
+                if self.get_user_by_id(data.get('user_id')):
+                    if self.update_user(data.get('user_id'), data):
+                        return data.get('user_id')
+                    else:
+                        return None
                 else:
-                    return None
+                    return self.create_user(data)
             else:
-                return self.create_user(data)
+                operations_logger.warning(f"No user_id provided to create_or_update_user, creating new user")
+                return self.create_user()
         else:
-            return self.create_user(data)
-            
+            operations_logger.info(f"No data provided to create_or_update_user, creating new user")
+            return self.create_user()
+        
     def get_user_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
             SELECT u.*

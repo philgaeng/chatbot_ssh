@@ -22,7 +22,7 @@ from actions_server.api_manager import APIManager
 SERVICE_NAME = "file_processor"
 
 # Configure upload settings
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads'))
 
 
 
@@ -31,7 +31,7 @@ UPLOAD_FOLDER = 'uploads'
 class FileServerCore(APIManager):
     """Core business logic for file operations"""
     
-    def __init__(self, upload_folder: str = 'uploads', allowed_extensions: list = ALLOWED_EXTENSIONS):
+    def __init__(self, upload_folder: str = UPLOAD_FOLDER, allowed_extensions: list = ALLOWED_EXTENSIONS):
         super().__init__(SERVICE_NAME)
         self.upload_folder = upload_folder
         self.allowed_extensions = allowed_extensions

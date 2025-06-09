@@ -278,11 +278,11 @@ function extractGrievanceId(response) {
         return response.grievance_id;
     }
     if (response.text) {
-        const grievanceMatch = response.text.match(/Your grievance ID is (GR[A-Z0-9]+)/);
+        const grievanceMatch = response.text.match(/Your grievance ID is (GR-[A-Z0-9-]+)/);
         if (grievanceMatch) {
+            console.log('Grievance ID found in text:', grievanceMatch[1]);
             return grievanceMatch[1];
         }
-
     }
     return null;
 }
@@ -663,12 +663,12 @@ async function handleFileUpload(files) {
             }
             appendMessage(statusMessage, 'received');
             
-            // Start polling for task status
-            if (data.task_id) {
-                console.log('Starting task status polling for:', data.task_id);
-                pollTaskStatus(data.task_id);
+            // Start polling for file status
+            if (data.files && data.files.length > 0) {
+                console.log('Starting file status polling for:', data.files);
+                pollFileStatus(data.files);
             } else {
-                console.warn('No task_id received in response');
+                console.warn('No file IDs received in response');
             }
             
             // Handle oversized files warning
@@ -685,39 +685,42 @@ async function handleFileUpload(files) {
     }
 }
 
-// Poll task status
-async function pollTaskStatus(taskId) {
+// Poll file status
+async function pollFileStatus(fileIds) {
     const maxAttempts = 30; // 5 minutes total (10s * 30)
     let attempts = 0;
     
     const poll = async () => {
         try {
-            console.log(`Polling task status (attempt ${attempts + 1}/${maxAttempts}):`, taskId);
-            const response = await fetch(`/task-status/${taskId}`);
-            const data = await response.json();
-            console.log('Task status response:', data);
+            console.log(`Polling file status (attempt ${attempts + 1}/${maxAttempts}):`, fileIds);
+            const statuses = await Promise.all(
+                fileIds.map(fileId => 
+                    fetch(`/file-status/${fileId}`).then(res => res.json())
+                )
+            );
+            console.log('File status response:', statuses);
             
-            if (response.ok) {
-                // Update task status in UI
-                updateTaskStatus(taskId, data);
-                
-                // Continue polling if not complete
-                if (data.status === 'PENDING' || data.status === 'STARTED') {
-                    if (attempts < maxAttempts) {
-                        attempts++;
-                        setTimeout(poll, 10000); // Poll every 10 seconds
-                    } else {
-                        console.log('Max polling attempts reached');
-                        appendMessage('File processing is taking longer than expected. You can continue with your submission.', 'received');
-                    }
-                } else {
-                    console.log('Task completed with status:', data.status);
+            // Update status for each file
+            statuses.forEach((data, index) => {
+                if (data.status) {
+                    updateFileStatus(fileIds[index], data);
                 }
-            } else {
-                console.error('Error polling task status:', data.error);
+            });
+            
+            // Check if all files are processed
+            const allProcessed = statuses.every(data => 
+                data.status === 'SUCCESS' || data.status === 'FAILURE'
+            );
+            
+            if (!allProcessed && attempts < maxAttempts) {
+                attempts++;
+                setTimeout(poll, 10000); // Poll every 10 seconds
+            } else if (!allProcessed) {
+                console.log('Max polling attempts reached');
+                appendMessage('File processing is taking longer than expected. You can continue with your submission.', 'received');
             }
         } catch (error) {
-            console.error('Error polling task status:', error);
+            console.error('Error polling file status:', error);
         }
     };
     
@@ -725,8 +728,8 @@ async function pollTaskStatus(taskId) {
     poll();
 }
 
-// Update task status in UI
-function updateTaskStatus(taskId, data) {
+// Update file status in UI
+function updateFileStatus(fileId, data) {
     const { status, progress, result, error } = data;
     
     // Get messages container
@@ -736,12 +739,12 @@ function updateTaskStatus(taskId, data) {
         return;
     }
     
-    // Create or update task status message
-    let statusElement = document.getElementById(`task-status-${taskId}`);
+    // Create or update file status message
+    let statusElement = document.getElementById(`file-status-${fileId}`);
     if (!statusElement) {
         statusElement = document.createElement('div');
-        statusElement.id = `task-status-${taskId}`;
-        statusElement.className = 'task-status';
+        statusElement.id = `file-status-${fileId}`;
+        statusElement.className = 'file-status';
         chatMessages.appendChild(statusElement);
     }
     

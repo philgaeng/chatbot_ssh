@@ -137,7 +137,7 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
             "user_address": ""
         }
 
-def classify_and_summarize_grievance(
+async def classify_and_summarize_grievance(
     grievance_text: str,
     language_code: str = 'ne',
     user_district: str = DEFAULT_DISTRICT,

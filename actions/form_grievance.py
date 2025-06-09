@@ -29,6 +29,8 @@ import tempfile
 import base64
 from datetime import datetime, timedelta
 from actions_server.LLM_helpers import classify_and_summarize_grievance
+from actions_server.db_manager import db_manager
+from actions_server.constants import USER_FIELDS, GRIEVANCE_FIELDS
 
 #define and load variables
 
@@ -83,7 +85,15 @@ class ActionStartGrievanceProcess(BaseAction):
         print("---------------------------------------------")
         
         # Create the grievance with temporary status and specify source as 'bot'
-        grievance_id = self.db.create_grievance(source='bot')
+        grievance_id= self.db.base.generate_id(type='grievance_id', suffix='bot')
+        user_id = self.db.base.generate_id(type='user_id', suffix='bot')
+        data = {
+            'grievance_id': grievance_id,
+            'user_id': user_id,
+            'source': 'bot'
+        }
+        self.db.grievance.create_grievance(data)
+        # grievance_id = self.db.grievance.create_grievance(source='bot')
         ic(f"Created temporary grievance with ID: {grievance_id}")
         
         # Get language code from tracker
@@ -99,7 +109,9 @@ class ActionStartGrievanceProcess(BaseAction):
         )
         
         # reset the slots used by the form grievance_details_form and grievance_summary_form and set verification_context to new_user
-        return [SlotSet("grievance_id", grievance_id),
+        return [
+                SlotSet("grievance_id", grievance_id),
+                SlotSet("user_id", user_id),
                 SlotSet("grievance_new_detail", None),
                 SlotSet("grievance_details", None),
                 SlotSet("grievance_summary_temp", None),
@@ -128,23 +140,23 @@ class ActionCallOpenAI(BaseAction):
         print(f"Raw - grievance_details: {grievance_details}")
         
         # Call the helper function for classification and summarization
-        result = classify_and_summarize_grievance_task.delay(grievance_details, language_code)
+        result = await classify_and_summarize_grievance(grievance_details, language_code)
         
-        if result["status"] == "error":
+        if result.get("status") == "error":
             utterance = get_utterance("grievance_form", self.name(), 2, language_code)
             buttons = get_buttons("grievance_form", self.name(), 2, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
             return {}
-
+        
         print(f"Processed result: {result}")
 
         # Prepare slots for Rasa
         grievance_open_ai_slots = {
             "grievance_details": grievance_details,
             "grievance_summary_temp": result["grievance_summary"],
-            "grievance_categories": result["list_categories"],
-            "classification_status": result["status"],
-            "language_code": result["language_code"]
+            "grievance_categories": result["grievance_categories"],
+            # "classification_status": 'SUCCESS',
+            "language_code": language_code
         }
         
         ic(grievance_open_ai_slots)
@@ -782,34 +794,6 @@ class ActionSubmitGrievance(BaseAction):
         """Get current date and time in YYYY-MM-DD HH:MM format."""
         return datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    def generate_user_id(self, grievance_data: Dict[str, Any]) -> str:
-        """Generate a unique user ID using Nepal time and UUID.
-
-        Returns:
-            str: A unique user ID in the format USR{YYYYMMDD}{UUID[:6]}
-        """
-        province = grievance_data.get('user_province')
-        district = grievance_data.get('user_district')
-        municipality = grievance_data.get('user_municipality')
-        project = grievance_data.get('user_project')
-        if province:
-            province_code = province[:3].upper()
-        else:
-            province_code = "XX"
-        if district:
-            district_code = district[:3].upper()
-        else:
-            district_code = "XX"
-        if municipality:
-            municipality_code = municipality[:3].upper()
-        else:
-            municipality_code = "XX"
-        if project:
-            project_code = project[:2].upper()
-        else:
-            project_code = "XX"
-        return f"{province_code}-{district_code}-{project_code}-{municipality_code}-{uuid.uuid4().hex[:6].upper()}"
-
 
     def is_valid_email(self, email: str) -> bool:
         """Check if the provided string is a valid email address."""
@@ -848,7 +832,7 @@ class ActionSubmitGrievance(BaseAction):
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp
         grievance_data["grievance_timeline"] = grievance_timeline
-        grievance_data["user_unique_id"] = self.generate_user_id(grievance_data)
+        # grievance_data["user_unique_id"] = self.generate_user_id(grievance_data)
         # change all the values of the slots_skipped or None to "NOT_PROVIDED"
         grievance_data = self._update_key_values_for_db_storage(grievance_data)
         ic(grievance_data)
@@ -871,18 +855,25 @@ class ActionSubmitGrievance(BaseAction):
         Returns:
             str: A formatted string containing file information, or empty string if no files
         """
-        files = self.db.get_grievance_files(grievance_id)
-        if not files:
+        try:
+            files = self.db.grievance.get_grievance_files(grievance_id)
+            if not files:
+                return {"has_files": False,
+                        "files_info": ""}
+            else:
+                files_info = "\nAttached files:\n" + "\n".join([
+                f"- {file['file_name']} ({file['file_size']} bytes)"
+                for file in files
+            ])
+                return {"has_files": True,
+                        "files_info": files_info}
+        except Exception as e:
+            ic(f"❌ Error getting attached files info: {str(e)}")
+            ic(f"Traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to get attached files info: {str(e)}")
             return {"has_files": False,
                     "files_info": ""}
-        else:
-            files_info = "\nAttached files:\n" + "\n".join([
-            f"- {file['file_name']} ({file['file_size']} bytes)"
-            for file in files
-        ])
-            return {"has_files": True,
-                    "files_info": files_info}
-    
+        
     def create_confirmation_message(self, 
                                     grievance_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
@@ -998,21 +989,43 @@ class ActionSubmitGrievance(BaseAction):
             dispatcher.utter_message(text=utterance)
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        print("\n=================== Submitting Grievance ===================")
+        ic("\n=================== Submitting Grievance ===================")
         self.language_code = tracker.get_slot("language_code") or "en"
         self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
+        self.grievance_id = tracker.get_slot("grievance_id")
+        self.user_id = tracker.get_slot("user_id")
+        
+        ic("Debug - All tracker slots:", tracker.slots)
+        ic("Debug - grievance_id from tracker:", self.grievance_id)
+        ic("Debug - user_id from tracker:", self.user_id)
+        ic("Debug - Current conversation state:", tracker.current_state())
         
         try:
             # Collect grievance data
             grievance_data = self.collect_grievance_data(tracker)
             ic('collected grievance data from tracker', grievance_data)
-            
+            user_data_for_db = {k: v for k,v in grievance_data.items() if k in USER_FIELDS}
+            grievance_data_for_db = {k: v for k,v in grievance_data.items() if k in GRIEVANCE_FIELDS}
+            ic('user data', user_data_for_db)
+            ic('grievance data', grievance_data_for_db)
             # Update the existing grievance with complete data
-            grievance_id = self.db.update_grievance_db(grievance_data)
-            if not grievance_id:
+            try:
+                self.db.grievance.update_grievance(grievance_id=self.grievance_id,
+                                                    data=grievance_data_for_db)
+            except Exception as e:
+                ic(f"❌ Error updating grievance: {str(e)}")
+                ic(f"Traceback: {traceback.format_exc()}")
                 raise Exception("Failed to update grievance in the database")
+            try:
+                self.db.user.update_user(user_id=self.user_id,
+                                         data=user_data_for_db)
+            except Exception as e:
+                ic(f"❌ Error updating user: {str(e)}")
+                ic(f"Traceback: {traceback.format_exc()}")
+                raise Exception("Failed to update user in the database")
+        
 
-            ic(f"✅ Grievance updated successfully with ID: {grievance_id}")
+            ic(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
             
             # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
@@ -1052,7 +1065,8 @@ class ActionSubmitGrievance(BaseAction):
             
             #send the last utterance and buttons
             self._send_last_utterance_buttons(self.gender_issues_reported, 
-                                                self._get_attached_files_info(grievance_id)["has_files"],
+                                              
+                                                self._get_attached_files_info(self.grievance_id)["has_files"],
                                                 dispatcher=dispatcher)
                 
             
@@ -1071,13 +1085,12 @@ class ActionSubmitGrievance(BaseAction):
                 
             # Prepare events
             return [
-                SlotSet("grievance_id", grievance_id),
                 SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"])
             ]
 
         except Exception as e:
-            print(f"❌ Error submitting grievance: {str(e)}")
-            print(f"Traceback: {traceback.format_exc()}")
+            ic(f"❌ Error submitting grievance: {str(e)}")
+            ic(f"Traceback: {traceback.format_exc()}")
             utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []

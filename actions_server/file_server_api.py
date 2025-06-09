@@ -41,6 +41,7 @@ class FileServerAPI:
         self.blueprint.route('/grievance-review/<grievance_id>', methods=['GET'])(self.get_grievance_review)
         self.blueprint.route('/grievance-review/<grievance_id>', methods=['POST'])(self.update_grievance_review)
         self.blueprint.route('/files/<filename>')(self.get_file)
+        self.blueprint.route('/test-upload', methods=['POST'])(self.test_upload)
 
     @staticmethod
     def health_check():
@@ -152,7 +153,12 @@ class FileServerAPI:
                 
                 else:
                     file_id = str(uuid.uuid4())
-                    file_path = os.path.join(self.core.upload_folder, file_id)
+                    # Create grievance-specific directory
+                    grievance_dir = os.path.join(self.core.upload_folder, request.form.get('grievance_id'))
+                    os.makedirs(grievance_dir, exist_ok=True)
+                    
+                    # Save file in grievance directory
+                    file_path = os.path.join(grievance_dir, file_id)
                     
                     # Save file
                     file.save(file_path)
@@ -231,7 +237,8 @@ class FileServerAPI:
                     "files": [file['file_id'] for file in uploaded_files],
                     "oversized_files": oversized_files,
                     "wrong_extensions_list": wrong_extensions_list,
-                    "max_file_size": MAX_FILE_SIZE
+                    "max_file_size": MAX_FILE_SIZE,
+                    "task_id": result.id
                 }),202
                         
             return response_data
@@ -344,6 +351,19 @@ class FileServerAPI:
         except Exception as e:
             self.core.log_event(event_type='failed', details={'error': str(e)})
             return jsonify({'error': str(e)}), 404
+
+    def test_upload(self):
+        """Test endpoint to verify request handling"""
+        try:
+            self.core.log_event(event_type='test_upload', details={
+                'method': request.method,
+                'form_data': dict(request.form),
+                'files': [f.filename for f in request.files.getlist('files[]')] if 'files[]' in request.files else [],
+                'headers': dict(request.headers)
+            })
+            return jsonify({"status": "received", "message": "Test upload endpoint received request"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
 
 file_server = FileServerAPI(file_server_core)
