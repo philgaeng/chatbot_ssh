@@ -146,9 +146,9 @@ class FileServerAPI:
                     continue
                 extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else None
                 if not extension:
-                    wrong_extensions_list.append({'filename': filename, 'extension': 'None'})
+                    wrong_extensions_list.append({'file_name': filename, 'extension': 'None'})
                 elif extension not in self.core.allowed_extensions:
-                    wrong_extensions_list.append({'filename': filename, 'extension': extension})
+                    wrong_extensions_list.append({'file_name': filename, 'extension': extension})
                     continue
                 
                 else:
@@ -158,7 +158,7 @@ class FileServerAPI:
                     os.makedirs(grievance_dir, exist_ok=True)
                     
                     # Save file in grievance directory
-                    file_path = os.path.join(grievance_dir, file_id)
+                    file_path = os.path.join(grievance_dir, filename)
                     
                     # Save file
                     file.save(file_path)
@@ -169,7 +169,7 @@ class FileServerAPI:
                     # Prepare file data
                     file_data = {
                         'file_id': file_id,
-                        'filename': filename,
+                        'file_name': filename,
                         'file_path': file_path,
                         'file_size': file_size,
                         **metadata
@@ -187,6 +187,8 @@ class FileServerAPI:
             
             # Check if grievance_id is provided
             grievance_id = request.form.get('grievance_id')
+            session_id = request.form.get('session_id')
+            client_type = request.form.get('client_type')
             self.core.log_event(event_type='processing', details={'grievance_id': grievance_id})
             
             if not grievance_id:
@@ -229,7 +231,8 @@ class FileServerAPI:
                 # # Process files in batch
                 # result = process_batch_files_task.delay(grievance_id, uploaded_files)
                 file = uploaded_files[0]
-                result = process_file_upload_task.delay(grievance_id, file)
+                result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, 
+                                                        session_type=client_type, session_id=session_id)
 
                 response_data = jsonify({
                     "status": "processing",
@@ -272,7 +275,7 @@ class FileServerAPI:
             
             file_data = db_manager.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
-                self.core.log_event(event_type='completed', details={'file_id': file_id, 'filename': file_data['file_name']})
+                self.core.log_event(event_type='completed', details={'file_id': file_id, 'file_name': file_data['file_name']})
                 return send_file(
                     file_data['file_path'],
                     as_attachment=True,
@@ -289,11 +292,12 @@ class FileServerAPI:
             language_code = self._get_language_code()
             self.core.log_event(event_type='started', details={'file_id': file_id})
             
-            status = db_manager.get_file_status(file_id)
-            if status:
-                self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': status})
-                return jsonify({"status": status}), 200
-            return jsonify({"error": "File not found"}), 404
+            if db_manager.file.is_file_saved(file_id):
+                self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': 'SUCCESS'})
+                return jsonify({"status": "SUCCESS", "message": "File is saved in the database"}), 200
+            else:
+                self.core.log_event(event_type='not_found', details={'file_id': file_id})
+                return jsonify({"status": "PROCESSING", "message": "File is not yet saved"}), 200
         except Exception as e:
             self.core.log_event(event_type='failed', details={'error': str(e)})
             return jsonify({"error": "Internal server error"}), 500
@@ -341,11 +345,11 @@ class FileServerAPI:
         """Serve uploaded files"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'filename': filename})
+            self.core.log_event(event_type='started', details={'file_name': filename})
             
             result = send_from_directory(self.core.upload_folder, filename)
             
-            self.core.log_event(event_type='completed', details={'filename': filename})
+            self.core.log_event(event_type='completed', details={'file_name': filename})
             
             return result
         except Exception as e:

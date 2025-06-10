@@ -18,5 +18,27 @@
   },
   "accessible_file_upload": {
     "start_time": 1749472606.9084735
+  },
+  "upload_files": {
+    "start_time": 1749545425.8612678
+  },
+  "get_file_metadata": {
+    "start_time": 1749545425.865566,
+    "last_duration": 0.0012784004211425781,
+    "total_tasks": 13
+  },
+  "process_file_upload_task": {
+    "start_time": 1749545425.885168,
+    "failed_tasks": 1,
+    "last_duration": 0.019533634185791016,
+    "total_tasks": 9
+  },
+  "process_file_upload": {
+    "start_time": 1749545425.8876705
+  },
+  "generate_ids": {
+    "start_time": 1749544641.4523847,
+    "last_duration": 0.0017642974853515625,
+    "total_tasks": 2
   }
 }

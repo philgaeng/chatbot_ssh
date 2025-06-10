@@ -4,6 +4,8 @@ from flask import request
 import os
 from logger.logger import TaskLogger
 from actions_server.constants import FIELD_CATEGORIES_MAPPING
+import socketio as socketio_client
+
 # Create a task logger instance for socketio
 task_logger = TaskLogger(service_name='socketio')
 logger = task_logger.logger
@@ -88,4 +90,31 @@ def emit_status_update(session_id, status, message):
         logger.debug(f"Event emitted to room: {session_id}")
     except Exception as e:
         task_logger.log_event(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
-        logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 
+        logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True)
+
+######### RASA WEBSOCKET UTILS #########
+RASA_WS_HOST = '18.141.5.167'
+RASA_WS_PORT = 5005
+RASA_WS_PATH = '/socket.io/'
+RASA_WS_PROTOCOL = 'wss'
+RASA_WS_TRANSPORTS = ['websocket']
+RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
+
+def emit_file_status_to_rasa(session_id, operation, status, file_id, file_name):
+    try:
+        rasa_sio = socketio_client.Client()
+        rasa_sio.connect(
+            RASA_WS_URL,
+            socketio_path=RASA_WS_PATH,
+            transports=RASA_WS_TRANSPORTS
+        )
+        rasa_sio.emit('file_status_update', {
+            'operation': operation,
+            'status': status,
+            'file_id': file_id,
+            'file_name': file_name,
+            'session_id': session_id,
+        }, room=session_id)
+        rasa_sio.disconnect()
+    except Exception as e:
+        print(f"Failed to emit file status to Rasa: {e}") 

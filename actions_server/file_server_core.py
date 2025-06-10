@@ -123,7 +123,8 @@ class FileServerCore(APIManager):
         file_data.update({
             'file_type': file_type,
             'upload_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'processing_status': 'processing'
+            'processing_status': 'processing',
+            'grievance_id': grievance_id
         })
         
         # Additional processing based on file type
@@ -131,6 +132,9 @@ class FileServerCore(APIManager):
             # Add audio-specific metadata
             audio_metadata = self.get_audio_metadata(file_data['file_path'])
             file_data.update(audio_metadata)
+        
+        # Store file attachment in DB
+        db_manager.file.store_file_attachment(file_data)
         
         return file_data
 
@@ -151,10 +155,10 @@ class FileServerCore(APIManager):
                     result = self.process_file_upload(grievance_id, file_data)
                     results.append(result)
                 except Exception as e:
-                    self.log_event(event_type='failed', details={'grievance_id': grievance_id, 'file': file_data['filename'], 'error': str(e)})
+                    self.log_event(event_type='failed', details={'grievance_id': grievance_id, 'file': file_data['file_name'], 'error': str(e)})
                     results.append({
                         'status': 'failed',
-                        'filename': file_data['filename'],
+                        'file_name': file_data['file_name'],
                         'error': str(e)
                     })
             
