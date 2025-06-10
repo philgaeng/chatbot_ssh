@@ -341,3 +341,11 @@ REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = os.getenv('REDIS_PORT', '6379')
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
 REDIS_DB = os.getenv('REDIS_DB', '0')
+
+DB_CONFIG = {
+    'host': os.environ.get('POSTGRES_HOST'),
+    'database': os.environ.get('POSTGRES_DB'),
+    'user': os.environ.get('POSTGRES_USER'),
+    'password': os.environ.get('POSTGRES_PASSWORD'),
+    'port': os.environ.get('POSTGRES_PORT')
+}

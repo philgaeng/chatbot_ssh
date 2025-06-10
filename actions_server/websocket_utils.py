@@ -90,7 +90,7 @@ def emit_status_update(session_id, status, message):
         logger.debug(f"Event emitted to room: {session_id}")
     except Exception as e:
         task_logger.log_event(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
-        logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 
 
 ######### RASA WEBSOCKET UTILS #########
 RASA_WS_HOST = '18.141.5.167'
