@@ -53,8 +53,10 @@ from actions_server.db_manager import db_manager
 from actions_server.messaging import CommunicationClient
 from actions_server.file_server_core import FileServerCore
 from task_queue.task_manager import TaskManager, DatabaseTaskManager
+from task_queue.celery_app import celery_app
 import json
 from celery import group, chord
+from actions_server.websocket_utils import emit_file_status_to_rasa
 
 __all__ = [
     'process_file_upload_task',
@@ -73,11 +75,12 @@ file_server_core = FileServerCore()
 
 #---------------------------------REGISTERED TASKS---------------------------------
 # File Processing Tasks
-@TaskManager.register_task(task_type='FileUpload')
-def process_file_upload_task(self, 
-                             grievance_id: str, 
-                             file_data: Dict[str, Any], 
-                             emit_websocket: bool = True) -> Dict[str, Any]:
+@celery_app.task(name='process_file_upload_task')
+def process_file_upload_task(grievance_id: str, 
+                           file_data: Dict[str, Any], 
+                           emit_websocket: bool = True,
+                           session_type: str = None,
+                           session_id: str = None) -> Dict[str, Any]:
     """
     Process a single file upload.
     
@@ -93,10 +96,12 @@ def process_file_upload_task(self,
         - field_name: 'file_data'
         - value: Processed file data
     """
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=self.service)
-    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, stage='single_file_upload')
+    task_mgr = TaskManager(task=process_file_upload_task, task_type='FileUpload', emit_websocket=emit_websocket, service='file_processor')
+    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id, stage='single_file_upload')
     try:
-        file_data = file_server_core.process_file_upload(grievance_id, file_data)
+        file_data = file_server_core.process_file_upload(grievance_id=grievance_id, 
+                                                         file_data=file_data,
+                                                         )
         result = {
             'status': 'success',
             'operation': 'file_upload',
@@ -104,6 +109,18 @@ def process_file_upload_task(self,
             'value': file_data,
         }
         task_mgr.complete_task(result, stage='single_file_upload')
+        if session_type == 'rasa':
+            try:
+                emit_file_status_to_rasa(
+                                 session_id=session_id,
+                                 operation='file_upload',
+                                 status='SUCCESS',
+                                     file_id = file_data['file_id'], 
+                                     file_name = file_data['file_name'])
+            except Exception as e:
+                task_mgr.fail_task(str(e), stage='single_file_upload-rasa_websocket_emit', extra_data=file_data)
+                raise
+        
         return result
     except Exception as e:
         task_mgr.fail_task(str(e), stage='single_file_upload')
@@ -114,7 +131,9 @@ def process_batch_files_task(self,
                              grievance_id: str, 
                              files_data: List[Dict[str, Any]], 
                              allowed_extensions: List[str] = ALLOWED_EXTENSIONS, 
-                             emit_websocket: bool = True):
+                             emit_websocket: bool = True,
+                             session_type: str = None,
+                             session_id: str = None):
     """
     Process multiple files in batch using Celery chord for per-file parallelism and aggregation.
     
@@ -136,7 +155,11 @@ def process_batch_files_task(self,
     task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, stage='batch_file_processing')
     try:
         upload_group = group(
-            process_file_upload_task.s(grievance_id, file_data, emit_websocket=False, service=self.service)
+            process_file_upload_task.s(grievance_id, file_data, 
+                                       emit_websocket=False, 
+                                       service=self.service,
+                                       session_type=session_type,
+                                       session_id=session_id)
             for file_data in files_data
         )
         # The callback will be called with the list of results
@@ -151,6 +174,7 @@ def process_batch_files_task(self,
             'message': 'Batch file upload tasks have been launched and will be aggregated.'
         }
         task_mgr.complete_task(summary, stage='batch_file_processing')
+        
         return summary
     except Exception as e:
         task_mgr.fail_task(str(e), stage='batch_file_processing')

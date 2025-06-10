@@ -163,6 +163,9 @@ function setupSocketEventHandlers() {
     socket.on('user_uttered', (message) => {
         console.log('📩 User message sent:', message);
     });
+    socket.on('file_status_update', (data) => {
+        console.log('File status update:', data);
+    });
 }
 
 // Handle bot responses
@@ -609,6 +612,8 @@ async function handleFileUpload(files) {
 
     const formData = new FormData();
     formData.append('grievance_id', window.grievanceId);
+    formData.append('client_type', 'rasa');
+    formData.append('session_id', socket.id);
     
     // Check for audio files
     const audioFiles = Array.from(files).filter(file => {
@@ -663,18 +668,18 @@ async function handleFileUpload(files) {
             }
             appendMessage(statusMessage, 'received');
             
-            // Start polling for file status
-            if (data.files && data.files.length > 0) {
-                console.log('Starting file status polling for:', data.files);
-                pollFileStatus(data.files);
-            } else {
-                console.warn('No file IDs received in response');
-            }
+            // // Start polling for file status
+            // if (data.files && data.files.length > 0) {
+            //     console.log('Starting file status polling for:', data.files);
+            //     pollFileStatus(data.files);
+            // } else {
+            //     console.warn('No file IDs received in response');
+            // }
             
-            // Handle oversized files warning
-            if (data.oversized_files) {
-                appendMessage(`Some files were too large and could not be processed: ${data.oversized_files.join(', ')}`, 'received');
-            }
+            // // Handle oversized files warning
+            // if (data.oversized_files) {
+            //     appendMessage(`Some files were too large and could not be processed: ${data.oversized_files.join(', ')}`, 'received');
+            // }
         } else {
             console.error('Upload failed:', data.error);
             appendMessage(`Error uploading files: ${data.error}`, 'received');
@@ -695,7 +700,19 @@ async function pollFileStatus(fileIds) {
             console.log(`Polling file status (attempt ${attempts + 1}/${maxAttempts}):`, fileIds);
             const statuses = await Promise.all(
                 fileIds.map(fileId => 
-                    fetch(`/file-status/${fileId}`).then(res => res.json())
+                    fetch(`/file-status/${fileId}`)
+                        .then(async res => {
+                            if (!res.ok) {
+                                // Try to parse JSON error, or fallback to a default
+                                try {
+                                    const data = await res.json();
+                                    return data;
+                                } catch {
+                                    return { status: "NOT_FOUND", message: "File not found" };
+                                }
+                            }
+                            return res.json();
+                        })
                 )
             );
             console.log('File status response:', statuses);

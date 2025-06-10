@@ -1637,6 +1637,27 @@ class FileDbManager(BaseDatabaseManager):
             operations_logger.error(f"Error retrieving file by ID: {str(e)}")
             return None
 
+    def is_file_saved(self, file_id: str) -> bool:
+        """Check if a file exists in the database
+        
+        Args:
+            file_id (str): The ID of the file to check
+            
+        Returns:
+            bool: True if the file exists in the database, False otherwise
+        """
+        query = """
+            SELECT 1
+            FROM file_attachments
+            WHERE file_id = %s
+        """
+        try:
+            results = self.execute_query(query, (file_id,), "is_file_saved")
+            return bool(results)
+        except Exception as e:
+            operations_logger.error(f"Error checking if file exists: {str(e)}")
+            return False
+
 class RecordingDbManager(BaseDatabaseManager):
     """Handles voice recording CRUD and lookup logic"""
     def create_recording(self, data: Dict[str, Any] = None) -> Optional[str]:

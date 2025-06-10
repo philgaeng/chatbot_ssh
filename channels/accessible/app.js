@@ -1144,6 +1144,8 @@ FileUploadModule = {
             
             // Add grievance_id to FormData
             formData.append('grievance_id', grievanceId);
+            formData.append('client_type', 'accessible');
+            formData.append('session_id', socket.id);
             
             // Add all files under the 'files[]' key as expected by the server
             for (const file of this.selectedFiles) {
