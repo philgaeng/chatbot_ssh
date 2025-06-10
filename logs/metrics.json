@@ -40,5 +40,11 @@
     "start_time": 1749544641.4523847,
     "last_duration": 0.0017642974853515625,
     "total_tasks": 2
+  },
+  "wrapper": {
+    "start_time": 1749581515.9606144,
+    "failed_tasks": 4,
+    "last_duration": 0.018101930618286133,
+    "total_tasks": 3
   }
 }

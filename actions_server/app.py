@@ -8,6 +8,7 @@ from actions_server.file_server_core import FileServerCore
 from accessible_server.voice_grievance import voice_grievance_bp
 from actions_server.websocket_utils import socketio, emit_status_update
 from actions_server.constants import ALLOWED_EXTENSIONS
+from actions_server.gsheet_monitoring_api import gsheet_monitoring_bp
 import os
 from logger.logger import TaskLogger
 from flask_socketio import join_room, rooms
@@ -26,6 +27,7 @@ file_server = FileServerAPI(core=file_server_core)
 # Register blueprints
 app.register_blueprint(file_server_bp)
 app.register_blueprint(voice_grievance_bp)
+app.register_blueprint(gsheet_monitoring_bp)
 
 # Make the function available to the file_server blueprint
 file_server_bp.emit_status_update = emit_status_update

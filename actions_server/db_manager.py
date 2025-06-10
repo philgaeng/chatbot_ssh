@@ -1310,6 +1310,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             return False
             
             
+            
 class UserDbManager(BaseDatabaseManager):
     """Handles user CRUD and lookup logic"""
     
@@ -2230,6 +2231,64 @@ class TranscriptionDbManager(BaseDatabaseManager):
         except Exception as e:
             operations_logger.error(f"Error in create_or_update_transcription: {str(e)}")
             return None
+        
+class GSheetDbManager(BaseDatabaseManager):
+    
+    def get_grievances_for_gsheet(self, status: Optional[str] = None, 
+                                 start_date: Optional[str] = None, 
+                                 end_date: Optional[str] = None) -> List[Dict]:
+        """Get grievances for Google Sheets monitoring with optional filters"""
+        query = """
+        
+            SELECT 
+                g.grievance_id,
+                g.user_id,
+                u.user_full_name,
+                u.user_contact_phone,
+                u.user_municipality,
+                u.user_village,
+                u.user_address,
+                g.grievance_details,
+                g.grievance_summary,
+                g.grievance_categories,
+                g.grievance_creation_date,
+                g.classification_status as status
+            FROM grievances g
+            LEFT JOIN users u ON g.user_id = u.id
+            WHERE 1=1
+        """
+        params = []
+
+        if status:
+            query += " AND status = %s"
+            params.append(status)
+        if start_date:
+            query += " AND grievance_creation_date >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND grievance_creation_date <= %s"
+            params.append(end_date)
+
+        query += " ORDER BY grievance_creation_date DESC"
+
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    columns = [desc[0] for desc in cur.description]
+                    rows = cur.fetchall()
+                    
+                    grievances = []
+                    for row in rows:
+                        grievance = dict(zip(columns, row))
+                        if grievance.get('grievance_creation_date'):
+                            grievance['grievance_creation_date'] = grievance['grievance_creation_date'].isoformat()
+                        grievances.append(grievance)
+                    
+                    return grievances
+        except Exception as e:
+            self.logger.error(f"Error fetching grievances for GSheet: {str(e)}")
+            raise DatabaseQueryError(f"Failed to fetch grievances: {str(e)}")
 
 
 class DatabaseManagers:
@@ -2244,6 +2303,7 @@ class DatabaseManagers:
         self.transcription = TranscriptionDbManager()
         self.translation = TranslationDbManager()
         self.base = BaseDatabaseManager()
+        self.gsheet = GSheetDbManager()
 
 # Individual manager instances (kept for backward compatibility)
 file_manager = FileDbManager()
@@ -2255,5 +2315,6 @@ recording_manager = RecordingDbManager()
 transcription_manager = TranscriptionDbManager()
 translation_manager = TranslationDbManager()
 base_manager = BaseDatabaseManager()
+gsheet_manager = GSheetDbManager()
 # Unified manager instance
 db_manager = DatabaseManagers() 
