@@ -2256,6 +2256,7 @@ class GSheetDbManager(BaseDatabaseManager):
             FROM grievances g
             LEFT JOIN users u ON g.user_id = u.id
             WHERE 1=1
+            AND g.grievance_details IS NOT NULL
         """
         params = []
 

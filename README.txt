@@ -3,14 +3,124 @@
 - Python 3.10
 - Rasa 3.6.21
 - PostgreSQL database
+- Redis server
+- Celery
+- Django 4.2+
 
-```
-## System Overview
+## System Architecture
 
-The Nepal Chatbot is a conversational AI application built using Rasa, 
-designed to handle grievance reporting, status checks, and user interactions 
-in both English and Nepali languages. The system includes an accessible interface 
-for users with disabilities and supports voice-based interactions.
+The Nepal Chatbot is a multi-component conversational AI system built with the following architecture:
+
+### Core Components
+
+1. **Rasa Core (NLP Engine)**
+   - Handles natural language understanding and processing
+   - Manages conversation flows and dialogue management
+   - Supports both English and Nepali language processing
+   - Runs on port 5005
+
+2. **Action Server**
+   - Executes custom actions and business logic
+   - Handles database operations and external API integrations
+   - Runs on port 5055
+
+3. **Accessible Server**
+   - Provides accessibility features for users with disabilities
+   - Supports voice-based interactions
+   - Runs on port 5001
+
+4. **Web Interface**
+   - Custom webchat interface for user interactions
+   - Supports both text and voice input
+   - Accessible design patterns implemented
+
+5. **Flask Server**
+   - Handles file uploads and management
+   - Manages WebSocket connections for real-time communication
+   - Processes voice recordings and file conversions
+   - Serves as a bridge between frontend and backend services
+   - Runs on port 5002
+
+6. **Django Helpdesk**
+   - Ticket management and workflow
+   - User hierarchy management (PD, PM, Contractor)
+   - Project type categorization
+   - Automated reminders and notifications
+   - Admin interface for ticket management
+   - Runs on port 8000
+
+### Supporting Infrastructure
+
+1. **Nginx Web Server**
+   - Acts as reverse proxy
+   - Handles SSL/TLS termination
+   - Routes requests to appropriate services
+   - Manages static file serving
+
+2. **PostgreSQL Database**
+   - Stores user interactions and grievance data
+   - Maintains conversation history
+   - Handles data persistence
+   - Shared database for both Rasa and Django Helpdesk
+
+3. **Redis Server**
+   - Message broker for Celery tasks
+   - Caching layer for frequently accessed data
+   - Session management
+   - Real-time data storage for WebSocket connections
+
+4. **Celery Task Queue**
+   - Asynchronous task processing
+   - Background job management
+   - Handles long-running operations:
+     - File processing
+     - Voice transcription
+     - Report generation
+     - Email notifications
+     - Ticket reminders and alerts
+   - Distributed task execution
+
+5. **File System**
+   - Manages voice recordings and uploads
+   - Organized directory structure for different file types
+   - Secure file handling and permissions
+
+### System Integration
+
+- All components communicate via REST APIs
+- WebSocket connections for real-time chat
+- Secure data transmission using HTTPS
+- Centralized logging system for monitoring and debugging
+- Redis-based task queue for asynchronous operations
+- Celery workers for distributed task processing
+- Shared database access between Rasa and Django Helpdesk
+- Django Admin interface for system management
+
+### Process Management
+
+1. **systemd Service Management**
+   - Automated service startup and recovery
+   - Process monitoring and automatic restarts
+   - Service dependencies management
+   - Log rotation and management
+   - Environment-specific service configurations
+
+2. **Service Configuration**
+   - Individual systemd service files for each component
+   - Environment-specific service parameters
+   - Resource limits and constraints
+   - Automatic restart policies
+   - Health check monitoring
+
+### Deployment Architecture
+
+- Production, Testing, and Development environments
+- Separate Nginx configurations for each environment
+- Environment-specific domain routing
+- Automated server management through run_servers.py
+- Redis and Celery configuration per environment
+- systemd service management across environments
+- Django Helpdesk deployment per environment
 
 ## Complete Technical Documentation
 
