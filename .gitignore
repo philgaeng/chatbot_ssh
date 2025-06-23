@@ -26,6 +26,11 @@ instance/
 .mypy_cache/
 .pytest_cache/
 
+# Redis database files
+dump.rdb
+*.rdb
+appendonlydir/
+
 # Rasa-specific
 models/          # Trained model files
 results/         # Test results
@@ -56,8 +61,6 @@ docker_images/
 Thumbs.db
 
 # Other large files
-*.csv
-*.xlsx
 *.pkl
 *.tar.gz
 *.tar
