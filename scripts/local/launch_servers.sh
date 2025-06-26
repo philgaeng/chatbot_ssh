@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Set the base directory and environment variables
-BASE_DIR="/home/ubuntu/nepal_chatbot"
+BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
-VENV_DIR="/home/ubuntu/rasa-env-21"
+VENV_DIR="/home/philg/projects/nepal_chatbot/rasa-env-21"
 UPLOAD_DIR="$BASE_DIR/uploads"
 
 # Export Redis and Celery environment variables globally
@@ -25,6 +25,10 @@ fi
 
 # Create necessary directories
 mkdir -p "$LOG_DIR" "$UPLOAD_DIR"
+
+# Generate webchat config from env.local
+echo "Generating channels/webchat/config.js from env.local..."
+python3 "$BASE_DIR/scripts/generate_webchat_config.py"
 
 # Function to check if a port is in use
 check_port() {
@@ -84,22 +88,9 @@ start_redis() {
     # Clear old files
     rm -f "$LOG_DIR/redis.pid" "$LOG_DIR/redis.log"
 
-    # Start Redis server
-    echo "Starting Redis server..."
-    redis-server --daemonize yes \
-                --port $REDIS_PORT \
-                --requirepass "$REDIS_PASSWORD" \
-                --pidfile "$LOG_DIR/redis.pid" \
-                --logfile "$LOG_DIR/redis.log" \
-                --loglevel notice \
-                --maxclients 10000 \
-                --tcp-keepalive 300 \
-                --timeout 0 \
-                --maxmemory 2gb \
-                --maxmemory-policy allkeys-lru \
-                --appendonly yes \
-                --appendfilename "appendonly.aof" \
-                --appendfsync everysec
+    # Start Redis server using the standalone config file
+    echo "Starting Redis server with standalone configuration..."
+    redis-server "$BASE_DIR/scripts/servers/redis.conf"
 
     # Wait for Redis to start
     local retry=0
@@ -223,7 +214,7 @@ start_celery_worker() {
 
     # Start worker with explicit PID file handling
     echo "Starting Celery worker for $queue_name..."
-    cd "$BASE_DIR" && source "$VENV_DIR/bin/activate" && \
+    cd "$BASE_DIR" && \
     PYTHONPATH=$BASE_DIR \
     CELERY_PID_FILE="$pid_file" \
     celery -A task_queue worker -Q "$queue_name" \
@@ -264,7 +255,7 @@ start_service() {
     
     echo "Starting $name..."
     if check_port $(echo $command | grep -oP '(?<=:)\d+'); then
-        cd "$BASE_DIR" && source "$VENV_DIR/bin/activate" && \
+        cd "$BASE_DIR" && \
         PYTHONPATH=$BASE_DIR \
         FLASK_APP=actions_server/app.py \
         FLASK_ENV=development \
@@ -293,9 +284,42 @@ start_service() {
     return 1
 }
 
+# Function to start HTTP server for webchat
+start_http_server() {
+    local port=$1
+    local directory=$2
+    local name="http_server_${port}"
+    local log_file="$LOG_DIR/${name}.log"
+    local pid_file="$LOG_DIR/${name}.pid"
+    
+    echo "Starting HTTP server for $directory on port $port..."
+    if check_port $port; then
+        cd "$BASE_DIR" && \
+        nohup python3 -m http.server $port > "$log_file" 2>&1 &
+        
+        # Store the PID
+        echo $! > "$pid_file"
+        
+        # Wait a moment for the process to start
+        sleep 2
+        
+        # Check if process started successfully
+        if ps -p $(cat "$pid_file") > /dev/null 2>&1; then
+            echo "$name started with PID $(cat $pid_file)"
+            return 0
+        else
+            echo "❌ Failed to start $name. Check logs at $log_file"
+            rm -f "$pid_file"
+            return 1
+        fi
+    fi
+    echo "Failed to start $name"
+    return 1
+}
+
 # Kill existing processes
 echo "Checking for existing processes..."
-for service in rasa rasa_actions file_server celery flower; do
+for service in rasa rasa_actions file_server celery flower http_server_8080 http_server_8081; do
     if [ -f "$LOG_DIR/${service}.pid" ]; then
         kill $(cat "$LOG_DIR/${service}.pid") 2>/dev/null
         rm "$LOG_DIR/${service}.pid"
@@ -361,13 +385,25 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
     esac
 done
 
+# 5. Start HTTP servers for webchat interfaces
+echo "Starting HTTP servers for webchat interfaces..."
+if ! start_http_server "8080" "channels/webchat"; then
+    echo "❌ Failed to start webchat HTTP server. Exiting..."
+    exit 1
+fi
+
+if ! start_http_server "8081" "channels/accessible"; then
+    echo "❌ Failed to start accessible HTTP server. Exiting..."
+    exit 1
+fi
+
 # Wait for all services to be ready
 echo "Waiting for all services to be ready..."
 sleep 10
 
 # Check service status
 echo -e "\nChecking service status:"
-for service in redis rasa rasa_actions flask_server flower celery_default celery_llm_queue; do
+for service in redis rasa rasa_actions flask_server flower celery_default celery_llm_queue http_server_8080 http_server_8081; do
     if [ -f "$LOG_DIR/${service}.pid" ]; then
         pid=$(cat "$LOG_DIR/${service}.pid")
         if ps -p $pid > /dev/null 2>&1; then
@@ -383,6 +419,8 @@ for service in redis rasa rasa_actions flask_server flower celery_default celery
                 else
                     echo "❌ $service is running but not ready"
                 fi
+            elif [[ $service == http_server_* ]]; then
+                echo "✅ $service is running (PID: $pid) - Webchat available at http://localhost:${service#http_server_}"
             else
                 echo "✅ $service is running (PID: $pid)"
             fi
@@ -395,4 +433,7 @@ for service in redis rasa rasa_actions flask_server flower celery_default celery
 done
 
 echo -e "\nAll services have been started. Logs can be found in $LOG_DIR"
-echo "To stop all services, run: ./scripts/stop_servers.sh" 
+echo "Webchat interfaces available at:"
+echo "  - Main webchat: http://localhost:8080/channels/webchat/index.html"
+echo "  - Accessible webchat: http://localhost:8081/channels/accessible/index_en.html"
+echo "To stop all services, run: ./scripts/local/stop_servers.sh" 

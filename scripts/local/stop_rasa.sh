@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set the base directory and environment variables
-BASE_DIR="/home/ubuntu/nepal_chatbot"
+BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
 
 echo "Stopping Rasa services..."

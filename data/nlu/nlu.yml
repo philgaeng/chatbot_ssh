@@ -1,10 +1,6 @@
 version: "3.1"
 
 nlu:
-#introduce
-- lookup: category
-  examples: |
-    data/lookup_tables/list_category.txt
 
 ######### basic intent #########
 
@@ -178,9 +174,7 @@ nlu:
     - close the window
     - /nav_close_browser_tab
 
-
-
-- intent: intent_session_start
+- intent: introduce
   examples: |
     - /introduce
     - /Introduce
@@ -191,7 +185,7 @@ nlu:
     - /introduce{"province": "${province}", "district": "${district}"}
     - /introduce{"province": "${province}", "district": "${district}"}
     - /introduce{"province": "${province}", "district": "${district}"}
-
+    - /introduce{"province": "${province}", "district": "${district}"}
 
 - intent: nav_menu_main
   examples: |
@@ -230,326 +224,22 @@ nlu:
     - restart the process
     - let's restart the current process
 
-
-
-######################### contact #########################
-- intent: contact_consent_provide
-  examples: |
-    - my name is
-    - I am Muhammad
-    - here is my contact info
-    - I am Mr. Suri
-    - my contact is
-    - you can reach me at
-    - call me on
-    - my phone number is
-    - my email is
-    - I go by the name of
-    - people call me
-    - I am known as
-    - reach out to me at
-    - my full name is
-    - here are my details
-
-
-- intent: contact_email_confirm
-  examples: |
-    - confirm_email
-    - /confirm_email
-    - confirm email
-    - confirm my email
-    - confirm my email address
-    - yes, that's my email
-    - the email is correct
-
-- intent: contact_email_modify
-  examples: |
-    - modify_email
-    - /modify_email
-    - modify email
-    - change my email
-    - update my email
-    - I want to change my email
-    - different email address
-
-- intent: contact_email_provide
-  examples: |
-    - my email is [philgaeng@gmail.com](contact_email)
-    - heres is my email [philgaeng@yahoo.com](contact_email)
-    - email me here [philgaeng@hotmail.com](contact_email)
-    - [philgaeng@outlook.com](contact_email)
-    - [philgaeng@example.com](contact_email)
-    - [philgaeng@icloud.com](contact_email)
-    - [philgaeng@zoho.com](contact_email)
-    - [philgaeng@protonmail.com](contact_email)
-    - [philgaeng@cloudlaya.com.np](contact_email)
-    - [philgaeng@marpainfotech.com.np](contact_email)
-    - [philgaeng@prabhuhost.com.np](contact_email)
-    - [philgaeng@webhousenepal.com.np](contact_email)
-    - [philgaeng@emailsewa.com.np](contact_email)
-    - [philgaeng@himalayanhost.com.np](contact_email)
-    - [philgaeng@nepallink.com.np](contact_email)
-    - [philgaeng@mail.com.np](contact_email)
-    - [philgaeng@worldlink.com.np](contact_email)
-    - [philgaeng@adb.org](contact_email)
-    - [philgaeng@project.com.ph](contact_email)
-    - [philgaeng@pm.me](contact_email)
-    - I want to enter my email again
-    - Let me correct my email
-    - Retry entering email
-    - Provide my email
-
-- intent: contact_info_modify
-  examples: |
-    - modify_contact_info
-    - /modify_contact_info
-    - modify contact info
-    - change my contact details
-    - update my information
-    - edit my contact details
-
-- intent: contact_modification_cancel
-  examples: |
-    - cancel_modification_contact
-    - /cancel_modification_contact
-    - cancel modification
-    - stop changing contact
-    - keep original contact info
-
-- intent: contact_phone_modify
-  examples: |
-    - modify_phone
-    - /modify_phone
-    - modify phone
-    - change my phone number
-    - update my phone
-    - different phone number
-
-
-- intent: contact_phone_provide
-  examples: |
-    - \d{10}(contact_phone)
-    - [9876543210](contact_phone)
-    - [09176399999](contact_phone)
-    - \d{11}(contact_phone)
-    - here is my phone number [9876543210](contact_phone)
-    - my phone number is [09176399999](contact_phone)
-    - call me on [9876543210](contact_phone)
-    - my phone number is [9876543210](contact_phone)
-    - my phone number is [09176399999](contact_phone)
-    - my phone number is [9876543210](contact_phone)
-    - \provide_contact_phone
-    - provide_contact_phone
-    - I want to enter my phone number again
-    - Let me correct my phone number
-    - Retry entering phone
-    - Provide my contact phone
-    
-
-######################### grievance #########################
-- intent: grievance_category_change
-  examples: |
-    - change_category
-    - /change_category
-    - change category
-    - change category
-
-
-- intent: grievance_category_confirm
-  examples: |
-    - confirm_selection_category
-    - /confirm_selection_category
-    - confirm selection
-    - confirm selection
-    - confirm selection
-
-- intent: grievance_category_delete
-  examples: |
-    - /delete_category
-    - delete_category
-
-- intent: grievance_category_modify
-  examples: |
-    - /modify_categories
-    - modify_categories
-
-- intent: grievance_details_add
-  examples: |
-    - add_more_details
-    - /add_more_details
-    - add more details
-    - add more information
-    - add more information
-
-- intent: grievance_details_submit
-  examples: |
-    - submit_details
-    - /submit_details
-    - submit details
-    - submit grievance
-    - submit grievance details
-    - submit grievance details
-
-- intent: grievance_process_start
-  examples: |
-    - start_grievance_process
-    - grievance_process_start
-    - I want to file a grievance
-    - I need to submit a complaint
-    - I have an issue
-    - I want to complain
-    - I complain about
-    - How can I complain
-    - My problem is
-    - I have a problem
-    - I am complaining
-    - I have a problem
-    - I complain
-    - we complain
-    - we want to say
-    - we have problem
-    - I problem
-    - I complain
-    - I compain
-    - we cmpain
-
-- intent: grievance_submit_as_is
-  examples: |
-    - file_without_validation
-    - /file_without_validation
-    - file without validation
-    - no need to validate just file
-    - submit without validation
-    - submit as is
-    - file as is
-    - File the grievance as is
-    - Just submit it
-    - Submit without more details
-    - Submit now
-    - File now
-    - No more changes, file
-
-- intent: grievance_summary_edit
-  examples: |
-    - edit_grievance_summary
-    - No, let me update the summary
-    - I want to change the summary
-    - I need to correct the summary
-    
-- intent: grievance_summary_validate
-  examples: |
-    - /validate_summary
-    - validate_summary
-    - /validate_summar
-    - That summary looks good
-    - Yes, that's the correct summary
-    - I agree with the summary
-
-
-
-
-
-
-######################### location #########################
-
-- intent: location_address_provide
-  examples: |
-    - The village I am from is [Sundarijal](village)
-    - I live in [Panauti](village)
-    - My village is [Chisapani](village)
-    - [Bandipur](village) is my home
-    - I am from [Balthali](village)
-    - My village name is [Syangja](village)
-    - [Kirtipur](village) is where I am from
-    - [Bhojpur](village) is my home village
-    - I currently live in [Ilam](village)
-    - My village is [Jumla](village)
-    - The village I live in is [Taplejung](village)
-    - I stay in [Mugu](village)
-    - [Phidim](village) is my native place
-    - [Rukum](village)
-    - [Besisahar](village)
-
-- intent: location_municipality_provide
-  examples: |
-    - I live in [Kathmandu](municipality)
-    - My municipality is [Bharatpur](municipality)
-    - [Pokhara](municipality) is where I live
-    - I am from [Lalitpur](municipality)
-    - [Gorkha](municipality) is my hometown
-    - I currently live in [Janakpur](municipality)
-    - [Dhulikhel](municipality) is my municipality
-    - [Hetauda](municipality) is my current location
-    - My city is [Biratnagar](municipality)
-    - The place I live in is [Tulsipur](municipality)
-    - I stay in [Itahari](municipality)
-    - [Nepalgunj](municipality) is my municipality
-    - My location is [Damak](municipality)
-    - I am in [Butwal](municipality)
-    - [Chitwan](municipality) is my home
-    - [Chitwan](municipality)
-    - [Damak](municipality)
-
-
- ######## otp ############
-
-- intent: otp_enter
-  examples: |
-    - /enter_otp
-    - enter_otp
-
-- intent: otp_provide
-  examples: |
-    - [123456](otp_number)
-    - The code is [123456](otp_number)
-    - My verification code is [123456](otp_number)
-    - [654321](otp_number)
-    - Here's my code [123456](otp_number)
-
-- intent: otp_resend
-  examples: |
-    - /resend_otp
-    - resend_otp
-    - send new code
-    - resend code
-    - send another verification code
-    - I need a new code
-    - 000000
-    - retry_otp
-    - let me try again
-    - i want to try another code
-    - try different otp
-    - enter different code
-    - retry otp
-
-- intent: otp_retry
-  examples: |
-    - /retry_otp
-    - retry verification
-    - try again
-
 ######################### status check #########################
 - intent: status_check
   examples: |
     - /check_status
-    - /check_status
-    - /check_status
+
 
 - intent: status_check_another
   examples: |
-    - retrieve_another_grievance
-    - /retrieve_another_grievance
     - check another grievance
     - i have another complaint to check
     - check status of different complaint
     - retrieve another grievance
     - check one more complaint
 
-
 - intent: status_check_id
   examples: |
-    - retrieve_grievance_with_id
-    - /retrieve_grievance_with_id
     - i have the grievance id
     - use grievance id
     - check with complaint number
@@ -558,8 +248,6 @@ nlu:
 
 - intent: status_check_phone
   examples: |
-    - retrieve_with_phone
-    - /retrieve_with_phone
     - retrieve with my phone number
     - use my phone number
     - check with mobile number
@@ -568,8 +256,6 @@ nlu:
 
 - intent: status_check_start
   examples: |
-    - start_check_status
-    - /start_check_status
     - check my status
     - check my grievance status
     - check my grievance
@@ -586,26 +272,18 @@ nlu:
     - nepali
     - नेपाली
 
-- intent: set_english
+- intent: question_attach_files
   examples: |
-    - /en
-    - /english
-    - english
-    - अंग्रेजी
-
-
-- intent: slot_extraction
-  examples: |
-    - /slot_extraction
-    - /slot_confirmed
-    - /slot_added
-    - /slot_deleted
+    - I want to attach a file
+    - Can I send a document
+    - I need to upload a file
+    - I would like to attach a document
+    - I have photos to upload
+    - I want to send you a picture
+    - Can I share a document with you
+    - I want to add an attachment
+    - Upload document
+    - Send file
+    - Attach photo
+    - Share document
     
-
-- intent: test_intent
-  examples: |
-    - I want to test the test story
-    - test the test story
-    - test story
-    - I want to test
-    - Let's test the test story

@@ -1,9 +1,9 @@
 // Configuration Loader
-// This script automatically selects the right configuration file based on the environment
+// This script is auto-generated from env.local
 
 // Server Configuration
 const SERVER_CONFIG = {
-    HOST: '18.141.5.167',
+    HOST: 'localhost',
     PORT: 5005,
     PATH: '/socket.io/',
     TRANSPORTS: ['websocket']
@@ -11,16 +11,16 @@ const SERVER_CONFIG = {
 
 // WebSocket Configuration
 const WEBSOCKET_CONFIG = {
-    URL: `wss://${SERVER_CONFIG.HOST}`,
+    URL: `ws://localhost:5005`, // TODO: check if the port is required when using on remote server
     OPTIONS: {
-        path: SERVER_CONFIG.PATH,
-        transports: SERVER_CONFIG.TRANSPORTS
+        path: '/socket.io/',
+        transports: ['websocket']
     }
 };
 
 // File Upload Configuration
 const FILE_UPLOAD_CONFIG = {
-    URL: `https://${SERVER_CONFIG.HOST}/upload-files`,
+    URL: `ws://localhost/upload-files`,
     MAX_SIZE_MB: 10
 };
 
@@ -30,19 +30,8 @@ const SESSION_CONFIG = {
     EXPIRY_DAYS: 7
 };
 
-// UI Configuration
-const UI_CONFIG = {
-    THEME: {
-        PRIMARY_COLOR: '#4CAF50',
-        SECONDARY_COLOR: '#2196F3',
-        BACKGROUND_COLOR: '#f5f5f5',
-        TEXT_COLOR: '#333333'
-    },
-    MESSAGES: {
-        MAX_DISPLAY: 50,
-        ANIMATION_DURATION: 300
-    }
-};
+// UI Configuration (not auto-generated, keep in code)
+import { UI_CONFIG } from './ui_config.js';
 
 // Export configurations
 export {
@@ -51,4 +40,4 @@ export {
     SESSION_CONFIG,
     UI_CONFIG,
     FILE_UPLOAD_CONFIG
-}; 
+};

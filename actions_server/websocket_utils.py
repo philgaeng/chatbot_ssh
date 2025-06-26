@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from flask import request
 import os
 from logger.logger import TaskLogger
-from actions_server.constants import FIELD_CATEGORIES_MAPPING
+from actions_server.constants import FIELD_CATEGORIES_MAPPING, RASA_WS_HOST, RASA_WS_PORT, RASA_WS_PROTOCOL, RASA_WS_PATH, RASA_WS_URL, RASA_WS_TRANSPORTS
 import socketio as socketio_client
 
 # Create a task logger instance for socketio
@@ -93,12 +93,7 @@ def emit_status_update(session_id, status, message):
         logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 
 
 ######### RASA WEBSOCKET UTILS #########
-RASA_WS_HOST = '18.141.5.167'
-RASA_WS_PORT = 5005
-RASA_WS_PATH = '/socket.io/'
-RASA_WS_PROTOCOL = 'wss'
-RASA_WS_TRANSPORTS = ['websocket']
-RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
+
 
 def emit_file_status_to_rasa(session_id, operation, status, file_id, file_name):
     try:

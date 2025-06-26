@@ -1,36 +1,73 @@
+# Define common ignore intents as YAML anchors
+x-common-ignore-intents: &common-ignore-intents
+  - affirm
+  - deny
+  - skip
+  - introduce
+  - nav_back
+  - nav_menu
+  - nav_exit
+  - nav_goodbye
+  - nav_clear
+  - nav_close_browser_tab
+  - nav_introduce
+  - nav_restart
+  - set_english
+  - set_nepali
+  - mood_great
+  - mood_unhappy
+  - bot_challenge
+  - test_intent
+  - slot_extraction
+  - status_check
+  - status_check_another
+  - status_check_id
+  - status_check_phone
+  - status_check_start
+  - affirm_sensitive_content
+  - deny_sensitive_content
+
+# Define form-specific ignore intents
+x-form-specific-intents: &form-specific-intents
+  - nlu_fallback
+  - slot_extraction
+  - start_grievance_process
+
 version: '3.1'
 session_config:
   session_expiration_time: 60
   carry_over_slots_to_new_session: true
 intents:
-- intent_session_start
+- action_session_start
 - affirm
+- attach_files
 - bot_challenge
 - deny
-- test_intent
 - grievance_process_start
 - grievance_submit_as_is
-- location_process_start
+- introduce
 - mood_great
 - mood_unhappy
 - nav_back
 - nav_clear
+- nav_close_browser_tab
 - nav_exit
 - nav_goodbye
 - nav_introduce
 - nav_menu_main
 - nav_restart
 - nlu_fallback
+- question_attach_files
 - set_english
 - set_nepali
 - skip
+- start_grievance_process
 - status_check
 - status_check_another
 - status_check_id
 - status_check_phone
 - status_check_start
-- attach_files
-- slot_extraction
+
 entities:
 - municipality
 - monetary
@@ -358,105 +395,134 @@ slots:
     influence_conversation: true
     mappings:
     - type: custom
+  sensitive_content_detected:
+    type: bool
+    influence_conversation: true
+    mappings:
+    - type: custom
+  sensitive_content_category:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+  sensitive_content_level:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+  sensitive_content_message:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
+  sensitive_content_confidence:
+    type: float
+    influence_conversation: false
+    mappings:
+    - type: custom
 
 actions:
-- action_set_english
-- action_set_nepali
-- action_start_grievance_process
-- action_submit_grievance
-- action_introduce
-- action_session_start
-- action_close_browser_tab
-- action_clear_session
-- action_menu
-- action_back_to_previous_step
-- action_exit_without_filing
-- action_continue
-- action_main_menu
-- action_goodbye
-- action_handle_mood_unhappy
-- action_set_current_process
-- action_go_back
-- action_restart_story
-- action_show_current_story
-- action_handle_skip
-- action_handle_mood_great
-- action_respond_to_challenge
-- action_default_fallback
-- action_custom_fallback
-- validate_location_form
-- action_ask_location_form_user_location_consent
-- action_ask_location_form_user_province
-- action_ask_location_form_user_district
-- action_ask_location_form_user_municipality_temp
-- action_ask_location_form_user_municipality_confirmed
-- action_ask_location_form_user_village
-- action_ask_location_form_user_address_temp
-- action_ask_location_form_user_address_confirmed
-- validate_grievance_details_form
+- action_ask_contact_form_user_address_confirmed
+- action_ask_contact_form_user_address_temp
+- action_ask_contact_form_user_contact_consent
+- action_ask_contact_form_user_contact_email_confirmed
+- action_ask_contact_form_user_contact_email_temp
+- action_ask_contact_form_user_contact_phone
+- action_ask_contact_form_user_district
+- action_ask_contact_form_user_full_name
+- action_ask_contact_form_user_location_consent
+- action_ask_contact_form_user_municipality_confirmed
+- action_ask_contact_form_user_municipality_temp
+- action_ask_contact_form_user_province
+- action_ask_contact_form_user_village
+- action_ask_contact_form_phone_validation_required
 - action_ask_grievance_details_form_grievance_temp
-- validate_grievance_summary_form
+- action_ask_grievance_id_form_grievance_id
+- action_ask_grievance_summary_form_gender_follow_up
 - action_ask_grievance_summary_form_grievance_categories_confirmed
 - action_ask_grievance_summary_form_grievance_cat_modify
 - action_ask_grievance_summary_form_grievance_summary_confirmed
 - action_ask_grievance_summary_form_grievance_summary_temp
-- action_ask_grievance_summary_form_gender_follow_up
-- action_submit_grievance_as_is
-- action_validate_categories
-- action_validate_summary
+- action_ask_location_form_user_address_confirmed
+- action_ask_location_form_user_address_temp
+- action_ask_location_form_user_district
+- action_ask_location_form_user_location_consent
+- action_ask_location_form_user_municipality_confirmed
+- action_ask_location_form_user_municipality_temp
+- action_ask_location_form_user_province
+- action_ask_location_form_user_village
+- action_ask_menu_form_language_code
+- action_ask_menu_form_main_story
+- action_ask_otp_verification_form_otp_consent
+- action_ask_otp_verification_form_otp_input
+- action_ask_otp_verification_form_otp_number
 - action_ask_summary
 - action_ask_for_user_summary
-- action_edit_grievance_summary
-- action_restart_grievance
-- action_generate_grievance_id
-- action_ask_contact_form_user_location_consent
-- action_ask_contact_form_user_province
-- action_ask_contact_form_user_district
-- action_ask_contact_form_user_municipality_temp
-- action_ask_contact_form_user_municipality_confirmed
-- action_ask_contact_form_user_village
-- action_ask_contact_form_user_address_temp
-- action_ask_contact_form_user_address_confirmed
-- action_ask_contact_form_user_contact_consent
-- action_ask_contact_form_user_full_name
-- action_ask_contact_form_user_contact_phone
-- action_ask_contact_form_phone_validation_required
-- action_ask_contact_form_user_contact_email_temp
-- action_ask_contact_form_user_contact_email_confirmed
-- validate_contact_form
-- action_recommend_phone_validation
-- action_ask_otp_verification_form_otp_consent
-- action_ask_otp_verification_form_otp_number
-- action_ask_otp_verification_form_otp_input
-- validate_otp_verification_form
-- action_choose_retrieval_method
-- action_retrieve_with_phone
-- action_retrieve_grievance_with_id
+- action_attach_file
+- action_back_to_previous_step
 - action_check_status
 - action_check_status_start
-- action_retry_otp
-- action_retrieve_another_grievance
+- action_choose_retrieval_method
+- action_clear_session
+- action_close_browser_tab
+- action_continue
+- action_custom_fallback
+- action_default_fallback
 - action_display_grievance
-- action_show_status_history
-- action_ask_menu_form_main_story
-- action_ask_menu_form_language_code
-- validate_menu_form
+- action_edit_grievance_summary
+- action_exit_without_filing
+- action_generate_grievance_id
+- action_go_back
+- action_goodbye
+- action_handle_mood_great
+- action_handle_mood_unhappy
+- action_handle_skip
+- action_introduce
+- action_main_menu
+- action_menu
 - action_mood_unhappy
-- validate_grievance_id_form
-- action_ask_grievance_id_form_grievance_id
-- action_attach_file
+- action_question_attach_files
+- action_recommend_phone_validation
+- action_respond_to_challenge
+- action_restart_grievance
+- action_restart_story
+- action_retrieve_another_grievance
+- action_retrieve_grievance_with_id
+- action_retrieve_with_phone
+- action_retry_otp
+- action_session_start
+- action_set_current_process
+- action_set_english
 - action_set_grievance_id
+- action_set_nepali
+- action_show_current_story
+- action_show_status_history
+- action_start_grievance_process
+- action_submit_grievance
+- action_submit_grievance_as_is
+- action_submit_llm_validated_grievance
+- action_validate_categories
+- action_validate_summary
+- action_handle_sensitive_content_affirm
+- action_handle_sensitive_content_deny
+- validate_contact_form
+- validate_grievance_details_form
+- validate_grievance_id_form
+- validate_grievance_summary_form
+- validate_location_form
+- validate_menu_form
+- validate_otp_verification_form
 
 forms:
   menu_form:
     required_slots:
     - language_code
     - main_story
+    ignored_intents: *common-ignore-intents
   location_form:
     required_slots:
     - user_location_consent
-    ignored_intents:
-    - nlu_fallback
+    ignored_intents: *common-ignore-intents
   contact_form:
     required_slots:
     - user_location_consent
@@ -466,35 +532,29 @@ forms:
     - phone_validation_required
     - user_contact_email_temp
     - user_contact_email_confirmed
-    ignored_intents:
-    - nlu_fallback
-    - slot_extraction
-    - start_grievance_process
+    ignored_intents: *common-ignore-intents
   collect_phone_form:
     required_slots:
     - user_contact_phone
+    ignored_intents: *common-ignore-intents
   edit_summary_form:
     required_slots:
     - grievance_summary
+    ignored_intents: *common-ignore-intents
   otp_verification_form:
     required_slots:
     - otp_input
     - otp_status
+    ignored_intents: *common-ignore-intents
   grievance_id_form:
     required_slots:
     - grievance_id
+    ignored_intents: *common-ignore-intents
   grievance_details_form:
     required_slots:
     - grievance_new_detail
-    ignored_intents:
-    - submit_details
-    - add_more_details
-    - exit_without_filing
-    - nlu_fallback
-    - slot_extraction
+    ignored_intents: *common-ignore-intents
   grievance_summary_form:
     required_slots:
     - grievance_categories_confirmed
-    ignored_intents:
-    - nlu_fallback
-    - slot_extraction
+    ignored_intents: *common-ignore-intents

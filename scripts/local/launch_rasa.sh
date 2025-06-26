@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Set the base directory and environment variables
-BASE_DIR="/home/ubuntu/nepal_chatbot"
+BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
-VENV_DIR="/home/ubuntu/rasa-env-21"
+VENV_DIR="/home/philg/projects/nepal_chatbot/rasa-env-21"
 
 # Create necessary directories
 mkdir -p "$LOG_DIR"
@@ -56,7 +56,7 @@ start_service() {
     
     echo "Starting $name..."
     if check_port $port; then
-        cd "$BASE_DIR" && source "$VENV_DIR/bin/activate" && \
+        cd "$BASE_DIR" && \
         PYTHONPATH=$BASE_DIR \
         nohup $command > "$log_file" 2>&1 &
         

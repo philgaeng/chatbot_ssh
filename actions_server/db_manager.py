@@ -7,7 +7,6 @@ from datetime import datetime
 import pytz
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 from psycopg2.extras import DictCursor
-from dotenv import load_dotenv
 import json
 import traceback
 from contextlib import contextmanager
@@ -15,8 +14,10 @@ import sys
 import time
 from icecream import ic
 
-# Load environment variables from .env file
-load_dotenv()
+# Import database configuration from constants.py (single source of truth)
+from .constants import DB_CONFIG, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
+
+
 
 # Configure loggingError in db_task operation
 def setup_logger(name: str, log_file: str) -> logging.Logger:
@@ -64,14 +65,7 @@ class BaseDatabaseManager:
     """Base class for database operations with proper logging and error handling"""
     def __init__(self, nepal_tz: Optional[pytz.timezone] = None):
         self.nepal_tz = nepal_tz or pytz.timezone('Asia/Kathmandu')
-        self.db_params = {
-            'host': os.environ.get('POSTGRES_HOST'),
-            'database': os.environ.get('POSTGRES_DB'),
-            'user': os.environ.get('POSTGRES_USER'),
-            'password': os.environ.get('POSTGRES_PASSWORD'),
-            'port': os.environ.get('POSTGRES_PORT')
-        }
-        self._validate_db_params()
+        self.db_params = DB_CONFIG.copy()  # <-- This line is required!
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -380,7 +374,6 @@ class TableDbManager(BaseDatabaseManager):
                 cur.execute("DROP TABLE IF EXISTS grievances CASCADE")
                 cur.execute("DROP TABLE IF EXISTS users CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievance_statuses CASCADE")
-                cur.execute("DROP TABLE IF EXISTS task_executions CASCADE")
                 cur.execute("DROP TABLE IF EXISTS task_statuses CASCADE")
                 self._create_tables(cur)
                 self._create_indexes(cur)
@@ -707,16 +700,6 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_task_status_active ON task_statuses(is_active);
         """)
 
-        # Task executions indexes
-        migrations_logger.info("Creating/recreating task executions indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_task_executions_task_id ON task_executions(task_id);
-            CREATE INDEX IF NOT EXISTS idx_task_executions_celery_task_id ON task_executions(celery_task_id);
-            CREATE INDEX IF NOT EXISTS idx_task_executions_grievance_id ON task_executions(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_task_executions_status ON task_executions(status_code);
-            CREATE INDEX IF NOT EXISTS idx_task_executions_started ON task_executions(started_at);
-            CREATE INDEX IF NOT EXISTS idx_task_executions_completed ON task_executions(completed_at);
-        """)
 
         # Users table indexes
         migrations_logger.info("Creating/recreating user indexes...")

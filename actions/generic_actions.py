@@ -357,3 +357,13 @@ class ActionCleanWindowOptions(BaseAction):
         buttons = get_buttons('generic_actions', self.name(), 1, language)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
+
+class ActionAttachFiles(BaseAction):
+    def name(self) -> Text:
+        return "action_question_attach_files"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
+        return []

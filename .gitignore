@@ -11,6 +11,7 @@ __pycache__/
 .bash_history
 
 # Environment and dependency folders
+env.local
 .env
 venv/
 .venv/
@@ -78,3 +79,4 @@ task_queue/logs/    # Ignore entire logs directory
 models/             # Ignore entire models directory
 uploads/
 logs/*.log.*
+env.local

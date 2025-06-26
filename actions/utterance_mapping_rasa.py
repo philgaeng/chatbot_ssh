@@ -21,7 +21,6 @@ from icecream import ic
 BUTTON_AFFIRM = "/affirm"
 BUTTON_DENY = "/deny"
 BUTTON_SKIP = "/skip"
-BUTTON_SLOT_SKIPPED = "/slot_skipped"
 BUTTON_ANONYMOUS_WITH_PHONE = "/anonymous_with_phone"
 BUTTON_RESEND = "/resend"
 BUTTON_SUBMIT_DETAILS = "/submit_details"
@@ -52,8 +51,8 @@ BUTTONS_AFFIRM_DENY = {
 
 BUTTONS_LANGUAGE_OPTIONS = {
     'en': [
-        {"title": "Nepali / नेपाली", "payload": "/nepali"},
-        {"title": "English / अंग्रेजी", "payload": "/english"}
+        {"title": "Nepali / नेपाली", "payload": "/set_nepali"},
+        {"title": "English / अंग्रेजी", "payload": "/set_english"}
     ]
 }
 
@@ -80,10 +79,10 @@ BUTTONS_CLEAN_WINDOW_OPTIONS = {
 
 BUTTONS_SLOT_SKIPPED = {
     'en': [
-        {"title": "Skip", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "Skip", "payload": BUTTON_SKIP}
     ],
     'ne': [
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
     ]
 }
 
@@ -91,12 +90,12 @@ BUTTONS_CONTACT_CONSENT = {
     'en': [
         {"title": "Yes", "payload": BUTTON_AFFIRM},
         {"title": "Anonymous with phone", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
-        {"title": "No contact info", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "No contact info", "payload": BUTTON_SKIP}
     ],
     'ne': [
         {"title": "हो", "payload": BUTTON_AFFIRM},
         {"title": "फोनसहित गुमनाम", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
-        {"title": "सम्पर्क जानकारी छैन", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "सम्पर्क जानकारी छैन", "payload": BUTTON_SKIP}
     ]
 }
 
@@ -139,12 +138,12 @@ BUTTONS_EMAIL_CONFIRMATION = {
     'en': [
         {"title": "Confirm Email", "payload": BUTTON_SLOT_CONFIRMED},
         {"title": "Try Different Email", "payload": BUTTON_SLOT_EDITED},
-        {"title": "Skip Email", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "Skip Email", "payload": BUTTON_SKIP}
     ],
     'ne': [
         {"title": "इमेल पुष्टि गर्नुहोस्", "payload": BUTTON_SLOT_CONFIRMED},
         {"title": "अर्को इमेल प्रयास गर्नुहोस्", "payload": BUTTON_SLOT_EDITED},
-        {"title": "इमेल छोड्नुहोस्", "payload": BUTTON_SLOT_SKIPPED}
+        {"title": "इमेल छोड्नुहोस्", "payload": BUTTON_SKIP}
     ]
 }
 
@@ -637,8 +636,8 @@ UTTERANCE_MAPPING = {
         'action_start_grievance_process': {
             'utterances': {
                 1: {
-                    'en': "Great! Your grievance ID is {grievance_id}. Let's start by understanding your grievance...",
-                    'ne': "राम्रो! तपाईंको गुनासो ID हो {grievance_id}। चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
+                    'en': "Great!  Let's start by understanding your grievance...",
+                    'ne': "राम्रो!  चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
                 }
             }
         },
@@ -1141,6 +1140,14 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_CLEAN_WINDOW_OPTIONS
+            }
+        },
+        'action_question_attach_files': {
+            'utterances': {
+                1: {
+                    'en': "In order to attach files, please click the attachment button.",
+                    'ne': "फाइलहरू संलग्न गर्न चाहनुहुन्छ भने, कृपया एट्याचमेन्ट बटन प्रयोग गर्नुहोस्।"
+                }
             }
         }
     },

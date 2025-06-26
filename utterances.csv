@@ -75,7 +75,7 @@ otp_verification_form,action_ask_otp_verification_form_otp_input,5,❌ Maximum r
 otp_verification_form,action_ask_otp_verification_form_otp_input,6,❌ Invalid code. Please try again or type 'resend' to get a new code.,❌ अवैध कोड। कृपया पुनः प्रयास गर्नुहोस् वा 'resend' प्रमाणित गर्न गर्नुहोस्।
 otp_verification_form,action_ask_otp_verification_form_otp_input,7,Continuing without phone verification. Your grievance details will not be sent via SMS.,"प्रमाणित गर्न छोड्नुहोस्। तपाईंको गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
 म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
-grievance_form,action_start_grievance_process,1,Great! Your grievance ID is {grievance_id}. Let's start by understanding your grievance...,राम्रो! तपाईंको गुनासो ID हो {grievance_id}। चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
+grievance_form,action_start_grievance_process,1,Great!  Let's start by understanding your grievance...,राम्रो!  चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
 grievance_form,action_ask_grievance_summary_form_gender_follow_up,1,"We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
                     ","गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
                     "
@@ -168,6 +168,7 @@ generic_actions,action_attach_file,3,Please file a grievance first before attach
 generic_actions,action_attach_file,4,Thank you. Your {count} files ({files}) have been successfully attached to your grievance.,धन्यवाद। तपाईंका {count} फाइलहरू ({files}) सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छन्।
 generic_actions,action_attach_file,5,You can now attach files to your grievance using the attachment button.,अब तपाईं एट्याचमेन्ट बटन प्रयोग गरेर आफ्नो गुनासोमा फाइलहरू संलग्न गर्न सक्नुहुन्छ।
 generic_actions,action_clean_window_options,1,Your grievance is completed. You can close the browser tab or session.,तपाईंको गुनासो पूरा हुन गरियो। तपाईं ब्राउजर टैब वा सत्र बन्द गर्न सक्नुहुन्छ।
+generic_actions,action_question_attach_files,1,"In order to attach files, please click the attachment button.","फाइलहरू संलग्न गर्न चाहनुहुन्छ भने, कृपया एट्याचमेन्ट बटन प्रयोग गर्नुहोस्।"
 menu_form,action_ask_menu_form_main_story,1,I am here to help you file a grievance or check its status. What would you like to do?,म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?
 menu_form,action_ask_menu_form_main_story,2,"You are reaching out to the office of {district} in {province}.
 I am here to help you file a grievance or check its status. What would you like to do?","तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
