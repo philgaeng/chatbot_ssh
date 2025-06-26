@@ -8,9 +8,10 @@ from rapidfuzz import fuzz
 import re
 import traceback
 from .utterance_mapping_rasa import VALIDATION_SKIP
+from actions_server.constants import DEFAULT_VALUES
 from icecream import ic
 
-
+SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
 
 class LanguageHelper:
     """Helper class for language detection and skip word matching."""
@@ -161,6 +162,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
     This class defines the interface and common functionality that all form validation
     actions must implement.
     """
+    message_display_list_cat = False
 
     def __init__(self):
         """Initialize shared resources."""
@@ -225,7 +227,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         slot_name: Text,
         tracker: Tracker,
         domain: DomainDict,
-        skip_value: Any = None
+        skip_value: Any = SKIP_VALUE
     ) -> Dict[Text, Any]:
         """
         Handle skip validation response.
@@ -249,7 +251,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             # User confirmed skip - use provided or default skip value
             if skip_value is None:
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                skip_value = False if slot_type == "bool" else "slot_skipped"
+                skip_value = False if slot_type == "bool" else SKIP_VALUE
             
             return {
                 slot_name: skip_value,
@@ -281,19 +283,20 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             # Check if we're in skip validation mode
             if tracker.get_slot("skip_validation_needed") == slot_name:
                 return self._handle_skip_validation(slot_name, tracker, domain, skip_value)
-
-            # Normal slot extraction
+                
             latest_message = tracker.latest_message
             message_text = latest_message.get("text", "")
-            print(f"Latest message: {latest_message}")
-            #print(f"Text: {message_text}")
+            intent = latest_message.get("intent", {}).get("name", "")
+
+            if intent == "skip":
+                return {slot_name: SKIP_VALUE}
             
             # Execute custom action if provided
             if custom_action:
                 await custom_action(dispatcher, tracker, domain)
 
             try:
-                skip_result = self._is_skip_requested(latest_message)
+                skip_result = self._is_skip_requested(tracker.latest_message)
                 is_skip, needs_validation, matched_word = skip_result
             except Exception as e:
                 print(f"Error in skip detection: {e}")
@@ -316,7 +319,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 
                 # Direct skip (high confidence match)
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                skip_value = False if slot_type == "bool" else "slot_skipped"
+                skip_value = False if slot_type == "bool" else SKIP_VALUE
                 return {slot_name: skip_value}
             print(f"---------- SLOT EXTRACTION END ----------")
             if message_text:
@@ -353,11 +356,14 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         print(f"Requested slot: {tracker.get_slot('requested_slot')}")
         if tracker.get_slot("requested_slot") == slot_name:
             latest_message = tracker.latest_message
-            text = latest_message.get("text", "")
+            message_text = latest_message.get("text", "")
             intent = latest_message.get("intent", {}).get("name", "")
+
+            if intent == "skip":
+                return {slot_name: SKIP_VALUE}
             
             print("######## boolean slot extraction ########")
-            print(f"text: {text}, intent: {intent}")
+            print(f"text: {message_text}, intent: {intent}")
 
             # Check if we're in skip validation mode
             if tracker.get_slot("skip_validation_needed") == slot_name:
@@ -368,7 +374,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 is_skip, needs_validation, matched_word = self._is_skip_requested(latest_message)
                 print(f"is_skip: {is_skip}, needs_validation: {needs_validation}, matched_word: {matched_word}")
             except Exception as e:
-                print(f"Error in skip detection: {e}", print("latest_message: ", latest_message.get("text", "")))
+                print(f"Error in skip detection: {e}", print("latest_message: ", message_text))
                 is_skip, needs_validation, matched_word = False, False, ""
             if is_skip:
                 if needs_validation:
@@ -378,19 +384,19 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                     )
                     return {
                         "skip_validation_needed": slot_name,
-                        "skipped_detected_text": text
+                        "skipped_detected_text": message_text
                     }
                 return {slot_name: skip_value}
 
             # Handle affirmative responses
-            if text.startswith("/affirm") or intent == "affirm":
+            if message_text.startswith("/affirm") or intent == "affirm":
                 if custom_affirm_action:
                     return await custom_affirm_action(dispatcher)
                 # print(f"Affirming {slot_name}")
                 return {slot_name: True}
 
             # Handle negative responses
-            if text.startswith("/deny") or intent == "deny":
+            if message_text.startswith("/deny") or intent == "deny":
                 #print(f"Denying {slot_name}")
                 return {slot_name: False}
 

@@ -2,10 +2,37 @@ import os
 import csv
 from typing import List
 import logging
+from pathlib import Path
+from dotenv import load_dotenv
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# Auto-detect and load environment variables
+# (This must happen BEFORE any os.getenv calls)
+def load_environment():
+    """Load environment variables from env.local (development) or .env (production/remote)"""
+    # Get the project root directory (2 levels up from actions_server)
+    project_root = Path(__file__).parent.parent
+    
+    # Try to load from env.local first (development)
+    env_local = project_root / "env.local"
+    env_file = project_root / ".env"
+    
+    if env_local.exists():
+        logger.info(f"Loading environment from {env_local} (development)")
+        load_dotenv(env_local)
+        return "env.local"
+    elif env_file.exists():
+        logger.info(f"Loading environment from {env_file} (production/remote)")
+        load_dotenv(env_file)
+        return ".env"
+    else:
+        logger.warning("No environment file found, using system environment variables")
+        return "system"
+
+# Load environment variables BEFORE any config is set
+ENV_SOURCE = load_environment()
 
 # Location Constants
 QR_PROVINCE = "Koshi"
@@ -21,11 +48,12 @@ CUT_OFF_FUZZY_MATCH_LOCATION = 75
 SMS_ENABLED = False  # Set to True to enable SMS    
 # API Constants
 
-# File Paths
-LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
-DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
-# Location JSON file
-LOCATION_FOLDER_PATH = "/home/ubuntu/nepal_chatbot/resources/location_dataset/"
+# Dynamic file paths based on project root
+PROJECT_ROOT = Path(__file__).parent.parent
+LOOKUP_FILE_PATH = str(PROJECT_ROOT / "data/lookup_tables/list_category.txt")
+DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.csv")
+LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
+
 # List of email providers
 EMAIL_PROVIDERS_NEPAL = {
     "Gmail": ["gmail.com"],
@@ -142,7 +170,8 @@ You will receive updates about your grievance through this number.""",
 # Default values
 DEFAULT_VALUES = {
     "NOT_PROVIDED": "Not provided",
-    "ANONYMOUS": "Anonymous"
+    "ANONYMOUS": "Anonymous",
+    "SKIP_VALUE": "slot_skipped"
 }
 
 # Location Words
@@ -250,10 +279,6 @@ FILE_TYPE_MAX_SIZES = {file_type: info['max_size_mb'] * 1024 * 1024 for file_typ
 # Default max file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
-# File Paths
-LOOKUP_FILE_PATH = "/home/ubuntu/nepal_chatbot/data/lookup_tables/list_category.txt"
-DEFAULT_CSV_PATH = "/home/ubuntu/nepal_chatbot/resources/grievances_categorization_v1.csv"
-
 # Enhanced field configuration with categories and metadata
 FIELD_CONFIG = {
         'user_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
@@ -342,10 +367,25 @@ REDIS_PORT = os.getenv('REDIS_PORT', '6379')
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
 REDIS_DB = os.getenv('REDIS_DB', '0')
 
+# Database configuration from environment variables
 DB_CONFIG = {
-    'host': os.environ.get('POSTGRES_HOST'),
-    'database': os.environ.get('POSTGRES_DB'),
-    'user': os.environ.get('POSTGRES_USER'),
-    'password': os.environ.get('POSTGRES_PASSWORD'),
-    'port': os.environ.get('POSTGRES_PORT')
+    'host': os.getenv('POSTGRES_HOST', 'localhost'),
+    'database': os.getenv('POSTGRES_DB', 'grievance_db'),
+    'user': os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
+    'port': os.getenv('POSTGRES_PORT', '5432')
 }
+
+# Log configuration source
+logger.info(f"Configuration loaded from: {ENV_SOURCE}")
+logger.info(f"Database host: {DB_CONFIG['host']}")
+logger.info(f"Database name: {DB_CONFIG['database']}")
+logger.info(f"Redis host: {REDIS_HOST}")
+
+# RASA WebSocket configuration
+RASA_WS_HOST = os.getenv('RASA_WS_HOST', 'localhost')
+RASA_WS_PORT = int(os.getenv('RASA_WS_PORT', 5005))
+RASA_WS_PROTOCOL = os.getenv('RASA_WS_PROTOCOL', 'ws')
+RASA_WS_PATH = os.getenv('RASA_WS_PATH', '/socket.io/')
+RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
+RASA_WS_TRANSPORTS = os.getenv('RASA_WS_TRANSPORTS', ['websocket'])

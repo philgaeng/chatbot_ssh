@@ -34,16 +34,6 @@ rules:
     - intent: nlu_fallback
     - action: action_default_fallback
 
-  - rule: action session start
-    steps:
-      - intent: nav_session_start
-      - action: action_session_start
-
-  - rule: On start
-    steps:
-      - intent: intent_session_start
-      - action: action_introduce
-
   - rule: Clearing window
     steps:
       - intent: nav_clear
@@ -53,3 +43,9 @@ rules:
     steps:
       - intent: nav_close_browser_tab
       - action: action_close_browser_tab
+
+  - rule: Attach files
+    steps:
+      - intent: question_attach_files
+      - action: action_question_attach_files
+

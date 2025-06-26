@@ -7,7 +7,7 @@ version: "3.1"
 stories:
   - story: Happy path - retrieve grievance with phone and check status in english
     steps:
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_english
       - action: action_set_english
@@ -35,7 +35,7 @@ stories:
 
   - story: Happy path - retrieve grievance with phone and check status in nepali
     steps:
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
@@ -58,12 +58,13 @@ stories:
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - action: action_menu
+      - intent: status_check
+      - action: action_check_status
 
 
   - story: Direct grievance ID retrieval and status check in english
     steps:
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_english
       - action: action_set_english
@@ -80,11 +81,12 @@ stories:
       - active_loop: grievance_id_form
       - active_loop: null
       - action: action_display_grievance
-      - action: action_menu
+      - intent: status_check
+      - action: action_check_status
 
   - story: Direct grievance ID retrieval and status check in nepali
     steps:
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
@@ -102,11 +104,12 @@ stories:
       - active_loop: grievance_id_form
       - active_loop: null
       - action: action_display_grievance
-      - action: action_menu
+      - intent: status_check
+      - action: action_check_status
 
   - story: User retrieves multiple grievances in english
     steps:
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_english
       - action: action_set_english
@@ -129,7 +132,8 @@ stories:
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - action: action_menu
+      - intent: status_check
+      - action: action_check_status
 
   - story: User checks status immediately after displaying grievance
     steps:
@@ -138,10 +142,8 @@ stories:
       - action: action_check_status
 
   - story: User retrieves multiple grievances in nepali
-
-  - story: User retrieves multiple grievances in nepali
     steps:  
-      - intent: intent_session_start
+      - intent: introduce
       - action: action_introduce
       - intent: set_nepali
       - action: action_set_nepali
@@ -163,5 +165,6 @@ stories:
       - active_loop: otp_verification_form
       - active_loop: null
       - action: action_display_grievance
-      - action: action_menu
+      - intent: status_check
+      - action: action_check_status
 

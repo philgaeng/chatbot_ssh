@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Set the base directory
-BASE_DIR="/home/ubuntu/nepal_chatbot"
+BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
-VENV_DIR="/home/ubuntu/rasa-env-21"
+VENV_DIR="/home/philg/projects/nepal_chatbot/rasa-env-21"
 
 # Function to stop a service
 stop_service() {
@@ -313,7 +313,7 @@ echo "Stopping all services..."
 stop_redis
 
 # Stop main services
-for service in rasa rasa_actions flask_server; do
+for service in rasa rasa_actions flask_server http_server_8080 http_server_8081; do
     stop_service $service
 done
 
@@ -332,6 +332,8 @@ kill_process_by_port 5005  # Rasa server
 kill_process_by_port 5055  # Action server
 kill_process_by_port 5555  # Flower monitoring
 kill_process_by_port 6379  # Redis server
+kill_process_by_port 8080  # Webchat HTTP server
+kill_process_by_port 8081  # Accessible HTTP server
 
 # Final cleanup of any remaining Celery processes
 echo "Performing final Celery cleanup..."
@@ -348,6 +350,8 @@ services=(
     "rasa_actions"
     "flask_server"
     "flower"
+    "http_server_8080"
+    "http_server_8081"
 )
 
 for service in "${services[@]}"; do
@@ -365,7 +369,7 @@ done
 
 # Verify ports are free
 echo -e "\nVerifying ports are free..."
-for port in 5001 5005 5055 5555 6379; do
+for port in 5001 5005 5055 5555 6379 8080 8081; do
     if sudo lsof -i:$port > /dev/null 2>&1; then
         echo "❌ Port $port is still in use"
     else
@@ -415,6 +419,6 @@ ensure_port_free() {
 }
 
 # Call ensure_port_free for all relevant ports
-for port in 5001 5005 5055 5555 6379; do
+for port in 5001 5005 5055 5555 6379 8080 8081; do
     ensure_port_free $port
 done 

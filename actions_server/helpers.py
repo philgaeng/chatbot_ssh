@@ -35,8 +35,8 @@ class ContactLocationValidator:
                  tracker = Tracker, 
                  json_path=LOCATION_FOLDER_PATH):
     
-        json_path_en = f"{json_path}en_cleaned.json"
-        json_path_ne = f"{json_path}ne_cleaned.json"
+        json_path_en = f"{json_path}_en_cleaned.json"
+        json_path_ne = f"{json_path}_ne_cleaned.json"
         self.locations_both_language = dict()
         ic(json_path)
         if USE_QR_CODE:
