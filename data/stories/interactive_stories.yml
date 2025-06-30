@@ -55,7 +55,6 @@ stories:
   - action: grievance_summary_form
   - active_loop: grievance_summary_form
   - slot_was_set:
-    - grievance_summary_temp: "Loss of rice and corn harvest"
     - grievance_categories: ["Destruction Of Agrarian Resources ; Crop Destruction"]
     - grievance_summary: "Loss of rice and corn harvest"
 
@@ -124,12 +123,10 @@ stories:
   - action: grievance_summary_form
   - active_loop: grievance_summary_form
   - slot_was_set:
-    - grievance_summary_temp: "Individual unable to find employment at a local road workshop and is willing to work in the nearest village."
     - grievance_categories: ["Economic, Social ; Employment Opportunities"]
+    - grievance_categories_status: "skipped"
+    - grievance_summary_status: "skipped"
   - slot_was_set:
-    - grievance_cat_modify: slot_confirmed
-    - grievance_categories_confirmed: slot_confirmed
-    - grievance_summary_confirmed: slot_confirmed
     - grievance_summary: "Individual unable to find employment at a local road workshop and is willing to work in the nearest village."
   - active_loop: null
 
@@ -193,7 +190,8 @@ stories:
   - action: grievance_summary_form
   - active_loop: grievance_summary_form
   - slot_was_set:
-    - grievance_summary_temp: "Trees chopped down and pollution due to a pipe spill on my land"
+    - grievance_categories_status: "skipped"
+    - grievance_summary_status: "skipped"
     - grievance_categories: 
       - "Environmental, Social ; Cutting Of Trees"
       - "Destruction Of Agrarian Resources ; Soil Pollution"
@@ -259,16 +257,13 @@ stories:
   - action: grievance_summary_form
   - active_loop: grievance_summary_form
   - slot_was_set:
-    - grievance_categories_confirmed: slot_added
+    - grievance_categories_status: "LLM_generated"
     - grievance_categories:
       - "Destruction Of Agrarian Resources ; Crop Destruction"
       - "Malicious Behavior ; Theft Of Crops"
       - "Economic, Social ; Land Acquisition Issues"
-    - grievance_categories_confirmed: slot_confirmed
     - grievance_cat_modify: slot_confirmed
-    - grievance_summary_confirmed: slot_edited
-    - grievance_summary_temp: "my chicken were stolen and I lost 1600 Rp"
-    - grievance_summary_confirmed: slot_confirmed
+    - grievance_summary_status
     - grievance_summary: "my chicken were stolen and I lost 1600 Rp"
   - active_loop: null
 
@@ -333,11 +328,10 @@ stories:
   - action: grievance_summary_form
   - active_loop: grievance_summary_form
   - slot_was_set:
-    - grievance_summary_temp: "Harvest has been lost"
+    - grievance_summary: "Harvest has been lost"
     - grievance_categories:
       - "Destruction Of Agrarian Resources ; Crop Destruction"
-    - grievance_categories_confirmed: slot_confirmed
-    - grievance_cat_modify: slot_confirmed
-    - grievance_summary_confirmed: slot_confirmed
+    - grievance_categories_status: "LLM_generate"
+    - grievance_summary_status: "LLM_generated"
     - grievance_summary: "Harvest has been lost"
   - active_loop: null

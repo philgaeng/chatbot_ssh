@@ -4,7 +4,7 @@ import json
 from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
-from .constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT
+from .constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
 from .db_manager import db_manager
 # Set up logging
 logger = logging.getLogger(__name__)

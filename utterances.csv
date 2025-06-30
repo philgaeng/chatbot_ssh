@@ -85,14 +85,15 @@ grievance_form,action_ask_grievance_summary_form_gender_follow_up,2,"Address : K
                     फोन : 021-530103"
 grievance_form,action_ask_grievance_summary_form_gender_follow_up,3, You can get more information on : https://nwchelpline.gov.np,तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np
 grievance_form,action_ask_grievance_summary_form_gender_follow_up,4,"If you desire, you can provide us with more details that we will forward to the OCMC.","यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।"
-grievance_form,action_ask_grievance_details_form_grievance_temp,1,Great! Let's start by understanding your grievance...,राम्रो! चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
-grievance_form,action_ask_grievance_details_form_grievance_temp,2,Please enter more details...,कृपया थप विवरण प्रविष्ट गर्नुहोस्...
-grievance_form,action_ask_grievance_details_form_grievance_temp,3,Calling OpenAI for classification... This may take a few seconds...,OpenAI क्लासिफिकेशनको लागि कल गर्दै... यसमा केही सेकेन्ड लाग्न सक्छ...
-grievance_form,action_ask_grievance_details_form_grievance_temp,4,"Thank you for your entry. Do you want to add more details to your grievance, such as:
+grievance_form,action_ask_grievance_details_form_grievance_new_detail,1,Great! Let's start by understanding your grievance...,राम्रो! चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
+grievance_form,action_ask_grievance_details_form_grievance_new_detail,2,"Lets restart, please enter your grievance details...","प्रक्रिया पुनः सुरु गर्नुहोस्, कृपया आफ्नो गुनासो विवरण प्रविष्ट गर्नुहोस्..."
+grievance_form,action_ask_grievance_details_form_grievance_new_detail,3,Please enter more details...,कृपया थप विवरण प्रविष्ट गर्नुहोस्...
+grievance_form,action_ask_grievance_details_form_grievance_new_detail,4,"Thank you for your entry: ""{grievance_details}""","तपाईंको प्रविष्टिको लागि धन्यवाद। ""{grievance_details}"""
+grievance_form,action_ask_grievance_details_form_grievance_new_detail,5,"Do you want to add more details to your grievance, such as:
 - Location information
 - Persons involved
 - Quantification of damages (e.g., number of bags of rice lost)
-- Monetary value of damages","तपाईंको प्रविष्टिको लागि धन्यवाद। के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:
+- Monetary value of damages","के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:
 - स्थान जानकारी
 - भागहरूको सम्बन्धमा
 - हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)
@@ -109,8 +110,8 @@ grievance_form,action_submit_grievance_as_is,1,Your grievance has been filed suc
 grievance_form,action_submit_grievance_as_is,2,✅ A recap of your grievance has been sent to your email : {user_contact_email}.,✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {user_contact_email}
 grievance_form,action_submit_grievance_as_is,3,✅ A recap of your grievance has been sent to your phone : {user_contact_phone}.,✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {user_contact_phone}
 grievance_form,action_submit_grievance_as_is,4,"I apologize, but there was an error submitting your grievance. Please try again or contact support.","मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
-grievance_form,action_ask_grievance_summary_form_grievance_categories_confirmed,1,No categories have been identified yet.,कृपया आफ्नो गुनासोको लागि निम्न श्रेणीहरू समीक्षा गर्नुहोस्:
-grievance_form,action_ask_grievance_summary_form_grievance_categories_confirmed,2,"Here are the suggested categories for your grievance:
+grievance_form,action_ask_grievance_summary_form_grievance_categories_status,1,No categories have been identified yet.,कृपया आफ्नो गुनासोको लागि निम्न श्रेणीहरू समीक्षा गर्नुहोस्:
+grievance_form,action_ask_grievance_summary_form_grievance_categories_status,2,"Here are the suggested categories for your grievance:
 {category_text}
 Does this seem correct?","तपाईंको गुनासोको लागि सुझाव गरिएका श्रेणीहरू यहाँ छन्:
 {category_text}
@@ -118,11 +119,11 @@ Does this seem correct?","तपाईंको गुनासोको ला�
 grievance_form,action_ask_grievance_summary_form_grievance_cat_modify,1,No categories selected. Skipping this step.,कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।
 grievance_form,action_ask_grievance_summary_form_grievance_cat_modify,2,Which category would you like to delete?,तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ?
 grievance_form,action_ask_grievance_summary_form_grievance_cat_modify,3,Select the category you want to add from the list below:,निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस्:
-grievance_form,action_ask_grievance_summary_form_grievance_summary_confirmed,1,"Here is the current summary: '{current_summary}'.
+grievance_form,action_ask_grievance_summary_form_grievance_summary_status,1,"Here is the current summary: '{current_summary}'.
  Is this correct?","तपाईंको गुनासोको निम्न सारांश यहाँ छ:
 {current_summary}
 के यो सही लाग्दैन?"
-grievance_form,action_ask_grievance_summary_form_grievance_summary_confirmed,2,There is no summary yet. Please type a new summary for your grievance or skip,कुनै सारांश छैन। कृपया तपाईंको गुनासोको लागि नयाँ सारांश प्रविष्ट गर्नुहोस् वा छोड्नुहोस्
+grievance_form,action_ask_grievance_summary_form_grievance_summary_status,2,There is no summary yet. Please type a new summary for your grievance or skip,कुनै सारांश छैन। कृपया तपाईंको गुनासोको लागि नयाँ सारांश प्रविष्ट गर्नुहोस् वा छोड्नुहोस्
 grievance_form,action_ask_grievance_summary_form_grievance_summary_temp,1,Please enter the new summary and confirm again.,कृपया नयाँ सारांश प्रविष्ट गर्नुहोस् र फेरी सुनिश्चित गर्नुहोस्।
 grievance_form,action_ask_details_form_grievance_temp,1,Great! Let's start by understanding your grievance...,राम्रो! चल्नुस् तपाईंको गुनासोको बारेमा सुरु गरौं...
 grievance_form,action_ask_details_form_grievance_temp,2,Please provide more details about your grievance.,कृपया आफ्नो गुनासोको बारेमा थप विवरण प्रदान गर्नुहोस्।

@@ -728,8 +728,8 @@ class ValidateContactForm(BaseFormValidationAction):
         print("################ Validate user contact email temp ###################")
         language = get_language_code(tracker)
         #deal with the slot_skipped case
-        if slot_value == '/slot_skipped':
-            print(SKIP_VALUE)
+        if slot_value == SKIP_VALUE:
+            print(f"Email skipped: {SKIP_VALUE}")
             return {"user_contact_email_temp": SKIP_VALUE,
                     "user_contact_email_confirmed": False,
                     "user_contact_email": SKIP_VALUE

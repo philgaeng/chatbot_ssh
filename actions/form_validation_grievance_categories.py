@@ -13,7 +13,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from .base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
-from actions_server.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES,USER_FIELDS, GRIEVANCE_FIELDS
+from actions_server.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES,USER_FIELDS, GRIEVANCE_FIELDS, GRIEVANCE_CLASSIFICATION_STATUS, TASK_STATUS
 from actions_server.db_manager import db_manager
 from actions_server.messaging import SMSClient, EmailClient
 from .utterance_mapping_rasa import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
@@ -22,6 +22,18 @@ from rapidfuzz import process
 from icecream import ic
 from datetime import datetime, timedelta
 from actions_server.LLM_helpers import classify_and_summarize_grievance
+
+
+
+LLM_GENERATED = GRIEVANCE_CLASSIFICATION_STATUS["LLM_generated"]
+LLM_FAILED = GRIEVANCE_CLASSIFICATION_STATUS["LLM_failed"]
+LLM_ERROR = GRIEVANCE_CLASSIFICATION_STATUS["LLM_error"]
+USER_CONFIRMED = GRIEVANCE_CLASSIFICATION_STATUS["user_confirmed"]
+OFFICER_CONFIRMED = GRIEVANCE_CLASSIFICATION_STATUS["officer_confirmed"]
+SUCCESS = TASK_STATUS["SUCCESS"]
+ERROR = TASK_STATUS["ERROR"]
+SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
+IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
 
 ############################ STEP 1 - VALIDATE GRIEVANCE SUMMARY AND CATEGORIES ############################
 
@@ -37,51 +49,135 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
     def name(self) -> Text:
         return "validate_grievance_summary_form"
     
+    async def _check_classification_status(self, tracker: Tracker, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
+        """
+        Check if async classification is complete and retrieve results.
+        
+        Returns:
+            Dict with updated slots if classification is complete
+        """
+        task_id = tracker.get_slot("classification_task_id")
+        language_code = tracker.get_slot("language_code") or "en"
+        
+        if not task_id:
+            return {}
+        
+        try:
+            # Import Celery app to check task status
+            from task_queue.celery_app import celery_app
+            
+            # Get task result
+            task_result = celery_app.AsyncResult(task_id)
+            
+            if task_result.ready():
+                if task_result.successful():
+                    result = task_result.get()
+                    
+                    if result.get('status') == 'SUCCESS':
+                        values = result.get('values', {})
+                        
+                        return {
+                            "grievance_summary": values.get('grievance_summary', ''),
+                            "grievance_categories": values.get('grievance_categories', []),
+                            "grievance_summary_status": LLM_GENERATED,
+                            "grievance_categories_status": LLM_GENERATED,
+                            "classification_status": SUCCESS,
+                            "classification_task_id": None
+                        }
+                    else:
+                        # Task completed but failed
+                        utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
+                        dispatcher.utter_message(text=utterance)
+                        
+                        return {
+                            "grievance_summary": "",
+                            "grievance_categories": "",
+                            "grievance_summary_status": LLM_FAILED,
+                            "grievance_categories_status": LLM_FAILED,
+                            "classification_status": "failed",
+                            "classification_task_id": None
+                        }
+                else:
+                    # Task failed with exception
+                    utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
+                    dispatcher.utter_message(text=utterance)
+
+                    return {
+                        "grievance_summary": "",
+                        "grievance_categories": "",
+                        "grievance_summary_status": LLM_ERROR,
+                        "grievance_categories_status": LLM_ERROR,
+                        "classification_status": "failed",
+                        "classification_task_id": None
+                    }
+            else:
+                # Task still processing
+                utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
+                dispatcher.utter_message(text=utterance)
+                
+                return {}
+                
+        except Exception as e:
+            print(f"Error checking task status: {e}")
+            # Fallback - proceed without classification
+            return {
+                "grievance_summary_status": "script_generated",
+                "grievance_categories_status": "script_generated",
+                "classification_task_id": None
+            }
+    
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
         print("######################### REQUIRED SLOTS ##############")
         
-        updated_slots = domain_slots
-        #ic(tracker.get_slot("gender_issues_reported"))
-        #ic(domain_slots)
-        if not domain_slots:
-            updated_slots = ["grievance_categories_confirmed"]
+        # Check if async classification is still processing and retrieve results if complete
+        classification_status = tracker.get_slot("classification_status")
+        if classification_status == "skipped":
+            return []
         
-        grievance_categories_confirmed = tracker.get_slot("grievance_categories_confirmed")
-        grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
- 
-        
-        # After category modification is complete, go back to confirmation
-        if grievance_cat_modify:
-            print(" category modify detected")
-            updated_slots = ["grievance_categories_confirmed"]  # Reset to ask for confirmation again
-        
-        #deal with the case where gender issues is part of list_of_cat by adding one slot to the updated_slots
-        if tracker.get_slot("gender_issues_reported") and "gender_follow_up" not in updated_slots:
-            updated_slots = ["gender_follow_up"]
-            #ic(updated_slots)
-            
-        elif grievance_categories_confirmed in [SKIP_VALUE, "slot_confirmed"]:
-            # Use extend to add multiple items to the list
-            updated_slots = [
-                "grievance_summary_confirmed",
-                "grievance_summary_temp",
-                "grievance_summary"
-            ]
-            
-        elif grievance_categories_confirmed in ["slot_added", "slot_deleted"]:
-            print(" category added or deleted detected")
-            updated_slots = ["grievance_cat_modify"]  # Simplified - only ask for the modification
+        if classification_status == "processing":
+            # Check if classification is complete now
+            status_update = await self._check_classification_status(tracker, dispatcher)
+            if status_update.get("classification_status") !=  "SUCCESS":
+                # Still processing, show appropriate message
+                language_code = tracker.get_slot("language_code") or "en"
+                utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
+                dispatcher.utter_message(text=utterance)
+                return []
+            else:
+                grievance_categories = status_update.get("grievance_categories")
+                grievance_summary = status_update.get("grievance_summary")
+                grievance_categories_status = status_update.get("grievance_categories_status")
+                grievance_summary_status = status_update.get("grievance_summary_status")
 
-        print(f"list of cat as in required_slots: {tracker.get_slot('grievance_categories')}")
+                if grievance_categories_status in [LLM_FAILED, LLM_ERROR]:
+                    return [SlotSet("grievance_categories_status", grievance_categories_status),
+                            SlotSet("grievance_summary_status", grievance_summary_status),
+                            SlotSet("grievance_categories", grievance_categories),
+                            SlotSet("grievance_summary", grievance_summary),
+                            ]
+                else:
+                    return [
+                        SlotSet("grievance_categories", grievance_categories),
+                        SlotSet("grievance_summary", grievance_summary),
+                        "grievance_categories_status",
+                        "grievance_categories_modify",
+                        "grievance_summary_status",
+                        "grievance_summary_temp"
+                    ] #this is the case where the classification is successful and we need now to validate grievance_categories_status
 
-        print(f"Input slots: {domain_slots} \n Updated slots: {updated_slots}")
-        print(f"Value grievance_categories_confirmed: {grievance_categories_confirmed}, Value grievance_cat_modify: {tracker.get_slot('grievance_cat_modify')}")
-        print(f"Value gender_follow_up: {tracker.get_slot('gender_follow_up')}")
-        print(f"next requested slot: {tracker.get_slot('requested_slot')}")
-        print(f"message_display_list_cat: {BaseFormValidationAction.message_display_list_cat}")
-        print("--------- END REQUIRED SLOTS ---------")
+    
 
-        return updated_slots
+        # ic(tracker.get_slot('grievance_categories'))
+
+        # ic(domain_slots)
+        # ic(updated_slots)
+        # ic(grievance_categories_status)
+        # ic(tracker.get_slot('grievance_cat_modify'))
+        # ic(tracker.get_slot('gender_follow_up'))
+        # ic(tracker.get_slot('requested_slot'))
+        # print("--------- END REQUIRED SLOTS ---------")
+
+        # return updated_slots
     
     
     def _detect_gender_issues(self, tracker: Tracker) -> bool:
@@ -106,27 +202,27 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             """
             ic("run _report_gender_issues")
             # update all the regular slots to validate the form and add the gender_issues_reported slot
-            return {"grievance_categories_confirmed": "slot_confirmed",
+            return {"grievance_categories_status": LLM_GENERATED,
                     "grievance_cat_modify": SKIP_VALUE,
                     "grievance_categories": tracker.get_slot("grievance_categories"),
                     "grievance_summary": tracker.get_slot("grievance_summary_temp"),
                     "grievance_summary_confirmed": SKIP_VALUE,
                     "gender_issues_reported": True}
             
-    async def extract_grievance_categories_confirmed(self, 
+    async def extract_grievance_categories_status(self, 
                                                    dispatcher: CollectingDispatcher,
                                                    tracker: Tracker,
                                                    domain: Dict[Text, Any]
                                                    ) -> Dict[Text, Any]:
         print("######################### EXTRACT GRIEVANCE LIST CAT CONFIRMED ##############")
         return await self._handle_slot_extraction(
-            "grievance_categories_confirmed",
+            "grievance_categories_status",
             tracker,
             dispatcher,
             domain
         )
     
-    async def validate_grievance_categories_confirmed(self, slot_value: Any,
+    async def validate_grievance_categories_status(self, slot_value: Any,
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
@@ -134,18 +230,24 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         print("######################### VALIDATE GRIEVANCE LIST CAT CONFIRMED ##############")
 
         slot_value = slot_value.strip('/')        
-        print(f"grievance_categories_confirmed: {slot_value}")
+        print(f"grievance_categories_status: {slot_value}")
+
+        if slot_value == SKIP_VALUE:
+            return {"grievance_categories_status": LLM_GENERATED}
         
-        if slot_value in [SKIP_VALUE, "slot_confirmed"]:
+        # Fallback to original logic if no async results
+        if slot_value == "slot_confirmed":
             if self._detect_gender_issues(tracker):
-                ic("validate_grievance_categories_confirmed: gender issues detected in list_of_cat")
+                ic("validate_grievance_categories_status: gender issues detected in list_of_cat")
                 return self._report_gender_issues(dispatcher, tracker)
             else:
-                ic("validate_grievance_categories_confirmed: no gender issues detected in list_of_cat")
-                return {"grievance_categories_confirmed": slot_value,
-                        "grievance_cat_modify": slot_value}
+                ic("validate_grievance_categories_status: no gender issues detected in list_of_cat")
+                return {
+                        "grievance_categories_status": USER_CONFIRMED}
             
-        return {"grievance_categories_confirmed": slot_value}
+        else:
+            #return the slot_value as selected by the user and move to category_modify slot
+            return {"grievance_categories_status": slot_value}
     
     
     
@@ -199,7 +301,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         Returns:
             Dict[Text, Any]: A dictionary containing updated slot values:
                 - grievance_categories: Updated list of categories
-                - grievance_categories_confirmed: Reset to None after processing
+                - grievance_categories_status: Reset to None after processing
                 - grievance_cat_modify: Reset to None after processing
                 
         Note:
@@ -219,58 +321,55 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         list_of_cat = tracker.get_slot("grievance_categories")
         print("list_of_cat: ", list_of_cat)
         
-        
+        #get the category to modify from the slot_value
         selected_category = self.get_category_to_modify(slot_value)
-                
         print("c extracted from message : " , selected_category)
-                
+        
+        #if no category is selected or the slot_value is SKIP_VALUE, return the LLM_GENERATED status and the SKIP_VALUE for the grievance_cat_modify slot
         if not selected_category or slot_value == SKIP_VALUE:
             dispatcher.utter_message(text="No category selected. skipping this step.")
-            return {"grievance_categories_confirmed": SKIP_VALUE,
+            return {"grievance_categories_status": LLM_GENERATED,
                     "grievance_cat_modify": SKIP_VALUE}
       
         #case 2: delete the category
-        if tracker.get_slot("grievance_categories_confirmed") == "slot_deleted":
+        if tracker.get_slot("grievance_categories_status") == "slot_deleted":
             #delete the category
             list_of_cat.remove(selected_category)
             
         #case 3: add the category
-        if tracker.get_slot("grievance_categories_confirmed") == "slot_added":
+        if tracker.get_slot("grievance_categories_status") == "slot_added":
             list_of_cat.append(selected_category)
         
         #reset the message_display_list_cat to True
         BaseFormValidationAction.message_display_list_cat = True
         print("updated list of cat: ", list_of_cat)
         
-        # #deal with the case where gender issues is part of list_of_cat
-        # if self._detect_gender_issues(tracker):
-        #     ic("validate_grievance_cat_modify: gender issues detected in list_of_cat")
-        #     return self._report_gender_issues(dispatcher, tracker)
+        #deal with the case where gender issues is part of list_of_cat
+        if self._detect_gender_issues(tracker):
+            ic("validate_grievance_cat_modify: gender issues detected in list_of_cat")
+            return self._report_gender_issues(dispatcher, tracker)
             
-        #update the slots
-        grievance_slots_to_set = {
+        return {
             "grievance_categories": list_of_cat,
-            "grievance_categories_confirmed": None,
-            "grievance_cat_modify": None,
-            "requested_slot": "grievance_categories_confirmed"
+            "grievance_categories_status": None,
+            "grievance_cat_modify": "Done",
         }
-        ic(grievance_slots_to_set)
-        return grievance_slots_to_set
+        
         
         
     
 
     
-    async def extract_grievance_summary_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def extract_grievance_summary_status(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return await self._handle_slot_extraction(
-            "grievance_summary_confirmed",
+            "grievance_summary_status",
             tracker,
             dispatcher,
             domain
         )
     
     
-    async def validate_grievance_summary_confirmed(self, slot_value: Any,
+    async def validate_grievance_summary_status(self, slot_value: Any,
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
@@ -279,17 +378,18 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         #initalize the slots
         
         if slot_value == SKIP_VALUE:
-            return {"grievance_summary_confirmed": SKIP_VALUE,
-                    "grievance_summary": SKIP_VALUE}
+            return {"grievance_summary_status": LLM_GENERATED,
+                    "grievance_summary_temp": SKIP_VALUE} #this will validate the slot and the form
             
             
         if slot_value == "slot_confirmed":
-            return {"grievance_summary_confirmed": "slot_confirmed",
-                    "grievance_summary": tracker.get_slot("grievance_summary_temp")}
+            return {"grievance_summary_status": USER_CONFIRMED,
+                    "grievance_summary_temp": SKIP_VALUE} #this will validate the slot and the form
         
         if slot_value == "slot_edited":
-            return {"grievance_summary_confirmed": "slot_edited",
-                    "grievance_summary_temp": None}
+            return {"grievance_summary_status": "slot_edited",
+                    "grievance_summary_temp": None
+                    }
 
     
     async def extract_grievance_summary_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -310,12 +410,13 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         slot_value = slot_value.strip('/')
        
         if slot_value == SKIP_VALUE:
-            return {"grievance_summary_confirmed": SKIP_VALUE,
-                    "grievance_summary": SKIP_VALUE}
+            return {"grievance_summary_status": LLM_GENERATED,
+                    "grievance_summary_temp": SKIP_VALUE}
         
         if slot_value:
-            return {"grievance_summary_confirmed": None,
-                    "grievance_summary_temp": slot_value}
+            return {"grievance_summary_status": None,
+                    "grievance_summary_temp": slot_value,
+                    "grievance_summary": slot_value}
             
         return {}
 
@@ -359,9 +460,9 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             return slots
         return {}
 
-class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(BaseAction):
+class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_categories_confirmed"
+        return "action_ask_grievance_summary_form_grievance_categories_status"
 
     async def run(
         self,
@@ -370,7 +471,35 @@ class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(BaseAction):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
+        classification_status = tracker.get_slot("classification_status")
         print(f"ACTION ASK GRIEVANCE SUMMARY FORM GRIEVANCE LIST CAT CONFIRMED\n called with message_display_list_cat: {BaseFormValidationAction.message_display_list_cat}")
+        
+        # Handle async classification status
+        if classification_status == "processing":
+            utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
+            dispatcher.utter_message(text=utterance)
+            return []
+        elif classification_status == "failed":
+            utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
+            dispatcher.utter_message(text=utterance)
+            return []
+        elif classification_status == "skipped":
+            # No classification available, proceed with manual input
+            utterance = get_utterance("grievance_form", "async_classification", 4, language_code)
+            dispatcher.utter_message(text=utterance)
+            return []
+        elif classification_status == "completed":
+            # Classification is complete, show results
+            grievance_categories = tracker.get_slot("grievance_categories")
+            grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
+            
+            if grievance_categories and grievance_summary_temp:
+                print(f"✅ Showing async classification results: {grievance_categories}")
+                print(f"Summary: {grievance_summary_temp}")
+                
+                # Show success message
+                utterance = get_utterance("grievance_form", "async_classification", 5, language_code)
+                dispatcher.utter_message(text=utterance)
             
         if BaseFormValidationAction.message_display_list_cat:
             grievance_categories = tracker.get_slot("grievance_categories")
@@ -406,7 +535,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
         domain: DomainDict
         ) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
-        ask_cat_modify_flag = tracker.get_slot("grievance_categories_confirmed")
+        ask_cat_modify_flag = tracker.get_slot("grievance_categories_status")
         ic(ask_cat_modify_flag)
         list_of_cat = tracker.get_slot("grievance_categories")
         
@@ -414,7 +543,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
             if not list_of_cat:
                 utterance = get_utterance("grievance_form", self.name(), 1, language_code)
                 dispatcher.utter_message(text=utterance)
-                return {"grievance_categories_confirmed": SKIP_VALUE}
+                return {"grievance_categories_status": SKIP_VALUE}
             else:
                 buttons = [
                     {"title": cat, "payload": f'/delete_category{{"category_to_delete": "{cat}"}}'}
@@ -435,9 +564,9 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
         return []
     
     
-class ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed(BaseAction):
+class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_summary_confirmed"
+        return "action_ask_grievance_summary_form_grievance_summary_status"
     
     async def run(
         self,
