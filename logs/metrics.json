@@ -10,8 +10,8 @@
     "total_tasks": 14
   },
   "classify_and_summarize_grievance_task": {
-    "start_time": 1749645475.657853,
-    "failed_tasks": 3
+    "start_time": 1751261704.1189194,
+    "failed_tasks": 12
   },
   "translate_grievance_to_english_task": {
     "failed_tasks": 3

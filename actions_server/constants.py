@@ -34,25 +34,72 @@ def load_environment():
 # Load environment variables BEFORE any config is set
 ENV_SOURCE = load_environment()
 
+############################
+# CORE DEFAULT VALUES
+############################
+
+DEFAULT_VALUES = {
+    "NOT_PROVIDED": "Not provided",
+    "ANONYMOUS": "Anonymous",
+    "SKIP_VALUE": "slot_skipped",
+    "DEFAULT_PROVINCE": "Koshi",
+    "DEFAULT_DISTRICT": "Jhapa"
+}
+
 # Location Constants
-QR_PROVINCE = "Koshi"
-QR_DISTRICT = "Jhapa"
-DEFAULT_PROVINCE = "Koshi"
-DEFAULT_DISTRICT = "Jhapa"
-DISTRICT_LIST = ['Jhapa', 'Morang', 'Sunsari']
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 USE_QR_CODE = True
 CUT_OFF_FUZZY_MATCH_LOCATION = 75
 
-# You can add other constants here, organized by category
-# For example:
-SMS_ENABLED = False  # Set to True to enable SMS    
-# API Constants
+############################
+# TASK AND STATUS CONSTANTS
+############################
+
+TASK_STATUS = {
+    "PENDING": "pending",
+    "IN_PROGRESS": "in_progress",
+    "SUCCESS": "SUCCESS",
+    "FAILED": "failed",
+    "ERROR": "error"
+}
+
+GRIEVANCE_CLASSIFICATION_STATUS = {
+    "LLM_generated": "LLM_generated",
+    "LLM_failed": "LLM_failed",
+    "LLM_error": "LLM_error",
+    "user_confirmed": "user_confirmed",
+    "officer_confirmed": "officer_confirmed",
+    "SKIP_VALUE": DEFAULT_VALUES["SKIP_VALUE"]
+}
+
+GRIEVANCE_STATUS = {
+    "SUBMITTED": "submitted",
+    "UNDER_EVALUATION": "under_evaluation",
+    "ESCALATED": "escalated",
+    "RESOLVED": "resolved",
+    "DENIED": "denied"
+}
+
+############################
+# FEATURE FLAGS
+############################
+
+SMS_ENABLED = False  # Set to True to enable SMS
+
+############################
+# FILE PATHS AND PATHS
+############################
 
 # Dynamic file paths based on project root
 PROJECT_ROOT = Path(__file__).parent.parent
 LOOKUP_FILE_PATH = str(PROJECT_ROOT / "data/lookup_tables/list_category.txt")
 DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.csv")
 LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
+
+############################
+# EMAIL CONFIGURATION
+############################
 
 # List of email providers
 EMAIL_PROVIDERS_NEPAL = {
@@ -77,15 +124,6 @@ EMAIL_PROVIDERS_NEPAL = {
 
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
-
-# AWS SNS Configuration
-AWS_REGION = "ap-southeast-1"
-WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
-    "+639175330841", 
-    "+639154345604"
-    # Add other whitelisted numbers
-]
-
 # Email Configuration
 SMTP_CONFIG = {
     "SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
@@ -101,14 +139,9 @@ ADMIN_EMAILS: List[str] = [
     # Add other admin emails
 ]
 
-# Grievance status
-GRIEVANCE_STATUS = {
-    "SUBMITTED": "submitted",
-    "UNDER_EVALUATION": "under_evaluation",
-    "ESCALATED": "escalated",
-    "RESOLVED": "resolved",
-    "DENIED": "denied"
-}
+############################
+# MESSAGING TEMPLATES
+############################
 
 # Email Templates
 EMAIL_TEMPLATES = {
@@ -152,7 +185,7 @@ EMAIL_TEMPLATES = {
 }
 
 # SMS Templates
-DIC_SMS_TEMPLATES ={
+DIC_SMS_TEMPLATES = {
     "OTP_MESSAGE": {
         'en': "Your verification code is {otp}. Please enter this code to verify your phone number.",
         'ne': "तपाईंको सत्यापन कोड {otp} हो। कृपया यो कोड फ्रिज गर्नुहोस् तपाईंको फोन नम्बरको सत्यापन गर्ने लागि।",
@@ -167,25 +200,23 @@ You will receive updates about your grievance through this number.""",
     }
 }
 
-# Default values
-DEFAULT_VALUES = {
-    "NOT_PROVIDED": "Not provided",
-    "ANONYMOUS": "Anonymous",
-    "SKIP_VALUE": "slot_skipped"
-}
+############################
+# LOCATION CONFIGURATION
+############################
 
 # Location Words
-DIC_LOCATION_WORDS = { "province" : {
-    "en" : ["province"],
-    "ne" : ["प्रदेश"]
+DIC_LOCATION_WORDS = {
+    "province": {
+        "en": ["province"],
+        "ne": ["प्रदेश"]
     },
-    "district" : {
-        "en" : ["district"],
-        "ne" : ["जिल्ला"]
+    "district": {
+        "en": ["district"],
+        "ne": ["जिल्ला"]
     },
-    "municipality" : {
-        "en" : ["municipality", "rural municipality", "metropolitan"],
-        "ne" : ["महानगरपालिका", "गाउँपालिका", "नगरपालिका"]
+    "municipality": {
+        "en": ["municipality", "rural municipality", "metropolitan"],
+        "ne": ["महानगरपालिका", "गाउँपालिका", "नगरपालिका"]
     }
 }
 
@@ -219,6 +250,10 @@ DIC_LOCATION_MAPPING = {
         "english": "Sudurpashchim"
     }
 }
+
+############################
+# FILE HANDLING CONFIGURATION
+############################
 
 # File type categories
 FILE_TYPES = {
@@ -279,30 +314,82 @@ FILE_TYPE_MAX_SIZES = {file_type: info['max_size_mb'] * 1024 * 1024 for file_typ
 # Default max file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
+############################
+# FIELD CONFIGURATION
+############################
+
 # Enhanced field configuration with categories and metadata
 FIELD_CONFIG = {
-        'user_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
-        'user_contact_phone': {'alias': 'contact_phone', 'required': True, 'category': 'user'},
-        'user_contact_email': {'alias': 'contact_email', 'required': False, 'category': 'user'},
-        'user_province': {'alias': 'province', 'required': True, 'category': 'user'},
-        'user_district': {'alias': 'district', 'required': True, 'category': 'user'},
-        'user_municipality': {'alias': 'municipality', 'required': True, 'category': 'user'},
-        'user_ward': {'alias': 'ward', 'required': False, 'category': 'user'},
-        'user_village': {'alias': 'village', 'required': False, 'category': 'user'},
-        'user_address': {'alias': 'address', 'required': False, 'category': 'user'},
-        'grievance_details': {'alias': 'grievance', 'required': True, 'category': 'grievance'},
-        'grievance_details_en': {'alias': 'grievance_en', 'required': False, 'category': 'grievance'},
-        'grievance_summary': {'alias': 'summary', 'required': False, 'category': 'grievance'},
-        'grievance_categories': {'alias': 'categories', 'required': True, 'category': 'grievance'},
-    }
+    'user_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
+    'user_contact_phone': {'alias': 'contact_phone', 'required': True, 'category': 'user'},
+    'user_contact_email': {'alias': 'contact_email', 'required': False, 'category': 'user'},
+    'user_province': {'alias': 'province', 'required': True, 'category': 'user'},
+    'user_district': {'alias': 'district', 'required': True, 'category': 'user'},
+    'user_municipality': {'alias': 'municipality', 'required': True, 'category': 'user'},
+    'user_ward': {'alias': 'ward', 'required': False, 'category': 'user'},
+    'user_village': {'alias': 'village', 'required': False, 'category': 'user'},
+    'user_address': {'alias': 'address', 'required': False, 'category': 'user'},
+    'grievance_details': {'alias': 'grievance', 'required': True, 'category': 'grievance'},
+    'grievance_details_en': {'alias': 'grievance_en', 'required': False, 'category': 'grievance'},
+    'grievance_summary': {'alias': 'summary', 'required': False, 'category': 'grievance'},
+    'grievance_categories': {'alias': 'categories', 'required': True, 'category': 'grievance'},
+}
 
-FIELD_MAPPING = {k:v['alias'] for k,v in FIELD_CONFIG.items()}
+FIELD_MAPPING = {k: v['alias'] for k, v in FIELD_CONFIG.items()}
+
 # Derived constants for backward compatibility and easy access
 VALID_FIELD_NAMES = list(FIELD_MAPPING.keys())
 USER_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'user']
 GRIEVANCE_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['category'] == 'grievance']
 REQUIRED_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['required']]
-FIELD_CATEGORIES_MAPPING = {k:v['category'] for k, v in FIELD_CONFIG.items()}
+FIELD_CATEGORIES_MAPPING = {k: v['category'] for k, v in FIELD_CONFIG.items()}
+
+############################
+# AWS CONFIGURATION
+############################
+
+# AWS SNS Configuration
+AWS_REGION = "ap-southeast-1"
+WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
+    "+639175330841", 
+    "+639154345604"
+    # Add other whitelisted numbers
+]
+
+############################
+# DATABASE CONFIGURATION
+############################
+
+# Get Redis configuration from environment variables
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+REDIS_DB = os.getenv('REDIS_DB', '0')
+
+# Database configuration from environment variables
+DB_CONFIG = {
+    'host': os.getenv('POSTGRES_HOST', 'localhost'),
+    'database': os.getenv('POSTGRES_DB', 'grievance_db'),
+    'user': os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
+    'port': os.getenv('POSTGRES_PORT', '5432')
+}
+
+############################
+# RASA WEBSOCKET CONFIGURATION
+############################
+
+# RASA WebSocket configuration
+RASA_WS_HOST = os.getenv('RASA_WS_HOST', 'localhost')
+RASA_WS_PORT = int(os.getenv('RASA_WS_PORT', 5005))
+RASA_WS_PROTOCOL = os.getenv('RASA_WS_PROTOCOL', 'ws')
+RASA_WS_PATH = os.getenv('RASA_WS_PATH', '/socket.io/')
+RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
+RASA_WS_TRANSPORTS = os.getenv('RASA_WS_TRANSPORTS', ['websocket'])
+
+############################
+# DATA LOADING FUNCTIONS
+############################
 
 def load_categories_from_lookup():
     """Loads categories from the lookup table file (list_category.txt)."""
@@ -356,36 +443,21 @@ def update_lookup_table(categories):
         logger.info("✅ Lookup table successfully updated.")
     except Exception as e:
         logger.error(f"⚠ Error updating lookup table: {e}")
-        
+
+############################
+# LOAD CLASSIFICATION DATA
+############################
+
 # Load classification data and categories as constants
 CLASSIFICATION_DATA = load_classification_data()
 LIST_OF_CATEGORIES = [cat.strip("-").strip() for cat in load_categories_from_lookup()]
 
-# Get Redis configuration from environment variables
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', '6379')
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
-REDIS_DB = os.getenv('REDIS_DB', '0')
-
-# Database configuration from environment variables
-DB_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'database': os.getenv('POSTGRES_DB', 'grievance_db'),
-    'user': os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
-    'port': os.getenv('POSTGRES_PORT', '5432')
-}
+############################
+# LOGGING AND INITIALIZATION
+############################
 
 # Log configuration source
 logger.info(f"Configuration loaded from: {ENV_SOURCE}")
 logger.info(f"Database host: {DB_CONFIG['host']}")
 logger.info(f"Database name: {DB_CONFIG['database']}")
 logger.info(f"Redis host: {REDIS_HOST}")
-
-# RASA WebSocket configuration
-RASA_WS_HOST = os.getenv('RASA_WS_HOST', 'localhost')
-RASA_WS_PORT = int(os.getenv('RASA_WS_PORT', 5005))
-RASA_WS_PROTOCOL = os.getenv('RASA_WS_PROTOCOL', 'ws')
-RASA_WS_PATH = os.getenv('RASA_WS_PATH', '/socket.io/')
-RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
-RASA_WS_TRANSPORTS = os.getenv('RASA_WS_TRANSPORTS', ['websocket'])

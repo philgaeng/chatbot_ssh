@@ -129,6 +129,15 @@ slots:
     influence_conversation: true
     mappings:
     - type: custom
+  classification_status:
+    type: categorical
+    mappings:
+    - type: custom
+  classification_task_id:
+    type: text
+    influence_conversation: false
+    mappings:
+    - type: custom
   user_location_consent:
     type: bool
     influence_conversation: true
@@ -303,39 +312,44 @@ slots:
     - type: custom
   grievance_categories:
     type: list
-    influence_conversation: false
-    mappings: []
-  grievance_cat_modify:
-    type: text
-    influence_conversation: false
+    influence_conversation: true
     mappings:
     - type: custom
-  grievance_categories_confirmed:
+  grievance_categories_status:
+    type: categorical
+    values:
+    - LLM_generated
+    - script_generated
+    - user_confirmed
+    - officer_reviewed
+    - LLM_failed
+    - LLM_error
+    influence_conversation: true
+    mappings:
+    - type: custom
+  grievance_cat_modify:
     type: text
-    influence_conversation: false
+    influence_conversation: true
+    mappings:
+    - type: custom
+  grievance_summary:
+    type: text
+    influence_conversation: true
+    mappings:
+    - type: custom
+  grievance_summary_status:
+    type: categorical
+    values:
+    - LLM_generated
+    - script_generated
+    - user_validated
+    - officer_reviewed
+    influence_conversation: true
     mappings:
     - type: custom
   grievance_summary_temp:
     type: text
-    influence_conversation: false
-    mappings:
-    - type: custom
-  grievance_summary_confirmed:
-    type: text
-    influence_conversation: false
-    mappings:
-    - type: custom
-  # old_category:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings: []
-  # new_category:
-  #   type: text
-  #   influence_conversation: false
-  #   mappings: []
-  grievance_summary:
-    type: text
-    influence_conversation: false
+    influence_conversation: true
     mappings:
     - type: custom
   grievance_date:
@@ -371,8 +385,8 @@ slots:
     type: text
     mappings:
     - type: custom
-  combined_grievance:
-    type: text
+  grievance_details_status:
+    type: categorical
     mappings:
     - type: custom
   skip_validation_needed:
@@ -436,12 +450,12 @@ actions:
 - action_ask_contact_form_user_province
 - action_ask_contact_form_user_village
 - action_ask_contact_form_phone_validation_required
-- action_ask_grievance_details_form_grievance_temp
+- action_ask_grievance_details_form_grievance_new_detail
 - action_ask_grievance_id_form_grievance_id
 - action_ask_grievance_summary_form_gender_follow_up
-- action_ask_grievance_summary_form_grievance_categories_confirmed
+- action_ask_grievance_summary_form_grievance_categories_status
 - action_ask_grievance_summary_form_grievance_cat_modify
-- action_ask_grievance_summary_form_grievance_summary_confirmed
+- action_ask_grievance_summary_form_grievance_summary_status
 - action_ask_grievance_summary_form_grievance_summary_temp
 - action_ask_location_form_user_address_confirmed
 - action_ask_location_form_user_address_temp
@@ -556,5 +570,8 @@ forms:
     ignored_intents: *common-ignore-intents
   grievance_summary_form:
     required_slots:
-    - grievance_categories_confirmed
+    - grievance_categories
+    - grievance_summary
+    - grievance_categories_status
+    - grievance_summary_status
     ignored_intents: *common-ignore-intents

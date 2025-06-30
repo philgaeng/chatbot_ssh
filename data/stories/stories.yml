@@ -33,9 +33,10 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-          - grievance_categories_confirmed
-          - grievance_summary_temp
-          - grievance_summary_confirmed
+          - grievance_categories_status
+          - grievance_categories
+          - grievance_summary
+          - grievance_summary_status
 
   # # Step 1.1 repeated version
   - story: User files a grievance in nepali with optional location and contact details
@@ -80,9 +81,10 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-          - grievance_categories_confirmed
-          - grievance_summary_temp
-          - grievance_summary_confirmed
+          - grievance_categories
+          - grievance_summary
+          - grievance_summary_status
+          - grievance_categories_status
 
 
 
@@ -99,9 +101,10 @@ stories:
       - action: grievance_summary_form
       - active_loop: grievance_summary_form
       - slot_was_set:
-          - grievance_categories_confirmed
-          - grievance_summary_temp
-          - grievance_summary_confirmed
+          - grievance_categories
+          - grievance_summary
+          - grievance_summary_status
+          - grievance_categories_status
 
 
 

@@ -31,6 +31,7 @@ BUTTON_SLOT_EDITED = "/slot_edited"
 BUTTON_MODIFY_EMAIL = "/modify_email"
 BUTTON_MODIFY_PHONE = "/modify_phone"
 BUTTON_CANCEL_MODIFICATION = "/cancel_modification_contact"
+BUTTON_RESTART = "/restart"
 BUTTON_RESTART_PROCESS = "/restart_story{\"restart_type\": \"process\"}"
 BUTTON_RESTART_STORY = "/restart_story{\"restart_type\": \"story\"}"
 BUTTON_MAIN_MENU = "/main_menu"
@@ -125,12 +126,12 @@ BUTTONS_GRIEVANCE_SUBMISSION = {
     'en': [
         {"title": "File as is", "payload": BUTTON_SUBMIT_DETAILS},
         {"title": "Add more details", "payload": BUTTON_ADD_MORE_DETAILS},
-        {"title": "Cancel filing", "payload": BUTTON_EXIT_WITHOUT_FILING}
+        {"title": "Restart the process", "payload": BUTTON_RESTART}
     ],
     'ne': [
         {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
         {"title": "थप विवरण थप्नुहोस्", "payload": BUTTON_ADD_MORE_DETAILS},
-        {"title": "दर्ता रद्द गर्नुहोस्", "payload": BUTTON_EXIT_WITHOUT_FILING}
+        {"title": "प्रक्रिया पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART}
     ]
 }
 
@@ -669,27 +670,31 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_GENDER_FOLLOW_UP
             }
         },  
-        'action_ask_grievance_details_form_grievance_temp': {
+        'action_ask_grievance_details_form_grievance_new_detail': {
             'utterances': {
                 1: {
                     'en': "Great! Let's start by understanding your grievance...",
                     'ne': "राम्रो! चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
                 },
                 2: {
+                    'en': "Lets restart, please enter your grievance details...",
+                    'ne': "प्रक्रिया पुनः सुरु गर्नुहोस्, कृपया आफ्नो गुनासो विवरण प्रविष्ट गर्नुहोस्..."
+                },
+                3: {
                     'en': "Please enter more details...",
                     'ne': "कृपया थप विवरण प्रविष्ट गर्नुहोस्..."
                 },
-                3: {
-                    'en': "Calling OpenAI for classification... This may take a few seconds...",
-                    'ne': "OpenAI क्लासिफिकेशनको लागि कल गर्दै... यसमा केही सेकेन्ड लाग्न सक्छ..."
-                },
                 4: {
-                    'en': "Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
+                    'en': 'Thank you for your entry: "{grievance_details}"',
+                    'ne': 'तपाईंको प्रविष्टिको लागि धन्यवाद। "{grievance_details}"'
+                },
+                5: {
+                    'en': "Do you want to add more details to your grievance, such as:\n"
                     "- Location information\n"
                     "- Persons involved\n"
                     "- Quantification of damages (e.g., number of bags of rice lost)\n"
                     "- Monetary value of damages",
-                    'ne': "तपाईंको प्रविष्टिको लागि धन्यवाद। के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n"
+                    'ne': "के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n"
                     "- स्थान जानकारी\n"
                     "- भागहरूको सम्बन्धमा\n"
                     "- हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)\n"
@@ -697,7 +702,7 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: BUTTONS_GRIEVANCE_SUBMISSION
+                4: BUTTONS_GRIEVANCE_SUBMISSION
             }
         },
         'action_call_openai_for_classification': {
@@ -779,7 +784,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_categories_confirmed': {
+        'action_ask_grievance_summary_form_grievance_categories_status': {
             'utterances': {
                 1: {
                     'en': "No categories have been identified yet.",
@@ -805,13 +810,13 @@ UTTERANCE_MAPPING = {
                         {"title": "Yes", "payload": "/slot_confirmed"},
                         {"title": "Add category", "payload": "/slot_added"},
                         {"title": "Delete category", "payload": "/slot_deleted"},
-                        {"title": "Exit", "payload": "/skip"}
+                        {"title": "Skip", "payload": "/skip"}
                     ],
                     'ne': [
                         {"title": "हो", "payload": "/slot_confirmed"},
                         {"title": "श्रेणी थप्नुहोस्", "payload": "/slot_added"},
                         {"title": "श्रेणी हटाउनुहोस्", "payload": "/slot_deleted"},
-                        {"title": "बाहिर निस्कनुहोस्", "payload": "/skip"}
+                        {"title": "छोड्नुहोस्", "payload": "/skip"}
                     ]
                 }
             }
@@ -832,7 +837,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_summary_confirmed': {
+        'action_ask_grievance_summary_form_grievance_summary_status': {
             'utterances': {
                 1: {
                     'en': "Here is the current summary: '{current_summary}'.\n Is this correct?",
