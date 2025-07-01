@@ -18,6 +18,8 @@ path = config.get('RASA_WS_PATH', '/socket.io/')
 protocol = config.get('RASA_WS_PROTOCOL', 'ws')
 transports = config.get('RASA_WS_TRANSPORTS', 'websocket').split(',')
 
+protocol_upload = config.get('FILE_UPLOAD_PROTOCOL', 'http')
+port_upload = config.get('PORT_UPLOAD', ':5001')
 file_upload_path = config.get('FILE_UPLOAD_PATH', '/upload-files')
 file_upload_max_size = config.get('FILE_UPLOAD_MAX_SIZE_MB', '10')
 
@@ -50,7 +52,7 @@ const WEBSOCKET_CONFIG = {{
 
 // File Upload Configuration
 const FILE_UPLOAD_CONFIG = {{
-    URL: `{protocol}://{host}{file_upload_path}`,
+    URL: `{protocol_upload}://{host}{port_upload}{file_upload_path}`,
     MAX_SIZE_MB: {file_upload_max_size}
 }};
 

@@ -57,11 +57,11 @@ CUT_OFF_FUZZY_MATCH_LOCATION = 75
 ############################
 
 TASK_STATUS = {
-    "PENDING": "pending",
     "IN_PROGRESS": "in_progress",
     "SUCCESS": "SUCCESS",
     "FAILED": "failed",
-    "ERROR": "error"
+    "ERROR": "error",
+    "RETRYING": "retrying"
 }
 
 GRIEVANCE_CLASSIFICATION_STATUS = {

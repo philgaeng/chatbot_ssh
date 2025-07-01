@@ -12,6 +12,13 @@ from task_queue.registered_tasks import (
 )
 from actions_server.db_manager import db_manager
 from logger.logger import TaskLogger
+from actions_server.constants import TASK_STATUS
+
+SUCCESS = TASK_STATUS['SUCCESS']
+IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+FAILED = TASK_STATUS['FAILED']
+ERROR = TASK_STATUS['ERROR']
+RETRYING = TASK_STATUS['RETRYING']
 
 task_logger = TaskLogger(service_name='voice_grievance')
 
@@ -111,17 +118,17 @@ def orchestrate_voice_processing(audio_files: List[Dict[str, Any]]) -> Dict[str,
             raise ValueError("No valid audio files provided")
         
         return {
-            'status': 'SUCCESS',
+            'status': SUCCESS,
             'files': file_tasks
         }
             
     except Exception as e:
-        task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(e)})
+        task_logger.log_task_event('orchestrate_voice_processing', FAILED, {'error': str(e)})
         # Clean up any temp files that were created
         for temp_path in temp_paths:
             try:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
             except Exception as cleanup_error:
-                task_logger.log_task_event('orchestrate_voice_processing', 'failed', {'error': str(cleanup_error)})
+                task_logger.log_task_event('orchestrate_voice_processing', FAILED, {'error': str(cleanup_error)})
         raise

@@ -367,3 +367,11 @@ class ActionAttachFiles(BaseAction):
         message = get_utterance('generic_actions', self.name(), 1, language)
         dispatcher.utter_message(text=message)
         return []
+
+class ActionDefaultFallback(BaseAction):
+    def name(self) -> Text:
+        return "action_default_fallback"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        #run the action_menu action
+        return [ActionExecuted("action_menu")]

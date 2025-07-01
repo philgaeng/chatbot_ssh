@@ -42,7 +42,7 @@ def test_nested_dictionary():
     print("=== Test 2: Nested Dictionary ===")
     
     input_data = {
-        'status': 'SUCCESS',
+        'status': SUCCESS,
         'operation': 'classification',
         'values': {
             'grievance_details': 'पानी बिग्रिएको छ',
@@ -76,7 +76,7 @@ def test_group_result_format():
     # This simulates the result from group(classify_task, store_task)
     input_data = [
         {  # Result from classify_and_summarize_grievance_task
-            'status': 'SUCCESS',
+            'status': SUCCESS,
             'operation': 'classification',
             'grievance_id': 'GRIEV-003',
             'values': {
@@ -198,7 +198,7 @@ def test_complex_group_scenario():
     # This simulates a more complex group result with multiple nested levels
     input_data = [
         {  # First task result
-            'status': 'SUCCESS',
+            'status': SUCCESS,
             'operation': 'classification',
             'task_id': 'task-123',
             'grievance_id': 'GRIEV-006',
