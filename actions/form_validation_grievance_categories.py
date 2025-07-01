@@ -73,7 +73,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
                 if task_result.successful():
                     result = task_result.get()
                     
-                    if result.get('status') == 'SUCCESS':
+                    if result.get('status') == SUCCESS:
                         values = result.get('values', {})
                         
                         return {

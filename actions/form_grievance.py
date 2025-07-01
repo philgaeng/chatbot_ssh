@@ -97,10 +97,20 @@ class ActionStartGrievanceProcess(BaseAction):
         
         # Send utterance with grievance ID in the text
         dispatcher.utter_message(
-            text=utterance
+            text=utterance,
         )
         
-        # reset the slots used by the form grievance_details_form and grievance_summary_form and set verification_context to new_user
+        # Emit custom event with grievance ID for frontend
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "grievance_id": grievance_id,
+                    "event_type": "grievance_id_set"
+                }
+            }
+        )
+        
+        # Also set it as a slot for session persistence
         return [
                 SlotSet("grievance_id", grievance_id),
                 SlotSet("user_id", user_id),

@@ -419,7 +419,7 @@ def translate_grievance_to_english(grievance_id: str) -> Dict[str, Any]:
             }
         
         return {
-            'status': 'SUCCESS',
+            'status': SUCCESS,
             'result': translation_result
         }
         

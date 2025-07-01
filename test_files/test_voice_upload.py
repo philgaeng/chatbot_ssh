@@ -8,6 +8,7 @@ import logging
 import base64
 import subprocess
 
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ def test_grievance_creation():
         response.raise_for_status()
         result = response.json()
         
-        if result.get("status") == "success":
+        if result.get("status") == "SUCCESS":
             grievance_id = result.get("id")
             logger.info(f"Successfully created grievance with ID: {grievance_id}")
             return grievance_id

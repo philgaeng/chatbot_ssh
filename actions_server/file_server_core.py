@@ -13,7 +13,7 @@ from actions_server.constants import (
     ALLOWED_MIME_TYPES, 
     FILE_TYPE_MAX_SIZES,
     FILE_TYPES,
-    
+    TASK_STATUS
 )
 from actions_server.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
@@ -24,6 +24,11 @@ SERVICE_NAME = "file_processor"
 
 UPLOAD_FOLDER = 'uploads'
 
+SUCCESS = TASK_STATUS['SUCCESS']
+IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+FAILED = TASK_STATUS['FAILED']
+ERROR = TASK_STATUS['ERROR']
+RETRYING = TASK_STATUS['RETRYING']
 
         
 class FileServerCore(APIManager):
@@ -47,23 +52,23 @@ class FileServerCore(APIManager):
     def get_valid_file(self, file_id: str) -> dict:
         """Retrieve and validate a file by ID."""
         try:
-            self.log_event(event_type='started', details={'file_id': file_id})
+            self.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
             file_data = db_manager.file.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
-                self.log_event(event_type='completed', details={'file_id': file_id, 'exists': True})
+                self.log_event(event_type=SUCCESS, details={'file_id': file_id, 'exists': True})
                 return file_data
             
-            self.log_event(event_type='completed', details={'file_id': file_id, 'exists': False})
+            self.log_event(event_type=SUCCESS, details={'file_id': file_id, 'exists': False})
             return None
         except Exception as e:
-            self.log_event(event_type='failed', details={'file_id': file_id, 'error': str(e)})
+            self.log_event(event_type=FAILED, details={'file_id': file_id, 'error': str(e)})
             return None
 
     def get_audio_metadata(self, file_path: str) -> dict:
         """Get metadata for an audio file"""
         try:
-            self.log_event(event_type='started', details={'file_path': file_path})
+            self.log_event(event_type=IN_PROGRESS, details={'file_path': file_path})
             
             metadata = {}
             
@@ -85,18 +90,18 @@ class FileServerCore(APIManager):
                 'modified_date': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
             })
             
-            self.log_event(event_type='completed', details={'file_path': file_path, 'metadata': metadata})
+            self.log_event(event_type=SUCCESS, details={'file_path': file_path, 'metadata': metadata})
             
             return metadata
             
         except Exception as e:
-            self.log_event(event_type='failed', details={'file_path': file_path, 'error': str(e)})
+            self.log_event(event_type=FAILED, details={'file_path': file_path, 'error': str(e)})
             return {}
 
     def get_file_metadata(self, file_path: str) -> dict:
         """Get metadata for a file"""
         try:
-            self.log_event(event_type='started', details={'file_path': file_path})
+            self.log_event(event_type=IN_PROGRESS, details={'file_path': file_path})
             
             file_stats = os.stat(file_path)
             metadata = {
@@ -105,17 +110,15 @@ class FileServerCore(APIManager):
                 'modified_date': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
             }
             
-            self.log_event(event_type='completed', details={'file_path': file_path, 'metadata': metadata})
+            self.log_event(event_type=SUCCESS, details={'file_path': file_path, 'metadata': metadata})
             
             return metadata
         except Exception as e:
-            self.log_event(event_type='failed', details={'file_path': file_path, 'error': str(e)})
+            self.log_event(event_type=FAILED, details={'file_path': file_path, 'error': str(e)})
             return {}
 
     def process_file_upload(self, grievance_id: str, file_data: dict) -> dict:
         """Process an uploaded file"""
-        self.log_event(event_type='started', details={'grievance_id': grievance_id, 'file': file_data['file_name']})
-        
         # Get file type
         file_type = self.get_file_type(file_data['file_name'])
         
@@ -123,7 +126,6 @@ class FileServerCore(APIManager):
         file_data.update({
             'file_type': file_type,
             'upload_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'processing_status': 'processing',
             'grievance_id': grievance_id
         })
         
@@ -134,14 +136,17 @@ class FileServerCore(APIManager):
             file_data.update(audio_metadata)
         
         # Store file attachment in DB
-        db_manager.file.store_file_attachment(file_data)
+        success = db_manager.file.store_file_attachment(file_data)
+        
+        if not success:
+            raise Exception(f"Failed to store file {file_data['file_name']} in database")
         
         return file_data
 
 
     def process_batch_files(self, grievance_id: str, file_list: list) -> dict:
         """Process a batch of files for a grievance"""
-        self.log_event(event_type='started', details={'grievance_id': grievance_id, 'file_count': len(file_list)})
+        self.log_event(event_type=IN_PROGRESS, details={'grievance_id': grievance_id, 'file_count': len(file_list)})
         
         try:
             results = []
@@ -155,23 +160,23 @@ class FileServerCore(APIManager):
                     result = self.process_file_upload(grievance_id, file_data)
                     results.append(result)
                 except Exception as e:
-                    self.log_event(event_type='failed', details={'grievance_id': grievance_id, 'file': file_data['file_name'], 'error': str(e)})
+                    self.log_event(event_type=FAILED, details={'grievance_id': grievance_id, 'file': file_data['file_name'], 'error': str(e)})
                     results.append({
-                        'status': 'failed',
+                        'status': FAILED,
                         'file_name': file_data['file_name'],
                         'error': str(e)
                     })
             
-            self.log_event(event_type='completed', details={'grievance_id': grievance_id, 'success_count': len([r for r in results if r['status'] == 'success']), 'failed_count': len([r for r in results if r['status'] == 'failed'])})
+            self.log_event(event_type=SUCCESS, details={'grievance_id': grievance_id, 'success_count': len([r for r in results if r['status'] == SUCCESS]), 'failed_count': len([r for r in results if r['status'] == FAILED])})
             
             return {
-                'status': 'completed',
+                'status': SUCCESS,
                 'grievance_id': grievance_id,
                 'results': results
             }
             
         except Exception as e:
-            self.log_event(event_type='failed', details={'grievance_id': grievance_id, 'error': str(e)})
+            self.log_event(event_type=FAILED, details={'grievance_id': grievance_id, 'error': str(e)})
             raise
 
     def allowed_mime_type(self, mime_type):

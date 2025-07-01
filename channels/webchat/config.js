@@ -20,7 +20,7 @@ const WEBSOCKET_CONFIG = {
 
 // File Upload Configuration
 const FILE_UPLOAD_CONFIG = {
-    URL: `ws://localhost/upload-files`,
+    URL: `http://localhost:5001/upload-files`,
     MAX_SIZE_MB: 10
 };
 

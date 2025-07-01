@@ -35,7 +35,7 @@ Example Usage:
 def my_llm_task(self, input_data: Dict[str, Any], emit_websocket: bool = True):
     # self.service is automatically set to TASK_CONFIG['LLM']['service'] = 'llm_processor'
     logger.info(f"Running LLM task with service: {self.service}")
-    return {"result": "success"}
+    return {"result": "SUCCESS"}
 
 @TaskManager.register_task(task_type='Messaging')  
 def my_messaging_task(self, message: str):
@@ -70,7 +70,7 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
 from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
-from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES
+from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS
 from .celery_app import celery_app  # Safe to import at module level now
 
 # Task type names (single source of truth)
@@ -136,6 +136,12 @@ TASK_CONFIG = {
                         },
                     },
 }
+
+SUCCESS = TASK_STATUS['SUCCESS']
+IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+FAILED = TASK_STATUS['FAILED']
+ERROR = TASK_STATUS['ERROR']
+RETRYING = TASK_STATUS['RETRYING']
 
 class MonitoringConfig:
     """Configuration for task monitoring and logging"""
@@ -289,7 +295,7 @@ class TaskManager:
         updated = self.db_task.update_task(
             self.task_id,
             {
-                'status_code': 'RETRYING',
+                'status_code': RETRYING,
                 'retry_count': new_retry_count,
                 'error_message': str(error),
                 'retry_history': retry_history_json
@@ -307,7 +313,7 @@ class TaskManager:
         # Log retry attempt
         self.monitoring.log_task_event(
             self.task_name,
-            'retrying',
+            RETRYING,
             {
                 'entity_key': self.entity_key,
                 'entity_id': self.entity_id,
@@ -320,7 +326,7 @@ class TaskManager:
         
         # Emit retry status
         self._emit_status(
-            'retrying',
+            RETRYING,
             {
                 'retry_count': new_retry_count,
                 'error': str(error),
@@ -391,13 +397,13 @@ class TaskManager:
                 websocket_data = {'stage': stage, **(extra_data or {})}
                 if is_retry:
                     websocket_data['retry_count'] = celery_retry_count
-                self._emit_status('processing', websocket_data)
+                self._emit_status(IN_PROGRESS, websocket_data)
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed_to_start',
+                FAILED,
                 {
                     'entity_key': entity_key,
                     'entity_id': entity_id,
@@ -416,17 +422,17 @@ class TaskManager:
         """
         try:
             self.end_time = datetime.datetime.utcnow()
-            self.status = 'SUCCESS'
+            self.status = SUCCESS
             self.result = result
             
             # Log task completion (no database interaction)
             self.monitoring.log_task_event(
                 self.task_name,
-                'completed',
+                SUCCESS,
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
-                    'status': 'SUCCESS',
+                    'status': SUCCESS,
                     'task_id': self.task_id,
                     'result': result,
                     'retry_count': self.retry_count,
@@ -437,13 +443,13 @@ class TaskManager:
             
             # Emit websocket status for UI updates
             if stage:
-                self._emit_status('SUCCESS', result)
+                self._emit_status(SUCCESS, result)
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed_to_complete',
+                FAILED,
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
@@ -466,7 +472,7 @@ class TaskManager:
             # Log task failure (no database interaction)
             self.monitoring.log_task_event(
                 self.task_name,
-                'failed',
+                FAILED,
                 {
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
@@ -748,7 +754,7 @@ class DatabaseTaskManager(TaskManager):
                         raise ValueError(f"Failed to create task record even after entity creation")
                     
                 # Update task status 
-                status_code = 'SUCCESS' if input_data.get('status') == 'SUCCESS' else 'FAILED'
+                status_code = SUCCESS if input_data.get('status') == SUCCESS else 'FAILED'
                 error_message = input_data.get('error') if status_code == 'FAILED' else None
                 
                 db_manager.task.update_task(
@@ -775,7 +781,7 @@ class DatabaseTaskManager(TaskManager):
                 )
             
             result = {
-                'status': 'SUCCESS',
+                'status': SUCCESS,
                 'operation': operation,
                 'entity_key': entity_key,
                 'entity_id': actual_entity_id,

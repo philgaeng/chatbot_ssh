@@ -113,3 +113,18 @@ def emit_file_status_to_rasa(session_id, operation, status, file_id, file_name):
         rasa_sio.disconnect()
     except Exception as e:
         print(f"Failed to emit file status to Rasa: {e}") 
+
+def emit_file_status_update(session_id, status, file_id, operation, session_type='bot', file_name=None):
+    if session_type == 'bot':
+        emit_file_status_to_rasa(session_id=session_id,
+         operation=operation,
+          status=status,
+           file_id=file_id,
+            file_name=file_name)
+    else:
+        message = {
+            'operation': operation,
+            'file_id': file_id,
+            'file_name': file_name
+        }
+        emit_status_update(session_id, status, message= message)

@@ -120,7 +120,7 @@ def get_grievance_status(grievance_id):
         files = db_manager.get_grievance_files(grievance_id)
         
         return jsonify({
-            'status': 'SUCCESS',
+            'status': SUCCESS,
             'grievance': grievance,
             'tasks': tasks,
             'files': files

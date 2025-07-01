@@ -8,12 +8,19 @@ import contextlib
 from actions_server.db_manager import db_manager
 from actions_server.constants import (
     MAX_FILE_SIZE, 
+    TASK_STATUS
 )
 from actions_server.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
 from actions_server.api_manager import APIManager
 from actions_server.file_server_core import FileServerCore
 from task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
+
+SUCCESS = TASK_STATUS['SUCCESS']
+IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+FAILED = TASK_STATUS['FAILED']
+ERROR = TASK_STATUS['ERROR']
+RETRYING = TASK_STATUS['RETRYING']
 
 file_server_core = FileServerCore()
 
@@ -26,8 +33,42 @@ class FileServerAPI:
         self._register_routes()
 
     def _get_language_code(self) -> str:
-        """Get language code from request or default to English"""
+        """Get language code from request parameters or headers"""
         return request.args.get('language', 'en')
+
+    def _extract_session_type_from_grievance_id(self, grievance_id: str) -> str:
+        """Extract session type from grievance_id suffix
+        
+        Args:
+            grievance_id: The grievance ID (e.g., 'GR-20241201-KO-JH-ABC1-A')
+            
+        Returns:
+            str: Session type ('accessible' for 'A', 'bot' for 'B', 'unknown' for others)
+        """
+        return self.__class__.extract_session_type_from_grievance_id(grievance_id)
+
+    @staticmethod
+    def extract_session_type_from_grievance_id(grievance_id: str) -> str:
+        """Extract session type from grievance_id suffix (static method)
+        
+        Args:
+            grievance_id: The grievance ID (e.g., 'GR-20241201-KO-JH-ABC1-A')
+            
+        Returns:
+            str: Session type ('accessible' for 'A', 'bot' for 'B', 'unknown' for others)
+        """
+        if not grievance_id or '-' not in grievance_id:
+            return 'unknown'
+        
+        # Get the last part after the last dash
+        suffix = grievance_id.split('-')[-1]
+        if len(suffix) == 1:
+            if suffix == 'A':
+                return 'accessible'
+            elif suffix == 'B':
+                return 'bot'
+        
+        return 'unknown'
 
     def _register_routes(self):
         """Register all routes with the blueprint"""
@@ -51,7 +92,7 @@ class FileServerAPI:
     def test_db(self):
         """Test database connectivity"""
         try:
-            self.core.log_event(event_type='started', details={})
+            self.core.log_event(event_type=IN_PROGRESS, details={})
             
             # Try to connect to the database
             connection = db_manager.get_connection()
@@ -79,23 +120,23 @@ class FileServerAPI:
             })
             
             return jsonify({
-                "status": "ok", 
+                "status": SUCCESS, 
                 "message": "Database connection successful",
                 "tables_exist": tables_count > 0,
                 "grievance_count": grievance_count,
                 "test_grievance_id": test_id
             })
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({
-                "status": "error", 
+                "status": ERROR, 
                 "message": f"Database connection error: {str(e)}"
             }), 500
             
     def generate_ids(self):
         """Generate grievance_id and user_id using centralized ID generation"""
         try:
-            self.core.log_event(event_type='started', details={'method': 'POST', 'endpoint': '/generate-ids'})
+            self.core.log_event(event_type=IN_PROGRESS, details={'method': 'POST', 'endpoint': '/generate-ids'})
             
             # Get optional parameters from request
             data = request.get_json() or {}
@@ -114,7 +155,7 @@ class FileServerAPI:
             })
             
             return jsonify({
-                'status': 'success',
+                'status': SUCCESS,
                 'grievance_id': grievance_id,
                 'user_id': user_id,
                 'province': province,
@@ -122,9 +163,9 @@ class FileServerAPI:
             }), 200
             
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({
-                'status': 'error',
+                'status': ERROR,
                 'message': f'Failed to generate IDs: {str(e)}'
             }), 500
             
@@ -183,36 +224,35 @@ class FileServerAPI:
         """Handle file uploads for a grievance"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'method': 'POST', 'endpoint': '/upload-files'})
+            self.core.log_event(event_type=IN_PROGRESS, details={'method': 'POST', 'endpoint': '/upload-files'})
             
             # Check if grievance_id is provided
             grievance_id = request.form.get('grievance_id')
             session_id = request.form.get('session_id')
-            client_type = request.form.get('client_type')
-            self.core.log_event(event_type='processing', details={'grievance_id': grievance_id})
+            session_type = self._extract_session_type_from_grievance_id(grievance_id)
+
+            
+            self.core.log_event(event_type=IN_PROGRESS, details={
+                'grievance_id': grievance_id,
+                'session_type': session_type
+            })
             
             if not grievance_id:
-                self.core.log_event(event_type='failed', details={'error': 'No grievance_id provided'})
+                self.core.log_event(event_type=FAILED, details={'error': 'No grievance_id provided'})
                 error_message = get_utterance('file_server', 'upload_files', 1, language_code)
-                return jsonify({"error": error_message}), 400
-
-            # Reject uploads for pending grievances
-            if grievance_id == "pending":
-                self.core.log_event(event_type='failed', details={'error': "Attempted to upload file for pending grievance"})
-                error_message = get_utterance('file_server', 'upload_files', 2, language_code)
                 return jsonify({"error": error_message}), 400
 
             # Check if any file was sent
             if 'files[]' not in request.files:
-                self.core.log_event(event_type='failed', details={'error': "No files[] in request.files"})
+                self.core.log_event(event_type=FAILED, details={'error': "No files[] in request.files"})
                 error_message = get_utterance('file_server', 'upload_files', 3, language_code)
                 return jsonify({"error": error_message}), 400
 
             files = request.files.getlist('files[]')
-            self.core.log_event(event_type='processing', details={'file_count': len(files)})
+            self.core.log_event(event_type=IN_PROGRESS, details={'file_count': len(files)})
             
             if not files:
-                self.core.log_event(event_type='failed', details={'error': "No files in files[] list"})
+                self.core.log_event(event_type=FAILED, details={'error': "No files in files[] list"})
                 error_message = get_utterance('file_server', 'upload_files', 4, language_code)
                 return jsonify({"error": error_message}), 400
 
@@ -225,14 +265,14 @@ class FileServerAPI:
                     "oversized_files": oversized_files,
                     "max_file_size": MAX_FILE_SIZE
                 }), 400
-                self.core.log_event(event_type='failed', details={'error': "All files were invalid"})
+                self.core.log_event(event_type=FAILED, details={'error': "All files were invalid"})
 
             else:
                 # # Process files in batch
                 # result = process_batch_files_task.delay(grievance_id, uploaded_files)
                 file = uploaded_files[0]
                 result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, 
-                                                        session_type=client_type, session_id=session_id)
+                                                        session_type=session_type, session_id=session_id)
 
                 response_data = jsonify({
                     "status": "processing",
@@ -247,7 +287,7 @@ class FileServerAPI:
             return response_data
             
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             error_message = get_utterance('file_server', 'upload_files', 6, language_code)
             return jsonify({"error": error_message}), 500
 
@@ -255,15 +295,23 @@ class FileServerAPI:
         """Get list of files for a grievance"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'grievance_id': grievance_id})
+            session_type = self._extract_session_type_from_grievance_id(grievance_id)
+            self.core.log_event(event_type=IN_PROGRESS, details={
+                'grievance_id': grievance_id,
+                'session_type': session_type
+            })
             
             files = db_manager.get_grievance_files(grievance_id)
             
-            self.core.log_event(event_type='completed', details={'grievance_id': grievance_id, 'file_count': len(files)})
+            self.core.log_event(event_type='completed', details={
+                'grievance_id': grievance_id, 
+                'file_count': len(files),
+                'session_type': session_type
+            })
             
             return jsonify({"files": files}), 200
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             error_message = get_utterance('file_server', 'get_files', 1, language_code)
             return jsonify({"error": error_message}), 500
 
@@ -271,7 +319,7 @@ class FileServerAPI:
         """Download a specific file"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'file_id': file_id})
+            self.core.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
             file_data = db_manager.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
@@ -283,69 +331,69 @@ class FileServerAPI:
                 )
             return jsonify({"error": "File not found"}), 404
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({"error": "Internal server error"}), 500
 
     def get_file_status(self, file_id):
         """Get the processing status of a file"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'file_id': file_id})
+            self.core.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
             if db_manager.file.is_file_saved(file_id):
-                self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': 'SUCCESS'})
-                return jsonify({"status": "SUCCESS", "message": "File is saved in the database"}), 200
+                self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': SUCCESS})
+                return jsonify({"status": SUCCESS, "message": "File is saved in the database"}), 200
             else:
                 self.core.log_event(event_type='not_found', details={'file_id': file_id})
-                return jsonify({"status": "PROCESSING", "message": "File is not yet saved"}), 200
+                return jsonify({"status": IN_PROGRESS, "message": "File is not yet saved"}), 200
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({"error": "Internal server error"}), 500
 
     def get_grievance_review(self, grievance_id):
         """Get all review data for a grievance"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'grievance_id': grievance_id})
+            self.core.log_event(event_type=IN_PROGRESS, details={'grievance_id': grievance_id})
             
             data = db_manager.get_grievance_review_data(grievance_id)
             if not data:
-                self.core.log_event(event_type='failed', details={'grievance_id': grievance_id, 'error': 'Not found'})
+                self.core.log_event(event_type=FAILED, details={'grievance_id': grievance_id, 'error': 'Not found'})
                 return jsonify({'error': 'Not found'}), 404
                 
             self.core.log_event(event_type='completed', details={'grievance_id': grievance_id})
             return jsonify(data), 200
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({'error': 'Internal server error'}), 500
 
     def update_grievance_review(self, grievance_id):
         """Update review data for a grievance (all at once)"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'grievance_id': grievance_id})
+            self.core.log_event(event_type=IN_PROGRESS, details={'grievance_id': grievance_id})
             
             if not request.is_json:
-                self.core.log_event(event_type='failed', details={'error': 'Request must be JSON'})
+                self.core.log_event(event_type=FAILED, details={'error': 'Request must be JSON'})
                 return jsonify({'error': 'Request must be JSON'}), 400
                 
             data = request.get_json()
             success = db_manager.update_grievance_review_data(grievance_id, data)
             if not success:
-                self.core.log_event(event_type='failed', details={'error': 'Update failed'})
+                self.core.log_event(event_type=FAILED, details={'error': 'Update failed'})
                 return jsonify({'error': 'Update failed'}), 400
                 
             self.core.log_event(event_type='completed', details={'grievance_id': grievance_id})
             return jsonify({'message': 'Update successful'}), 200
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({'error': 'Internal server error'}), 500
 
     def get_file(self, filename):
         """Serve uploaded files"""
         try:
             language_code = self._get_language_code()
-            self.core.log_event(event_type='started', details={'file_name': filename})
+            self.core.log_event(event_type=IN_PROGRESS, details={'file_name': filename})
             
             result = send_from_directory(self.core.upload_folder, filename)
             
@@ -353,7 +401,7 @@ class FileServerAPI:
             
             return result
         except Exception as e:
-            self.core.log_event(event_type='failed', details={'error': str(e)})
+            self.core.log_event(event_type=FAILED, details={'error': str(e)})
             return jsonify({'error': str(e)}), 404
 
     def test_upload(self):

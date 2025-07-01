@@ -64,7 +64,7 @@ def simulate_task_execution(is_retry: bool = False, task_id: str = None):
     print("2. Completing task (logging only, no DB interaction)...")
     transcription_id = str(uuid.uuid4())
     task_result = {
-        'status': 'SUCCESS',
+        'status': SUCCESS,
         'operation': 'transcription',
         'field_name': 'grievance_details',
         'value': 'This is a test transcription',

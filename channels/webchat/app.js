@@ -78,6 +78,15 @@ window.getSessionId = function() {
     return storage.getItem(storageKey) || tempSessionId;
 };
 
+// Make grievance ID status available globally for debugging
+window.getGrievanceIdStatus = function() {
+    return {
+        grievanceId: window.grievanceId,
+        hasGrievanceId: !!window.grievanceId,
+        sessionId: window.getSessionId()
+    };
+};
+
 // Initialize WebSocket connection
 function initializeWebSocket() {
     socket = io(WEBSOCKET_CONFIG.URL, {
@@ -188,11 +197,11 @@ function handleBotResponse(response) {
     messageRetryCount = 0;
     window.hasReceivedResponse = true;
     
-    // Extract and set grievance ID if present
-    const grievanceId = extractGrievanceId(response);
-    if (grievanceId) {
-        console.log('Setting grievance ID:', grievanceId);
-        window.grievanceId = grievanceId;
+    // Handle custom events
+    if (response.event_type === 'grievance_id_set') {
+        console.log('Setting grievance ID from event:', response.grievance_id);
+        window.grievanceId = response.grievance_id;
+        return; // Don't display custom events to user
     }
     
     // Handle task status updates
@@ -267,27 +276,6 @@ function handleTaskStatus(taskStatus) {
             statusElement.remove();
         }, 5000);
     }
-}
-
-// Extract grievance ID from bot response
-function extractGrievanceId(response) {
-    if (response.json_message?.grievance_id) {
-        return response.json_message.grievance_id;
-    }
-    if (response.metadata?.grievance_id) {
-        return response.metadata.grievance_id;
-    }
-    if (response.grievance_id) {
-        return response.grievance_id;
-    }
-    if (response.text) {
-        const grievanceMatch = response.text.match(/Your grievance ID is (GR-[A-Z0-9-]+)/);
-        if (grievanceMatch) {
-            console.log('Grievance ID found in text:', grievanceMatch[1]);
-            return grievanceMatch[1];
-        }
-    }
-    return null;
 }
 
 // Safe message sending function
@@ -605,6 +593,8 @@ let selectedFiles = [];
 // Handle file upload
 async function handleFileUpload(files) {
     console.log('Starting file upload process...', files);
+    console.log('Current window.grievanceId:', window.grievanceId);
+    
     if (!window.grievanceId) {
         appendMessage('Please start a grievance submission first.', 'received');
         return;
@@ -652,7 +642,7 @@ async function handleFileUpload(files) {
 
     try {
         console.log('Sending file upload request...');
-        const response = await fetch('/upload-files', {
+        const response = await fetch(FILE_UPLOAD_CONFIG.URL, {
             method: 'POST',
             body: formData
         });

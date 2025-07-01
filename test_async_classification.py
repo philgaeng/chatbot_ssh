@@ -43,7 +43,7 @@ def test_async_classification():
         print(f"✅ Task completed successfully!")
         print(f"Result: {result}")
         
-        if result.get('status') == 'SUCCESS':
+        if result.get('status') == SUCCESS:
             values = result.get('values', {})
             print(f"✅ Classification successful!")
             print(f"Summary: {values.get('grievance_summary', 'N/A')}")
@@ -90,7 +90,7 @@ def test_chain_classification():
         print(f"✅ Chain completed successfully!")
         print(f"Final result: {final_result}")
         
-        if final_result.get('status') == 'SUCCESS':
+        if final_result.get('status') == SUCCESS:
             values = final_result.get('values', {})
             print(f"✅ Classification successful!")
             print(f"Summary: {values.get('grievance_summary', 'N/A')}")
