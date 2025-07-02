@@ -10,8 +10,8 @@
     "total_tasks": 14
   },
   "classify_and_summarize_grievance_task": {
-    "start_time": 1751296151.5095587,
-    "failed_tasks": 27
+    "start_time": 1751352492.9253094,
+    "failed_tasks": 29
   },
   "translate_grievance_to_english_task": {
     "failed_tasks": 3
@@ -40,7 +40,7 @@
     "total_tasks": 2
   },
   "process_file_upload_task": {
-    "start_time": 1751296161.9752865,
+    "start_time": 1751352502.4182677,
     "last_duration": 0.06507229804992676,
     "total_tasks": 2,
     "failed_tasks": 5

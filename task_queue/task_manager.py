@@ -60,7 +60,7 @@ Dependencies:
 
 import datetime
 from actions_server.db_manager import db_manager
-from actions_server.websocket_utils import emit_status_update
+from actions_server.websocket_utils import emit_status_update_accessible
 from typing import Dict, Any, Optional, List, Tuple, Callable
 import time
 import random
@@ -70,8 +70,10 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
 from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
-from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS
+from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS, RASA_WS_URL, RASA_WS_PATH, RASA_WS_TRANSPORTS
 from .celery_app import celery_app  # Safe to import at module level now
+import requests
+from actions.websocket_rasa_actions import TASK_RASA_ACTION_MAP
 
 # Task type names (single source of truth)
 TASK_TYPE_LLM = "LLM"
@@ -136,6 +138,8 @@ TASK_CONFIG = {
                         },
                     },
 }
+
+
 
 SUCCESS = TASK_STATUS['SUCCESS']
 IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
@@ -207,6 +211,7 @@ class TaskManager:
         self.db_task = db_manager.task
         self.task_name = task.name if task else 'unknown_task'
         self.task_type = task_type
+        self.source = None
         
         # Retry tracking
         self.retry_count = getattr(task.request, 'retries', 0) if task and hasattr(task, 'request') else 0
@@ -248,14 +253,19 @@ class TaskManager:
         return delay + jitter
 
     def _emit_status(self, status, data):
-        if self.emit_websocket:
+        """
+        Choose where and when to emit status update based on source and emit_websocket flag
+        Emit status update to accessible websocket room or Rasa action if source is bot
+        """
+        if self.emit_websocket and self.source == 'A': #Accessible websocket room
             # FIXED: Use stored grievance_id for consistent websocket room emission
             # All tasks emit to the grievance_id room where the frontend listens
             websocket_room_id = self.grievance_id 
-            
+            emit_status_update_accessible(websocket_room_id, status, data)
 
-            
-            emit_status_update(websocket_room_id, status, data)
+        if self.emit_websocket and self.source == 'B': #Rasa action websocket room
+            action_name = TASK_RASA_ACTION_MAP.get(self.task_name, 'action_file_upload_status')
+            self.trigger_rasa_action(self.session_id, action_name, slots=data)
 
     def retry_task(self, error: Exception) -> Tuple[bool, Optional[float]]:
         """
@@ -356,6 +366,7 @@ class TaskManager:
             self.entity_key = entity_key
             self.entity_id = entity_id
             self.grievance_id = grievance_id
+            self.source = grievance_id.split("_")[0] #A for accessible, B for bot
             self.session_id = session_id or grievance_id  # Use grievance_id as session_id by default
             self.start_time = datetime.datetime.utcnow()
             self.status = 'PENDING'
@@ -418,13 +429,14 @@ class TaskManager:
 
     def complete_task(self, result=None, stage: str = None) -> bool:
         """Mark task as complete with logging and websocket emission only - no database interaction.
+        Also triggers a Rasa action via HTTP API if session_id and result are available (for file upload/classification tasks).
         Database task record will be created/updated later by store_result_to_db_task.
         """
         try:
             self.end_time = datetime.datetime.utcnow()
             self.status = SUCCESS
             self.result = result
-            
+
             # Log task completion (no database interaction)
             self.monitoring.log_task_event(
                 self.task_name,
@@ -440,10 +452,13 @@ class TaskManager:
                 },
                 service=self.service
             )
-            
+
             # Emit websocket status for UI updates
             if stage:
                 self._emit_status(SUCCESS, result)
+
+
+
             return True
         except Exception as e:
             self.error = str(e)
@@ -626,6 +641,40 @@ class TaskManager:
         error_msg = f"Task '{task_name}' not found in registry"
         cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
         raise KeyError(error_msg)
+
+    @staticmethod
+    def trigger_rasa_action(session_id: str, action_name: str, slots: dict = None):
+        """
+        Trigger a Rasa action via HTTP API for a given session, with optional slots and a source field.
+        Args:
+            session_id (str): The Rasa conversation/session ID
+            action_name (str): The name of the action to trigger
+            slots (dict): Optional dictionary of slots to set
+            source (str): 'A' for accessible, 'B' for bot (default: 'B')
+        """
+        RASA_SERVER_URL = "http://localhost:5005"  # Update if needed
+        url = f"{RASA_SERVER_URL}/conversations/{session_id}/execute"
+        payload = {
+            "name": action_name,
+            "policy": "policy_0_MemoizationPolicy",
+            "confidence": 1.0,
+            "entities": [],
+            "input_channel": "rest",
+            "metadata": {},
+        }
+        if slots is not None:
+            payload["slots"] = slots.copy()
+        else:
+            payload["slots"] = {}
+        # Add the source field
+        payload["slots"]["source"] = source
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            logging.info(f"Triggered Rasa action '{action_name}' for session '{session_id}' with source '{source}'. Response: {response.json()}")
+        except Exception as e:
+            logging.error(f"Failed to trigger Rasa action '{action_name}' for session '{session_id}': {e}")
+
 
 class DatabaseTaskManager(TaskManager):
     """
