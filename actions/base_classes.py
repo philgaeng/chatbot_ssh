@@ -401,3 +401,25 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 return {slot_name: False}
 
         return {}
+
+class ActionFileUploadStatus(BaseAction):
+    def name(self) -> Text:
+        return "action_file_upload_status"
+
+    def run(self, dispatcher, tracker, domain):
+        # You can pass these as slots or from tracker.latest_message
+        file_id = tracker.get_slot("file_id")
+        status = tracker.get_slot("file_status")
+        file_name = tracker.get_slot("file_name")
+        # Add any other info you want to send
+
+        dispatcher.utter_message(
+            json_message={
+                "event_type": "file_upload_status",
+                "file_id": file_id,
+                "status": status,
+                "file_name": file_name,
+                # ... any other fields
+            }
+        )
+        return []
