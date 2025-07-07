@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Import the database manager from actions_server
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 
 # Import all action modules
 from .custom_policy import *

@@ -26,9 +26,10 @@ class LoggingConfig:
     
     # Default services to monitor (centralized service registry)
     DEFAULT_SERVICES = {
-        'llm_processor': 'llm_processor.log',
+        'llm_service': 'llm_service.log',
         'queue_system': 'queue_system.log',
         'db_operations': 'db_operations.log',
+        'database_service': 'database_service.log',
         'db_migrations': 'db_migrations.log',
         'db_backup': 'db_backup.log',
         'ticket_processor': 'ticket_processor.log',
@@ -37,7 +38,11 @@ class LoggingConfig:
         'monitoring_config': 'monitoring_config.log',
         'socketio': 'socketio.log',
         'voice_grievance': 'voice_grievance.log',
-        'api_manager': 'api_manager.log'
+        'api_manager': 'api_manager.log',
+        'file_processor': 'file_processor.log',
+        'file_service': 'file_service.log',
+        'messaging_service': 'messaging_service.log',
+        'channels_api': 'channels_api.log'
     }
     
     @classmethod
@@ -88,29 +93,29 @@ class TaskLogger:
             
         return logger
     
-    def log_task_event(self, task_name: str, event_type: str, details: Optional[Dict[str, Any]] = None, service_name: str = None) -> None:
+    def log_task_event(self, task_name: str, details: Optional[Dict[str, Any]] = None, service_name: str = None, event_type=None) -> None:
         """Log task events with consistent formatting"""
-        log_message = f"Service: {service_name or self.service_name} - Task or function: {task_name} - Event: {event_type}"
+        log_message = f"Service: {service_name or self.service_name} - Task or function: {task_name}"
         if details:
             log_message += f" - Details: {json.dumps(details)}"
         
         self.logger.info(log_message)
-        
-        # Record metrics if needed
-        if event_type == 'started':
-            self._record_metric(task_name, 'start_time', time.time())
-        elif event_type == 'completed':
-            start_time = self._get_metric(task_name, 'start_time', time.time())
-            duration = time.time() - start_time
-            self._record_metric(task_name, 'last_duration', duration)
-            self._record_metric(task_name, 'total_tasks', 
-                self._get_metric(task_name, 'total_tasks', 0) + 1)
-        elif event_type == 'failed':
-            self._record_metric(task_name, 'failed_tasks', 
-                self._get_metric(task_name, 'failed_tasks', 0) + 1)
-        elif event_type == 'retrying':
-            self._record_metric(task_name, 'retry_count', 
-                self._get_metric(task_name, 'retry_count', 0) + 1)
+        if event_type:
+            # Record metrics if needed
+            if event_type == 'started':
+                self._record_metric(task_name, 'start_time', time.time())
+            elif event_type == 'completed':
+                start_time = self._get_metric(task_name, 'start_time', time.time())
+                duration = time.time() - start_time
+                self._record_metric(task_name, 'last_duration', duration)
+                self._record_metric(task_name, 'total_tasks', 
+                    self._get_metric(task_name, 'total_tasks', 0) + 1)
+            elif event_type == 'failed':
+                self._record_metric(task_name, 'failed_tasks', 
+                    self._get_metric(task_name, 'failed_tasks', 0) + 1)
+            elif event_type == 'retrying':
+                self._record_metric(task_name, 'retry_count', 
+                    self._get_metric(task_name, 'retry_count', 0) + 1)
     
     def _record_metric(self, task_name: str, metric_name: str, value: float):
         """Record a metric for a task"""

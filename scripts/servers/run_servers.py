@@ -307,7 +307,7 @@ def init_database():
     
     try:
         # Initialize the database using the shared db_manager
-        from actions_server.db_manager import db_manager
+        from backend.services.database_services.postgres_services import db_manager
         db_manager.init_db()
         logger.info("Database initialized successfully")
         return True
@@ -324,7 +324,7 @@ def start_file_server(port=5001):
         from actions_server import db_manager
         
         # Import file server app
-        from actions_server.file_server import app as file_server_app
+        from backend.api.app import app as file_server_app
         
         # Create uploads directory if it doesn't exist
         uploads_dir = os.path.join(project_root, 'uploads')
@@ -344,7 +344,7 @@ def start_file_server(port=5001):
             "-c",
             f"""
 import sys
-from actions_server.file_server import app
+from backend.api.app import app
 app.run(host='0.0.0.0', port={port}, use_reloader=False, debug=False)
             """
         ]
@@ -395,7 +395,7 @@ project_root = '{project_root}'
 sys.path.append(project_root)
 
 # Now import the app
-from actions_server.app import app
+from backend.api.app import app
 
 # Add a health check endpoint
 @app.route('/health')

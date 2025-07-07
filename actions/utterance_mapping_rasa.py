@@ -1000,7 +1000,14 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        
+        'action_outro': {
+            'utterances': {
+                1: {
+                    'en': "Thank you for using the Grievance Management Chatbot. Have a great day!",
+                    'ne': "गुनासो व्यवस्थापन च्याटबटमा धन्यवाद। एक अच्छा दिन राखौं!"
+                }
+            }
+        },
         'action_set_current_process': {
             'utterances': {
                 1: {

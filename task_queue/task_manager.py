@@ -59,8 +59,8 @@ Dependencies:
 """
 
 import datetime
-from actions_server.db_manager import db_manager
-from actions_server.websocket_utils import emit_status_update_accessible
+from backend.services.database_services.postgres_services import db_manager
+from backend.api.websocket_utils import emit_status_update_accessible
 from typing import Dict, Any, Optional, List, Tuple, Callable
 import time
 import random
@@ -70,10 +70,10 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
 from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
-from actions_server.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS, RASA_WS_URL, RASA_WS_PATH, RASA_WS_TRANSPORTS
+from backend.config.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS, RASA_API_URL, FLASK_URL
 from .celery_app import celery_app  # Safe to import at module level now
 import requests
-from actions.websocket_rasa_actions import TASK_RASA_ACTION_MAP
+from icecream import ic
 
 # Task type names (single source of truth)
 TASK_TYPE_LLM = "LLM"
@@ -81,6 +81,21 @@ TASK_TYPE_FILEUPLOAD = "FileUpload"
 TASK_TYPE_MESSAGING = "Messaging"
 TASK_TYPE_DATABASE = "Database"
 TASK_TYPE_DEFAULT = "Default"
+
+MAP_TASK_TO_TYPE = {
+    'process_file_upload_task': TASK_TYPE_FILEUPLOAD,
+    'process_batch_files_task': TASK_TYPE_FILEUPLOAD,
+    'aggregate_batch_results': TASK_TYPE_FILEUPLOAD,
+    'send_sms_task': TASK_TYPE_MESSAGING,
+    'send_email_task': TASK_TYPE_MESSAGING,
+    'transcribe_audio_file_task': TASK_TYPE_LLM,
+    'classify_and_summarize_grievance_task': TASK_TYPE_LLM,
+    'extract_contact_info_task': TASK_TYPE_LLM,
+    'translate_grievance_to_english_task': TASK_TYPE_LLM,
+    'store_result_to_db_task': TASK_TYPE_DATABASE,
+    'task_registry': TASK_TYPE_DEFAULT,
+    'trigger_rasa_action': TASK_TYPE_DEFAULT,
+}
 
 TASK_CONFIG = {
     TASK_TYPE_LLM: {'service': 'llm_processor', 
@@ -93,7 +108,7 @@ TASK_CONFIG = {
             'retry_on': ['ConnectionError', 'TimeoutError', 'RateLimitError']
         }
     },
-    TASK_TYPE_FILEUPLOAD: {'service': 'queue_system',
+    TASK_TYPE_FILEUPLOAD: {'service': 'file_processor',
                            'queue': {"priority": "medium", "queue": "default", "bind": False},
                            'retries': {
                             'max_retries': 2,
@@ -141,11 +156,13 @@ TASK_CONFIG = {
 
 
 
+
 SUCCESS = TASK_STATUS['SUCCESS']
 IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
 FAILED = TASK_STATUS['FAILED']
 ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
+STARTED = TASK_STATUS['STARTED']
 
 class MonitoringConfig:
     """Configuration for task monitoring and logging"""
@@ -161,20 +178,24 @@ class MonitoringConfig:
         for service in self.config.DEFAULT_SERVICES:
             self.register_logger(service)
     
+    def get_service_from_task_name(self, task_name: str) -> str:
+        """Get service from task name"""
+        return TASK_CONFIG[MAP_TASK_TO_TYPE[task_name]]['service']
+    
     def register_logger(self, service_name: str) -> TaskLogger:
         """Register a new logger for a service"""
         if service_name not in self.logger_registry:
             self.logger_registry[service_name] = TaskLogger(service_name)
         return self.logger_registry[service_name]
     
-    def log_task_event(self, task_name: str, event_type: str, details: Optional[Dict[str, Any]] = None, 
-                      service: str = 'queue_system') -> None:
+    def log_task_event(self, task_name: str, details: Optional[Dict[str, Any]] = None , level='info', event_type=None) -> None:
         """Log task events with consistent formatting"""
+        service = self.get_service_from_task_name(task_name)
         # Get or create logger for the service
         logger = self.logger_registry.get(service, self.register_logger(service))
         
         # Log the event
-        logger.log_task_event(task_name, event_type, details, service_name=service)
+        logger.log_task_event(service_name=service, task_name=task_name, details=details, event_type=event_type)
 
 class RetryConfig:
     """Configuration for task retries"""
@@ -193,10 +214,11 @@ class TaskManager:
     TASK_TYPE_CONFIG = {k:v['queue'] for k, v in TASK_CONFIG.items()}
     monitoring = MonitoringConfig()  # Initialize as class-level attribute
     
-    def __init__(self, task=None, task_type='Default', emit_websocket=False, service='queue_system'):
+    def __init__(self, task=None, emit_websocket=False, service='queue_system'):
         self.task = task
+        self.task_name = task.name if task else 'unknown_task'
+        self.task_type = MAP_TASK_TO_TYPE.get(self.task_name, TASK_TYPE_DEFAULT)
         self.emit_websocket = emit_websocket
-        self.service = service  # Service name for logging
         self.task_id = None
         self.entity_key = None
         self.entity_id = None
@@ -209,15 +231,14 @@ class TaskManager:
         self.result = None
         self.error = None
         self.db_task = db_manager.task
-        self.task_name = task.name if task else 'unknown_task'
-        self.task_type = task_type
-        self.source = None
+        self.service = TASK_CONFIG[self.task_type]['service']
         
         # Retry tracking
         self.retry_count = getattr(task.request, 'retries', 0) if task and hasattr(task, 'request') else 0
         self.last_retry_time = None
         self.retry_config = self._get_retry_config()
         self.retry_history: List[Dict[str, Any]] = []
+        ic(0,self.task_name, self.task_type, self.service)
 
     def _get_retry_config(self) -> Dict[str, Any]:
         """Get retry configuration based on task type"""
@@ -252,20 +273,104 @@ class TaskManager:
         jitter = random.uniform(0, 0.1 * delay)
         return delay + jitter
 
-    def _emit_status(self, status, data):
+    def emit_status(self, status, data):
+       
         """
-        Choose where and when to emit status update based on source and emit_websocket flag
-        Emit status update to accessible websocket room or Rasa action if source is bot
+        Send task status update directly to Flask API endpoint for websocket emission
+        Args:
+            status (str): The status to send
+            data (dict): The data to send
         """
-        if self.emit_websocket and self.source == 'A': #Accessible websocket room
-            # FIXED: Use stored grievance_id for consistent websocket room emission
-            # All tasks emit to the grievance_id room where the frontend listens
-            websocket_room_id = self.grievance_id 
-            emit_status_update_accessible(websocket_room_id, status, data)
+        try:
+            self.monitoring.log_task_event(
+                task_name='trigger_task_status_update',
+                details={
+                    'grievance_id': self.grievance_id,
+                    'session_id': self.session_id,
+                    'status': status,
+                    'data': data,
+                    'note': 'Sending task status update to Flask API'
+                }
+            )
+            
+            if data is None:
+                data = {}
+            
+            # Add task name and status to data
+            data['task_name'] = self.task_name
+            data['status'] = status
+            
+            # Send to Flask API endpoint
+            url = FLASK_URL + "/task-status"
+            payload = {
+                'status': status,
+                'data': data,
+                'grievance_id': self.grievance_id,
+                'session_id': self.session_id,
+            }
+            
+            # Add grievance_id and session_id if available
+            if hasattr(self, 'grievance_id') and self.grievance_id:
+                payload['grievance_id'] = self.grievance_id
+            
+            if hasattr(self, 'session_id') and self.session_id:
+                payload['session_id'] = self.session_id
+            
+            self.monitoring.log_task_event(
+                task_name='trigger_task_status_update',
+                details={
+                    'url': url,
+                    'payload': payload,
+                    'note': 'Sending to Flask API endpoint'
+                }
+            )
+        
+            try:
+                response = requests.post(url, json=payload, timeout=10)
+                self.monitoring.log_task_event(
+                    task_name='trigger_task_status_update',
+                    details={
+                        'grievance_id': self.grievance_id,
+                        'session_id': self.session_id,
+                        'response_status': response.status_code,
+                        'response_text': response.text,
+                        'note': 'Task status update sent successfully'
+                    }
+                )
+                
+                if response.status_code != 200:
+                    self.monitoring.log_task_event(
+                        task_name='trigger_task_status_update',
+                        details={
+                            'grievance_id': self.grievance_id,
+                            'session_id': self.session_id,
+                            'error': f'API returned status {response.status_code}',
+                            'response': response.text,
+                            'note': 'Task status update failed'
+                        }
+                    )
 
-        if self.emit_websocket and self.source == 'B': #Rasa action websocket room
-            action_name = TASK_RASA_ACTION_MAP.get(self.task_name, 'action_file_upload_status')
-            self.trigger_rasa_action(self.session_id, action_name, slots=data)
+            except Exception as e:
+                self.monitoring.log_task_event(
+                    task_name='trigger_task_status_update',
+                    details={
+                        'grievance_id': self.grievance_id,
+                        'session_id': self.session_id,
+                        'error': str(e),
+                        'note': 'Failed to send task status update'
+                    }
+                )
+            logging.error(f"Failed to send task status update for grievance '{self.grievance_id}' and session '{self.session_id}': {e}")
+
+        except Exception as e:
+            self.monitoring.log_task_event(
+                task_name=self.task_name,
+                details={
+                    'entity_key': self.entity_key,
+                    'entity_id': self.entity_id,
+                    'error': f"Failed to emit status update: {str(e)}"
+                }
+            )
 
     def retry_task(self, error: Exception) -> Tuple[bool, Optional[float]]:
         """
@@ -322,20 +427,19 @@ class TaskManager:
         
         # Log retry attempt
         self.monitoring.log_task_event(
-            self.task_name,
-            RETRYING,
-            {
+            task_name=self.task_name,
+            details={
                 'entity_key': self.entity_key,
                 'entity_id': self.entity_id,
                 'retry_count': new_retry_count,
                 'error': str(error),
                 'next_retry_delay': self._calculate_retry_delay()
             },
-            service=self.service
+            event_type=RETRYING
         )
         
         # Emit retry status
-        self._emit_status(
+        self.emit_status(
             RETRYING,
             {
                 'retry_count': new_retry_count,
@@ -347,7 +451,7 @@ class TaskManager:
         return True, self._calculate_retry_delay()
 
     def start_task(self, entity_key: str, entity_id: str, grievance_id: str, 
-                   stage: str = None, extra_data=None, session_id: str = None) -> bool:
+                    extra_data=None, session_id: str = None) -> bool:
         """Start a new task with logging and websocket emission only - no database interaction.
         Database task record will be created later by store_result_to_db_task when entity exists.
         
@@ -355,7 +459,6 @@ class TaskManager:
             entity_key: Type of entity (user_id, grievance_id, etc.)
             entity_id: ID of the entity
             grievance_id: Grievance ID for websocket emissions (REQUIRED)
-            stage: Optional stage name for logging
             extra_data: Optional extra data for logging
             session_id: Optional session identifier for websocket emissions
         """
@@ -366,10 +469,21 @@ class TaskManager:
             self.entity_key = entity_key
             self.entity_id = entity_id
             self.grievance_id = grievance_id
-            self.source = grievance_id.split("_")[0] #A for accessible, B for bot
-            self.session_id = session_id or grievance_id  # Use grievance_id as session_id by default
+            # No longer need source differentiation since we use unified API endpoint
+            self.monitoring.log_task_event(
+                task_name=self.task_name,
+                details={
+                    'grievance_id': grievance_id,
+                    'session_id': session_id,
+                    'note': 'Task started with unified API endpoint',
+                    
+                },
+                event_type=STARTED
+            )
+            self.session_id = session_id
+            ic(1, self.session_id)
             self.start_time = datetime.datetime.utcnow()
-            self.status = 'PENDING'
+            self.status = IN_PROGRESS
             
             # Get Celery's task ID for tracking
             celery_task_id = getattr(self.task.request, 'id', None)
@@ -384,12 +498,12 @@ class TaskManager:
             is_retry = celery_retry_count > 0
             
             # Log task start (no database interaction)
-            log_event_type = 'retry_started' if is_retry else 'started'
+            log_event_type = 'retry_started' if is_retry else STARTED
             log_details = {
+                'session_id': self.session_id,
                 'entity_key': entity_key,
                 'entity_id': entity_id,
                 'grievance_id': self.grievance_id,
-                'stage': stage,
                 'task_id': self.task_id,
                 'celery_retry_count': celery_retry_count,
                 'note': f'Task {"retry" if is_retry else "execution"} started - database record will be created when results are stored',
@@ -397,37 +511,34 @@ class TaskManager:
             }
             
             self.monitoring.log_task_event(
-                self.task_name,
-                log_event_type,
-                log_details,
-                service=self.service
+                task_name=self.task_name,
+                details=log_details,
+                event_type=log_event_type
             )
             
             # Emit websocket status for UI updates
-            if stage:
-                websocket_data = {'stage': stage, **(extra_data or {})}
+            if self.emit_websocket:
+                websocket_data = {'task_name': self.task_name, **(extra_data or {})}
                 if is_retry:
                     websocket_data['retry_count'] = celery_retry_count
-                self._emit_status(IN_PROGRESS, websocket_data)
+                self.emit_status(IN_PROGRESS, websocket_data)
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
-                self.task_name,
-                FAILED,
-                {
+                task_name=self.task_name,
+                details={
                     'entity_key': entity_key,
                     'entity_id': entity_id,
                     'grievance_id': self.grievance_id,
-                    'stage': stage,
                     'error': str(e),
                     **(extra_data or {})
                 },
-                service=self.service
+                event_type=FAILED
             )
             return False
 
-    def complete_task(self, result=None, stage: str = None) -> bool:
+    def complete_task(self, result=None) -> bool:
         """Mark task as complete with logging and websocket emission only - no database interaction.
         Also triggers a Rasa action via HTTP API if session_id and result are available (for file upload/classification tasks).
         Database task record will be created/updated later by store_result_to_db_task.
@@ -439,9 +550,9 @@ class TaskManager:
 
             # Log task completion (no database interaction)
             self.monitoring.log_task_event(
-                self.task_name,
-                SUCCESS,
-                {
+                task_name=self.task_name,
+                details={
+                    'session_id': self.session_id,
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
                     'status': SUCCESS,
@@ -450,32 +561,28 @@ class TaskManager:
                     'retry_count': self.retry_count,
                     'note': 'Task completed - database record will be created when results are stored'
                 },
-                service=self.service
+                event_type=SUCCESS
             )
 
             # Emit websocket status for UI updates
-            if stage:
-                self._emit_status(SUCCESS, result)
-
-
+            if self.emit_websocket:
+                    self.emit_status(SUCCESS, result)
 
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
-                self.task_name,
-                FAILED,
-                {
+                task_name=self.task_name,
+                details={
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
-                    'stage': stage,
                     'error': str(e)
                 },
-                service=self.service
+                event_type=FAILED
             )
             return False
 
-    def fail_task(self, error: str, stage: str = None) -> bool:
+    def fail_task(self, error: str) -> bool:
         """Mark task as failed with logging and websocket emission only - no database interaction.
         Database task record will be created/updated later by store_result_to_db_task.
         """
@@ -486,35 +593,31 @@ class TaskManager:
             
             # Log task failure (no database interaction)
             self.monitoring.log_task_event(
-                self.task_name,
-                FAILED,
-                {
+                task_name=self.task_name,
+                details={
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
-                    'stage': stage,
                     'error': error,
                     'retry_count': self.retry_count,
                     'note': 'Task failed - database record will be created when results are stored'
                 },
-                service=self.service
+                event_type=FAILED
             )
             
             # Emit websocket status for UI updates
-            if stage:
-                self._emit_status('FAILED', {'stage': stage, 'error': str(error)})
+            if self.emit_websocket:
+                self.emit_status('FAILED', {'task_name': self.task_name, 'error': str(error)})
             return True
         except Exception as e:
             self.error = str(e)
             self.monitoring.log_task_event(
-                self.task_name,
-                'failed_to_record_failure',
-                {
+                task_name=self.task_name,
+                details={
                     'entity_key': self.entity_key,
                     'entity_id': self.entity_id,
-                    'stage': stage,
                     'error': f"Failed to record failure: {str(e)}"
                 },
-                service=self.service
+                event_type=FAILED
             )
             return False
 
@@ -543,7 +646,7 @@ class TaskManager:
         """
         if task_type not in cls.TASK_TYPE_CONFIG:
             error_msg = f"Unknown task_type '{task_type}'. Please add it to TASK_TYPE_CONFIG."
-            cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
+            cls.monitoring.log_task_event('task_registry', level='error', details={'error': error_msg})
             raise ValueError(error_msg)
         
         # Extract config from TASK_CONFIG
@@ -584,9 +687,8 @@ class TaskManager:
             
             # Log task registration
             cls.monitoring.log_task_event(
-                'task_registry',
-                'registered',
-                {
+                task_name='task_registry',
+                details={
                     'task_name': func.__name__,
                     'task_type': task_type,
                     'queue': queue_config['queue'],
@@ -628,8 +730,7 @@ class TaskManager:
         """Get a task function from the registry by name."""
         task_info = cls.TASK_REGISTRY.get(task_name)
         if not task_info:
-            cls.monitoring.log_task_event('task_registry', 'error', 
-                {'error': f"Task '{task_name}' not found in registry"})
+            cls.monitoring.log_task_event(task_name='task_registry', level='error', details={'error': f"Task '{task_name}' not found in registry"})
         return task_info['task'] if task_info else None
     
     @classmethod
@@ -639,41 +740,94 @@ class TaskManager:
         if task_info:
             return {k: v for k, v in task_info.items() if k != 'task'}
         error_msg = f"Task '{task_name}' not found in registry"
-        cls.monitoring.log_task_event('task_registry', 'error', {'error': error_msg})
+        cls.monitoring.log_task_event(task_name='task_registry', level='error', details={'error': error_msg})
         raise KeyError(error_msg)
 
-    @staticmethod
-    def trigger_rasa_action(session_id: str, action_name: str, slots: dict = None):
+    def trigger_task_status_update(self, status: str, data: dict = None):
         """
-        Trigger a Rasa action via HTTP API for a given session, with optional slots and a source field.
+        Send task status update directly to Flask API endpoint for websocket emission
         Args:
-            session_id (str): The Rasa conversation/session ID
-            action_name (str): The name of the action to trigger
-            slots (dict): Optional dictionary of slots to set
-            source (str): 'A' for accessible, 'B' for bot (default: 'B')
+            status (str): The status to send
+            data (dict): The data to send
         """
-        RASA_SERVER_URL = "http://localhost:5005"  # Update if needed
-        url = f"{RASA_SERVER_URL}/conversations/{session_id}/execute"
+        
+        self.monitoring.log_task_event(
+            task_name='trigger_task_status_update',
+            details={
+                'grievance_id': self.grievance_id,
+                'session_id': self.session_id,
+                'status': status,
+                'data': data,
+                'note': 'Sending task status update to Flask API'
+            }
+        )
+        
+        if data is None:
+            data = {}
+        
+        # Add task name and status to data
+        data['task_name'] = self.task_name
+        data['status'] = status
+        
+        # Send to Flask API endpoint
+        url = "http://localhost:5001/api/task-status"
         payload = {
-            "name": action_name,
-            "policy": "policy_0_MemoizationPolicy",
-            "confidence": 1.0,
-            "entities": [],
-            "input_channel": "rest",
-            "metadata": {},
+            'status': status,
+            'data': data
         }
-        if slots is not None:
-            payload["slots"] = slots.copy()
-        else:
-            payload["slots"] = {}
-        # Add the source field
-        payload["slots"]["source"] = source
+        
+        # Add grievance_id and session_id if available
+        if hasattr(self, 'grievance_id') and self.grievance_id:
+            payload['grievance_id'] = self.grievance_id
+        
+        if hasattr(self, 'session_id') and self.session_id:
+            payload['session_id'] = self.session_id
+        
+        self.monitoring.log_task_event(
+            task_name='trigger_task_status_update',
+            details={
+                'url': url,
+                'payload': payload,
+                'note': 'Sending to Flask API endpoint'
+            }
+        )
+        
         try:
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-            logging.info(f"Triggered Rasa action '{action_name}' for session '{session_id}' with source '{source}'. Response: {response.json()}")
+            response = requests.post(url, json=payload, timeout=10)
+            self.monitoring.log_task_event(
+                task_name='trigger_task_status_update',
+                details={
+                    'grievance_id': self.grievance_id,
+                    'session_id': self.session_id,
+                    'response_status': response.status_code,
+                    'response_text': response.text,
+                    'note': 'Task status update sent successfully'
+                }
+            )
+            
+            if response.status_code != 200:
+                self.monitoring.log_task_event(
+                    task_name='trigger_task_status_update',
+                    details={
+                        'grievance_id': self.grievance_id,
+                        'session_id': self.session_id,
+                        'error': f'API returned status {response.status_code}',
+                        'response': response.text,
+                        'note': 'Task status update failed'
+                    }
+                )
+
         except Exception as e:
-            logging.error(f"Failed to trigger Rasa action '{action_name}' for session '{session_id}': {e}")
+            self.monitoring.log_task_event(
+                task_name='trigger_task_status_update',
+                details={
+                    'grievance_id': self.grievance_id,
+                    'session_id': self.session_id,
+                    'error': str(e),
+                    'note': 'Failed to send task status update'
+                }
+            )
+            logging.error(f"Failed to send task status update for grievance '{self.grievance_id}' and session '{self.session_id}': {e}")
 
 
 class DatabaseTaskManager(TaskManager):
@@ -728,7 +882,7 @@ class DatabaseTaskManager(TaskManager):
                     # Remove the field_name entry from update_data
                     del update_data[field_name]
                 except Exception as e:
-                    self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
+                    self.monitoring.log_task_event(task_name='task_registry', level='error', details={'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
                     raise ValueError(f"Error in prepare_task_result_data_to_db: transcription - {str(e)} - input_data: {input_data} - update_data: {update_data}")
                 
             
@@ -742,7 +896,7 @@ class DatabaseTaskManager(TaskManager):
             return update_data
         except Exception as e:
             
-            self.monitoring.log_task_event('task_registry', 'error', {'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
+            self.monitoring.log_task_event(task_name='task_registry', level='error', details={'error': f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data}"})   
             raise ValueError(f"Error in prepare_task_result_data_to_db: {str(e)} - input_data: {input_data} - update_data: {update_data}")
     
 
@@ -817,16 +971,14 @@ class DatabaseTaskManager(TaskManager):
                 )
                 
                 self.monitoring.log_task_event(
-                    task_name,
-                    'first_execution_completed',
-                    {
+                    task_name=task_name,
+                    details={
                         'entity_key': entity_key,
                         'entity_id': actual_entity_id,
                         'task_id': task_id,
                         'status': status_code,
                         'retry_count': self.retry_count,
-                    },
-                    service=self.service
+                    }
                 )
             
             result = {
@@ -843,16 +995,15 @@ class DatabaseTaskManager(TaskManager):
         except Exception as e:
             error_msg = f"Error in {operation} operation: {str(e)} - input_data: {input_data} - update_data: {update_data}"
             self.monitoring.log_task_event(
-                task_name,
-                'operation_failed',
-                {
+                task_name='operation_failed',
+                details={
                     'entity_key': input_data.get('entity_key', 'unknown'),
                     'entity_id': input_data.get('id', 'unknown'),
                     'task_id': input_data.get('task_id', 'unknown'),
                     'error': error_msg,
                     'note': 'Database operation failed'
                 },
-                service=self.service
+                event_type=FAILED
             )
             return {'status': 'error', 'error': error_msg}
 

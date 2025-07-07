@@ -1,14 +1,14 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from actions_server.file_server_api import FileServerAPI, file_server_bp
-from actions_server.file_server_core import FileServerCore
-from accessible_server.voice_grievance import voice_grievance_bp
-from actions_server.websocket_utils import socketio, emit_status_update
-from actions_server.constants import ALLOWED_EXTENSIONS
-from actions_server.gsheet_monitoring_api import gsheet_monitoring_bp
+from .channels_api import FileServerAPI
+from ..services.file_server_core import FileServerCore
+from ..integration.accessible_server.voice_grievance import voice_grievance_bp
+from .websocket_utils import socketio, emit_status_update_accessible
+from ..config.constants import ALLOWED_EXTENSIONS
+from .gsheet_monitoring_api import gsheet_monitoring_bp
 import os
 from logger.logger import TaskLogger
 from flask_socketio import join_room, rooms
@@ -25,12 +25,12 @@ file_server_core = FileServerCore(
 file_server = FileServerAPI(core=file_server_core)
 
 # Register blueprints
-app.register_blueprint(file_server_bp)
+app.register_blueprint(file_server.blueprint)
 app.register_blueprint(voice_grievance_bp)
 app.register_blueprint(gsheet_monitoring_bp)
 
 # Make the function available to the file_server blueprint
-file_server_bp.emit_status_update = emit_status_update
+file_server.blueprint.emit_status_update_accessible = emit_status_update_accessible
 
 # === Add these handlers here ===
 
@@ -70,12 +70,7 @@ def on_join_room(data):
 def health():
     return 'OK', 200
 
-@app.route('/test_emit_status')
-def test_emit_status():
-    room = data.get('room')  # Replace with your test room/session_id as needed
-    if room:
-        socketio.emit('status_update', {'status': 'test', 'message': 'manual'}, room=room)
-        return 'Emitted test status_update', 200
+
 
 if __name__ == '__main__':
     import eventlet

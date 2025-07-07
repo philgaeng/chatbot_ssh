@@ -3,20 +3,34 @@ from typing import Any, Text, Dict, List
 from random import randint
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted, UserUtteranceReverted
+from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted, UserUtteranceReverted, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from twilio.rest import Client
-from actions_server.constants import  MAX_FILE_SIZE  # Import MAX_FILE_SIZE
+from backend.config.constants import  MAX_FILE_SIZE  # Import MAX_FILE_SIZE
 from .utterance_mapping_rasa import get_utterance, get_buttons
 from icecream import ic
 from .base_classes import BaseAction
+from backend.config.constants import TASK_STATUS, GRIEVANCE_STATUS
 import json
 
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+TASK_SLOTS_TO_UPDATE_MAP = {
+    "process_file_upload_task": {"slot_name": "file_upload_status", "followup_action": None},
+    "classify_and_summarize_grievance_task": {"slot_name": "classification_status", "followup_action": "action_trigger_summary_form"},
+    "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
+   }
+
+IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
+SUCCESS = TASK_STATUS["SUCCESS"]
+FAILED = TASK_STATUS["FAILED"]
+ERROR = TASK_STATUS["ERROR"]
+RETRYING = TASK_STATUS["RETRYING"]
+
 
 class ActionWrapper:
     """Wrapper to catch and log registration errors for actions"""
@@ -39,6 +53,104 @@ class ActionWrapper:
 def get_language_code(tracker: Tracker) -> str:
     """Helper function to get the language code from tracker with English as fallback."""
     return tracker.get_slot("language_code") or "en"
+
+class ActionReopenConversationForEmitStatusUpdate(BaseAction):
+    def name(self) -> Text:
+        return "action_reopen_conversation_for_emit_status_update"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        ic("ActionReopenConversationForEmitStatusUpdate triggered")
+        return []
+
+class ActionEmitStatusUpdate(BaseAction):
+    def name(self) -> Text:
+        return "action_emit_status_update"
+    
+    def extract_slots_to_update(self, data: Dict[Text, Any], domain: DomainDict) -> List[Dict[Text, Any]]:
+        ic("ActionEmitStatusUpdate: triggered")
+        task_name = data.get("task_name")
+        task_status = data.get("status")
+        values = data.get("values", {})
+        
+        # Extract domain slots included in the values
+        slots_to_set = []
+        for slot_name, slot_value in values.items():
+            if slot_name in domain["slots"]:
+                slots_to_set.append(SlotSet(slot_name, slot_value))
+        
+        # Add task-specific slot if mapped
+        if task_name in TASK_SLOTS_TO_UPDATE_MAP:
+            slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
+            slots_to_set.append(SlotSet(slot_name, task_status))
+        
+        # Clear the data_to_emit slot
+        slots_to_set.append(SlotSet("data_to_emit", None))
+        
+        return slots_to_set
+    def extract_followup_action(self, data: Dict[Text, Any], domain: DomainDict) -> Text:
+        task_name = data.get("task_name")
+        if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
+            return TASK_SLOTS_TO_UPDATE_MAP[task_name]['followup_action']
+        return None
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        logger.debug(f"🔍 [RASA DEBUG] ActionEmitStatusUpdate triggered")
+        logger.debug(f"   - data_to_emit slot: {tracker.get_slot('data_to_emit')}")
+        
+        if tracker.get_slot("data_to_emit") is None:
+            ic(f"❌ [RASA DEBUG] No data to emit - raising exception")
+            raise Exception("No data to emit")
+        
+        data = tracker.get_slot("data_to_emit")
+        task_status = data.get("status")
+        task_name = data.get("task_name")
+        task_id = data.get("task_id", 'not_provided')
+        
+        logger.debug(f"🔍 [RASA DEBUG] Processing task: {task_name}, status: {task_status}")
+        logger.debug(f"   - Full data: {data}")
+        
+        if task_status in [SUCCESS, FAILED]:  # Only emit status update for success or failure to not clutter websocket
+            
+            # Structure the data for frontend consumption
+            structured_data = {
+                'task_status': {
+                    'task_id': task_id,
+                    'status': task_status,
+                    'result': data if task_status == SUCCESS else None,
+                    'error': data if task_status == FAILED else None
+                }
+            }
+            logger.debug(f"✅ [RASA DEBUG] Emitting status update via dispatcher.utter_message: {structured_data}")
+            dispatcher.utter_message(json_message=structured_data)
+            if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
+                slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
+                logger.debug(f"   - Setting slot {slot_name} to {task_status}")
+                return [SlotSet(slot_name, task_status)]
+        if task_status == SUCCESS:
+            logger.debug(f"✅ [RASA DEBUG] Processing SUCCESS status")
+            # Structure the data for frontend consumption
+            structured_data = {
+                'task_status': {
+                    'task_id': task_id,
+                    'status': task_status,
+                    'result': data
+                }
+            }
+            dispatcher.utter_message(json_message=structured_data)
+            slots_to_set = self.extract_slots_to_update(data, domain)
+            followup_action = self.extract_followup_action(data, domain)
+            if followup_action:
+                logger.debug(f"   - Adding followup action: {followup_action}")
+                slots_to_set.append(FollowupAction(followup_action))
+            logger.debug(f"   - Returning slots: {slots_to_set}")
+            return slots_to_set
+        else:
+            logger.debug(f"⚠️ [RASA DEBUG] Task status not in [SUCCESS, FAILED]: {task_status}")
+            return []
+
+
+
+
 
 
 class ActionSessionStart(BaseAction):
@@ -139,7 +251,15 @@ class ActionMenu(BaseAction):
         dispatcher.utter_message(text=welcome_text, buttons=buttons)
         return []
 
-
+class ActionOutro(BaseAction):
+    def name(self) -> Text:
+        return "action_outro"
+    
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        language = get_language_code(tracker)
+        message = get_utterance('generic_actions', self.name(), 1, language)
+        dispatcher.utter_message(text=message)
+        return []
 
 #helpers
 class ActionSetCurrentProcess(BaseAction):
@@ -325,6 +445,9 @@ class ActionClearSession(BaseAction): # Corrected class name if it was typo
         return []
 
 
+
+
+
 class ActionCloseBrowserTab(BaseAction):
     def name(self) -> Text:
         return "action_close_browser_tab"
@@ -375,3 +498,26 @@ class ActionDefaultFallback(BaseAction):
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         #run the action_menu action
         return [ActionExecuted("action_menu")]
+
+class ActionFileUploadStatus(BaseAction):
+    def name(self) -> Text:
+        return "action_file_upload_status"
+
+    def run(self, dispatcher, tracker, domain):
+        # You can pass these as slots or from tracker.latest_message
+        file_id = tracker.get_slot("file_id")
+        status = tracker.get_slot("file_status")
+        file_name = tracker.get_slot("file_name")
+        # Add any other info you want to send
+
+        dispatcher.utter_message(
+            json_message={
+                "event_type": "file_upload_status",
+                "file_id": file_id,
+                "status": status,
+                "file_name": file_name,
+                # ... any other fields
+            }
+        )
+        return []
+

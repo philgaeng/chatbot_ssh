@@ -15,7 +15,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.append(PROJECT_ROOT)
 
 # Import the db_manager singleton
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 
 # Load configuration
 def load_config():

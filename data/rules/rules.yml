@@ -1,7 +1,6 @@
 version: "3.1"
 
 rules:
-
   - rule: Say goodbye anytime the user says goodbye
     steps:
       - intent: nav_goodbye
@@ -31,8 +30,8 @@ rules:
 
   - rule: Implementation of the Two-Stage-Fallback
     steps:
-    - intent: nlu_fallback
-    - action: action_default_fallback
+      - intent: nlu_fallback
+      - action: action_default_fallback
 
   - rule: Clearing window
     steps:
@@ -49,3 +48,7 @@ rules:
       - intent: question_attach_files
       - action: action_question_attach_files
 
+  - rule: Emit status update
+    steps:
+      - action: action_reopen_conversation_for_emit_status_update
+      - action: action_emit_status_update

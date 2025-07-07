@@ -10,9 +10,9 @@ from task_queue.registered_tasks import (
     translate_grievance_to_english_task,
     store_result_to_db_task
 )
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 from logger.logger import TaskLogger
-from actions_server.constants import TASK_STATUS
+from backend.config.constants import TASK_STATUS
 
 SUCCESS = TASK_STATUS['SUCCESS']
 IN_PROGRESS = TASK_STATUS['IN_PROGRESS']

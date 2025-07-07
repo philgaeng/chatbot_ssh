@@ -7,7 +7,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from actions_server.messaging import CommunicationClient, SMSClient
+from backend.services.messaging import CommunicationClient, SMSClient
 from .base_classes import BaseFormValidationAction, BaseAction
 from .utterance_mapping_rasa import get_utterance, get_buttons
 from random import randint

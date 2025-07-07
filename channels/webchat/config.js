@@ -11,7 +11,7 @@ const SERVER_CONFIG = {
 
 // WebSocket Configuration
 const WEBSOCKET_CONFIG = {
-    URL: `ws://localhost:5005`, // TODO: check if the port is required when using on remote server
+    URL: `http://localhost:5005`, // TODO: check if the port is required when using on remote server
     OPTIONS: {
         path: '/socket.io/',
         transports: ['websocket']

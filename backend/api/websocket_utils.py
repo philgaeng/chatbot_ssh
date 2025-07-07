@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from flask import request
 import os
 from logger.logger import TaskLogger
-from actions_server.constants import FIELD_CATEGORIES_MAPPING, RASA_WS_HOST, RASA_WS_PORT, RASA_WS_PROTOCOL, RASA_WS_PATH, RASA_WS_URL, RASA_WS_TRANSPORTS
+from ..config.constants import FIELD_CATEGORIES_MAPPING
 import socketio as socketio_client
 
 # Create a task logger instance for socketio
@@ -92,4 +92,3 @@ def emit_status_update_accessible(session_id, status, message):
         task_logger.log_event(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
         logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 
 
-######### RASA WEBSOCKET UTILS #########

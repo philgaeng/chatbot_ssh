@@ -61,7 +61,8 @@ TASK_STATUS = {
     "SUCCESS": "SUCCESS",
     "FAILED": "failed",
     "ERROR": "error",
-    "RETRYING": "retrying"
+    "RETRYING": "retrying",
+    "STARTED": "started"
 }
 
 GRIEVANCE_CLASSIFICATION_STATUS = {
@@ -376,16 +377,24 @@ DB_CONFIG = {
 }
 
 ############################
-# RASA WEBSOCKET CONFIGURATION
+# RASA CONFIGURATION
 ############################
 
 # RASA WebSocket configuration
-RASA_WS_HOST = os.getenv('RASA_WS_HOST', 'localhost')
-RASA_WS_PORT = int(os.getenv('RASA_WS_PORT', 5005))
+RASA_HOST = os.getenv('RASA_HOST', 'localhost')
+RASA_PORT = int(os.getenv('RASA_PORT', 5005))
 RASA_WS_PROTOCOL = os.getenv('RASA_WS_PROTOCOL', 'ws')
 RASA_WS_PATH = os.getenv('RASA_WS_PATH', '/socket.io/')
-RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_WS_HOST}:{RASA_WS_PORT}"
+RASA_WS_URL = f"{RASA_WS_PROTOCOL}://{RASA_HOST}:{RASA_PORT}"
 RASA_WS_TRANSPORTS = os.getenv('RASA_WS_TRANSPORTS', ['websocket'])
+RASA_API_PROTOCOL = os.getenv('RASA_API_PROTOCOL', 'http')
+RASA_API_URL = f"{RASA_API_PROTOCOL}://{RASA_HOST}:{RASA_PORT}"
+
+############################
+# FLASK CONFIGURATION
+
+FLASK_URL = os.getenv('FLASK_URL', 'http://localhost:5001')
+
 
 ############################
 # DATA LOADING FUNCTIONS

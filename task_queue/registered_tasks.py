@@ -48,15 +48,15 @@ Architecture Benefits:
 """
 
 from typing import Dict, Any, List, Tuple, Callable, Optional
-from actions_server.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING, TASK_STATUS
-from actions_server.db_manager import db_manager
-from actions_server.messaging import CommunicationClient
-from actions_server.file_server_core import FileServerCore
+from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING, TASK_STATUS
+from backend.services.database_services.postgres_services import db_manager
+from backend.services.messaging import CommunicationClient
+from backend.services.file_server_core import FileServerCore
 from task_queue.task_manager import TaskManager, DatabaseTaskManager
 from task_queue.celery_app import celery_app
 import json
 from celery import group, chord
-from actions_server.websocket_utils import emit_file_status_to_rasa, emit_file_status_update
+from icecream import ic
 
 __all__ = [
     'process_file_upload_task',
@@ -80,10 +80,12 @@ FAILED = TASK_STATUS['FAILED']
 ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
 
+
+
 #---------------------------------REGISTERED TASKS---------------------------------
 # File Processing Tasks
-@celery_app.task(name='process_file_upload_task')
-def process_file_upload_task(grievance_id: str, 
+@TaskManager.register_task(task_type='FileUpload')
+def process_file_upload_task(self, grievance_id: str, 
                            file_data: Dict[str, Any], 
                            emit_websocket: bool = True,
                            session_type: str = 'bot',
@@ -105,36 +107,19 @@ def process_file_upload_task(grievance_id: str,
         - field_name: 'file_data'
         - value: Processed file data
     """
-    task_mgr = TaskManager(task=process_file_upload_task, task_type='FileUpload', emit_websocket=emit_websocket, service='file_processor')
-    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id, stage='single_file_upload')
+    session_id = grievance_id if session_id is None else session_id
+    ic(session_id)
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
+    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id, session_id=session_id)
     try:
-        file_data = file_server_core.process_file_upload(grievance_id=grievance_id, 
+        result = file_server_core.process_file_upload(grievance_id=grievance_id, 
                                                          file_data=file_data,
                                                          )
-        result = {
-            'status': SUCCESS,
-            'operation': 'file_upload',
-            'field_name': 'file_data',
-            'value': file_data,
-        }
-        task_mgr.complete_task(result, stage='single_file_upload')
-        try:
-            emit_file_status_update(
-                session_id=session_id,
-                status=SUCCESS,
-                file_id=file_data['file_id'],
-                operation='file_upload',
-                session_type=session_type,
-                file_name=file_data['file_name']
-            )
-        except Exception as e:
-            task_mgr.fail_task(error=str(e), 
-            stage='single_file_upload_websocket_emit')
-            raise
+        task_mgr.complete_task(result)
         
         return result
     except Exception as e:
-        task_mgr.fail_task(str(e), stage='single_file_upload')
+        task_mgr.fail_task(str(e))
         raise
 
 @TaskManager.register_task(task_type='FileUpload')
@@ -143,7 +128,6 @@ def process_batch_files_task(self,
                              files_data: List[Dict[str, Any]], 
                              allowed_extensions: List[str] = ALLOWED_EXTENSIONS, 
                              emit_websocket: bool = True,
-                             session_type: str = None,
                              session_id: str = None):
     """
     Process multiple files in batch using Celery chord for per-file parallelism and aggregation.
@@ -162,15 +146,12 @@ def process_batch_files_task(self,
         - file_task_ids: List of task IDs for each file
         - message: Status message
     """
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=emit_websocket, service=self.service)
-    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, stage='batch_file_processing')
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
+    task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id)
     try:
         upload_group = group(
             process_file_upload_task.s(grievance_id, file_data, 
-                                       emit_websocket=False, 
-                                       service=self.service,
-                                       session_type=session_type,
-                                       session_id=session_id)
+                                       emit_websocket=False)
             for file_data in files_data
         )
         # The callback will be called with the list of results
@@ -184,11 +165,11 @@ def process_batch_files_task(self,
             'file_task_ids': [r.id for r in result.parent.results],
             'message': 'Batch file upload tasks have been launched and will be aggregated.'
         }
-        task_mgr.complete_task(summary, stage='batch_file_processing')
+        task_mgr.complete_task(summary)
         
         return summary
     except Exception as e:
-        task_mgr.fail_task(str(e), stage='batch_file_processing')
+        task_mgr.fail_task(str(e))
         raise
 
 @TaskManager.register_task(task_type='FileUpload')
@@ -219,7 +200,7 @@ def aggregate_batch_results(self, results, grievance_id):
         'failed_count': failed_count,
     }
     # Emit WebSocket message for batch completion
-    task_mgr = TaskManager(task=self, task_type='FileUpload', emit_websocket=True, service=self.service)
+    task_mgr = TaskManager(task=self, emit_websocket=True)
     task_mgr._emit_status(grievance_id, summary['status'], summary)
     return summary
 
@@ -237,23 +218,22 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
     Returns:
         Result of the SMS sending operation.
     """
-    from actions_server.messaging import SMSClient
-    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False, service=self.service)
+    from backend.services.messaging import SMSClient
+    task_mgr = TaskManager(task=self,  emit_websocket=False)
     if grievance_id:
         task_mgr.start_task(
             entity_key='grievance_id',
             entity_id=grievance_id,
-            stage='send_sms',
             extra_data={'phone_number': phone_number}
         )
     try:
         result = SMSClient().send_sms(phone_number, message)
         if grievance_id:
-            task_mgr.complete_task(result, stage='send_sms')
+            task_mgr.complete_task(result)
         return result
     except Exception as e:
         if grievance_id:
-            task_mgr.fail_task(str(e), stage='send_sms')
+            task_mgr.fail_task(str(e))
         raise
 
 @TaskManager.register_task(task_type='Messaging')
@@ -270,23 +250,22 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
     Returns:
         Result of the email sending operation.
     """
-    from actions_server.messaging import EmailClient
-    task_mgr = TaskManager(task=self, task_type='Messaging', emit_websocket=False, service=self.service)
+    from backend.services.messaging import EmailClient
+    task_mgr = TaskManager(task=self, emit_websocket=False)
     if grievance_id:
         task_mgr.start_task(
             entity_key='grievance_id',
             entity_id=grievance_id,
-            stage='send_email',
             extra_data={'to_emails': to_emails}
         )
     try:
         result = EmailClient().send_email(to_emails, subject, body)
         if grievance_id:
-            task_mgr.complete_task(result, stage='send_email')
+            task_mgr.complete_task(result)
         return result
     except Exception as e:
         if grievance_id:
-            task_mgr.fail_task(str(e), stage='send_email')
+            task_mgr.fail_task(str(e))
         raise
 
 # LLM Tasks
@@ -328,7 +307,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
     task_id = self.request.id if hasattr(self, 'request') else None
     
     # Create task manager with the current task instance and proper websocket handling
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     try:
         user_id = input_data.get('user_id')
         grievance_id = input_data.get('grievance_id')
@@ -341,7 +320,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
             raise ValueError(f"field_name is required but not found in input data: {input_data}")
             
     except Exception as e:
-        task_mgr.fail_task(str(e), stage='transcription')
+        task_mgr.fail_task(str(e))
         return {
             'status': 'error',
             'operation': 'transcription',
@@ -355,7 +334,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
         # Get recording_id from input_data or lookup from database
         recording_id = input_data.get('recording_id')
         if not recording_id:
-            from actions_server.db_manager import db_manager
+            from backend.services.database_services.postgres_services import db_manager
             recording_id = db_manager.recording.get_recording_id_for_grievance_id_and_field_name(grievance_id, field_name)
             if not recording_id:
                 raise ValueError(f"Could not find recording_id for grievance_id: {grievance_id}, field_name: {field_name}")
@@ -366,12 +345,11 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
         task_mgr.start_task(
             entity_key='transcription_id',
             entity_id=dummy_transcription_id,  # Use task_id as dummy transcription_id
-            stage='transcription',
             extra_data={'file_path': file_path},
             grievance_id=grievance_id
         )
         
-        from actions_server.LLM_helpers import transcribe_audio_file
+        from backend.services.LLM_services import transcribe_audio_file
         transcription = transcribe_audio_file(file_path, language_code)
         values = {field_name: transcription}
         result = {
@@ -390,7 +368,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
             'user_province': input_data.get('user_province'),
             'user_district': input_data.get('user_district')
         }
-        task_mgr.complete_task(values, stage='transcription')
+        task_mgr.complete_task(values)
         
         # Store result to database asynchronously (fire & forget)
         store_result_to_db_task.delay(result)
@@ -409,7 +387,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
             'user_id': user_id
         }
 
-        task_mgr.fail_task(error_result, stage='transcription')
+        task_mgr.fail_task(error_result)
         return error_result
 
 @TaskManager.register_task(task_type='LLM')
@@ -448,7 +426,7 @@ def classify_and_summarize_grievance_task(self,
     # Get the Celery task ID from the current task
     task_id = self.request.id if hasattr(self, 'request') else None
     
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
+    task_mgr = TaskManager(task=self,  emit_websocket=emit_websocket)
     print(f"Classify and summarize grievance task called with file_data: {input_data}")
     
     # Extract grievance_id from the file_data
@@ -469,7 +447,7 @@ def classify_and_summarize_grievance_task(self,
                         entity_id=grievance_id,
                         grievance_id=grievance_id)
     try:
-        from actions_server.LLM_helpers import classify_and_summarize_grievance
+        from backend.services.LLM_services import classify_and_summarize_grievance
         values = classify_and_summarize_grievance(grievance_details, language_code, user_district, user_province) #values is a dict with keys: grievance_summary, grievance_categories
         if not values:
             raise ValueError(f"No result found in classify_and_summarize_grievance: {values}")
@@ -489,14 +467,14 @@ def classify_and_summarize_grievance_task(self,
                   'user_district': user_district
                   }
         
-        task_mgr.complete_task(values, stage='classification')
+        task_mgr.complete_task(values)
         
         # Store result to database asynchronously (fire & forget)
         store_result_to_db_task.delay(result)
         
         return result
     except Exception as e:
-        task_mgr.fail_task(str(e), stage='classification')
+        task_mgr.fail_task(str(e))
         return {
             'status': ERROR,
             'operation': 'classification',
@@ -539,7 +517,7 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
     # Get the Celery task ID from the current task
     
     task_id = self.request.id if hasattr(self, 'request') else None
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     
     try:    
         # Extract data directly from transcription result
@@ -563,10 +541,9 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
             entity_key='user_id', 
             entity_id=user_id,
             grievance_id=grievance_id,
-            stage='contact_info'
         )
     
-        from actions_server.LLM_helpers import extract_contact_info
+        from backend.services.LLM_services import extract_contact_info
         contact_data = input_data['values']
         values = extract_contact_info(contact_data, language_code, user_district, user_province)
         
@@ -589,7 +566,7 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
             # result.update({'result': contact_info})  # Use contact_info direc
     
  
-        task_mgr.complete_task(values, stage='contact_info')
+        task_mgr.complete_task(values)
         
         # Store result to database asynchronously (fire & forget)
         store_result_to_db_task.delay(result)
@@ -597,7 +574,7 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
         return result
     
     except Exception as e:
-        task_mgr.fail_task(str(e), stage='contact_info')
+        task_mgr.fail_task(str(e))
         return {
             'status': ERROR,
             'operation': 'contact_info',
@@ -631,12 +608,10 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
         - user_id: ID of the user
     """
     task_id = self.request.id if hasattr(self, 'request') else None
-    task_mgr = TaskManager(task=self, task_type='LLM', emit_websocket=emit_websocket, service=self.service)
+    task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     
     try:
         task_mgr.monitoring.log_task_event(task_name='translate_grievance_to_english',
-                                           event_type='raw_input_data_for_translation',
-                                           service='llm_processor',
                                            details=input_data)
         # Extract data from potentially nested group result
         grievance_id = input_data.get('grievance_id')
@@ -654,8 +629,7 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
         grievance_data.update({'language_code': language_code, 'grievance_id': grievance_id})
         
         task_mgr.monitoring.log_task_event(task_name='translate_grievance_to_english', 
-                                           event_type='extracted_input_data_for_translation', 
-                                           service='llm_processor', details=grievance_data)
+details=grievance_data)
     
         
         task_mgr.start_task(
@@ -664,7 +638,7 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
             grievance_id=grievance_id
         )
         
-        from actions_server.LLM_helpers import translate_grievance_to_english_LLM
+        from backend.services.LLM_services import translate_grievance_to_english_LLM
         result = translate_grievance_to_english_LLM(grievance_data)
         
         if not result:
@@ -688,7 +662,7 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
             'user_province': input_data.get('user_province'),
             'user_district': input_data.get('user_district')
         }
-        task_mgr.complete_task(values, stage='translation')
+        task_mgr.complete_task(values)
         
         # Store result to database asynchronously (fire & forget)
         store_result_to_db_task.delay(result)
@@ -710,7 +684,7 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
         except:
             pass
             
-        task_mgr.fail_task(str(e), stage='translation')
+        task_mgr.fail_task(str(e))
         return {
             'status': ERROR,
             'operation': 'translation',

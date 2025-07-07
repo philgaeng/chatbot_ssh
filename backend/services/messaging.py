@@ -4,7 +4,7 @@ import boto3
 from botocore.exceptions import ClientError
 from typing import Any, Text, Dict, List, Optional, Tuple
 from random import randint
-from actions_server.constants import (
+from ..config.constants import (
     WHITELIST_PHONE_NUMBERS_OTP_TESTING,
     SMTP_CONFIG,
     ADMIN_EMAILS,

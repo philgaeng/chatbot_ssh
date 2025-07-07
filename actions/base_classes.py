@@ -8,7 +8,7 @@ from rapidfuzz import fuzz
 import re
 import traceback
 from .utterance_mapping_rasa import VALIDATION_SKIP
-from actions_server.constants import DEFAULT_VALUES
+from backend.config.constants import DEFAULT_VALUES
 from icecream import ic
 
 SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
@@ -402,24 +402,3 @@ class BaseFormValidationAction(FormValidationAction, ABC):
 
         return {}
 
-class ActionFileUploadStatus(BaseAction):
-    def name(self) -> Text:
-        return "action_file_upload_status"
-
-    def run(self, dispatcher, tracker, domain):
-        # You can pass these as slots or from tracker.latest_message
-        file_id = tracker.get_slot("file_id")
-        status = tracker.get_slot("file_status")
-        file_name = tracker.get_slot("file_name")
-        # Add any other info you want to send
-
-        dispatcher.utter_message(
-            json_message={
-                "event_type": "file_upload_status",
-                "file_id": file_id,
-                "status": status,
-                "file_name": file_name,
-                # ... any other fields
-            }
-        )
-        return []

@@ -2,7 +2,7 @@ from typing import Any, Text, Dict, List, Optional
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, FollowupAction
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 from .utterance_mapping_rasa import get_utterance, get_buttons
 from .base_classes import BaseFormValidationAction, BaseAction
 from icecream import ic

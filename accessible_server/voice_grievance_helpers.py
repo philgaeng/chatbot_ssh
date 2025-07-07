@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 import uuid
 from typing import Dict, Any, List, Optional, Tuple
-from actions_server.constants import AUDIO_EXTENSIONS, FIELD_MAPPING
+from backend.config.constants import AUDIO_EXTENSIONS, FIELD_MAPPING
 
 # Define service name for logging
 SERVICE_NAME = "voice_grievance"
