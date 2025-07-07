@@ -12,9 +12,9 @@ from datetime import datetime
 from logger.logger import TaskLogger
 from werkzeug.utils import secure_filename
 # Update imports to use actions_server
-from actions_server.db_manager import db_manager
-from actions_server.websocket_utils import emit_status_update
-from actions_server.constants import VALID_FIELD_NAMES, DEFAULT_PROVINCE, DEFAULT_DISTRICT
+from backend.services.database_services.postgres_services import db_manager
+from backend.api.websocket_utils import emit_status_update_accessible
+from backend.config.constants import VALID_FIELD_NAMES, DEFAULT_PROVINCE, DEFAULT_DISTRICT
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
 from task_queue.registered_tasks import process_batch_files_task

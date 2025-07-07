@@ -6,8 +6,8 @@ import uuid
 from datetime import datetime
 import wave
 import contextlib
-from actions_server.db_manager import db_manager
-from actions_server.constants import (
+from .database_services.postgres_services.db_manager import db_manager
+from ..config.constants import (
     MAX_FILE_SIZE, 
     ALLOWED_EXTENSIONS, 
     ALLOWED_MIME_TYPES, 
@@ -15,9 +15,9 @@ from actions_server.constants import (
     FILE_TYPES,
     TASK_STATUS
 )
-from actions_server.utterance_mapping_server import get_utterance
+from ..shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
-from actions_server.api_manager import APIManager
+from ..api.api_manager import APIManager
 
 # Define service name for logging
 SERVICE_NAME = "file_processor"

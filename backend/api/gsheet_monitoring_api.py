@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 import os
-from actions_server.api_manager import APIManager
-from actions_server.db_manager import DatabaseManagers
+from .api_manager import APIManager
+from ..services.database_services.postgres_services.db_manager import DatabaseManagers
 
 
 class GSheetMonitoringAPI:

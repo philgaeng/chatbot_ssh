@@ -149,6 +149,7 @@ You are reaching out to the office of {district} in {province}.
 I am here to help you file a grievance or check its status. What would you like to do?","नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
 तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
 म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+generic_actions,action_outro,1,Thank you for using the Grievance Management Chatbot. Have a great day!,गुनासो व्यवस्थापन च्याटबटमा धन्यवाद। एक अच्छा दिन राखौं!
 generic_actions,action_set_current_process,1,You are currently in the process of {current_story}.,तपाईं हाल {current_story} को प्रक्रियामा हुनुहुन्छ।
 generic_actions,action_go_back,1,Going back to the previous step.,अघिल्लो चरणमा फर्कदै।
 generic_actions,action_restart_story,1,Would you like to restart the current process or story?,के तपाईं वर्तमान प्रक्रिया वा कथामा पुनः सुरु गर्न चाहनुहुन्छ?

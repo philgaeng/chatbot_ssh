@@ -1,13 +1,13 @@
 import os
-import logging
 import json
 from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
-from .constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
-from .db_manager import db_manager
+from logger.logger import TaskLogger
+from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
+from .database_services.postgres_services.db_manager import db_manager
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = TaskLogger(service_name='llm_service')
 
 # Load environment variables
 load_dotenv('/home/ubuntu/nepal_chatbot/.env')
@@ -137,7 +137,7 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
             "user_address": ""
         }
 
-async def classify_and_summarize_grievance(
+def classify_and_summarize_grievance(
     grievance_text: str,
     language_code: str = 'ne',
     user_district: str = DEFAULT_DISTRICT,

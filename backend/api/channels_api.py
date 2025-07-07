@@ -5,16 +5,17 @@ import uuid
 from datetime import datetime
 import wave
 import contextlib
-from actions_server.db_manager import db_manager
-from actions_server.constants import (
+from ..services.database_services.postgres_services.db_manager import db_manager
+from ..config.constants import (
     MAX_FILE_SIZE, 
     TASK_STATUS
 )
-from actions_server.utterance_mapping_server import get_utterance
+from ..shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
-from actions_server.api_manager import APIManager
-from actions_server.file_server_core import FileServerCore
+from ..api.api_manager import APIManager
+from ..services.file_server_core import FileServerCore
 from task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
+from icecream import ic
 
 SUCCESS = TASK_STATUS['SUCCESS']
 IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
@@ -83,6 +84,7 @@ class FileServerAPI:
         self.blueprint.route('/grievance-review/<grievance_id>', methods=['POST'])(self.update_grievance_review)
         self.blueprint.route('/files/<filename>')(self.get_file)
         self.blueprint.route('/test-upload', methods=['POST'])(self.test_upload)
+        self.blueprint.route('/task-status', methods=['POST'])(self.task_status_update)
 
     @staticmethod
     def health_check():
@@ -229,12 +231,13 @@ class FileServerAPI:
             # Check if grievance_id is provided
             grievance_id = request.form.get('grievance_id')
             session_id = request.form.get('session_id')
-            session_type = self._extract_session_type_from_grievance_id(grievance_id)
+            self.source = self._extract_session_type_from_grievance_id(grievance_id)
 
             
             self.core.log_event(event_type=IN_PROGRESS, details={
                 'grievance_id': grievance_id,
-                'session_type': session_type
+                'source': self.source,
+                'session_id': session_id
             })
             
             if not grievance_id:
@@ -268,14 +271,12 @@ class FileServerAPI:
                 self.core.log_event(event_type=FAILED, details={'error': "All files were invalid"})
 
             else:
-                # # Process files in batch
-                # result = process_batch_files_task.delay(grievance_id, uploaded_files)
                 file = uploaded_files[0]
-                result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, 
-                                                        session_type=session_type, session_id=session_id)
+                result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, session_id=session_id)
 
                 response_data = jsonify({
-                    "status": "processing",
+                    "status": IN_PROGRESS,
+                    "session_id": session_id,
                     "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
                     "files": [file['file_id'] for file in uploaded_files],
                     "oversized_files": oversized_files,
@@ -416,6 +417,76 @@ class FileServerAPI:
             return jsonify({"status": "received", "message": "Test upload endpoint received request"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    def task_status_update(self):
+        """
+        API endpoint to receive task status updates and emit websocket messages
+        """
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Extract required fields - support both grievance_id and session_id
+            grievance_id = data.get('grievance_id')
+            session_id = data.get('session_id')
+            source = 'A' if grievance_id and grievance_id.endswith('A') else 'B'  # default to B "Bot"
+            status = data.get('status')
+            task_data = data.get('data', {})
+            
+            if not status:
+                return jsonify({'error': 'Missing required field: status'}), 400
+            
+            if not grievance_id and not session_id:
+                return jsonify({'error': 'Missing required field: grievance_id or session_id'}), 400
+            
+            # Log the incoming request
+            self.core.log_event(event_type='task_status_update', details={
+                'grievance_id': grievance_id,
+                'session_id': session_id,
+                'status': status,
+                'data': task_data,
+                'source': source
+            })
+            
+            # Import socketio here to avoid circular imports
+            from .websocket_utils import socketio, emit_status_update_accessible
+            
+            if source == 'A':
+                # Emit to the grievance room (accessible interface)
+                 # Prepare websocket data
+                websocket_data = {
+                    'status': status,
+                    'data': task_data,
+                    'timestamp': eventlet.time.time()
+                }
+                
+                # Add grievance_id if available
+                if grievance_id:
+                    websocket_data['grievance_id'] = grievance_id
+                    emit_status_update_accessible(grievance_id, status, task_data)
+
+            # for the bot case, we don't need to use websocket as the frontend listens to the event from the backend
+            self.core.log_event(event_type='task_status_emitted', details={
+                'grievance_id': grievance_id,
+                'session_id': session_id,
+                'emit_websocket': True if source == 'A' else False,
+                'status': status,
+                'source': source
+            })
+            
+            return jsonify({
+                'status': status,
+                'message': 'Task status update sent',
+                'grievance_id': grievance_id,
+                'session_id': session_id,
+                'source': source,
+                'data': task_data
+            }), 200
+            
+        except Exception as e:
+            self.core.log_event(event_type='task_status_error', details={'error': str(e)})
+            return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 
 file_server = FileServerAPI(file_server_core)

@@ -12,7 +12,7 @@ import re
 from icecream import ic
 
 # Direct access to constants
-from actions_server.constants import (    
+from ..config.constants import (    
     LOCATION_FOLDER_PATH,
     CUT_OFF_FUZZY_MATCH_LOCATION,
     USE_QR_CODE,

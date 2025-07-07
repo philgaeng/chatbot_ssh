@@ -39,7 +39,7 @@ from .registered_tasks import (
 )
 
 # Import database manager
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 
 class TestGrievanceWorkflow(unittest.TestCase):
     """Test the complete workflow of processing a grievance"""

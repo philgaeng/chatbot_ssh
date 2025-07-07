@@ -12,10 +12,10 @@ def parse_env_file(path):
 env_path = 'env.local'  # Adjust if needed
 config = parse_env_file(env_path)
 
-host = config.get('RASA_WS_HOST', 'localhost')
-port = config.get('RASA_WS_PORT', '5005')
+host = config.get('RASA_HOST', 'localhost')
+port = config.get('RASA_PORT', '5005')
 path = config.get('RASA_WS_PATH', '/socket.io/')
-protocol = config.get('RASA_WS_PROTOCOL', 'ws')
+protocol = config.get('RASA_API_PROTOCOL', 'http')
 transports = config.get('RASA_WS_TRANSPORTS', 'websocket').split(',')
 
 protocol_upload = config.get('FILE_UPLOAD_PROTOCOL', 'http')

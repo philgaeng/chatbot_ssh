@@ -13,15 +13,15 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from .base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
-from actions_server.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES,USER_FIELDS, GRIEVANCE_FIELDS, GRIEVANCE_CLASSIFICATION_STATUS, TASK_STATUS
-from actions_server.db_manager import db_manager
-from actions_server.messaging import SMSClient, EmailClient
+from backend.config.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES,USER_FIELDS, GRIEVANCE_FIELDS, GRIEVANCE_CLASSIFICATION_STATUS, TASK_STATUS
+from backend.services.database_services.postgres_services import db_manager
+from backend.services.messaging import SMSClient, EmailClient
 from .utterance_mapping_rasa import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from .keyword_detector import KeywordDetector, DetectionResult
 from rapidfuzz import process
 from icecream import ic
 from datetime import datetime, timedelta
-from actions_server.LLM_helpers import classify_and_summarize_grievance
+from backend.services.LLM_services import classify_and_summarize_grievance
 
 
 
@@ -34,8 +34,30 @@ SUCCESS = TASK_STATUS["SUCCESS"]
 ERROR = TASK_STATUS["ERROR"]
 SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
 IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
+FAILED = TASK_STATUS["FAILED"]
 
 ############################ STEP 1 - VALIDATE GRIEVANCE SUMMARY AND CATEGORIES ############################
+
+class ActionTriggerSummaryForm(BaseAction):
+    def name(self) -> Text:
+        return "action_trigger_summary_form"
+    
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """
+        Trigger the grievance summary form only if classification is complete.
+        This action should be called after ActionEmitStatusUpdate when classification results are received.
+        """
+        classification_status = tracker.get_slot("classification_status")
+        grievance_status = tracker.get_slot("grievance_status")
+        grievance_categories = tracker.get_slot("grievance_categories")
+        grievance_summary = tracker.get_slot("grievance_summary")
+        
+        # Check if we have classification results
+        if classification_status == SUCCESS and grievance_status == GRIEVANCE_STATUS["SUBMITTED"] and grievance_categories and grievance_summary:
+            # Classification is complete, activate the form
+            return [ActiveLoop("grievance_summary_form")]
+        elif classification_status == FAILED: #no followup action is needed
+            return []
 
 class ValidateGrievanceSummaryForm(BaseFormValidationAction):
     # Class variable to track messagBe display
@@ -49,137 +71,20 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
     def name(self) -> Text:
         return "validate_grievance_summary_form"
     
-    async def _check_classification_status(self, tracker: Tracker, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
-        """
-        Check if async classification is complete and retrieve results.
-        
-        Returns:
-            Dict with updated slots if classification is complete
-        """
-        task_id = tracker.get_slot("classification_task_id")
-        language_code = tracker.get_slot("language_code") or "en"
-        
-        if not task_id:
-            return {}
-        
-        try:
-            # Import Celery app to check task status
-            from task_queue.celery_app import celery_app
-            
-            # Get task result
-            task_result = celery_app.AsyncResult(task_id)
-            
-            if task_result.ready():
-                if task_result.successful():
-                    result = task_result.get()
-                    
-                    if result.get('status') == SUCCESS:
-                        values = result.get('values', {})
-                        
-                        return {
-                            "grievance_summary": values.get('grievance_summary', ''),
-                            "grievance_categories": values.get('grievance_categories', []),
-                            "grievance_summary_status": LLM_GENERATED,
-                            "grievance_categories_status": LLM_GENERATED,
-                            "classification_status": SUCCESS,
-                            "classification_task_id": None
-                        }
-                    else:
-                        # Task completed but failed
-                        utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
-                        dispatcher.utter_message(text=utterance)
-                        
-                        return {
-                            "grievance_summary": "",
-                            "grievance_categories": "",
-                            "grievance_summary_status": LLM_FAILED,
-                            "grievance_categories_status": LLM_FAILED,
-                            "classification_status": "failed",
-                            "classification_task_id": None
-                        }
-                else:
-                    # Task failed with exception
-                    utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
-                    dispatcher.utter_message(text=utterance)
-
-                    return {
-                        "grievance_summary": "",
-                        "grievance_categories": "",
-                        "grievance_summary_status": LLM_ERROR,
-                        "grievance_categories_status": LLM_ERROR,
-                        "classification_status": "failed",
-                        "classification_task_id": None
-                    }
-            else:
-                # Task still processing
-                utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
-                dispatcher.utter_message(text=utterance)
-                
-                return {}
-                
-        except Exception as e:
-            print(f"Error checking task status: {e}")
-            # Fallback - proceed without classification
-            return {
-                "grievance_summary_status": "script_generated",
-                "grievance_categories_status": "script_generated",
-                "classification_task_id": None
-            }
     
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
         print("######################### REQUIRED SLOTS ##############")
         
-        # Check if async classification is still processing and retrieve results if complete
-        classification_status = tracker.get_slot("classification_status")
-        if classification_status == "skipped":
-            return []
-        
-        if classification_status == "processing":
-            # Check if classification is complete now
-            status_update = await self._check_classification_status(tracker, dispatcher)
-            if status_update.get("classification_status") !=  "SUCCESS":
-                # Still processing, show appropriate message
-                language_code = tracker.get_slot("language_code") or "en"
-                utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
-                dispatcher.utter_message(text=utterance)
-                return []
-            else:
-                grievance_categories = status_update.get("grievance_categories")
-                grievance_summary = status_update.get("grievance_summary")
-                grievance_categories_status = status_update.get("grievance_categories_status")
-                grievance_summary_status = status_update.get("grievance_summary_status")
-
-                if grievance_categories_status in [LLM_FAILED, LLM_ERROR]:
-                    return [SlotSet("grievance_categories_status", grievance_categories_status),
-                            SlotSet("grievance_summary_status", grievance_summary_status),
-                            SlotSet("grievance_categories", grievance_categories),
-                            SlotSet("grievance_summary", grievance_summary),
-                            ]
-                else:
-                    return [
-                        SlotSet("grievance_categories", grievance_categories),
-                        SlotSet("grievance_summary", grievance_summary),
-                        "grievance_categories_status",
-                        "grievance_categories_modify",
-                        "grievance_summary_status",
-                        "grievance_summary_temp"
-                    ] #this is the case where the classification is successful and we need now to validate grievance_categories_status
-
-    
-
-        # ic(tracker.get_slot('grievance_categories'))
-
-        # ic(domain_slots)
-        # ic(updated_slots)
-        # ic(grievance_categories_status)
-        # ic(tracker.get_slot('grievance_cat_modify'))
-        # ic(tracker.get_slot('gender_follow_up'))
-        # ic(tracker.get_slot('requested_slot'))
-        # print("--------- END REQUIRED SLOTS ---------")
-
-        # return updated_slots
+        # The form is only activated when classification is complete, so we can simply return the required slots
+        return [
+            "grievance_categories_status",
+            "grievance_cat_modify", 
+            "grievance_summary_status",
+            "grievance_summary_temp"
+        ]
     
     
+
     def _detect_gender_issues(self, tracker: Tracker) -> bool:
         """
         Detects gender issues in the grievance list of categories

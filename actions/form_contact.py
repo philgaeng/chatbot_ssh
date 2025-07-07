@@ -7,9 +7,9 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from actions_server.db_manager import db_manager
+from backend.services.database_services.postgres_services import db_manager
 from .base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
-from actions_server.helpers import ContactLocationValidator
+from backend.shared_functions.helpers import ContactLocationValidator
 from .utterance_mapping_rasa import get_utterance, get_buttons
 from icecream import ic
 
@@ -214,12 +214,8 @@ class ValidateContactForm(BaseFormValidationAction):
     
     def __init__(self):
         super().__init__()
-        print("ValidateContactForm.__init__ called")
-        super().__init__()
-        print("super().__init__() completed")
-        print(f"self.lang_helper exists: {hasattr(self, 'lang_helper')}")
         self.validator = ContactLocationValidator()
-        print("ValidateContactForm.__init__ completed")
+        
 
     def name(self) -> Text:
         return "validate_contact_form"
@@ -259,14 +255,12 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        print("######## FORM: Extracting user_location_consent ######")
         result = await self._handle_boolean_slot_extraction(
             "user_location_consent",
             tracker,
             dispatcher,
             domain
         )
-        print(f"Extraction result: {result}")
         return result
     
     async def validate_user_location_consent(
@@ -277,9 +271,6 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate user_location_consent value."""
-        print("######## FORM: Validating user_location_consent ########")
-        print(f"Validating value: {slot_value}")
-        
         if slot_value is True:
             return {"user_location_consent": True}
         elif slot_value is False:
@@ -400,8 +391,6 @@ class ValidateContactForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         self.validator._initialize_constants(tracker)
         language_code = self.validator.language_code
-        print("######## FORM: Validating municipality_temp ######")
-        print(f"Received value: {slot_value}")
         
         #deal with the slot_skipped case
         if slot_value == SKIP_VALUE:
@@ -417,7 +406,6 @@ class ValidateContactForm(BaseFormValidationAction):
         validated_municipality = self.validator._validate_municipality_input(slot_value, 
                                                                    tracker.get_slot("user_province"),
                                                                    tracker.get_slot("user_district"))
-        print(f"Validated municipality: {validated_municipality}")
         
         if validated_municipality:
             return {"user_municipality_temp": validated_municipality}
@@ -453,12 +441,9 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        print("######## FORM: Validating municipality confirmed slot ######")
-        
-        print(f"Received value for municipality confirmed: {slot_value}")
+
         if slot_value == True:
-            print("## user_municipality_confirmed: True ######")
-            print(f"Received value for municipality: {slot_value}")
+            
         #save the municipality to the slot
             return {"user_municipality_confirmed": True,
                     "user_municipality": tracker.get_slot("user_municipality_temp")}
@@ -490,7 +475,6 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        print("######## FORM: Validating village ######")
         language_code = tracker.get_slot("language_code")
         if slot_value == SKIP_VALUE:
             return {"user_village": SKIP_VALUE}
@@ -567,8 +551,7 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        print("######## FORM: Validating address confirmed slot ######")
-        print(f"Received value for address confirmed: {slot_value}")
+
         # Handle rejection of address confirmation
         if slot_value == False:
             dispatcher.utter_message(text="Please enter your correct village and address")
@@ -582,7 +565,6 @@ class ValidateContactForm(BaseFormValidationAction):
         # Check if we have a confirmation
         if slot_value == True:
             address = tracker.get_slot("user_address_temp")
-            print(f"Address set to: {address}")
             return {
                 "user_address": address,
                 "user_address_confirmed": True
@@ -598,8 +580,6 @@ class ValidateContactForm(BaseFormValidationAction):
         )
         
     async def validate_user_contact_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        print("################ Validate user contact consent ###################")
-        print(f"Received value: {slot_value}")
         
         if slot_value == False:
             return {"user_contact_consent": False,
@@ -627,14 +607,11 @@ class ValidateContactForm(BaseFormValidationAction):
         )
     
     def validate_user_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        print("################ Validate user full name ###################")
-        print(f"Validating value: {slot_value}")
+
         if SKIP_VALUE in slot_value:
-            print("full name skipped")
             return {"user_full_name": SKIP_VALUE}
         
         if not slot_value or slot_value.startswith('/'):
-            print("validation rejected")
             return {"user_full_name": None}
 
         if len(slot_value)<3:
@@ -643,7 +620,6 @@ class ValidateContactForm(BaseFormValidationAction):
             dispatcher.utter_message(text=message)
             return {"user_full_name": None}
         
-        print("validated :", slot_value)
         return {"user_full_name": slot_value}
     
     # ✅ Extract user contact phone
@@ -664,16 +640,12 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate phone number and set validation requirement."""
-        print("################ Validate user contact phone ###################")
-        print(f"Received value: {slot_value}")
         language = get_language_code(tracker)
         if SKIP_VALUE in slot_value:
-            print("⏩ Phone number skipped")
             return {
                 "user_contact_phone": SKIP_VALUE
             }
         if slot_value.startswith("/"):
-            print("payload in slot, reset to None")
             return {"user_contact_phone": None}  
         
         # Validate phone number format
@@ -682,7 +654,7 @@ class ValidateContactForm(BaseFormValidationAction):
             dispatcher.utter_message(text=message)
             return {"user_contact_phone": None}
 
-        print("validated :", slot_value)
+
         
         if re.match(r'^09\d{9}$', slot_value) or re.match(r'^639\d{8}$', slot_value):
             dispatcher.utter_message(text="You entered a PH number for validation.")
@@ -702,7 +674,6 @@ class ValidateContactForm(BaseFormValidationAction):
 
     async def validate_phone_validation_required(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         if slot_value and tracker.get_slot("user_contact_phone") == SKIP_VALUE:
-            print("Reset phone number to None - expected next slot to be user_contact_phone")
             return {"phone_validation_required": None,
                     "user_contact_phone": None}
         else:
@@ -725,11 +696,9 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        print("################ Validate user contact email temp ###################")
         language = get_language_code(tracker)
         #deal with the slot_skipped case
         if slot_value == SKIP_VALUE:
-            print(f"Email skipped: {SKIP_VALUE}")
             return {"user_contact_email_temp": SKIP_VALUE,
                     "user_contact_email_confirmed": False,
                     "user_contact_email": SKIP_VALUE
@@ -737,7 +706,6 @@ class ValidateContactForm(BaseFormValidationAction):
         
         #deal with the email case
         extracted_email = self.validator._email_extract_from_text(slot_value)
-        print(f"Extracted email: {extracted_email}")
         if not extracted_email:
             message = get_utterance('contact_form', 'validate_user_contact_email_temp', 1, language)
             dispatcher.utter_message(text=message)
@@ -751,12 +719,10 @@ class ValidateContactForm(BaseFormValidationAction):
 
         # Check for Nepali email domain using existing method
         if not self.validator._email_is_valid_nepal_domain(extracted_email):
-            print("user validation required")
             # Keep the email in slot but deactivate form while waiting for user choice
             return {"user_contact_email_temp": extracted_email,
                     "user_contact_email_confirmed": None}
             
-        print("email is valid")
         # If all validations pass
         return {"user_contact_email_temp": extracted_email,
                 "user_contact_email_confirmed": True,
@@ -786,7 +752,6 @@ class ValidateContactForm(BaseFormValidationAction):
         Returns:
             Dict containing updates to the relevant email slots based on user's choice
         """
-        print("################ Validate user contact email confirmed ###################")
         if slot_value == SKIP_VALUE:
             return {"user_contact_email_confirmed": SKIP_VALUE}
         if slot_value == "slot_confirmed":
