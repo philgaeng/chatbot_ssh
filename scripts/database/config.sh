@@ -30,6 +30,10 @@ if [ "$ENV_SOURCE" != "default" ]; then
     DB_NAME="${POSTGRES_DB:-grievance_db}"
     DB_USER="${POSTGRES_USER:-nepal_grievance_admin}"
     DB_PASSWORD="${POSTGRES_PASSWORD:-K9!mP2$vL5nX8&qR4jW7}"
+    
+    # Encryption configuration
+    DB_ENCRYPTION_KEY="${DB_ENCRYPTION_KEY:-}"
+    DB_ENCRYPTION_ENABLED="${DB_ENCRYPTION_ENABLED:-false}"
 else
     # Fallback to default values
     DB_HOST="localhost"
@@ -37,6 +41,10 @@ else
     DB_NAME="grievance_db"
     DB_USER="nepal_grievance_admin"
     DB_PASSWORD="K9!mP2$vL5nX8&qR4jW7"
+    
+    # Default encryption settings
+    DB_ENCRYPTION_KEY=""
+    DB_ENCRYPTION_ENABLED="false"
 fi
 
 # Connection Settings
@@ -60,6 +68,11 @@ HEALTH_CHECK_TIMEOUT=30
 HEALTH_CHECK_RETRIES=3
 HEALTH_CHECK_DELAY=5
 
+# Encryption Configuration
+ENCRYPTION_ENABLED="${DB_ENCRYPTION_ENABLED:-false}"
+ENCRYPTION_KEY="${DB_ENCRYPTION_KEY:-}"
+ENCRYPTION_TEST_ENABLED="${ENCRYPTION_TEST_ENABLED:-true}"
+
 # Error Patterns to Monitor
 ERROR_PATTERNS=(
     "connection refused"
@@ -70,6 +83,8 @@ ERROR_PATTERNS=(
     "deadlock detected"
     "timeout expired"
     "could not connect"
+    "extension pgcrypto does not exist"
+    "encryption key not set"
 )
 
 # Export all variables
@@ -79,6 +94,7 @@ export BACKUP_DIR BACKUP_RETENTION_DAYS BACKUP_COMPRESSION
 export LOG_DIR LOG_MAX_SIZE_MB LOG_MAX_FILES LOG_FORMAT
 export SCRIPT_DIR PROJECT_ROOT
 export HEALTH_CHECK_TIMEOUT HEALTH_CHECK_RETRIES HEALTH_CHECK_DELAY
+export ENCRYPTION_ENABLED ENCRYPTION_KEY ENCRYPTION_TEST_ENABLED
 export ERROR_PATTERNS
 
 # Log which configuration was loaded
@@ -86,3 +102,9 @@ echo "Database configuration loaded from: $ENV_SOURCE"
 echo "Database: $DB_NAME"
 echo "Host: $DB_HOST:$DB_PORT"
 echo "User: $DB_USER" 
+echo "Encryption enabled: $ENCRYPTION_ENABLED"
+if [ -n "$ENCRYPTION_KEY" ]; then
+    echo "Encryption key: [SET]"
+else
+    echo "Encryption key: [NOT SET]"
+fi 

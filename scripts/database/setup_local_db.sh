@@ -4,7 +4,7 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$SCRIPT_DIR/config.sh"
 
-echo "Setting up local PostgreSQL database..."
+echo "Setting up local PostgreSQL database with encryption support..."
 
 # Check if PostgreSQL is installed
 if ! command -v psql &> /dev/null; then
@@ -56,6 +56,9 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO $D
 -- Grant table privileges
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $DB_USER;
+
+-- Enable pgcrypto extension for encryption
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 EOF
 
 if [ $? -eq 0 ]; then
@@ -63,6 +66,7 @@ if [ $? -eq 0 ]; then
     echo "Database: $DB_NAME"
     echo "User: $DB_USER"
     echo "Host: $DB_HOST:$DB_PORT"
+    echo "✅ pgcrypto extension enabled for encryption"
 else
     echo "❌ Database setup failed"
     exit 1
@@ -79,4 +83,39 @@ else
     exit 1
 fi
 
-echo "Local database setup completed!" 
+# Test pgcrypto extension
+echo "Testing pgcrypto extension..."
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT pgp_sym_encrypt('test', 'test_key');" > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "✅ pgcrypto extension test successful"
+else
+    echo "❌ pgcrypto extension test failed"
+    exit 1
+fi
+
+# Generate encryption key if not set
+if [ -z "$ENCRYPTION_KEY" ]; then
+    echo "🔑 Generating encryption key..."
+    ENCRYPTION_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+    echo "Generated encryption key: $ENCRYPTION_KEY"
+    echo ""
+    echo "📝 Add this to your environment variables:"
+    echo "export DB_ENCRYPTION_KEY='$ENCRYPTION_KEY'"
+    echo ""
+    echo "Or add to your .env file:"
+    echo "DB_ENCRYPTION_KEY=$ENCRYPTION_KEY"
+    echo ""
+else
+    echo "✅ Encryption key already set"
+fi
+
+echo ""
+echo "🎉 Local database setup completed!"
+echo ""
+echo "📋 Next steps:"
+echo "1. Add the encryption key to your environment variables"
+echo "2. Run database initialization: python scripts/database/init.py --enable-encryption"
+echo "3. Test encryption: python scripts/database/init.py --test-encryption"
+echo ""
+echo "🔐 Encryption is now ready to use!" 

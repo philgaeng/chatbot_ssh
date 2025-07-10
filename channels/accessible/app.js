@@ -6,12 +6,12 @@
 // Debug: Check if script starts loading
 console.log("🔍 Starting to load app.js...");
 
-import socket from "./modules/socket.js";
-import createReviewDataModule from "./modules/reviewData.js";
-import createSpeechModule from "./modules/speech.js";
 import createAccessibilityModule from "./modules/accessibility.js";
 import createAPIModule from "./modules/api.js";
 import createModifyModule from "./modules/modify.js";
+import createReviewDataModule from "./modules/reviewData.js";
+import socket from "./modules/socket.js";
+import createSpeechModule from "./modules/speech.js";
 
 // Module namespaces
 let SpeechModule = {};
@@ -65,14 +65,14 @@ let state = {
 
 // Global review data storage
 window.reviewData = {
-  grievance_details: "",
+  grievance_description: "",
   grievance_summary: "",
   grievance_categories: [],
-  user_full_name: "",
-  user_contact_phone: "",
-  user_municipality: "",
-  user_village: "",
-  user_address: "",
+  complainant_full_name: "",
+  complainant_phone: "",
+  complainant_municipality: "",
+  complainant_village: "",
+  complainant_address: "",
 };
 console.log(
   "[DEBUG] window.reviewData initialized/reset in app.js:",
@@ -131,14 +131,14 @@ function getStepOrder() {
 // At the top of the file, after the windowToRecordingTypeMap
 const windowToRecordingTypeMap = {
   grievance: {
-    grievanceDetails: "grievance_details",
+    grievanceDetails: "grievance_description",
   },
   personalInfo: {
-    fullName: "user_full_name",
-    phone: "user_contact_phone",
-    municipality: "user_municipality",
-    village: "user_village",
-    address: "user_address",
+    fullName: "complainant_full_name",
+    phone: "complainant_phone",
+    municipality: "complainant_municipality",
+    village: "complainant_village",
+    address: "complainant_address",
   },
 };
 
@@ -258,10 +258,10 @@ document.addEventListener("DOMContentLoaded", function () {
           );
           // Use the requiredRecordings from GrievanceModule.canSubmit (keep in sync)
           const requiredRecordings = [
-            "grievance_details",
-            "user_contact_phone",
-            "user_municipality",
-            "user_village",
+            "grievance_description",
+            "complainant_phone",
+            "complainant_municipality",
+            "complainant_village",
           ];
           // Only show if this window is recordable and not required
           if (recordingType && !requiredRecordings.includes(recordingType)) {
@@ -512,14 +512,14 @@ document.addEventListener("DOMContentLoaded", function () {
             );
             const outroFieldMap = {
               grievance_number: "outroGrievanceId",
-              grievance_details: "outroGrievanceDetails",
+              grievance_description: "outroGrievanceDetails",
               grievance_summary: "outroGrievanceSummary",
               grievance_categories: "outroGrievanceCategories",
-              user_full_name: "outroUserName",
-              user_contact_phone: "outroUserPhone",
-              user_municipality: "outroUserMunicipality",
-              user_village: "outroUserVillage",
-              user_address: "outroUserAddress",
+              complainant_full_name: "outroUserName",
+              complainant_phone: "outroUserPhone",
+              complainant_municipality: "outroUserMunicipality",
+              complainant_village: "outroUserVillage",
+              complainant_address: "outroUserAddress",
             };
             const reviewData = window.reviewData || {};
             Object.entries(outroFieldMap).forEach(([dataKey, domId]) => {
@@ -2005,10 +2005,10 @@ GrievanceModule = {
 
     // Check if all required recordings exist
     const requiredRecordings = [
-      "grievance_details",
-      "user_contact_phone",
-      "user_municipality",
-      "user_village",
+      "grievance_description",
+      "complainant_phone",
+      "complainant_municipality",
+      "complainant_village",
     ];
 
     const missingRecordings = requiredRecordings.filter(
@@ -2189,7 +2189,7 @@ GrievanceModule = {
       const formData = new FormData();
       formData.append("language_code", LanguageModule.getCurrentLanguage());
       formData.append("grievance_id", state.grievanceId);
-      formData.append("user_id", state.userId);
+      formData.append("complainant_id", state.userId);
       formData.append("province", state.province);
       formData.append("district", state.district);
 
@@ -2319,7 +2319,7 @@ GrievanceModule = {
     // Populate grievance details
     const grievanceDetails = document.getElementById("grievanceDetailsReview");
     if (grievanceDetails) {
-      grievanceDetails.textContent = data.grievance_details || "";
+      grievanceDetails.textContent = data.grievance_description || "";
     }
 
     // Populate categories
@@ -2338,11 +2338,11 @@ GrievanceModule = {
 
     // Populate user details
     const userDetails = {
-      userNameReview: data.user_full_name,
-      userPhoneReview: data.user_contact_phone,
-      userMunicipalityReview: data.user_municipality,
-      userVillageReview: data.user_village,
-      userAddressReview: data.user_address,
+      userNameReview: data.complainant_full_name,
+      userPhoneReview: data.complainant_phone,
+      userMunicipalityReview: data.complainant_municipality,
+      userVillageReview: data.complainant_village,
+      userAddressReview: data.complainant_address,
     };
 
     Object.entries(userDetails).forEach(([id, value]) => {
@@ -2769,7 +2769,7 @@ function populateReviewUI(data) {
   if (!data) return;
   // Step 1
   document.getElementById("grievanceDetailsReview").textContent =
-    data.grievance_details || "";
+    data.grievance_description || "";
   document.getElementById("grievanceSummaryReview").textContent =
     data.grievance_summary || "";
   // Categories as list with delete buttons
@@ -2805,16 +2805,16 @@ function populateReviewUI(data) {
   catContainer.appendChild(addBtn);
   // Step 2
   document.getElementById("userNameReview").textContent =
-    data.user_full_name || "";
+    data.complainant_full_name || "";
   document.getElementById("userPhoneReview").textContent =
-    data.user_contact_phone || "";
+    data.complainant_phone || "";
   // Step 3
   document.getElementById("userMunicipalityReview").textContent =
-    data.user_municipality || "";
+    data.complainant_municipality || "";
   document.getElementById("userVillageReview").textContent =
-    data.user_village || "";
+    data.complainant_village || "";
   document.getElementById("userAddressReview").textContent =
-    data.user_address || "";
+    data.complainant_address || "";
 }
 
 // Attach modules to window for global access (needed for inline event handlers)
@@ -3070,7 +3070,7 @@ function initializeGrievanceSession() {
         console.log("🔍 Generated IDs:", data);
         if (data.status === "success") {
           state.grievanceId = data.grievance_id;
-          state.userId = data.user_id;
+          state.userId = data.complainant_id;
           state.province = province;
           state.district = district;
           console.log("Generated grievanceId:", state.grievanceId);

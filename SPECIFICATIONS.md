@@ -3,6 +3,7 @@
 ## 1. System Overview
 
 ### 1.1 Current System Components
+
 - Rasa Core (NLP Engine)
 - Action Server
 - Accessible Server
@@ -11,6 +12,7 @@
 - PostgreSQL Database (grievances_db)
 
 ### 1.2 New Components
+
 - Django Helpdesk
 - New PostgreSQL Database (helpdesk_db)
 - API Gateway (if needed)
@@ -18,6 +20,7 @@
 ## 2. Database Architecture
 
 ### 2.1 Task Database (helpdesk_db)
+
 ```sql
 -- Core Tables
 CREATE TABLE tasks (
@@ -58,11 +61,12 @@ CREATE TABLE system_monitoring (
 ```
 
 ### 2.2 Grievance Database (grievances_db)
+
 ```sql
 -- Core Tables
 CREATE TABLE grievances (
     grievance_id VARCHAR(50) PRIMARY KEY,
-    user_id INT,
+    complainant_id INT,
     project_type VARCHAR(50),
     status VARCHAR(20),
     created_at TIMESTAMP,
@@ -71,7 +75,7 @@ CREATE TABLE grievances (
 );
 
 CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,
+    complainant_id SERIAL PRIMARY KEY,
     phone_number VARCHAR(20),
     name VARCHAR(100),
     created_at TIMESTAMP,
@@ -101,11 +105,12 @@ CREATE TABLE status_history (
 ### 3.1 Django Helpdesk API Endpoints
 
 #### Grievance Management
+
 ```python
 # POST /api/grievances/
 {
     "grievance_id": "string",
-    "user_info": {
+    "complainant_info": {
         "phone_number": "string",
         "name": "string"
     },
@@ -127,6 +132,7 @@ CREATE TABLE status_history (
 ```
 
 #### User Management
+
 ```python
 # POST /api/users/
 {
@@ -135,11 +141,12 @@ CREATE TABLE status_history (
     "role": "string"
 }
 
-# GET /api/users/{user_id}/
-# PUT /api/users/{user_id}/
+# GET /api/users/{complainant_id}/
+# PUT /api/users/{complainant_id}/
 ```
 
 #### File Management
+
 ```python
 # POST /api/files/
 {
@@ -154,6 +161,7 @@ CREATE TABLE status_history (
 ## 4. Integration Points
 
 ### 4.1 Rasa Custom Actions
+
 ```python
 class GrievanceAction(Action):
     def run(self, dispatcher, tracker, domain):
@@ -165,6 +173,7 @@ class GrievanceAction(Action):
 ```
 
 ### 4.2 Task Management
+
 ```python
 class TaskManager:
     def handle_task_operation(self, input_data: dict) -> dict:
@@ -176,12 +185,14 @@ class TaskManager:
 ## 5. Migration Strategy
 
 ### 5.1 Phase 1: Parallel Systems
+
 - Set up Django with new database
 - Implement basic API endpoints
 - Keep existing system fully functional
 - Start with new features in Django
 
 ### 5.2 Phase 2: Feature Migration
+
 1. User Management
 2. File Handling
 3. Grievance Creation
@@ -189,11 +200,13 @@ class TaskManager:
 5. Reporting
 
 ### 5.3 Phase 3: Data Synchronization
+
 - Implement sync mechanism between databases
 - Monitor for inconsistencies
 - Handle edge cases
 
 ### 5.4 Phase 4: Complete Migration
+
 - Move remaining features
 - Verify all functionality
 - Plan database consolidation
@@ -201,11 +214,13 @@ class TaskManager:
 ## 6. Security Considerations
 
 ### 6.1 Authentication
+
 - JWT-based authentication
 - Role-based access control
 - API key management
 
 ### 6.2 Data Protection
+
 - Encrypted data transmission
 - Secure file storage
 - Audit logging
@@ -213,11 +228,13 @@ class TaskManager:
 ## 7. Monitoring and Logging
 
 ### 7.1 System Monitoring
+
 - Service health checks
 - Performance metrics
 - Error tracking
 
 ### 7.2 Logging
+
 - Request/Response logging
 - Error logging
 - Audit logging
@@ -225,11 +242,13 @@ class TaskManager:
 ## 8. Deployment Architecture
 
 ### 8.1 Development Environment
+
 - Local development setup
 - Testing environment
 - CI/CD pipeline
 
 ### 8.2 Production Environment
+
 - Load balancing
 - High availability
 - Backup strategy
@@ -237,11 +256,13 @@ class TaskManager:
 ## 9. Testing Strategy
 
 ### 9.1 Unit Tests
+
 - API endpoint testing
 - Database operations
 - Business logic
 
 ### 9.2 Integration Tests
+
 - End-to-end testing
 - System integration
 - Performance testing
@@ -249,11 +270,13 @@ class TaskManager:
 ## 10. Documentation Requirements
 
 ### 10.1 Technical Documentation
+
 - API documentation
 - Database schema
 - Deployment guide
 
 ### 10.2 User Documentation
+
 - Admin guide
 - User manual
-- Troubleshooting guide 
+- Troubleshooting guide

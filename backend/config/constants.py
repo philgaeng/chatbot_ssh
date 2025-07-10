@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 # (This must happen BEFORE any os.getenv calls)
 def load_environment():
     """Load environment variables from env.local (development) or .env (production/remote)"""
-    # Get the project root directory (2 levels up from actions_server)
-    project_root = Path(__file__).parent.parent
+    # Get the project root directory (3 levels up from backend/config/constants.py)
+    project_root = Path(__file__).parent.parent.parent
     
     # Try to load from env.local first (development)
     env_local = project_root / "env.local"
@@ -69,7 +69,7 @@ GRIEVANCE_CLASSIFICATION_STATUS = {
     "LLM_generated": "LLM_generated",
     "LLM_failed": "LLM_failed",
     "LLM_error": "LLM_error",
-    "user_confirmed": "user_confirmed",
+    "complainant_confirmed": "complainant_confirmed",
     "officer_confirmed": "officer_confirmed",
     "SKIP_VALUE": DEFAULT_VALUES["SKIP_VALUE"]
 }
@@ -94,7 +94,7 @@ SMS_ENABLED = False  # Set to True to enable SMS
 
 # Dynamic file paths based on project root
 PROJECT_ROOT = Path(__file__).parent.parent
-LOOKUP_FILE_PATH = str(PROJECT_ROOT / "data/lookup_tables/list_category.txt")
+LOOKUP_FILE_PATH = str(PROJECT_ROOT / "resources/lookup_tables/list_category.txt")
 DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.csv")
 LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
 
@@ -152,13 +152,13 @@ EMAIL_TEMPLATES = {
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
         <p><strong>Grievance Filed on:</strong> {grievance_timestamp}</p>
         <p><strong>Expected Resolution Date:</strong> {grievance_timeline}</p>
-        <p><strong>Submitted by:</strong> {user_name}</p>
+        <p><strong>Submitted by:</strong> {complainant_name}</p>
         
         <h3>Grievance Summary:</h3>
         <p>{grievance_summary}</p>
         
         <h3>Grievance Details:</h3>
-        <p>{grievance_details}</p>
+        <p>{grievance_description}</p>
         
         <h3>Categories:</h3>
         <ul>
@@ -321,17 +321,17 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
 # Enhanced field configuration with categories and metadata
 FIELD_CONFIG = {
-    'user_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
-    'user_contact_phone': {'alias': 'contact_phone', 'required': True, 'category': 'user'},
-    'user_contact_email': {'alias': 'contact_email', 'required': False, 'category': 'user'},
-    'user_province': {'alias': 'province', 'required': True, 'category': 'user'},
-    'user_district': {'alias': 'district', 'required': True, 'category': 'user'},
-    'user_municipality': {'alias': 'municipality', 'required': True, 'category': 'user'},
-    'user_ward': {'alias': 'ward', 'required': False, 'category': 'user'},
-    'user_village': {'alias': 'village', 'required': False, 'category': 'user'},
-    'user_address': {'alias': 'address', 'required': False, 'category': 'user'},
-    'grievance_details': {'alias': 'grievance', 'required': True, 'category': 'grievance'},
-    'grievance_details_en': {'alias': 'grievance_en', 'required': False, 'category': 'grievance'},
+    'complainant_full_name': {'alias': 'full_name', 'required': True, 'category': 'user'},
+    'complainant_phone': {'alias': 'contact_phone', 'required': True, 'category': 'user'},
+    'complainant_email': {'alias': 'contact_email', 'required': False, 'category': 'user'},
+    'complainant_province': {'alias': 'province', 'required': True, 'category': 'user'},
+    'complainant_district': {'alias': 'district', 'required': True, 'category': 'user'},
+    'complainant_municipality': {'alias': 'municipality', 'required': True, 'category': 'user'},
+    'complainant_ward': {'alias': 'ward', 'required': False, 'category': 'user'},
+    'complainant_village': {'alias': 'village', 'required': False, 'category': 'user'},
+    'complainant_address': {'alias': 'address', 'required': False, 'category': 'user'},
+    'grievance_description': {'alias': 'grievance', 'required': True, 'category': 'grievance'},
+    'grievance_description_en': {'alias': 'grievance_en', 'required': False, 'category': 'grievance'},
     'grievance_summary': {'alias': 'summary', 'required': False, 'category': 'grievance'},
     'grievance_categories': {'alias': 'categories', 'required': True, 'category': 'grievance'},
 }

@@ -37,8 +37,8 @@ class SyncResult:
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     retry_count: int = 0
-    timestamp: datetime = None
-    
+    timestamp: Optional[datetime] = None
+
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now()
@@ -199,7 +199,7 @@ class GRMSyncManager:
             logger.error(f"Error getting GRM status for {grievance_id}: {str(e)}")
             return None
     
-    def update_grievance_status(self, grievance_id: str, status: str, notes: str = None) -> bool:
+    def update_grievance_status(self, grievance_id: str, status: str, notes: str = "") -> bool:
         """Update grievance status in GRM system"""
         try:
             # Map status to GRM format
@@ -311,7 +311,7 @@ class GRMIntegrationOrchestrator:
         
         return self.sync_manager.get_grm_status(grievance_id)
     
-    def update_grievance_status(self, grievance_id: str, status: str, notes: str = None) -> bool:
+    def update_grievance_status(self, grievance_id: str, status: str, notes: str = "") -> bool:
         """Update grievance status in GRM system"""
         if not self.is_initialized:
             logger.warning("GRM integration not initialized, cannot update status")
@@ -369,10 +369,10 @@ if __name__ == "__main__":
         # Test with sample grievance data
         sample_grievance = {
             'grievance_id': 'TEST-001',
-            'user_full_name': 'Test User',
-            'user_contact_phone': '+9771234567890',
-            'user_contact_email': 'test@example.com',
-            'grievance_details': 'This is a test grievance',
+            'complainant_full_name': 'Test User',
+            'complainant_phone': '+9771234567890',
+            'complainant_email': 'test@example.com',
+            'grievance_description': 'This is a test grievance',
             'grievance_location': 'Kathmandu',
             'classification_status': 'pending'
         }

@@ -8,14 +8,19 @@ from logging.handlers import RotatingFileHandler
 import traceback
 from typing import Optional
 import json
+import argparse
+from dotenv import load_dotenv
 
 # Add the project directory to the Python path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-sys.path.append(PROJECT_ROOT)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # Go up two levels to reach project root
+sys.path.insert(0, PROJECT_ROOT)
 
-# Import the db_manager singleton
-from backend.services.database_services.postgres_services import db_manager
+# Set PYTHONPATH to include the project root
+os.environ['PYTHONPATH'] = PROJECT_ROOT
+
+# Import the db_manager from the new modular structure
+from backend.services.database_services import db_manager
 
 # Load configuration
 def load_config():
@@ -87,14 +92,32 @@ class DatabaseInitError(Exception):
     """Custom exception for database initialization errors"""
     pass
 
-def check_database_connection(max_retries: int = None, retry_delay: int = None) -> bool:
+def enable_pgcrypto_extension() -> bool:
+    """Enable pgcrypto extension for encryption support"""
+    try:
+        logger.info("Enabling pgcrypto extension for encryption...")
+        with db_manager.base.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+                conn.commit()
+        logger.info("✅ pgcrypto extension enabled successfully")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to enable pgcrypto extension: {str(e)}")
+        return False
+
+def check_database_connection(max_retries: int, retry_delay: int) -> bool:
     """Check database connection with retries"""
     max_retries = max_retries or config['DB_CONNECTION_RETRIES']
     retry_delay = retry_delay or config['DB_CONNECTION_DELAY']
     
     for attempt in range(max_retries):
         try:
-            db_manager.check_connection()
+            # Test connection by executing a simple query
+            with db_manager.base.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
             logger.info("Database connection successful")
             return True
         except Exception as e:
@@ -107,7 +130,7 @@ def check_database_connection(max_retries: int = None, retry_delay: int = None) 
                 return False
     return False
 
-def init_database_with_retry(max_retries: int = None, retry_delay: int = None) -> bool:
+def init_database_with_retry(max_retries: int, retry_delay: int) -> bool:
     """Initialize database with retry mechanism"""
     max_retries = max_retries or config['HEALTH_CHECK_RETRIES']
     retry_delay = retry_delay or config['HEALTH_CHECK_DELAY']
@@ -132,33 +155,101 @@ def init_database_with_retry(max_retries: int = None, retry_delay: int = None) -
 def verify_database_setup() -> bool:
     """Verify that database was initialized correctly"""
     try:
-        # Add your verification logic here
-        # For example, check if required tables exist
-        required_tables = ['users', 'tickets', 'files']  # Add your actual table names
+        # Check if required tables exist
+        required_tables = [
+            'users', 'grievances', 'grievance_statuses', 'processing_statuses', 
+            'task_statuses', 'field_names', 'tasks', 'grievance_status_history',
+            'grievance_history', 'file_attachments', 'grievance_voice_recordings',
+            'grievance_transcriptions', 'grievance_translations', 'task_entities'
+        ]
+        
         for table in required_tables:
             if not db_manager.table_exists(table):
                 logger.error(f"Required table '{table}' not found")
                 return False
+        
         logger.info("Database setup verification successful")
         return True
     except Exception as e:
         logger.error(f"Database verification failed: {str(e)}")
         return False
 
+def test_encryption_setup() -> bool:
+    """Test encryption functionality if encryption key is available"""
+    try:
+        encryption_key = os.getenv('DB_ENCRYPTION_KEY')
+        if not encryption_key:
+            logger.warning("DB_ENCRYPTION_KEY not set - encryption will be disabled")
+            return True
+        
+        logger.info("Testing encryption functionality...")
+        from backend.services.database_services import ComplainantDbManager
+        
+        manager = ComplainantDbManager()
+        
+        # Test data
+        test_data = {
+            'complainant_full_name': 'Test User',
+            'complainant_phone': '+977-1234567890',
+            'complainant_email': 'test@example.com'
+        }
+        
+        # Test encryption
+        encrypted = manager._encrypt_complainant_data(test_data)
+        logger.info("✅ Encryption test passed")
+        
+        # Test decryption
+        decrypted = manager._decrypt_complainant_data(encrypted)
+        logger.info("✅ Decryption test passed")
+        
+        # Verify integrity
+        for key in test_data:
+            if test_data[key] != decrypted[key]:
+                logger.error(f"❌ Data integrity check failed for {key}")
+                return False
+        
+        logger.info("✅ Encryption setup verified successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Encryption test failed: {str(e)}")
+        return False
+
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Initialize database tables')
+    parser.add_argument('--enable-encryption', action='store_true', help='Enable pgcrypto extension')
+    parser.add_argument('--test-encryption', action='store_true', help='Test encryption functionality')
+    parser.add_argument('--retries', type=int, help='Number of retry attempts')
+    parser.add_argument('--delay', type=int, help='Delay between retries in seconds')
+    return parser.parse_args()
+
 def main():
-    """Initialize the database tables and indexes with enhanced error handling"""
+    """Initialize the database tables and indexes with enhanced error handling and encryption support"""
+    args = parse_args()
+    
     try:
         # Check database connection first
-        if not check_database_connection():
+        if not check_database_connection(args.retries, args.delay):
             raise DatabaseInitError("Failed to establish database connection")
 
+        # Enable pgcrypto extension if requested
+        if args.enable_encryption:
+            if not enable_pgcrypto_extension():
+                logger.warning("Failed to enable pgcrypto extension - continuing without encryption")
+
         # Initialize database with retry mechanism
-        if not init_database_with_retry():
+        if not init_database_with_retry(args.retries, args.delay):
             raise DatabaseInitError("Failed to initialize database")
 
         # Verify the setup
         if not verify_database_setup():
             raise DatabaseInitError("Database setup verification failed")
+
+        # Test encryption if requested
+        if args.test_encryption:
+            if not test_encryption_setup():
+                logger.warning("Encryption test failed - check DB_ENCRYPTION_KEY environment variable")
 
         logger.info("Database initialization completed successfully")
         return 0

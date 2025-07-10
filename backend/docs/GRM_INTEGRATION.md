@@ -147,9 +147,9 @@ else:
 # Sync a grievance
 grievance_data = {
     'grievance_id': 'GRV-001',
-    'user_full_name': 'John Doe',
-    'user_contact_phone': '+9771234567890',
-    'grievance_details': 'Water supply issue in ward 5',
+    'complainant_full_name': 'John Doe',
+    'complainant_phone': '+9771234567890',
+    'grievance_description': 'Water supply issue in ward 5',
     'grievance_location': 'Kathmandu',
     'classification_status': 'pending'
 }
@@ -207,9 +207,9 @@ The system automatically maps fields between your chatbot and the GRM system:
 
 | Chatbot Field           | GRM Field               | Description                    |
 | ----------------------- | ----------------------- | ------------------------------ |
-| `user_full_name`        | `complainant_name`      | User's full name               |
-| `user_contact_phone`    | `contact_phone`         | Contact phone number           |
-| `grievance_details`     | `grievance_description` | Detailed grievance description |
+| `complainant_full_name` | `complainant_name`      | User's full name               |
+| `complainant_phone`     | `contact_phone`         | Contact phone number           |
+| `grievance_description` | `grievance_description` | Detailed grievance description |
 | `grievance_location`    | `location`              | Location of the issue          |
 | `classification_status` | `status`                | Processing status              |
 
@@ -240,8 +240,8 @@ Edit `backend/config/grm_config.py` to customize field mappings:
 
 ```python
 GRM_FIELD_MAPPING = {
-    'user_full_name': 'complainant_name',
-    'user_contact_phone': 'contact_phone',
+    'complainant_full_name': 'complainant_name',
+    'complainant_phone': 'contact_phone',
     # Add your custom mappings here
     'custom_field': 'grm_custom_field',
 }

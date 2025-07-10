@@ -136,7 +136,7 @@ class FileServerAPI:
             }), 500
             
     def generate_ids(self):
-        """Generate grievance_id and user_id using centralized ID generation"""
+        """Generate grievance_id and complainant_id using centralized ID generation"""
         try:
             self.core.log_event(event_type=IN_PROGRESS, details={'method': 'POST', 'endpoint': '/generate-ids'})
             
@@ -147,11 +147,11 @@ class FileServerAPI:
             
             # Generate both IDs using the centralized function
             grievance_id = db_manager.base.generate_id(type='grievance_id', province=province, district=district)
-            user_id = db_manager.base.generate_id(type='user_id', province=province, district=district)
+            complainant_id = db_manager.base.generate_id(type='complainant_id', province=province, district=district)
             
             self.core.log_event(event_type='completed', details={
                 'grievance_id': grievance_id,
-                'user_id': user_id,
+                'complainant_id': complainant_id,
                 'province': province,
                 'district': district
             })
@@ -159,7 +159,7 @@ class FileServerAPI:
             return jsonify({
                 'status': SUCCESS,
                 'grievance_id': grievance_id,
-                'user_id': user_id,
+                'complainant_id': complainant_id,
                 'province': province,
                 'district': district
             }), 200
@@ -341,7 +341,7 @@ class FileServerAPI:
             language_code = self._get_language_code()
             self.core.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
-            if db_manager.file.is_file_saved(file_id):
+            if db_manager.is_file_saved(file_id):
                 self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': SUCCESS})
                 return jsonify({"status": SUCCESS, "message": "File is saved in the database"}), 200
             else:
