@@ -42,3 +42,4 @@ def get_utterance(module, function, message_id, language='en'):
         return default_messages.get(module, {}).get(function, {}).get(message_id, "An error occurred")
     except Exception:
         return "An error occurred" 
+

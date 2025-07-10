@@ -57,7 +57,7 @@ export function setupSocketEventHandlers(socket, sessionState) {
     uiActions.showReconnectError();
   });
 
-  socket.on("user_uttered", (message) => {
+  socket.on("complainant_uttered", (message) => {
     console.log("📩 User message sent:", message);
   });
 }

@@ -42,19 +42,19 @@ GRM_INTEGRATION_CONFIG = {
 # Map your chatbot fields to GRM system fields
 GRM_FIELD_MAPPING = {
     # User/Complainant Information
-    'user_full_name': 'complainant_name',
-    'user_contact_phone': 'contact_phone',
-    'user_contact_email': 'contact_email',
-    'user_province': 'province',
-    'user_district': 'district',
-    'user_municipality': 'municipality',
-    'user_ward': 'ward',
-    'user_village': 'village',
-    'user_address': 'address',
+    'complainant_full_name': 'complainant_name',
+    'complainant_phone': 'contact_phone',
+    'complainant_email': 'contact_email',
+    'complainant_province': 'province',
+    'complainant_district': 'district',
+    'complainant_municipality': 'municipality',
+    'complainant_ward': 'ward',
+    'complainant_village': 'village',
+    'complainant_address': 'address',
     
     # Grievance Information
     'grievance_id': 'grievance_id',
-    'grievance_details': 'grievance_description',
+    'grievance_description': 'grievance_description',
     'grievance_summary': 'grievance_summary',
     'grievance_categories': 'grievance_category',
     'grievance_location': 'location',
@@ -77,7 +77,7 @@ GRM_STATUS_MAPPING = {
     'denied': 'denied',
     'LLM_generated': 'pending',
     'LLM_failed': 'pending',
-    'user_confirmed': 'submitted',
+    'complainant_confirmed': 'submitted',
     'officer_confirmed': 'under_evaluation'
 }
 

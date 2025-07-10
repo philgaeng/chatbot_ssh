@@ -164,7 +164,7 @@ window.safeSendMessage = function (message, additionalData = {}) {
   }
 
   console.log("Sending message:", payload);
-  socket.emit("user_uttered", payload);
+  socket.emit("complainant_uttered", payload);
   return true;
 };
 

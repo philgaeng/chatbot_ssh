@@ -1,661 +1,1367 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Accessible Grievance Reporting</title>
-    <link rel="stylesheet" href="/shared/styles/common.css">
-    <link rel="stylesheet" href="/accessible/styles.css">
-    <link rel="apple-touch-icon" sizes="180x180" href="/shared/images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/shared/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/shared/images/favicon-16x16.png">
-    <link rel="manifest" href="/shared/images/site.webmanifest">
-    <meta name="description" content="Accessible grievance reporting system for the Department of Roads, Nepal">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-</head>
-<body>
+    <link rel="stylesheet" href="/shared/styles/common.css" />
+    <link rel="stylesheet" href="/accessible/styles.css" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/shared/images/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/shared/images/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/shared/images/favicon-16x16.png"
+    />
+    <link rel="manifest" href="/shared/images/site.webmanifest" />
+    <meta
+      name="description"
+      content="Accessible grievance reporting system for the Department of Roads, Nepal"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+    />
+  </head>
+  <body>
     <a href="#main" class="skip-link">Skip to main content</a>
 
     <div class="container">
-        <header>
-            <div class="header-content">
-                <img src="/shared/images/DOR-logo.png" alt="Department of Roads Logo" width="50">
-                <h1>Accessible Grievance Reporting</h1>
-                <div class="language-selector">
-                    <select id="languageSelect" aria-label="Select language">
-                        <option value="en" selected>English</option>
-                        <option value="ne">नेपाली (Nepali)</option>
-                        <option value="hi">हिंदी (Hindi)</option>
-                        <option value="fr">Français (French)</option>
-                    </select>
-                </div>
-            </div>
-        </header>
+      <header>
+        <div class="header-content">
+          <img
+            src="/shared/images/DOR-logo.png"
+            alt="Department of Roads Logo"
+            width="50"
+          />
+          <h1>Accessible Grievance Reporting</h1>
+          <div class="language-selector">
+            <select id="languageSelect" aria-label="Select language">
+              <option value="en" selected>English</option>
+              <option value="ne">नेपाली (Nepali)</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="fr">Français (French)</option>
+            </select>
+          </div>
+        </div>
+      </header>
 
-        <!-- Speech rate dropdown that appears when speed button is clicked -->
-        <div id="speedDropdown" class="speed-dropdown" hidden>
-            <div class="speed-option" data-rate="0.6">0.6x</div>
-            <div class="speed-option" data-rate="0.85">0.85x</div>
-            <div class="speed-option selected" data-rate="1">1x</div>
-            <div class="speed-option" data-rate="1.25">1.25x</div>
-            <div class="speed-option" data-rate="1.5">1.5x</div>
+      <!-- Speech rate dropdown that appears when speed button is clicked -->
+      <div id="speedDropdown" class="speed-dropdown" hidden>
+        <div class="speed-option" data-rate="0.6">0.6x</div>
+        <div class="speed-option" data-rate="0.85">0.85x</div>
+        <div class="speed-option selected" data-rate="1">1x</div>
+        <div class="speed-option" data-rate="1.25">1.25x</div>
+        <div class="speed-option" data-rate="1.5">1.5x</div>
+      </div>
+
+      <main id="main">
+        <!-- Step 1: Grievance Details -->
+        <div
+          id="grievance-grievanceDetails"
+          class="step"
+          role="region"
+          aria-label="Grievance: Grievance Details"
+        >
+          <h2>Step 1: Grievance</h2>
+          <h3 style="display: inline; font-weight: normal">
+            – Grievance Details
+          </h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+                disabled
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-grievance-grievanceDetails"
+                class="record-btn"
+                aria-label="Record your grievance"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+            <div
+              class="instruction-row"
+              id="instruction-grievance-grievanceDetails"
+            >
+              <p class="step-instruction">
+                Please explain your grievance related to roads or
+                transportation.
+              </p>
+            </div>
+            <div class="info-row" id="info-grievance-grievanceDetails">
+              <div id="status-grievance-grievanceDetails" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div
+                id="playback-grievance-grievanceDetails"
+                class="playback"
+                hidden
+              >
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <main id="main">
-            <!-- Step 1: Grievance Details -->
-            <div id="grievance-grievanceDetails" class="step" role="region" aria-label="Grievance: Grievance Details">
-                <h2>Step 1: Grievance</h2><h3 style="display: inline; font-weight: normal;">– Grievance Details</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step" disabled>
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-grievance-grievanceDetails" class="record-btn" aria-label="Record your grievance" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-grievance-grievanceDetails">
-                        <p class="step-instruction">Please explain your grievance related to roads or transportation.</p>
-                    </div>
-                    <div class="info-row" id="info-grievance-grievanceDetails">
-                        <div id="status-grievance-grievanceDetails" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-grievance-grievanceDetails" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Step 2: Personal Info - Full Name -->
+        <div
+          id="personalInfo-fullName"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Personal Info: Full Name"
+        >
+          <h2>Step 2: Personal Info</h2>
+          <h3 style="display: inline; font-weight: normal">– Full Name</h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-personalInfo-fullName"
+                class="record-btn"
+                aria-label="Record your full name"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+            <div class="instruction-row" id="instruction-personalInfo-fullName">
+              <p class="step-instruction">Please state your full name.</p>
+            </div>
+            <div class="info-row" id="info-personalInfo-fullName">
+              <div id="status-personalInfo-fullName" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div id="playback-personalInfo-fullName" class="playback" hidden>
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
                 </div>
+              </div>
             </div>
-
-            <!-- Step 2: Personal Info - Full Name -->
-            <div id="personalInfo-fullName" class="step" hidden role="region" aria-label="Personal Info: Full Name">
-                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Full Name</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-personalInfo-fullName" class="record-btn" aria-label="Record your full name" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-personalInfo-fullName">
-                        <p class="step-instruction">Please state your full name.</p>
-                    </div>
-                    <div class="info-row" id="info-personalInfo-fullName">
-                        <div id="status-personalInfo-fullName" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-personalInfo-fullName" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Personal Info - Phone -->
-            <div id="personalInfo-phone" class="step" hidden role="region" aria-label="Personal Info: Phone">
-                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Phone</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-personalInfo-phone" class="record-btn" aria-label="Record your phone number" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-personalInfo-phone">
-                        <p class="step-instruction">Please state your phone number.</p>
-                    </div>
-                    <div class="info-row" id="info-personalInfo-phone">
-                        <div id="status-personalInfo-phone" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-personalInfo-phone" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Personal Info - Municipality -->
-            <div id="personalInfo-municipality" class="step" hidden role="region" aria-label="Personal Info: Municipality">
-                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Municipality</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-personalInfo-municipality" class="record-btn" aria-label="Record your municipality" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-personalInfo-municipality">
-                        <p class="step-instruction">Please state your municipality.</p>
-                    </div>
-                    <div class="info-row" id="info-personalInfo-municipality">
-                        <div id="status-personalInfo-municipality" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-personalInfo-municipality" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Personal Info - Village -->
-            <div id="personalInfo-village" class="step" hidden role="region" aria-label="Personal Info: Village">
-                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Village</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-personalInfo-village" class="record-btn" aria-label="Record your village" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-personalInfo-village">
-                        <p class="step-instruction">Please state your village name.</p>
-                    </div>
-                    <div class="info-row" id="info-personalInfo-village">
-                        <div id="status-personalInfo-village" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-personalInfo-village" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step">
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Personal Info - Address -->
-            <div id="personalInfo-address" class="step" hidden role="region" aria-label="Personal Info: Address">
-                <h2>Step 2: Personal Info</h2><h3 style="display: inline; font-weight: normal;">– Address</h3>
-                <div class="content">
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button id="recordBtn-personalInfo-address" class="record-btn" aria-label="Record your street address" type="button">Record</button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                        <button id="submitGrievanceBtn" class="nav-btn" data-action="submit" aria-label="Submit your grievance" type="button">
-                            <i class="fas fa-check"></i>
-                            <span class="tooltip">Submit</span>
-                        </button>
-                    </div>
-                    <div class="instruction-row" id="instruction-personalInfo-address">
-                        <p class="step-instruction">Please state your street address or location details.</p>
-                    </div>
-                    <div class="info-row" id="info-personalInfo-address">
-                        <div id="status-personalInfo-address" class="status" hidden>Recording: <span>0:00</span></div>
-                    </div>
-                    <div class="playback-row-container">
-                        <div id="playback-personalInfo-address" class="playback" hidden>
-                            <div class="playback-row">
-                                <button class="nav-btn" data-action="retry" aria-label="Retry recording">
-                                    <i class="fas fa-undo"></i>
-                                    <span class="tooltip">Retry</span>
-                                </button>
-                                <audio controls></audio>
-                                <button class="nav-btn" data-action="continue" aria-label="Continue to next step" disabled>
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span class="tooltip">Continue</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Attachment Step -->
-            <div id="attachments-attachments" class="step" hidden role="region" aria-label="attachments-attachments">
-                <h2>Step 3: Attachment</h2>
-                <div class="content">
-                    
-                    <!-- Success Message and Grievance ID -->
-                    <div class="confirmation-message">
-                        <h4 id="confirmation-heading">Voice Grievance Submitted</h4>
-                        <p id="resultMessage">Your voice recordings have been submitted successfully.</p>
-                        <p>Your grievance ID is </p><h4 id="grievanceId"><span></span></h4>
-                        <p>Please save this ID for your reference.</p>
-                        <p>You can now review your transcript and attach supporting documents to your grievance.</p>
-                    </div>
-                    <div class="nav-row">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Review Results</span>
-                        </button>
-                    </div>
-                    <!-- Attachment Section -->
-                    <div class="attachment-instructions" id="attachmentInstructions">
-                        <h4>Attach your files</h4>
-                        <p>You can attach photos or documents to provide more details about your grievance.</p>
-                        <p>This step is optional but recommended to help us better understand your issue.</p>
-                        <div class="button-container">
-                            <button id="attachFilesBtn" class="secondary-btn" aria-label="Attach photos or documents" type="button">Attach Files</button>
-                        </div>
-                    </div>
-                    
-                    <div class="file-upload-container">
-                        <input type="file" id="fileInput" multiple accept="image/*,application/pdf,video/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden>
-                        <div id="fileList" class="file-list" hidden>
-                            <h3>Selected Files:</h3>
-                            <ul></ul>
-                            <button id="submitFilesBtn" class="secondary-btn" aria-label="Submit your selected files" type="button">Submit Files</button>
-                        </div>
-                    </div>
-                    
-                    <div id="uploadedFilesSection" class="uploaded-files-section" hidden>
-                        <h3>Uploaded Files</h3>
-                        <div id="uploadedFilesList" class="uploaded-files-list">
-                            <ul></ul>
-                        </div>
-                        <p class="upload-success-message" id="uploadSuccessMessage">Files uploaded successfully!</p>
-                        <div class="button-container">
-                            <button id="attachMoreBtn" class="secondary-btn" aria-label="Attach more files" type="button">Attach More Files</button>
-                        </div>
-                    </div>
-                    <div class="button-container">
-                        <button id="newBtn" class="primary-btn" data-action="new" aria-label="Start a new grievance report" type="button">New Grievance</button>
-                        <button id="exitBtn" class="exit-btn" data-action="exit" aria-label="Exit application" type="button">Exit</button>
-                    </div>
-                </div>
-            </div>
-                <!-- Review Steps -->
-            <div id="review-reviewAll" class="step" hidden role="region" aria-label="review-reviewAll">
-                <div class="review-steps">
-                    <h2>Step 4: Review</h2><h3 style="display: inline; font-weight: normal;">– Complete Review</h3>
-                    <div class="review-content">
-                        <div class="nav-row">
-                            <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                                <i class="fas fa-chevron-left"></i>
-                                <span class="tooltip">Previous</span>
-                            </button>
-                            <button class="nav-btn" data-action="next" aria-label="Next step">
-                                <i class="fas fa-chevron-right"></i>
-                                <span class="tooltip">Next</span>
-                            </button>
-                        </div>
-                        
-                        <!-- Grievance Information Section -->
-                        <div style="margin-bottom: 40px;">
-                            <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 20px;">Grievance Information</h3>
-                            
-                            <!-- Grievance Details -->
-                            <div class="review-section">
-                                <h4>Grievance Details</h4>
-                                <div class="review-text" id="grievanceDetailsReview"></div>
-                                <div class="edit-area" id="grievanceDetailsEditArea" hidden>
-                                    <textarea id="grievanceDetailsEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="grievance_details">💾 Save</button>
-                                        <button class="cancel-btn" data-field="grievance_details">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="grievance_details">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="grievanceDetailsValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Grievance Summary -->
-                            <div class="review-section">
-                                <h4>Grievance Summary</h4>
-                                <div class="review-text" id="grievanceSummaryReview"></div>
-                                <div class="edit-area" id="grievanceSummaryEditArea" hidden>
-                                    <textarea id="grievanceSummaryEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="grievance_summary">💾 Save</button>
-                                        <button class="cancel-btn" data-field="grievance_summary">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="grievance_summary">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="grievanceSummaryValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Grievance Categories -->
-                            <div class="review-section">
-                                <h4>Grievance Categories</h4>
-                                <div class="review-text" id="grievanceCategoriesReview"></div>
-                                <button data-action="show-categories" class="modify-btn primary-btn" aria-label="Show categories">
-                                    <i class="fas fa-edit"></i> Modify Categories
-                                </button>
-                                <div id="categoriesDropdown" class="dropdown-content" hidden>
-                                    <!-- Categories will be populated from LIST_OF_CATEGORIES -->
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Personal Information Section -->
-                        <div style="margin-bottom: 40px;">
-                            <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 20px;">Personal Information</h3>
-                            
-                            <!-- Full Name -->
-                            <div class="review-section">
-                                <h4>Full Name</h4>
-                                <div class="review-text" id="userNameReview"></div>
-                                <div class="edit-area" id="userNameEditArea" hidden>
-                                    <textarea id="userNameEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="user_full_name">💾 Save</button>
-                                        <button class="cancel-btn" data-field="user_full_name">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="user_full_name">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="userNameValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Phone Number -->
-                            <div class="review-section">
-                                <h4>Phone Number</h4>
-                                <div class="review-text" id="userPhoneReview"></div>
-                                <div class="edit-area" id="userPhoneEditArea" hidden>
-                                    <textarea id="userPhoneEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="user_contact_phone">💾 Save</button>
-                                        <button class="cancel-btn" data-field="user_contact_phone">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="user_contact_phone">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="userPhoneValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <!-- Municipality -->
-                            <div class="review-section">
-                                <h4>Municipality</h4>
-                                <div class="review-text" id="userMunicipalityReview"></div>
-                                <div class="edit-area" id="userMunicipalityEditArea" hidden>
-                                    <textarea id="userMunicipalityEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="user_municipality">💾 Save</button>
-                                        <button class="cancel-btn" data-field="user_municipality">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="user_municipality">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="userMunicipalityValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Village -->
-                            <div class="review-section">
-                                <h4>Village</h4>
-                                <div class="review-text" id="userVillageReview"></div>
-                                <div class="edit-area" id="userVillageEditArea" hidden>
-                                    <textarea id="userVillageEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="user_village">💾 Save</button>
-                                        <button class="cancel-btn" data-field="user_village">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="user_village">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="userVillageValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Address -->
-                            <div class="review-section">
-                                <h4>Address / Landmark</h4>
-                                <div class="review-text" id="userAddressReview"></div>
-                                <div class="edit-area" id="userAddressEditArea" hidden>
-                                    <textarea id="userAddressEdit" placeholder="Edit your text here..."></textarea>
-                                    <div class="edit-buttons">
-                                        <button class="save-btn" data-field="user_address">💾 Save</button>
-                                        <button class="cancel-btn" data-field="user_address">❌ Cancel</button>
-                                    </div>
-                                </div>
-                                <div class="action-buttons">
-                                    <button class="edit-text-btn secondary-btn" data-field="user_address">📝 Edit Text</button>
-                                </div>
-                                <div class="validation-section">
-                                    <label class="validation-checkbox">
-                                        <input type="checkbox" id="userAddressValidated">
-                                        ✓ This information is correct
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Navigation Buttons -->
-                    <div class="review-navigation">
-                        <button class="nav-btn" data-action="prev" aria-label="Previous step">
-                            <i class="fas fa-chevron-left"></i>
-                            <span class="tooltip">Previous</span>
-                        </button>
-                        <button class="nav-btn" data-action="next" aria-label="Next step">
-                            <i class="fas fa-chevron-right"></i>
-                            <span class="tooltip">Next</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div id="outro-outro" class="step" hidden role="region" aria-label="Outro">
-                <div class="review-steps">
-                    <h2>Submission Complete</h2>
-                    <div class="review-content">
-                        <div class="review-section">
-                            <table class="outro-table" style="width:100%; margin-bottom:2em; table-layout:fixed;">
-                                <colgroup>
-                                    <col style="width:33%;">
-                                    <col style="width:67%;">
-                                </colgroup>
-                                <tbody>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Number :</td><td id="outroGrievanceId" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Details :</td><td id="outroGrievanceDetails" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Summary :</td><td id="outroGrievanceSummary" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Grievance Categories :</td><td id="outroGrievanceCategories" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Full Name :</td><td id="outroUserName" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Phone Number :</td><td id="outroUserPhone" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Municipality :</td><td id="outroUserMunicipality" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Village :</td><td id="outroUserVillage" style="text-align:left;"></td></tr>
-                                    <tr><td class="accent-text" style="font-weight:550; text-align:left; padding-left:1em;">Address / Landmark :</td><td id="outroUserAddress" style="text-align:left;"></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="review-section" style="margin-bottom:2em;">
-                            <h2 style="margin-bottom:1em;">Next Step</h2>
-                            <div style="margin-bottom:0.5em; text-align:left; padding-left:1em;">Our team will review it shortly and contact you if more information is needed.</div>
-                            <div style="text-align:left; padding-left:1em;">The standard resolution time for a grievance is 15 days. Expected resolution date: <span id="expectedResolutionDate"></span></div>
-                        </div>
-                        <div class="button-container">
-                            <button id="newBtnOutro" class="primary-btn" data-action="new" aria-label="Start a new grievance report" type="button">New Grievance</button>
-                            <button id="exitBtnOutro" class="exit-btn" data-action="exit" aria-label="Exit application" type="button">Exit</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Ensure the help dialog is properly set up to work with showModal() -->
-        <dialog id="helpDialog" aria-labelledby="helpDialogHeading">
-            <h2 id="helpDialogHeading">Help & Instructions</h2>
-            <p>Record your grievance in these steps:</p>
-            <ol>
-                <li>Explain your grievance</li>
-                <li>Provide your full name</li>
-                <li>Provide your phone number</li>
-                <li>State your municipality</li>
-                <li>State your village</li>
-                <li>State your street address</li>
-                <li>Submit your grievance</li>
-                <li>Optionally attach supporting files</li>
-            </ol>
-            <p>Accessibility features available:</p>
-            <ul>
-                <li>Use the "Read Aloud" button (🔊) to hear page contents</li>
-                <li>Change speech rate with the "1x" button</li>
-                <li>Increase font size with the "Aa" button</li>
-                <li>Toggle high contrast mode with the contrast button (◐)</li>
-            </ul>
-            <button class="primary-btn" aria-label="Close help dialog" type="button">Close</button>
-        </dialog>
-        
-        <!-- Screen Reader Enable Dialog -->
-        <dialog id="screenReaderDialog" aria-labelledby="screenReaderDialogHeading">
-            <h2 id="screenReaderDialogHeading">Enable Screen Reader?</h2>
-            <p>Would you like to enable the Screen Reader (Read Aloud) feature for this session? This will allow the app to read instructions aloud for each step.</p>
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button id="enableScreenReaderBtn" class="primary-btn" aria-label="Enable screen reader">Enable</button>
-                <button id="disableScreenReaderBtn" class="secondary-btn" aria-label="Do not enable screen reader">Not Now</button>
-            </div>
-        </dialog>
-        
-        <footer>
-            <div class="footer-content">
-                <p>&copy; 2025 Department of Roads, Nepal. All rights reserved.</p>
-                
-                <!-- Accessibility Toolbar in Footer -->
-                <div class="accessibility-toolbar" role="toolbar" aria-label="Accessibility controls">
-                    <button id="contrastToggleBtn" class="a11y-btn contrast-btn" aria-label="Toggle high contrast mode" type="button">
-                        <span class="icon" aria-hidden="true">◐</span>
-                    </button>
-                    
-                    <button id="fontSizeBtn" class="a11y-btn font-btn" aria-label="Increase font size" type="button">
-                        <span class="icon" aria-hidden="true">Aa</span>
-                    </button>
-                    
-                    <button id="readPageBtn" class="a11y-btn read-btn" aria-label="Read page content aloud" type="button">
-                        <span class="icon" aria-hidden="true">🔊</span>
-                    </button>
-                    
-                    <button id="speedBtn" class="a11y-btn speed-btn" aria-label="Change speech rate" type="button">
-                        <span class="icon" aria-hidden="true">1x</span>
-                    </button>
-                    
-                    <button id="helpBtn" class="a11y-btn help-btn" aria-label="Show help and instructions" type="button">
-                        <span class="icon" aria-hidden="true">?</span>
-                    </button>
-                </div>
-            </div>
-        </footer>
-
-        <!-- Add after the main content, before the footer -->
-        <div id="submissionOverlay" class="submission-overlay" hidden data-debug="submission-overlay">
-            <div class="submission-content">
-                <div class="spinner"></div>
-                <div class="submission-message">Submitting your grievance…</div>
-                <button id="cancelSubmissionBtn" class="secondary-btn" style="display:none; margin-top:20px;">Cancel</button>
-            </div>
+          </div>
         </div>
+
+        <!-- Step 2: Personal Info - Phone -->
+        <div
+          id="personalInfo-phone"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Personal Info: Phone"
+        >
+          <h2>Step 2: Personal Info</h2>
+          <h3 style="display: inline; font-weight: normal">– Phone</h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-personalInfo-phone"
+                class="record-btn"
+                aria-label="Record your phone number"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+            <div class="instruction-row" id="instruction-personalInfo-phone">
+              <p class="step-instruction">Please state your phone number.</p>
+            </div>
+            <div class="info-row" id="info-personalInfo-phone">
+              <div id="status-personalInfo-phone" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div id="playback-personalInfo-phone" class="playback" hidden>
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Personal Info - Municipality -->
+        <div
+          id="personalInfo-municipality"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Personal Info: Municipality"
+        >
+          <h2>Step 2: Personal Info</h2>
+          <h3 style="display: inline; font-weight: normal">– Municipality</h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-personalInfo-municipality"
+                class="record-btn"
+                aria-label="Record your municipality"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+            <div
+              class="instruction-row"
+              id="instruction-personalInfo-municipality"
+            >
+              <p class="step-instruction">Please state your municipality.</p>
+            </div>
+            <div class="info-row" id="info-personalInfo-municipality">
+              <div id="status-personalInfo-municipality" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div
+                id="playback-personalInfo-municipality"
+                class="playback"
+                hidden
+              >
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Personal Info - Village -->
+        <div
+          id="personalInfo-village"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Personal Info: Village"
+        >
+          <h2>Step 2: Personal Info</h2>
+          <h3 style="display: inline; font-weight: normal">– Village</h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-personalInfo-village"
+                class="record-btn"
+                aria-label="Record your village"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+            <div class="instruction-row" id="instruction-personalInfo-village">
+              <p class="step-instruction">Please state your village name.</p>
+            </div>
+            <div class="info-row" id="info-personalInfo-village">
+              <div id="status-personalInfo-village" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div id="playback-personalInfo-village" class="playback" hidden>
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Personal Info - Address -->
+        <div
+          id="personalInfo-address"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Personal Info: Address"
+        >
+          <h2>Step 2: Personal Info</h2>
+          <h3 style="display: inline; font-weight: normal">– Address</h3>
+          <div class="content">
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                id="recordBtn-personalInfo-address"
+                class="record-btn"
+                aria-label="Record your street address"
+                type="button"
+              >
+                Record
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+              <button
+                id="submitGrievanceBtn"
+                class="nav-btn"
+                data-action="submit"
+                aria-label="Submit your grievance"
+                type="button"
+              >
+                <i class="fas fa-check"></i>
+                <span class="tooltip">Submit</span>
+              </button>
+            </div>
+            <div class="instruction-row" id="instruction-personalInfo-address">
+              <p class="step-instruction">
+                Please state your street address or location details.
+              </p>
+            </div>
+            <div class="info-row" id="info-personalInfo-address">
+              <div id="status-personalInfo-address" class="status" hidden>
+                Recording: <span>0:00</span>
+              </div>
+            </div>
+            <div class="playback-row-container">
+              <div id="playback-personalInfo-address" class="playback" hidden>
+                <div class="playback-row">
+                  <button
+                    class="nav-btn"
+                    data-action="retry"
+                    aria-label="Retry recording"
+                  >
+                    <i class="fas fa-undo"></i>
+                    <span class="tooltip">Retry</span>
+                  </button>
+                  <audio controls></audio>
+                  <button
+                    class="nav-btn"
+                    data-action="continue"
+                    aria-label="Continue to next step"
+                    disabled
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    <span class="tooltip">Continue</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attachment Step -->
+        <div
+          id="attachments-attachments"
+          class="step"
+          hidden
+          role="region"
+          aria-label="attachments-attachments"
+        >
+          <h2>Step 3: Attachment</h2>
+          <div class="content">
+            <!-- Success Message and Grievance ID -->
+            <div class="confirmation-message">
+              <h4 id="confirmation-heading">Voice Grievance Submitted</h4>
+              <p id="resultMessage">
+                Your voice recordings have been submitted successfully.
+              </p>
+              <p>Your grievance ID is</p>
+              <h4 id="grievanceId"><span></span></h4>
+              <p>Please save this ID for your reference.</p>
+              <p>
+                You can now review your transcript and attach supporting
+                documents to your grievance.
+              </p>
+            </div>
+            <div class="nav-row">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button
+                class="nav-btn"
+                data-action="next"
+                aria-label="Next step"
+                disabled
+              >
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Review Results</span>
+              </button>
+            </div>
+            <!-- Attachment Section -->
+            <div class="attachment-instructions" id="attachmentInstructions">
+              <h4>Attach your files</h4>
+              <p>
+                You can attach photos or documents to provide more details about
+                your grievance.
+              </p>
+              <p>
+                This step is optional but recommended to help us better
+                understand your issue.
+              </p>
+              <div class="button-container">
+                <button
+                  id="attachFilesBtn"
+                  class="secondary-btn"
+                  aria-label="Attach photos or documents"
+                  type="button"
+                >
+                  Attach Files
+                </button>
+              </div>
+            </div>
+
+            <div class="file-upload-container">
+              <input
+                type="file"
+                id="fileInput"
+                multiple
+                accept="image/*,application/pdf,video/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                hidden
+              />
+              <div id="fileList" class="file-list" hidden>
+                <h3>Selected Files:</h3>
+                <ul></ul>
+                <button
+                  id="submitFilesBtn"
+                  class="secondary-btn"
+                  aria-label="Submit your selected files"
+                  type="button"
+                >
+                  Submit Files
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="uploadedFilesSection"
+              class="uploaded-files-section"
+              hidden
+            >
+              <h3>Uploaded Files</h3>
+              <div id="uploadedFilesList" class="uploaded-files-list">
+                <ul></ul>
+              </div>
+              <p class="upload-success-message" id="uploadSuccessMessage">
+                Files uploaded successfully!
+              </p>
+              <div class="button-container">
+                <button
+                  id="attachMoreBtn"
+                  class="secondary-btn"
+                  aria-label="Attach more files"
+                  type="button"
+                >
+                  Attach More Files
+                </button>
+              </div>
+            </div>
+            <div class="button-container">
+              <button
+                id="newBtn"
+                class="primary-btn"
+                data-action="new"
+                aria-label="Start a new grievance report"
+                type="button"
+              >
+                New Grievance
+              </button>
+              <button
+                id="exitBtn"
+                class="exit-btn"
+                data-action="exit"
+                aria-label="Exit application"
+                type="button"
+              >
+                Exit
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Review Steps -->
+        <div
+          id="review-reviewAll"
+          class="step"
+          hidden
+          role="region"
+          aria-label="review-reviewAll"
+        >
+          <div class="review-steps">
+            <h2>Step 4: Review</h2>
+            <h3 style="display: inline; font-weight: normal">
+              – Complete Review
+            </h3>
+            <div class="review-content">
+              <div class="nav-row">
+                <button
+                  class="nav-btn"
+                  data-action="prev"
+                  aria-label="Previous step"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                  <span class="tooltip">Previous</span>
+                </button>
+                <button
+                  class="nav-btn"
+                  data-action="next"
+                  aria-label="Next step"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                  <span class="tooltip">Next</span>
+                </button>
+              </div>
+
+              <!-- Grievance Information Section -->
+              <div style="margin-bottom: 40px">
+                <h3
+                  style="
+                    color: var(--primary-color);
+                    border-bottom: 2px solid var(--primary-color);
+                    padding-bottom: 10px;
+                    margin-bottom: 20px;
+                  "
+                >
+                  Grievance Information
+                </h3>
+
+                <!-- Grievance Details -->
+                <div class="review-section">
+                  <h4>Grievance Details</h4>
+                  <div class="review-text" id="grievanceDetailsReview"></div>
+                  <div class="edit-area" id="grievanceDetailsEditArea" hidden>
+                    <textarea
+                      id="grievanceDetailsEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button
+                        class="save-btn"
+                        data-field="grievance_description"
+                      >
+                        💾 Save
+                      </button>
+                      <button
+                        class="cancel-btn"
+                        data-field="grievance_description"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="grievance_description"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="grievanceDetailsValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Grievance Summary -->
+                <div class="review-section">
+                  <h4>Grievance Summary</h4>
+                  <div class="review-text" id="grievanceSummaryReview"></div>
+                  <div class="edit-area" id="grievanceSummaryEditArea" hidden>
+                    <textarea
+                      id="grievanceSummaryEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button class="save-btn" data-field="grievance_summary">
+                        💾 Save
+                      </button>
+                      <button class="cancel-btn" data-field="grievance_summary">
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="grievance_summary"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="grievanceSummaryValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Grievance Categories -->
+                <div class="review-section">
+                  <h4>Grievance Categories</h4>
+                  <div class="review-text" id="grievanceCategoriesReview"></div>
+                  <button
+                    data-action="show-categories"
+                    class="modify-btn primary-btn"
+                    aria-label="Show categories"
+                  >
+                    <i class="fas fa-edit"></i> Modify Categories
+                  </button>
+                  <div id="categoriesDropdown" class="dropdown-content" hidden>
+                    <!-- Categories will be populated from LIST_OF_CATEGORIES -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Personal Information Section -->
+              <div style="margin-bottom: 40px">
+                <h3
+                  style="
+                    color: var(--primary-color);
+                    border-bottom: 2px solid var(--primary-color);
+                    padding-bottom: 10px;
+                    margin-bottom: 20px;
+                  "
+                >
+                  Personal Information
+                </h3>
+
+                <!-- Full Name -->
+                <div class="review-section">
+                  <h4>Full Name</h4>
+                  <div class="review-text" id="userNameReview"></div>
+                  <div class="edit-area" id="userNameEditArea" hidden>
+                    <textarea
+                      id="userNameEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button
+                        class="save-btn"
+                        data-field="complainant_full_name"
+                      >
+                        💾 Save
+                      </button>
+                      <button
+                        class="cancel-btn"
+                        data-field="complainant_full_name"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="complainant_full_name"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="userNameValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Phone Number -->
+                <div class="review-section">
+                  <h4>Phone Number</h4>
+                  <div class="review-text" id="userPhoneReview"></div>
+                  <div class="edit-area" id="userPhoneEditArea" hidden>
+                    <textarea
+                      id="userPhoneEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button class="save-btn" data-field="complainant_phone">
+                        💾 Save
+                      </button>
+                      <button class="cancel-btn" data-field="complainant_phone">
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="complainant_phone"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="userPhoneValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Municipality -->
+                <div class="review-section">
+                  <h4>Municipality</h4>
+                  <div class="review-text" id="userMunicipalityReview"></div>
+                  <div class="edit-area" id="userMunicipalityEditArea" hidden>
+                    <textarea
+                      id="userMunicipalityEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button
+                        class="save-btn"
+                        data-field="complainant_municipality"
+                      >
+                        💾 Save
+                      </button>
+                      <button
+                        class="cancel-btn"
+                        data-field="complainant_municipality"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="complainant_municipality"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="userMunicipalityValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Village -->
+                <div class="review-section">
+                  <h4>Village</h4>
+                  <div class="review-text" id="userVillageReview"></div>
+                  <div class="edit-area" id="userVillageEditArea" hidden>
+                    <textarea
+                      id="userVillageEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button class="save-btn" data-field="complainant_village">
+                        💾 Save
+                      </button>
+                      <button
+                        class="cancel-btn"
+                        data-field="complainant_village"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="complainant_village"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="userVillageValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Address -->
+                <div class="review-section">
+                  <h4>Address / Landmark</h4>
+                  <div class="review-text" id="userAddressReview"></div>
+                  <div class="edit-area" id="userAddressEditArea" hidden>
+                    <textarea
+                      id="userAddressEdit"
+                      placeholder="Edit your text here..."
+                    ></textarea>
+                    <div class="edit-buttons">
+                      <button class="save-btn" data-field="complainant_address">
+                        💾 Save
+                      </button>
+                      <button
+                        class="cancel-btn"
+                        data-field="complainant_address"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  <div class="action-buttons">
+                    <button
+                      class="edit-text-btn secondary-btn"
+                      data-field="complainant_address"
+                    >
+                      📝 Edit Text
+                    </button>
+                  </div>
+                  <div class="validation-section">
+                    <label class="validation-checkbox">
+                      <input type="checkbox" id="userAddressValidated" />
+                      ✓ This information is correct
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="review-navigation">
+              <button
+                class="nav-btn"
+                data-action="prev"
+                aria-label="Previous step"
+              >
+                <i class="fas fa-chevron-left"></i>
+                <span class="tooltip">Previous</span>
+              </button>
+              <button class="nav-btn" data-action="next" aria-label="Next step">
+                <i class="fas fa-chevron-right"></i>
+                <span class="tooltip">Next</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div
+          id="outro-outro"
+          class="step"
+          hidden
+          role="region"
+          aria-label="Outro"
+        >
+          <div class="review-steps">
+            <h2>Submission Complete</h2>
+            <div class="review-content">
+              <div class="review-section">
+                <table
+                  class="outro-table"
+                  style="width: 100%; margin-bottom: 2em; table-layout: fixed"
+                >
+                  <colgroup>
+                    <col style="width: 33%" />
+                    <col style="width: 67%" />
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Grievance Number :
+                      </td>
+                      <td id="outroGrievanceId" style="text-align: left"></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Grievance Details :
+                      </td>
+                      <td
+                        id="outroGrievanceDetails"
+                        style="text-align: left"
+                      ></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Grievance Summary :
+                      </td>
+                      <td
+                        id="outroGrievanceSummary"
+                        style="text-align: left"
+                      ></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Grievance Categories :
+                      </td>
+                      <td
+                        id="outroGrievanceCategories"
+                        style="text-align: left"
+                      ></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Full Name :
+                      </td>
+                      <td id="outroUserName" style="text-align: left"></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Phone Number :
+                      </td>
+                      <td id="outroUserPhone" style="text-align: left"></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Municipality :
+                      </td>
+                      <td
+                        id="outroUserMunicipality"
+                        style="text-align: left"
+                      ></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Village :
+                      </td>
+                      <td id="outroUserVillage" style="text-align: left"></td>
+                    </tr>
+                    <tr>
+                      <td
+                        class="accent-text"
+                        style="
+                          font-weight: 550;
+                          text-align: left;
+                          padding-left: 1em;
+                        "
+                      >
+                        Address / Landmark :
+                      </td>
+                      <td id="outroUserAddress" style="text-align: left"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="review-section" style="margin-bottom: 2em">
+                <h2 style="margin-bottom: 1em">Next Step</h2>
+                <div
+                  style="
+                    margin-bottom: 0.5em;
+                    text-align: left;
+                    padding-left: 1em;
+                  "
+                >
+                  Our team will review it shortly and contact you if more
+                  information is needed.
+                </div>
+                <div style="text-align: left; padding-left: 1em">
+                  The standard resolution time for a grievance is 15 days.
+                  Expected resolution date:
+                  <span id="expectedResolutionDate"></span>
+                </div>
+              </div>
+              <div class="button-container">
+                <button
+                  id="newBtnOutro"
+                  class="primary-btn"
+                  data-action="new"
+                  aria-label="Start a new grievance report"
+                  type="button"
+                >
+                  New Grievance
+                </button>
+                <button
+                  id="exitBtnOutro"
+                  class="exit-btn"
+                  data-action="exit"
+                  aria-label="Exit application"
+                  type="button"
+                >
+                  Exit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Ensure the help dialog is properly set up to work with showModal() -->
+      <dialog id="helpDialog" aria-labelledby="helpDialogHeading">
+        <h2 id="helpDialogHeading">Help & Instructions</h2>
+        <p>Record your grievance in these steps:</p>
+        <ol>
+          <li>Explain your grievance</li>
+          <li>Provide your full name</li>
+          <li>Provide your phone number</li>
+          <li>State your municipality</li>
+          <li>State your village</li>
+          <li>State your street address</li>
+          <li>Submit your grievance</li>
+          <li>Optionally attach supporting files</li>
+        </ol>
+        <p>Accessibility features available:</p>
+        <ul>
+          <li>Use the "Read Aloud" button (🔊) to hear page contents</li>
+          <li>Change speech rate with the "1x" button</li>
+          <li>Increase font size with the "Aa" button</li>
+          <li>Toggle high contrast mode with the contrast button (◐)</li>
+        </ul>
+        <button
+          class="primary-btn"
+          aria-label="Close help dialog"
+          type="button"
+        >
+          Close
+        </button>
+      </dialog>
+
+      <!-- Screen Reader Enable Dialog -->
+      <dialog
+        id="screenReaderDialog"
+        aria-labelledby="screenReaderDialogHeading"
+      >
+        <h2 id="screenReaderDialogHeading">Enable Screen Reader?</h2>
+        <p>
+          Would you like to enable the Screen Reader (Read Aloud) feature for
+          this session? This will allow the app to read instructions aloud for
+          each step.
+        </p>
+        <div
+          style="
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+          "
+        >
+          <button
+            id="enableScreenReaderBtn"
+            class="primary-btn"
+            aria-label="Enable screen reader"
+          >
+            Enable
+          </button>
+          <button
+            id="disableScreenReaderBtn"
+            class="secondary-btn"
+            aria-label="Do not enable screen reader"
+          >
+            Not Now
+          </button>
+        </div>
+      </dialog>
+
+      <footer>
+        <div class="footer-content">
+          <p>&copy; 2025 Department of Roads, Nepal. All rights reserved.</p>
+
+          <!-- Accessibility Toolbar in Footer -->
+          <div
+            class="accessibility-toolbar"
+            role="toolbar"
+            aria-label="Accessibility controls"
+          >
+            <button
+              id="contrastToggleBtn"
+              class="a11y-btn contrast-btn"
+              aria-label="Toggle high contrast mode"
+              type="button"
+            >
+              <span class="icon" aria-hidden="true">◐</span>
+            </button>
+
+            <button
+              id="fontSizeBtn"
+              class="a11y-btn font-btn"
+              aria-label="Increase font size"
+              type="button"
+            >
+              <span class="icon" aria-hidden="true">Aa</span>
+            </button>
+
+            <button
+              id="readPageBtn"
+              class="a11y-btn read-btn"
+              aria-label="Read page content aloud"
+              type="button"
+            >
+              <span class="icon" aria-hidden="true">🔊</span>
+            </button>
+
+            <button
+              id="speedBtn"
+              class="a11y-btn speed-btn"
+              aria-label="Change speech rate"
+              type="button"
+            >
+              <span class="icon" aria-hidden="true">1x</span>
+            </button>
+
+            <button
+              id="helpBtn"
+              class="a11y-btn help-btn"
+              aria-label="Show help and instructions"
+              type="button"
+            >
+              <span class="icon" aria-hidden="true">?</span>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      <!-- Add after the main content, before the footer -->
+      <div
+        id="submissionOverlay"
+        class="submission-overlay"
+        hidden
+        data-debug="submission-overlay"
+      >
+        <div class="submission-content">
+          <div class="spinner"></div>
+          <div class="submission-message">Submitting your grievance…</div>
+          <button
+            id="cancelSubmissionBtn"
+            class="secondary-btn"
+            style="display: none; margin-top: 20px"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
 
     <script src="/shared/scripts/utils.js"></script>
     <script src="/accessible/config.js"></script>
     <script type="module" src="/accessible/app.js"></script>
-</body>
-</html> 
+  </body>
+</html>

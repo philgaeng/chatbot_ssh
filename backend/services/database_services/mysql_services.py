@@ -68,7 +68,7 @@ class MySQLDatabaseManager:
         self.grm_db_config = {
             'host': os.getenv('GRM_MYSQL_HOST', 'localhost'),
             'database': os.getenv('GRM_MYSQL_DB', 'grm_database'),
-            'user': os.getenv('GRM_MYSQL_USER', 'grm_user'),
+            'user': os.getenv('GRM_MYSQL_USER', 'grm_complainant'),
             'password': os.getenv('GRM_MYSQL_PASSWORD', ''),
             'port': int(os.getenv('GRM_MYSQL_PORT', '3306')),
             'charset': 'utf8mb4',
@@ -282,10 +282,10 @@ class GRMIntegrationService:
             # Example mapping based on typical GRM systems
             grm_data = {
                 'grievance_id': grievance_data.get('grievance_id'),
-                'complainant_name': grievance_data.get('user_full_name'),
-                'contact_phone': grievance_data.get('user_contact_phone'),
-                'contact_email': grievance_data.get('user_contact_email'),
-                'grievance_description': grievance_data.get('grievance_details'),
+                'complainant_name': grievance_data.get('complainant_full_name'),
+                'contact_phone': grievance_data.get('complainant_phone'),
+                'contact_email': grievance_data.get('complainant_email'),
+                'grievance_description': grievance_data.get('grievance_description'),
                 'location': grievance_data.get('grievance_location'),
                 'submission_date': datetime.now(),
                 'status': 'pending'

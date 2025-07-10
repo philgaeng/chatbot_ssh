@@ -25,7 +25,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    StartGrievance[action_start_grievance_process] --> GrievanceDetails[grievance_details_form]
+    StartGrievance[action_start_grievance_process] --> GrievanceDetails[grievance_description_form]
     GrievanceDetails --> |Collect grievance text| ValidateGrievanceDetails[ValidateGrievanceDetailsForm]
     ValidateGrievanceDetails --> |Generate summary| OpenAICall[ActionCallOpenAI]
     OpenAICall --> GrievanceSummary[grievance_summary_form]
@@ -66,6 +66,7 @@ flowchart TD
 These form validation actions handle user input validation and slot filling:
 
 #### ValidateGrievanceDetailsForm
+
 - **Purpose**: Validates the grievance details entered by the user
 - **Key Methods**:
   - `validate_grievance_new_detail`: Checks if the text is of sufficient length and quality
@@ -76,6 +77,7 @@ These form validation actions handle user input validation and slot filling:
   3. Appends to existing text if the user is adding more details
 
 #### ValidateGrievanceSummaryForm
+
 - **Purpose**: Handles AI-generated summary and category confirmation by user
 - **Key Methods**:
   - `validate_grievance_categories_confirmed`: Processes user confirmation of suggested categories
@@ -87,11 +89,12 @@ These form validation actions handle user input validation and slot filling:
   3. Checks for gender issues that need special handling
 
 #### ValidateContactForm
+
 - **Purpose**: Validates user contact and location information
 - **Key Methods**:
-  - `validate_user_location_consent`: Checks if user agrees to share location info
-  - `validate_user_municipality_temp`: Validates the user's municipality information
-  - `validate_user_contact_phone`: Validates phone number format and prepares for OTP verification
+  - `validate_complainant_location_consent`: Checks if user agrees to share location info
+  - `validate_complainant_municipality_temp`: Validates the user's municipality information
+  - `validate_complainant_phone`: Validates phone number format and prepares for OTP verification
 - **Flow**:
   1. Collects location consent
   2. If consented, collects province, district, municipality, and other location details
@@ -99,6 +102,7 @@ These form validation actions handle user input validation and slot filling:
   4. Prepares phone number for verification if provided
 
 #### ValidateOTPVerificationForm
+
 - **Purpose**: Handles phone verification through OTP (One-Time Password)
 - **Key Methods**:
   - `validate_otp_input`: Validates the OTP entered by the user
@@ -114,11 +118,13 @@ These form validation actions handle user input validation and slot filling:
 These actions generate the prompts and buttons for the various form inputs:
 
 #### Grievance Details Form
+
 - `ActionAskGrievanceDetailsFormGrievanceTemp`: Asks user to provide grievance details
   - **Utterance**: "Please describe your grievance in detail"
   - **Buttons**: "Skip", "Submit as is"
 
 #### Grievance Summary Form
+
 - `ActionAskGrievanceSummaryFormGrievanceListCatConfirmed`: Shows AI-generated categories for confirmation
 - `ActionAskGrievanceSummaryFormGrievanceSummaryTemp`: Shows AI-generated summary for editing
 - `ActionAskGrievanceSummaryFormGrievanceSummaryConfirmed`: Asks user to confirm the summary
@@ -126,6 +132,7 @@ These actions generate the prompts and buttons for the various form inputs:
   - **Buttons**: "Yes", "No"
 
 #### Contact Form
+
 - `ActionAskContactFormUserContactConsent`: Asks user for consent to collect contact information
 - `ActionAskContactFormUserFullName`: Requests user's full name
 - `ActionAskContactFormUserContactPhone`: Requests user's phone number
@@ -134,6 +141,7 @@ These actions generate the prompts and buttons for the various form inputs:
   - **Buttons**: "Yes", "No"
 
 #### OTP Verification Form
+
 - `ActionAskOtpVerificationFormOtpConsent`: Asks user for consent to verify phone number
 - `ActionAskOtpVerificationFormOtpInput`: Requests user to enter the OTP sent to their phone
   - **Utterance**: "A verification code has been sent to your number. Please enter it."
@@ -144,6 +152,7 @@ These actions generate the prompts and buttons for the various form inputs:
 These actions perform the final steps in the conversation flows:
 
 #### ActionSubmitGrievance
+
 - **Purpose**: Handles final submission of the grievance
 - **Key Steps**:
   1. Collects all data from filled slots
@@ -154,6 +163,7 @@ These actions perform the final steps in the conversation flows:
   6. Optional: Sends email confirmation if email provided
 
 #### ActionCheckStatus
+
 - **Purpose**: Retrieves and displays status information
 - **Key Steps**:
   1. Validates grievance ID or uses phone number to look up grievances
@@ -166,11 +176,13 @@ These actions perform the final steps in the conversation flows:
 ### New Grievance Submission (Happy Path)
 
 1. **System**: "Welcome to the Grievance Reporting System. Please select your language."
+
    - **Buttons**: "English", "नेपाली"
 
 2. **User**: Clicks "English"
 
 3. **System**: "Welcome! How can I help you today?"
+
    - **Buttons**: "File a Grievance", "Check Status", "Exit"
 
 4. **User**: Clicks "File a Grievance"
@@ -180,16 +192,19 @@ These actions perform the final steps in the conversation flows:
 6. **User**: "The water supply in my area has been inconsistent for the past month. We only get water for 2 hours every day."
 
 7. **System**: "Based on your description, I've categorized your grievance as: WATER SUPPLY. Is this correct?"
+
    - **Buttons**: "Yes", "No"
 
 8. **User**: Clicks "Yes"
 
 9. **System**: "Here's a summary of your grievance: 'Inconsistent water supply for the past month, limited to 2 hours daily.' Is this accurate?"
+
    - **Buttons**: "Yes", "No"
 
 10. **User**: Clicks "Yes"
 
 11. **System**: "Would you like to provide your contact information so we can update you about your grievance?"
+
     - **Buttons**: "Yes", "No"
 
 12. **User**: Clicks "Yes"
@@ -203,6 +218,7 @@ These actions perform the final steps in the conversation flows:
 16. **User**: "+9779812345678"
 
 17. **System**: "We'll send a verification code to this number. Do you wish to continue?"
+
     - **Buttons**: "Yes", "No"
 
 18. **User**: Clicks "Yes"
@@ -212,6 +228,7 @@ These actions perform the final steps in the conversation flows:
 20. **User**: "123456"
 
 21. **System**: "Would you like to share your location information?"
+
     - **Buttons**: "Yes", "No"
 
 22. **User**: Clicks "Yes"
@@ -223,11 +240,13 @@ These actions perform the final steps in the conversation flows:
 ### Status Check Flow
 
 1. **System**: "Welcome! How can I help you today?"
+
    - **Buttons**: "File a Grievance", "Check Status", "Exit"
 
 2. **User**: Clicks "Check Status"
 
 3. **System**: "Do you have a grievance ID?"
+
    - **Buttons**: "Yes", "No"
 
 4. **User**: Clicks "No"
@@ -260,28 +279,32 @@ If OTP verification fails:
 2. **User**: "123456"
 
 3. **System**: "The code you entered is incorrect. Please try again or click Resend OTP."
+
    - **Buttons**: "Resend OTP", "Skip verification"
 
 4. **User**: Clicks "Resend OTP"
 
 5. **System**: "A new verification code has been sent to your number. Please enter it."
-   
+
 ### Grievance Category Modification
 
 If the user wants to modify the suggested categories:
 
 1. **System**: "Based on your description, I've categorized your grievance as: WATER SUPPLY. Is this correct?"
+
    - **Buttons**: "Yes", "No"
 
 2. **User**: Clicks "No"
 
 3. **System**: "Please select the correct category:"
+
    - **Buttons**: [List of categories]
 
 4. **User**: Selects "SANITATION"
 
 5. **System**: "Your grievance has been categorized as: SANITATION. Is this correct?"
+
    - **Buttons**: "Yes", "No"
 
 6. **User**: Clicks "Yes"
-   [Continues with the flow] 
+   [Continues with the flow]

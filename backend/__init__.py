@@ -22,5 +22,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import the database manager for easy access
-from .db_manager import db_manager 
+# Import database managers from the new modular structure
+try:
+    from .services.database_services import db_manager
+    logger.info("Database manager imported successfully")
+except ImportError as e:
+    logger.warning(f"Could not import database manager: {e}")
+    db_manager = None 

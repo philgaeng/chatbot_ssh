@@ -54,7 +54,7 @@ class FileServerCore(APIManager):
         try:
             self.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
-            file_data = db_manager.file.get_file_by_id(file_id)
+            file_data = db_manager.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
                 self.log_event(event_type=SUCCESS, details={'file_id': file_id, 'exists': True})
                 return file_data
@@ -136,7 +136,7 @@ class FileServerCore(APIManager):
             file_data.update(audio_metadata)
         
         # Store file attachment in DB
-        success = db_manager.file.store_file_attachment(file_data)
+        success = db_manager.store_file_attachment(file_data)
         
         if not success:
             raise Exception(f"Failed to store file {file_data['file_name']} in database")
