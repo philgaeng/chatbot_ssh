@@ -12,15 +12,9 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from .base_classes import BaseFormValidationAction, BaseAction
-from backend.config.constants import GRIEVANCE_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES, ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
-from backend.services.database_services.postgres_services import db_manager
-from backend.services.messaging import SMSClient, EmailClient
-from .utterance_mapping_rasa import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
-from .keyword_detector import KeywordDetector, DetectionResult
-from datetime import datetime, timedelta
-from rapidfuzz import process
-import traceback
+from utils.base_classes import BaseFormValidationAction, BaseAction
+from utils.utterance_mapping_rasa import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, DEFAULT_PROVINCE, DEFAULT_DISTRICT
 
 from icecream import ic
 
@@ -30,24 +24,7 @@ ERROR = TASK_STATUS["ERROR"]
 IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
 
 
-#define and load variables
 
-load_dotenv('/home/ubuntu/nepal_chatbot/.env')
-open_ai_key = os.getenv("OPENAI_API_KEY")
-
-# Categories are already stripped in constants.py
-logger = logging.getLogger(__name__)
-
-
-# Initialize keyword detector
-keyword_detector = None
-
-def get_keyword_detector(language_code: str = "en") -> KeywordDetector:
-    """Get or create keyword detector instance"""
-    global keyword_detector
-    if keyword_detector is None or keyword_detector.language_code != language_code:
-        keyword_detector = KeywordDetector(language_code=language_code)
-    return keyword_detector
 
 ############################ STEP 0 - GENERIC ACTIONS ############################
 
@@ -89,7 +66,7 @@ class ActionStartGrievanceProcess(BaseAction):
         language_code = tracker.get_slot("language_code") or "en"
         
         # Get utterance and buttons from mapping
-        utterance = get_utterance("grievance_form", "action_start_grievance_process", 1, language_code)
+        utterance = get_utterance("form_grievance", "action_start_grievance_process", 1, language_code)
         
         # Send utterance with grievance ID in the text
         dispatcher.utter_message(
@@ -268,7 +245,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
         if slot_value and not slot_value.startswith('/'):
             # Check for sensitive content using keyword detection
             language_code = tracker.get_slot("language_code") or "en"
-            detector = get_keyword_detector(language_code)
+            detector = backend_repo.get_keyword_detector(language_code)
             detection_result = detector.detect_sensitive_content(slot_value)
             
             #handle the case where sensitive content is detected
@@ -327,21 +304,21 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
         language_code = tracker.get_slot("language_code") or "en"
         
         if not slot_grievance_description_status:
-            utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 1, language_code)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "restart":
-            utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 2, language_code)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "add_more_details":
-            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 3, language_code)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "show_options":
             slot_grievance_description = tracker.get_slot("grievance_description")
-            utterance = get_utterance("grievance_form", self.name(), 4, language_code).format(grievance_description=slot_grievance_description)
-            buttons = get_buttons("grievance_form", self.name(), 4, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 4, language_code).format(grievance_description=slot_grievance_description)
+            buttons = get_buttons("form_grievance", self.name(), 4, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
             
         return []
@@ -449,7 +426,7 @@ class ActionSubmitGrievance(BaseAction):
         has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
         files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
         
-        message = [get_utterance("grievance_form", 
+        message = [get_utterance("form_grievance", 
                                  'create_confirmation_message', 
                                  i, 
                                  self.language_code) for i in ['grievance_id',
@@ -519,7 +496,7 @@ class ActionSubmitGrievance(BaseAction):
                                         body=body
                                         )
             if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-                message = get_utterance("grievance_form", self.name(), 2, self.language_code)
+                message = get_utterance("form_grievance", self.name(), 2, self.language_code)
                 dispatcher.utter_message(text=message)
                 
         except Exception as e:
@@ -528,8 +505,8 @@ class ActionSubmitGrievance(BaseAction):
             
     # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
     #         """Handle the case of gender follow up."""
-    #         utterance = get_utterance("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
-    #         buttons = get_buttons("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         utterance = get_utterance("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         buttons = get_buttons("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
     #         ic(utterance, buttons)
     #         dispatcher.utter_message(text=utterance, buttons=buttons)
     
@@ -540,12 +517,12 @@ class ActionSubmitGrievance(BaseAction):
         buttons = None
         ic("send last utterance and buttons")
         if gender_tag:
-                utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
-                buttons = get_buttons("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
+                utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
+                buttons = get_buttons("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
         elif not has_files:
-            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 2, self.language_code)
+            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 2, self.language_code)
         else:
-            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 3, self.language_code)
+            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 3, self.language_code)
         
         ic(utterance, buttons)
         if buttons:
@@ -593,7 +570,7 @@ class ActionSubmitGrievance(BaseAction):
                 if complainant_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
                     self.sms_client.send_sms(complainant_phone, confirmation_message)
                     #utter sms confirmation message
-                    utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(complainant_phone=complainant_phone)
+                    utterance = get_utterance("form_grievance", self.name(), 2, self.language_code).format(complainant_phone=complainant_phone)
                     ic(complainant_phone, utterance)
                     dispatcher.utter_message(text=utterance)
             
@@ -612,7 +589,7 @@ class ActionSubmitGrievance(BaseAction):
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 3, self.language_code).format(complainant_email=complainant_email)
+                utterance = get_utterance("form_grievance", self.name(), 3, self.language_code).format(complainant_email=complainant_email)
                 dispatcher.utter_message(text=utterance)
             
             #send the last utterance and buttons
@@ -628,11 +605,11 @@ class ActionSubmitGrievance(BaseAction):
             
             # #send utter to users if they have not attached any files or a reminder to attach more files
             # elif not self._get_attached_files_info(grievance_id)["has_files"]:
-            #     utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            #     utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
             #     dispatcher.utter_message(text=utterance)
             
             # else:
-            #         utterance = get_utterance("grievance_form", self.name(), 5, self.language_code)
+            #         utterance = get_utterance("form_grievance", self.name(), 5, self.language_code)
             #         dispatcher.utter_message(text=utterance)
                 
             # Prepare events
@@ -643,7 +620,7 @@ class ActionSubmitGrievance(BaseAction):
         except Exception as e:
             ic(f"❌ Error submitting grievance: {str(e)}")
             ic(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []
         

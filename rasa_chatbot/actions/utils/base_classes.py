@@ -7,11 +7,14 @@ from typing import Dict, Text, Any, Tuple, List, Callable
 from rapidfuzz import fuzz
 import re
 import traceback
-from .utterance_mapping_rasa import VALIDATION_SKIP
-from .backend_repository import backend_repo
-from icecream import ic
+from .utterance_mapping_rasa import get_utterance_base, get_buttons_base
+from .mapping_buttons import VALIDATION_SKIP
+from backend.shared_functions.helpers_repo import helpers_repo
+from backend.config.constants import DEFAULT_VALUES
+import inspect
+import logging
 
-SKIP_VALUE = backend_repo.get_constant('DEFAULT_VALUES')['SKIP_VALUE']
+SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
 
 class LanguageHelper:
     """Helper class for language detection and skip word matching."""
@@ -135,11 +138,18 @@ class LanguageHelper:
 class BaseAction(Action, ABC):
     """Abstract base class for all actions.
     
-    This class provides common functionality for all actions, including language detection.
+    This class provides common functionality for all actions, including language detection
+    and standard logging patterns.
     """
     def __init__(self):
         super().__init__()
         self.lang_helper = LanguageHelper()
+        self.logger = logging.getLogger(__name__)
+        self.file_name = self.__class__.__module__.split(".")[-1]
+        self.helpers = helpers_repo
+        # Remove this line: self.language_code = self.get_language_code(tracker)
+        # The language code should be retrieved from the tracker within methods where the tracker is available,
+        # not in __init__, since tracker is not available at initialization.
         
     @abstractmethod
     def name(self) -> Text:
@@ -150,11 +160,71 @@ class BaseAction(Action, ABC):
         """
         pass
 
-    def get_language_code(self, tracker: Tracker) -> str:
-        """Get the current language code from the tracker."""
-        return tracker.get_slot("language_code") or "en"    
+    def _update_language_code(self, tracker: Tracker) -> None:
+        """Update the language code from tracker for use in validation methods."""
+        if not hasattr(self, 'language_code'):
+            self.language_code = self.get_language_code(tracker)
+
+    def _initialize_language_and_helpers(self, tracker: Tracker) -> None:
+        """Initialize language code and update all helper services."""
+        self._update_language_code(tracker)
+        if self.helpers.keyword_detector.language_code != self.language_code:
+            self.helpers.init_language(self.language_code)
+        if self.helpers.location_validator.language_code != self.language_code:
+            self.helpers.init_language(self.language_code)
+
+    def get_utterance(self, utterance_index: int) -> str:
+        
+        return get_utterance_base(self.file_name, self.name(), utterance_index, self.language_code)
     
+    def get_buttons(self, button_index: int) -> list:
+        return get_buttons_base(self.file_name, self.name(), button_index, self.language_code)
     
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """
+        Standard run method with automatic logging.
+        Subclasses should override execute_action() instead of run().
+        """
+        self._initialize_language_and_helpers(tracker)
+        action_detailed_name = self.file_name + "-" + self.name()
+        #I want to get the name of the file where the action is defined
+        
+        self.session_id = tracker.session_id
+        
+        # Log action start
+        self.logger.debug(f"Action started: {action_detailed_name} | Session: {self.session_id}")
+        
+        try:
+            # Execute the actual action logic
+            result = self.execute_action(dispatcher, tracker, domain)
+            
+            # Log successful completion
+            self.logger.debug(f"Action completed: {action_detailed_name} | Session: {self.session_id}")
+            
+            return result
+            
+        except Exception as e:
+            # Log error with context
+            self.logger.error(
+                f"Action failed: {action_detailed_name} | Error: {str(e)}", 
+                exc_info=True
+            )
+            raise
+    
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """
+        Execute the actual action logic. Override this method in subclasses.
+        
+        Args:
+            dispatcher: The dispatcher for sending messages
+            tracker: The tracker for accessing conversation state
+            domain: The domain configuration
+            
+        Returns:
+            List[Dict[Text, Any]]: List of events to be applied
+        """
+        raise NotImplementedError("Subclasses must implement execute_action()")
+
 
 class BaseFormValidationAction(FormValidationAction, ABC):
     """Abstract base class for form validation with skip handling and language detection.
@@ -178,9 +248,18 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         """
         pass
 
-    def get_language_code(self, tracker: Tracker) -> str:
-        """Get the current language code from the tracker."""
-        return tracker.get_slot("language_code") or "en"
+    def _update_language_code(self, tracker: Tracker) -> None:
+        """Update the language code from tracker for use in validation methods."""
+        if not hasattr(self, 'language_code'):
+            self.language_code = self.get_language_code(tracker)
+
+    def get_utterance(self, utterance_index: int=1) -> str:
+        function_name = inspect.currentframe().f_back.f_code.co_name
+        return get_utterance_base(self.file_name, function_name, utterance_index, self.language_code)
+    
+    def get_buttons(self, button_index: int=1) -> list:
+        function_name = inspect.currentframe().f_back.f_code.co_name
+        return get_buttons_base(self.file_name, function_name, button_index, self.language_code)
 
     # Concrete (shared) methods that subclasses can use
     def _is_skip_requested(self, latest_message: dict) -> Tuple[bool, bool, str]:
@@ -201,7 +280,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 results = self.lang_helper.is_skip_instruction(input_text)
                 return results
             except Exception as e:
-                backend_repo.log_error_with_context(e, "is_skip_requested", {"input_text": input_text, "intent": intent, "form_name": self.name()})
+                self.logger.error(f"Error in is_skip_requested: {e} | input_text: {input_text} | intent: {intent} | form_name: {self.name()}")
                 return False, False, ""
 
         return False, False, ""
@@ -297,7 +376,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 skip_result = self._is_skip_requested(tracker.latest_message)
                 is_skip, needs_validation, matched_word = skip_result
             except Exception as e:
-                backend_repo.log_error_with_context(e, "is_skip_requested", {"input_text": message_text, "intent": intent, "form_name": self.name(), "traceback": traceback.format_exc()})
+                self.logger.error(f"Error in _handle_slot_extraction: {e} | input_text: {message_text} | intent: {intent} | form_name: {self.name()}")
                 is_skip, needs_validation, matched_word = False, False, ""
             
             if is_skip:
@@ -317,9 +396,9 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
                 skip_value = False if slot_type == "bool" else SKIP_VALUE
                 return {slot_name: skip_value}
-            backend_repo.log_action("slot_extraction", {"slot_name": slot_name, "slot_value": skip_value})
+            self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | skip_value: {skip_value}")
             if message_text:
-                backend_repo.log_action("slot_extraction", {"slot_name": slot_name, "slot_value": message_text})
+                self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | message_text: {message_text}")
                 return {slot_name: message_text}
         
         return {}
@@ -382,12 +461,12 @@ class BaseFormValidationAction(FormValidationAction, ABC):
             if message_text.startswith("/affirm") or intent == "affirm":
                 if custom_affirm_action:
                     return await custom_affirm_action(dispatcher)
-                backend_repo.log_action("boolean_slot_extraction", {"form_name": self.name(), "slot_name": slot_name, "slot_value": True})
+                self.logger.debug(f"Boolean slot extraction: {self.name()} - {slot_name} | slot_value: True")
                 return {slot_name: True}
 
             # Handle negative responses
             if message_text.startswith("/deny") or intent == "deny":
-                backend_repo.log_action("boolean_slot_extraction", {"form_name": self.name(), "slot_name": slot_name, "slot_value": False})
+                self.logger.debug(f"Boolean_slot_extraction: {self.name()} - {slot_name} | slot_value: False")
                 return {slot_name: False}
 
         return {}

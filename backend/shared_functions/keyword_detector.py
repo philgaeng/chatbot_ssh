@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import os
-
+from backend.config.constants import DEFAULT_VALUES
 logger = logging.getLogger(__name__)
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 
 class DetectionLevel(Enum):
     """Detection levels for sensitive content"""
@@ -43,10 +44,13 @@ class KeywordDetector:
     Designed for offline use in rural Nepal with limited connectivity.
     """
     
-    def __init__(self, language_code: str = "en"):
+    def __init__(self, language_code: str = DEFAULT_LANGUAGE_CODE):
         self.language_code = language_code
         self.keyword_patterns = self._load_keyword_patterns()
         self.thresholds = self._load_thresholds()
+    
+    def _initialize_constants(self, language_code: str = DEFAULT_LANGUAGE_CODE):
+        self.language_code = language_code
         
     def _load_keyword_patterns(self) -> Dict[str, Dict[str, Any]]:
         """Load keyword patterns for different categories"""

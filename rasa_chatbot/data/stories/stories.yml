@@ -20,14 +20,14 @@ stories:
       - action: grievance_description_form
       - active_loop: grievance_description_form
       - active_loop: null
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_consent: true
           - phone_validation_required: true
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_submit_grievance
 
@@ -48,22 +48,22 @@ stories:
       - action: grievance_description_form
       - active_loop: grievance_description_form
       - active_loop: null
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_consent: true
           - phone_validation_required: true
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_submit_grievance
 
   # User does not provide phone number
   - story: User does not provide phone number
     steps:
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - phone_validation_required: false
       - active_loop: null
@@ -72,11 +72,11 @@ stories:
   #Step 5: Collect contact details with OTP verification
   - story: User provides contact consent with phone verification
     steps:
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_submit_grievance
 
