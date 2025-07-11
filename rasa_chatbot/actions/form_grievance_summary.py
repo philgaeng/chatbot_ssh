@@ -385,16 +385,16 @@ class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
         
         # Handle async classification status
         if classification_status == "processing":
-            utterance = get_utterance("grievance_form", "async_classification", 3, language_code)
+            utterance = get_utterance("form_grievance", "async_classification", 3, language_code)
             dispatcher.utter_message(text=utterance)
             return []
         elif classification_status == "failed":
-            utterance = get_utterance("grievance_form", "async_classification", 2, language_code)
+            utterance = get_utterance("form_grievance", "async_classification", 2, language_code)
             dispatcher.utter_message(text=utterance)
             return []
         elif classification_status == "skipped":
             # No classification available, proceed with manual input
-            utterance = get_utterance("grievance_form", "async_classification", 4, language_code)
+            utterance = get_utterance("form_grievance", "async_classification", 4, language_code)
             dispatcher.utter_message(text=utterance)
             return []
         elif classification_status == "completed":
@@ -405,7 +405,7 @@ class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
             if grievance_categories and grievance_summary_temp:
                 
                 # Show success message
-                utterance = get_utterance("grievance_form", "async_classification", 5, language_code)
+                utterance = get_utterance("form_grievance", "async_classification", 5, language_code)
                 dispatcher.utter_message(text=utterance)
             
         if BaseFormValidationAction.message_display_list_cat:
@@ -414,15 +414,15 @@ class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
             
             if not grievance_categories or grievance_categories == []:
                 print("No categories found, sending no categories message")
-                utterance = get_utterance("grievance_form", self.name(), 1, language_code)
-                buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+                utterance = get_utterance("form_grievance", self.name(), 1, language_code)
+                buttons = get_buttons("form_grievance", self.name(), 1, language_code)
                 dispatcher.utter_message(text=utterance, buttons=buttons)
             
             else:
                 print(f"Sending message with categories: {grievance_categories}")
                 category_text = "\n".join([v for v in grievance_categories])
-                utterance = get_utterance("grievance_form", self.name(), 2, language_code).format(category_text=category_text)  
-                buttons = get_buttons("grievance_form", self.name(), 2, language_code)
+                utterance = get_utterance("form_grievance", self.name(), 2, language_code).format(category_text=category_text)  
+                buttons = get_buttons("form_grievance", self.name(), 2, language_code)
                 dispatcher.utter_message(text=utterance, buttons=buttons)
 
             BaseFormValidationAction.message_display_list_cat = False
@@ -449,7 +449,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
         
         if ask_cat_modify_flag == 'slot_deleted':
             if not list_of_cat:
-                utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+                utterance = get_utterance("form_grievance", self.name(), 1, language_code)
                 dispatcher.utter_message(text=utterance)
                 return {"grievance_categories_status": SKIP_VALUE}
             else:
@@ -458,7 +458,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
                     for cat in list_of_cat
                 ]
                 buttons.append({"title": "Skip", "payload": "/skip"})
-                utterance = get_utterance("grievance_form", self.name(), 2, language_code)
+                utterance = get_utterance("form_grievance", self.name(), 2, language_code)
                 dispatcher.utter_message(text=utterance, buttons=buttons)
                 
         if ask_cat_modify_flag == "slot_added":
@@ -467,7 +467,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
                 {"title": cat, "payload": f'/add_category{{"category": "{cat}"}}'} 
                 for cat in list_cat_to_add[:10]
             ]
-            utterance = get_utterance("grievance_form", self.name(), 3, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 3, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
         return []
     
@@ -485,11 +485,11 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
         language_code = tracker.get_slot("language_code") or "en"
         current_summary = tracker.get_slot("grievance_summary_temp")
         if current_summary:
-            utterance = get_utterance("grievance_form", self.name(), 1, language_code).format(current_summary=current_summary)
-            buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 1, language_code).format(current_summary=current_summary)
+            buttons = get_buttons("form_grievance", self.name(), 1, language_code)
             dispatcher.utter_message(text=utterance, buttons=buttons)
         else:
-            utterance = get_utterance("grievance_form", self.name(), 1, language_code)
+            utterance = get_utterance("form_grievance", self.name(), 1, language_code)
             buttons = BUTTON_SKIP
             dispatcher.utter_message(text=utterance)
 
@@ -500,7 +500,7 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(BaseAction):
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
         if tracker.get_slot("grievance_summary_confirmed") == "slot_edited":
-            utterance = get_utterance("grievance_form", 
+            utterance = get_utterance("form_grievance", 
                                       self.name(), 
                                       2, 
                                       language_code)
@@ -514,10 +514,10 @@ class ActionAskGrievanceSummaryFormGenderFollowUp(BaseAction):
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
         for i in range(1, 4):
-            utterance = get_utterance("grievance_form", self.name(), i, language_code)
+            utterance = get_utterance("form_grievance", self.name(), i, language_code)
             dispatcher.utter_message(text=utterance)
-        utterance = get_utterance("grievance_form", self.name(), 4, language_code)
-        buttons = get_buttons("grievance_form", self.name(), 1, language_code)
+        utterance = get_utterance("form_grievance", self.name(), 4, language_code)
+        buttons = get_buttons("form_grievance", self.name(), 1, language_code)
         dispatcher.utter_message(text=utterance, buttons=buttons)
 
 
@@ -617,7 +617,7 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
         has_files = backend_repo.get_attached_files_info(grievance_data['grievance_id'])["has_files"]
         files_info = backend_repo.get_attached_files_info(grievance_data['grievance_id'])["files_info"]
         
-        message = [get_utterance("grievance_form", 
+        message = [get_utterance("form_grievance", 
                                  'create_confirmation_message', 
                                  i, 
                                  self.language_code) for i in ['grievance_id',
@@ -688,7 +688,7 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
                                         body=body
                                         )
             if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-                message = get_utterance("grievance_form", self.name(), 2, self.language_code)
+                message = get_utterance("form_grievance", self.name(), 2, self.language_code)
                 dispatcher.utter_message(text=message)
                 
         except Exception as e:
@@ -697,8 +697,8 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
             
     # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
     #         """Handle the case of gender follow up."""
-    #         utterance = get_utterance("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
-    #         buttons = get_buttons("grievance_form", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         utterance = get_utterance("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         buttons = get_buttons("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
     #         ic(utterance, buttons)
     #         dispatcher.utter_message(text=utterance, buttons=buttons)
     
@@ -709,12 +709,12 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
         buttons = None
         ic("send last utterance and buttons")
         if gender_tag:
-                utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
-                buttons = get_buttons("grievance_form", "send_last_utterance_buttons", 1, self.language_code)
+                utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
+                buttons = get_buttons("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
         elif not has_files:
-            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 2, self.language_code)
+            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 2, self.language_code)
         else:
-            utterance = get_utterance("grievance_form", "send_last_utterance_buttons", 3, self.language_code)
+            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 3, self.language_code)
         
         ic(utterance, buttons)
         if buttons:
@@ -757,7 +757,7 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
                 if complainant_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
                     backend_repo.send_sms(complainant_phone, confirmation_message)
                     #utter sms confirmation message
-                    utterance = get_utterance("grievance_form", self.name(), 2, self.language_code).format(complainant_phone=complainant_phone)
+                    utterance = get_utterance("form_grievance", self.name(), 2, self.language_code).format(complainant_phone=complainant_phone)
                     ic(complainant_phone, utterance)
                     dispatcher.utter_message(text=utterance)
             
@@ -776,7 +776,7 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
-                utterance = get_utterance("grievance_form", self.name(), 3, self.language_code).format(complainant_email=complainant_email)
+                utterance = get_utterance("form_grievance", self.name(), 3, self.language_code).format(complainant_email=complainant_email)
                 dispatcher.utter_message(text=utterance)
             
             #send the last utterance and buttons
@@ -792,11 +792,11 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
             
             # #send utter to users if they have not attached any files or a reminder to attach more files
             # elif not self._get_attached_files_info(grievance_id)["has_files"]:
-            #     utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            #     utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
             #     dispatcher.utter_message(text=utterance)
             
             # else:
-            #         utterance = get_utterance("grievance_form", self.name(), 5, self.language_code)
+            #         utterance = get_utterance("form_grievance", self.name(), 5, self.language_code)
             #         dispatcher.utter_message(text=utterance)
                 
             # Prepare events
@@ -807,7 +807,7 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
         except Exception as e:
             ic(f"❌ Error submitting grievance: {str(e)}")
             ic(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("grievance_form", self.name(), 4, self.language_code)
+            utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
             dispatcher.utter_message(text=utterance)
             return []
         

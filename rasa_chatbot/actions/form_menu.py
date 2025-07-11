@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class AskMenuFormLanguageCode(BaseAction):
     def name(self) -> Text:
-        return "action_ask_menu_form_language_code"
+        return "action_ask_form_menu_language_code"
     
     def run(self,
             dispatcher: CollectingDispatcher,
@@ -24,8 +24,8 @@ class AskMenuFormLanguageCode(BaseAction):
             domain: Dict[Text, Any]
         ) -> List[Dict[Text, Any]]:
         language = get_language_code(tracker)
-        message = get_utterance('menu_form', self.name(), 1, language)
-        buttons = get_buttons('menu_form', self.name(), 1, language)
+        message = get_utterance('form_menu', self.name(), 1, language)
+        buttons = get_buttons('form_menu', self.name(), 1, language)
         print(message)
         print(buttons)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -33,7 +33,7 @@ class AskMenuFormLanguageCode(BaseAction):
     
 class AskMenuFormMainStory(BaseAction):
     def name(self) -> Text:
-        return "action_ask_menu_form_main_story"
+        return "action_ask_form_menu_main_story"
     
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = tracker.latest_message.get('text', '')
@@ -43,22 +43,22 @@ class AskMenuFormMainStory(BaseAction):
         #ic(language, district, province)
         
         if province and district:
-            welcome_text = get_utterance('menu_form', self.name(), 2, language).format(
+            welcome_text = get_utterance('form_menu', self.name(), 2, language).format(
                 district=district,
                 province=province
             )
         else:
-            welcome_text = get_utterance('menu_form', self.name(), 1, language)
+            welcome_text = get_utterance('form_menu', self.name(), 1, language)
                 
             
         if message and "/" in message:
-            buttons = get_buttons('menu_form', self.name(), 1, language)
+            buttons = get_buttons('form_menu', self.name(), 1, language)
             dispatcher.utter_message(text=welcome_text, buttons=buttons)
         return []
 
 class ValidateMenuForm(BaseFormValidationAction):
     def name(self) -> Text:
-        return "validate_menu_form"
+        return "validate_form_menu"
     
     async def required_slots(self, tracker: Tracker) -> List[Text]:
         return ["language_code", "main_story"]

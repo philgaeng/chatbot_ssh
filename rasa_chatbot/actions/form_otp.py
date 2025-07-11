@@ -16,7 +16,7 @@ from icecream import ic
 
 class ActionAskOtpVerificationFormOtpConsent(BaseAction):
     def name(self) -> Text:
-        return "action_ask_otp_verification_form_otp_consent"
+        return "action_ask_form_otp_otp_consent"
     
     async def run(
         self,
@@ -25,14 +25,14 @@ class ActionAskOtpVerificationFormOtpConsent(BaseAction):
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
-        message = get_utterance("otp_verification_form", self.name(), 1, language_code)
-        buttons = get_buttons("otp_verification_form", self.name(), 1, language_code)
+        message = get_utterance("form_otp", self.name(), 1, language_code)
+        buttons = get_buttons("form_otp", self.name(), 1, language_code)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 class ActionAskOtpVerificationFormOtpInput(BaseAction):
     def name(self) -> Text:
-        return "action_ask_otp_verification_form_otp_input"
+        return "action_ask_form_otp_otp_input"
 
     def _generate_otp(self):
         return ''.join([str(randint(0, 9)) for _ in range(6)])
@@ -50,17 +50,17 @@ class ActionAskOtpVerificationFormOtpInput(BaseAction):
         phone_number = tracker.get_slot("complainant_phone")
         otp_status = tracker.get_slot("otp_status")
         resend_count = tracker.get_slot("otp_resend_count") or 0
-        buttons_otp = get_buttons("otp_verification_form", self.name(), 1, language_code)
+        buttons_otp = get_buttons("form_otp", self.name(), 1, language_code)
         
         #deal with the case where the OTP needs to be generated = first send or resend
         if not otp_status or otp_status == "resend" and resend_count < 3 :
         # OTP already generated
             otp_number = self._generate_otp()
-            message_sms = get_utterance("otp_verification_form", self.name(), 1, language_code).format(otp_number=otp_number)
-            message_bot = get_utterance("otp_verification_form", self.name(), 2, language_code).format(phone_number=phone_number)
+            message_sms = get_utterance("form_otp", self.name(), 1, language_code).format(otp_number=otp_number)
+            message_bot = get_utterance("form_otp", self.name(), 2, language_code).format(phone_number=phone_number)
     
             if otp_status == "resend":
-                message_bot_retry = get_utterance("otp_verification_form", self.name(), 3, language_code).format(
+                message_bot_retry = get_utterance("form_otp", self.name(), 3, language_code).format(
                     resend_count=resend_count + 1, max_attempts=3 - resend_count)
                 message_bot = message_bot + " " + message_bot_retry
             
@@ -76,36 +76,36 @@ class ActionAskOtpVerificationFormOtpInput(BaseAction):
                 
             except Exception as e:
                 logger.error(f"Error sending SMS: {e}")
-                message_error = get_utterance("otp_verification_form", self.name(), 4, language_code)
+                message_error = get_utterance("form_otp", self.name(), 4, language_code)
                 dispatcher.utter_message(text=message_error)
         
         if otp_status == "resend" and resend_count >= 3:
-            message_max_attempts = get_utterance("otp_verification_form", self.name(), 5, language_code)
+            message_max_attempts = get_utterance("form_otp", self.name(), 5, language_code)
             dispatcher.utter_message(text=message_max_attempts,
                                      buttons = buttons_otp)
             
 
 
         if otp_status in ["invalid_format", "invalid_otp"]:
-            message_invalid_code = get_utterance("otp_verification_form", self.name(), 6, language_code)
+            message_invalid_code = get_utterance("form_otp", self.name(), 6, language_code)
             dispatcher.utter_message(text=message_invalid_code,
                                      buttons = buttons_otp)
                 
         if otp_status == "slot_skipped":
-            message_skip = get_utterance("otp_verification_form", self.name(), 7, language_code)
+            message_skip = get_utterance("form_otp", self.name(), 7, language_code)
             dispatcher.utter_message(text=message_skip)
             
 
         return [SlotSet("otp_number", otp_number), SlotSet("otp_resend_count", resend_count)]
     
 
-class ValidateOTPVerificationForm(BaseFormValidationAction):
+class ValidateFormOtp(BaseFormValidationAction):
     
     def __init__(self):
         super().__init__()
 
     def name(self) -> Text:
-        return "validate_otp_verification_form"
+        return "validate_form_otp"
 
     async def required_slots(
         self,
@@ -125,7 +125,7 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
         ic(tracker.get_slot("otp_consent"))
         ic(tracker.get_slot("otp_status"))
         ic(tracker.get_slot("otp_input"))
-        #skip the otp_verification_form if no phone number is provided
+        #skip the form_otp if no phone number is provided
         if not tracker.get_slot("complainant_phone") or tracker.get_slot("complainant_phone") == "slot_skipped":
             return []
         if tracker.get_slot("gender_issues_reported"):
@@ -200,7 +200,7 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
                     "otp_resend_count" : 0}
 
         # Validate OTP format
-        if not self._is_valid_otp_verification_format(slot_value):
+        if not self._is_valid_form_otpat(slot_value):
             print(f"❌ Invalid OTP format: {slot_value}")
             return {"otp_input": None, 
                     "otp_status" : "invalid_format",
@@ -212,7 +212,7 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
         
         if self._is_matching_otp(slot_value, expected_otp):
             print("✅ OTP matched successfully")
-            message = get_utterance("otp_verification_form", "otp_verified_successfully", 1, self.language_code)
+            message = get_utterance("form_otp", "otp_verified_successfully", 1, self.language_code)
             dispatcher.utter_message(text=message)
             return {"otp_input": slot_value,
                     "otp_status" : "verified",
@@ -225,7 +225,7 @@ class ValidateOTPVerificationForm(BaseFormValidationAction):
                     "otp_resend_count" : tracker.get_slot("otp_resend_count") or 0}
         return {}
 
-    def _is_valid_otp_verification_format(self, slot_value: str) -> bool:
+    def _is_valid_form_otpat(self, slot_value: str) -> bool:
         """Validate OTP format (6 digits)."""
         is_valid = bool(slot_value and slot_value.isdigit() and len(slot_value) == 6)
         logger.debug(f"OTP format validation: {is_valid} for value: {slot_value}")

@@ -21,13 +21,13 @@ stories:
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_phone: "9818000000"
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_display_grievance
       - intent: status_check
@@ -49,13 +49,13 @@ stories:
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_phone: "9818000000"
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_display_grievance
       - intent: status_check
@@ -122,13 +122,13 @@ stories:
       - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_phone: "9818000000"
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_display_grievance
       - intent: status_check
@@ -155,13 +155,13 @@ stories:
           - main_story: "status_update"
       - action: action_choose_retrieval_method
       - intent: status_check_phone
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_phone: "9818000000"
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - active_loop: null
       - action: action_display_grievance
       - intent: status_check

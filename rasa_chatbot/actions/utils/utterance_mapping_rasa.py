@@ -17,226 +17,12 @@ Structure:
 }
 """
 from icecream import ic
-# Button payload constants
-BUTTON_AFFIRM = "/affirm"
-BUTTON_DENY = "/deny"
-BUTTON_SKIP = "/skip"
-BUTTON_ANONYMOUS_WITH_PHONE = "/anonymous_with_phone"
-BUTTON_RESEND = "/resend"
-BUTTON_SUBMIT_DETAILS = "/submit_details"
-BUTTON_ADD_MORE_DETAILS = "/add_more_details"
-BUTTON_EXIT_WITHOUT_FILING = "/exit_without_filing"
-BUTTON_SLOT_CONFIRMED = "/slot_confirmed"
-BUTTON_SLOT_EDITED = "/slot_edited"
-BUTTON_MODIFY_EMAIL = "/modify_email"
-BUTTON_MODIFY_PHONE = "/modify_phone"
-BUTTON_CANCEL_MODIFICATION = "/cancel_modification_contact"
-BUTTON_RESTART = "/restart"
-BUTTON_RESTART_PROCESS = "/restart_story{\"restart_type\": \"process\"}"
-BUTTON_RESTART_STORY = "/restart_story{\"restart_type\": \"story\"}"
-BUTTON_MAIN_MENU = "/main_menu"
-BUTTON_TRY_AGAIN = "/restart_story{\"restart_type\": \"story\"}"
-BUTTON_EXIT = "/exit"
+from mapping_buttons import *
 
-# Button dictionary constants
-BUTTONS_AFFIRM_DENY = {
-    'en': [
-        {"title": "Yes", "payload": BUTTON_AFFIRM},
-        {"title": "No", "payload": BUTTON_DENY}
-    ],
-    'ne': [
-        {"title": "हो", "payload": BUTTON_AFFIRM},
-        {"title": "होइन", "payload": BUTTON_DENY}
-    ]
-}
-
-BUTTONS_LANGUAGE_OPTIONS = {
-    'en': [
-        {"title": "Nepali / नेपाली", "payload": "/set_nepali"},
-        {"title": "English / अंग्रेजी", "payload": "/set_english"}
-    ]
-}
-
-BUTTONS_SKIP = {
-    'en': [
-        {"title": "Skip", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
-    ]
-}
-
-BUTTONS_CLEAN_WINDOW_OPTIONS = {
-    'en': [
-        {"title": "Close Browser", "payload": "/nav_close_browser_tab"},
-        {"title": "Clear Session", "payload": "/nav_clear"}
-    ],
-    'ne': [
-        {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
-        {"title": "सत्र खाली गर्नुहोस्", "payload": "/nav_clear"}
-    ]
-}
-
-
-BUTTONS_SLOT_SKIPPED = {
-    'en': [
-        {"title": "Skip", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
-    ]
-}
-
-BUTTONS_CONTACT_CONSENT = {
-    'en': [
-        {"title": "Yes", "payload": BUTTON_AFFIRM},
-        {"title": "Anonymous with phone", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
-        {"title": "No contact info", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "हो", "payload": BUTTON_AFFIRM},
-        {"title": "फोनसहित गुमनाम", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
-        {"title": "सम्पर्क जानकारी छैन", "payload": BUTTON_SKIP}
-    ]
-}
-
-BUTTONS_PHONE_VALIDATION = {
-    'en': [
-        {"title": "Give Phone Number", "payload": BUTTON_AFFIRM},
-        {"title": "File Grievance as is", "payload": BUTTON_DENY}
-    ],
-    'ne': [
-        {"title": "फोन नम्बर दिनुहोस्", "payload": BUTTON_AFFIRM},
-        {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_DENY}
-    ]
-}
-
-BUTTONS_OTP_VERIFICATION = {
-    'en': [
-        {"title": "Resend", "payload": BUTTON_RESEND},
-        {"title": "Skip", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "पुनः पठाउनुहोस्", "payload": BUTTON_RESEND},
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
-    ]
-}
-
-BUTTONS_GRIEVANCE_SUBMISSION = {
-    'en': [
-        {"title": "File as is", "payload": BUTTON_SUBMIT_DETAILS},
-        {"title": "Add more details", "payload": BUTTON_ADD_MORE_DETAILS},
-        {"title": "Restart the process", "payload": BUTTON_RESTART}
-    ],
-    'ne': [
-        {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
-        {"title": "थप विवरण थप्नुहोस्", "payload": BUTTON_ADD_MORE_DETAILS},
-        {"title": "प्रक्रिया पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART}
-    ]
-}
-
-BUTTONS_EMAIL_CONFIRMATION = {
-    'en': [
-        {"title": "Confirm Email", "payload": BUTTON_SLOT_CONFIRMED},
-        {"title": "Try Different Email", "payload": BUTTON_SLOT_EDITED},
-        {"title": "Skip Email", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "इमेल पुष्टि गर्नुहोस्", "payload": BUTTON_SLOT_CONFIRMED},
-        {"title": "अर्को इमेल प्रयास गर्नुहोस्", "payload": BUTTON_SLOT_EDITED},
-        {"title": "इमेल छोड्नुहोस्", "payload": BUTTON_SKIP}
-    ]
-}
-
-BUTTONS_CONTACT_MODIFICATION = {
-    'en': [
-        {"title": "Change Email ({current_email})", "payload": BUTTON_MODIFY_EMAIL},
-        {"title": "Add Email", "payload": BUTTON_MODIFY_EMAIL},
-        {"title": "Change Phone ({current_phone})", "payload": BUTTON_MODIFY_PHONE},
-        {"title": "Add Phone", "payload": BUTTON_MODIFY_PHONE},
-        {"title": "Cancel", "payload": BUTTON_CANCEL_MODIFICATION}
-    ],
-    'ne': [
-        {"title": "इमेल परिवर्तन गर्नुहोस् ({current_email})", "payload": BUTTON_MODIFY_EMAIL},
-        {"title": "इमेल थप्नुहोस्", "payload": BUTTON_MODIFY_EMAIL},
-        {"title": "फोन परिवर्तन गर्नुहोस् ({current_phone})", "payload": BUTTON_MODIFY_PHONE},
-        {"title": "फोन थप्नुहोस्", "payload": BUTTON_MODIFY_PHONE},
-        {"title": "रद्द गर्नुहोस्", "payload": BUTTON_CANCEL_MODIFICATION}
-    ]
-}
-
-BUTTONS_RESTART_OPTIONS = {
-    'en': [
-        {"title": "Restart the process", "payload": BUTTON_RESTART_PROCESS},
-        {"title": "Restart the story", "payload": BUTTON_RESTART_STORY},
-        {"title": "Go back to the main menu", "payload": BUTTON_MAIN_MENU}
-    ],
-    'ne': [
-        {"title": "प्रक्रिया पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART_PROCESS},
-        {"title": "कथामा पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART_STORY},
-        {"title": "मुख्य मेनुमा फर्कनुहोस्", "payload": BUTTON_MAIN_MENU}
-    ]
-}
-
-BUTTONS_GENDER_FOLLOW_UP = {
-    'en': [
-        {"title": "No, I want to Exit", "payload": BUTTON_EXIT},
-        {"title": "I want to file anonymously with one phone number", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
-    ],
-    'ne': [
-        {"title": "निस्कनुहोस्", "payload": BUTTON_EXIT},
-        {"title": "मैले एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
-    ],
-}
-
-BUTTONS_FALLBACK = {
-    'en': [
-        {"title": "Try Again", "payload": BUTTON_TRY_AGAIN},
-        {"title": "Restart the process", "payload": BUTTON_RESTART_PROCESS},
-        {"title": "Restart the story", "payload": BUTTON_RESTART_STORY},
-        {"title": "File Grievance as Is", "payload": BUTTON_SUBMIT_DETAILS},
-        {"title": "Exit", "payload": BUTTON_EXIT}
-    ],
-    'ne': [
-        {"title": "पुनः प्रयास गर्नुहोस्", "payload": BUTTON_TRY_AGAIN},
-        {"title": "प्रक्रिया पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART_PROCESS},
-        {"title": "कथामा पुनः सुरु गर्नुहोस्", "payload": BUTTON_RESTART_STORY},
-        {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
-        {"title": "बाहिर निस्कनुहोस्", "payload": BUTTON_EXIT}
-    ]
-}
-
-BUTTONS_CHECK_STATUS = {
-    'en': [
-        {"title": "Check Status", "payload": "/check_status"},
-        {"title": "Skip", "payload": BUTTON_SKIP},
-    ],
-    'ne': [
-        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
-    ]
-}
-
-
-VALIDATION_SKIP = {"utterance":{
-    "en" : "Did you want to skip this field? I matched '{matched_word}'",
-    "ne" : "के तपाईं यो क्षेत्र छोड्न चाहनुहुन्छ? मैले '{matched_word}' मिलान गरेको छु।"
-    },
-    "buttons":{
-        "en": [
-            {"title": "Yes, skip it", "payload": "/affirm_skip"},
-            {"title": "No, let me enter a value", "payload": "/deny_skip"}
-        ],
-        "ne": [
-            {"title": "हो", "payload": "/affirm_skip"},
-            {"title": "होइन", "payload": "/deny_skip"}
-        ]
-    }
-}
 
 UTTERANCE_MAPPING = {
-    'location_form': {
-        'action_ask_location_form_complainant_location_consent': {
+    'form_contact': {
+        'action_ask_form_contact_complainant_location_consent': {
             'utterances': {
                 1: {
                     'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
@@ -247,7 +33,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_location_form_complainant_municipality_temp': {
+        'action_ask_form_contact_complainant_municipality_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
@@ -258,7 +44,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_location_form_complainant_municipality_confirmed': {
+        'action_ask_form_contact_complainant_municipality_confirmed': {
             'utterances': {
                 1: {
                     'en': "Is {validated_municipality} your correct municipality?",
@@ -269,7 +55,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_location_form_complainant_village': {
+        'action_ask_form_contact_complainant_village': {
             'utterances': {
                 1: {
                     'en': "Please provide your village name or Skip to skip",
@@ -280,7 +66,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_location_form_complainant_address_temp': {
+        'action_ask_form_contact_complainant_address_temp': {
             'utterances': {
                 1: {
                     'en': "Please provide your address or Skip to skip",
@@ -291,7 +77,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_location_form_complainant_address_confirmed': {
+        'action_ask_form_contact_complainant_address_confirmed': {
             'utterances': {
                 1: {
                     'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
@@ -302,7 +88,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_location_form_complainant_province': {
+        'action_ask_form_contact_complainant_province': {
             'utterances': {
                 1: {
                     'en': "Please provide your province name or Skip",
@@ -313,145 +99,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_location_form_complainant_district': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your district name or Skip",
-                    'ne': "कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'validate_complainant_province': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid province name, this is required to file your grievance",
-                    'ne': "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
-                },
-                2: {
-                    'en': "We cannot match your entry {slot_value} to a valid province. Please try again",
-                    'ne': "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
-                },
-                3: {
-                    'en': "We have matched your entry {slot_value} to {result}.",
-                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
-                }
-            }
-        },
-        'validate_complainant_district': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid district name, this is required to file your grievance",
-                    'ne': "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
-                },
-                2: {
-                    'en': "We cannot match your entry {slot_value} to a valid district. Please try again",
-                    'ne': "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
-                },
-                3: {
-                    'en': "We have matched your entry {slot_value} to {result}.",
-                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
-                }
-            }
-        },
-        'validate_complainant_village': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
-                    'ne': "कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्"
-                }
-            }
-        },
-        'validate_complainant_address_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid address (at least 3 characters)",
-                    'ne': "कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)"
-                }
-            }
-        }
-    },
-    'contact_form': {
-        'action_ask_contact_form_complainant_location_consent': {
-            'utterances': {
-                1: {
-                    'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
-                    'ne': "के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_contact_form_complainant_municipality_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
-                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_contact_form_complainant_municipality_confirmed': {
-            'utterances': {
-                1: {
-                    'en': "Is {validated_municipality} your correct municipality?",
-                    'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_contact_form_complainant_village': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your village name or Skip to skip",
-                    'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_contact_form_complainant_address_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your address or Skip to skip",
-                    'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_contact_form_complainant_address_confirmed': {
-            'utterances': {
-                1: {
-                    'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
-                    'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_contact_form_complainant_province': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your province name or Skip",
-                    'ne': "कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_contact_form_complainant_district': {
+        'action_ask_form_contact_complainant_district': {
             'utterances': {
                 1: {
                     'en': "Please provide your district name or Skip",
@@ -510,7 +158,151 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_contact_form_complainant_consent': {
+        'validate_complainant_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Please enter your correct village and address",
+                    'ne': "कृपया आफ्नो सही गाउँ र ठेगाना प्रविष्ट गर्नुहोस्"
+                }
+            }
+        },
+        'action_ask_form_contact_complainant_location_consent': {
+            'utterances': {
+                1: {
+                    'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
+                    'ne': "के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_form_contact_complainant_municipality_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
+                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_contact_complainant_municipality_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Is {validated_municipality} your correct municipality?",
+                    'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_form_contact_complainant_village': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your village name or Skip to skip",
+                    'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_contact_complainant_address_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your address or Skip to skip",
+                    'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_contact_complainant_address_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
+                    'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_form_contact_complainant_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your province name or Skip",
+                    'ne': "कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_contact_complainant_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your district name or Skip",
+                    'ne': "कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'validate_complainant_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid province name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid province. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_complainant_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid district name, this is required to file your grievance",
+                    'ne': "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+                },
+                2: {
+                    'en': "We cannot match your entry {slot_value} to a valid district. Please try again",
+                    'ne': "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
+                },
+                3: {
+                    'en': "We have matched your entry {slot_value} to {result}.",
+                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
+                }
+            }
+        },
+        'validate_complainant_village': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
+                    'ne': "कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्"
+                }
+            }
+        },
+        'validate_complainant_address_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please provide a valid address (at least 3 characters)",
+                    'ne': "कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)"
+                }
+            }
+        },
+        'action_ask_form_contact_complainant_consent': {
             'utterances': {
                 1: {
                     'en': "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.",
@@ -521,7 +313,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_contact_form_complainant_full_name': {
+        'action_ask_form_contact_complainant_full_name': {
             'utterances': {
                 1: {
                     'en': "Please enter the name you want us to address you by. You can skip this if you prefer to remain anonymous.",
@@ -536,7 +328,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SLOT_SKIPPED
             }
         },
-        'action_ask_contact_form_complainant_phone': {
+        'action_ask_form_contact_complainant_phone': {
             'utterances': {
                 1: {
                     'en': "Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. \nYou can skip this if you prefer to remain anonymous.",
@@ -547,7 +339,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SLOT_SKIPPED
             }
         },
-        'action_ask_contact_form_phone_validation_required': {
+        'action_ask_form_contact_phone_validation_required': {
             'utterances': {
                 1: {
                     'en': "Your grievance is filed without a validated number. Providing a valid number will help in the follow-up of the grievance and we recommend it. However, you can file the grievance as is.",
@@ -558,7 +350,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_PHONE_VALIDATION
             }
         },
-        'action_ask_contact_form_complainant_email_temp': {
+        'action_ask_form_contact_complainant_email_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
@@ -569,7 +361,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SLOT_SKIPPED
             }
         },
-        'action_ask_contact_form_complainant_email_confirmed': {
+        'action_ask_form_contact_complainant_email_confirmed': {
             'utterances': {
                 1: {
                     'en': "⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
@@ -608,8 +400,8 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'otp_verification_form': {
-        'action_ask_otp_verification_form_otp_input': {
+    'form_otp': {
+        'action_ask_form_otp_otp_input': {
             'utterances': {
                 1: {
                     'en': "-------- OTP verification ongoing --------\nPlease enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number.",
@@ -633,7 +425,7 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'grievance_form': {
+    'form_grievance': {
         'action_start_grievance_process': {
             'utterances': {
                 1: {
@@ -1163,8 +955,8 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'menu_form': {
-        'action_ask_menu_form_main_story': {
+    'form_menu': {
+        'action_ask_form_menu_main_story': {
             'utterances': {
                 1: {
                     'en': "I am here to help you file a grievance or check its status. What would you like to do?",
@@ -1190,7 +982,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_menu_form_language_code': {
+        'action_ask_form_menu_language_code': {
             'utterances': {
                 1: {
                     'en':"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nWhat language do you want to use?",
@@ -1202,8 +994,8 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'otp_verification_form': {
-        'action_ask_otp_verification_form_otp_consent': {
+    'form_otp': {
+        'action_ask_form_otp_otp_consent': {
             'utterances': {
                 1: {
                     'en': "Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you.",
@@ -1222,7 +1014,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        "action_ask_otp_verification_form_otp_input": {
+        "action_ask_form_otp_otp_input": {
             'utterances': {
                 1: {
                     'en': "Your verification code is {otp_number}. \n Please enter this code to verify your phone number.",
@@ -1566,7 +1358,7 @@ UTTERANCE_MAPPING = {
     },
 }
 
-def get_utterance(form_name: str, action_name: str, utter_index: int, language: str = 'en') -> str:
+def get_utterance_base(form_name: str, action_name: str, utter_index: int, language: str = 'en') -> str:
     """
     Get the appropriate utterance based on form, action, index, and language.
     
@@ -1621,7 +1413,7 @@ def get_utterance_count(form_name: str, action_name: str) -> int:
         print(f"Error getting utterance count: {str(e)}")
         return 0
 
-def get_buttons(form_name: str, action_name: str, button_index: int, language: str = 'en') -> list:
+def get_buttons_base(form_name: str, action_name: str, button_index: int, language: str = 'en') -> list:
     """
     Get the buttons for a specific form, action, index, and language.
     

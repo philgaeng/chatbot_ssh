@@ -8,8 +8,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from .base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
-from backend.shared_functions.helpers import ContactLocationValidator
-from .utterance_mapping_rasa import get_utterance, get_buttons
+from backend.shared_functions.helpers_repo import helpers_repo
 from icecream import ic
 
 
@@ -21,73 +20,68 @@ def get_language_code(tracker: Tracker) -> str:
     return tracker.get_slot("language_code") or "en"
 
 #-----------------------------------------------------------------------------
- ######################## AskContactFormSlots Actions ########################
+ ######################## AskFormContactSlots Actions ########################
  #-----------------------------------------------------------------------------
  
-class ActionAskContactFormUserLocationConsent(BaseAction):
+class ActionAskFormContactUserLocationConsent(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_location_consent"
+        return "action_ask_form_contact_complainant_location_consent"
 
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserMunicipalityTemp(BaseAction):
+class ActionAskFormContactUserMunicipalityTemp(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_municipality_temp"
+        return "action_ask_form_contact_complainant_municipality_temp"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         province = tracker.get_slot("complainant_province")
         district = tracker.get_slot("complainant_district")
-        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code).format(district=district, province=province)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        message = self.get_utterance(1).format(district=district, province=province)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
     
-class ActionAskContactFormUserMunicipalityConfirmed(BaseAction):
+class ActionAskFormContactUserMunicipalityConfirmed(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_municipality_confirmed"
+        return "action_ask_form_contact_complainant_municipality_confirmed"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('complainant_municipality_temp')
-        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code).format(validated_municipality=validated_municipality)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        message = self.get_utterance(1).format(validated_municipality=validated_municipality)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
        
-class ActionAskContactFormUserVillage(BaseAction):
+class ActionAskFormContactUserVillage(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_village"
+        return "action_ask_form_contact_complainant_village"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserAddressTemp(BaseAction):
+class ActionAskFormContactUserAddressTemp(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_address_temp"
+        return "action_ask_form_contact_complainant_address_temp"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot("language_code") if tracker.get_slot("language_code") else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserAddressConfirmed(BaseAction):
+class ActionAskFormContactUserAddressConfirmed(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_address_confirmed"
+        return "action_ask_form_contact_complainant_address_confirmed"
     
-    async def run(self,
+    async def execute_action(self,
                   dispatcher: CollectingDispatcher,
                   tracker: Tracker,
                   domain: dict
@@ -96,9 +90,8 @@ class ActionAskContactFormUserAddressConfirmed(BaseAction):
         municipality = tracker.get_slot('complainant_municipality')
         village = tracker.get_slot('complainant_village')
         address = tracker.get_slot('complainant_address_temp')
-        language_code = tracker.get_slot('language_code')
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         message = message.format(municipality=municipality, village=village, address=address)
             
         dispatcher.utter_message(
@@ -108,99 +101,94 @@ class ActionAskContactFormUserAddressConfirmed(BaseAction):
         return []
     
 
-class ActionAskContactFormUserProvince(BaseAction):
+class ActionAskFormContactUserProvince(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_province"
+        return "action_ask_form_contact_complainant_province"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserDistrict(BaseAction):
+class ActionAskFormContactUserDistrict(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_district"
+        return "action_ask_form_contact_complainant_district"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        language_code = tracker.get_slot('language_code') if tracker.get_slot('language_code') else "en"
-        message = get_utterance('contact_form', self.name(), 1, language_code)
-        buttons = get_buttons('contact_form', self.name(), 1, language_code)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
  
 
-class AskContactFormUserContactConsent(BaseAction):
+class AskFormContactUserContactConsent(BaseAction):
     def name(self) -> str:
-        return "action_ask_contact_form_complainant_consent"
+        return "action_ask_form_contact_complainant_consent"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserFullName(BaseAction):
+class ActionAskFormContactUserFullName(BaseAction):
     def name(self) -> Text:
-        return "action_ask_contact_form_complainant_full_name"
+        return "action_ask_form_contact_complainant_full_name"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         if tracker.get_slot("gender_issues_reported") == SKIP_VALUE:
-            message = get_utterance('contact_form', self.name(), 1, language)
+            message = self.get_utterance(1)
         else:
-            message = get_utterance('contact_form', self.name(), 2, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+            message = self.get_utterance(2)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserContactPhone(BaseAction):
+class ActionAskFormContactUserContactPhone(BaseAction):
     def name(self) -> Text:
-        return "action_ask_contact_form_complainant_phone"
+        return "action_ask_form_contact_complainant_phone"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
 
-class ActionAskContactFormPhoneValidationRequired(BaseAction):
+class ActionAskFormContactPhoneValidationRequired(BaseAction):
     def name(self) -> Text:
-        return "action_ask_contact_form_phone_validation_required"
+        return "action_ask_form_contact_phone_validation_required"
 
-    async def run(
+    async def execute_action(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserContactEmailTemp(BaseAction):
+class ActionAskFormContactUserContactEmailTemp(BaseAction):
     def name(self) -> Text:
-        return "action_ask_contact_form_complainant_email_temp"
+        return "action_ask_form_contact_complainant_email_temp"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskContactFormUserContactEmailConfirmed(BaseAction):
+class ActionAskFormContactUserContactEmailConfirmed(BaseAction):
     def name(self) -> Text:
-        return "action_ask_contact_form_complainant_email_confirmed"
+        return "action_ask_form_contact_complainant_email_confirmed"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         domain_name = tracker.get_slot("complainant_email_temp").split('@')[1]
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language).format(domain_name=domain_name)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
+        message = message.format(domain_name=domain_name)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
@@ -208,16 +196,15 @@ class ActionAskContactFormUserContactEmailConfirmed(BaseAction):
  ######################## ValidateContactForm Actions ########################
  #-----------------------------------------------------------------------------
     
-class ValidateContactForm(BaseFormValidationAction):
+class ValidateFormContact(BaseFormValidationAction):
     """Form validation action for contact details collection."""
     
     def __init__(self):
         super().__init__()
-        self.validator = ContactLocationValidator()
         
 
     def name(self) -> Text:
-        return "validate_contact_form"
+        return "validate_form_contact"
     
     async def required_slots(self, 
                        domain_slots: List[Text], 
@@ -228,6 +215,7 @@ class ValidateContactForm(BaseFormValidationAction):
         This function is used to determine the required slots for the contact form depending on the main story.
         It checks the main story to determine if the user is checking status and only requires the phone number.
         """
+        self._initialize_language_and_helpers(tracker)
         main_story = tracker.get_slot("main_story")
         #ic(main_story)
         if main_story == "status_update":
@@ -271,9 +259,9 @@ class ValidateContactForm(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         """Validate complainant_location_consent value."""
         if slot_value is True:
-            return {"complainant_location_consent": True}
+            result = {"complainant_location_consent": True}
         elif slot_value is False:
-            return {"complainant_location_consent": False,
+            result = {"complainant_location_consent": False,
                     "complainant_municipality_temp": SKIP_VALUE,
                     "complainant_municipality": SKIP_VALUE,
                     "complainant_municipality_confirmed": False,
@@ -281,6 +269,8 @@ class ValidateContactForm(BaseFormValidationAction):
                     "complainant_address_temp": SKIP_VALUE,
                     "complainant_address": SKIP_VALUE,
                     "complainant_address_confirmed": False}
+        self.logger.debug(f"Validate complainant_location_consent: {result}")
+        return result
             
     async def extract_complainant_province(
         self,
@@ -302,24 +292,27 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        self.validator._initialize_constants(tracker)
-        language_code = self.validator.language_code
         if slot_value == SKIP_VALUE:
+            message = self.get_utterance(1)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_province', 1, language_code)
+                text=message
             )
             return {"complainant_province": None}
         
         #check if the province is valid
-        if not self.validator._check_province(slot_value):
+        if not helpers_repo.check_province(slot_value):
+            message = self.get_utterance(2)
+            message = message.format(slot_value=slot_value)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_province', 2, language_code).format(slot_value=slot_value)
+                text=message
             )
             return {"complainant_province": None}
         
         result = self.validator._check_province(slot_value).title()
+        message = self.get_utterance(3) 
+        message = message.format(slot_value=slot_value, result=result)
         dispatcher.utter_message(
-            text=get_utterance('contact_form', 'validate_complainant_province', 3, language_code).format(slot_value=slot_value, result=result)
+            text=message
         )
         
         return {"complainant_province": result}
@@ -344,24 +337,28 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        self.validator._initialize_constants(tracker)
-        language_code = self.validator.language_code
+
         if slot_value == SKIP_VALUE:
+            message = self.get_utterance(1)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_district', 1, language_code)
+                text=message
             )
             return {"complainant_district": None}
             
         province = tracker.get_slot("complainant_province").title()
         if not self.validator._check_district(slot_value, province):
+            message = self.get_utterance(2)
+            message = message.format(slot_value=slot_value)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_district', 2, language_code).format(slot_value=slot_value)
+                text=message
             )
             return {"complainant_district": None}
             
         result = self.validator._check_district(slot_value, province).title()
+        message = self.get_utterance(3)
+        message = message.format(slot_value=slot_value, result=result)
         dispatcher.utter_message(
-            text=get_utterance('contact_form', 'validate_complainant_district', 3, language_code).format(slot_value=slot_value, result=result)
+            text=message
         )
         
         return {"complainant_district": result}
@@ -388,8 +385,6 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        self.validator._initialize_constants(tracker)
-        language_code = self.validator.language_code
         
         #deal with the slot_skipped case
         if slot_value == SKIP_VALUE:
@@ -402,7 +397,7 @@ class ValidateContactForm(BaseFormValidationAction):
             return {"complainant_municipality_temp": None}
                 
         # Validate new municipality input with the extract and rapidfuzz functions
-        validated_municipality = self.validator._validate_municipality_input(slot_value, 
+        validated_municipality = self.helpers.validate_municipality_input(slot_value, 
                                                                    tracker.get_slot("complainant_province"),
                                                                    tracker.get_slot("complainant_district"))
         
@@ -444,15 +439,18 @@ class ValidateContactForm(BaseFormValidationAction):
         if slot_value == True:
             
         #save the municipality to the slot
-            return {"complainant_municipality_confirmed": True,
+            result = {"complainant_municipality_confirmed": True,
                     "complainant_municipality": tracker.get_slot("complainant_municipality_temp")}
             
         elif slot_value == False:
-            return {"complainant_municipality_confirmed": None,
+            result = {"complainant_municipality_confirmed": None,
                     "complainant_municipality_temp": None,
                     "complainant_municipality": None
                     }
-        return {}
+        else:
+            result = {}
+        self.logger.debug(f"Validate complainant_municipality_confirmed: {result}")
+        return result
     
     async def extract_complainant_village(
         self,
@@ -474,19 +472,20 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        language_code = tracker.get_slot("language_code")
         if slot_value == SKIP_VALUE:
-            return {"complainant_village": SKIP_VALUE}
+            result = {"complainant_village": SKIP_VALUE}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
-            
+            message = self.get_utterance(1)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_village', 1, language_code)
+                text=message
             )
-            return {"complainant_village": None}
+            result = {"complainant_village": None}
             
-        return {"complainant_village": slot_value}
+        result = {"complainant_village": slot_value}
+        self.logger.debug(f"Validate complainant_village: {result}")
+        return result
     
         
     
@@ -511,19 +510,20 @@ class ValidateContactForm(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate complainant_address value."""
-        language_code = tracker.get_slot("language_code")
         if slot_value == SKIP_VALUE:
-            return {"complainant_address_temp": SKIP_VALUE}
+            result = {"complainant_address_temp": SKIP_VALUE}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
-            
+            message = self.get_utterance(1)
             dispatcher.utter_message(
-                text=get_utterance('contact_form', 'validate_complainant_address_temp', 1, language_code)
+                text=message
             )
-            return {"complainant_address_temp": None}
+            result = {"complainant_address_temp": None}
         
-        return {"complainant_address_temp": slot_value}
+        result = {"complainant_address_temp": slot_value}
+        self.logger.debug(f"Validate complainant_address_temp: {result}")
+        return result
 
     async def extract_complainant_address_confirmed(
         self,
@@ -531,9 +531,6 @@ class ValidateContactForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        # First check if we have an address to confirm
-        if not tracker.get_slot("complainant_address_temp"):
-            return {}
 
         return await self._handle_boolean_slot_extraction(
             "complainant_address_confirmed",
@@ -553,8 +550,9 @@ class ValidateContactForm(BaseFormValidationAction):
 
         # Handle rejection of address confirmation
         if slot_value == False:
+            message = self.get_utterance(1)
             dispatcher.utter_message(text="Please enter your correct village and address")
-            return {
+            result = {
                 "complainant_village": None,
                 "complainant_address": None,
                 "complainant_address_temp": None,
@@ -564,11 +562,12 @@ class ValidateContactForm(BaseFormValidationAction):
         # Check if we have a confirmation
         if slot_value == True:
             address = tracker.get_slot("complainant_address_temp")
-            return {
+            result = {
                 "complainant_address": address,
                 "complainant_address_confirmed": True
             }
-        return {} 
+        self.logger.debug(f"Validate complainant_address_confirmed: {result['complainant_address_confirmed']}")
+        return result
     
     async def extract_complainant_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -581,7 +580,7 @@ class ValidateContactForm(BaseFormValidationAction):
     async def validate_complainant_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         
         if slot_value == False:
-            return {"complainant_consent": False,
+            result = {"complainant_consent": False,
                     "complainant_full_name": SKIP_VALUE,
                     "complainant_phone": SKIP_VALUE,
                     "complainant_email_temp": SKIP_VALUE,
@@ -589,12 +588,14 @@ class ValidateContactForm(BaseFormValidationAction):
                     }
 
         if slot_value == True:
-            return {"complainant_consent": True,
+            result = {"complainant_consent": True,
                     "complainant_full_name": None,
                     "complainant_phone": None,
                     "complainant_email_temp": None,
                     "complainant_email_confirmed": None
                     }
+        self.logger.debug(f"Validate complainant_consent: {result['complainant_consent']}")
+        return result
         
 
     async def extract_complainant_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
@@ -608,18 +609,21 @@ class ValidateContactForm(BaseFormValidationAction):
     def validate_complainant_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
 
         if SKIP_VALUE in slot_value:
-            return {"complainant_full_name": SKIP_VALUE}
+            result = {"complainant_full_name": SKIP_VALUE}
         
-        if not slot_value or slot_value.startswith('/'):
-            return {"complainant_full_name": None}
+        elif not slot_value or slot_value.startswith('/'):
+            result = {"complainant_full_name": None}
 
-        if len(slot_value)<3:
-            language = get_language_code(tracker)
-            message = get_utterance('contact_form', 'validate_complainant_full_name', 1, language)
+        elif len(slot_value)<3:
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            return {"complainant_full_name": None}
+            result = {"complainant_full_name": None}
         
-        return {"complainant_full_name": slot_value}
+        else :
+            result = {"complainant_full_name": slot_value}
+            
+        self.logger.debug(f"Validate complainant_full_name: {result['complainant_full_name']}")
+        return result
     
     # ✅ Extract user contact phone
     async def extract_complainant_phone(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
@@ -641,27 +645,30 @@ class ValidateContactForm(BaseFormValidationAction):
         """Validate phone number and set validation requirement."""
         language = get_language_code(tracker)
         if SKIP_VALUE in slot_value:
-            return {
+            result = {
                 "complainant_phone": SKIP_VALUE
             }
-        if slot_value.startswith("/"):
-            return {"complainant_phone": None}  
+        elif slot_value.startswith("/"):
+            result = {"complainant_phone": None}  
         
         # Validate phone number format
-        if not self.validator._is_valid_phone(slot_value):
-            message = get_utterance('contact_form', 'validate_complainant_phone', 1, language)
+        elif not self.validator._is_valid_phone(slot_value):
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            return {"complainant_phone": None}
+            result = {"complainant_phone": None}
 
 
         
-        if re.match(r'^09\d{9}$', slot_value) or re.match(r'^639\d{8}$', slot_value):
+        elif re.match(r'^09\d{9}$', slot_value) or re.match(r'^639\d{8}$', slot_value):
             dispatcher.utter_message(text="You entered a PH number for validation.")
             slot_value = slot_value.replace('09', '+639') if slot_value.startswith('09') else slot_value.replace('639', '+639') if slot_value.startswith('639') else slot_value
-        return {
+        else:
+            result = {
             "complainant_phone": slot_value,
             "phone_validation_required": True
         }
+        self.logger.debug(f"Validate complainant_phone: {result['complainant_phone']}")
+        return result
 
     async def extract_phone_validation_required(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_slot_extraction(
@@ -673,10 +680,12 @@ class ValidateContactForm(BaseFormValidationAction):
 
     async def validate_phone_validation_required(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         if slot_value and tracker.get_slot("complainant_phone") == SKIP_VALUE:
-            return {"phone_validation_required": None,
+            result = {"phone_validation_required": None,
                     "complainant_phone": None}
         else:
-            return {"phone_validation_required": False}
+            result = {"phone_validation_required": False}
+        self.logger.debug(f"Validate phone_validation_required: {result['phone_validation_required']}")
+        return result
 
     async def extract_complainant_email_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         slot_value = await self._handle_slot_extraction(
@@ -698,34 +707,36 @@ class ValidateContactForm(BaseFormValidationAction):
         language = get_language_code(tracker)
         #deal with the slot_skipped case
         if slot_value == SKIP_VALUE:
-            return {"complainant_email_temp": SKIP_VALUE,
+            result = {"complainant_email_temp": SKIP_VALUE,
                     "complainant_email_confirmed": False,
                     "complainant_email": SKIP_VALUE
                     }
         
-        #deal with the email case
-        extracted_email = self.validator._email_extract_from_text(slot_value)
-        if not extracted_email:
-            message = get_utterance('contact_form', 'validate_complainant_email_temp', 1, language)
+    
+        elif not self.validator._email_extract_from_text(slot_value):
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            return {"complainant_email_temp": None}
+            result = {"complainant_email_temp": None}
         
         # Use consistent validation methods
-        if not self.validator._email_is_valid_format(extracted_email):
-            message = get_utterance('contact_form', 'validate_complainant_email_temp', 1, language)
+        elif not self.validator._email_is_valid_format(extracted_email):
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            return {"complainant_email_temp": None}
+            result = {"complainant_email_temp": None}
 
         # Check for Nepali email domain using existing method
-        if not self.validator._email_is_valid_nepal_domain(extracted_email):
+        elif not self.validator._email_is_valid_nepal_domain(extracted_email):
             # Keep the email in slot but deactivate form while waiting for user choice
-            return {"complainant_email_temp": extracted_email,
+            result = {"complainant_email_temp": extracted_email,
                     "complainant_email_confirmed": None}
             
         # If all validations pass
-        return {"complainant_email_temp": extracted_email,
-                "complainant_email_confirmed": True,
-                "complainant_email": extracted_email}
+        else:
+            result = {"complainant_email_temp": extracted_email,
+                    "complainant_email_confirmed": True,
+                    "complainant_email": extracted_email}
+        self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+        return result
     
     async def extract_complainant_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
@@ -752,12 +763,14 @@ class ValidateContactForm(BaseFormValidationAction):
             Dict containing updates to the relevant email slots based on user's choice
         """
         if slot_value == SKIP_VALUE:
-            return {"complainant_email_confirmed": SKIP_VALUE}
-        if slot_value == "slot_confirmed":
-            return {"complainant_email_confirmed": True}
-        if slot_value == "slot_edited":
-            return {"complainant_email_temp": None,
+            result = {"complainant_email_confirmed": SKIP_VALUE}
+        elif slot_value == "slot_confirmed":
+            result = {"complainant_email_confirmed": True}
+        elif slot_value == "slot_edited":
+            result = {"complainant_email_temp": None,
                     "complainant_email_confirmed": None}
+        self.logger.debug(f"Validate complainant_email_confirmed: {result['complainant_email_confirmed']}")
+        return result
 
 #-----------------------------------------------------------------------------
  ######################## ModifyContactInfo Actions ########################
@@ -767,7 +780,7 @@ class ActionModifyContactInfo(BaseAction):
     def name(self) -> Text:
         return "action_modify_contact_info"
 
-    async def run(
+    async def execute_action(
         self, 
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
@@ -775,10 +788,9 @@ class ActionModifyContactInfo(BaseAction):
     ) -> List[Dict[Text, Any]]:
         current_email = tracker.get_slot("complainant_email")
         current_phone = tracker.get_slot("complainant_phone")
-        language = get_language_code(tracker)
         
-        message = get_utterance('contact_form', self.name(), 1, language)
-        buttons = get_buttons('contact_form', self.name(), 1, language)
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         
         if current_email and current_email != SKIP_VALUE:
             buttons = [i for i in buttons if "Add Email" or "इमेल परिवर्तन गर्नुहोस्" not in i['title']]
@@ -797,32 +809,30 @@ class ActionModifyEmail(BaseAction):
     def name(self) -> Text:
         return "action_modify_email"
 
-    async def run(
+    async def execute_action(
         self, 
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
+        message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return [
             SlotSet("complainant_email", None),
             SlotSet("contact_modification_mode", True),
-            ActiveLoop("contact_form")
+            ActiveLoop("form_contact")
         ]
 
 class ActionCancelModification(BaseAction):
     def name(self) -> Text:
         return "action_cancel_modification_contact"
 
-    async def run(
+    async def execute_action(
         self, 
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any]
     ) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
-        message = get_utterance('contact_form', self.name(), 1, language)
+        message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return [SlotSet("contact_modification_mode", False)]

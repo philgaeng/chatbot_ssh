@@ -10,7 +10,7 @@ from twilio.rest import Client
 from backend.config.constants import  MAX_FILE_SIZE  # Import MAX_FILE_SIZE
 from .utterance_mapping_rasa import get_utterance, get_buttons
 from icecream import ic
-from .base_classes import BaseAction
+from utils.base_classes import BaseAction
 from backend.config.constants import TASK_STATUS, GRIEVANCE_STATUS
 import json
 

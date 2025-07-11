@@ -1,8 +1,6 @@
 # actions/helpers.py
 
-import os  # For file path operations
-import logging  # For logging errors
-import csv  # For reading CSV files 
+import logging  # For logging errors 
 from rasa_sdk import Tracker
 from datetime import datetime
 import json  # For loading JSON files
@@ -13,11 +11,11 @@ from icecream import ic
 
 # Direct access to constants
 from ..config.constants import (    
-    LOCATION_FOLDER_PATH,
+        LOCATION_FOLDER_PATH,
     CUT_OFF_FUZZY_MATCH_LOCATION,
     USE_QR_CODE,
     DIC_LOCATION_WORDS,
-    EMAIL_PROVIDERS_NEPAL_LIST
+    DEFAULT_LANGUAGE_CODE
 )
 
 # Set up logging
@@ -32,7 +30,6 @@ class ContactLocationValidator:
     The json file should be named as <language_code>_cleaned.json
     """
     def __init__(self, 
-                 tracker = Tracker, 
                  json_path=LOCATION_FOLDER_PATH):
     
         json_path_en = f"{json_path}_en_cleaned.json"
@@ -45,13 +42,32 @@ class ContactLocationValidator:
             with open(json_path_ne, "r") as file:
                 self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
 
+    def _validate_location(self, location_string, qr_province=None, qr_district=None):
+        """Validate location from a single string input and QR defaults."""
+        # Preprocess input and generate possible names
+        processed_text = self._preprocess(location_string)
+        print(f"######## LocationValidator: Preprocessed text: {processed_text}")
+        possible_names = self._generate_possible_names(processed_text)
+        
+        
+        #check if QR code is provided
+        if qr_province and qr_district:
+            # Try matching with QR data first
+            province, district, municipality = self._match_with_qr_data(
+                possible_names, qr_province, qr_district
+            )
+        
+        else:
+            province, district, municipality = self._match_from_string(possible_names)
+
+        
+        # Format and return the result
+        result = self._format_result(province, district, municipality)
+        print(f"######## LocationValidator: Result: {result}")
+        return result
+
             
-    def _initialize_constants(self, tracker):
-        language_code = 'en'
-        if tracker and isinstance(tracker, Tracker) and "language_code" in tracker.slots:
-            language_temp = tracker.get_slot("language_code")
-            if language_temp:
-                language_code = language_temp
+    def _initialize_constants(self, language_code: str = DEFAULT_LANGUAGE_CODE):
         self.language_code = language_code
         self.locations = self.locations_both_language[language_code]
         self.max_words = self._calculate_max_words()
@@ -266,31 +282,7 @@ class ContactLocationValidator:
             "municipality": municipality
         }
 
-    def _validate_location(self, location_string, qr_province=None, qr_district=None):
-        """Validate location from a single string input and QR defaults."""
-        # Preprocess input and generate possible names
-        processed_text = self._preprocess(location_string)
-        print(f"######## LocationValidator: Preprocessed text: {processed_text}")
-        possible_names = self._generate_possible_names(processed_text)
-        
-        
-        #check if QR code is provided
-        if qr_province and qr_district:
-            # Try matching with QR data first
-            province, district, municipality = self._match_with_qr_data(
-                possible_names, qr_province, qr_district
-            )
-        
-        else:
-            province, district, municipality = self._match_from_string(possible_names)
-
-        
-        # Format and return the result
-        result = self._format_result(province, district, municipality)
-        print(f"######## LocationValidator: Result: {result}")
-        return result
-
-    def _check_province(self, input_text):
+    def check_province(self, input_text):
         """Check if the province name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
@@ -301,7 +293,7 @@ class ContactLocationValidator:
                 return matched_province
         return None
     
-    def _check_district(self, input_text, province_name):
+    def check_district(self, input_text, province_name):
         """Check if the district name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
@@ -312,7 +304,7 @@ class ContactLocationValidator:
                 return matched_district
         return None
     
-    def _validate_municipality_input(
+    def validate_municipality_input(
             self,
             input_text: str,
             qr_province: str,
@@ -335,37 +327,4 @@ class ContactLocationValidator:
             print(f"✅ Municipality validated: {municipality}")
             
             return municipality
-
-    def _validate_string_length(self, text: str, min_length: int = 2) -> bool:
-        """Validate if the string meets minimum length requirement."""
-        return bool(text and len(text.strip()) >= min_length)
-    
-    def _is_valid_phone(self, phone: str) -> bool:
-        """Check if the phone number is valid."""
-        # Add your phone validation logic here
-        #Nepalese logic
-        # 1. Must be 10 digits and start with 9
-        if re.match(r'^9\d{9}$', phone):
-            return True
-        #Matching PH number format for testing
-        if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
-            return True
-        return False
-    
-    def _email_extract_from_text(self, text: str) -> Optional[str]:
-        email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-        email_match = re.search(email_pattern, text)
-        return email_match.group(0) if email_match else None
-
-    def _email_is_valid_nepal_domain(self, email: str) -> bool:
-        email_domain = email.split('@')[1].lower()
-        return email_domain in EMAIL_PROVIDERS_NEPAL_LIST or email_domain.endswith('.com.np')
-
-    # ✅ Validate user contact email
-    def _email_is_valid_format(self, email: str) -> bool:
-        """Check if email follows basic format requirements."""
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
-
-    
-    
+            

@@ -22,8 +22,8 @@ stories:
       - active_loop: null
 
       # Contact information collection
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_location_consent: true
           - complainant_municipality_temp: Haldibar
@@ -40,8 +40,8 @@ stories:
           - complainant_email_confirmed: slot_confirmed
       - active_loop: null
       # OTP verification
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - slot_was_set:
           - otp_input: "008021"
           - otp_status: verified
@@ -86,8 +86,8 @@ stories:
           - grievance_description: "I cannot find a job at the road workshop\nI want to workk on the road to provide to my family\nI can work in the nearest village"
       - active_loop: null
 
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_location_consent: true
           - complainant_municipality: Birtamod
@@ -103,8 +103,8 @@ stories:
           - complainant_email_confirmed: slot_skipped
       - active_loop: null
       # OTP verification
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - slot_was_set:
           - otp_input: "862952"
           - otp_status: verified
@@ -131,8 +131,8 @@ stories:
       - active_loop: null
       # Grievance details collection
 
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_location_consent: false
           - complainant_municipality_temp: slot_skipped
@@ -148,8 +148,8 @@ stories:
           - complainant_email_temp: slot_skipped
           - complainant_email_confirmed: slot_skipped
       - active_loop: null
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - slot_was_set:
           - otp_input: "533688"
           - otp_status: verified
@@ -199,8 +199,8 @@ stories:
       - active_loop: null
 
       # Contact information collection
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_location_consent: false
           - complainant_municipality_temp: slot_skipped
@@ -217,8 +217,8 @@ stories:
           - complainant_email_confirmed: slot_skipped
       - active_loop: null
       # OTP verification
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - slot_was_set:
           - otp_input: "533688"
           - otp_status: verified
@@ -254,8 +254,8 @@ stories:
       - active_loop: null
 
       # Contact information collection
-      - action: contact_form
-      - active_loop: contact_form
+      - action: form_contact
+      - active_loop: form_contact
       - slot_was_set:
           - complainant_location_consent: true
           - complainant_municipality_temp: Kankai
@@ -273,8 +273,8 @@ stories:
           - complainant_email_confirmed: slot_confirmed
       - active_loop: null
       # OTP verification
-      - action: otp_verification_form
-      - active_loop: otp_verification_form
+      - action: form_otp
+      - active_loop: form_otp
       - slot_was_set:
           - otp_number: "309165"
           - otp_input: "309165"
