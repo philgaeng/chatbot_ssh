@@ -576,92 +576,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_categories_status': {
-            'utterances': {
-                1: {
-                    'en': "No categories have been identified yet.",
-                    'ne': "कृपया आफ्नो गुनासोको लागि निम्न श्रेणीहरू समीक्षा गर्नुहोस्:"
-                },
-                2: {
-                    'en': "Here are the suggested categories for your grievance:\n{category_text}\nDoes this seem correct?",
-                    'ne': "तपाईंको गुनासोको लागि सुझाव गरिएका श्रेणीहरू यहाँ छन्:\n{category_text}\nके यो सही लाग्दैन?"
-                }
-            },
-            'buttons': {
-                1: {'en' :[
-                    {"title": "Add category", "payload": "/add_category"},
-                    {"title": "Continue without categories", "payload": "/slot_confirmed"}
-                ],
-                'ne': [
-                    {"title": "श्रेणी थप्नुहोस्", "payload": "/add_category"},
-                    {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"}
-                ]
-            },
-                2: {
-                    'en': [
-                        {"title": "Yes", "payload": "/slot_confirmed"},
-                        {"title": "Add category", "payload": "/slot_added"},
-                        {"title": "Delete category", "payload": "/slot_deleted"},
-                        {"title": "Skip", "payload": "/skip"}
-                    ],
-                    'ne': [
-                        {"title": "हो", "payload": "/slot_confirmed"},
-                        {"title": "श्रेणी थप्नुहोस्", "payload": "/slot_added"},
-                        {"title": "श्रेणी हटाउनुहोस्", "payload": "/slot_deleted"},
-                        {"title": "छोड्नुहोस्", "payload": "/skip"}
-                    ]
-                }
-            }
-        },
-        'action_ask_grievance_summary_form_grievance_cat_modify': {
-            'utterances': {
-                1: {
-                    'en': "No categories selected. Skipping this step.",
-                    'ne': "कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।"
-                },
-                2: {
-                    'en': "Which category would you like to delete?",
-                    'ne': "तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ?"
-                },
-                3: {
-                    'en': "Select the category you want to add from the list below:",
-                    'ne': "निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस्:"
-                }
-            }
-        },
-        'action_ask_grievance_summary_form_grievance_summary_status': {
-            'utterances': {
-                1: {
-                    'en': "Here is the current summary: '{current_summary}'.\n Is this correct?",
-                    'ne': "तपाईंको गुनासोको निम्न सारांश यहाँ छ:\n{current_summary}\nके यो सही लाग्दैन?"
-                },
-                2: {
-                    'en': "There is no summary yet. Please type a new summary for your grievance or skip",
-                    'ne': "कुनै सारांश छैन। कृपया तपाईंको गुनासोको लागि नयाँ सारांश प्रविष्ट गर्नुहोस् वा छोड्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: {'en':[
-                    {"title": "Validate summary", "payload": "/slot_confirmed"},
-                    {"title": "Edit summary", "payload": "/slot_edited"},
-                    {"title": "Skip", "payload": "/skip"}
-                ],
-                'ne': [
-                    {"title": "सारांश सुनिश्चित गर्नुहोस्", "payload": "/slot_confirmed"},
-                    {"title": "सारांश संपादन गर्नुहोस्", "payload": "/slot_edited"},
-                    {"title": "छोड्नुहोस्", "payload": "/skip"}
-                ]
-                }
-            }
-        },
-        'action_ask_grievance_summary_form_grievance_summary_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please enter the new summary and confirm again.",
-                    'ne': "कृपया नयाँ सारांश प्रविष्ट गर्नुहोस् र फेरी सुनिश्चित गर्नुहोस्।"
-                }
-            }
-        },
+        
         'action_ask_details_form_grievance_temp': {
             'utterances': {
                 1: {
@@ -751,6 +666,94 @@ UTTERANCE_MAPPING = {
             'ne': {
                 1: "⚠️ केही फाइलहरू अधिकतम साइज सीमा {max_size_formatted} भन्दा बढी छन्:\n{oversized_files_list}",
                 2: "कृपया यी फाइलहरूलाई कम्प्रेस गर्नुहोस् वा सानो फाइलहरू अपलोड गर्नुहोस्।"
+            }
+        }
+    },
+    'form_grievance_summary': {
+        'action_ask_grievance_summary_form_grievance_categories_status': {
+            'utterances': {
+                1: {
+                    'en': "No categories have been identified yet.",
+                    'ne': "कृपया आफ्नो गुनासोको लागि निम्न श्रेणीहरू समीक्षा गर्नुहोस्:"
+                },
+                2: {
+                    'en': "Here are the suggested categories for your grievance:\n{category_text}\nDoes this seem correct?",
+                    'ne': "तपाईंको गुनासोको लागि सुझाव गरिएका श्रेणीहरू यहाँ छन्:\n{category_text}\nके यो सही लाग्दैन?"
+                }
+            },
+            'buttons': {
+                1: {'en' :[
+                    {"title": "Add category", "payload": "/add_category"},
+                    {"title": "Continue without categories", "payload": "/slot_confirmed"}
+                ],
+                'ne': [
+                    {"title": "श्रेणी थप्नुहोस्", "payload": "/add_category"},
+                    {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"}
+                ]
+            },
+                2: {
+                    'en': [
+                        {"title": "Yes", "payload": "/slot_confirmed"},
+                        {"title": "Add category", "payload": "/slot_added"},
+                        {"title": "Delete category", "payload": "/slot_deleted"},
+                        {"title": "Skip", "payload": "/skip"}
+                    ],
+                    'ne': [
+                        {"title": "हो", "payload": "/slot_confirmed"},
+                        {"title": "श्रेणी थप्नुहोस्", "payload": "/slot_added"},
+                        {"title": "श्रेणी हटाउनुहोस्", "payload": "/slot_deleted"},
+                        {"title": "छोड्नुहोस्", "payload": "/skip"}
+                    ]
+                }
+            }
+        },
+        'action_ask_grievance_summary_form_grievance_cat_modify': {
+            'utterances': {
+                1: {
+                    'en': "No categories selected. Skipping this step.",
+                    'ne': "कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।"
+                },
+                2: {
+                    'en': "Which category would you like to delete?",
+                    'ne': "तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ?"
+                },
+                3: {
+                    'en': "Select the category you want to add from the list below:",
+                    'ne': "निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस्:"
+                }
+            }
+        },
+        'action_ask_grievance_summary_form_grievance_summary_status': {
+            'utterances': {
+                1: {
+                    'en': "Here is the current summary: '{current_summary}'.\n Is this correct?",
+                    'ne': "तपाईंको गुनासोको निम्न सारांश यहाँ छ:\n{current_summary}\nके यो सही लाग्दैन?"
+                },
+                2: {
+                    'en': "There is no summary yet. Please type a new summary for your grievance or skip",
+                    'ne': "कुनै सारांश छैन। कृपया तपाईंको गुनासोको लागि नयाँ सारांश प्रविष्ट गर्नुहोस् वा छोड्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: {'en':[
+                    {"title": "Validate summary", "payload": "/slot_confirmed"},
+                    {"title": "Edit summary", "payload": "/slot_edited"},
+                    {"title": "Skip", "payload": "/skip"}
+                ],
+                'ne': [
+                    {"title": "सारांश सुनिश्चित गर्नुहोस्", "payload": "/slot_confirmed"},
+                    {"title": "सारांश संपादन गर्नुहोस्", "payload": "/slot_edited"},
+                    {"title": "छोड्नुहोस्", "payload": "/skip"}
+                ]
+                }
+            }
+        },
+        'action_ask_grievance_summary_form_grievance_summary_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please enter the new summary and confirm again.",
+                    'ne': "कृपया नयाँ सारांश प्रविष्ट गर्नुहोस् र फेरी सुनिश्चित गर्नुहोस्।"
+                }
             }
         }
     },
