@@ -9,11 +9,11 @@ class HelpersRepo:
         self.location_validator = ContactLocationValidator()
         self.keyword_detector = KeywordDetector()
 
-    def validate_location(self, location_string: str,
+    def validate_municipality_input(self, location_string: str,
                         qr_province: str = DEFAULT_PROVINCE, 
                         qr_district: str = DEFAULT_DISTRICT) -> dict[str, str]:
         """Validate location using the location validator."""
-        return self.location_validator.validate_location(location_string, qr_province, qr_district)
+        return self.location_validator.validate_municipality_input(location_string, qr_province, qr_district)
 
     def init_language(self, language_code: str):
         """Initialize the language code for the helpers."""

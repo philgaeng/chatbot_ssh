@@ -300,7 +300,7 @@ class ValidateFormContact(BaseFormValidationAction):
             return {"complainant_province": None}
         
         #check if the province is valid
-        if not helpers_repo.check_province(slot_value):
+        if not self.helpers.check_province(slot_value):
             message = self.get_utterance(2)
             message = message.format(slot_value=slot_value)
             dispatcher.utter_message(
@@ -308,7 +308,7 @@ class ValidateFormContact(BaseFormValidationAction):
             )
             return {"complainant_province": None}
         
-        result = self.validator._check_province(slot_value).title()
+        result = self.helpers.check_province(slot_value).title()
         message = self.get_utterance(3) 
         message = message.format(slot_value=slot_value, result=result)
         dispatcher.utter_message(
@@ -346,7 +346,7 @@ class ValidateFormContact(BaseFormValidationAction):
             return {"complainant_district": None}
             
         province = tracker.get_slot("complainant_province").title()
-        if not self.validator._check_district(slot_value, province):
+        if not self.helpers.check_district(slot_value, province):
             message = self.get_utterance(2)
             message = message.format(slot_value=slot_value)
             dispatcher.utter_message(
@@ -354,7 +354,7 @@ class ValidateFormContact(BaseFormValidationAction):
             )
             return {"complainant_district": None}
             
-        result = self.validator._check_district(slot_value, province).title()
+        result = self.helpers.check_district(slot_value, province).title()
         message = self.get_utterance(3)
         message = message.format(slot_value=slot_value, result=result)
         dispatcher.utter_message(
@@ -643,7 +643,6 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate phone number and set validation requirement."""
-        language = get_language_code(tracker)
         if SKIP_VALUE in slot_value:
             result = {
                 "complainant_phone": SKIP_VALUE
@@ -652,7 +651,7 @@ class ValidateFormContact(BaseFormValidationAction):
             result = {"complainant_phone": None}  
         
         # Validate phone number format
-        elif not self.validator._is_valid_phone(slot_value):
+        elif not self.helpers.is_valid_phone(slot_value):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"complainant_phone": None}
@@ -711,21 +710,26 @@ class ValidateFormContact(BaseFormValidationAction):
                     "complainant_email_confirmed": False,
                     "complainant_email": SKIP_VALUE
                     }
+            self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+            return result
         
-    
-        elif not self.validator._email_extract_from_text(slot_value):
+        
+        extracted_email = self.helpers.email_extract_from_text(slot_value)
+        if not extracted_email:
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"complainant_email_temp": None}
+            self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+            return result
         
         # Use consistent validation methods
-        elif not self.validator._email_is_valid_format(extracted_email):
+        if not self.helpers.email_is_valid_format(extracted_email):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"complainant_email_temp": None}
 
         # Check for Nepali email domain using existing method
-        elif not self.validator._email_is_valid_nepal_domain(extracted_email):
+        elif not self.helpers.email_is_valid_nepal_domain(extracted_email):
             # Keep the email in slot but deactivate form while waiting for user choice
             result = {"complainant_email_temp": extracted_email,
                     "complainant_email_confirmed": None}

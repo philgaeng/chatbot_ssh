@@ -1,22 +1,17 @@
 import re
-import logging
-import os
 import json
 from random import randint
-
-from dotenv import load_dotenv
-from openai import OpenAI
 from typing import Any, Text, Dict, List, Tuple, Union, Optional
-
+from datetime import datetime, timedelta
+import traceback
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from utils.base_classes import BaseFormValidationAction, BaseAction
-from utils.utterance_mapping_rasa import get_utterance, get_buttons, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
+from utils.utterance_mapping_rasa import  BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, DEFAULT_PROVINCE, DEFAULT_DISTRICT
-
-from icecream import ic
 
 SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
 SUCCESS = TASK_STATUS["SUCCESS"]
@@ -32,7 +27,7 @@ class ActionSubmitGrievanceAsIs(BaseAction):
     def name(self) -> Text:
         return "action_submit_grievance_as_is"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_description = tracker.get_slot("grievance_description")
         if grievance_description:
             dispatcher.utter_message(response="utter_grievance_submitted_as_is", grievance_description=grievance_description)
@@ -47,7 +42,7 @@ class ActionStartGrievanceProcess(BaseAction):
     def name(self) -> Text:
         return "action_start_grievance_process"
 
-    async def run(self, dispatcher, tracker, domain):
+    async def execute_action(self, dispatcher, tracker, domain):
         # reset the form parameters
         BaseFormValidationAction.message_display_list_cat = True
         set_id_data = {
@@ -57,16 +52,15 @@ class ActionStartGrievanceProcess(BaseAction):
             'source': 'bot'
         }
         # Create the grievance with temporary status and specify source as 'bot'
-        complainant_id = db_manager.create_complainant_id(set_id_data)
-        ic(f"Created user with ID: {complainant_id}")
-        grievance_id = db_manager.create_grievance_id(set_id_data)
-        ic(f"Created temporary grievance with ID: {grievance_id}")
+        complainant_id = self.db_manager.create_complainant_id(set_id_data)
+        grievance_id = self.db_manager.create_grievance_id(set_id_data)
+        self.logger.info(f"Created temporary grievance with ID: {grievance_id} and complainant ID: {complainant_id}")
         
         # Get language code from tracker
         language_code = tracker.get_slot("language_code") or "en"
         
         # Get utterance and buttons from mapping
-        utterance = get_utterance("form_grievance", "action_start_grievance_process", 1, language_code)
+        utterance = self.get_utterance(1)
         
         # Send utterance with grievance ID in the text
         dispatcher.utter_message(
@@ -127,8 +121,6 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             }
             
         try:
-            # Import the Celery task
-            from task_queue.registered_tasks import classify_and_summarize_grievance_task
             
             # Prepare input data for Celery task
             input_data = {
@@ -146,7 +138,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             task_result = classify_and_summarize_grievance_task.delay(input_data)
             task_id = task_result.id
             
-            print(f"Async classification triggered for grievance {grievance_id} with task ID: {task_id}")
+            self.logger.info(f"Async classification triggered for grievance {grievance_id} with task ID: {task_id}")
             
             # Return slots to indicate async processing
             return {
@@ -155,7 +147,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             }
             
         except Exception as e:
-            print(f"Error launching async classification: {e}")
+            self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
             return {
                 "classification_status": ERROR,
@@ -172,6 +164,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Text]:
+        self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed"
         if tracker.get_slot("grievance_new_detail") == "completed":
             
@@ -216,72 +209,73 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
         - /restart
         
         """
+        try:
+            # Handle restart the process
+            if slot_value == "/restart":
+                return {"grievance_new_detail": None,
+                        "grievance_description": None,
+                        "grievance_description_status": "restart"}
 
-        # Handle restart the process
-        if slot_value == "/restart":
-            return {"grievance_new_detail": None,
-                    "grievance_description": None,
-                    "grievance_description_status": "restart"}
-
-        if slot_value == "/add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
-           return {"grievance_new_detail": None,
-                   "grievance_description_status": "add_more_details"}
-        
-        # Handle form completion
-        if slot_value == "/submit_details":
-            # Get base slots - async classification will be triggered here
-            slots_to_set = {
-                "grievance_new_detail": "completed",
-                "grievance_description": tracker.get_slot('grievance_description'),
-            }
+            if slot_value == "/add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
+                return {"grievance_new_detail": None,
+                    "grievance_description_status": "add_more_details"}
             
-            # Trigger async classification when form is completed
-            classification_slots = await self._trigger_async_classification(tracker, dispatcher)
-            slots_to_set.update(classification_slots)
-            ic(slots_to_set)
-            return slots_to_set
-        
-        # Handle valid grievance text
-        if slot_value and not slot_value.startswith('/'):
-            # Check for sensitive content using keyword detection
-            language_code = tracker.get_slot("language_code") or "en"
-            detector = backend_repo.get_keyword_detector(language_code)
-            detection_result = detector.detect_sensitive_content(slot_value)
-            
-            #handle the case where sensitive content is detected
-            if detection_result.detected and detection_result.action_required:
-                ic(f"🚨 SENSITIVE CONTENT DETECTED: {detection_result.category} - {detection_result.level}")
-                ic(f"Confidence: {detection_result.confidence}")
-                ic(f"Message: {detection_result.message}")
-                
-                # Store detection result for later use
+            # Handle form completion
+            if slot_value == "/submit_details":
+                # Get base slots - async classification will be triggered here
                 slots_to_set = {
-                    "sensitive_content_detected": True,
-                    "sensitive_content_category": detection_result.category,
-                    "sensitive_content_level": detection_result.level.value,
-                    "sensitive_content_message": detection_result.message,
-                    "sensitive_content_confidence": detection_result.confidence
+                    "grievance_new_detail": "completed",
+                    "grievance_description": tracker.get_slot('grievance_description'),
                 }
                 
-                # Send detection message with buttons
-                buttons = detector.get_detection_buttons(detection_result)
-                dispatcher.utter_message(
-                    text=detection_result.message,
-                    buttons=buttons
-                )
-                
-                # Don't process the grievance text yet - wait for user response
+                # Trigger async classification when form is completed
+                classification_slots = await self._trigger_async_classification(tracker, dispatcher)
+                slots_to_set.update(classification_slots)
+                self.logger.info(f"Slots to set: {slots_to_set}")
                 return slots_to_set
             
-            #handle the case where sensitive content is not detected
-            updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
-            
-            
-            return {
-                "grievance_new_detail": None,
-                "grievance_description": updated_temp,
-                "grievance_description_status": "show_options"
-            }
+            # Handle valid grievance text
+            if slot_value and not slot_value.startswith('/'):
+                # Check for sensitive content using keyword detection
+                detection_result = self.helpers.detect_sensitive_content(slot_value, language_code)
+                
+                #handle the case where sensitive content is detected
+                if detection_result.detected and detection_result.action_required:
+                    self.logger.info(f"🚨 SENSITIVE CONTENT DETECTED: {detection_result.category} - {detection_result.level}")
+                    self.logger.info(f"Confidence: {detection_result.confidence}")
+                    self.logger.info(f"Message: {detection_result.message}")
+                    
+                    # Store detection result for later use
+                    slots_to_set = {
+                        "sensitive_content_detected": True,
+                        "sensitive_content_category": detection_result.category,
+                        "sensitive_content_level": detection_result.level.value,
+                        "sensitive_content_message": detection_result.message,
+                        "sensitive_content_confidence": detection_result.confidence
+                    }
+                    
+                    # Send detection message with buttons
+                    buttons = detector.get_detection_buttons(detection_result)
+                    dispatcher.utter_message(
+                        text=detection_result.message,
+                        buttons=buttons
+                    )
+                    
+                    # Don't process the grievance text yet - wait for user response
+                    return slots_to_set
+                
+                #handle the case where sensitive content is not detected
+                updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
+                
+                
+                return {
+                    "grievance_new_detail": None,
+                    "grievance_description": updated_temp,
+                    "grievance_description_status": "show_options"
+                }
+        except Exception as e:
+            self.logger.error(f"Error in validate_grievance_new_detail: {e}")
+            raise Exception(f"Error in validate_grievance_new_detail: {e}")
 
         
 
@@ -304,21 +298,21 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
         language_code = tracker.get_slot("language_code") or "en"
         
         if not slot_grievance_description_status:
-            utterance = get_utterance("form_grievance", self.name(), 1, language_code)
+            utterance = self.get_utterance(1)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "restart":
-            utterance = get_utterance("form_grievance", self.name(), 2, language_code)
+            utterance = self.get_utterance(2)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "add_more_details":
-            utterance = get_utterance("form_grievance", self.name(), 3, language_code)
+            utterance = self.get_utterance(3)
             dispatcher.utter_message(text=utterance)
 
         if slot_grievance_description_status == "show_options":
             slot_grievance_description = tracker.get_slot("grievance_description")
-            utterance = get_utterance("form_grievance", self.name(), 4, language_code).format(grievance_description=slot_grievance_description)
-            buttons = get_buttons("form_grievance", self.name(), 4, language_code)
+            utterance = self.get_utterance(4).format(grievance_description=slot_grievance_description)
+            buttons = self.get_buttons(4)
             dispatcher.utter_message(text=utterance, buttons=buttons)
             
         return []
@@ -327,9 +321,6 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(BaseAction):
     def __init__(self):
-        self.sms_client = SMSClient()
-        self.email_client = EmailClient()
-        
         
     def name(self) -> Text:
         return "action_submit_grievance"
@@ -375,10 +366,9 @@ class ActionSubmitGrievance(BaseAction):
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp
         grievance_data["grievance_timeline"] = grievance_timeline
-        # grievance_data["complainant_unique_id"] = self.generate_complainant_id(grievance_data)
         # change all the values of the slots_skipped or None to "NOT_PROVIDED"
         grievance_data = self._update_key_values_for_db_storage(grievance_data)
-        ic(grievance_data)
+        self.logger.info(f"Grievance data: {grievance_data}")
                 
         return grievance_data
 
@@ -399,7 +389,7 @@ class ActionSubmitGrievance(BaseAction):
             str: A formatted string containing file information, or empty string if no files
         """
         try:
-            files = db_manager.get_grievance_files(grievance_id)
+            files = self.db_manager.get_grievance_files(grievance_id)
             if not files:
                 return {"has_files": False,
                         "files_info": ""}
@@ -411,8 +401,8 @@ class ActionSubmitGrievance(BaseAction):
                 return {"has_files": True,
                         "files_info": files_info}
         except Exception as e:
-            ic(f"❌ Error getting attached files info: {str(e)}")
-            ic(f"Traceback: {traceback.format_exc()}")
+            self.logger.error(f"❌ Error getting attached files info: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to get attached files info: {str(e)}")
             return {"has_files": False,
                     "files_info": ""}
@@ -420,16 +410,12 @@ class ActionSubmitGrievance(BaseAction):
     def create_confirmation_message(self, 
                                     grievance_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
-        ic(self.language_code)
         
         # Get attached files information using the helper function
         has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
         files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
         
-        message = [get_utterance("form_grievance", 
-                                 'create_confirmation_message', 
-                                 i, 
-                                 self.language_code) for i in ['grievance_id',
+        message = [self.get_utterance(i) for i in ['grievance_id',
                                                                 'grievance_timestamp',
                                                          'grievance_description',
                                                          'complainant_email',
@@ -496,17 +482,17 @@ class ActionSubmitGrievance(BaseAction):
                                         body=body
                                         )
             if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-                message = get_utterance("form_grievance", self.name(), 2, self.language_code)
+                message = self.get_utterance(2)
                 dispatcher.utter_message(text=message)
                 
         except Exception as e:
-            logger.error(f"Failed to send system notification email: {e}"
+            self.logger.error(f"Failed to send system notification email: {e}"
             )
             
     # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
     #         """Handle the case of gender follow up."""
-    #         utterance = get_utterance("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
-    #         buttons = get_buttons("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
+    #         utterance = self.get_utterance(1)
+    #         buttons = self.get_buttons(1)
     #         ic(utterance, buttons)
     #         dispatcher.utter_message(text=utterance, buttons=buttons)
     
@@ -515,46 +501,47 @@ class ActionSubmitGrievance(BaseAction):
                                      has_files: bool, 
                                      dispatcher: CollectingDispatcher) -> str:
         buttons = None
-        ic("send last utterance and buttons")
-        if gender_tag:
-                utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
-                buttons = get_buttons("form_grievance", "send_last_utterance_buttons", 1, self.language_code)
-        elif not has_files:
-            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 2, self.language_code)
-        else:
-            utterance = get_utterance("form_grievance", "send_last_utterance_buttons", 3, self.language_code)
-        
-        ic(utterance, buttons)
-        if buttons:
-            dispatcher.utter_message(text=utterance, buttons=buttons)
-        else:
-            dispatcher.utter_message(text=utterance)
+        self.logger.info("send last utterance and buttons")
+        try:
+            if gender_tag:
+                    utterance = self.get_utterance(1)
+                    buttons = self.get_buttons(1)
+            elif not has_files:
+                utterance = self.get_utterance(2)
+            else:
+                utterance = self.get_utterance(3)
+            
+            if buttons:
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+            else:
+                dispatcher.utter_message(text=utterance)
+        except Exception as e:
+            self.logger.error(f"Error in send_last_utterance_buttons: {e}")
 
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        ic("\n=================== Submitting Grievance ===================")
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         self.language_code = tracker.get_slot("language_code") or "en"
         self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
         self.grievance_id = tracker.get_slot("grievance_id")
         self.complainant_id = tracker.get_slot("complainant_id")
         
-        ic("Debug - All tracker slots:", tracker.slots)
-        ic("Debug - grievance_id from tracker:", self.grievance_id)
-        ic("Debug - complainant_id from tracker:", self.complainant_id)
+        self.logger.debug(f"Submit grievance - All tracker slots: {tracker.slots}")
+        self.logger.debug(f"Submit grievance - grievance_id from tracker: {self.grievance_id}")
+        self.logger.debug(f"Submit grievance - complainant_id from tracker: {self.complainant_id}")
         
         try:
             # Collect grievance data
             grievance_data = self.collect_grievance_data(tracker)
-            ic('collected grievance data from tracker', grievance_data)
+            self.logger.debug(f"Submit grievance - collected grievance data from tracker: {grievance_data}")
             # Update the existing grievance with complete data
             try:
-                db_manager.submit_grievance_to_db(data=grievance_data)
+                self.db_manager.submit_grievance_to_db(data=grievance_data)
             except Exception as e:
-                ic(f"❌ Error updating grievance: {str(e)}")
-                ic(f"Traceback: {traceback.format_exc()}")
+                self.logger.error(f"❌ Error updating grievance: {str(e)}")
+                self.logger.error(f"Traceback: {traceback.format_exc()}")
                 raise Exception("Failed to update grievance in the database")
         
 
-            ic(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
+            self.logger.info(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
             
             # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
@@ -570,8 +557,8 @@ class ActionSubmitGrievance(BaseAction):
                 if complainant_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
                     self.sms_client.send_sms(complainant_phone, confirmation_message)
                     #utter sms confirmation message
-                    utterance = get_utterance("form_grievance", self.name(), 2, self.language_code).format(complainant_phone=complainant_phone)
-                    ic(complainant_phone, utterance)
+                    utterance = self.get_utterance(2)
+                    utterance = utterance.format(complainant_phone=complainant_phone)
                     dispatcher.utter_message(text=utterance)
             
             #send email to admin
@@ -589,7 +576,8 @@ class ActionSubmitGrievance(BaseAction):
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
-                utterance = get_utterance("form_grievance", self.name(), 3, self.language_code).format(complainant_email=complainant_email)
+                utterance = self.get_utterance(3)
+                utterance = utterance.format(complainant_email=complainant_email)
                 dispatcher.utter_message(text=utterance)
             
             #send the last utterance and buttons
@@ -605,11 +593,11 @@ class ActionSubmitGrievance(BaseAction):
             
             # #send utter to users if they have not attached any files or a reminder to attach more files
             # elif not self._get_attached_files_info(grievance_id)["has_files"]:
-            #     utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
+            #     utterance = self.get_utterance(4)
             #     dispatcher.utter_message(text=utterance)
             
             # else:
-            #         utterance = get_utterance("form_grievance", self.name(), 5, self.language_code)
+            #         utterance = self.get_utterance(5)
             #         dispatcher.utter_message(text=utterance)
                 
             # Prepare events
@@ -618,9 +606,9 @@ class ActionSubmitGrievance(BaseAction):
             ]
 
         except Exception as e:
-            ic(f"❌ Error submitting grievance: {str(e)}")
-            ic(f"Traceback: {traceback.format_exc()}")
-            utterance = get_utterance("form_grievance", self.name(), 4, self.language_code)
+            self.logger.error(f"❌ Error submitting grievance: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            utterance = self.get_utterance(4)
             dispatcher.utter_message(text=utterance)
             return []
         

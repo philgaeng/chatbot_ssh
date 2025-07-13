@@ -10,7 +10,9 @@ import traceback
 from .utterance_mapping_rasa import get_utterance_base, get_buttons_base
 from .mapping_buttons import VALIDATION_SKIP
 from backend.shared_functions.helpers_repo import helpers_repo
+from backend.services.messaging import Messaging
 from backend.config.constants import DEFAULT_VALUES
+from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
 
@@ -147,6 +149,8 @@ class BaseAction(Action, ABC):
         self.logger = logging.getLogger(__name__)
         self.file_name = self.__class__.__module__.split(".")[-1]
         self.helpers = helpers_repo
+        self.messaging = Messaging()
+        self.db_manager = db_manager
         # Remove this line: self.language_code = self.get_language_code(tracker)
         # The language code should be retrieved from the tracker within methods where the tracker is available,
         # not in __init__, since tracker is not available at initialization.
@@ -180,7 +184,7 @@ class BaseAction(Action, ABC):
     def get_buttons(self, button_index: int) -> list:
         return get_buttons_base(self.file_name, self.name(), button_index, self.language_code)
     
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
         Standard run method with automatic logging.
         Subclasses should override execute_action() instead of run().
@@ -211,7 +215,7 @@ class BaseAction(Action, ABC):
             )
             raise
     
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
         Execute the actual action logic. Override this method in subclasses.
         
@@ -238,6 +242,7 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         """Initialize shared resources."""
         super().__init__()  # Call parent's __init__
         self.lang_helper = LanguageHelper()
+        self.helpers = helpers_repo
 
     @abstractmethod
     def name(self) -> Text:
