@@ -3,19 +3,16 @@ from flask import request, jsonify, send_file, Blueprint, send_from_directory
 from werkzeug.utils import secure_filename
 import uuid
 from datetime import datetime
-import wave
-import contextlib
-from ..services.database_services.postgres_services.db_manager import db_manager
-from ..config.constants import (
+from backend.services.database_services.postgres_services import db_manager
+from backend.config.constants import (
     MAX_FILE_SIZE, 
     TASK_STATUS
 )
-from ..shared_functions.utterance_mapping_server import get_utterance
+from backend.shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
-from ..api.api_manager import APIManager
-from ..services.file_server_core import FileServerCore
-from task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
-from icecream import ic
+from backend.api.api_manager import APIManager
+from backend.services.file_server_core import FileServerCore
+from backend.task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
 
 SUCCESS = TASK_STATUS['SUCCESS']
 IN_PROGRESS = TASK_STATUS['IN_PROGRESS']

@@ -69,11 +69,10 @@ import json
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
-from logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
+from backend.logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
 from backend.config.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS, RASA_API_URL, FLASK_URL
 from .celery_app import celery_app  # Safe to import at module level now
 import requests
-from icecream import ic
 
 # Task type names (single source of truth)
 TASK_TYPE_LLM = "LLM"
@@ -238,7 +237,6 @@ class TaskManager:
         self.last_retry_time = None
         self.retry_config = self._get_retry_config()
         self.retry_history: List[Dict[str, Any]] = []
-        ic(0,self.task_name, self.task_type, self.service)
 
     def _get_retry_config(self) -> Dict[str, Any]:
         """Get retry configuration based on task type"""
@@ -481,7 +479,6 @@ class TaskManager:
                 event_type=STARTED
             )
             self.session_id = session_id
-            ic(1, self.session_id)
             self.start_time = datetime.datetime.utcnow()
             self.status = IN_PROGRESS
             

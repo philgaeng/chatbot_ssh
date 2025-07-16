@@ -38,7 +38,7 @@ from .config import (
     ServiceConfig,
     DirectoryConfig
 )
-from logger.logger import TaskLogger, LoggingConfig as CentralizedLoggingConfig
+from backend.logger.logger import TaskLogger, LoggingConfig as CentralizedLoggingConfig
 from .task_manager import (
     TaskManager,
     DatabaseTaskManager,

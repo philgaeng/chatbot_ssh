@@ -5,6 +5,8 @@ BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
 VENV_DIR="/home/philg/projects/nepal_chatbot/rasa-env-21"
 UPLOAD_DIR="$BASE_DIR/uploads"
+BACKEND_DIR="$BASE_DIR/backend"
+RASA_DIR="$BASE_DIR/rasa_chatbot"
 
 # Export Redis and Celery environment variables globally
 export REDIS_HOST=localhost
@@ -217,7 +219,7 @@ start_celery_worker() {
     cd "$BASE_DIR" && \
     PYTHONPATH=$BASE_DIR \
     CELERY_PID_FILE="$pid_file" \
-    celery -A task_queue worker -Q "$queue_name" \
+    celery -A backend.task_queue.celery_app worker -Q "$queue_name" \
         --concurrency="$concurrency" \
         --logfile="$log_file" \
         --pidfile="$pid_file" \
@@ -257,7 +259,7 @@ start_service() {
     if check_port $(echo $command | grep -oP '(?<=:)\d+'); then
         cd "$BASE_DIR" && \
         PYTHONPATH=$BASE_DIR \
-        FLASK_APP=actions_server/app.py \
+        FLASK_APP=backend.api.app.py \
         FLASK_ENV=development \
         UPLOAD_FOLDER=$UPLOAD_DIR \
         SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
@@ -359,25 +361,63 @@ fi
 for service in "rasa_actions" "rasa" "flask_server" "flower"; do
     case $service in
         "rasa_actions")
-            if ! start_service "$service" "rasa run actions --debug"; then
-                echo "❌ Failed to start $service. Exiting..."
+            cd "$RASA_DIR" && \
+            PYTHONPATH=$BASE_DIR \
+            FLASK_APP=backend.api.app.py \
+            FLASK_ENV=development \
+            UPLOAD_FOLDER=$UPLOAD_DIR \
+            SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
+            REDIS_PASSWORD="$REDIS_PASSWORD" \
+            nohup rasa run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
+            
+            # Store the PID
+            echo $! > "$LOG_DIR/rasa_actions.pid"
+            
+            # Wait a moment for the process to start
+            sleep 2
+            
+            # Check if process started successfully
+            if ps -p $(cat "$LOG_DIR/rasa_actions.pid") > /dev/null 2>&1; then
+                echo "rasa_actions started with PID $(cat $LOG_DIR/rasa_actions.pid)"
+            else
+                echo "❌ Failed to start rasa_actions. Check logs at $LOG_DIR/rasa_actions.log"
+                rm -f "$LOG_DIR/rasa_actions.pid"
                 exit 1
             fi
             ;;
         "rasa")
-            if ! start_service "$service" "rasa run --enable-api --cors \"*\" --debug"; then
-                echo "❌ Failed to start $service. Exiting..."
+            cd "$RASA_DIR" && \
+            PYTHONPATH=$BASE_DIR \
+            FLASK_APP=backend.api.app.py \
+            FLASK_ENV=development \
+            UPLOAD_FOLDER=$UPLOAD_DIR \
+            SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
+            REDIS_PASSWORD="$REDIS_PASSWORD" \
+            nohup rasa run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
+            
+            # Store the PID
+            echo $! > "$LOG_DIR/rasa.pid"
+            
+            # Wait a moment for the process to start
+            sleep 2
+            
+            # Check if process started successfully
+            if ps -p $(cat "$LOG_DIR/rasa.pid") > /dev/null 2>&1; then
+                echo "rasa started with PID $(cat $LOG_DIR/rasa.pid)"
+            else
+                echo "❌ Failed to start rasa. Check logs at $LOG_DIR/rasa.log"
+                rm -f "$LOG_DIR/rasa.pid"
                 exit 1
             fi
             ;;
         "flask_server")
-            if ! start_service "$service" "python3 actions_server/app.py"; then
+            if ! start_service "$service" "python3 backend/api/app.py"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi
             ;;
         "flower")
-            if ! start_service "$service" "celery -A task_queue --broker=redis://:3fduLmg25%40k@localhost:6379/0 flower --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
+            if ! start_service "$service" "celery -A backend.task_queue.celery_app --broker=redis://:3fduLmg25%40k@localhost:6379/0 flower --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi

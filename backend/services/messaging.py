@@ -27,11 +27,15 @@ class Messaging:
         try:
             self.sms_client = SMSClient()
             self.email_client = EmailClient()
-            self.communication_client = CommunicationClient()
             self.logger = TaskLogger(service_name='messaging_service')
             self.logger.log_event("Successfully initialized Messaging repository")
         except Exception as e:
-            self.logger.log_event(f"Failed to initialize Messaging repository: {str(e)}", level="error")
+            # Create a basic logger for error reporting if the main one failed
+            try:
+                
+                self.logger.log_event(f"Failed to initialize Messaging repository: {str(e)}", level="error")
+            except:
+                pass  # If even the error logger fails, just raise the original exception
             raise
 
     def send_sms(self, phone_number: str, message: str) -> bool:
@@ -189,55 +193,18 @@ class SMSClient:
             
         return formatted_number
 
-
-class CommunicationClient:
-    def __init__(self):
-        self.logger = TaskLogger(service_name='messaging_service')
-        try:
-            # Initialize the client with the new service name
-            self.client = boto3.client(
-                'communication-messages', 
-                region_name=AWS_REGION
-            )
-            self.logger.log_event("Successfully initialized Communication Messages client")
-        except ClientError as e:
-            self.logger.log_event(f"Failed to initialize Communication Messages client: {str(e)}", level="error")
-            raise
-
-    def _format_phone_number(self, phone_number: str) -> str:
-        # Your existing phone number formatting logic
-        cleaned_number = re.sub(r'[^\d+]', '', phone_number)
-        
-        if re.match(r'^\+63\d{10}$', cleaned_number):
-            return cleaned_number
-        
-        if cleaned_number.startswith('09'):
-            formatted_number = '+63' + cleaned_number[1:]
-        elif cleaned_number.startswith('63'):
-            formatted_number = '+' + cleaned_number
-        elif cleaned_number.startswith('0063'):
-            formatted_number = '+' + cleaned_number[2:]
-        else:
-            raise ValueError(f"Invalid phone number format: {phone_number}")
-        
-        if not re.match(r'^\+63\d{10}$', formatted_number):
-            raise ValueError(f"Invalid phone number format after formatting: {formatted_number}")
-            
-        return formatted_number
-
-
 class EmailClient:
     def __init__(self):
         self.logger = TaskLogger(service_name='messaging_service')
         try:
             self.ses_client = boto3.client('ses',
-                region_name=os.getenv('AWS_REGION'),
+                region_name=AWS_REGION,
                 aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
                 aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
             )
             self.sender_email = os.getenv('SES_VERIFIED_EMAIL')
             self.logger.log_event(f"SES Configuration:")
-            self.logger.log_event(f"Region: {os.getenv('AWS_REGION')}")
+            self.logger.log_event(f"Region: {AWS_REGION}")
             self.logger.log_event(f"Sender Email: {self.sender_email}")  # Check if this is None
             
             if not self.sender_email:
@@ -286,3 +253,4 @@ class EmailClient:
             return False
 
 
+messaging = Messaging()

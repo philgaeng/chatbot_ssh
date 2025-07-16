@@ -1,14 +1,10 @@
 
-import logging
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
-from rasa_sdk import Action, Tracker, FormValidationAction
+from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
-from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from .base_classes import BaseFormValidationAction, BaseAction
-from .generic_actions import get_language_code
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 
 
 
@@ -21,7 +17,6 @@ class AskMenuFormLanguageCode(BaseAction):
             tracker: Tracker,
             domain: Dict[Text, Any]
         ) -> List[Dict[Text, Any]]:
-        language = get_language_code(tracker)
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -33,10 +28,8 @@ class AskMenuFormMainStory(BaseAction):
     
     def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = tracker.latest_message.get('text', '')
-        language = get_language_code(tracker)
         province = tracker.get_slot("complainant_province")
         district = tracker.get_slot("complainant_district")
-        #ic(language, district, province)
         
         if province and district:
             utterance = self.get_utterance(2)

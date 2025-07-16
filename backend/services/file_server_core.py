@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 import wave
 import contextlib
-from .database_services.postgres_services.db_manager import db_manager
+from .database_services.postgres_services import db_manager
 from ..config.constants import (
     MAX_FILE_SIZE, 
     ALLOWED_EXTENSIONS, 

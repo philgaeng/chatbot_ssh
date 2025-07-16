@@ -1,10 +1,9 @@
 from typing import Any, Text, Dict, List, Optional
-from rasa_sdk import Action, Tracker
+from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
-from rasa_sdk.events import SlotSet, FollowupAction
-from .utterance_mapping_rasa import get_utterance, get_buttons
-from .base_classes import BaseFormValidationAction, BaseAction
-from icecream import ic
+from rasa_sdk.events import SlotSet
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
+from rasa_chatbot.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base
 
 class GrievanceHelpers:
     """Utility class for formatting grievance messages and buttons. Not a Rasa action."""
@@ -14,9 +13,7 @@ class GrievanceHelpers:
                                       grievance_dict: Dict) -> str:
         message = []
         for k,v in grievance_dict.items():
-            ic(message)
-            ic(k,v)
-            utter = get_utterance("check_status", "actions_helpers", k, language_code)
+            utter = get_utterance_base("check_status", "actions_helpers", k, language_code)
             if utter:
                 if v:
                     utter = utter.replace(f"{{{k}}}", v)
@@ -34,7 +31,7 @@ class GrievanceHelpers:
                                  language_code: str,
                                 grievance_id_list: Dict) -> List[Dict]:
         buttons = []
-        buttons_dict = get_buttons("check_status", "actions_helpers", "grievance_id_buttons", language_code)
+        buttons_dict = get_buttons_base("check_status", "actions_helpers", "grievance_id_buttons", language_code)
         title_buttons = buttons_dict.get("title")
         for k in grievance_id_list:
             buttons.append({"payload": f"/check_status{{'grievance_id': '{k}'}}", "title": f"{title_buttons} {k}"})
@@ -51,14 +48,9 @@ class ActionChooseRetrievalMethod(BaseAction):
     def name(self) -> Text:
         return "action_choose_retrieval_method"
 
-    def run(self,
-            dispatcher: CollectingDispatcher,
-            tracker: Tracker,
-            domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        ic(f"------ {self.name()} ------")
-        self.language_code = tracker.get_slot("language_code")
-        message = get_utterance("check_status", "action_choose_retrieval_method", 1, self.language_code)
-        buttons = get_buttons("check_status", "action_choose_retrieval_method", 1, self.language_code)
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
@@ -69,39 +61,36 @@ class ActionDisplayGrievance(BaseAction):
     def name(self) -> Text:
         return "action_display_grievance"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code")
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         phone_number = tracker.get_slot("complainant_phone")
         if grievance_id:
-            grievance_description = db.get_grievance_by_id(grievance_id)
-            ic(grievance_description)
+            grievance_description = self.db_manager.get_grievance_by_id(grievance_id)
             if grievance_description:
                 self._display_single_grievance(dispatcher, grievance_description)
             else:
-                message = get_utterance("check_status", self.name(), 1, self.language_code)
+                message = self.get_utterance(1)
                 dispatcher.utter_message(text=message)
         elif phone_number:
-            grievances = db.get_grievances_by_phone(phone_number)
-            ic(grievances)
+            grievances = self.db_manager.get_grievances_by_phone(phone_number)
             if grievances:
                 self._display_multiple_grievances(dispatcher, grievances)
             else:
-                message = get_utterance("check_status", self.name(), 2, self.language_code)
+                message = self.get_utterance(2)
                 dispatcher.utter_message(text=message)
         else:
-            message = get_utterance("check_status", self.name(), 3, self.language_code)
+            message = self.get_utterance(3)
             dispatcher.utter_message(text=message)
         return []
 
     def _display_single_grievance(self, dispatcher: CollectingDispatcher, grievance_dict: Dict):
         try:
-            message = self.grievance_helpers.get_message_grievance_description(language_code=self.language_code, 
-                                                                         grievance_dict=grievance_dict) 
+            message = self.grievance_helpers.get_message_grievance_description(language_code=self.language_code,
+            grievance_dict=grievance_dict) 
             dispatcher.utter_message(text=message)
         except:
             message = self.grievance_helpers.get_message_grievance_description(language_code=self.language_code, 
-                                                                        grievance_dict=grievance_dict) 
+            grievance_dict=grievance_dict) 
                 
             dispatcher.utter_message(text="\n\n".join(message))
         self._offer_status_check(dispatcher)
@@ -116,7 +105,7 @@ class ActionDisplayGrievance(BaseAction):
 
         #deal with multiple grievances
         #launch the intro message
-        message = get_utterance("check_status", 
+        message = self.get_utterance("check_status", 
                                 "_display_multiple_grievances", 
                                 1, self.language_code).format(len(grievances_list))
         dispatcher.utter_message(text=message)
@@ -144,10 +133,10 @@ class ActionDisplayGrievance(BaseAction):
         
         #create the final message and related buttons
         grievances_id_list = [g['grievance_id'] for g in grievances_list]
-        message = get_utterance("check_status", "_display_multiple_grievances", 2, self.language_code)
+        message = get_utterance_base("check_status", "_display_multiple_grievances", 2, self.language_code)
         try:
             buttons = self.grievance_helpers.get_buttons_grievance_id(language_code=self.language_code, 
-                                                                   grievance_id_list=grievances_id_list)
+             grievance_id_list=grievances_id_list)
         except:
             buttons = [{"payload": f"/check_status{{'grievance_id': '{g['grievance_id']}'}}", 
                      "title": f"Check {g['grievance_id']}"} for g in grievances_id_list]
@@ -159,8 +148,8 @@ class ActionDisplayGrievance(BaseAction):
         )
 
     def _offer_status_check(self, dispatcher: CollectingDispatcher):
-        message = get_utterance("check_status", "_offer_status_check", 1, self.language_code)
-        buttons = get_buttons("check_status", "_offer_status_check", 1, self.language_code)
+        message = get_utterance_base("check_status", "_offer_status_check", 1, self.language_code)
+        buttons = get_buttons_base("check_status", "_offer_status_check", 1, self.language_code)
         dispatcher.utter_message(
             text=message,
             buttons=buttons
@@ -173,24 +162,23 @@ class ActionCheckStatus(BaseAction):
     def name(self) -> Text:
         return "action_check_status"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code")
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         if not grievance_id:
-            message = get_utterance("check_status", self.name(), 1, self.language_code)
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             return []
 
-        history = db.get_grievance_history(grievance_id)
+        history = self.db_manager.get_grievance_history(grievance_id)
         if not history:
-            message = get_utterance("check_status", self.name(), 2, self.language_code)
+            message = self.get_utterance(2)
             dispatcher.utter_message(text=message)
             return []
 
         latest = history[0]
         try:
             message = self.grievance_helpers.get_message_grievance_description(language_code=self.language_code, 
-                                                                         grievance_dict=latest)
+            grievance_dict=latest)
             
         except:
             message = [
@@ -206,8 +194,8 @@ class ActionCheckStatus(BaseAction):
 
             if latest.get('notes'):
                 message.append(f"📝 **Notes:** {latest['notes']}")
-        utterance = get_utterance("check_status", self.name(), 3, self.language_code)
-        buttons = get_buttons("check_status", self.name(), 1, self.language_code)
+        utterance = self.get_utterance(3)
+        buttons = self.get_buttons(1)
 
         dispatcher.utter_message(text="\n\n".join(message))
 
@@ -240,29 +228,28 @@ class ValidateGrievanceIdForm(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        ic(self.name())
-        self.language_code = tracker.get_slot("language_code")
+        self._initialize_language_and_helpers(tracker)
         
         # Check if the input is empty or not a string
         if not slot_value or not isinstance(slot_value, str):
-            message = get_utterance("check_status", self.name(), 3, self.language_code)
+            message = self.get_utterance(3)
             dispatcher.utter_message(text=message)
             return {"grievance_id": None}
             
         # Check if the ID starts with GR and contains only alphanumeric characters
         if not slot_value.startswith('GR') or not slot_value[2:].replace('-', '').isalnum():
-            message = get_utterance("check_status", self.name(), 4, self.language_code)
+            message = self.get_utterance(4)
             dispatcher.utter_message(text=message)
             return {"grievance_id": None}
             
         # Check if the grievance exists in the database
-        if db.is_valid_grievance_id(slot_value):
+        if self.db_manager.is_valid_grievance_id(slot_value):
             ic(slot_value)
-            message = get_utterance("check_status", self.name(), 1, self.language_code)
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message.format(grievance_id=slot_value))
             return {"grievance_id": slot_value}
         else:
-            message = get_utterance("check_status", self.name(), 2, self.language_code)
+            message = self.get_utterance(2)
             dispatcher.utter_message(text=message)
             return {"grievance_id": None}
         
@@ -270,9 +257,8 @@ class ActionAskGrievanceIdFormGrievanceId(BaseAction):
     def name(self) -> Text:
         return "action_ask_grievance_id_form_grievance_id"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code")
-        message = get_utterance("check_status", self.name(), 1, self.language_code)
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
 
@@ -283,8 +269,7 @@ class ActionRetrieveWithPhone(BaseAction):
     def name(self) -> Text:
         return "action_retrieve_with_phone"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code")
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return [
             SlotSet("verification_context", "retrieval"),
         ]
@@ -297,26 +282,25 @@ class ActionShowStatusHistory(BaseAction):
     def name(self) -> Text:
         return "action_show_status_history"
 
-    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code")
+    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         if not grievance_id:
-            message = get_utterance("check_status", self.name(), 1, self.language_code)
+            message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             return []
 
         # Get full history
-        history = db.get_grievance_history(grievance_id)
+        history = self.db_manager.get_grievance_history(grievance_id)
         if not history:
-            message = get_utterance("check_status", self.name(), 2, self.language_code)
+            message = self.get_utterance(2)
             dispatcher.utter_message(text=message)
             return []
         
         # Display header
-        message = get_utterance("check_status", self.name(), 3, self.language_code).format(grievance_id)
+        message = self.get_utterance(3).format(grievance_id)
         dispatcher.utter_message(text=message)
         try:
-            list_of_messages = [get_utterance("check_status", self.name(), i, self.language_code)for i in range(4, 11)]
+            list_of_messages = [self.get_utterance(i)for i in range(4, 11)]
             final_list_of_messages = []
             for i in list_of_messages:
                 if 'entry' in i:
@@ -359,8 +343,8 @@ class ActionShowStatusHistory(BaseAction):
             dispatcher.utter_message(text="-------------------")
 
         # Offer next actions    
-        message = get_utterance("check_status", self.name(), 11, self.language_code)
-        buttons = get_buttons("check_status", self.name(), 1, self.language_code)
+        message = self.get_utterance(11)
+        buttons = self.get_buttons(1)
         dispatcher.utter_message(
             text=message,
             buttons=buttons

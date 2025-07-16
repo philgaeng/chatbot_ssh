@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 import os
 from .api_manager import APIManager
-from ..services.database_services.postgres_services.db_manager import DatabaseManagers
+from backend.services.database_services.postgres_services import db_manager
 
 
 class GSheetMonitoringAPI:
@@ -12,7 +12,7 @@ class GSheetMonitoringAPI:
         self.api_manager = APIManager('gsheet_monitoring')
         self._register_routes()
         self.gsheet_bearer_token = os.getenv('GSHEET_BEARER_TOKEN')
-        self.db = DatabaseManagers()
+        self.db = db_manager
 
     def _register_routes(self):
         """Register all routes with the blueprint"""

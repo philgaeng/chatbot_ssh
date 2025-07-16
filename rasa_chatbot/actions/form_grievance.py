@@ -8,10 +8,14 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from utils.base_classes import BaseFormValidationAction, BaseAction
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
-from utils.utterance_mapping_rasa import  BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, DEFAULT_PROVINCE, DEFAULT_DISTRICT
+from rasa_chatbot.actions.utils.utterance_mapping_rasa import  BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
+
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
 SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
 SUCCESS = TASK_STATUS["SUCCESS"]
@@ -55,9 +59,6 @@ class ActionStartGrievanceProcess(BaseAction):
         complainant_id = self.db_manager.create_complainant_id(set_id_data)
         grievance_id = self.db_manager.create_grievance_id(set_id_data)
         self.logger.info(f"Created temporary grievance with ID: {grievance_id} and complainant ID: {complainant_id}")
-        
-        # Get language code from tracker
-        language_code = tracker.get_slot("language_code") or "en"
         
         # Get utterance and buttons from mapping
         utterance = self.get_utterance(1)
@@ -108,7 +109,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
         """
         grievance_id = tracker.get_slot("grievance_id")
         grievance_description = tracker.get_slot("grievance_description")
-        language_code = tracker.get_slot("language_code") or "en"
+        self._initialize_language_and_helpers(tracker)
         
         # If no grievance details or ID, skip classification
         if not grievance_description or not grievance_id:
@@ -126,7 +127,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             input_data = {
                 'grievance_id': grievance_id,
                 'complainant_id': tracker.get_slot("complainant_id"),
-                'language_code': language_code,
+                'language_code': self.language_code,
                 'complainant_province': tracker.get_slot("complainant_province") or DEFAULT_PROVINCE,
                 'complainant_district': tracker.get_slot("complainant_district") or DEFAULT_DISTRICT,
                 'values': {
@@ -237,7 +238,7 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             # Handle valid grievance text
             if slot_value and not slot_value.startswith('/'):
                 # Check for sensitive content using keyword detection
-                detection_result = self.helpers.detect_sensitive_content(slot_value, language_code)
+                detection_result = self.helpers.detect_sensitive_content(slot_value, self.language_code)
                 
                 #handle the case where sensitive content is detected
                 if detection_result.detected and detection_result.action_required:
@@ -293,9 +294,8 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
     def name(self) -> Text:
         return "action_ask_grievance_description_form_grievance_new_detail"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         slot_grievance_description_status = tracker.get_slot("grievance_description_status")
-        language_code = tracker.get_slot("language_code") or "en"
         
         if not slot_grievance_description_status:
             utterance = self.get_utterance(1)
@@ -320,8 +320,6 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
 
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(BaseAction):
-    def __init__(self):
-        
     def name(self) -> Text:
         return "action_submit_grievance"
 
@@ -519,7 +517,6 @@ class ActionSubmitGrievance(BaseAction):
             self.logger.error(f"Error in send_last_utterance_buttons: {e}")
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.language_code = tracker.get_slot("language_code") or "en"
         self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
         self.grievance_id = tracker.get_slot("grievance_id")
         self.complainant_id = tracker.get_slot("complainant_id")

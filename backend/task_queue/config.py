@@ -21,6 +21,13 @@ from .settings import *  # Import all Celery/queue constants and env variables f
 from .celery_app import celery_app  # Import celery_app from celery_app.py
 from .registered_tasks import *  # Eagerly import all tasks for Celery registration
 
+# Configure logging early
+logging.basicConfig(level='INFO')
+logger = logging.getLogger(__name__)
+
+# Import settings classes with aliases to avoid conflicts
+from .settings import TaskConfig as SettingsTaskConfig, WorkerConfig as SettingsWorkerConfig
+
 # Queue system configuration
 QUEUE_FOLDER = 'task_queue'  # Name of the queue system folder
 
@@ -195,10 +202,6 @@ logging_config = LoggingConfig()
 directory_config = DirectoryConfig()
 health_check_config = HealthCheckConfig()
 error_patterns = ErrorPatterns()
-
-# Configure logging
-logging.basicConfig(level=logging_config.level)
-logger = logging.getLogger(__name__)
 
 def generate_shell_config() -> str:
     """

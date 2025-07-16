@@ -3,14 +3,14 @@ import os
 import uuid
 from celery import chain, group
 from .voice_grievance_helpers import *
-from task_queue.registered_tasks import (
+from backend.task_queue.registered_tasks import (
     transcribe_audio_file_task,
     extract_contact_info_task,
     classify_and_summarize_grievance_task,
     translate_grievance_to_english_task,
     store_result_to_db_task
 )
-from logger.logger import TaskLogger
+from backend.logger.logger import TaskLogger
 from backend.config.constants import TASK_STATUS
 
 SUCCESS = TASK_STATUS['SUCCESS']

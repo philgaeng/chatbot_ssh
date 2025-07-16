@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from logger.logger import TaskLogger
+from backend.logger.logger import TaskLogger
 from flask import jsonify
 import inspect
 

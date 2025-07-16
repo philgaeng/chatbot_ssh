@@ -43,13 +43,11 @@ DEFAULT_VALUES = {
     "ANONYMOUS": "Anonymous",
     "SKIP_VALUE": "slot_skipped",
     "DEFAULT_PROVINCE": "Koshi",
-    "DEFAULT_DISTRICT": "Jhapa"
+    "DEFAULT_DISTRICT": "Jhapa",
+    "DEFAULT_LANGUAGE_CODE": "ne"
 }
 
 # Location Constants
-DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
-DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
-USE_QR_CODE = True
 CUT_OFF_FUZZY_MATCH_LOCATION = 75
 
 ############################

@@ -1,10 +1,9 @@
-import logging
+
 from flask_socketio import SocketIO
 from flask import request
 import os
-from logger.logger import TaskLogger
-from ..config.constants import FIELD_CATEGORIES_MAPPING
-import socketio as socketio_client
+from backend.logger.logger import TaskLogger
+from backend.config.constants import FIELD_CATEGORIES_MAPPING
 
 # Create a task logger instance for socketio
 task_logger = TaskLogger(service_name='socketio')

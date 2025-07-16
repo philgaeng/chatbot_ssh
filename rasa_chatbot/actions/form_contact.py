@@ -7,9 +7,8 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from .base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
 from backend.shared_functions.helpers_repo import helpers_repo
-from icecream import ic
 
 
 logger = logging.getLogger(__name__)
@@ -217,7 +216,6 @@ class ValidateFormContact(BaseFormValidationAction):
         """
         self._initialize_language_and_helpers(tracker)
         main_story = tracker.get_slot("main_story")
-        #ic(main_story)
         if main_story == "status_update":
             return ["complainant_phone"]
         else:
@@ -693,7 +691,6 @@ class ValidateFormContact(BaseFormValidationAction):
             dispatcher,
             domain
         )
-        ic(slot_value)
         return slot_value
     
     async def validate_complainant_email_temp(
