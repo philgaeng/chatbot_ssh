@@ -16,8 +16,7 @@ Structure:
     }
 }
 """
-from icecream import ic
-from mapping_buttons import *
+from .mapping_buttons import *
 
 
 UTTERANCE_MAPPING = {
@@ -1375,7 +1374,6 @@ def get_utterance_base(form_name: str, action_name: str, utter_index: int, langu
         str: The appropriate utterance name
     """
     try:
-        ic(form_name, action_name, utter_index, language)
         return UTTERANCE_MAPPING[form_name][action_name]['utterances'][utter_index][language]
     except (KeyError, IndexError) as e:
         print(f"Error getting utterance: {str(e)}")
@@ -1430,7 +1428,6 @@ def get_buttons_base(form_name: str, action_name: str, button_index: int, langua
         list: List of button dictionaries with title and payload
     """
     try:
-        ic(form_name, action_name, button_index, language)
         return UTTERANCE_MAPPING[form_name][action_name]['buttons'][button_index][language]
     except KeyError as e:
         print(f"Error getting buttons: {str(e)}")

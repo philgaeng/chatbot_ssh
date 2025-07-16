@@ -46,17 +46,17 @@ Architecture Benefits:
 - Consistent task registration pattern
 - No configuration duplication
 """
-
+import json
+from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
 from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING, TASK_STATUS
 from backend.services.database_services.postgres_services import db_manager
-from backend.services.messaging import CommunicationClient
+from backend.services.messaging import messaging
 from backend.services.file_server_core import FileServerCore
-from task_queue.task_manager import TaskManager, DatabaseTaskManager
-from task_queue.celery_app import celery_app
-import json
-from celery import group, chord
-from icecream import ic
+from backend.logger.logger import TaskLogger
+from .task_manager import TaskManager
+from .celery_app import celery_app
+
 
 __all__ = [
     'process_file_upload_task',
@@ -108,7 +108,6 @@ def process_file_upload_task(self, grievance_id: str,
         - value: Processed file data
     """
     session_id = grievance_id if session_id is None else session_id
-    ic(session_id)
     task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
     task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id, session_id=session_id)
     try:
@@ -218,7 +217,6 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
     Returns:
         Result of the SMS sending operation.
     """
-    from backend.services.messaging import SMSClient
     task_mgr = TaskManager(task=self,  emit_websocket=False)
     if grievance_id:
         task_mgr.start_task(
@@ -227,7 +225,7 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
             extra_data={'phone_number': phone_number}
         )
     try:
-        result = SMSClient().send_sms(phone_number, message)
+        result = messaging.send_sms(phone_number, message)
         if grievance_id:
             task_mgr.complete_task(result)
         return result
@@ -250,7 +248,6 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
     Returns:
         Result of the email sending operation.
     """
-    from backend.services.messaging import EmailClient
     task_mgr = TaskManager(task=self, emit_websocket=False)
     if grievance_id:
         task_mgr.start_task(
@@ -259,7 +256,7 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
             extra_data={'to_emails': to_emails}
         )
     try:
-        result = EmailClient().send_email(to_emails, subject, body)
+        result = messaging.send_email(to_emails, subject, body)
         if grievance_id:
             task_mgr.complete_task(result)
         return result

@@ -9,16 +9,18 @@ import os
 import uuid
 from flask import request, jsonify, Blueprint
 from datetime import datetime
-from logger.logger import TaskLogger
+from backend.logger.logger import TaskLogger
 from werkzeug.utils import secure_filename
 # Update imports to use actions_server
 from backend.services.database_services.postgres_services import db_manager
 from backend.api.websocket_utils import emit_status_update_accessible
-from backend.config.constants import VALID_FIELD_NAMES, DEFAULT_PROVINCE, DEFAULT_DISTRICT
+from backend.task_queue.registered_tasks import process_batch_files_task
+from backend.config.constants import VALID_FIELD_NAMES,DEFAULT_VALUES
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
-from task_queue.registered_tasks import process_batch_files_task
 
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
 

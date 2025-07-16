@@ -11,16 +11,16 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from utils.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
 
 from backend.services.messaging import Messaging
-from utils.utterance_mapping_rasa import BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from rasa_chatbot.actions.utils.utterance_mapping_rasa import BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from rapidfuzz import process
 from datetime import datetime, timedelta
 from backend.config.constants import (
     GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, DEFAULT_VALUES,
     ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS,
-    GRIEVANCE_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS,
+    GRIEVANCE_FIELDS, TASK_STATUS,
     MAX_FILE_SIZE
 )
 
@@ -43,7 +43,7 @@ class ActionTriggerSummaryForm(BaseAction):
     def name(self) -> Text:
         return "action_trigger_summary_form"
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
         Trigger the grievance summary form only if classification is complete.
         This action should be called after ActionEmitStatusUpdate when classification results are received.
@@ -73,8 +73,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
     
     
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
-        self.language_code = tracker.get_slot("language_code")
-        # The form is only activated when classification is complete, so we can simply return the required slots
+        self._initialize_language_and_helpers(tracker)
         return [
             "grievance_categories_status",
             "grievance_cat_modify", 
@@ -533,22 +532,22 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
         
         # user data
         grievance_data={k : tracker.get_slot(k) for k in ["complainant_phone",
-                                                          "complainant_email",
-                                                          "complainant_full_name",
-                                                          "complainant_province",
-                                                          "complainant_district",
-                                                          "complainant_municipality",
-                                                          "complainant_project",
-                                                          "complainant_ward",
-                                                          "complainant_village",
-                                                          "complainant_address",
-                                                          "grievance_id",
-                                                          "grievance_summary",
-                                                          "grievance_description",
-                                                          "grievance_categories",
-                                                          "grievance_claimed_amount",
-                                                          "otp_verified"
-                                                          ]}
+        "complainant_email",
+        "complainant_full_name",
+        "complainant_province",
+        "complainant_district",
+        "complainant_municipality",
+        "complainant_project",
+        "complainant_ward",
+        "complainant_village",
+        "complainant_address",
+        "grievance_id",
+        "grievance_summary",
+        "grievance_description",
+        "grievance_categories",
+        "grievance_claimed_amount",
+        "otp_verified"
+        ]}
         
         grievance_data["grievance_status"] = GRIEVANCE_STATUS["SUBMITTED"]
         grievance_data["submission_type"] = "new_grievance"
@@ -605,24 +604,24 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
                                  'create_confirmation_message', 
                                  i, 
                                  self.language_code) for i in ['grievance_id',
-                                                                'grievance_timestamp',
-                                                         'grievance_summary',
-                                                         'grievance_categories',
-                                                         'grievance_description',
-                                                         'complainant_email',
-                                                         'complainant_phone',
-                                                         'grievance_outro',
-                                                         'grievance_timeline'] if grievance_data.get(i) is not DEFAULT_VALUES["NOT_PROVIDED"]]
+                                    'grievance_timestamp',
+                                    'grievance_summary',
+                                    'grievance_categories',
+                                    'grievance_description',
+                                    'complainant_email',
+                                    'complainant_phone',
+                                    'grievance_outro',
+                                    'grievance_timeline'] if grievance_data.get(i) is not DEFAULT_VALUES["NOT_PROVIDED"]]
         
         message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
-                                            grievance_timestamp=grievance_data['grievance_timestamp'],
-                                            grievance_summary=grievance_data['grievance_summary'],
-                                            grievance_categories=grievance_data['grievance_categories'],
-                                            grievance_description=grievance_data['grievance_description'],
-                                            complainant_email=grievance_data['complainant_email'],
-                                            complainant_phone=grievance_data['complainant_phone'],
-                                            grievance_timeline=grievance_data['grievance_timeline']
-                                           )
+                grievance_timestamp=grievance_data['grievance_timestamp'],
+                grievance_summary=grievance_data['grievance_summary'],
+                grievance_categories=grievance_data['grievance_categories'],
+                grievance_description=grievance_data['grievance_description'],
+                complainant_email=grievance_data['complainant_email'],
+                complainant_phone=grievance_data['complainant_phone'],
+                grievance_timeline=grievance_data['grievance_timeline']
+                )
 
         # Add files information to the message
         if has_files:

@@ -1,8 +1,12 @@
 from .location_validator import ContactLocationValidator
 from .keyword_detector import KeywordDetector
-from backend.config.constants import DEFAULT_PROVINCE, DEFAULT_DISTRICT, EMAIL_PROVIDERS_NEPAL_LIST
+from backend.config.constants import DEFAULT_VALUES, EMAIL_PROVIDERS_NEPAL_LIST
 from typing import Optional
 import re
+
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
 class HelpersRepo:
     def __init__(self):
@@ -15,7 +19,7 @@ class HelpersRepo:
         """Validate location using the location validator."""
         return self.location_validator.validate_municipality_input(location_string, qr_province, qr_district)
 
-    def init_language(self, language_code: str):
+    def init_language(self, language_code: str = DEFAULT_LANGUAGE_CODE):
         """Initialize the language code for the helpers."""
         self.location_validator._initialize_constants(language_code)
         self.keyword_detector.language_code = language_code

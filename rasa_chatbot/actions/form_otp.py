@@ -6,7 +6,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from .base_classes import BaseFormValidationAction, BaseAction
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 from random import randint
 
 

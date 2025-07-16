@@ -6,20 +6,15 @@ from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
 from typing import Optional, Dict, Any, Tuple, List
-import re
-from icecream import ic
 
 # Direct access to constants
-from ..config.constants import (    
+from backend.config.constants import (    
         LOCATION_FOLDER_PATH,
     CUT_OFF_FUZZY_MATCH_LOCATION,
-    USE_QR_CODE,
     DIC_LOCATION_WORDS,
-    DEFAULT_LANGUAGE_CODE
+    DEFAULT_VALUES
 )
-
-# Set up logging
-logger = logging.getLogger(__name__)
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 
 
 
@@ -34,13 +29,12 @@ class ContactLocationValidator:
     
         json_path_en = f"{json_path}_en_cleaned.json"
         json_path_ne = f"{json_path}_ne_cleaned.json"
+        self.logger = logging.getLogger(__name__)
         self.locations_both_language = dict()
-        ic(json_path)
-        if USE_QR_CODE:
-            with open(json_path_en, "r") as file:
-                self.locations_both_language["en"] = self._normalize_locations(json.load(file))
-            with open(json_path_ne, "r") as file:
-                self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
+        with open(json_path_en, "r") as file:
+            self.locations_both_language["en"] = self._normalize_locations(json.load(file))
+        with open(json_path_ne, "r") as file:
+            self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
 
     def _validate_location(self, location_string, qr_province=None, qr_district=None):
         """Validate location from a single string input and QR defaults."""
@@ -157,7 +151,6 @@ class ContactLocationValidator:
         """Get district names by province name.
         Extract and process district names from province data for a chosen province name.
         """
-        ic(province_name)
         province_data = [province for province in self.locations if 
                          province["name"] == province_name][0]
         if not province_data:
@@ -286,7 +279,6 @@ class ContactLocationValidator:
         """Check if the province name is valid."""
         # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        ic(self.provinces)
         for possible_name in possible_names:
             matched_province = self._find_best_match(possible_name, self.provinces)
             if matched_province:

@@ -3,7 +3,11 @@
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 
 # Import database configuration from constants.py (single source of truth)
-from backend.config.constants import DB_CONFIG, DEFAULT_PROVINCE, DEFAULT_DISTRICT
+from backend.config.constants import DB_CONFIG, DEFAULT_VALUES
+
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
 # Import base manager for inheritance
 from .base_manager import BaseDatabaseManager

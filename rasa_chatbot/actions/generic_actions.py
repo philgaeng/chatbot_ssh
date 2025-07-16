@@ -4,10 +4,8 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted, UserUtteranceReverted, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from backend.config.constants import  MAX_FILE_SIZE  # Import MAX_FILE_SIZE
-from .utterance_mapping_rasa import get_utterance, get_buttons
-from utils.base_classes import BaseAction
-from backend.config.constants import TASK_STATUS, GRIEVANCE_STATUS
+from .utils.base_classes import BaseAction
+from backend.config.constants import TASK_STATUS
 import json
 
 
@@ -24,7 +22,7 @@ ERROR = TASK_STATUS["ERROR"]
 RETRYING = TASK_STATUS["RETRYING"]
 
 
-class ActionWrapper:
+class ActionWrapper(BaseAction):
     """Wrapper to catch and log registration errors for actions"""
     @staticmethod
     def wrap_action(action_class):

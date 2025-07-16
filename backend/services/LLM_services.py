@@ -3,11 +3,15 @@ import json
 from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
-from logger.logger import TaskLogger
-from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_PROVINCE, DEFAULT_DISTRICT, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
-from .database_services.postgres_services.db_manager import db_manager
+from backend.logger.logger import TaskLogger
+from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
+from .database_services.postrgres_services import db_manager
 # Set up logging
 logger = TaskLogger(service_name='llm_service')
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
+SUCCESS = TASK_STATUS["SUCCESS"]
 
 # Load environment variables
 load_dotenv('/home/ubuntu/nepal_chatbot/.env')
@@ -21,7 +25,7 @@ except Exception as e:
     logger.error(f"Error initializing OpenAI client: {str(e)}")
     client = None
 
-def transcribe_audio_file(file_path: str, language: str = None) -> str:
+def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> str:
     """Transcribe an audio file using OpenAI Whisper API"""
     if not client:
         raise RuntimeError("OpenAI client not available for transcription")
@@ -31,14 +35,14 @@ def transcribe_audio_file(file_path: str, language: str = None) -> str:
             response = client.audio.transcriptions.create(
                 file=audio_data,
                 model="whisper-1",
-                language=language
+                language_code=language_code
             )
         return response.text
     except Exception as e:
         logger.error(f"Error transcribing audio file {file_path}: {str(e)}")
         raise
     
-def extract_contact_info(contact_data: Dict[str, Any], language_code: str = 'ne', complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
+def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
     try:
         # Use OpenAI to extract structured information
@@ -90,7 +94,7 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = 'ne'
         }
         
 
-def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 'ne', complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
+def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
     try:
         # Use OpenAI to extract structured information
@@ -139,7 +143,7 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
 
 def classify_and_summarize_grievance(
     grievance_text: str,
-    language_code: str = 'ne',
+    language_code: str = DEFAULT_LANGUAGE_CODE,
     complainant_district: str = DEFAULT_DISTRICT,
     complainant_province: str = DEFAULT_PROVINCE,
     categories: List[str] = CLASSIFICATION_DATA
@@ -218,7 +222,7 @@ def classify_and_summarize_grievance(
         }
         
         
-def parse_llm_response(type: str, response: str, language_code: str = 'ne') -> Dict[str, Any]:
+def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:
     """
     Parse the LLM response into a structured format.
     type can be "grievance_response" or "contact_response"

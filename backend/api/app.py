@@ -3,14 +3,14 @@ eventlet.monkey_patch()
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from .channels_api import FileServerAPI
-from ..services.file_server_core import FileServerCore
-from ..integration.accessible_server.voice_grievance import voice_grievance_bp
-from .websocket_utils import socketio, emit_status_update_accessible
-from ..config.constants import ALLOWED_EXTENSIONS
-from .gsheet_monitoring_api import gsheet_monitoring_bp
+from backend.api.channels_api import FileServerAPI
+from backend.services.file_server_core import FileServerCore
+from backend.services.accessible.voice_grievance import voice_grievance_bp
+from backend.api.websocket_utils import socketio, emit_status_update_accessible
+from backend.config.constants import ALLOWED_EXTENSIONS
+from backend.api.gsheet_monitoring_api import gsheet_monitoring_bp
 import os
-from logger.logger import TaskLogger
+from backend.logger.logger import TaskLogger
 from flask_socketio import join_room, rooms
 
 app = Flask(__name__)
