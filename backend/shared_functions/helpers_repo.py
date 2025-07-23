@@ -89,6 +89,12 @@ class HelpersRepo:
         if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
             return True
         return False
+
+    def is_philippine_phone(self, phone: str) -> bool:
+        if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
+            phone = phone.replace('09', '+639') if phone.startswith('09') else phone.replace('639', '+639') if phone.startswith('639') else phone
+            return phone
+        return None
     
     def email_extract_from_text(self, text: str) -> Optional[str]:
         email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
@@ -104,6 +110,8 @@ class HelpersRepo:
         """Check if email follows basic format requirements."""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
+
+
 
 
 # Global instance for easy access

@@ -48,7 +48,7 @@ class ActionChooseRetrievalMethod(BaseAction):
     def name(self) -> Text:
         return "action_choose_retrieval_method"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -61,7 +61,7 @@ class ActionDisplayGrievance(BaseAction):
     def name(self) -> Text:
         return "action_display_grievance"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         phone_number = tracker.get_slot("complainant_phone")
         if grievance_id:
@@ -162,7 +162,7 @@ class ActionCheckStatus(BaseAction):
     def name(self) -> Text:
         return "action_check_status"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         if not grievance_id:
             message = self.get_utterance(1)
@@ -257,7 +257,7 @@ class ActionAskGrievanceIdFormGrievanceId(BaseAction):
     def name(self) -> Text:
         return "action_ask_grievance_id_form_grievance_id"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -269,7 +269,7 @@ class ActionRetrieveWithPhone(BaseAction):
     def name(self) -> Text:
         return "action_retrieve_with_phone"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return [
             SlotSet("verification_context", "retrieval"),
         ]
@@ -282,7 +282,7 @@ class ActionShowStatusHistory(BaseAction):
     def name(self) -> Text:
         return "action_show_status_history"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_id = tracker.get_slot("grievance_id")
         if not grievance_id:
             message = self.get_utterance(1)

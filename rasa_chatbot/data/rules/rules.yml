@@ -1,6 +1,11 @@
 version: "3.1"
 
 rules:
+  - rule: Introduce the bot
+    steps:
+      - intent: introduce
+      - action: action_introduce
+
   - rule: Say goodbye anytime the user says goodbye
     steps:
       - intent: nav_goodbye
@@ -33,11 +38,6 @@ rules:
       - intent: nlu_fallback
       - action: action_default_fallback
 
-  - rule: Clearing window
-    steps:
-      - intent: nav_clear
-      - action: action_clear_session
-
   - rule: Close browser tab
     steps:
       - intent: nav_close_browser_tab
@@ -47,8 +47,3 @@ rules:
     steps:
       - intent: question_attach_files
       - action: action_question_attach_files
-
-  - rule: Emit status update
-    steps:
-      - action: action_reopen_conversation_for_emit_status_update
-      - action: action_emit_status_update

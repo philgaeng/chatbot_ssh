@@ -40,6 +40,13 @@ window.sessionInitialized = false;
 window.lastBotMessageText = "";
 window.lastBotQuickReplies = null;
 
+// Global session state
+window.sessionState = {
+  confirmed: false,
+  started: false,
+  retryCount: 0,
+};
+
 // File type constants
 const FILE_TYPES = {
   IMAGE: {
@@ -129,15 +136,8 @@ function initializeWebSocket() {
 
 // Set up WebSocket event handlers
 function setupSocketEventHandlers() {
-  // Create session state object
-  const sessionState = {
-    confirmed: false,
-    started: false,
-    retryCount: 0,
-  };
-
-  // Set up event handlers using the module
-  eventHandlers.setupSocketEventHandlers(socket, sessionState);
+  // Use the global session state
+  eventHandlers.setupSocketEventHandlers(socket, window.sessionState);
 }
 
 // Safe message sending function
@@ -170,7 +170,8 @@ window.safeSendMessage = function (message, additionalData = {}) {
 
 // Send introduction message
 function sendIntroduceMessage() {
-  if (!sessionStarted) {
+  // Check if session is started using the global session state
+  if (!window.sessionState || !window.sessionState.started) {
     console.log("Waiting for session to be fully initialized...");
     return;
   }
@@ -221,6 +222,9 @@ function sendIntroduceMessage() {
     }
   }
 }
+
+// Make sendIntroduceMessage available globally
+window.sendIntroduceMessage = sendIntroduceMessage;
 
 // Initialize the chat application
 function initializeChat() {

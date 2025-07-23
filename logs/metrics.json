@@ -1,52 +1,6 @@
 {
-  "transcribe_audio_file_task": {
-    "start_time": 1749645473.2439466,
-    "last_duration": 316.13216066360474,
-    "total_tasks": 17
-  },
-  "extract_contact_info_task": {
-    "start_time": 1749645789.3890803,
-    "last_duration": 1.1083860397338867,
-    "total_tasks": 14
-  },
   "classify_and_summarize_grievance_task": {
-    "start_time": 1751613030.526283,
-    "failed_tasks": 72
-  },
-  "translate_grievance_to_english_task": {
-    "failed_tasks": 3
-  },
-  "generate_ids": {
-    "start_time": 1750409653.731088,
-    "last_duration": 0.0011992454528808594,
-    "total_tasks": 10
-  },
-  "submit_grievance": {
-    "start_time": 1749645472.9787226,
-    "last_duration": 0.37825965881347656,
-    "total_tasks": 1
-  },
-  "wrapper": {
-    "start_time": 1749626566.6329687,
-    "last_duration": 0.019590377807617188,
-    "total_tasks": 1
-  },
-  "upload_files": {
-    "start_time": 1751274991.3690734,
-    "failed_tasks": 1
-  },
-  "get_file_metadata": {
-    "start_time": 1751274991.3726604,
-    "last_duration": 0.0005726814270019531,
-    "total_tasks": 2
-  },
-  "process_file_upload_task": {
-    "start_time": 1751686534.4303138,
-    "last_duration": 0.06507229804992676,
-    "total_tasks": 2,
-    "failed_tasks": 13
-  },
-  "process_file_upload": {
-    "start_time": 1751274991.4596336
+    "start_time": 1753275644.3503036,
+    "failed_tasks": 18
   }
 }

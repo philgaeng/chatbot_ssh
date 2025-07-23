@@ -146,7 +146,7 @@ class BaseDatabaseManager:
             self.logger.error(f"{operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
 
-    def get_grievance_or_user_source(self, id: str) -> str:
+    def get_grievance_or_complainant_source(self, id: str) -> str:
         """Get the source of a grievance or user based on the ID"""
         if id.endswith('-B'):
             return 'bot'

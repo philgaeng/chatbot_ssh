@@ -1,0 +1,2 @@
+2025-07-22 07:40:40,760 - socketio - INFO - Service: socketio - Message: Initializing Socket.IO with Redis - redis_url: redis://:3fduLmg25@k@localhost:6379/0 - env_redis_url: redis://:3fduLmg25@k@localhost:6379/0 - env_redis_password: True
+2025-07-22 07:48:21,379 - socketio - INFO - Service: socketio - Message: Initializing Socket.IO with Redis - redis_url: redis://:3fduLmg25@k@localhost:6379/0 - env_redis_url: redis://:3fduLmg25@k@localhost:6379/0 - env_redis_password: True

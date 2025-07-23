@@ -7,8 +7,7 @@ from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
-from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
-from backend.shared_functions.helpers_repo import helpers_repo
+from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 
 
 logger = logging.getLogger(__name__)
@@ -138,7 +137,7 @@ class ActionAskFormContactUserFullName(BaseAction):
         return "action_ask_form_contact_complainant_full_name"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        if tracker.get_slot("gender_issues_reported") == SKIP_VALUE:
+        if tracker.get_slot("gender_issues_reported") ==self.SKIP_VALUE:
             message = self.get_utterance(1)
         else:
             message = self.get_utterance(2)
@@ -260,12 +259,12 @@ class ValidateFormContact(BaseFormValidationAction):
             result = {"complainant_location_consent": True}
         elif slot_value is False:
             result = {"complainant_location_consent": False,
-                    "complainant_municipality_temp": SKIP_VALUE,
-                    "complainant_municipality": SKIP_VALUE,
+                    "complainant_municipality_temp":self.SKIP_VALUE,
+                    "complainant_municipality":self.SKIP_VALUE,
                     "complainant_municipality_confirmed": False,
-                    "complainant_village": SKIP_VALUE,
-                    "complainant_address_temp": SKIP_VALUE,
-                    "complainant_address": SKIP_VALUE,
+                    "complainant_village":self.SKIP_VALUE,
+                    "complainant_address_temp":self.SKIP_VALUE,
+                    "complainant_address":self.SKIP_VALUE,
                     "complainant_address_confirmed": False}
         self.logger.debug(f"Validate complainant_location_consent: {result}")
         return result
@@ -290,7 +289,7 @@ class ValidateFormContact(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        if slot_value == SKIP_VALUE:
+        if slot_value == self.SKIP_VALUE:
             message = self.get_utterance(1)
             dispatcher.utter_message(
                 text=message
@@ -336,7 +335,7 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
 
-        if slot_value == SKIP_VALUE:
+        if slot_value == self.SKIP_VALUE:
             message = self.get_utterance(1)
             dispatcher.utter_message(
                 text=message
@@ -385,9 +384,9 @@ class ValidateFormContact(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         
         #deal with the slot_skipped case
-        if slot_value == SKIP_VALUE:
-            return {"complainant_municipality_temp": SKIP_VALUE,
-                    "complainant_municipality": SKIP_VALUE,
+        if slot_value == self.SKIP_VALUE:
+            return {"complainant_municipality_temp": self.SKIP_VALUE,
+                    "complainant_municipality": self.SKIP_VALUE,
                     "complainant_municipality_confirmed": False}
         
         # First validate string length
@@ -470,8 +469,8 @@ class ValidateFormContact(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        if slot_value == SKIP_VALUE:
-            result = {"complainant_village": SKIP_VALUE}
+        if slot_value == self.SKIP_VALUE:
+            result = {"complainant_village": self.SKIP_VALUE}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
@@ -508,8 +507,8 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate complainant_address value."""
-        if slot_value == SKIP_VALUE:
-            result = {"complainant_address_temp": SKIP_VALUE}
+        if slot_value == self.SKIP_VALUE:
+            result = {"complainant_address_temp": self.SKIP_VALUE}
             
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
@@ -579,10 +578,10 @@ class ValidateFormContact(BaseFormValidationAction):
         
         if slot_value == False:
             result = {"complainant_consent": False,
-                    "complainant_full_name": SKIP_VALUE,
-                    "complainant_phone": SKIP_VALUE,
-                    "complainant_email_temp": SKIP_VALUE,
-                    "complainant_email_confirmed": SKIP_VALUE
+                    "complainant_full_name": self.SKIP_VALUE,
+                    "complainant_phone": self.SKIP_VALUE,
+                    "complainant_email_temp": self.SKIP_VALUE,
+                    "complainant_email_confirmed": self.SKIP_VALUE
                     }
 
         if slot_value == True:
@@ -604,10 +603,10 @@ class ValidateFormContact(BaseFormValidationAction):
             domain
         )
     
-    def validate_complainant_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    async def validate_complainant_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
 
-        if SKIP_VALUE in slot_value:
-            result = {"complainant_full_name": SKIP_VALUE}
+        if self.SKIP_VALUE in slot_value:
+            result = {"complainant_full_name": self.SKIP_VALUE}
         
         elif not slot_value or slot_value.startswith('/'):
             result = {"complainant_full_name": None}
@@ -641,9 +640,9 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate phone number and set validation requirement."""
-        if SKIP_VALUE in slot_value:
+        if self.SKIP_VALUE in slot_value:
             result = {
-                "complainant_phone": SKIP_VALUE
+                "complainant_phone": self.SKIP_VALUE
             }
         elif slot_value.startswith("/"):
             result = {"complainant_phone": None}  
@@ -653,17 +652,18 @@ class ValidateFormContact(BaseFormValidationAction):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"complainant_phone": None}
-
-
-        
-        elif re.match(r'^09\d{9}$', slot_value) or re.match(r'^639\d{8}$', slot_value):
-            dispatcher.utter_message(text="You entered a PH number for validation.")
-            slot_value = slot_value.replace('09', '+639') if slot_value.startswith('09') else slot_value.replace('639', '+639') if slot_value.startswith('639') else slot_value
         else:
-            result = {
-            "complainant_phone": slot_value,
-            "phone_validation_required": True
-        }
+            if self.helpers.is_philippine_phone(slot_value):
+                result = {
+                    "complainant_phone": self.helpers.is_philippine_phone(slot_value),
+                    "phone_validation_required": True
+                }
+                dispatcher.utter_message(text="You entered a PH number for validation.")
+            else:
+                result = {
+                "complainant_phone": slot_value,
+                "phone_validation_required": True
+            }
         self.logger.debug(f"Validate complainant_phone: {result['complainant_phone']}")
         return result
 
@@ -676,7 +676,7 @@ class ValidateFormContact(BaseFormValidationAction):
         )
 
     async def validate_phone_validation_required(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        if slot_value and tracker.get_slot("complainant_phone") == SKIP_VALUE:
+        if slot_value and tracker.get_slot("complainant_phone") == self.SKIP_VALUE:
             result = {"phone_validation_required": None,
                     "complainant_phone": None}
         else:
@@ -702,10 +702,10 @@ class ValidateFormContact(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         language = get_language_code(tracker)
         #deal with the slot_skipped case
-        if slot_value == SKIP_VALUE:
-            result = {"complainant_email_temp": SKIP_VALUE,
+        if slot_value == self.SKIP_VALUE:
+            result = {"complainant_email_temp": self.SKIP_VALUE,
                     "complainant_email_confirmed": False,
-                    "complainant_email": SKIP_VALUE
+                    "complainant_email": self.SKIP_VALUE
                     }
             self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
             return result
@@ -763,8 +763,8 @@ class ValidateFormContact(BaseFormValidationAction):
         Returns:
             Dict containing updates to the relevant email slots based on user's choice
         """
-        if slot_value == SKIP_VALUE:
-            result = {"complainant_email_confirmed": SKIP_VALUE}
+        if slot_value == self.SKIP_VALUE:
+            result = {"complainant_email_confirmed": self.SKIP_VALUE}
         elif slot_value == "slot_confirmed":
             result = {"complainant_email_confirmed": True}
         elif slot_value == "slot_edited":
@@ -793,14 +793,14 @@ class ActionModifyContactInfo(BaseAction):
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         
-        if current_email and current_email != SKIP_VALUE:
+        if current_email and current_email != self.SKIP_VALUE:
             buttons = [i for i in buttons if "Add Email" or "इमेल परिवर्तन गर्नुहोस्" not in i['title']]
-        elif current_email == SKIP_VALUE:
+        elif current_email == self.SKIP_VALUE:
             buttons = [i for i in buttons if "Change Email" or "इमेल थप्नुहोस्"not in i['title']]
             
-        if current_phone and current_phone != SKIP_VALUE:
+        if current_phone and current_phone != self.SKIP_VALUE:
             buttons = [i for i in buttons if "Add Phone" or "फोन थप्नुहोस्" not in i['title']]
-        elif current_phone == SKIP_VALUE:
+        elif current_phone == self.SKIP_VALUE:
             buttons = [i for i in buttons if "Change Phone" or "फोन परिवर्तन गर्नुहोस्" not in i['title']]
             
         dispatcher.utter_message(text=message, buttons=buttons)

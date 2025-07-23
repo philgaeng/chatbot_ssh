@@ -7,16 +7,20 @@ from typing import Dict, Text, Any, Tuple, List, Callable
 from rapidfuzz import fuzz
 import re
 import traceback
-from .utterance_mapping_rasa import get_utterance_base, get_buttons_base
-from .mapping_buttons import VALIDATION_SKIP
+from .utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
+from .mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
-from backend.config.constants import DEFAULT_VALUES
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS
 from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
 
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
+DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+
 
 class LanguageHelper:
     """Helper class for language detection and skip word matching."""
@@ -151,9 +155,20 @@ class BaseAction(Action, ABC):
         self.helpers = helpers_repo
         self.messaging = Messaging()
         self.db_manager = db_manager
-        # Remove this line: self.language_code = self.get_language_code(tracker)
-        # The language code should be retrieved from the tracker within methods where the tracker is available,
-        # not in __init__, since tracker is not available at initialization.
+        self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS
+        self.SKIP_VALUE = SKIP_VALUE
+        self.VALIDATION_SKIP = VALIDATION_SKIP
+        self.DEFAULT_LANGUAGE_CODE = DEFAULT_LANGUAGE_CODE
+        self.DEFAULT_PROVINCE = DEFAULT_PROVINCE
+        self.DEFAULT_DISTRICT = DEFAULT_DISTRICT
+        self.BUTTON_SKIP = BUTTON_SKIP
+        self.BUTTON_AFFIRM = BUTTON_AFFIRM
+        self.BUTTON_DENY = BUTTON_DENY
+        self.DEFAULT_VALUES = DEFAULT_VALUES
+        self.TASK_STATUS = TASK_STATUS
+        self.GRIEVANCE_CLASSIFICATION_STATUS = GRIEVANCE_CLASSIFICATION_STATUS
+        self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
+        self.NOT_PROVIDED = self.DEFAULT_VALUES["NOT_PROVIDED"]
         
     @abstractmethod
     def name(self) -> Text:
@@ -167,23 +182,62 @@ class BaseAction(Action, ABC):
     def _update_language_code(self, tracker: Tracker) -> None:
         """Update the language code from tracker for use in validation methods."""
         if not hasattr(self, 'language_code'):
-            self.language_code = self.get_language_code(tracker)
+            self.language_code = tracker.get_slot("language_code") or self.DEFAULT_LANGUAGE_CODE
 
     def _initialize_language_and_helpers(self, tracker: Tracker) -> None:
         """Initialize language code and update all helper services."""
         self._update_language_code(tracker)
-        if self.helpers.keyword_detector.language_code != self.language_code:
-            self.helpers.init_language(self.language_code)
-        if self.helpers.location_validator.language_code != self.language_code:
-            self.helpers.init_language(self.language_code)
+        if not hasattr(self, 'keyword_detector'):
+            self.keyword_detector = self.helpers.keyword_detector
+        else:
+            if not hasattr(self.keyword_detector, 'language_code'):
+                self.keyword_detector._initialize_constants(self.language_code)
+            if self.keyword_detector.language_code != self.language_code:
+                self.keyword_detector._initialize_constants(self.language_code)
 
-    def get_utterance(self, utterance_index: int) -> str:
-        
+        if not hasattr(self, 'location_validator'):
+            self.location_validator = self.helpers.location_validator
+        else:
+            if not hasattr(self.location_validator, 'language_code'):
+                self.location_validator._initialize_constants(self.language_code)
+            if self.location_validator.language_code != self.language_code:
+                self.location_validator._initialize_constants(self.language_code)
+
+    def detect_sensitive_content(self, dispatcher: CollectingDispatcher, slot_value: str) -> Dict[Text, Any]:
+        """Check for sensitive content using keyword detection"""
+        detection_result = self.helpers.detect_sensitive_content(slot_value, self.language_code)
+        #handle the case where sensitive content is detected
+        if detection_result.get("detected") and detection_result.get("action_required"):
+            self.logger.info(f"🚨 SENSITIVE CONTENT DETECTED: {detection_result.get('category')} - {detection_result.get('level')}")
+            self.logger.info(f"Confidence: {detection_result.get('confidence')}")
+            self.logger.info(f"Message: {detection_result.get('message')}")
+            
+            return {
+                "sensitive_issues_detected": True,
+                "sensitive_issues_category": detection_result.get('category'),
+                "sensitive_issues_level": detection_result.get('level'),
+                "sensitive_issues_message": detection_result.get('message'),
+                "sensitive_issues_confidence": detection_result.get('confidence')
+            }
+        return {}
+
+    def dispatch_sensitive_content_utterances_and_buttons(self, dispatcher: CollectingDispatcher) -> None:
+        for i in range(1, len(self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['utterances']) + 1):
+            dispatcher.utter_message(
+                text=self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['utterances'][i][self.language_code]
+            )
+        buttons = self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['buttons'][1][self.language_code]
+        dispatcher.utter_message(
+            buttons=buttons
+        )
+
+    def get_utterance(self, utterance_index: int=1):
         return get_utterance_base(self.file_name, self.name(), utterance_index, self.language_code)
     
-    def get_buttons(self, button_index: int) -> list:
+    def get_buttons(self, button_index: int=1):
         return get_buttons_base(self.file_name, self.name(), button_index, self.language_code)
-    
+            
+
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
         Standard run method with automatic logging.
@@ -192,15 +246,15 @@ class BaseAction(Action, ABC):
         self._initialize_language_and_helpers(tracker)
         action_detailed_name = self.file_name + "-" + self.name()
         #I want to get the name of the file where the action is defined
-        
-        self.session_id = tracker.session_id
+        if not hasattr(self, 'session_id'):
+            self.session_id = tracker.sender_id
         
         # Log action start
         self.logger.debug(f"Action started: {action_detailed_name} | Session: {self.session_id}")
         
         try:
             # Execute the actual action logic
-            result = self.execute_action(dispatcher, tracker, domain)
+            result = await self.execute_action(dispatcher, tracker, domain)
             
             # Log successful completion
             self.logger.debug(f"Action completed: {action_detailed_name} | Session: {self.session_id}")
@@ -230,7 +284,7 @@ class BaseAction(Action, ABC):
         raise NotImplementedError("Subclasses must implement execute_action()")
 
 
-class BaseFormValidationAction(FormValidationAction, ABC):
+class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
     """Abstract base class for form validation with skip handling and language detection.
     
     This class defines the interface and common functionality that all form validation
@@ -240,9 +294,9 @@ class BaseFormValidationAction(FormValidationAction, ABC):
 
     def __init__(self):
         """Initialize shared resources."""
-        super().__init__()  # Call parent's __init__
-        self.lang_helper = LanguageHelper()
-        self.helpers = helpers_repo
+        FormValidationAction.__init__(self)
+        BaseAction.__init__(self)
+
 
     @abstractmethod
     def name(self) -> Text:
@@ -253,13 +307,9 @@ class BaseFormValidationAction(FormValidationAction, ABC):
         """
         pass
 
-    def _update_language_code(self, tracker: Tracker) -> None:
-        """Update the language code from tracker for use in validation methods."""
-        if not hasattr(self, 'language_code'):
-            self.language_code = self.get_language_code(tracker)
-
-    def get_utterance(self, utterance_index: int=1) -> str:
+    def get_utterance(self, utterance_index: int=1):
         function_name = inspect.currentframe().f_back.f_code.co_name
+        self.logger.debug(f"get_utterance called from function: {function_name}")
         return get_utterance_base(self.file_name, function_name, utterance_index, self.language_code)
     
     def get_buttons(self, button_index: int=1) -> list:
@@ -348,6 +398,15 @@ class BaseFormValidationAction(FormValidationAction, ABC):
                 "skip_validation_needed": None,
                 "skipped_detected_text": None
             }
+
+    def check_form_function_name(self, form_name: str, function_name: str) -> bool:
+        try:
+            UTTERANCE_MAPPING[form_name][function_name]
+            self.logger.debug(f"check_form_function_name: form_name: {form_name} | function_name: {function_name}")
+            self.logger.debug(f"UTTERANCE_MAPPING {form_name}: {UTTERANCE_MAPPING[form_name]}")
+            self.logger.debug(f"UTTERANCE_MAPPING {form_name}[{function_name}]: {UTTERANCE_MAPPING[form_name][function_name]}")
+        except Exception as e:
+            self.logger.error(f"Error in check_form_function_name: {e} | form_name: {form_name} | function_name: {function_name}")
 
     async def _handle_slot_extraction(
         self,

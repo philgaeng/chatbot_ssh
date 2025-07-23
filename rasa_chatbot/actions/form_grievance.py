@@ -10,17 +10,7 @@ from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
-from rasa_chatbot.actions.utils.utterance_mapping_rasa import  BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
-
-DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
-DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
-DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
-
-SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
-SUCCESS = TASK_STATUS["SUCCESS"]
-ERROR = TASK_STATUS["ERROR"]
-IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
+from backend.config.constants import EMAIL_TEMPLATES
 
 
 
@@ -31,7 +21,7 @@ class ActionSubmitGrievanceAsIs(BaseAction):
     def name(self) -> Text:
         return "action_submit_grievance_as_is"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         grievance_description = tracker.get_slot("grievance_description")
         if grievance_description:
             dispatcher.utter_message(response="utter_grievance_submitted_as_is", grievance_description=grievance_description)
@@ -50,8 +40,8 @@ class ActionStartGrievanceProcess(BaseAction):
         # reset the form parameters
         BaseFormValidationAction.message_display_list_cat = True
         set_id_data = {
-            'complainant_province': tracker.get_slot("complainant_province") or DEFAULT_PROVINCE,
-            'complainant_district': tracker.get_slot("complainant_district") or DEFAULT_DISTRICT,
+            'complainant_province': tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE,
+            'complainant_district': tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT,
             'complainant_office': tracker.get_slot("complainant_office") or None,
             'source': 'bot'
         }
@@ -95,10 +85,10 @@ class ActionStartGrievanceProcess(BaseAction):
 
 ############################ STEP 1 - GRIEVANCE FORM DETAILS ############################
 
-class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton instance directly
+class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instance directly
         
     def name(self) -> Text:
-        return "validate_grievance_description_form"
+        return "validate_form_grievance"
     
     async def _trigger_async_classification(self, tracker: Tracker, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
         """
@@ -114,11 +104,11 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
         # If no grievance details or ID, skip classification
         if not grievance_description or not grievance_id:
             return {
-                "classification_status": SKIP_VALUE,
+                "classification_status": self.SKIP_VALUE,
                 "grievance_summary": "",
                 "grievance_categories": [],
-                "grievance_summary_status": SKIP_VALUE,
-                "grievance_categories_status": SKIP_VALUE
+                "grievance_summary_status": self.SKIP_VALUE,
+                "grievance_categories_status": self.SKIP_VALUE
             }
             
         try:
@@ -128,8 +118,8 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
                 'grievance_id': grievance_id,
                 'complainant_id': tracker.get_slot("complainant_id"),
                 'language_code': self.language_code,
-                'complainant_province': tracker.get_slot("complainant_province") or DEFAULT_PROVINCE,
-                'complainant_district': tracker.get_slot("complainant_district") or DEFAULT_DISTRICT,
+                'complainant_province': tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE,
+                'complainant_district': tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT,
                 'values': {
                     'grievance_description': grievance_description
                 }
@@ -144,18 +134,18 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             # Return slots to indicate async processing
             return {
                 "classification_task_id": task_id,
-                "classification_status": IN_PROGRESS
+                "classification_status": self.TASK_STATUS["IN_PROGRESS"]
             }
             
         except Exception as e:
             self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
             return {
-                "classification_status": ERROR,
+                "classification_status": self.TASK_STATUS["ERROR"],
                 "grievance_summary": "",
                 "grievance_categories": [],
-                "grievance_summary_status": SKIP_VALUE,
-                "grievance_categories_status": SKIP_VALUE
+                "grievance_summary_status": self.SKIP_VALUE,
+                "grievance_categories_status": self.SKIP_VALUE
             }
     
     async def required_slots(
@@ -167,6 +157,8 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
     ) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed"
+        if tracker.get_slot("sensitive_issues_reported"):
+            return ["sensitive_issues_follow_up", "grievance_new_detail"]
         if tracker.get_slot("grievance_new_detail") == "completed":
             
             return []  # This will deactivate the form
@@ -177,6 +169,15 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
     async def _dispatch_openai_message(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]):
         if tracker.latest_message.get("text") == "/submit_details":
             dispatcher.utter_message(text="Calling OpenAI for classification... This may take a few seconds...")
+
+    def _update_grievance_text(self, current_text: str, new_text: str) -> str:
+        """Helper method to update the grievance text."""
+        # handle the cases where the new text is a payload
+        if new_text.startswith('/'):
+            new_text = ""
+        updated = current_text + "\n" + new_text if current_text else new_text
+        updated = updated.strip()
+        return updated
 
     async def extract_grievance_new_detail(
         self,
@@ -237,38 +238,16 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             
             # Handle valid grievance text
             if slot_value and not slot_value.startswith('/'):
+                #update the grievance description with the new detail
+                updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
                 # Check for sensitive content using keyword detection
-                detection_result = self.helpers.detect_sensitive_content(slot_value, self.language_code)
-                
-                #handle the case where sensitive content is detected
-                if detection_result.detected and detection_result.action_required:
-                    self.logger.info(f"🚨 SENSITIVE CONTENT DETECTED: {detection_result.category} - {detection_result.level}")
-                    self.logger.info(f"Confidence: {detection_result.confidence}")
-                    self.logger.info(f"Message: {detection_result.message}")
-                    
-                    # Store detection result for later use
-                    slots_to_set = {
-                        "sensitive_content_detected": True,
-                        "sensitive_content_category": detection_result.category,
-                        "sensitive_content_level": detection_result.level.value,
-                        "sensitive_content_message": detection_result.message,
-                        "sensitive_content_confidence": detection_result.confidence
-                    }
-                    
-                    # Send detection message with buttons
-                    buttons = detector.get_detection_buttons(detection_result)
-                    dispatcher.utter_message(
-                        text=detection_result.message,
-                        buttons=buttons
-                    )
-                    
-                    # Don't process the grievance text yet - wait for user response
-                    return slots_to_set
+                sensitive_content_result = self.detect_sensitive_content(dispatcher, slot_value)
+                if sensitive_content_result:
+                    sensitive_content_result["grievance_description"] = updated_temp
+                    sensitive_content_result["grievance_new_detail"] = "completed"
+                    return sensitive_content_result
                 
                 #handle the case where sensitive content is not detected
-                updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
-                
-                
                 return {
                     "grievance_new_detail": None,
                     "grievance_description": updated_temp,
@@ -278,21 +257,11 @@ class ValidateGrievanceDetailsForm(BaseFormValidationAction):# Use the singleton
             self.logger.error(f"Error in validate_grievance_new_detail: {e}")
             raise Exception(f"Error in validate_grievance_new_detail: {e}")
 
-        
 
-
-    def _update_grievance_text(self, current_text: str, new_text: str) -> str:
-        """Helper method to update the grievance text."""
-        # handle the cases where the new text is a payload
-        if new_text.startswith('/'):
-            new_text = ""
-        updated = current_text + "\n" + new_text if current_text else new_text
-        updated = updated.strip()
-        return updated
     
-class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
+class ActionAskGrievanceNewDetail(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_description_form_grievance_new_detail"
+        return "action_ask_grievance_new_detail"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         slot_grievance_description_status = tracker.get_slot("grievance_description_status")
@@ -316,6 +285,8 @@ class ActionAskGrievanceDetailsFormGrievanceNewDetail(BaseAction):
             dispatcher.utter_message(text=utterance, buttons=buttons)
             
         return []
+
+
 
 
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
@@ -360,7 +331,7 @@ class ActionSubmitGrievance(BaseAction):
                                                           "grievance_summary"
                                                           ]}
         
-        grievance_data["grievance_status"] = GRIEVANCE_STATUS["SUBMITTED"]
+        grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp
         grievance_data["grievance_timeline"] = grievance_timeline
@@ -373,8 +344,8 @@ class ActionSubmitGrievance(BaseAction):
     def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update the values of the grievance data for the database storage."""
         for key, value in grievance_data.items():
-            if value == SKIP_VALUE or value is None:
-                grievance_data[key] = DEFAULT_VALUES["NOT_PROVIDED"]
+            if value == self.SKIP_VALUE or value is None:
+                grievance_data[key] = self.NOT_PROVIDED
         return grievance_data
     
     def _get_attached_files_info(self, grievance_id: str) -> str:
@@ -419,7 +390,7 @@ class ActionSubmitGrievance(BaseAction):
                                                          'complainant_email',
                                                          'complainant_phone',
                                                          'grievance_outro',
-                                                         'grievance_timeline'] if grievance_data.get(i) is not DEFAULT_VALUES["NOT_PROVIDED"]]
+                                                         'grievance_timeline'] if grievance_data.get(i) is not self.NOT_PROVIDED]
         
         message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
                                             grievance_timestamp=grievance_data['grievance_timestamp'],
@@ -443,7 +414,7 @@ class ActionSubmitGrievance(BaseAction):
         
         json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
         
-        if email_data['grievance_categories'] and email_data['grievance_categories'] != DEFAULT_VALUES["NOT_PROVIDED"]:
+        if email_data['grievance_categories'] and email_data['grievance_categories'] != self.NOT_PROVIDED:
             categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_categories'] or []))
         else:
             categories_html = ""
@@ -468,7 +439,7 @@ class ActionSubmitGrievance(BaseAction):
         if body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
             body = EMAIL_TEMPLATES[body_name].format(
                 json_data=json_data,
-                grievance_status=GRIEVANCE_STATUS["SUBMITTED"],
+                grievance_status=self.GRIEVANCE_STATUS["SUBMITTED"],
             )
 
         subject = EMAIL_TEMPLATES["GRIEVANCE_RECAP_SUBJECT"].format(
@@ -494,7 +465,7 @@ class ActionSubmitGrievance(BaseAction):
     #         ic(utterance, buttons)
     #         dispatcher.utter_message(text=utterance, buttons=buttons)
     
-    def _send_last_utterance_buttons(self, 
+    def send_last_utterance_buttons(self, 
                                      gender_tag: bool, 
                                      has_files: bool, 
                                      dispatcher: CollectingDispatcher) -> str:
@@ -551,7 +522,7 @@ class ActionSubmitGrievance(BaseAction):
             if grievance_data.get('otp_verified') == True:
                 #send sms
                 complainant_phone = grievance_data.get('complainant_phone')
-                if complainant_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
+                if complainant_phone != self.NOT_PROVIDED:
                     self.sms_client.send_sms(complainant_phone, confirmation_message)
                     #utter sms confirmation message
                     utterance = self.get_utterance(2)
@@ -566,10 +537,10 @@ class ActionSubmitGrievance(BaseAction):
             
             #send email to user
             complainant_email = grievance_data.get('complainant_email')
-            if complainant_email and complainant_email != DEFAULT_VALUES["NOT_PROVIDED"]:
+            if complainant_email and complainant_email != self.NOT_PROVIDED:
                 await self._send_grievance_recap_email([complainant_email], 
                                                        grievance_data, 
-                                                       "GRIEVANCE_RECAP_complainant_BODY", 
+                                                       "GRIEVANCE_RECAP_COMPLAINANT_BODY", 
                                                        dispatcher=dispatcher)
                 
                 # Send email confirmation message
@@ -578,7 +549,7 @@ class ActionSubmitGrievance(BaseAction):
                 dispatcher.utter_message(text=utterance)
             
             #send the last utterance and buttons
-            self._send_last_utterance_buttons(self.gender_issues_reported, 
+            self.send_last_utterance_buttons(self.gender_issues_reported, 
                                               
                                                 self._get_attached_files_info(self.grievance_id)["has_files"],
                                                 dispatcher=dispatcher)
@@ -599,7 +570,7 @@ class ActionSubmitGrievance(BaseAction):
                 
             # Prepare events
             return [
-                SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"])
+                SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"])
             ]
 
         except Exception as e:
