@@ -12,7 +12,7 @@ class AskMenuFormLanguageCode(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_menu_language_code"
     
-    def execute_action(self,
+    async def execute_action(self,
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
             domain: Dict[Text, Any]
@@ -26,7 +26,7 @@ class AskMenuFormMainStory(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_menu_main_story"
     
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = tracker.latest_message.get('text', '')
         province = tracker.get_slot("complainant_province")
         district = tracker.get_slot("complainant_district")
@@ -62,7 +62,7 @@ class ValidateMenuForm(BaseFormValidationAction):
             domain
         )
     
-    def validate_language_code(self, slot_value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    async def validate_language_code(self, slot_value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         self.logger.info("validate_language_code")
         value = slot_value.strip("/")
         if value not in ["en", "ne"]:
@@ -79,7 +79,7 @@ class ValidateMenuForm(BaseFormValidationAction):
             domain
         )
     
-    def validate_main_story(self, slot_value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    async def validate_main_story(self, slot_value: Text, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         
         value = slot_value.strip("/")
         self.logger.info(f"validate_main_story: {value}")

@@ -37,7 +37,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
             if not data.get('source'):
-                source = self.get_grievance_or_user_source(grievance_id)
+                source = self.get_grievance_or_complainant_source(grievance_id)
                 data['source'] = source
                 
             self.logger.info(f"create_grievance: Creating grievance with ID: {grievance_id}")

@@ -85,6 +85,10 @@ function handleSessionConfirm(sessionState) {
 
   setTimeout(() => {
     sessionState.started = true;
+    // Also update the global session state
+    if (window.sessionState) {
+      window.sessionState.started = true;
+    }
     console.log("Session fully initialized, sending initial message...");
     if (!window.sessionInitialized) {
       window.sendIntroduceMessage();

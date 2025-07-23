@@ -60,7 +60,7 @@ class ActionTriggerSummaryForm(BaseAction):
         elif classification_status == FAILED: #no followup action is needed
             return []
 
-class ValidateGrievanceSummaryForm(BaseFormValidationAction):
+class ValidateFormGrievanceSummary(BaseFormValidationAction):
     # Class variable to track messagBe display
     BaseFormValidationAction.message_display_list_cat = True
     
@@ -69,7 +69,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
         super().__init__()
         
     def name(self) -> Text:
-        return "validate_grievance_summary_form"
+        return "validate_form_grievance_summary"
     
     
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
@@ -83,17 +83,17 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
     
     
 
-    def _detect_gender_issues(self, tracker: Tracker) -> bool:
+    def _detect_sensitive_issues_category(self, tracker: Tracker) -> bool:
         """
-        Detects gender issues in the grievance list of categories
+        Detects sensitive issues in the grievance list of categories
         """
         
         categories = tracker.get_slot("grievance_categories")
-        gender_issues_detected = any("gender" in category.lower() for category in categories)
-        #check if the string "gender" is in any of the categories in the list_of_cat
-        return gender_issues_detected
+        sensitive_issues_detected = any("sensitive" in category.lower() for category in categories)
+        #check if the string "sensitive" is in any of the categories in the list_of_cat
+        return sensitive_issues_detected
     
-    def _report_gender_issues(self, 
+    def _report_sensitive_issues_category(self, 
                                  dispatcher: CollectingDispatcher, 
                                  tracker: Tracker):
             """
@@ -107,7 +107,7 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
                     "grievance_categories": tracker.get_slot("grievance_categories"),
                     "grievance_summary": tracker.get_slot("grievance_summary_temp"),
                     "grievance_summary_confirmed": SKIP_VALUE,
-                    "gender_issues_reported": True}
+                    "sensitive_issues_reported": True}
             
     async def extract_grievance_categories_status(self, 
                                                    dispatcher: CollectingDispatcher,
@@ -133,8 +133,8 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             
             # Fallback to original logic if no async results
             if slot_value == "slot_confirmed":
-                if self._detect_gender_issues(tracker):
-                    return self._report_gender_issues(dispatcher, tracker)
+                if self._detect_sensitive_issues_category(tracker):
+                    return self._report_sensitive_issues_category(dispatcher, tracker)
                 else:
                     return {"grievance_categories_status": complainant_CONFIRMED}
                 
@@ -233,9 +233,9 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             #reset the message_display_list_cat to True
             BaseFormValidationAction.message_display_list_cat = True
             
-            #deal with the case where gender issues is part of list_of_cat
-            if self._detect_gender_issues(tracker):
-                return self._report_gender_issues(dispatcher, tracker)
+            #deal with the case where sensitive issues is part of list_of_cat
+            if self._detect_sensitive_issues_category(tracker):
+                return self._report_sensitive_issues_category(dispatcher, tracker)
                 
             return {
                 "grievance_categories": list_of_cat,
@@ -319,49 +319,11 @@ class ValidateGrievanceSummaryForm(BaseFormValidationAction):
             self.logger.error(f"Error in validate_grievance_summary_temp: {e}")
             return {}
 
-    async def extract_gender_follow_up(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        return await self._handle_slot_extraction(
-            "gender_follow_up",
-            tracker,
-            dispatcher,
-            domain
-        )
-        
-    async def validate_gender_follow_up(self, slot_value: Any,
-                                                   dispatcher: CollectingDispatcher, 
-                                                   tracker: Tracker, 
-                                                   domain: Dict[Text, Any]
-                                                   ) -> List[Dict[Text, Any]]:
-        
-        slots = {"complainant_location_consent": False,
-                    "complainant_municipality_temp": SKIP_VALUE,
-                    "complainant_municipality": SKIP_VALUE,
-                    "complainant_municipality_confirmed": False,
-                    "complainant_village": SKIP_VALUE,
-                    "complainant_address_temp": SKIP_VALUE,
-                    "complainant_address": SKIP_VALUE,
-                    "complainant_address_confirmed": False,
-                    "complainant_consent": SKIP_VALUE,
-                    "complainant_full_name": SKIP_VALUE,
-                    "complainant_phone": SKIP_VALUE,
-                    "phone_validation_required": False,
-                    "complainant_email_temp": SKIP_VALUE,
-                    "complainant_email_confirmed": SKIP_VALUE
-                    }
-        
-        if slot_value == "/exit" or SKIP_VALUE in slot_value:
-            return slots
-        if slot_value == "/anonymous_with_phone":
-            slots["complainant_consent"] = "anonymous_with_phone"
-            slots["complainant_full_name"] = None
-            slots["complainant_phone"] = None
-            slots["phone_validation_required"] = True
-            return slots
-        return {}
+
 
 class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_categories_status"
+        return "action_ask_form_grievance_summary_grievance_categories_status"
 
     async def execute_action(
         self,
@@ -422,7 +384,7 @@ class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
 
 class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_cat_modify"
+        return "action_ask_form_grievance_summary_grievance_cat_modify"
     
     async def execute_action(
         self, 
@@ -461,7 +423,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
     
 class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_summary_status"
+        return "action_ask_form_grievance_summary_grievance_summary_status"
     
     async def execute_action(
         self,
@@ -483,7 +445,7 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
 
 class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_grievance_summary_temp"
+        return "action_ask_form_grievance_summary_grievance_summary_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
@@ -717,9 +679,9 @@ class ActionSubmitLLMValidatedGrievance(BaseAction):
         try:
             # Collect grievance data
             grievance_data = self.collect_grievance_data(tracker)
-            self.helpers.grievance_repo.update_grievance(grievance_id=self.grievance_id,
+            self.db_manager.update_grievance(grievance_id=self.grievance_id,
                                                     data=grievance_data)
-            self.helpers.grievance_repo.update_grievance_status(grievance_id=self.grievance_id,
+            self.db_manager.update_grievance_status(grievance_id=self.grievance_id,
                                                     status=GRIEVANCE_STATUS["SUBMITTED"])
 
         

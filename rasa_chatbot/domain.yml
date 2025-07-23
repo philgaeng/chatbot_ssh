@@ -27,12 +27,6 @@ x-common-ignore-intents: &common-ignore-intents
   - affirm_sensitive_content
   - deny_sensitive_content
 
-# Define form-specific ignore intents
-x-form-specific-intents: &form-specific-intents
-  - nlu_fallback
-  - slot_extraction
-  - start_grievance_process
-
 version: "3.1"
 session_config:
   session_expiration_time: 300 # 5 minutes instead of 1 minute
@@ -116,16 +110,6 @@ slots:
       - new_complainant
       - modify_grievance
       - modify_contact
-    influence_conversation: true
-    mappings:
-      - type: custom
-  gender_issues_reported:
-    type: bool
-    influence_conversation: true
-    mappings:
-      - type: custom
-  gender_follow_up:
-    type: bool
     influence_conversation: true
     mappings:
       - type: custom
@@ -401,28 +385,43 @@ slots:
     type: text
     mappings:
       - type: custom
-  sensitive_content_detected:
+  sensitive_issues_detected:
     type: bool
     influence_conversation: true
     mappings:
       - type: custom
-  sensitive_content_category:
+  sensitive_issues_category:
     type: text
     influence_conversation: false
     mappings:
       - type: custom
-  sensitive_content_level:
+  sensitive_issues_level:
     type: text
     influence_conversation: false
     mappings:
       - type: custom
-  sensitive_content_message:
+  sensitive_issues_message:
     type: text
     influence_conversation: false
     mappings:
       - type: custom
-  sensitive_content_confidence:
+  sensitive_issues_confidence:
     type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  sensitive_issues_follow_up:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  sensitive_issues_nickname:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  sensitive_issues_new_detail:
+    type: text
     influence_conversation: false
     mappings:
       - type: custom
@@ -450,29 +449,19 @@ actions:
   - action_ask_form_contact_complainant_municipality_temp
   - action_ask_form_contact_complainant_province
   - action_ask_form_contact_complainant_village
-  - action_ask_form_contact_phone_validation_required
-  - action_ask_grievance_description_form_grievance_new_detail
-  - action_ask_grievance_id_form_grievance_id
-  - action_ask_grievance_summary_form_gender_follow_up
-  - action_ask_grievance_summary_form_grievance_categories_status
-  - action_ask_grievance_summary_form_grievance_cat_modify
-  - action_ask_grievance_summary_form_grievance_summary_status
-  - action_ask_grievance_summary_form_grievance_summary_temp
-  - action_ask_form_contact_complainant_address_confirmed
-  - action_ask_form_contact_complainant_address_temp
-  - action_ask_form_contact_complainant_district
-  - action_ask_form_contact_complainant_location_consent
-  - action_ask_form_contact_complainant_municipality_confirmed
-  - action_ask_form_contact_complainant_municipality_temp
-  - action_ask_form_contact_complainant_province
-  - action_ask_form_contact_complainant_village
+  - action_ask_grievance_new_detail
+  - action_ask_sensitive_issues_follow_up
+  - action_ask_sensitive_issues_nickname
+  - action_ask_sensitive_issues_new_detail
+  - action_ask_form_sensitive_issues_complainant_phone
   - action_ask_form_menu_language_code
   - action_ask_form_menu_main_story
-  - action_ask_form_otp_otp_consent
-  - action_ask_form_otp_otp_input
-  - action_ask_form_otp_otp_number
-  - action_ask_summary
-  - action_ask_for_complainant_summary
+  - action_ask_otp_consent
+  - action_ask_otp_input
+  - action_ask_otp_number
+  - action_ask_form_grievance_summary_grievance_cat_modify
+  - action_ask_form_grievance_summary_grievance_summary_status
+  - action_ask_form_grievance_summary_grievance_summary_temp
   - action_attach_file
   - action_back_to_previous_step
   - action_check_status
@@ -484,10 +473,7 @@ actions:
   - action_custom_fallback
   - action_default_fallback
   - action_display_grievance
-  - action_edit_grievance_summary
-  - action_emit_status_update
   - action_exit_without_filing
-  - action_generate_grievance_id
   - action_go_back
   - action_goodbye
   - action_handle_mood_great
@@ -499,7 +485,6 @@ actions:
   - action_mood_unhappy
   - action_question_attach_files
   - action_recommend_phone_validation
-  - action_reopen_conversation_for_emit_status_update
   - action_respond_to_challenge
   - action_restart_grievance
   - action_restart_story
@@ -518,18 +503,18 @@ actions:
   - action_submit_grievance
   - action_submit_grievance_as_is
   - action_submit_llm_validated_grievance
+  - action_trigger_form_grievance_summary
   - action_validate_categories
   - action_validate_summary
   - action_handle_sensitive_content_affirm
   - action_handle_sensitive_content_deny
   - validate_form_contact
-  - validate_grievance_description_form
-  - validate_grievance_id_form
-  - validate_grievance_summary_form
-  - validate_form_contact
+  - validate_form_grievance
+  - validate_form_grievance_summary
+  - validate_form_grievance_id
   - validate_form_menu
   - validate_form_otp
-  - action_trigger_summary_form
+  - validate_form_sensitive_issues
   - action_outro
 
 forms:
@@ -565,14 +550,18 @@ forms:
     required_slots:
       - grievance_id
     ignored_intents: *common-ignore-intents
-  grievance_description_form:
+  form_grievance:
     required_slots:
       - grievance_new_detail
     ignored_intents: *common-ignore-intents
-  grievance_summary_form:
+  form_grievance_summary:
     required_slots:
       - grievance_categories
       - grievance_summary
       - grievance_categories_status
       - grievance_summary_status
+    ignored_intents: *common-ignore-intents
+  form_sensitive_issues:
+    required_slots:
+      - sensitive_issues_follow_up
     ignored_intents: *common-ignore-intents

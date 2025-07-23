@@ -42,98 +42,98 @@ class ActionWrapper(BaseAction):
 
 
 
-class ActionReopenConversationForEmitStatusUpdate(BaseAction):
-    def name(self) -> Text:
-        return "action_reopen_conversation_for_emit_status_update"
+# class ActionReopenConversationForEmitStatusUpdate(BaseAction):
+#     def name(self) -> Text:
+#         return "action_reopen_conversation_for_emit_status_update"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        return []
+#     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+#         return []
 
-class ActionEmitStatusUpdate(BaseAction):
-    def name(self) -> Text:
-        return "action_emit_status_update"
+# class ActionEmitStatusUpdate(BaseAction):
+#     def name(self) -> Text:
+#         return "action_emit_status_update"
     
-    def extract_slots_to_update(self, data: Dict[Text, Any], domain: DomainDict) -> List[Dict[Text, Any]]:
-        task_name = data.get("task_name")
-        task_status = data.get("status")
-        values = data.get("values", {})
+#     def extract_slots_to_update(self, data: Dict[Text, Any], domain: DomainDict) -> List[Dict[Text, Any]]:
+#         task_name = data.get("task_name")
+#         task_status = data.get("status")
+#         values = data.get("values", {})
         
-        # Extract domain slots included in the values
-        slots_to_set = []
-        for slot_name, slot_value in values.items():
-            if slot_name in domain["slots"]:
-                slots_to_set.append(SlotSet(slot_name, slot_value))
+#         # Extract domain slots included in the values
+#         slots_to_set = []
+#         for slot_name, slot_value in values.items():
+#             if slot_name in domain["slots"]:
+#                 slots_to_set.append(SlotSet(slot_name, slot_value))
         
-        # Add task-specific slot if mapped
-        if task_name in TASK_SLOTS_TO_UPDATE_MAP:
-            slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
-            slots_to_set.append(SlotSet(slot_name, task_status))
+#         # Add task-specific slot if mapped
+#         if task_name in TASK_SLOTS_TO_UPDATE_MAP:
+#             slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
+#             slots_to_set.append(SlotSet(slot_name, task_status))
         
-        # Clear the data_to_emit slot
-        slots_to_set.append(SlotSet("data_to_emit", None))
+#         # Clear the data_to_emit slot
+#         slots_to_set.append(SlotSet("data_to_emit", None))
         
-        return slots_to_set
+#         return slots_to_set
 
-    def extract_followup_action(self, data: Dict[Text, Any], domain: DomainDict) -> Text:
-        task_name = data.get("task_name")
-        if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
-            return TASK_SLOTS_TO_UPDATE_MAP[task_name]['followup_action']
-        return None
+#     def extract_followup_action(self, data: Dict[Text, Any], domain: DomainDict) -> Text:
+#         task_name = data.get("task_name")
+#         if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
+#             return TASK_SLOTS_TO_UPDATE_MAP[task_name]['followup_action']
+#         return None
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        self.logger.debug(f"🔍 [RASA DEBUG] ActionEmitStatusUpdate triggered")
-        self.logger.debug(f"   - data_to_emit slot: {tracker.get_slot('data_to_emit')}")
+#     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+#         self.logger.debug(f"🔍 [RASA DEBUG] ActionEmitStatusUpdate triggered")
+#         self.logger.debug(f"   - data_to_emit slot: {tracker.get_slot('data_to_emit')}")
         
-        if tracker.get_slot("data_to_emit") is None:
-            self.logger.error(f"{self.name()} - ❌ [RASA DEBUG] No data to emit - raising exception")
-            raise Exception("No data to emit")
+#         if tracker.get_slot("data_to_emit") is None:
+#             self.logger.error(f"{self.name()} - ❌ [RASA DEBUG] No data to emit - raising exception")
+#             raise Exception("No data to emit")
         
-        data = tracker.get_slot("data_to_emit")
-        task_status = data.get("status")
-        task_name = data.get("task_name")
-        task_id = data.get("task_id", 'not_provided')
+#         data = tracker.get_slot("data_to_emit")
+#         task_status = data.get("status")
+#         task_name = data.get("task_name")
+#         task_id = data.get("task_id", 'not_provided')
         
-        self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Processing task: {task_name}, status: {task_status}")
-        self.logger.debug(f"{self.name()} -   - Full data: {data}")
+#         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Processing task: {task_name}, status: {task_status}")
+#         self.logger.debug(f"{self.name()} -   - Full data: {data}")
         
-        if task_status in [SUCCESS, FAILED]:  # Only emit status update for success or failure to not clutter websocket
-            # Structure the data for frontend consumption
-            structured_data = {
-                'task_status': {
-                    'task_id': task_id,
-                    'status': task_status,
-                    'result': data if task_status == SUCCESS else None,
-                    'error': data if task_status == FAILED else None
-                }
-            }
-            self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Emitting status update via dispatcher.utter_message: {structured_data}")
-            dispatcher.utter_message(json_message=structured_data)
-            if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
-                slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
-                self.logger.debug(f"{self.name()} -   - Setting slot {slot_name} to {task_status}")
-                return [SlotSet(slot_name, task_status)]
+#         if task_status in [SUCCESS, FAILED]:  # Only emit status update for success or failure to not clutter websocket
+#             # Structure the data for frontend consumption
+#             structured_data = {
+#                 'task_status': {
+#                     'task_id': task_id,
+#                     'status': task_status,
+#                     'result': data if task_status == SUCCESS else None,
+#                     'error': data if task_status == FAILED else None
+#                 }
+#             }
+#             self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Emitting status update via dispatcher.utter_message: {structured_data}")
+#             dispatcher.utter_message(json_message=structured_data)
+#             if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
+#                 slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
+#                 self.logger.debug(f"{self.name()} -   - Setting slot {slot_name} to {task_status}")
+#                 return [SlotSet(slot_name, task_status)]
                 
-        if task_status == SUCCESS:
-            self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Processing SUCCESS status")
-            # Structure the data for frontend consumption
-            structured_data = {
-                'task_status': {
-                    'task_id': task_id,
-                    'status': task_status,
-                    'result': data
-                }
-            }
-            dispatcher.utter_message(json_message=structured_data)
-            slots_to_set = self.extract_slots_to_update(data, domain)
-            followup_action = self.extract_followup_action(data, domain)
-            if followup_action:
-                self.logger.debug(f"{self.name()} -   - Adding followup action: {followup_action}")
-                slots_to_set.append(FollowupAction(followup_action))
-            self.logger.debug(f"{self.name()} -   - Returning slots: {slots_to_set}")
-            return slots_to_set
-        else:
-            self.logger.debug(f"{self.name()} - ⚠️ [RASA DEBUG] Task status not in [SUCCESS, FAILED]: {task_status}")
-            return []
+#         if task_status == SUCCESS:
+#             self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Processing SUCCESS status")
+#             # Structure the data for frontend consumption
+#             structured_data = {
+#                 'task_status': {
+#                     'task_id': task_id,
+#                     'status': task_status,
+#                     'result': data
+#                 }
+#             }
+#             dispatcher.utter_message(json_message=structured_data)
+#             slots_to_set = self.extract_slots_to_update(data, domain)
+#             followup_action = self.extract_followup_action(data, domain)
+#             if followup_action:
+#                 self.logger.debug(f"{self.name()} -   - Adding followup action: {followup_action}")
+#                 slots_to_set.append(FollowupAction(followup_action))
+#             self.logger.debug(f"{self.name()} -   - Returning slots: {slots_to_set}")
+#             return slots_to_set
+#         else:
+#             self.logger.debug(f"{self.name()} - ⚠️ [RASA DEBUG] Task status not in [SUCCESS, FAILED]: {task_status}")
+#             return []
 
 
 
@@ -144,7 +144,7 @@ class ActionSessionStart(BaseAction):
     def name(self) -> Text:
         return "action_session_start"
     
-    def execute_action(self, 
+    async def execute_action(self, 
             dispatcher: CollectingDispatcher, 
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -165,7 +165,7 @@ class ActionIntroduce(BaseAction):
             return None, None
 
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         events = []
         message = tracker.latest_message.get('text', '')
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {message}")
@@ -180,6 +180,8 @@ class ActionIntroduce(BaseAction):
         #dispatch message to choose language
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
+        self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {message}")
+        self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Buttons: {buttons}")
         dispatcher.utter_message(text=message, buttons=buttons)
         return events
     
@@ -188,7 +190,7 @@ class ActionSetEnglish(BaseAction):
     def name(self) -> Text:
         return "action_set_english"
     
-    def execute_action(
+    async def execute_action(
             self,
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
@@ -199,7 +201,7 @@ class ActionSetNepali(BaseAction):
     def name(self) -> Text:
         return "action_set_nepali"
     
-    def execute_action(
+    async def execute_action(
             self,
             dispatcher: CollectingDispatcher,
             tracker: Tracker,
@@ -210,7 +212,7 @@ class ActionMenu(BaseAction):
     def name(self) -> Text:
         return "action_menu"
 
-    def execute_action(
+    async def execute_action(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
@@ -237,7 +239,7 @@ class ActionOutro(BaseAction):
     def name(self) -> Text:
         return "action_outro"
     
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -247,7 +249,7 @@ class ActionSetCurrentProcess(BaseAction):
     def name(self) -> Text:
         return "action_set_current_process"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         current_story = "Filing a Complaint"  # Replace with dynamic logic if needed
         message = self.get_utterance(1)
         message = message.format(current_story=current_story)
@@ -263,7 +265,7 @@ class ActionGoBack(BaseAction):
     def name(self):
         return "action_go_back"
 
-    def execute_action(self, dispatcher, tracker, domain):
+    async def execute_action(self, dispatcher, tracker, domain):
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return [UserUtteranceReverted()]
@@ -275,7 +277,7 @@ class ActionRestartStory(BaseAction):
     def name(self) -> str:
         return "action_restart_story"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         current_process = tracker.get_slot("current_process")
         current_story = tracker.get_slot("current_story")
 
@@ -294,7 +296,7 @@ class ActionShowCurrentStory(BaseAction):
     def name(self):
         return "action_show_current_story"
 
-    def execute_action(self, dispatcher, tracker, domain):
+    async def execute_action(self, dispatcher, tracker, domain):
         current_story = tracker.get_slot("current_story")
         
         if current_story:
@@ -311,7 +313,7 @@ class ActionHandleMoodGreat(BaseAction):
     def name(self) -> str:
         return "action_handle_mood_great"
 
-    def execute_action(self, dispatcher, tracker, domain):
+    async def execute_action(self, dispatcher, tracker, domain):
         previous_action = tracker.get_slot("previous_state")
 
         if previous_action:
@@ -328,7 +330,7 @@ class ActionRespondToChallenge(BaseAction):
     def name(self) -> Text:
         return "action_respond_to_challenge"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -337,7 +339,7 @@ class ActionCustomFallback(BaseAction):
     def name(self):
         return "action_custom_fallback"
 
-    def execute_action(self, dispatcher, tracker, domain):
+    async def execute_action(self, dispatcher, tracker, domain):
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -350,7 +352,7 @@ class ActionHandleSkip(BaseAction):
     def name(self) -> Text:
         return "action_handle_skip"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         skip_count = tracker.get_slot("skip_count") or 0
         skip_count += 1
 
@@ -367,7 +369,7 @@ class ActionGoodbye(BaseAction):
     def name(self) -> Text:
         return "action_goodbye"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -376,7 +378,7 @@ class ActionMoodUnhappy(BaseAction):
     def name(self) -> Text:
         return "action_mood_unhappy"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -385,7 +387,7 @@ class ActionExitWithoutFiling(BaseAction):
     def name(self) -> Text:
         return "action_exit_without_filing"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -398,7 +400,7 @@ class ActionClearSession(BaseAction): # Corrected class name if it was typo
     def name(self) -> Text:
         return "action_clear_session"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] ActionClearSession triggered")
 
         dispatcher.utter_message(
@@ -415,7 +417,7 @@ class ActionCloseBrowserTab(BaseAction):
     def name(self) -> Text:
         return "action_close_browser_tab"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] ActionCloseBrowserTab triggered")
 
         dispatcher.utter_message(
@@ -433,7 +435,7 @@ class ActionCleanWindowOptions(BaseAction):
     def name(self) -> Text:
         return "action_clean_window_options"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
@@ -443,7 +445,7 @@ class ActionAttachFiles(BaseAction):
     def name(self) -> Text:
         return "action_question_attach_files"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         dispatcher.utter_message(text=message)
         return []
@@ -452,7 +454,7 @@ class ActionDefaultFallback(BaseAction):
     def name(self) -> Text:
         return "action_default_fallback"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         #run the action_menu action
         return [ActionExecuted("action_menu")]
 
@@ -460,7 +462,7 @@ class ActionFileUploadStatus(BaseAction):
     def name(self) -> Text:
         return "action_file_upload_status"
 
-    def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         # You can pass these as slots or from tracker.latest_message
         file_id = tracker.get_slot("file_id")
         status = tracker.get_slot("file_status")

@@ -54,6 +54,10 @@ BUTTONS_LANGUAGE_OPTIONS = {
     'en': [
         {"title": "Nepali / नेपाली", "payload": "/set_nepali"},
         {"title": "English / अंग्रेजी", "payload": "/set_english"}
+    ],
+    'ne': [
+        {"title": "Nepali / नेपाली", "payload": "/set_nepali"},
+        {"title": "English / अंग्रेजी", "payload": "/set_english"}
     ]
 }
 
@@ -178,16 +182,7 @@ BUTTONS_RESTART_OPTIONS = {
     ]
 }
 
-BUTTONS_GENDER_FOLLOW_UP = {
-    'en': [
-        {"title": "No, I want to Exit", "payload": BUTTON_EXIT},
-        {"title": "I want to file anonymously with one phone number", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
-    ],
-    'ne': [
-        {"title": "निस्कनुहोस्", "payload": BUTTON_EXIT},
-        {"title": "मैले एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ", "payload": BUTTON_ANONYMOUS_WITH_PHONE},   
-    ],
-}
+
 
 BUTTONS_FALLBACK = {
     'en': [

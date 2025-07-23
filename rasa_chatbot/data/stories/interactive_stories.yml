@@ -13,8 +13,8 @@ stories:
       - action: action_start_grievance_process
       - slot_was_set:
           - main_story: new_grievance
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_new_detail: completed
           - grievance_temp: I lost my hharvest of rice and corn
@@ -65,14 +65,14 @@ stories:
       - action: action_start_grievance_process
       - slot_was_set:
           - main_story: new_grievance
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_temp: I cannot find a job at the road workshop
       - active_loop: null
       # Grievance details collection
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_temp: I cannot find a job at the road workshop
           - grievance_new_detail: null
@@ -159,8 +159,8 @@ stories:
       - slot_was_set:
           - grievance_id: GR202503062029EC
           - grievance_status: submitted
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_temp: "they cut trees on my field"
           - grievance_new_detail: null
@@ -188,8 +188,8 @@ stories:
           - language_code
           - main_story: new_grievance
       # Grievance details collection
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_description: "thhey killed and eat my chicken\nI lost 16000 Rp"
           - grievance_summary_temp: "Someone killed and consumed my chicken, and I lost 16000 Rp due to this."
@@ -245,8 +245,8 @@ stories:
           - main_story: new_grievance
       - active_loop: null
       # Grievance details collection
-      - action: grievance_description_form
-      - active_loop: grievance_description_form
+      - action: form_grievance
+      - active_loop: form_grievance
       - slot_was_set:
           - grievance_temp: "lost harvest"
           - grievance_new_detail: completed

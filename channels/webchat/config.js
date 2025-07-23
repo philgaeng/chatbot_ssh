@@ -4,14 +4,14 @@
 // Server Configuration
 const SERVER_CONFIG = {
     HOST: 'localhost',
-    PORT: 5005,
+    PORT: 8082,
     PATH: '/socket.io/',
     TRANSPORTS: ['websocket']
 };
 
 // WebSocket Configuration
 const WEBSOCKET_CONFIG = {
-    URL: `http://localhost:5005`, // TODO: check if the port is required when using on remote server
+    URL: `http://localhost:8082`, // TODO: check if the port is required when using on remote server
     OPTIONS: {
         path: '/socket.io/',
         transports: ['websocket']

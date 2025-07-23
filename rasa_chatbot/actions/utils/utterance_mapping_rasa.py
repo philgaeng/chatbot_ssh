@@ -18,6 +18,52 @@ Structure:
 """
 from .mapping_buttons import *
 
+#special case for sensitive issues follow up so that the messaging is consistent accross all forms that may use it
+SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
+            'utterances': {
+                1: {
+                    'en': """We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
+                    """,
+                    'ne': """गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
+                    """
+                },
+                2: {
+                    'en': """Address : Koshi Regional Hospital, Biratnagar
+                    Morang
+                    Phone : 021-530103""",
+                    'ne': """कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर
+                    फोन : 021-530103""",
+                },
+                3: {
+                    'en': """ You can get more information on : https://nwchelpline.gov.np""",
+                    'ne': """तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np""",
+                },
+                4: {
+                    'en': """You can decide to file your grievance anonymously with one phone number or not.
+                    """,
+                    'ne': """तपाईं एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ वा छोड्न सक्नुहुन्छ।
+                    """
+                },
+                5: {
+                    'en': "If you desire, you can provide us with more details that we will forward to the OCMC.",
+                    'ne': "यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।",
+                }
+            },
+            'buttons': {
+                1:  {
+                    'en': [
+                        {"title": "File anonymously", "payload": BUTTON_EXIT},
+                        {"title": "File anonymously with one phone number", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
+                        {"title": "Provide more details", "payload": BUTTON_ADD_MORE_DETAILS},
+                    ],
+                    'ne': [
+                        {"title": "गुनासो दर्ता गर्न चाहनुहुन्छ", "payload": BUTTON_EXIT},
+                        {"title": "एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ", "payload": BUTTON_ANONYMOUS_WITH_PHONE},
+                        {"title": "अधिक विवरण प्रदान गर्न चाहनुहुन्छ", "payload": BUTTON_ADD_MORE_DETAILS},   
+                    ],
+                }
+            }
+        }
 
 UTTERANCE_MAPPING = {
     'form_contact': {
@@ -301,6 +347,17 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'validate_complainant_phone': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a correct phone number.",
+                    'ne': "कृपया आफ्नो सम्पर्क फोन नम्बर प्रविष्ट गर्नुहोस्। नेपाली फोन नम्बर 9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SLOT_SKIPPED
+            }
+        },
         'action_ask_form_contact_complainant_consent': {
             'utterances': {
                 1: {
@@ -399,31 +456,6 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'form_otp': {
-        'action_ask_form_otp_otp_input': {
-            'utterances': {
-                1: {
-                    'en': "-------- OTP verification ongoing --------\nPlease enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number.",
-                    'ne': "-------- OTP प्रमाणीकरण जारी छ --------\nकृपया आफ्नो नम्बर प्रमाणित गर्न {phone_number} मा पठाइएको 6-अंकको वन टाइम पासवर्ड (OTP) प्रविष्ट गर्नुहोस्।"
-                },
-                2: {
-                    'en': "❌ Maximum resend attempts reached. Please try again later or skip verification.",
-                    'ne': "❌ अधिकतम पुनःपठाउने प्रयास पूरा भयो। कृपया पछि पुनः प्रयास गर्नुहोस् वा प्रमाणीकरण छोड्नुहोस्।"
-                },
-                3: {
-                    'en': "❌ Invalid code. Please try again or type 'resend' to get a new code.",
-                    'ne': "❌ अमान्य कोड। कृपया पुनः प्रयास गर्नुहोस् वा नयाँ कोड प्राप्त गर्न 'resend' टाइप गर्नुहोस्।"
-                },
-                4: {
-                    'en': "Continuing without phone verification. Your grievance details will not be sent via SMS.",
-                    'ne': "फोन प्रमाणीकरण बिना अगाडि बढ्दै। तपाईंको गुनासो विवरण SMS मार्फत पठाइने छैन।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_OTP_VERIFICATION
-            }
-        }
-    },
     'form_grievance': {
         'action_start_grievance_process': {
             'utterances': {
@@ -433,35 +465,8 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_gender_follow_up': {
-            'utterances': {
-                1: {
-                    'en': """We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
-                    """,
-                    'ne': """गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
-                    """
-                },
-                2: {
-                    'en': """Address : Koshi Regional Hospital, Biratnagar
-                    Morang
-                    Phone : 021-530103""",
-                    'ne': """कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर
-                    फोन : 021-530103""",
-                },
-                3: {
-                    'en': """ You can get more information on : https://nwchelpline.gov.np""",
-                    'ne': """तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np""",
-                },
-                4: {
-                    'en': "If you desire, you can provide us with more details that we will forward to the OCMC.",
-                    'ne': "यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।",
-                }
-            },
-            'buttons': {
-                1: BUTTONS_GENDER_FOLLOW_UP
-            }
-        },  
-        'action_ask_grievance_description_form_grievance_new_detail': {
+        'action_ask_form_grievance_summary_sensitive_issues_follow_up': SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS,  
+        'action_ask_grievance_new_detail': {
             'utterances': {
                 1: {
                     'en': "Great! Let's start by understanding your grievance...",
@@ -494,26 +499,6 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 4: BUTTONS_GRIEVANCE_SUBMISSION
-            }
-        },
-        'action_call_openai_for_classification': {
-            'utterances': {
-                1: {
-                    'en': "There was an issue processing your grievance. Please try again.",
-                    'ne': "तपाईंको गुनासोको प्रकार पत्ता लगाउन त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस्।"
-                }
-            },
-            'buttons': {
-                1: {'en': [
-                    {"title": "Try again", "payload": "/start_grievance_process"},
-                    {"title": "Exit", "payload": "/exit_without_filing"}
-                ]
-                ,
-                'ne': [
-                    {"title": "पुनःप्रयास गर्नुहोस्", "payload": "/start_grievance_process"},
-                    {"title": "बाहिर निस्कनुहोस्", "payload": "/exit_without_filing"}
-                ]
-                }
             }
         },
         'action_submit_grievance': {
@@ -574,34 +559,6 @@ UTTERANCE_MAPPING = {
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 }
             }
-        },
-        
-        'action_ask_details_form_grievance_temp': {
-            'utterances': {
-                1: {
-                    'en': "Great! Let's start by understanding your grievance...",
-                    'ne': "राम्रो! चल्नुस् तपाईंको गुनासोको बारेमा सुरु गरौं..."
-                },
-                2: {
-                    'en': "Please provide more details about your grievance.",
-                    'ne': "कृपया आफ्नो गुनासोको बारेमा थप विवरण प्रदान गर्नुहोस्।"
-                },
-                3: {
-                    'en': "Calling OpenAI for classification... This may take a few seconds",
-                    'ne': "OpenAI क्लासिफिकेशनको लागि कल गर्दै... यसमा केही सेकेन्ड लाग्न सक्छ"
-                },
-                4: {'en': "Thank you for your entry. Do you want to add more details to your grievance, such as:\n"
-                    "- Location information\n"
-                    "- Persons involved\n"
-                    "- Quantification of damages (e.g., number of bags of rice lost)\n"
-                    "- Monetary value of damages",
-                    'ne': "तपाईंको प्रविष्टिको लागि धन्यवाद। के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n"
-                    "- स्थान जानकारी\n"
-                    "- भागहरूको सम्बन्धमा\n"
-                    "- हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)\n"
-                    "- हानिको मुनाफा मूल्य"}
-            },
-            'buttons': BUTTONS_GRIEVANCE_SUBMISSION
         },
         'create_confirmation_message': {
             'utterances': {
@@ -669,7 +626,7 @@ UTTERANCE_MAPPING = {
         }
     },
     'form_grievance_summary': {
-        'action_ask_grievance_summary_form_grievance_categories_status': {
+        'action_ask_form_grievance_summary_grievance_categories_status': {
             'utterances': {
                 1: {
                     'en': "No categories have been identified yet.",
@@ -706,7 +663,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_cat_modify': {
+        'action_ask_form_grievance_summary_grievance_cat_modify': {
             'utterances': {
                 1: {
                     'en': "No categories selected. Skipping this step.",
@@ -722,7 +679,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_summary_status': {
+        'action_ask_form_grievance_summary_grievance_summary_status': {
             'utterances': {
                 1: {
                     'en': "Here is the current summary: '{current_summary}'.\n Is this correct?",
@@ -747,7 +704,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_grievance_summary_form_grievance_summary_temp': {
+        'action_ask_form_grievance_summary_grievance_summary_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter the new summary and confirm again.",
@@ -761,6 +718,8 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en':
+                     "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nHello! Welcome to the Grievance Management Chatbot.\nWhat language do you want to use?",
+                     'ne':
                      "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nHello! Welcome to the Grievance Management Chatbot.\nWhat language do you want to use?"
                 }
             },
@@ -997,7 +956,7 @@ UTTERANCE_MAPPING = {
         }
     },
     'form_otp': {
-        'action_ask_form_otp_otp_consent': {
+        'action_ask_otp_consent': {
             'utterances': {
                 1: {
                     'en': "Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you.",
@@ -1008,7 +967,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'otp_verified_successfully': {
+        'validate_otp_input': {
             'utterances': {
                 1: {
                     'en': "OTP verified successfully",
@@ -1016,7 +975,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        "action_ask_form_otp_otp_input": {
+        "action_ask_otp_input": {
             'utterances': {
                 1: {
                     'en': "Your verification code is {otp_number}. \n Please enter this code to verify your phone number.",
@@ -1058,6 +1017,38 @@ UTTERANCE_MAPPING = {
                         {"title": "छोड्नुहोस्", "payload": "/skip"}
                     ]
                 }
+            }
+        }
+    },
+    'form_sensitive_issues': {
+        'action_ask_sensitive_issues_new_detail': {
+            'utterances': {
+                1: {
+                    'en': "What are the details you want to add, you may add details about the location, date and time, etc.",
+                    'ne': "तपाईं के विवरण थप्न चाहनुहुन्छ, तपाईं स्थान, मिति र समय विवरण थप्न सक्नुहुन्छ।"
+                }
+            }
+        },
+        'action_ask_sensitive_issues_nickname': {
+            'utterances': {
+                1: {
+                    'en': "Do you want to provide us a nickname that we will use to contact you anonymously - you can skip if you want?",
+                    'ne': "के तपाईं हामीलाई एक नाम दिन चाहनुहुन्छ जुन हामी तपाईंलाई अनामिक रूपमा सम्पर्क गर्न प्रयोग गर्न सक्नुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_sensitive_issues_complainant_phone': {
+            'utterances': {
+                1: {
+                    'en': "Do you want to provide us your phone number so we can contact you - or skip?",
+                    'ne': "के तपाईं हामीलाई आफ्नो फोन नम्बर दिन चाहनुहुन्छ जुन हामी तपाईंलाई सम्पर्क गर्न प्रयोग गर्न सक्नुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
             }
         }
     },
@@ -1375,9 +1366,8 @@ def get_utterance_base(form_name: str, action_name: str, utter_index: int, langu
     """
     try:
         return UTTERANCE_MAPPING[form_name][action_name]['utterances'][utter_index][language]
-    except (KeyError, IndexError) as e:
-        print(f"Error getting utterance: {str(e)}")
-        return None
+    except Exception as e:
+        raise ValueError(f"Error getting utterance: {str(e)}, form_name: {form_name}, action_name: {action_name}, utter_index: {utter_index}, language: {language}")
 
 def get_all_utterances(form_name: str, action_name: str, language: str = 'en') -> list:
     """
