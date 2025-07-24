@@ -20,12 +20,12 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger(__name__)
+init_logger = logging.getLogger(__name__)
 
 # Import database managers from the new modular structure
 try:
     from .services.database_services import db_manager
-    logger.info("Database manager imported successfully")
+    init_logger.info("Database manager imported successfully")
 except ImportError as e:
-    logger.warning(f"Could not import database manager: {e}")
+    init_logger.warning(f"Could not import database manager: {e}")
     db_manager = None 

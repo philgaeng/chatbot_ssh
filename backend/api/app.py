@@ -34,17 +34,17 @@ file_server.blueprint.emit_status_update_accessible = emit_status_update_accessi
 
 # === Add these handlers here ===
 
-task_logger = TaskLogger(service_name='socketio')
+logger = TaskLogger(service_name='socketio').logger
 
 def log_event(event, data):
-    task_logger.log_event(f"[SOCKETIO] Event: {event}, Data: {data}")
+    logger.log_event(f"[SOCKETIO] Event: {event}, Data: {data}")
 
 @socketio.on('status_update')
 def handle_status_update(data):
     log_event('status_update', data)
     # Re-emit the event to ensure the client receives it
     socketio.emit('status_update', data, room=data.get('session_id', request.sid))
-    task_logger.log_event("Re-emitted status update to client", extra_data={"data": data})
+    logger.info("Re-emitted status update to client", extra_data={"data": data})
 
 @socketio.on('another_event')
 def handle_another_event(data):
@@ -52,7 +52,7 @@ def handle_another_event(data):
 
 @socketio.on_error()
 def error_handler(e):
-    task_logger.logger.error(f"[SOCKETIO] Error: {e}")
+    logger.error(f"[SOCKETIO] Error: {e}")
 
 @socketio.on('join_room')
 def on_join_room(data):

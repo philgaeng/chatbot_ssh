@@ -14,7 +14,7 @@ SOCKETIO_PATH = '/accessible-socket.io'
 
 # Use SOCKETIO_REDIS_URL from environment, default to DB 0
 SOCKETIO_REDIS_URL = os.getenv('SOCKETIO_REDIS_URL', 'redis://localhost:6379/0')
-task_logger.log_event(f"Initializing Socket.IO with Redis - redis_url: {SOCKETIO_REDIS_URL} - env_redis_url: {os.getenv('SOCKETIO_REDIS_URL')} - env_redis_password: {'REDIS_PASSWORD' in os.environ}")
+logger.debug(f"Initializing Socket.IO with Redis - redis_url: {SOCKETIO_REDIS_URL} - env_redis_url: {os.getenv('SOCKETIO_REDIS_URL')} - env_redis_password: {'REDIS_PASSWORD' in os.environ}")
 
 # Create a socketio instance that can be imported by other modules
 socketio = SocketIO(
@@ -34,7 +34,7 @@ socketio = SocketIO(
 # Add connection event handlers
 @socketio.on('connect')
 def handle_connect():
-    task_logger.log_event("Client connected", extra_data={"sid": request.sid})
+    logger.debug("Client connected", extra_data={"sid": request.sid})
     logger.debug(f"Transport: {request.environ.get('socketio').transport}")
     logger.debug(f"Protocol version: {request.environ.get('socketio').protocol}")
 
@@ -42,22 +42,22 @@ def handle_connect():
 def on_join(data):
     room = data.get('room')
     if room:
-        task_logger.log_event("Client joining room", extra_data={"sid": request.sid, "room": room})
+        logger.debug("Client joining room", extra_data={"sid": request.sid, "room": room})
         socketio.join_room(room)
         logger.debug(f"Client {request.sid} joined room: {room}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    task_logger.log_event("Client disconnected", extra_data={"sid": request.sid})
+    logger.debug("Client disconnected", extra_data={"sid": request.sid})
 
 @socketio.on('error')
 def handle_error(error):
-    task_logger.log_event(message="error", extra_data={"error": str(error)})
+    logger.debug(message="error", extra_data={"error": str(error)})
 
 def emit_status_update_accessible(session_id, status, message):
     """Emit a status update to a specific session"""
     try:
-        task_logger.log_event(
+        logger.debug(
             f"Emitting status update - session_id: {session_id} - status: {status} - message: {message} - message_queue_url: {SOCKETIO_REDIS_URL}"
         )
         logger.debug(f"SocketIO instance: {socketio}")
@@ -85,9 +85,9 @@ def emit_status_update_accessible(session_id, status, message):
             'session_id': session_id
         }, room=session_id)
         
-        task_logger.log_event(f"Status update emitted successfully - session_id: {session_id}")
+        logger.debug(f"Status update emitted successfully - session_id: {session_id}")
         logger.debug(f"Event emitted to room: {session_id}")
     except Exception as e:
-        task_logger.log_event(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
+        logger.debug(message="Failed to emit event to room", extra_data={"session_id": session_id, "error": str(e)})
         logger.error(f"Failed to emit event to room {session_id}: {str(e)}", exc_info=True) 
 

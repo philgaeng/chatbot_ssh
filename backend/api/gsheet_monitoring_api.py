@@ -13,6 +13,10 @@ class GSheetMonitoringAPI:
         self._register_routes()
         self.gsheet_bearer_token = os.getenv('GSHEET_BEARER_TOKEN')
         self.db = db_manager
+        self.log_event = self.api_manager.log_event
+        self.IN_PROGRESS = self.api_manager.IN_PROGRESS
+        self.SUCCESS = self.api_manager.SUCCESS
+        self.FAILED = self.api_manager.FAILED
 
     def _register_routes(self):
         """Register all routes with the blueprint"""
@@ -28,13 +32,13 @@ class GSheetMonitoringAPI:
     def handle_request(self, func):
         def wrapper(*args, **kwargs):
             try:
-                self.api_manager.log_event('started', {'args': args, 'kwargs': kwargs})
+                self.log_event(event_type=self.IN_PROGRESS, details={'args': args, 'kwargs': kwargs})
                 result = func(*args, **kwargs)
                 # Only log the type, not the full result
-                self.api_manager.log_event('completed', {'result_type': str(type(result))})
+                self.log_event(event_type=self.SUCCESS, details={'result_type': str(type(result))})
                 return result
             except Exception as e:
-                self.api_manager.log_event('failed', {'error': str(e)})
+                self.log_event(event_type=self.FAILED, details={'error': str(e)})
                 return self.api_manager.error_response(str(e))
         return wrapper
 

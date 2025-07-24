@@ -7,7 +7,7 @@ from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
 from .database_services.postrgres_services import db_manager
 # Set up logging
-logger = TaskLogger(service_name='llm_service')
+logger = TaskLogger(service_name='llm_service').logger
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
 DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]

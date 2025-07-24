@@ -15,12 +15,19 @@ from werkzeug.utils import secure_filename
 from backend.services.database_services.postgres_services import db_manager
 from backend.api.websocket_utils import emit_status_update_accessible
 from backend.task_queue.registered_tasks import process_batch_files_task
-from backend.config.constants import VALID_FIELD_NAMES,DEFAULT_VALUES
+from backend.config.constants import VALID_FIELD_NAMES,DEFAULT_VALUES, TASK_STATUS
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
 
+SUCCESS = TASK_STATUS['SUCCESS']
+IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+FAILED = TASK_STATUS['FAILED']
+ERROR = TASK_STATUS['ERROR']
+RETRYING = TASK_STATUS['RETRYING']
+
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
 DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+
 
 voice_grievance_bp = Blueprint('voice_grievance', __name__)
 
@@ -36,18 +43,18 @@ def accessible_file_upload():
     """Handle file uploads from the accessible interface directly"""
     
     try:
-        task_logger.log_task_event('accessible_file_upload', 'started', {})
+        task_logger.log_task_event('accessible_file_upload', IN_PROGRESS, {})
         
         # Check if grievance_id is provided
         grievance_id = request.form.get('grievance_id')
         if not grievance_id:
-            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': 'No grievance_id provided'})
+            task_logger.log_task_event('accessible_file_upload', FAILED, {'error': 'No grievance_id provided'})
             return jsonify({"error": "Grievance ID is required for file upload"}), 400
         
         # Check if files are provided
         files = request.files.getlist('files[]')
         if not files:
-            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': "No files found in the request"})
+            task_logger.log_task_event('accessible_file_upload', FAILED, {'error': "No files found in the request"})
             return jsonify({"error": "No files provided"}), 400
         
         # Create the upload directory for this grievance
@@ -75,9 +82,9 @@ def accessible_file_upload():
                     audio_files.append(filename)
         
         if not files_data:
-            task_logger.log_task_event('accessible_file_upload', 'failed', {'error': 'Failed to save any files'})
+            task_logger.log_task_event('accessible_file_upload', FAILED, {'error': 'Failed to save any files'})
             return jsonify({
-                'status': 'error',
+                'status': ERROR,
                 'error': 'Failed to save any files'
             }), 500
         
@@ -97,9 +104,9 @@ def accessible_file_upload():
         return jsonify(response), 202
     
     except Exception as e:
-        task_logger.log_task_event('accessible_file_upload', 'failed', {'error': str(e)})
+        task_logger.log_task_event('accessible_file_upload', FAILED, {'error': str(e)})
         return jsonify({
-            'status': 'error',
+            'status': FAILED,
             'error': str(e)
         }), 500
     
@@ -129,9 +136,9 @@ def get_grievance_status(grievance_id):
         })
         
     except Exception as e:
-        task_logger.log_task_event('get_grievance_status', 'failed', {'error': str(e)})
+        task_logger.log_task_event('get_grievance_status', FAILED, {'error': str(e)})
         return jsonify({
-            'status': 'error',
+            'status': FAILED,
             'error': str(e)
         }), 500
 
@@ -139,7 +146,7 @@ def get_grievance_status(grievance_id):
 def submit_grievance():
     """Unified endpoint for submitting a grievance with user info and audio recordings"""
     try:
-        task_logger.log_task_event('submit_grievance', 'started', {})
+        task_logger.log_task_event('submit_grievance', IN_PROGRESS, {})
         
         # Extract complainant_id, grievance_id, province, and district from the form data
         complainant_id = request.form.get('complainant_id')
@@ -147,7 +154,7 @@ def submit_grievance():
         province = request.form.get('province', DEFAULT_PROVINCE)
         district = request.form.get('district', DEFAULT_DISTRICT)
         
-        task_logger.log_task_event('submit_grievance', 'processing', {
+        task_logger.log_task_event('submit_grievance', IN_PROGRESS, {
             'received_complainant_id': complainant_id,
             'received_grievance_id': grievance_id,
             'form_keys': list(request.form.keys()),
@@ -166,8 +173,8 @@ def submit_grievance():
                 file_path, file_size = save_uploaded_file(file, upload_dir, filename)
                 field_name = next((field for field in VALID_FIELD_NAMES if field in file_path), None)
                 if not field_name:
-                    task_logger.log_task_event('submit_grievance', 'failed', {'error': f'No field name found for file {file_path}'})
-                    return jsonify({'status': 'error', 'error': f'No field name found for file {file_path}'}), 400
+                    task_logger.log_task_event('submit_grievance', FAILED, {'error': f'No field name found for file {file_path}'})
+                    return jsonify({'status': ERROR, 'error': f'No field name found for file {file_path}'}), 400
                 #sanitize duration to int
                 duration = request.form.get(f'duration', None)
                 if duration in ['float', 'int']:
@@ -192,7 +199,7 @@ def submit_grievance():
                 }
                 if duration and duration is not None:
                     recording_data['duration_seconds'] = duration
-                task_logger.log_task_event('submit_grievance', 'processing', f"has_duration: {'TRUE' if duration else 'FALSE'}")
+                task_logger.log_task_event('submit_grievance', IN_PROGRESS, f"has_duration: {'TRUE' if duration else 'FALSE'}")
                 
                 # Store recording in database directly (not using result storage task)
                 recording_id = db_manager.create_or_update_recording(recording_data)
@@ -200,14 +207,14 @@ def submit_grievance():
                     # Add to audio files list with the format expected by orchestrate_voice_processing
                     audio_files.append(recording_data)
                 else:
-                    task_logger.log_task_event('submit_grievance', 'failed', {'error': f'Failed to create recording {recording_data}'})
-                    return jsonify({'status': 'error', 'error': f'Failed to create recording {recording_data}'}), 500
+                    task_logger.log_task_event('submit_grievance', FAILED, {'error': f'Failed to create recording {recording_data}'})
+                    return jsonify({'status': ERROR, 'error': f'Failed to create recording {recording_data}'}), 500
                     
         if not audio_files:
-            task_logger.log_task_event('submit_grievance', 'failed', {'error': 'No audio files provided in submission'})
-            return jsonify({'status': 'error', 'error': 'No audio files provided'}), 400
+            task_logger.log_task_event('submit_grievance', FAILED, {'error': 'No audio files provided in submission'})
+            return jsonify({'status': ERROR, 'error': 'No audio files provided'}), 400
         else:
-            task_logger.log_task_event('submit_grievance', 'processing', f"audio_files: {audio_files}")
+            task_logger.log_task_event('submit_grievance', IN_PROGRESS, f"audio_files: {audio_files}")
             
         # Queue Celery tasks for each file
         result = orchestrate_voice_processing(audio_files)
@@ -218,14 +225,14 @@ def submit_grievance():
         })
         
         # Return response
-        task_logger.log_task_event('submit_grievance', 'completed', {
+        task_logger.log_task_event('submit_grievance', SUCCESS, {
             'grievance_id': grievance_id,
             'complainant_id': complainant_id,
             'tasks': result.get('files', {})
         })
         
         return jsonify({
-            'status': 'success',
+            'status': SUCCESS,
             'message': 'Grievance submitted successfully',
             'grievance_id': grievance_id,
             'complainant_id': complainant_id,
@@ -234,9 +241,9 @@ def submit_grievance():
             
     except Exception as e:
         
-        task_logger.log_task_event('submit_grievance', 'failed', {'error': str(e)})
+        task_logger.log_task_event('submit_grievance', FAILED, {'error': str(e)})
         return jsonify({
-            'status': 'error',
+            'status': FAILED,
             'error': str(e)
         }), 500
 

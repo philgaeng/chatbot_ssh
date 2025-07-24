@@ -112,7 +112,7 @@ class FileServerAPI:
             
             connection.close()
             
-            self.core.log_event(event_type='completed', details={
+            self.core.log_event(event_type=SUCCESS, details={
                 'tables_exist': tables_count > 0,
                 'grievance_count': grievance_count,
                 'test_grievance_id': test_id
@@ -146,7 +146,7 @@ class FileServerAPI:
             grievance_id = db_manager.base.generate_id(type='grievance_id', province=province, district=district)
             complainant_id = db_manager.base.generate_id(type='complainant_id', province=province, district=district)
             
-            self.core.log_event(event_type='completed', details={
+            self.core.log_event(event_type=SUCCESS, details={
                 'grievance_id': grievance_id,
                 'complainant_id': complainant_id,
                 'province': province,
@@ -301,7 +301,7 @@ class FileServerAPI:
             
             files = db_manager.get_grievance_files(grievance_id)
             
-            self.core.log_event(event_type='completed', details={
+            self.core.log_event(event_type=SUCCESS, details={
                 'grievance_id': grievance_id, 
                 'file_count': len(files),
                 'session_type': session_type
@@ -321,7 +321,7 @@ class FileServerAPI:
             
             file_data = db_manager.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
-                self.core.log_event(event_type='completed', details={'file_id': file_id, 'file_name': file_data['file_name']})
+                self.core.log_event(event_type=SUCCESS, details={'file_id': file_id, 'file_name': file_data['file_name']})
                 return send_file(
                     file_data['file_path'],
                     as_attachment=True,
@@ -339,7 +339,7 @@ class FileServerAPI:
             self.core.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
             
             if db_manager.is_file_saved(file_id):
-                self.core.log_event(event_type='completed', details={'file_id': file_id, 'status': SUCCESS})
+                self.core.log_event(event_type=SUCCESS, details={'file_id': file_id, 'status': SUCCESS})
                 return jsonify({"status": SUCCESS, "message": "File is saved in the database"}), 200
             else:
                 self.core.log_event(event_type='not_found', details={'file_id': file_id})
@@ -359,7 +359,7 @@ class FileServerAPI:
                 self.core.log_event(event_type=FAILED, details={'grievance_id': grievance_id, 'error': 'Not found'})
                 return jsonify({'error': 'Not found'}), 404
                 
-            self.core.log_event(event_type='completed', details={'grievance_id': grievance_id})
+            self.core.log_event(event_type=SUCCESS, details={'grievance_id': grievance_id})
             return jsonify(data), 200
         except Exception as e:
             self.core.log_event(event_type=FAILED, details={'error': str(e)})
@@ -381,7 +381,7 @@ class FileServerAPI:
                 self.core.log_event(event_type=FAILED, details={'error': 'Update failed'})
                 return jsonify({'error': 'Update failed'}), 400
                 
-            self.core.log_event(event_type='completed', details={'grievance_id': grievance_id})
+            self.core.log_event(event_type=SUCCESS, details={'grievance_id': grievance_id})
             return jsonify({'message': 'Update successful'}), 200
         except Exception as e:
             self.core.log_event(event_type=FAILED, details={'error': str(e)})
@@ -395,7 +395,7 @@ class FileServerAPI:
             
             result = send_from_directory(self.core.upload_folder, filename)
             
-            self.core.log_event(event_type='completed', details={'file_name': filename})
+            self.core.log_event(event_type=SUCCESS, details={'file_name': filename})
             
             return result
         except Exception as e:
