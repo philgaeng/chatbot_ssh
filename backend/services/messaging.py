@@ -27,13 +27,15 @@ class Messaging:
         try:
             self.sms_client = SMSClient()
             self.email_client = EmailClient()
-            self.logger = TaskLogger(service_name='messaging_service')
-            self.logger.log_event("Successfully initialized Messaging repository")
+            self.task_logger = TaskLogger(service_name='messaging_service')
+            self.logger = self.task_logger.logger
+            self.log_event = self.task_logger.log_event
+            self.logger.info("Successfully initialized Messaging repository")
         except Exception as e:
             # Create a basic logger for error reporting if the main one failed
             try:
                 
-                self.logger.log_event(f"Failed to initialize Messaging repository: {str(e)}", level="error")
+                self.logger.error(f"Failed to initialize Messaging repository: {str(e)}")
             except:
                 pass  # If even the error logger fails, just raise the original exception
             raise
@@ -50,7 +52,7 @@ class Messaging:
         try:
             return self.sms_client.send_sms(phone_number, message)
         except Exception as e:
-            self.logger.log_event(f"Failed to send SMS: {str(e)}", level="error")
+            self.logger.error(f"Failed to send SMS: {str(e)}")
             return False
 
     def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
@@ -66,7 +68,7 @@ class Messaging:
         try:
             return self.email_client.send_email(to_emails, subject, body)
         except Exception as e:
-            self.logger.log_event(f"Failed to send email: {str(e)}", level="error")
+            self.logger.error(f"Failed to send email: {str(e)}")
             return False
 
     def test_sms_connection(self, test_phone_number: str) -> bool:
@@ -80,7 +82,7 @@ class Messaging:
         try:
             return self.sms_client.test_connection(test_phone_number)
         except Exception as e:
-            self.logger.log_event(f"Failed to test SMS connection: {str(e)}", level="error")
+            self.logger.error(f"Failed to test SMS connection: {str(e)}")
             return False
 
     def format_phone_number(self, phone_number: str) -> str:
@@ -94,18 +96,20 @@ class Messaging:
         try:
             return self.sms_client._format_phone_number(phone_number)
         except Exception as e:
-            self.logger.log_event(f"Failed to format phone number: {str(e)}", level="error")
+            self.logger.error(f"Failed to format phone number: {str(e)}")
             raise
 
 class SMSClient:
     def __init__(self):
-        self.logger = TaskLogger(service_name='messaging_service')
+        self.task_logger = TaskLogger(service_name='messaging_service')
+        self.logger = self.task_logger.logger
+        self.log_event = self.task_logger.log_event
         try:
             # Initialize SNS (not Pinpoint) client
             self.sns_client = boto3.client('sns', region_name=AWS_REGION)
-            self.logger.log_event("Successfully initialized SNS client")
+            self.logger.info("Successfully initialized SNS client")
         except ClientError as e:
-            self.logger.log_event(f"Failed to initialize SNS client: {str(e)}", level="error")
+            self.logger.error(f"Failed to initialize SNS client: {str(e)}")
             raise
 
     def test_connection(self, test_phone_number: str) -> bool:
@@ -119,13 +123,11 @@ class SMSClient:
         try:
             test_message = "This is a test message from your chatbot."
             result = self.send_sms(test_phone_number, test_message)
-            if result:
-                self.logger.log_event(f"Test SMS sent successfully to {test_phone_number}")
-            else:
-                self.logger.log_event(f"Failed to send test SMS to {test_phone_number}", level="error")
+            
+            self.logger.info(f"Test SMS sent successfully to {test_phone_number}")
             return result
         except Exception as e:
-            self.logger.log_event(f"Test SMS failed with error: {str(e)}", level="error")
+            self.logger.error(f"Test SMS to {test_phone_number} failed with error: {str(e)}")
             return False
 
     def send_sms(self, phone_number: str, message: str):
@@ -138,16 +140,14 @@ class SMSClient:
         Returns:
             bool: True if successful, False otherwise
         """
-        if SMS_ENABLED:
-            try:
-                # Using SNS publish (not Pinpoint send_messages)
+        try:
+            if SMS_ENABLED:
                 formatted_number = self._format_phone_number(phone_number)
-                
                 if formatted_number not in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
-                    self.logger.log_event(f"Phone number {formatted_number} not in whitelist. SMS not sent.", level="warning")
+                    self.logger.warning(f"Phone number {formatted_number} not in whitelist. SMS not sent.")
                     return False
                     
-                self.logger.log_event(f"Sending SMS via SNS to whitelisted number: {formatted_number}")
+                self.logger.info(f"Sending SMS via SNS to whitelisted number: {formatted_number}")
                 
                 response = self.sns_client.publish(
                     PhoneNumber=formatted_number,
@@ -159,15 +159,11 @@ class SMSClient:
                         }
                     }
                 )
-                self.logger.log_event(f"SNS SMS sent successfully: {response['MessageId']}")
+                self.logger.info(f"SNS SMS sent successfully: {response['MessageId']}")
                 return True
-                
-            except ClientError as e:
-                self.logger.log_event(f"Failed to send SMS to: {str(e)}", level="debug")
-                return True 
-        else:
-            print(f"[DEBUG] TEST ONLY: NOT SENDING SMS to {phone_number}: {message}")
-            return True
+        except ClientError as e:
+            self.logger.error(f"Failed to send SMS to: {str(e)}")
+            return False 
 
     def _format_phone_number(self, phone_number: str) -> str:
         # Remove any non-numeric characters except '+'
@@ -195,7 +191,9 @@ class SMSClient:
 
 class EmailClient:
     def __init__(self):
-        self.logger = TaskLogger(service_name='messaging_service')
+        self.task_logger = TaskLogger(service_name='messaging_service')
+        self.logger = self.task_logger.logger
+        self.log_event = self.task_logger.log_event
         try:
             self.ses_client = boto3.client('ses',
                 region_name=AWS_REGION,
@@ -203,16 +201,16 @@ class EmailClient:
                 aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
             )
             self.sender_email = os.getenv('SES_VERIFIED_EMAIL')
-            self.logger.log_event(f"SES Configuration:")
-            self.logger.log_event(f"Region: {AWS_REGION}")
-            self.logger.log_event(f"Sender Email: {self.sender_email}")  # Check if this is None
+            self.logger.info(f"SES Configuration:")
+            self.logger.info(f"Region: {AWS_REGION}")
+            self.logger.info(f"Sender Email: {self.sender_email}")  # Check if this is None
             
             if not self.sender_email:
                 raise ValueError("SES_VERIFIED_EMAIL not set in .env file")
                 
-            self.logger.log_event("Successfully initialized SES client")
+            self.logger.info("Successfully initialized SES client")
         except Exception as e:
-            self.logger.log_event(f"Failed to initialize SES client: {str(e)}", level="error")
+            self.logger.error(f"Failed to initialize SES client: {str(e)}")
             raise
         
     def name(self) -> Text:
@@ -220,8 +218,8 @@ class EmailClient:
 
     def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
         try:
-            self.logger.log_event(f"Attempting to send email to: {to_emails}")
-            self.logger.log_event(f"Using sender email: {self.sender_email}")
+            self.logger.info(f"Attempting to send email to: {to_emails}")
+            self.logger.info(f"Using sender email: {self.sender_email}")
             
             response = self.ses_client.send_email(
                 Source=self.sender_email,
@@ -242,14 +240,14 @@ class EmailClient:
                 }
             )
             
-            self.logger.log_event(f"Email sent successfully! MessageId: {response['MessageId']}")
+            self.logger.info(f"Email sent successfully! MessageId: {response['MessageId']}")
             return True
             
         except Exception as e:
-            self.logger.log_event(f"Failed to send email: {str(e)}", level="error")
-            self.logger.log_event(f"To: {to_emails}", level="error")
-            self.logger.log_event(f"Subject: {subject}", level="error")
-            self.logger.log_event(f"Body: {body[:100]}...", level="error")  # Log first 100 chars of body
+            self.logger.error(f"Failed to send email: {str(e)}")
+            self.logger.error(f"To: {to_emails}")
+            self.logger.error(f"Subject: {subject}")
+            self.logger.error(f"Body: {body[:100]}...")  # Log first 100 chars of body
             return False
 
 

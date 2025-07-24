@@ -20,6 +20,7 @@ ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
 
 task_logger = TaskLogger(service_name='voice_grievance')
+logger = task_logger.logger
 
 def process_single_audio_file(recording_data: Dict[str, Any]) -> Dict[str, Any]:
     """

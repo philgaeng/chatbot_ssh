@@ -13,6 +13,9 @@ import traceback
 from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
+from backend.logger.logger import TaskLogger
+from backend.config.constants import DEFAULT_VALUES
+DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
 # --- Error classes ---
 class DatabaseError(Exception):
@@ -29,10 +32,12 @@ class DatabaseQueryError(DatabaseError):
 
 class BaseDatabaseManager:
     """Base class for database operations with proper logging and error handling"""
-    def __init__(self, logger_name: str = 'db_manager', log_file: str = 'logs/db_manager.log', nepal_tz: Optional[pytz.BaseTzInfo] = None):
-        self.logger = self.setup_logger(logger_name, log_file)
-        self.nepal_tz = nepal_tz or pytz.timezone('Asia/Kathmandu')
+    def __init__(self, logger_name: str = 'db_manager', timezone: Optional[pytz.BaseTzInfo] = pytz.timezone(DEFAULT_TIMEZONE)):
+        self.logger = TaskLogger(service_name=logger_name).logger
+        self.nepal_tz = timezone
         self.db_params = DB_CONFIG.copy()
+        self.logger.info(f"Database parameters: {self.db_params}")
+        self.logger.info(f"Database manager initialized successfully")
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -162,6 +167,7 @@ class BaseDatabaseManager:
         complainant_fields['source']=data.get('source', 'bot')
         grievance_fields['complainant_id']=data.get('complainant_id') 
         return {'complainant_fields':complainant_fields, 'grievance_fields':grievance_fields}
+
     
     def generate_id(self, type: str='grievance_id', province: str='KO', district: str='JH',  office: str=None, suffix: str='bot'):
         """Generate a unique ID based on type, province, and district"""
@@ -277,7 +283,7 @@ class TableDbManager(BaseDatabaseManager):
     ]
 
     def __init__(self, **kwargs):
-        super().__init__(logger_name='db_manager', log_file='logs/db_manager.log', **kwargs)
+        super().__init__(logger_name='db_manager', **kwargs)
         self.migrations_logger = self.setup_logger('db_migrations', 'logs/db_migrations.log')
 
     def get_all_tables(self) -> List[str]:

@@ -18,6 +18,7 @@ from ..config.constants import (
 from ..shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
 from ..api.api_manager import APIManager
+from backend.logger.logger import TaskLogger
 
 # Define service name for logging
 SERVICE_NAME = "file_processor"
@@ -36,6 +37,9 @@ class FileServerCore(APIManager):
     
     def __init__(self, upload_folder: str = UPLOAD_FOLDER, allowed_extensions: list = ALLOWED_EXTENSIONS):
         super().__init__(SERVICE_NAME)
+        self.task_logger = TaskLogger(service_name=SERVICE_NAME)
+        self.logger = self.task_logger.logger
+        self.log_event = self.task_logger.log_event
         self.upload_folder = upload_folder
         self.allowed_extensions = allowed_extensions
         os.makedirs(upload_folder, exist_ok=True)

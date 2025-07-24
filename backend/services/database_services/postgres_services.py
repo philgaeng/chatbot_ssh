@@ -11,6 +11,7 @@ DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
 # Import base manager for inheritance
 from .base_manager import BaseDatabaseManager
+from backend.logger import logger
 
 
 class DatabaseManager(BaseDatabaseManager):
@@ -21,6 +22,7 @@ class DatabaseManager(BaseDatabaseManager):
     
     def __init__(self):
         # Import managers directly to avoid circular imports
+        super().__init__()
         from .base_manager import TableDbManager, TaskDbManager, FileDbManager, GSheetDbManager
         from .complainant_manager import ComplainantDbManager
         from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
@@ -90,7 +92,7 @@ class DatabaseManager(BaseDatabaseManager):
         try:
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
-            source = self.get_grievance_source(grievance_id)
+            source = self.get_grievance_or_complainant_source(grievance_id)
             data['source'] = source
 
             data = self.get_complainant_and_grievance_fields(data)
@@ -115,7 +117,7 @@ class DatabaseManager(BaseDatabaseManager):
         try:
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
-            source = self.get_grievance_source(grievance_id)
+            source = self.get_grievance_or_complainant_source(grievance_id)
             data['source'] = source
 
             data = self.get_complainant_and_grievance_fields(data)

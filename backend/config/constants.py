@@ -44,7 +44,8 @@ DEFAULT_VALUES = {
     "SKIP_VALUE": "slot_skipped",
     "DEFAULT_PROVINCE": "Koshi",
     "DEFAULT_DISTRICT": "Jhapa",
-    "DEFAULT_LANGUAGE_CODE": "ne"
+    "DEFAULT_LANGUAGE_CODE": "ne",
+    "DEFAULT_TIMEZONE": "Asia/Kathmandu"
 }
 
 # Location Constants
