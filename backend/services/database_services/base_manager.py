@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
 from backend.config.constants import DEFAULT_VALUES
+import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
 # --- Error classes ---
@@ -34,10 +35,18 @@ class BaseDatabaseManager:
     """Base class for database operations with proper logging and error handling"""
     def __init__(self, logger_name: str = 'db_manager', timezone: Optional[pytz.BaseTzInfo] = pytz.timezone(DEFAULT_TIMEZONE)):
         self.logger = TaskLogger(service_name=logger_name).logger
+        self.logger.setLevel(logging.DEBUG)
         self.nepal_tz = timezone
         self.db_params = DB_CONFIG.copy()
         self.logger.info(f"Database parameters: {self.db_params}")
         self.logger.info(f"Database manager initialized successfully")
+        self.encryption_key = os.getenv('DB_ENCRYPTION_KEY')
+        if not self.encryption_key:
+            self.logger.warning("DB_ENCRYPTION_KEY not set - encryption will be disabled")
+        else:
+            self.logger.info("Encryption enabled for sensitive fields")
+        self.ENCRYPTED_FIELDS = {}
+        self.HASHED_FIELDS = {}
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -102,6 +111,11 @@ class BaseDatabaseManager:
         logger.addHandler(console_handler)
         
         return logger
+    
+
+
+    def _hash_value(value: str) -> str:
+        return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
     def execute_query(self, query: str, params: tuple = (), operation: str = "query") -> List[Dict]:
         """Execute a query with logging"""
@@ -150,6 +164,57 @@ class BaseDatabaseManager:
         except Exception as e:
             self.logger.error(f"{operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
+
+    def _encrypt_field(self, value: str) -> Optional[str]:
+        """Encrypt a field value using pgcrypto"""
+        if not value or not self.encryption_key:
+            return value
+        try:
+            query = "SELECT pgp_sym_encrypt(%s, %s)"
+            result = self.execute_query(query, (value, self.encryption_key), "encrypt_field")
+            return result[0]['pgp_sym_encrypt'] if result else value
+        except Exception as e:
+            self.logger.error(f"Error encrypting field: {str(e)}")
+            return value
+    
+    def _decrypt_field(self, encrypted_value: str) -> Optional[str]:
+        """Decrypt a field value using pgcrypto"""
+        if not encrypted_value or not self.encryption_key:
+            return encrypted_value
+        
+        try:
+            query = "SELECT pgp_sym_decrypt(%s::bytea, %s)"
+            result = self.execute_query(query, (encrypted_value, self.encryption_key), "decrypt_field")
+            return result[0]['pgp_sym_decrypt'] if result else encrypted_value
+        except Exception as e:
+            self.logger.error(f"Error decrypting field: {str(e)}")
+            return encrypted_value
+    
+    def _encrypt_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Encrypt sensitive fields in complainant data"""
+        encrypted_data = data.copy()
+        for field in self.ENCRYPTED_FIELDS:
+            if field in encrypted_data and encrypted_data[field]:
+                encrypted_data[field] = self._encrypt_field(encrypted_data[field])
+                if field == 'complainant_phone':
+                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field].tobytes().hex()}")
+        return encrypted_data
+    
+    def _decrypt_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Decrypt sensitive fields in complainant data"""
+        decrypted_data = data.copy()
+        for field in self.ENCRYPTED_FIELDS:
+            if field in decrypted_data and decrypted_data[field]:
+                decrypted_data[field] = self._decrypt_field(decrypted_data[field])
+        return decrypted_data
+
+    def _hash_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Hash sensitive fields in complainant data"""
+        hashed_data = data.copy()
+        for field in self.HASHED_FIELDS:
+            if field in hashed_data and hashed_data[field]:
+                hashed_data[field] = self._hash_value(hashed_data[field])
+        return hashed_data
 
     def get_grievance_or_complainant_source(self, id: str) -> str:
         """Get the source of a grievance or user based on the ID"""
@@ -223,7 +288,7 @@ class BaseDatabaseManager:
                 
             elif entity_key == 'complainant_id':
                 result = self.execute_query(
-                    "SELECT id FROM users WHERE id = %s", 
+                    "SELECT id FROM complainants WHERE id = %s", 
                     (entity_id,), 
                     "check_complainant_exists"
                 )
@@ -269,10 +334,10 @@ class TableDbManager(BaseDatabaseManager):
         'processing_statuses',
         'task_statuses',
         'field_names',
-        'users',
+        'complainants',
+        'office_user',
         'tasks',
         'grievances',
-
         'task_entities',
         'grievance_status_history',
         'grievance_history',
@@ -357,7 +422,8 @@ class TableDbManager(BaseDatabaseManager):
                 cur.execute("DROP TABLE IF EXISTS grievance_history CASCADE")
                 cur.execute("DROP TABLE IF EXISTS file_attachments CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievances CASCADE")
-                cur.execute("DROP TABLE IF EXISTS users CASCADE")
+                cur.execute("DROP TABLE IF EXISTS office_user CASCADE")
+                cur.execute("DROP TABLE IF EXISTS complainants CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievance_statuses CASCADE")
                 cur.execute("DROP TABLE IF EXISTS task_statuses CASCADE")
                 self._create_tables(cur)
@@ -490,22 +556,43 @@ class TableDbManager(BaseDatabaseManager):
                     ('grievance_location', 'Grievance location'),
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
-        
+
         # Users table
-        self.migrations_logger.info("Creating/recreating users table...")
+        self.migrations_logger.info("Creating/recreating office_user table...")
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS office_user (
                 id TEXT PRIMARY KEY,
+                us_unique_id TEXT UNIQUE,
+                user_name TEXT,
+                user_phone TEXT,
+                user_email TEXT,
+                user_office_id TEXT,
+                user_login TEXT,
+                user_password TEXT,
+                user_role TEXT,
+                user_status TEXT,
+                user_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                user_updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                user_last_login TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Complainant table
+        self.migrations_logger.info("Creating/recreating complainant table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS complainants (
+                complainant_id TEXT PRIMARY KEY,
                 complainant_unique_id TEXT UNIQUE,
-                complainant_full_name TEXT,
-                complainant_phone TEXT,
-                complainant_email TEXT,
+                complainant_full_name BYTEA,
+                complainant_phone BYTEA,
+                complainant_email BYTEA,
                 complainant_province TEXT,
                 complainant_district TEXT,
                 complainant_municipality TEXT,
                 complainant_ward TEXT,
                 complainant_village TEXT,
-                complainant_address TEXT,
+                complainant_address BYTEA,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -533,7 +620,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievances (
                 grievance_id TEXT PRIMARY KEY,
-                complainant_id TEXT REFERENCES users(id),
+                complainant_id TEXT REFERENCES complainants(complainant_id),
                 grievance_categories TEXT,
                 grievance_summary TEXT,
                 grievance_description TEXT,
@@ -597,7 +684,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
                 recording_id UUID PRIMARY KEY,
-                complainant_id TEXT REFERENCES users(id),
+                complainant_id TEXT REFERENCES complainants(complainant_id),
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 task_id TEXT,
                 file_path TEXT NOT NULL,
@@ -689,9 +776,9 @@ class TableDbManager(BaseDatabaseManager):
         # Users table indexes
         self.migrations_logger.info("Creating/recreating user indexes...")
         cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_complainant_phone ON users(complainant_phone);
-            CREATE INDEX IF NOT EXISTS idx_complainant_email ON users(complainant_email);
-            CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON users(complainant_unique_id);
+            CREATE INDEX IF NOT EXISTS idx_complainant_phone ON complainants(complainant_phone);
+            CREATE INDEX IF NOT EXISTS idx_complainant_email ON complainants(complainant_email);
+            CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON complainants(complainant_unique_id);
         """)
 
         # Grievances table indexes
@@ -1083,7 +1170,7 @@ class GSheetDbManager(BaseDatabaseManager):
                 g.grievance_creation_date,
                 g.classification_status as status
             FROM grievances g
-            LEFT JOIN users u ON g.complainant_id = u.id
+            LEFT JOIN complainants u ON g.complainant_id = u.id
             WHERE 1=1
             AND g.grievance_description IS NOT NULL
         """

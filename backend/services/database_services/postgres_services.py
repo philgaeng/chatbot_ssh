@@ -60,12 +60,16 @@ class DatabaseManager(BaseDatabaseManager):
     
     
     # ===== COMPLAINANT OPERATIONS =====
+
+    def create_complainant(self, data: Dict[str, Any]) -> bool:
+        """Create a new complainant"""
+        return self.complainant.create_complainant(data)
     
     def update_complainant(self, complainant_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing complainant"""
         return self.complainant.update_complainant(complainant_id, data)
     
-    def get_complainant(self, complainant_id: str) -> Optional[Dict[str, Any]]:
+    def get_complainant_by_id(self, complainant_id: str) -> Optional[Dict[str, Any]]:
         """Get complainant by ID"""
         return self.complainant.get_complainant_by_id(complainant_id)
     
@@ -110,7 +114,9 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
-
+    def create_grievance(self, data: Dict[str, Any]) -> bool:
+        """Create a new grievance"""
+        return self.grievance.create_grievance(data)
     
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing grievance"""
@@ -222,48 +228,7 @@ class DatabaseManager(BaseDatabaseManager):
         """Get available grievance statuses"""
         return self.grievance.get_available_statuses(language)
     
-    # ===== COMPOSITE OPERATIONS =====
-    
-    def create_grievance_with_complainant(self, grievance_data: Dict[str, Any], 
-                                        complainant_data: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Create grievance and complainant in one operation"""
-        try:
-            # Create complainant first
-            complainant_id = self.create_complainant(complainant_data)
-            if not complainant_id:
-                return None
-            
-            # Add complainant_id to grievance data
-            grievance_data['complainant_id'] = complainant_id
-            
-            # Create grievance
-            return self.create_grievance(grievance_data)
-        except Exception as e:
-            # Log error and return None
-            return None
-    
-    def get_grievance_with_complainant(self, grievance_id: str) -> Optional[Dict[str, Any]]:
-        """Get grievance with complainant details included"""
-        grievance = self.get_grievance(grievance_id)
-        if grievance:
-            # Complainant details are already included in the join
-            return grievance
-        return None
-    
-    def update_grievance_and_status(self, grievance_id: str, grievance_data: Dict[str, Any],
-                                  status_code: str, created_by: str, 
-                                  assigned_to: Optional[str] = None, notes: Optional[str] = None) -> bool:
-        """Update grievance and its status in one operation"""
-        try:
-            # Update grievance
-            grievance_updated = self.update_grievance(grievance_id, grievance_data)
-            if not grievance_updated:
-                return False
-            
-            # Update status
-            return self.update_grievance_status(grievance_id, status_code, created_by, assigned_to, notes)
-        except Exception as e:
-            return False
+
 
 # Create a single instance for the application
 db_manager = DatabaseManager()
