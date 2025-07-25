@@ -73,6 +73,8 @@ class ComplainantDbManager(BaseDatabaseManager):
         for field in self.ENCRYPTED_FIELDS:
             if field in encrypted_data and encrypted_data[field]:
                 encrypted_data[field] = self._encrypt_field(encrypted_data[field])
+                if field == 'complainant_phone':
+                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field].tobytes().hex()}")
         return encrypted_data
     
     def _decrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -83,9 +85,29 @@ class ComplainantDbManager(BaseDatabaseManager):
                 decrypted_data[field] = self._decrypt_field(decrypted_data[field])
         return decrypted_data
 
+    def _encrypt_phone_number(self, phone_number: str) -> str:
+        """Encrypt a phone number using pgcrypto"""
+        if self.encryption_key:
+            encrypted_phone_number = self._encrypt_field(phone_number)
+            if isinstance(encrypted_phone_number, memoryview):
+            # Try to decode as utf-8, or use .hex() if it's binary
+                try:
+                    encrypted_phone_number = encrypted_phone_number.tobytes().decode('utf-8')
+                    self.logger.debug(f"encrypted phone number as utf-8: {encrypted_phone_number}")
+                except UnicodeDecodeError:
+                    encrypted_phone_number = encrypted_phone_number.tobytes().hex()
+                    self.logger.debug(f"encrypted phone number as hex: {encrypted_phone_number}")
+            return encrypted_phone_number
+        else:
+            self.logger.error("Encryption key not set")
+
+
+
     def get_complainants_by_phone_number(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
-        search_phone = self._encrypt_field(phone_number) if self.encryption_key else phone_number
+        self.logger.debug(f"original phone number: {phone_number}")
+        search_phone = self._encrypt_phone_number(phone_number) if self.encryption_key else phone_number
+        self.logger.debug(f"encrypted phone number: {search_phone}")
         
         query = """
             SELECT complainant_id, complainant_unique_id, complainant_full_name, complainant_phone,
@@ -100,8 +122,12 @@ class ComplainantDbManager(BaseDatabaseManager):
             results = self.execute_query(query, (search_phone,), "get_complainants_by_phone_number")
             # Decrypt sensitive fields in results
             decrypted_results = []
+            self.logger.debug(f"{len(results)} complainants found")
+            self.logger.debug(f"results: {results}")
             for complainant in results:
                 decrypted_results.append(self._decrypt_complainant_data(complainant))
+            self.logger.debug(f"{len(decrypted_results)} complainants successfully decrypted")
+            self.logger.debug(f"decrypted results: {decrypted_results}")
             return decrypted_results
         except Exception as e:
             self.logger.error(f"Error retrieving complainants by phone number: {str(e)}")
@@ -203,7 +229,7 @@ class ComplainantDbManager(BaseDatabaseManager):
                     encrypted_data.get('complainant_address'),
                     complainant_id
                 ))
-            self.logger.info(f"update_complainant: Updated complainant with ID: {complainant_id}, rows affected: {result}")
+            self.logger.info(f"update_complainant: Updated complainant with ID: {complainant_id}, rows affected: {len(data)}")
             return True
             
         except Exception as e:
@@ -212,9 +238,9 @@ class ComplainantDbManager(BaseDatabaseManager):
         
     def get_complainant_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
-            SELECT u.*
-            FROM complainants u
-            JOIN grievances g ON u.id = g.complainant_id
+            SELECT c.*
+            FROM complainants c
+            JOIN grievances g ON c.complainant_id = g.complainant_id
             WHERE g.grievance_id = %s
         """
         try:

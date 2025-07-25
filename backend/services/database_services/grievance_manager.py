@@ -47,7 +47,7 @@ class GrievanceDbManager(BaseDatabaseManager):
                     grievance_id, complainant_id, grievance_categories,
                     grievance_summary, grievance_description, grievance_claimed_amount,
                     grievance_location, language_code, source
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING grievance_id
             """
             self.execute_insert(insert_query, (
@@ -113,11 +113,11 @@ class GrievanceDbManager(BaseDatabaseManager):
 
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
-                SELECT g.*, u.complainant_full_name, u.complainant_phone, u.complainant_email,
-                       u.complainant_province, u.complainant_district, u.complainant_municipality,
-                       u.complainant_ward, u.complainant_village, u.complainant_address
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+                       c.complainant_province, c.complainant_district, c.complainant_municipality,
+                       c.complainant_ward, c.complainant_village, c.complainant_address
                 FROM grievances g
-                LEFT JOIN users u ON g.complainant_id = u.id
+                LEFT JOIN complainants c ON g.complainant_id = c.complainant_id
                 WHERE g.grievance_id = %s
         """
         try:

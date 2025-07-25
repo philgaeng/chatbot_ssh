@@ -2,13 +2,6 @@
 
 import os
 import sys
-import time
-import logging
-from logging.handlers import RotatingFileHandler
-import traceback
-from typing import List, Optional
-import argparse
-from backend.config.constants import load_environment
 
 # Add the project directory to the Python path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +10,15 @@ sys.path.insert(0, PROJECT_ROOT)
 
 # Set PYTHONPATH to include the project root
 os.environ['PYTHONPATH'] = PROJECT_ROOT
+
+# Now import everything else
+import time
+import logging
+from logging.handlers import RotatingFileHandler
+import traceback
+from typing import List, Optional
+import argparse
+from backend.config.constants import load_environment
 
 # Import the db_manager from the new modular structure
 from backend.services.database_services import db_manager
@@ -114,7 +116,7 @@ def recreate_tables_with_retry(max_retries: int, retry_delay: int) -> bool:
         try:
             logger.info(f"Starting table recreation (attempt {attempt + 1}/{max_retries})...")
             
-            if not db_manager.recreate_all_tables():
+            if not db_manager.table.recreate_all_tables():
                 raise DatabaseRecreateError("Failed to recreate tables")
             
             logger.info("Table recreation completed successfully")
@@ -133,9 +135,9 @@ def recreate_tables_with_retry(max_retries: int, retry_delay: int) -> bool:
 def verify_tables() -> bool:
     """Verify that tables were recreated correctly"""
     try:
-        tables = db_manager.get_all_tables()
+        tables = db_manager.table.get_all_tables()
         for table in tables:
-            if not db_manager.table_exists(table):
+            if not db_manager.table.table_exists(table):
                 logger.error(f"Table '{table}' not found after recreation")
                 return False
         logger.info("Table verification successful")
