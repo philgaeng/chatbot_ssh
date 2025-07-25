@@ -14,7 +14,7 @@ from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
-from backend.config.constants import DEFAULT_VALUES
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS_DICT
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
@@ -45,8 +45,11 @@ class BaseDatabaseManager:
             self.logger.warning("DB_ENCRYPTION_KEY not set - encryption will be disabled")
         else:
             self.logger.info("Encryption enabled for sensitive fields")
+        self.DEFAULT_USER = DEFAULT_VALUES['DEFAULT_USER']
         self.ENCRYPTED_FIELDS = {}
         self.HASHED_FIELDS = {}
+        self.DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
+        self.TASK_STATUS = TASK_STATUS
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -114,8 +117,7 @@ class BaseDatabaseManager:
     
 
 
-    def _hash_value(value: str) -> str:
-        return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
 
     def execute_query(self, query: str, params: tuple = (), operation: str = "query") -> List[Dict]:
         """Execute a query with logging"""
@@ -170,9 +172,9 @@ class BaseDatabaseManager:
         if not value or not self.encryption_key:
             return value
         try:
-            query = "SELECT pgp_sym_encrypt(%s, %s)"
+            query = "SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted"
             result = self.execute_query(query, (value, self.encryption_key), "encrypt_field")
-            return result[0]['pgp_sym_encrypt'] if result else value
+            return result[0]['encrypted'] if result else value
         except Exception as e:
             self.logger.error(f"Error encrypting field: {str(e)}")
             return value
@@ -181,11 +183,11 @@ class BaseDatabaseManager:
         """Decrypt a field value using pgcrypto"""
         if not encrypted_value or not self.encryption_key:
             return encrypted_value
-        
         try:
-            query = "SELECT pgp_sym_decrypt(%s::bytea, %s)"
+            # Decode the hex string to bytea in SQL using decode(..., 'hex')
+            query = "SELECT pgp_sym_decrypt(decode(%s, 'hex'), %s) AS decrypted"
             result = self.execute_query(query, (encrypted_value, self.encryption_key), "decrypt_field")
-            return result[0]['pgp_sym_decrypt'] if result else encrypted_value
+            return result[0]['decrypted'] if result else encrypted_value
         except Exception as e:
             self.logger.error(f"Error decrypting field: {str(e)}")
             return encrypted_value
@@ -197,7 +199,7 @@ class BaseDatabaseManager:
             if field in encrypted_data and encrypted_data[field]:
                 encrypted_data[field] = self._encrypt_field(encrypted_data[field])
                 if field == 'complainant_phone':
-                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field].tobytes().hex()}")
+                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field]}")
         return encrypted_data
     
     def _decrypt_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -208,12 +210,18 @@ class BaseDatabaseManager:
                 decrypted_data[field] = self._decrypt_field(decrypted_data[field])
         return decrypted_data
 
+    def _hash_value(self, value: str) -> str:
+        return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
     def _hash_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Hash sensitive fields in complainant data"""
-        hashed_data = data.copy()
+        hashed_data = {}
         for field in self.HASHED_FIELDS:
-            if field in hashed_data and hashed_data[field]:
-                hashed_data[field] = self._hash_value(hashed_data[field])
+            if field in data.keys():
+                hashed_key = field + '_hash'
+                hashed_data[hashed_key] = self._hash_value(data[field])
+                if field == 'complainant_phone':
+                    self.logger.debug(f"phone number {data[field]} hashed to {hashed_data[hashed_key]} at hash_sensitive_data")
         return hashed_data
 
     def get_grievance_or_complainant_source(self, id: str) -> str:
@@ -455,16 +463,8 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM grievance_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default grievance statuses...")
-            cur.execute("""
-                INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES
-                ('TEMP', 'Temporary', 'अस्थायी', 'Initial temporary status for new grievances', 'नयाँ गुनासोहरूको लागि प्रारम्भिक अस्थायी स्थिति', 0),
-                ('PENDING', 'Pending', 'प्रतीक्षामा', 'Grievance is pending review', 'गुनासो समीक्षाको लागि प्रतीक्षामा छ', 1),
-                ('IN_REVIEW', 'In Review', 'समीक्षामा', 'Grievance is being reviewed', 'गुनासो समीक्षा भइरहेको छ', 2),
-                ('IN_PROGRESS', 'In Progress', 'प्रगतिमा', 'Grievance is being addressed', 'गुनासो समाधान भइरहेको छ', 3),
-                ('RESOLVED', 'Resolved', 'समाधान भएको', 'Grievance has been resolved', 'गुनासो समाधान भएको छ', 4),
-                ('CLOSED', 'Closed', 'बन्द भएको', 'Grievance case is closed', 'गुनासो केस बन्द भएको छ', 5),
-                ('REJECTED', 'Rejected', 'अस्वीकृत', 'Grievance has been rejected', 'गुनासो अस्वीकृत भएको छ', 6)
-            """)
+            statuses = [(v['code'], v['name_en'], v['name_ne'], v['description_en'], v['description_ne'], 0) for v in GRIEVANCE_STATUS_DICT.values()]
+            cur.executemany("INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES (%s, %s, %s, %s, %s, %s)", statuses)
             
         
         # Processing statuses table
@@ -484,25 +484,16 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM processing_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default processing statuses...")
-            cur.execute("""
-                INSERT INTO processing_statuses (status_code, status_name, description) VALUES
-                ('PENDING', 'Pending', 'Processing is pending'),
-                ('PROCESSING', 'Processing', 'Processing is in progress'),
-                ('COMPLETED', 'Completed', 'Processing is completed'),
-                ('FAILED', 'Failed', 'Processing failed'),
-                ('FOR VERIFICATION', 'For Verification', 'Processing is for verification by dedicated team'),
-                ('VERIFICATION IN PROGRESS', 'Verification In Progress', 'Verification is in progress by dedicated team'),
-                ('VERIFIED', 'Verified', 'Processing is verified by dedicated team'),
-                ('VERIFIED AND AMENDED', 'Verified and Amended', 'Results have been verified and amended by dedicated team')
-            """)
+            statuses = [(v['code'], v['name'], v['description']) for v in TRANSCRIPTION_PROCESSING_STATUS_DICT.values()]
+            cur.executemany("INSERT INTO processing_statuses (status_code, status_name, description) VALUES (%s, %s, %s)", statuses)
         
         
         # Task statuses table
         self.migrations_logger.info("Creating/recreating task_statuses table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS task_statuses (
-                status_code TEXT PRIMARY KEY,
-                status_name TEXT NOT NULL,
+                task_status_code TEXT PRIMARY KEY,
+                task_status_name TEXT NOT NULL,
                 description TEXT,
                 is_active BOOLEAN DEFAULT true,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -515,16 +506,18 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM task_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default task statuses...")
-            cur.execute("""
-                INSERT INTO task_statuses (status_code, status_name, description) VALUES
-                ('TEST', 'Test Status', 'For testing'),
-                ('SUCCESS', 'Successful task', 'Task completed successfully'),
-                ('FAILED', 'Failed task', 'Task failed'),
-                ('PENDING', 'Pending task', 'Task is pending'),
-                ('QUEUED', 'Queued task', 'Task is queued'),
-                ('RUNNING', 'Running task', 'Task is currently running'),
-                ('CANCELLED', 'Cancelled task', 'Task was cancelled')
-            """)
+            statuses = [
+                (TASK_STATUS['SUCCESS'], 'Successful task', 'Task completed successfully'),
+                (TASK_STATUS['FAILED'], 'Failed task', 'Task failed'),
+                (TASK_STATUS['STARTED'], 'Started', 'Task is started'),
+                (TASK_STATUS['RETRYING'], 'Retrying', 'Task is retrying'),
+                (TASK_STATUS['ERROR'], 'Error', 'Task has an error'),
+                (TASK_STATUS['IN_PROGRESS'], 'In progress', 'Task is in progress')
+            ]
+            cur.executemany(
+                "INSERT INTO task_statuses (task_status_code, task_status_name, description) VALUES (%s, %s, %s)",
+                statuses
+            )
 
         # Field types table
         self.migrations_logger.info("Creating/recreating field_names table...")
@@ -584,15 +577,18 @@ class TableDbManager(BaseDatabaseManager):
             CREATE TABLE IF NOT EXISTS complainants (
                 complainant_id TEXT PRIMARY KEY,
                 complainant_unique_id TEXT UNIQUE,
-                complainant_full_name BYTEA,
-                complainant_phone BYTEA,
-                complainant_email BYTEA,
+                complainant_full_name TEXT,
+                complainant_phone TEXT,
+                complainant_email TEXT,
                 complainant_province TEXT,
                 complainant_district TEXT,
                 complainant_municipality TEXT,
                 complainant_ward TEXT,
                 complainant_village TEXT,
-                complainant_address BYTEA,
+                complainant_address TEXT,
+                complainant_phone_hash TEXT,
+                complainant_email_hash TEXT,
+                complainant_full_name_hash TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -603,7 +599,7 @@ class TableDbManager(BaseDatabaseManager):
             CREATE TABLE IF NOT EXISTS tasks (
                 task_id TEXT PRIMARY KEY,  -- This will store Celery's task ID
                 task_name TEXT NOT NULL,
-                status_code TEXT REFERENCES task_statuses(status_code),
+                task_status_code TEXT REFERENCES task_statuses(task_status_code),
                 started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 completed_at TIMESTAMP WITH TIME ZONE,
                 error_message TEXT,
@@ -758,7 +754,7 @@ class TableDbManager(BaseDatabaseManager):
         self.migrations_logger.info("Creating task entity indexes...")
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_task_entities_entity ON task_entities(entity_key, entity_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_code);
+            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(task_status_code);
             CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
             CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at);
         """)
@@ -897,7 +893,7 @@ class TaskDbManager(BaseDatabaseManager):
                 # Create task
                 task_query = """
                     INSERT INTO tasks (
-                        task_id, task_name, status_code
+                        task_id, task_name, task_status_code
                     ) VALUES (%s, %s, 'PENDING')
                     RETURNING task_id
                 """
@@ -925,16 +921,16 @@ class TaskDbManager(BaseDatabaseManager):
     def get_task(self, task_id: str) -> Optional[Dict]:
         """Get task by ID with its entity relationships"""
         query = """
-            SELECT t.*, ts.status_name,
+            SELECT t.*, ts.task_status_name,
                    json_agg(json_build_object(
                        'entity_key', te.entity_key,
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
-            JOIN task_statuses ts ON t.status_code = ts.status_code
+            JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
             LEFT JOIN task_entities te ON t.task_id = te.task_id
             WHERE t.task_id = %s
-            GROUP BY t.task_id, ts.status_name
+            GROUP BY t.task_id, ts.task_status_name
         """
         try:
             results = self.execute_query(query, (task_id,), "get_task")
@@ -955,10 +951,10 @@ class TaskDbManager(BaseDatabaseManager):
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
-            JOIN task_statuses ts ON t.status_code = ts.status_code
+            JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
             JOIN task_entities te ON t.task_id = te.task_id
             WHERE te.entity_key = %s AND te.entity_id = %s
-            GROUP BY t.task_id, ts.status_name
+            GROUP BY t.task_id, ts.task_status_name
             ORDER BY t.created_at DESC
         """
         try:
@@ -976,11 +972,11 @@ class TaskDbManager(BaseDatabaseManager):
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
-            JOIN task_statuses ts ON t.status_code = ts.status_code
+            JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
             LEFT JOIN task_entities te ON t.task_id = te.task_id
-            WHERE t.status_code = 'PENDING'
+            WHERE t.task_status_code = {task_status_code}
             {entity_key_filter}
-            GROUP BY t.task_id, ts.status_name
+            GROUP BY t.task_id, ts.task_status_name
             ORDER BY t.created_at ASC
         """
         
@@ -989,7 +985,7 @@ class TaskDbManager(BaseDatabaseManager):
                 if not self.is_valid_entity_key(entity_key):
                     return []
                 query = query.format(entity_key_filter="AND te.entity_key = %s")
-                return self.execute_query(query, (entity_key,), "get_pending_tasks")
+                return self.execute_query(query, (self.TASK_STATUS['PENDING'], entity_key), "get_pending_tasks")
             else:
                 query = query.format(entity_key_filter="")
                 return self.execute_query(query, operation="get_pending_tasks")
@@ -1063,7 +1059,7 @@ class TaskDbManager(BaseDatabaseManager):
         query = """
             SELECT 
                 task_id,
-                status_code,
+                task_status_code,
                 retry_count,
                 retry_history,
                 error_message
@@ -1159,18 +1155,18 @@ class GSheetDbManager(BaseDatabaseManager):
             SELECT 
                 g.grievance_id,
                 g.complainant_id,
-                u.complainant_full_name,
-                u.complainant_phone,
-                u.complainant_municipality,
-                u.complainant_village,
-                u.complainant_address,
+                c.complainant_full_name,
+                c.complainant_phone,
+                c.complainant_municipality,
+                c.complainant_village,
+                c.complainant_address,
                 g.grievance_description,
                 g.grievance_summary,
                 g.grievance_categories,
                 g.grievance_creation_date,
                 g.classification_status as status
             FROM grievances g
-            LEFT JOIN complainants u ON g.complainant_id = u.id
+            LEFT JOIN complainants c ON g.complainant_id = c.id
             WHERE 1=1
             AND g.grievance_description IS NOT NULL
         """

@@ -114,6 +114,7 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+            
     def create_grievance(self, data: Dict[str, Any]) -> bool:
         """Create a new grievance"""
         return self.grievance.create_grievance(data)
@@ -146,12 +147,11 @@ class DatabaseManager(BaseDatabaseManager):
         """Get grievance by ID"""
         return self.grievance.get_grievance_by_id(grievance_id)
     
-    def get_grievance_status(self, grievance_id: str, language: str = 'en') -> Optional[Dict[str, Any]]:
+    def get_grievance_status(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get current status of a grievance"""
-        return self.grievance.get_grievance_status(grievance_id, language)
+        return self.grievance.get_grievance_status(grievance_id)
     
-    def update_grievance_status(self, grievance_id: str, status_code: str, created_by: str,
-                              assigned_to: Optional[str] = None, notes: Optional[str] = None) -> bool:
+    def update_grievance_status(self, grievance_id: str, status_code: str, created_by: Optional[str] = None, assigned_to: Optional[str] = None, notes: Optional[str] = None) -> bool:
         """Update grievance status"""
         return self.grievance.update_grievance_status(grievance_id, status_code, created_by, assigned_to, notes)
     
