@@ -24,66 +24,25 @@ class ComplainantDbManager(BaseDatabaseManager):
         'complainant_address'
     }
     
-    # Sensitive fields that should be encrypted
-    ENCRYPTED_FIELDS = {
-        'complainant_phone',
-        'complainant_email', 
-        'complainant_address',
-        'complainant_full_name'
-    }
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Get encryption key from environment variable
         self.encryption_key = os.getenv('DB_ENCRYPTION_KEY')
-        if not self.encryption_key:
-            self.logger.warning("DB_ENCRYPTION_KEY not set - encryption will be disabled")
-        else:
-            self.logger.info("Encryption enabled for sensitive fields")
+        self.ENCRYPTED_FIELDS = {
+            'complainant_phone',
+            'complainant_email', 
+            'complainant_full_name',
+            'complainant_address'
+        }
+        self.HASHED_FIELDS = {
+        'complainant_phone',
+        'complainant_email', 
+        'complainant_full_name'
+    }
+
     
-    def _encrypt_field(self, value: str) -> Optional[str]:
-        """Encrypt a field value using pgcrypto"""
-        if not value or not self.encryption_key:
-            return value
-        
-        try:
-            query = "SELECT pgp_sym_encrypt(%s, %s)"
-            result = self.execute_query(query, (value, self.encryption_key), "encrypt_field")
-            return result[0]['pgp_sym_encrypt'] if result else value
-        except Exception as e:
-            self.logger.error(f"Error encrypting field: {str(e)}")
-            return value
-    
-    def _decrypt_field(self, encrypted_value: str) -> Optional[str]:
-        """Decrypt a field value using pgcrypto"""
-        if not encrypted_value or not self.encryption_key:
-            return encrypted_value
-        
-        try:
-            query = "SELECT pgp_sym_decrypt(%s::bytea, %s)"
-            result = self.execute_query(query, (encrypted_value, self.encryption_key), "decrypt_field")
-            return result[0]['pgp_sym_decrypt'] if result else encrypted_value
-        except Exception as e:
-            self.logger.error(f"Error decrypting field: {str(e)}")
-            return encrypted_value
-    
-    def _encrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Encrypt sensitive fields in complainant data"""
-        encrypted_data = data.copy()
-        for field in self.ENCRYPTED_FIELDS:
-            if field in encrypted_data and encrypted_data[field]:
-                encrypted_data[field] = self._encrypt_field(encrypted_data[field])
-                if field == 'complainant_phone':
-                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field].tobytes().hex()}")
-        return encrypted_data
-    
-    def _decrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Decrypt sensitive fields in complainant data"""
-        decrypted_data = data.copy()
-        for field in self.ENCRYPTED_FIELDS:
-            if field in decrypted_data and decrypted_data[field]:
-                decrypted_data[field] = self._decrypt_field(decrypted_data[field])
-        return decrypted_data
+
 
     def _encrypt_phone_number(self, phone_number: str) -> str:
         """Encrypt a phone number using pgcrypto"""
@@ -106,8 +65,8 @@ class ComplainantDbManager(BaseDatabaseManager):
     def get_complainants_by_phone_number(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
         self.logger.debug(f"original phone number: {phone_number}")
-        search_phone = self._encrypt_phone_number(phone_number) if self.encryption_key else phone_number
-        self.logger.debug(f"encrypted phone number: {search_phone}")
+        search_phone = self._hash_value(phone_number) if self.encryption_key else phone_number
+        self.logger.debug(f"hashed phone number: {search_phone}")
         
         query = """
             SELECT complainant_id, complainant_unique_id, complainant_full_name, complainant_phone,
@@ -115,7 +74,7 @@ class ComplainantDbManager(BaseDatabaseManager):
                    complainant_municipality, complainant_ward, complainant_village, complainant_address,
                    created_at
             FROM complainants
-            WHERE complainant_phone = %s
+            WHERE complainant_phone_hash = %s
             ORDER BY created_at DESC
         """
         try:
@@ -125,7 +84,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             self.logger.debug(f"{len(results)} complainants found")
             self.logger.debug(f"results: {results}")
             for complainant in results:
-                decrypted_results.append(self._decrypt_complainant_data(complainant))
+                decrypted_results.append(self._decrypt_sensitive_data(complainant))
             self.logger.debug(f"{len(decrypted_results)} complainants successfully decrypted")
             self.logger.debug(f"decrypted results: {decrypted_results}")
             return decrypted_results
@@ -135,7 +94,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             
     def get_complainant_by_id(self, complainant_id: int) -> Optional[Dict[str, Any]]:
         query = """
-            SELECT complainant_id, complainant_unique_id, complainant_full_name, complainant_phone,
+            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_phone,
                    complainant_email, complainant_province, complainant_district,
                    complainant_municipality, complainant_ward, complainant_village, complainant_address,
                    created_at
@@ -146,7 +105,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             results = self.execute_query(query, (complainant_id,), "get_complainant_by_id")
             if results:
                 # Decrypt sensitive fields in result
-                return self._decrypt_complainant_data(results[0])
+                return self._decrypt_sensitive_data(results[0])
             return None
         except Exception as e:
             self.logger.error(f"Error retrieving complainant by complainant_id: {str(e)}")
@@ -157,34 +116,66 @@ class ComplainantDbManager(BaseDatabaseManager):
         try:
             complainant_id = data.get('complainant_id')
             self.logger.info(f"create_complainant: Creating complainant with ID: {complainant_id}")
-            
-            # Encrypt sensitive fields before storing
-            encrypted_data = self._encrypt_complainant_data(data)
-            
-            insert_query = """
-                    INSERT INTO complainants (
-                        complainant_id, complainant_unique_id, complainant_full_name,
-                        complainant_phone, complainant_email,
-                        complainant_province, complainant_district, complainant_municipality,
-                        complainant_ward, complainant_village, complainant_address
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING complainant_id
-                """
-            self.execute_insert(insert_query, (
-                complainant_id,
-                complainant_id,  # Use same ID for complainant_unique_id
-                    encrypted_data.get('complainant_full_name'),
-                    encrypted_data.get('complainant_phone'),
-                    encrypted_data.get('complainant_email'),
-                    encrypted_data.get('complainant_province'),
-                    encrypted_data.get('complainant_district'),
-                    encrypted_data.get('complainant_municipality'),
-                    encrypted_data.get('complainant_ward'),
-                    encrypted_data.get('complainant_village'),
-                    encrypted_data.get('complainant_address')
-                ))
-            self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id}")
-            return True
+            if self.encryption_key:
+                # Encrypt sensitive fields before storing
+                encrypted_data = self._encrypt_sensitive_data(data)
+                hashed_data = self._hash_sensitive_data(data)
+                self.logger.debug(f"complainant hashed data before insert : {hashed_data}")
+                for k, v in hashed_data.items():
+                    encrypted_data[k] = v
+                insert_query = """
+                        INSERT INTO complainants (
+                            complainant_id, complainant_unique_id, complainant_full_name,
+                            complainant_phone, complainant_email,
+                            complainant_province, complainant_district, complainant_municipality,
+                            complainant_ward, complainant_village, complainant_address,
+                            complainant_phone_hash, complainant_email_hash, complainant_full_name_hash
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING complainant_id
+                    """
+                self.execute_insert(insert_query, (
+                    complainant_id,
+                    complainant_id,  # Use same ID for complainant_unique_id
+                        encrypted_data.get('complainant_full_name'),
+                        encrypted_data.get('complainant_phone'),
+                        encrypted_data.get('complainant_email'),
+                        encrypted_data.get('complainant_province'),
+                        encrypted_data.get('complainant_district'),
+                        encrypted_data.get('complainant_municipality'),
+                        encrypted_data.get('complainant_ward'),
+                        encrypted_data.get('complainant_village'),
+                        encrypted_data.get('complainant_address'),
+                        encrypted_data.get('complainant_phone_hash'),
+                        encrypted_data.get('complainant_email_hash'),
+                        encrypted_data.get('complainant_full_name_hash')
+                    ))
+                self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id} and hashed phone number: {encrypted_data.get('complainant_phone_hash')}")
+                return True
+            else:
+                insert_query = """
+                        INSERT INTO complainants (
+                            complainant_id, complainant_unique_id, complainant_full_name,
+                            complainant_phone, complainant_email,
+                            complainant_province, complainant_district, complainant_municipality,
+                            complainant_ward, complainant_village, complainant_address
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING complainant_id
+                    """
+                self.execute_insert(insert_query, (
+                    complainant_id,
+                    complainant_id,  # Use same ID for complainant_unique_id
+                        data.get('complainant_full_name'),
+                        data.get('complainant_phone'),
+                        data.get('complainant_email'),
+                        data.get('complainant_province'),
+                        data.get('complainant_district'),
+                        data.get('complainant_municipality'),
+                        data.get('complainant_ward'),
+                        data.get('complainant_village'),
+                        data.get('complainant_address')
+                    ))
+                self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id}")
+                return True
 
         except Exception as e:
             if not complainant_id:
@@ -201,7 +192,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             self.logger.info(f"update_complainant: Updating complainant with ID: {complainant_id}")
             
             # Encrypt sensitive fields before storing
-            encrypted_data = self._encrypt_complainant_data(data)
+            encrypted_data = self._encrypt_sensitive_data(data)
             
             update_query = """
                     UPDATE complainants 
@@ -247,7 +238,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             results = self.execute_query(query, (grievance_id,), "get_complainant_from_grievance_id")
             if results:
                 # Decrypt sensitive fields in result
-                return self._decrypt_complainant_data(results[0])
+                return self._decrypt_sensitive_data(results[0])
             return None
         except Exception as e:
             self.logger.error(f"Error retrieving complainant from grievance complainant_id: {str(e)}")

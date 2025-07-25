@@ -140,10 +140,11 @@ class GrievanceDbManager(BaseDatabaseManager):
             self.logger.error(f"Error retrieving grievance files: {str(e)}")
             return []
 
-    def get_grievance_status(self, grievance_id: str, language: str = 'en') -> Optional[Dict]:
+
+    def get_grievance_status(self, grievance_id: str) -> Optional[Dict]:
         query = """
                 WITH latest_status AS (
-                    SELECT status_code, assigned_to, notes, created_at
+                    SELECT status_code, assigned_to, notes, created_at, grievance_id
                     FROM grievance_status_history
                     WHERE grievance_id = %s
                     ORDER BY created_at DESC
@@ -152,7 +153,6 @@ class GrievanceDbManager(BaseDatabaseManager):
                 SELECT 
                     h.status_code,
                     CASE WHEN %s = 'en' THEN s.status_name_en ELSE s.status_name_ne END as status_name,
-                    CASE WHEN %s = 'en' THEN s.description_en ELSE s.description_ne END as description,
                     h.assigned_to,
                     h.notes,
                     h.created_at as status_date
@@ -160,15 +160,19 @@ class GrievanceDbManager(BaseDatabaseManager):
                 JOIN grievance_statuses s ON h.status_code = s.status_code
         """
         try:
-            results = self.execute_query(query, (grievance_id, language, language), "get_grievance_status")
+            self.logger.debug(f"get_grievance_status: grievance_id: {grievance_id}, language: {self.DEFAULT_LANGUAGE_CODE}")
+            results = self.execute_query(query, (grievance_id, self.DEFAULT_LANGUAGE_CODE), "get_grievance_status")
             return results[0] if results else None
         except Exception as e:
             self.logger.error(f"Error retrieving grievance status: {str(e)}")
             return None
             
-    def update_grievance_status(self, grievance_id: str, status_code: str, created_by: str,
+    def update_grievance_status(self, grievance_id: str, status_code: str, 
+                                created_by: Optional[str] = None,
                               assigned_to: Optional[str] = None, notes: Optional[str] = None) -> bool:
         try:
+            if created_by is None:
+                created_by = self.DEFAULT_USER
             # Verify status code exists and is active
             status_check_query = """
                 SELECT status_code FROM grievance_statuses
