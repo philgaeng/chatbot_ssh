@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 import traceback
 from icecream import ic
 from .base_manager import BaseDatabaseManager
+from backend.config.constants import TRANSCRIPTION_PROCESSING_STATUS
 
 
 
@@ -504,8 +505,9 @@ class TranslationDbManager(BaseDatabaseManager):
             str: The translation_id if successful, None otherwise
         """
         try:
-            if not data:
-                data = dict()
+            if not data.get('translation_id'):
+                data['translation_id'] = self.generate_id('translation_id')
+            translation_id = data.get('translation_id')
             
             # Validate required fields
             required_fields = ['grievance_id', 'translation_method']
@@ -515,29 +517,14 @@ class TranslationDbManager(BaseDatabaseManager):
             if missing_fields:
                 self.logger.error(f"Missing required fields: {missing_fields}")
                 return None
+            query_fields = ['grievance_id', 'task_id', 'grievance_description_en', 'grievance_summary_en', 'grievance_categories_en', 'source_language', 'translation_method', 'confidence_score', 'verified_by', 'verified_at']
             
-            insert_query = """
-                INSERT INTO grievance_translations (
-                    grievance_id, task_id, grievance_description_en, grievance_summary_en,
-                    grievance_categories_en, source_language, translation_method,
-                    confidence_score, verified_by, verified_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING translation_id
-            """
-            result = self.execute_insert(insert_query, (
-                data['grievance_id'],
-                data['task_id'],
-                data.get('grievance_description_en'),
-                data.get('grievance_summary_en'),
-                data.get('grievance_categories_en'),
-                data.get('source_language', 'ne'),
-                data['translation_method'],
-                data.get('confidence_score'),
-                data.get('verified_by'),
-                data.get('verified_at')
-            ))
-            self.logger.info(f"create_translation: Successfully created translation with ID: {result[0]['translation_id']}")
-            return result[0]['translation_id'] if result else None
+            query_values = self.generate_values_tuple(data, query_fields)
+            insert_query = self.generate_query_string(table_name='grievance_translations', input_data=data, database_operation='insert', returning='translation_id')
+            result = self.execute_insert(insert_query, query_values)
+            
+            self.logger.info(f"create_translation: Successfully created translation with ID: {translation_id}")
+            return translation_id if result else None
             
         except Exception as e:
             self.logger.error(f"Error in create_translation: {str(e)}")
@@ -679,6 +666,10 @@ class TranslationDbManager(BaseDatabaseManager):
 
 
 class TranscriptionDbManager(BaseDatabaseManager):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.transcription_processing_status = TRANSCRIPTION_PROCESSING_STATUS
+        
     def create_transcription(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new transcription record - pure SQL function
         
@@ -689,7 +680,8 @@ class TranscriptionDbManager(BaseDatabaseManager):
                 - grievance_id: ID of the grievance (required)
                 - field_name: Name of the field being transcribed (required)
                 - automated_transcript: The transcription text (required)
-                - language_code: Language code (defaults to 'ne')
+                - language_code: Language code (defaults to 'ne'),
+                - verification_status: Status of verification (defaults to DEFAULT_VERIFICATION_STATUS['FOR_VERIFICATION'])
                 
         Returns:
             str: The transcription_id if successful, None otherwise
@@ -697,40 +689,25 @@ class TranscriptionDbManager(BaseDatabaseManager):
         try:
             if not data:
                 data = dict()
-            
+            #update the verification status if not provided
+            if not data.get('verification_status'):
+                data['verification_status'] = self.transcription_processing_status['FOR_VERIFICATION']
             # Validate required fields
             required_fields = ['recording_id', 'grievance_id', 'field_name', 'automated_transcript']
+            allowed_fields = ['recording_id', 'grievance_id', 'field_name', 'automated_transcript', 'verified_transcript', 'verification_status', 'confidence_score', 'verification_notes', 'verified_by', 'verified_at', 'language_code', 'language_code_detect', 'task_id']
             missing_fields = [field for field in required_fields if not data.get(field)]
             if missing_fields:
                 self.logger.error(f"Missing required fields: {missing_fields}")
                 return None
-            
-            insert_query = """
-                INSERT INTO grievance_transcriptions (
-                    recording_id, grievance_id, field_name, automated_transcript,
-                    verified_transcript, verification_status, confidence_score,
-                    verification_notes, verified_by, verified_at, language_code,
-                    language_code_detect, task_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING transcription_id
-            """
-            result = self.execute_insert(insert_query, (
-                data['recording_id'],
-                data['grievance_id'],
-                data['field_name'],
-                data['automated_transcript'],
-                data.get('verified_transcript'),
-                data.get('verification_status', 'PENDING'),
-                data.get('confidence_score'),
-                data.get('verification_notes', 'by default, verification is pending'),
-                data.get('verified_by'),
-                data.get('verified_at'),
-                data.get('language_code', 'ne'),
-                data.get('language_code_detect'),
-                data['task_id']
-            ))
-            self.logger.info(f"create_transcription: Successfully created transcription with ID: {result[0]['transcription_id']}")
-            return result[0]['transcription_id'] if result else None
+            #format the insert data to avoid errorss 
+            insert_data = {k: data.get(k) for k in allowed_fields if k in data and data.get(k) is not None}
+            #execute the insert query
+            query = self.generate_query_string(table_name='grievance_transcriptions', input_data=insert_data, database_operation='insert', returning='transcription_id')
+            values = tuple(insert_data[k] for k in insert_data.keys())
+            result = self.execute_insert(query, values)
+
+            self.logger.info(f"create_transcription: Successfully created transcription with ID: {result[0]}")
+            return result[0] if result else None
             
         except Exception as e:
             self.logger.error(f"Error in create_transcription: {str(e)}")

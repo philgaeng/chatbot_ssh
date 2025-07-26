@@ -74,10 +74,9 @@ __all__ = [
 file_server_core = FileServerCore()
 
 # Define task status constants
+STARTED = TASK_STATUS['STARTED']
 SUCCESS = TASK_STATUS['SUCCESS']
-IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
 FAILED = TASK_STATUS['FAILED']
-ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
 
 
@@ -102,14 +101,17 @@ def process_file_upload_task(self, grievance_id: str,
         
     Returns:
         Dict containing processing results with keys:
-        - status: SUCCESS or ERROR
+        - status: SUCCESS or FAILED
         - operation: 'file_upload'
         - field_name: 'file_data'
         - value: Processed file data
     """
     session_id = grievance_id if session_id is None else session_id
     task_mgr = TaskManager(task=self, emit_websocket=emit_websocket)
+    
+    # Mark task as started (now executing in Celery worker)
     task_mgr.start_task(entity_key='grievance_id', entity_id=grievance_id, grievance_id=grievance_id, session_id=session_id)
+    
     try:
         result = file_server_core.process_file_upload(grievance_id=grievance_id, 
                                                          file_data=file_data,
@@ -158,7 +160,7 @@ def process_batch_files_task(self,
         result = chord(upload_group)(callback)
         # Return the chord id for tracking
         summary = {
-            'status': 'processing',
+            'status': STARTED,
             'grievance_id': grievance_id,
             'chord_id': result.id,
             'file_task_ids': [r.id for r in result.parent.results],
@@ -373,7 +375,7 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
         return result
     except Exception as e:
         error_result = {
-            'status': ERROR,
+            'status': FAILED,
             'operation': 'transcription',
             'error': str(e),
             'task_id': task_id,
@@ -407,7 +409,7 @@ def classify_and_summarize_grievance_task(self,
         
     Returns:
         Dict containing classification results with keys:
-        - status: SUCCESS or ERROR
+        - status: SUCCESS or FAILED
         - operation: 'classification'
         - entity_key: Entity key from file_data
         - id: ID from file_data
@@ -473,7 +475,7 @@ def classify_and_summarize_grievance_task(self,
     except Exception as e:
         task_mgr.fail_task(str(e))
         return {
-            'status': ERROR,
+            'status': FAILED,
             'operation': 'classification',
             'error': str(e),
             'task_id': task_id,
@@ -499,7 +501,7 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
         
     Returns:
         Dict containing contact information extraction results with keys:
-        - status: SUCCESS or ERROR
+        - status: SUCCESS or FAILED
         - operation: 'contact_info'
         - entity_key: 'complainant_id'
         - id: ID of the user
@@ -573,7 +575,7 @@ def extract_contact_info_task(self, input_data: Dict[str, Any], emit_websocket: 
     except Exception as e:
         task_mgr.fail_task(str(e))
         return {
-            'status': ERROR,
+            'status': FAILED,
             'operation': 'contact_info',
             'error': str(e),
             'entity_key': 'complainant_id',
@@ -594,7 +596,7 @@ def translate_grievance_to_english_task(self, input_data: Dict[str, Any], emit_w
         
     Returns:
         Dict containing translation results with keys:
-        - status: SUCCESS or ERROR
+        - status: SUCCESS or FAILED
         - operation: 'translation'
         - value: Translated grievance data
         - language_code: 'en'
@@ -683,7 +685,7 @@ details=grievance_data)
             
         task_mgr.fail_task(str(e))
         return {
-            'status': ERROR,
+            'status': FAILED,
             'operation': 'translation',
             'error': str(e),
             'entity_key': 'translation_id',
@@ -705,12 +707,12 @@ def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bo
             - id: ID of the entity
             - operation: Operation type (e.g., 'store_result')
             - value: Result data to store
-            - status: SUCCESS or ERROR
+            - status: SUCCESS or FAILED
         emit_websocket: Whether to emit a websocket message (default: False)
         
     Returns:
         Dict indicating the result of the storage operation with keys:
-        - status: SUCCESS or ERROR
+        - status: SUCCESS or FAILED
         - operation: 'store_result'
         - error: Error message if status is 'error'
     """
@@ -722,7 +724,7 @@ def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bo
         return result
     except Exception as e:
         error_result = {
-            'status': ERROR,
+            'status': FAILED,
             'operation': 'store_result',
             'error': str(e)
         }
