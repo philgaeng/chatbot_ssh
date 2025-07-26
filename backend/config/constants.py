@@ -55,15 +55,14 @@ CUT_OFF_FUZZY_MATCH_LOCATION = 75
 ############################
 # TASK AND STATUS CONSTANTS
 ############################
-
-TASK_STATUS = {
-    "IN_PROGRESS": "in_progress",
-    "SUCCESS": "SUCCESS",
-    "FAILED": "failed",
-    "ERROR": "error",
-    "RETRYING": "retrying",
-    "STARTED": "started"
+TASK_STATUS_DICT = {
+    "STARTED": {"code": "started", "name": "Started", "description": "Task is started"},
+    "SUCCESS": {"code": "SUCCESS", "name": "Success", "description": "Task is successful"},
+    "FAILED": {"code": "failed", "name": "Failed", "description": "Task is failed"},
+    "RETRYING": {"code": "retrying", "name": "Retrying", "description": "Task is retrying"}
 }
+
+
 
 GRIEVANCE_STATUS_DICT = {
     "SUBMITTED": {'code': "SUBMITTED", 'name_en': "Submitted", 'name_ne': "जमा भएको", 'description_en': "Grievance has been submitted by the complainant", 'description_ne': "गुनासो जमा भएको छ"},
@@ -98,6 +97,7 @@ TRANSCRIPTION_PROCESSING_STATUS_DICT = {
     'VERIFIED_AND_AMENDED': {'code': "VERIFIED_AND_AMENDED", 'name': "Verified and Amended", 'description': "Transcription is verified and amended by dedicated team"}
 }
 
+TASK_STATUS = {k: v['code'] for k, v in TASK_STATUS_DICT.items()}
 GRIEVANCE_STATUS = {k: v['code'] for k, v in GRIEVANCE_STATUS_DICT.items()}
 GRIEVANCE_CLASSIFICATION_STATUS = {k: v['code'] for k, v in GRIEVANCE_CLASSIFICATION_STATUS_DICT.items()}
 TRANSCRIPTION_PROCESSING_STATUS = {k: v['code'] for k, v in TRANSCRIPTION_PROCESSING_STATUS_DICT.items()}

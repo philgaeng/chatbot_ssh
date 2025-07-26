@@ -14,7 +14,7 @@ from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS_DICT
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS_DICT, TASK_STATUS_DICT
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
@@ -151,21 +151,31 @@ class BaseDatabaseManager:
             self.logger.error(f"{operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Update execution failed: {str(e)}")
 
-    def execute_insert(self, query: str, params: tuple = (), operation: str = "insert") -> Any:
+    def execute_insert(self, query: str, params: tuple = (), database_operation: str = "insert") -> Any:
         """Execute an insert query with logging"""
         start_time = datetime.now()
         try:
             with self.transaction() as conn:
                 with conn.cursor() as cur:
-                    self.logger.info(f"Executing {operation}: {query[:100]}...")
+                    self.logger.info(f"Executing {database_operation}: {query[:100]}...")
                     cur.execute(query, params or ())
                     result = cur.fetchone()
                     duration = (datetime.now() - start_time).total_seconds()
-                    self.logger.info(f"{operation} completed in {duration:.2f}s")
+                    self.logger.info(f"{database_operation} completed in {duration:.2f}s")
+                    self.logger.debug(f"Result from database insert: {result}")
                     return result
         except Exception as e:
-            self.logger.error(f"{operation} failed: {str(e)}")
+            self.logger.error(f"{database_operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
+
+    def generate_query_string(self, table_name: str, input_data: Dict[str, Any], database_operation: str = "insert", returning: str = None) -> str:
+        """Generate a query based on the input data"""
+        query = f"{database_operation.upper()} INTO {table_name} ({', '.join(input_data.keys())}) VALUES ({', '.join(['%s'] * len(input_data))})"
+        if returning:
+            query += f" RETURNING {returning}"
+        self.logger.debug(f"Generated query: {query}")
+        return query
+
 
     def _encrypt_field(self, value: str) -> Optional[str]:
         """Encrypt a field value using pgcrypto"""
@@ -506,14 +516,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM task_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default task statuses...")
-            statuses = [
-                (TASK_STATUS['SUCCESS'], 'Successful task', 'Task completed successfully'),
-                (TASK_STATUS['FAILED'], 'Failed task', 'Task failed'),
-                (TASK_STATUS['STARTED'], 'Started', 'Task is started'),
-                (TASK_STATUS['RETRYING'], 'Retrying', 'Task is retrying'),
-                (TASK_STATUS['ERROR'], 'Error', 'Task has an error'),
-                (TASK_STATUS['IN_PROGRESS'], 'In progress', 'Task is in progress')
-            ]
+            statuses = [(v['code'], v['name'], v['description']) for v in TASK_STATUS_DICT.values()]
             cur.executemany(
                 "INSERT INTO task_statuses (task_status_code, task_status_name, description) VALUES (%s, %s, %s)",
                 statuses
@@ -965,6 +968,7 @@ class TaskDbManager(BaseDatabaseManager):
 
     def get_pending_tasks(self, entity_key: str = "") -> List[Dict]:
         """Get all pending tasks, optionally filtered by entity type"""
+        pending_statuses_code = [self.TASK_STATUS['QUEUED'], self.TASK_STATUS['IN_PROGRESS']]
         query = """
             SELECT t.*, ts.status_name,
                    json_agg(json_build_object(
@@ -974,18 +978,19 @@ class TaskDbManager(BaseDatabaseManager):
             FROM tasks t
             JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
             LEFT JOIN task_entities te ON t.task_id = te.task_id
-            WHERE t.task_status_code = {task_status_code}
+            WHERE t.task_status_code IN ({pending_statuses_code})
             {entity_key_filter}
             GROUP BY t.task_id, ts.task_status_name
             ORDER BY t.created_at ASC
         """
         
         try:
+            query = query.format(task_status_code=self.TASK_STATUS['PENDING'])
             if entity_key:
                 if not self.is_valid_entity_key(entity_key):
                     return []
-                query = query.format(entity_key_filter="AND te.entity_key = %s")
-                return self.execute_query(query, (self.TASK_STATUS['PENDING'], entity_key), "get_pending_tasks")
+                query = query.format(entity_key_filter=f"AND te.entity_key = '{entity_key}'")
+                return self.execute_query(query, operation="get_pending_tasks")
             else:
                 query = query.format(entity_key_filter="")
                 return self.execute_query(query, operation="get_pending_tasks")

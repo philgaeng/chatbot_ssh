@@ -155,13 +155,11 @@ TASK_CONFIG = {
 
 
 
-
-SUCCESS = TASK_STATUS['SUCCESS']
-IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
-FAILED = TASK_STATUS['FAILED']
-ERROR = TASK_STATUS['ERROR']
-RETRYING = TASK_STATUS['RETRYING']
 STARTED = TASK_STATUS['STARTED']
+SUCCESS = TASK_STATUS['SUCCESS']
+FAILED = TASK_STATUS['FAILED']
+RETRYING = TASK_STATUS['RETRYING']
+
 
 class MonitoringConfig:
     """Configuration for task monitoring and logging"""
@@ -480,7 +478,7 @@ class TaskManager:
             )
             self.session_id = session_id
             self.start_time = datetime.datetime.utcnow()
-            self.status = IN_PROGRESS
+            self.status = STARTED
             
             # Get Celery's task ID for tracking
             celery_task_id = getattr(self.task.request, 'id', None)
@@ -518,7 +516,7 @@ class TaskManager:
                 websocket_data = {'task_name': self.task_name, **(extra_data or {})}
                 if is_retry:
                     websocket_data['retry_count'] = celery_retry_count
-                self.emit_status(IN_PROGRESS, websocket_data)
+                self.emit_status(STARTED, websocket_data)
             return True
         except Exception as e:
             self.error = str(e)

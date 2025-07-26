@@ -200,9 +200,6 @@ class DatabaseManager(BaseDatabaseManager):
         """Update task status and details"""
         return self.task.update_task(task_id, update_data)
     
-    def get_pending_tasks(self, entity_key: str = "") -> List[Dict[str, Any]]:
-        """Get all pending tasks"""
-        return self.task.get_pending_tasks(entity_key)
     
     # ===== FILE OPERATIONS =====
     
