@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, List
 from backend.api.api_manager import APIManager
 from backend.services.file_server_core import FileServerCore
 from backend.task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
+from backend.api.websocket_utils import socketio
 
 SUCCESS = TASK_STATUS['SUCCESS']
 FAILED = TASK_STATUS['FAILED']
@@ -226,13 +227,15 @@ class FileServerAPI:
             
             # Check if grievance_id is provided
             grievance_id = request.form.get('grievance_id')
-            session_id = request.form.get('session_id')
+            rasa_session_id = request.form.get('rasa_session_id')  # For bot context
+            session_id = request.form.get('session_id')  # Flask session ID for websocket emissions
             self.source = self._extract_session_type_from_grievance_id(grievance_id)
 
             
             self.core.log_event(event_type=STARTED, details={
                 'grievance_id': grievance_id,
                 'source': self.source,
+                'rasa_session_id': rasa_session_id,
                 'session_id': session_id
             })
             
@@ -272,7 +275,8 @@ class FileServerAPI:
 
                 response_data = jsonify({
                     "status": STARTED,
-                    "session_id": session_id,
+                    "session_id": session_id,  # Flask session ID for websocket emissions
+                    "rasa_session_id": rasa_session_id,  # Rasa session ID for bot context
                     "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
                     "files": [file['file_id'] for file in uploaded_files],
                     "oversized_files": oversized_files,
@@ -450,7 +454,6 @@ class FileServerAPI:
             
             if source == 'A':
                 # Emit to the grievance room (accessible interface)
-                 # Prepare websocket data
                 websocket_data = {
                     'status': status,
                     'data': task_data,
@@ -461,8 +464,25 @@ class FileServerAPI:
                 if grievance_id:
                     websocket_data['grievance_id'] = grievance_id
                     emit_status_update_accessible(grievance_id, status, task_data)
-
-            # for the bot case, we don't need to use websocket as the frontend listens to the event from the backend
+            else:
+                # Emit to the bot interface (source 'B')
+                # The frontend listens for 'task_status' and 'file_status_update' events
+                if session_id:
+                    # Determine the event type based on task name
+                    task_name = task_data.get('task_name', 'unknown')
+                    if 'file' in task_name.lower():
+                        event_name = 'file_status_update'
+                    else:
+                        event_name = 'task_status'
+                    
+                    # Emit the event to the session
+                    socketio.emit(event_name, {
+                        'status': status,
+                        'data': task_data,
+                        'grievance_id': grievance_id,
+                        'session_id': session_id,
+                        'task_name': task_name
+                    }, room=session_id)
             self.core.log_event(event_type='task_status_emitted', details={
                 'grievance_id': grievance_id,
                 'session_id': session_id,

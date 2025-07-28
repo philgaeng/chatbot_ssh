@@ -54,7 +54,7 @@ from backend.services.database_services.postgres_services import db_manager
 from backend.services.messaging import messaging
 from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
-from .task_manager import TaskManager
+from .task_manager import TaskManager, DatabaseTaskManager
 from .celery_app import celery_app
 
 

@@ -125,7 +125,8 @@ def test_update_complainant(complainant_id):
     updated_complainant_data['complainant_email'] = 'test_complainant_updated@gmail.com'
     
     result = db_manager.update_complainant(complainant_id, updated_complainant_data)
-    assert result is True
+    assert type(result) == int
+    assert result > 0
     updated = db_manager.get_complainant_by_id(complainant_id)
     assert updated['complainant_id'] == complainant_id
     assert updated['complainant_municipality'] == 'Bagmati'
@@ -248,7 +249,7 @@ def test_store_file(grievance_id):
         'file_type': 'txt',
         'uploaded_by': 'tester',
     }
-    result = db_manager.store_file(file_data)
+    result = db_manager.store_file_attachment(file_data)
     assert result in [True, False]
 
 def test_get_grievance_file_attachments(grievance_id):

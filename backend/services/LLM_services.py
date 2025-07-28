@@ -5,7 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
-from .database_services.postrgres_services import db_manager
+from backend.services.database_services.postgres_services import db_manager
 # Set up logging
 logger = TaskLogger(service_name='llm_service').logger
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
@@ -258,7 +258,7 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
     
     
 
-def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> str:
+def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate a grievance to English using OpenAI API
     Args:
         grievance_data: Dict containing grievance data: {grievance_id, language_code, grievance_description, grievance_summary, grievance_categories}
@@ -315,8 +315,7 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> str:
     
     except Exception as e:
         raise ValueError(f"Error translating grievance to English: {str(e)} - input_data: {input_data} - result: {result}")
-        logger.error(f"Error translating grievance to English: {str(e)}")
-        return None
+        
 
 def extract_input_data_for_translation(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Extract the input data for translation from nested data structures
@@ -387,11 +386,9 @@ def translate_grievance_to_english(grievance_id: str) -> Dict[str, Any]:
         Dict containing status and result of the translation
     """
     try:
-        # Initialize database manager
-        db = db_manager()
         
         # Get grievance data from database
-        grievance_data = db.grievance.get_grievance_by_id(grievance_id)
+        grievance_data = db_manager.get_grievance_by_id(grievance_id)
         if not grievance_data:
             return {
                 'status': 'FAILED',
@@ -415,7 +412,7 @@ def translate_grievance_to_english(grievance_id: str) -> Dict[str, Any]:
             }
         
         # Update database
-        success = db.grievance.update_translation(grievance_id, translation_result)
+        success = db_manager.update_translation(grievance_id, translation_result)
         if not success:
             return {
                 'status': 'FAILED',

@@ -21,9 +21,35 @@ export function setupSocketEventHandlers(socket, sessionState) {
     handleTaskStatusEvent(data);
   });
 
-  socket.on("file_status_update", (data) => {
-    handleFileStatusUpdate(data);
-  });
+  // Listen for file status updates on the Flask socket
+  if (window.flaskSocket) {
+    window.flaskSocket.on("connect", () => {
+      console.log("🔗 Flask socket connected with ID:", window.flaskSocket.id);
+
+      // Store Flask session ID globally for use in API calls
+      window.flaskSessionId = window.flaskSocket.id;
+      console.log("🔗 Flask session ID stored:", window.flaskSessionId);
+    });
+
+    window.flaskSocket.on("file_status_update", (data) => {
+      console.log(
+        "🎉 FLASK WEBSOCKET EVENT RECEIVED: file_status_update",
+        data
+      );
+      console.log("Flask socket ID:", window.flaskSocket.id);
+      console.log("Session ID from data:", data.session_id);
+      handleFileStatusUpdate(data);
+    });
+
+    window.flaskSocket.on("task_status", (data) => {
+      console.log("🎉 FLASK WEBSOCKET EVENT RECEIVED: task_status", data);
+      handleTaskStatusEvent(data);
+    });
+  } else {
+    console.warn(
+      "⚠️ Flask socket not available, file status updates will not be received"
+    );
+  }
 
   // Error handling
   socket.on("error", (error) => {
@@ -59,6 +85,38 @@ export function setupSocketEventHandlers(socket, sessionState) {
 
   socket.on("complainant_uttered", (message) => {
     console.log("📩 User message sent:", message);
+  });
+
+  // Error handling
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
+  });
+
+  socket.on("connect_error", (error) => {
+    console.error("Connection error:", error);
+    uiActions.showConnectionError();
+  });
+
+  socket.on("connect_timeout", () => {
+    console.error("Connection timeout");
+    uiActions.showTimeoutError();
+  });
+
+  socket.on("reconnect_attempt", (attemptNumber) => {
+    console.log("Reconnection attempt:", attemptNumber);
+  });
+
+  socket.on("reconnect", (attemptNumber) => {
+    console.log("Reconnected after", attemptNumber, "attempts");
+  });
+
+  socket.on("reconnect_error", (error) => {
+    console.error("Reconnection error:", error);
+  });
+
+  socket.on("reconnect_failed", () => {
+    console.error("Reconnection failed");
+    uiActions.showReconnectError();
   });
 }
 
@@ -213,8 +271,41 @@ function handleTaskStatusEvent(data) {
 }
 
 function handleFileStatusUpdate(data) {
-  console.log("File status update:", data);
-  // This can be expanded to handle file-specific status updates
+  console.log("🎯 handleFileStatusUpdate called with data:", data);
+
+  const { status, data: fileData, task_name, grievance_id } = data;
+
+  // Show status message to user
+  let statusMessage = "";
+
+  switch (status) {
+    case "SUCCESS":
+      if (fileData && fileData.file_name) {
+        statusMessage = `✅ File "${fileData.file_name}" processed successfully`;
+      } else {
+        statusMessage = "✅ File processing completed successfully";
+      }
+      break;
+
+    case "FAILED":
+      statusMessage = "❌ File processing failed";
+      break;
+
+    case "IN_PROGRESS":
+      statusMessage = "⏳ File is being processed...";
+      break;
+
+    default:
+      statusMessage = `ℹ️ File status: ${status}`;
+  }
+
+  // Show the status message in the chat
+  uiActions.appendMessage(statusMessage, "received");
+
+  // Update grievance ID if provided
+  if (grievance_id) {
+    uiActions.setGrievanceId(grievance_id);
+  }
 }
 
 // API response handlers

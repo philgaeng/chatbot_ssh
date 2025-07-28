@@ -315,9 +315,11 @@ class ActionSubmitGrievance(BaseAction):
                             timedelta(days=15)).strftime("%Y-%m-%d")
         
         # user data
-        grievance_data={k : tracker.get_slot(k) for k in ["complainant_phone",
+        grievance_data={k : tracker.get_slot(k) for k in ["complainant_id",
+                                                          "complainant_phone",
                                                           "complainant_email",
                                                           "complainant_full_name",
+                                                          "complainant_gender",
                                                           "complainant_province",
                                                           "complainant_district",
                                                           "complainant_municipality",

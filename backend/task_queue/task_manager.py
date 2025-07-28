@@ -278,14 +278,17 @@ class TaskManager:
             data (dict): The data to send
         """
         try:
+            # Debug logging to understand the issue
             self.monitoring.log_task_event(
-                task_name='trigger_task_status_update',
+                task_name=self.task_name,
                 details={
                     'grievance_id': self.grievance_id,
                     'session_id': self.session_id,
                     'status': status,
                     'data': data,
-                    'note': 'Sending task status update to Flask API'
+                    'task_name': self.task_name,
+                    'requests_available': 'requests' in globals(),
+                    'note': 'DEBUG: Starting emit_status method'
                 }
             )
             
@@ -313,7 +316,7 @@ class TaskManager:
                 payload['session_id'] = self.session_id
             
             self.monitoring.log_task_event(
-                task_name='trigger_task_status_update',
+                task_name=self.task_name,
                 details={
                     'url': url,
                     'payload': payload,
@@ -322,9 +325,31 @@ class TaskManager:
             )
         
             try:
-                response = requests.post(url, json=payload, timeout=10)
+                # Debug: Log before making the request
                 self.monitoring.log_task_event(
-                    task_name='trigger_task_status_update',
+                    task_name=self.task_name,
+                    details={
+                        'grievance_id': self.grievance_id,
+                        'session_id': self.session_id,
+                        'url': url,
+                        'payload_keys': list(payload.keys()) if payload else None,
+                        'note': 'DEBUG: About to make HTTP request'
+                    }
+                )
+                
+                try:
+                    response = requests.post(url, json=payload, timeout=10)
+                except ImportError as e:
+                    raise Exception(f"requests module not available: {e}")
+                except requests.exceptions.ConnectionError as e:
+                    raise Exception(f"Connection error to {url}: {e}")
+                except requests.exceptions.Timeout as e:
+                    raise Exception(f"Timeout error to {url}: {e}")
+                except Exception as e:
+                    raise Exception(f"HTTP request error to {url}: {e}")
+                
+                self.monitoring.log_task_event(
+                    task_name=self.task_name,
                     details={
                         'grievance_id': self.grievance_id,
                         'session_id': self.session_id,
@@ -336,7 +361,7 @@ class TaskManager:
                 
                 if response.status_code != 200:
                     self.monitoring.log_task_event(
-                        task_name='trigger_task_status_update',
+                        task_name=self.task_name,
                         details={
                             'grievance_id': self.grievance_id,
                             'session_id': self.session_id,
@@ -347,18 +372,37 @@ class TaskManager:
                     )
 
             except Exception as e:
+                # Debug logging for inner exception
                 self.monitoring.log_task_event(
-                    task_name='trigger_task_status_update',
+                    task_name=self.task_name,
                     details={
                         'grievance_id': self.grievance_id,
                         'session_id': self.session_id,
                         'error': str(e),
-                        'note': 'Failed to send task status update'
+                        'exception_type': type(e).__name__,
+                        'exception_traceback': str(e.__traceback__),
+                        'note': 'DEBUG: Inner exception in HTTP request'
                     }
                 )
-            logging.error(f"Failed to send task status update for grievance '{self.grievance_id}' and session '{self.session_id}': {e}")
+                logging.error(f"Failed to send task status update for grievance '{self.grievance_id}' and session '{self.session_id}': {e}")
 
         except Exception as e:
+            # Debug logging to understand the exception
+            self.monitoring.log_task_event(
+                task_name=self.task_name,
+                details={
+                    'grievance_id': self.grievance_id,
+                    'session_id': self.session_id,
+                    'task_name': self.task_name,
+                    'entity_key': self.entity_key,
+                    'entity_id': self.entity_id,
+                    'exception_type': type(e).__name__,
+                    'exception_message': str(e),
+                    'exception_traceback': str(e.__traceback__),
+                    'note': 'DEBUG: Exception in emit_status method'
+                }
+            )
+            
             self.monitoring.log_task_event(
                 task_name=self.task_name,
                 details={
@@ -382,7 +426,7 @@ class TaskManager:
             return False, None
             
         # Get current retry count from database using simpler query
-        task_info = self.db_task.get_task_status(self.task_id)
+        task_info = self.db_task.get_task(self.task_id)
         if not task_info:
             return False, None
             
@@ -830,8 +874,8 @@ class DatabaseTaskManager(TaskManager):
     Specialized TaskManager for database operations.
     Handles database-specific task lifecycle and error handling.
     """
-    def __init__(self, task=None, task_type='Database', emit_websocket=False, service='db_operations'):
-        super().__init__(task=task, task_type=task_type, emit_websocket=emit_websocket, service=service)
+    def __init__(self, task=None, emit_websocket=False):
+        super().__init__(task=task,  emit_websocket=emit_websocket)
 
         
     def prepare_task_result_data_to_db(self, input_data: dict) -> dict:
