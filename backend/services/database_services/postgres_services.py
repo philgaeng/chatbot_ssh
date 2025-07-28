@@ -212,7 +212,7 @@ class DatabaseManager(BaseDatabaseManager):
     
     # ===== FILE OPERATIONS =====
     
-    def store_file(self, file_data: Dict[str, Any]) -> bool:
+    def store_file_attachment(self, file_data: Dict[str, Any]) -> bool:
         """Store file attachment"""
         return self.file.store_file_attachment(file_data)
     

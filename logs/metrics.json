@@ -1,6 +1,16 @@
 {
   "classify_and_summarize_grievance_task": {
-    "start_time": 1753689223.5930474,
-    "failed_tasks": 31
+    "start_time": 1753710722.9549007,
+    "failed_tasks": 44
+  },
+  "upload_files": {
+    "start_time": 1753710732.364404
+  },
+  "get_file_metadata": {
+    "start_time": 1753710732.365943
+  },
+  "process_file_upload_task": {
+    "start_time": 1753710732.3911788,
+    "failed_tasks": 5
   }
 }

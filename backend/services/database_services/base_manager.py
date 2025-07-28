@@ -56,6 +56,7 @@ class BaseDatabaseManager:
         self.province = DEFAULT_VALUES['DEFAULT_PROVINCE']
         self.district = DEFAULT_VALUES['DEFAULT_DISTRICT']
         self.office = DEFAULT_VALUES['DEFAULT_OFFICE']
+        self.NOT_PROVIDED = DEFAULT_VALUES['NOT_PROVIDED']
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -266,7 +267,7 @@ class BaseDatabaseManager:
 
     def _standardize_phone_number(self, phone_number: str) -> str:
         """Standardize phone number format before hashing and storing in the database"""
-        if not phone_number:
+        if not phone_number or phone_number == '' or phone_number.lower() in ['null', 'none', 'nan'] or phone_number == self.NOT_PROVIDED:
             return phone_number
         
         # Remove all non-digit characters except +
@@ -1005,16 +1006,15 @@ class TaskDbManager(BaseDatabaseManager):
     def get_task(self, task_id: str) -> Optional[Dict]:
         """Get task by ID with its entity relationships"""
         query = """
-            SELECT t.*, ts.task_status_name,
+            SELECT t.*
                    json_agg(json_build_object(
                        'entity_key', te.entity_key,
                        'entity_id', te.entity_id
                    )) as entities
             FROM tasks t
-            JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
             LEFT JOIN task_entities te ON t.task_id = te.task_id
             WHERE t.task_id = %s
-            GROUP BY t.task_id, ts.task_status_name
+            GROUP BY t.task_id, t.task_status_code
         """
         try:
             results = self.execute_query(query, (task_id,), "get_task")
@@ -1132,21 +1132,11 @@ class TaskDbManager(BaseDatabaseManager):
 class FileDbManager(BaseDatabaseManager):
     """Handles file attachment CRUD and lookup logic"""
     def store_file_attachment(self, file_data: Dict) -> bool:
-        query = """
-            INSERT INTO file_attachments (
-                file_id, grievance_id, file_name,
-                file_path, file_type, file_size
-            ) VALUES (%s, %s, %s, %s, %s, %s)
-        """
+        """Store file attachment in the database"""
+        allowed_keys = ['file_id', 'grievance_id', 'file_name', 'file_path', 'file_type', 'file_size']
+
         try:
-            self.execute_update(query, (
-                file_data['file_id'],
-                file_data['grievance_id'],
-                file_data['file_name'],
-                file_data['file_path'],
-                file_data['file_type'],
-                file_data['file_size']
-            ), "store_file_attachment")
+            self.execute_insert(table_name="file_attachments", input_data=file_data, allowed_fields=allowed_keys)
             return True
         except Exception as e:
             self.logger.error(f"Error storing file attachment: {str(e)}")

@@ -119,6 +119,7 @@ window.getGrievanceIdStatus = function () {
 
 // Initialize WebSocket connection
 function initializeWebSocket() {
+  // Connect to Rasa websocket for bot messages
   socket = io(WEBSOCKET_CONFIG.URL, {
     path: WEBSOCKET_CONFIG.OPTIONS.path,
     transports: WEBSOCKET_CONFIG.OPTIONS.transports,
@@ -130,6 +131,19 @@ function initializeWebSocket() {
 
   // Make socket available globally
   window.socket = socket;
+
+  // Connect to Flask websocket for file status updates
+  const flaskSocket = io("http://localhost:5001", {
+    path: "/socket.io/",
+    transports: ["websocket"],
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    pingTimeout: 120000,
+  });
+
+  // Make flask socket available globally
+  window.flaskSocket = flaskSocket;
 
   setupSocketEventHandlers();
 }
@@ -414,7 +428,8 @@ async function handleFileUpload(files) {
   const formData = new FormData();
   formData.append("grievance_id", window.grievanceId);
   formData.append("client_type", "rasa");
-  formData.append("session_id", socket.id);
+  formData.append("rasa_session_id", socket.id); // Rasa session ID for bot context
+  formData.append("session_id", window.flaskSessionId || socket.id); // Flask session ID for websocket emissions
 
   // Check for audio files
   const audioFiles = Array.from(files).filter((file) => {

@@ -38,7 +38,6 @@ class FileServerCore(APIManager):
         super().__init__(SERVICE_NAME)
         self.task_logger = TaskLogger(service_name=SERVICE_NAME)
         self.logger = self.task_logger.logger
-        self.log_event = self.task_logger.log_event
         self.upload_folder = upload_folder
         self.allowed_extensions = allowed_extensions
         os.makedirs(upload_folder, exist_ok=True)
