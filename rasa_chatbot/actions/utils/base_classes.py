@@ -18,8 +18,6 @@ import logging
 
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
-DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
-DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 
 
 class LanguageHelper:
@@ -159,8 +157,9 @@ class BaseAction(Action, ABC):
         self.SKIP_VALUE = SKIP_VALUE
         self.VALIDATION_SKIP = VALIDATION_SKIP
         self.DEFAULT_LANGUAGE_CODE = DEFAULT_LANGUAGE_CODE
-        self.DEFAULT_PROVINCE = DEFAULT_PROVINCE
-        self.DEFAULT_DISTRICT = DEFAULT_DISTRICT
+        self.DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
+        self.DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
+        self.DEFAULT_OFFICE = DEFAULT_VALUES["DEFAULT_OFFICE"]
         self.BUTTON_SKIP = BUTTON_SKIP
         self.BUTTON_AFFIRM = BUTTON_AFFIRM
         self.BUTTON_DENY = BUTTON_DENY
@@ -179,14 +178,20 @@ class BaseAction(Action, ABC):
         """
         pass
 
-    def _update_language_code(self, tracker: Tracker) -> None:
+    def _update_language_code_and_location_info(self, tracker: Tracker) -> None:
         """Update the language code from tracker for use in validation methods."""
         if not hasattr(self, 'language_code'):
             self.language_code = tracker.get_slot("language_code") or self.DEFAULT_LANGUAGE_CODE
+        if not hasattr(self, 'province'):
+            self.province = tracker.get_slot("province") or self.DEFAULT_PROVINCE
+        if not hasattr(self, 'district'):
+            self.district = tracker.get_slot("district") or self.DEFAULT_DISTRICT
+        if not hasattr(self, 'office'):
+            self.office = tracker.get_slot("office") or self.DEFAULT_OFFICE
 
     def _initialize_language_and_helpers(self, tracker: Tracker) -> None:
         """Initialize language code and update all helper services."""
-        self._update_language_code(tracker)
+        self._update_language_code_and_location_info(tracker)
         if not hasattr(self, 'keyword_detector'):
             self.keyword_detector = self.helpers.keyword_detector
         else:

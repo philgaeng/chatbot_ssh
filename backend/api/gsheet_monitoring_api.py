@@ -14,7 +14,7 @@ class GSheetMonitoringAPI:
         self.gsheet_bearer_token = os.getenv('GSHEET_BEARER_TOKEN')
         self.db = db_manager
         self.log_event = self.api_manager.log_event
-        self.IN_PROGRESS = self.api_manager.IN_PROGRESS
+        self.STARTED = self.api_manager.STARTED
         self.SUCCESS = self.api_manager.SUCCESS
         self.FAILED = self.api_manager.FAILED
 

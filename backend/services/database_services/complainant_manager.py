@@ -65,8 +65,12 @@ class ComplainantDbManager(BaseDatabaseManager):
     def get_complainants_by_phone_number(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
         self.logger.debug(f"original phone number: {phone_number}")
-        search_phone = self._hash_value(phone_number) if self.encryption_key else phone_number
+        standardized_phone = self._standardize_phone_number(phone_number)
+        search_phone = self._hash_value(standardized_phone) if self.encryption_key else standardized_phone
         self.logger.debug(f"hashed phone number: {search_phone}")
+        
+        # Add debug logging to track the hash
+        self.logger.debug(f"Phone number '{standardized_phone}' hashed to '{search_phone}' in search")
         
         query = """
             SELECT complainant_id, complainant_unique_id, complainant_full_name, complainant_phone,
@@ -78,6 +82,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             ORDER BY created_at DESC
         """
         try:
+            self.logger.debug(f"search_phone at query time: {search_phone}")
             results = self.execute_query(query, (search_phone,), "get_complainants_by_phone_number")
             # Decrypt sensitive fields in results
             decrypted_results = []
@@ -92,7 +97,7 @@ class ComplainantDbManager(BaseDatabaseManager):
             self.logger.error(f"Error retrieving complainants by phone number: {str(e)}")
             return []
             
-    def get_complainant_by_id(self, complainant_id: int) -> Optional[Dict[str, Any]]:
+    def get_complainant_by_id(self, complainant_id: str) -> Optional[Dict[str, Any]]:
         query = """
             SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_phone,
                    complainant_email, complainant_province, complainant_district,
@@ -114,68 +119,23 @@ class ComplainantDbManager(BaseDatabaseManager):
     def create_complainant(self, data: Dict[str, Any]) -> bool:
         """Create a new complainant record with encrypted sensitive fields"""
         try:
-            complainant_id = data.get('complainant_id')
+            complainant_id = data.get('complainant_id') or self.generate_id('complainant_id')
+            data['complainant_id'] = complainant_id
+            data['complainant_unique_id'] = complainant_id #complainant_unique_id is the same as complainant_id for now
             self.logger.info(f"create_complainant: Creating complainant with ID: {complainant_id}")
-            if self.encryption_key:
-                # Encrypt sensitive fields before storing
-                encrypted_data = self._encrypt_sensitive_data(data)
-                hashed_data = self._hash_sensitive_data(data)
-                self.logger.debug(f"complainant hashed data before insert : {hashed_data}")
-                for k, v in hashed_data.items():
-                    encrypted_data[k] = v
-                insert_query = """
-                        INSERT INTO complainants (
-                            complainant_id, complainant_unique_id, complainant_full_name,
-                            complainant_phone, complainant_email,
-                            complainant_province, complainant_district, complainant_municipality,
-                            complainant_ward, complainant_village, complainant_address,
-                            complainant_phone_hash, complainant_email_hash, complainant_full_name_hash
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING complainant_id
-                    """
-                self.execute_insert(insert_query, (
-                    complainant_id,
-                    complainant_id,  # Use same ID for complainant_unique_id
-                        encrypted_data.get('complainant_full_name'),
-                        encrypted_data.get('complainant_phone'),
-                        encrypted_data.get('complainant_email'),
-                        encrypted_data.get('complainant_province'),
-                        encrypted_data.get('complainant_district'),
-                        encrypted_data.get('complainant_municipality'),
-                        encrypted_data.get('complainant_ward'),
-                        encrypted_data.get('complainant_village'),
-                        encrypted_data.get('complainant_address'),
-                        encrypted_data.get('complainant_phone_hash'),
-                        encrypted_data.get('complainant_email_hash'),
-                        encrypted_data.get('complainant_full_name_hash')
-                    ))
-                self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id} and hashed phone number: {encrypted_data.get('complainant_phone_hash')}")
-                return True
-            else:
-                insert_query = """
-                        INSERT INTO complainants (
-                            complainant_id, complainant_unique_id, complainant_full_name,
-                            complainant_phone, complainant_email,
-                            complainant_province, complainant_district, complainant_municipality,
-                            complainant_ward, complainant_village, complainant_address
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING complainant_id
-                    """
-                self.execute_insert(insert_query, (
-                    complainant_id,
-                    complainant_id,  # Use same ID for complainant_unique_id
-                        data.get('complainant_full_name'),
-                        data.get('complainant_phone'),
-                        data.get('complainant_email'),
-                        data.get('complainant_province'),
-                        data.get('complainant_district'),
-                        data.get('complainant_municipality'),
-                        data.get('complainant_ward'),
-                        data.get('complainant_village'),
-                        data.get('complainant_address')
-                    ))
-                self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id}")
-                return True
+            allowed_fields = ['complainant_id', 'complainant_unique_id', 'complainant_full_name', 'complainant_phone', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
+
+            data = {k: v for k, v in data.items() if k in allowed_fields}
+
+            if data['complainant_phone']:
+                data['complainant_phone'] = self._standardize_phone_number(data['complainant_phone'])
+
+            input_data = self._encrypt_and_hash_sensitive_data(data) #manage encryption and hashing when required
+                    
+            #execute the upsert query
+            result = self.execute_insert(table_name='complainants', input_data=input_data)
+            self.logger.info(f"create_complainant: Successfully created complainant with ID: {complainant_id}")
+            return True
 
         except Exception as e:
             if not complainant_id:
@@ -186,42 +146,26 @@ class ComplainantDbManager(BaseDatabaseManager):
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
-    def update_complainant(self, complainant_id: str, data: Dict[str, Any]) -> bool:
+    def update_complainant(self, complainant_id: str, data: Dict[str, Any]) -> int:
         """Update an existing complainant record with encrypted sensitive fields"""
         try:
             self.logger.info(f"update_complainant: Updating complainant with ID: {complainant_id}")
-            
+            allowed_fields = ['complainant_full_name', 'complainant_phone', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
+            # ensure the phone number is standardized
+            if data.get('complainant_phone'):
+                data['complainant_phone'] = self._standardize_phone_number(data['complainant_phone'])
+            #ensure the data is within the allowed fields
+            input_data = self.select_query_data(data, allowed_fields)
             # Encrypt sensitive fields before storing
-            encrypted_data = self._encrypt_sensitive_data(data)
-            
-            update_query = """
-                    UPDATE complainants 
-                    SET complainant_full_name = %s,
-                        complainant_phone = %s,
-                        complainant_email = %s,
-                        complainant_province = %s,
-                        complainant_district = %s,
-                        complainant_municipality = %s,
-                        complainant_ward = %s,
-                        complainant_village = %s,
-                        complainant_address = %s
-                    WHERE complainant_id = %s
-                    RETURNING complainant_id
-                """
-            self.execute_update(update_query, (
-                    encrypted_data.get('complainant_full_name'),
-                    encrypted_data.get('complainant_phone'),
-                    encrypted_data.get('complainant_email'),
-                    encrypted_data.get('complainant_province'),
-                    encrypted_data.get('complainant_district'),
-                    encrypted_data.get('complainant_municipality'),
-                    encrypted_data.get('complainant_ward'),
-                    encrypted_data.get('complainant_village'),
-                    encrypted_data.get('complainant_address'),
-                    complainant_id
-                ))
-            self.logger.info(f"update_complainant: Updated complainant with ID: {complainant_id}, rows affected: {len(data)}")
-            return True
+            encrypted_data = self._encrypt_and_hash_sensitive_data(input_data)
+            self.logger.debug(f"encrypted_data at update_complainant: {encrypted_data}")
+            #prepare the query
+            set_clause = ', '.join([f'{k} = %s' for k in encrypted_data.keys()])
+            query = f"UPDATE complainants SET {set_clause} WHERE complainant_id = %s"
+            values = tuple(encrypted_data.values()) + (complainant_id,)
+            #execute the update query
+            affected_rows = self.execute_update(query, values)
+            return affected_rows  # Just return True if any rows were updated
             
         except Exception as e:
             self.logger.error(f"Error in update_complainant: {str(e)}")

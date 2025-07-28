@@ -14,9 +14,8 @@ from backend.logger.logger import TaskLogger
 from backend.config.constants import TASK_STATUS
 
 SUCCESS = TASK_STATUS['SUCCESS']
-IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+STARTED = TASK_STATUS['STARTED']
 FAILED = TASK_STATUS['FAILED']
-ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
 
 task_logger = TaskLogger(service_name='voice_grievance')
