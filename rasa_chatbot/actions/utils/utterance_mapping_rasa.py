@@ -518,20 +518,16 @@ UTTERANCE_MAPPING = {
                 4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
-                }
-            }
-        },
-        'send_last_utterance_buttons': {
-            'utterances': {
-                1: {
+                },
+                5: {
                     'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
                     'ne': "तपाईंको गुनासो दर्ता गरिएको छ। हामीलाई एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ।"
                 },
-                2: {
+                6: {
                     'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
                     'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
                 },
-                3: {
+                7: {
                     'en': "You can still attach more files to your grievance  by clicking on the attachment button below.",
                     'ne': "तपाईं अभी भी तपाईंको गुनासोको लागि अधिक फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
                 }
@@ -557,50 +553,6 @@ UTTERANCE_MAPPING = {
                 4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
-                }
-            }
-        },
-        'create_confirmation_message': {
-            'utterances': {
-                'grievance_id': {
-                    'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
-                    'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
-                },
-                'grievance_timestamp': {
-                    'en': "Grievance filed on: {grievance_timestamp}",
-                    'ne': "गुनासो दर्ता गरिएको: {grievance_timestamp}"
-                },
-                'grievance_summary': {
-                    'en': "**Summary: {grievance_summary}**",
-                    'ne': "**सारांश: {grievance_summary}**"
-                },
-                'grievance_categories': {
-                    'en': "**Category: {grievance_categories}**",
-                    'ne': "**श्रेणी: {grievance_categories}**"
-                },
-                'grievance_description': {
-                    'en': "**Details: {grievance_description}**",
-                    'ne': "**विवरण: {grievance_description}**"
-                },
-                'complainant_email': {
-                    'en': "\nA confirmation email will be sent to {complainant_email}",
-                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {complainant_email}"
-                },
-                'complainant_phone': {
-                    'en': "**A confirmation SMS will be sent to your phone: {complainant_phone}**",
-                    'ne': "**तपाईंको फोनमा सुनिश्चित गर्ने संदेश भेटिन्छ। {complainant_phone}**"
-                },
-                'grievance_outro': {
-                    'en': "Our team will review it shortly and contact you if more information is needed.",
-                    'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
-                },
-                'grievance_timeline': {
-                    'en': "The standard resolution time for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
-                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
-                },
-                'grievance_status': {
-                    'en': "**Status:**",
-                    'ne': "**स्थिति:**"
                 }
             }
         },

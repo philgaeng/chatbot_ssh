@@ -4,14 +4,19 @@ from random import randint
 from unittest.mock import patch, MagicMock
 from backend.services.database_services.postgres_services import db_manager
 from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, TRANSCRIPTION_PROCESSING_STATUS
+from backend.services.database_services.base_manager import BaseDatabaseManager
+
 
 # Check if string is a valid UUID format
-def is_valid_uuid(uuid_string):
-    try:
-        uuid.UUID(uuid_string)
-        return True
-    except ValueError:
-        return False
+def is_valid_key(uuid_string):
+    startswith = ['GR-2025', 'CM-2025', 'REC-2025', 'TR-2025', 'TL-2025']
+    endswith = ['-B', '-A']
+    for start in startswith:
+        if uuid_string.startswith(start):
+            for end in endswith:
+                if uuid_string.endswith(end):
+                    return True
+    return False
 
 # Test data templates
 id_generation_data = {
@@ -58,7 +63,7 @@ def recording_id(grievance_id):
         'language_code': 'en',
         'processing_status': TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']
     }
-    return db_manager.create_or_update_recording(recording_data)
+    return db_manager.create_recording(recording_data)
 
 @pytest.fixture(scope="module")
 def transcription_id(grievance_id, recording_id):
@@ -183,7 +188,7 @@ def test_get_grievance_files(grievance_id):
 def test_create_or_update_recording(recording_id):
     assert recording_id is not None
     print(f"rec_id: {recording_id}")
-    assert is_valid_uuid(recording_id)
+    assert is_valid_key(recording_id)
 
 def test_create_transcription(grievance_id, recording_id):
     transcription_data = {
@@ -195,10 +200,9 @@ def test_create_transcription(grievance_id, recording_id):
     }
     trans_id = db_manager.create_transcription(transcription_data)
     assert trans_id is not None
+    assert is_valid_key(trans_id)
 
-def test_update_transcription(transcription_id):
-    result = db_manager.update_transcription(transcription_id, {'field_name': 'grievance_description', 'automated_transcript': 'Updated transcription again'})
-    assert result is True
+
 
 def test_create_translation(grievance_id, transcription_id):
     translation_data = {
@@ -214,19 +218,14 @@ def test_create_translation(grievance_id, transcription_id):
     translation_id = db_manager.create_translation(translation_data)
     assert translation_id is not None
 
-def test_update_translation(translation_id):
-    result = db_manager.update_translation(translation_id, {'grievance_description_en': 'Updated translation description'})
-    assert result is True
+
 
 def test_create_task(grievance_id):
     task_id = "task" + str(randint(100, 999))
-    task_data = {
-        'task_id': task_id,
-        'task_name': 'Test Task',
-        'entity_key': 'grievance_id',
-        'entity_id': grievance_id
-    }
-    result = db_manager.create_task(task_data)
+    task_name = 'Test Task'
+    entity_key = 'grievance_id'
+    entity_id = grievance_id
+    result = db_manager.create_task(task_id = task_id, task_name=task_name, entity_key=entity_key, entity_id=entity_id)
     assert result is not None
 
 def test_get_task():
@@ -247,7 +246,7 @@ def test_store_file(grievance_id):
         'grievance_id': grievance_id,
         'file_path': '/tmp/test_file.txt',
         'file_type': 'txt',
-        'uploaded_by': 'tester'
+        'uploaded_by': 'tester',
     }
     result = db_manager.store_file(file_data)
     assert result in [True, False]

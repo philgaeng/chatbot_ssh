@@ -10,7 +10,7 @@ from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from rasa_chatbot.actions.utils.base_classes import BaseFormValidationAction, BaseAction
 from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
-from backend.config.constants import EMAIL_TEMPLATES
+from backend.config.constants import EMAIL_TEMPLATES, ADMIN_EMAILS
 
 
 
@@ -40,8 +40,8 @@ class ActionStartGrievanceProcess(BaseAction):
         # reset the form parameters
         BaseFormValidationAction.message_display_list_cat = True
         set_id_data = {
-            'complainant_province': tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE,
-            'complainant_district': tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT,
+            'complainant_province': tracker.get_slot("complainant_province") or self.province,
+            'complainant_district': tracker.get_slot("complainant_district") or self.district,
             'complainant_office': tracker.get_slot("complainant_office") or None,
             'source': 'bot'
         }
@@ -118,8 +118,8 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 'grievance_id': grievance_id,
                 'complainant_id': tracker.get_slot("complainant_id"),
                 'language_code': self.language_code,
-                'complainant_province': tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE,
-                'complainant_district': tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT,
+                'complainant_province': tracker.get_slot("complainant_province") or self.province,
+                'complainant_district': tracker.get_slot("complainant_district") or self.district,
                 'values': {
                     'grievance_description': grievance_description
                 }
@@ -134,14 +134,14 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             # Return slots to indicate async processing
             return {
                 "classification_task_id": task_id,
-                "classification_status": self.TASK_STATUS["IN_PROGRESS"]
+                "classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_generated"]
             }
             
         except Exception as e:
             self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
             return {
-                "classification_status": self.TASK_STATUS["ERROR"],
+                "classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_error"],
                 "grievance_summary": "",
                 "grievance_categories": [],
                 "grievance_summary_status": self.SKIP_VALUE,
@@ -291,6 +291,7 @@ class ActionAskGrievanceNewDetail(BaseAction):
 
 ############################ STEP 4 - SUBMIT GRIEVANCE ############################
 class ActionSubmitGrievance(BaseAction):
+
     def name(self) -> Text:
         return "action_submit_grievance"
 
@@ -306,7 +307,7 @@ class ActionSubmitGrievance(BaseAction):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
-    def collect_grievance_data(self, tracker: Tracker) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def collect_grievance_data(self, tracker: Tracker) -> Dict[str, Any]:
         """Collect and separate user and grievance data from slots."""
         # set up the timestamp and timeline
         grievance_timestamp = self.get_current_datetime()
@@ -348,7 +349,7 @@ class ActionSubmitGrievance(BaseAction):
                 grievance_data[key] = self.NOT_PROVIDED
         return grievance_data
     
-    def _get_attached_files_info(self, grievance_id: str) -> str:
+    def _get_attached_files_info(self, grievance_id: str) -> Dict[str, Any]:
         """Get information about files attached to a grievance.
         
         Args:
@@ -369,30 +370,79 @@ class ActionSubmitGrievance(BaseAction):
             ])
                 return {"has_files": True,
                         "files_info": files_info}
+
         except Exception as e:
             self.logger.error(f"❌ Error getting attached files info: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to get attached files info: {str(e)}")
-            return {"has_files": False,
-                    "files_info": ""}
+
         
     def create_confirmation_message(self, 
                                     grievance_data: Dict[str, Any]) -> str:
         """Create a formatted confirmation message."""
+
+        allowed_keys = ['grievance_id',
+                        'grievance_timestamp',
+                        'grievance_description',
+                        'complainant_email',
+                        'complainant_phone',
+                        'grievance_outro',
+                        'grievance_timeline']
         
+        message_keys = [i for i in allowed_keys if grievance_data.get(i) and grievance_data.get(i) != self.NOT_PROVIDED]
+
+        all_message_elements =  {
+                'grievance_id': {
+                    'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
+                    'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
+                },
+                'grievance_timestamp': {
+                    'en': "Grievance filed on: {grievance_timestamp}",
+                    'ne': "गुनासो दर्ता गरिएको: {grievance_timestamp}"
+                },
+                'grievance_summary': {
+                    'en': "**Summary: {grievance_summary}**",
+                    'ne': "**सारांश: {grievance_summary}**"
+                },
+                'grievance_categories': {
+                    'en': "**Category: {grievance_categories}**",
+                    'ne': "**श्रेणी: {grievance_categories}**"
+                },
+                'grievance_description': {
+                    'en': "**Details: {grievance_description}**",
+                    'ne': "**विवरण: {grievance_description}**"
+                },
+                'complainant_email': {
+                    'en': "\nA confirmation email will be sent to {complainant_email}",
+                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {complainant_email}"
+                },
+                'complainant_phone': {
+                    'en': "**A confirmation SMS will be sent to your phone: {complainant_phone}**",
+                    'ne': "**तपाईंको फोनमा सुनिश्चित गर्ने संदेश भेटिन्छ। {complainant_phone}**"
+                },
+                'grievance_outro': {
+                    'en': "Our team will review it shortly and contact you if more information is needed.",
+                    'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
+                },
+                'grievance_timeline': {
+                    'en': "The standard resolution time for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
+                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
+                },
+                'grievance_status': {
+                    'en': "**Status:**",
+                    'ne': "**स्थिति:**"
+                }
+            }
+
+        message_elements = [all_message_elements[i][self.language_code] for i in message_keys]
+
         # Get attached files information using the helper function
         has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
         files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
         
-        message = [self.get_utterance(i) for i in ['grievance_id',
-                                                                'grievance_timestamp',
-                                                         'grievance_description',
-                                                         'complainant_email',
-                                                         'complainant_phone',
-                                                         'grievance_outro',
-                                                         'grievance_timeline'] if grievance_data.get(i) is not self.NOT_PROVIDED]
+
         
-        message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
+        message = "\n".join(message_elements).format(grievance_id=grievance_data['grievance_id'], 
                                             grievance_timestamp=grievance_data['grievance_timestamp'],
                                             grievance_description=grievance_data['grievance_description'],
                                             complainant_email=grievance_data['complainant_email'],
@@ -446,7 +496,7 @@ class ActionSubmitGrievance(BaseAction):
             grievance_id=email_data['grievance_id']
         )
         try:
-            self.email_client.send_email(to_emails,
+            self.messaging.send_email(to_emails,
                                         subject = subject,
                                         body=body
                                         )
@@ -473,12 +523,12 @@ class ActionSubmitGrievance(BaseAction):
         self.logger.info("send last utterance and buttons")
         try:
             if gender_tag:
-                    utterance = self.get_utterance(1)
+                    utterance = self.get_utterance(5) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
                     buttons = self.get_buttons(1)
             elif not has_files:
-                utterance = self.get_utterance(2)
+                utterance = self.get_utterance(6)
             else:
-                utterance = self.get_utterance(3)
+                utterance = self.get_utterance(7)
             
             if buttons:
                 dispatcher.utter_message(text=utterance, buttons=buttons)
@@ -523,7 +573,7 @@ class ActionSubmitGrievance(BaseAction):
                 #send sms
                 complainant_phone = grievance_data.get('complainant_phone')
                 if complainant_phone != self.NOT_PROVIDED:
-                    self.sms_client.send_sms(complainant_phone, confirmation_message)
+                    self.messaging.send_sms(phone_number=complainant_phone, message=confirmation_message)
                     #utter sms confirmation message
                     utterance = self.get_utterance(2)
                     utterance = utterance.format(complainant_phone=complainant_phone)

@@ -14,7 +14,7 @@ from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS_DICT, TASK_STATUS_DICT
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS, TRANSCRIPTION_PROCESSING_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
@@ -50,6 +50,12 @@ class BaseDatabaseManager:
         self.HASHED_FIELDS = {}
         self.DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
         self.TASK_STATUS = TASK_STATUS
+        self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
+        self.GRIEVANCE_CLASSIFICATION_STATUS = GRIEVANCE_CLASSIFICATION_STATUS
+        self.TRANSCRIPTION_PROCESSING_STATUS = TRANSCRIPTION_PROCESSING_STATUS
+        self.province = DEFAULT_VALUES['DEFAULT_PROVINCE']
+        self.district = DEFAULT_VALUES['DEFAULT_DISTRICT']
+        self.office = DEFAULT_VALUES['DEFAULT_OFFICE']
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -116,14 +122,11 @@ class BaseDatabaseManager:
         return logger
     
 
-
-
-
     def execute_query(self, query: str, params: tuple = (), operation: str = "query") -> List[Dict]:
         """Execute a query with logging"""
         start_time = datetime.now()
         try:
-            with self.get_connection() as conn:
+            with self.transaction() as conn:
                 with conn.cursor() as cur:
                     self.logger.info(f"Executing {operation}: {query[:100]}...")
                     cur.execute(query, params or ())
@@ -131,50 +134,78 @@ class BaseDatabaseManager:
                     duration = (datetime.now() - start_time).total_seconds()
                     self.logger.info(f"{operation} completed in {duration:.2f}s. Rows: {len(results)}")
                     return results
+                    
         except Exception as e:
             self.logger.error(f"{operation} failed: {str(e)}")
             raise DatabaseQueryError(f"Query execution failed: {str(e)}")
 
-    def execute_update(self, query: str, params: tuple = (), operation: str = "update") -> int:
+
+
+    def execute_update(self, query: str, values: tuple) -> int:
         """Execute an update query with logging"""
         start_time = datetime.now()
         try:
+            self.logger.debug(f"execute_update values: {values}")
+            self.logger.debug(f"execute_update query: {query}")
             with self.transaction() as conn:
                 with conn.cursor() as cur:
-                    self.logger.info(f"Executing {operation}: {query[:100]}...")
-                    cur.execute(query, params or ())
+                    self.logger.info(f"execute_update: Executing update query: {query[:100]}...")
+                    cur.execute(query, values)
                     affected_rows = cur.rowcount
                     duration = (datetime.now() - start_time).total_seconds()
-                    self.logger.info(f"{operation} completed in {duration:.2f}s. Affected rows: {affected_rows}")
+                    self.logger.info(f"execute_update: Update completed in {duration:.2f}s. Affected rows: {affected_rows}")
                     return affected_rows
         except Exception as e:
-            self.logger.error(f"{operation} failed: {str(e)}")
-            raise DatabaseQueryError(f"Update execution failed: {str(e)}")
+            self.logger.error(f"execute_update: Update failed: {str(e)}")
+            raise DatabaseQueryError(f"execute_update: Update execution failed: {str(e)}")
 
-    def execute_insert(self, query: str, params: tuple = (), database_operation: str = "insert") -> Any:
-        """Execute an insert query with logging"""
-        start_time = datetime.now()
+    def execute_insert(self, table_name: str, input_data: Dict[str, Any], allowed_fields: Optional[List[str]] = None,  returning: Optional[str] = None) -> Any:
+        """Execute an upsert query with logging"""
         try:
+            if allowed_fields:
+                input_data = self.select_query_data(input_data, allowed_fields)
+            values = self.generate_values_tuple(input_data)
+            query = self.generate_query_string(table_name, input_data, database_operation="insert", returning= returning)
+            self.logger.debug(f"Generated query: {query}")
             with self.transaction() as conn:
                 with conn.cursor() as cur:
-                    self.logger.info(f"Executing {database_operation}: {query[:100]}...")
-                    cur.execute(query, params or ())
-                    result = cur.fetchone()
-                    duration = (datetime.now() - start_time).total_seconds()
-                    self.logger.info(f"{database_operation} completed in {duration:.2f}s")
-                    self.logger.debug(f"Result from database insert: {result}")
-                    return result
-        except Exception as e:
-            self.logger.error(f"{database_operation} failed: {str(e)}")
-            raise DatabaseQueryError(f"Insert execution failed: {str(e)}")
+                    cur.execute(query, values)
+                    if returning:
+                        result = cur.fetchone()
+                        return result[0] if result else None
+                    else:
+                        return True
 
-    def generate_query_string(self, table_name: str, input_data: Dict[str, Any], database_operation: str = "insert", returning: str = None) -> str:
+        except Exception as e:
+            self.logger.error(f"insert failed: {str(e)}")
+            raise DatabaseQueryError(f"insert execution failed: {str(e)}")
+
+    def select_query_data(self, input_data: Dict[str, Any], allowed_fields: List[str]) -> Dict[str, Any]:
+        """Select the fields from the input data"""
+        return {field : input_data.get(field) for field in allowed_fields if field in input_data.keys() and input_data.get(field) is not None}
+
+    def generate_query_string(self, table_name: str, input_data: Dict[str, Any], database_operation: str = "insert", returning: Optional[str] = None) -> str:
         """Generate a query based on the input data"""
-        query = f"{database_operation.upper()} INTO {table_name} ({', '.join(input_data.keys())}) VALUES ({', '.join(['%s'] * len(input_data))})"
+        query_keys = input_data.keys()
+        self.logger.debug(f"query_keys at generate_query_string: {query_keys}")
+        if database_operation == "insert":
+            query = f"INSERT INTO {table_name} ({', '.join(query_keys)}) VALUES ({', '.join(['%s'] * len(query_keys))})"
+        elif database_operation == "update":
+            set_clause = ', '.join([f'{k} = %s' for k in query_keys])
+            where_clause = ' AND '.join([f'{k} = %s' for k in query_keys])  # ← Use AND instead of comma
+            query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
+        else:
+            raise ValueError(f"Invalid database operation: {database_operation}")
         if returning:
             query += f" RETURNING {returning}"
         self.logger.debug(f"Generated query: {query}")
+        self.logger.debug(f"len of query_keys: {len(query_keys)}")
         return query
+
+    
+    def generate_values_tuple(self, input_data: Dict[str, Any]) -> tuple:
+        """Generate a tuple of values from the input data"""
+        return tuple(input_data[k] for k in input_data.keys()) 
 
 
     def _encrypt_field(self, value: str) -> Optional[str]:
@@ -220,6 +251,40 @@ class BaseDatabaseManager:
                 decrypted_data[field] = self._decrypt_field(decrypted_data[field])
         return decrypted_data
 
+    def _encrypt_and_hash_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Encrypt and hash sensitive fields in complainant data"""
+        if self.encryption_key:
+            # Encrypt sensitive fields before storing
+            encrypted_data = self._encrypt_sensitive_data(data)
+            hashed_data = self._hash_sensitive_data(data)
+            for k, v in hashed_data.items():
+                encrypted_data[k] = v
+            self.logger.debug(f"encrypted and hashed data at encrypt_and_hash_sensitive_data: {encrypted_data}")
+            return encrypted_data
+        else:
+            return data
+
+    def _standardize_phone_number(self, phone_number: str) -> str:
+        """Standardize phone number format before hashing and storing in the database"""
+        if not phone_number:
+            return phone_number
+        
+        # Remove all non-digit characters except +
+        cleaned = ''.join(c for c in phone_number if c.isdigit() or c == '+')
+        
+        # Ensure it starts with +977 for Nepal numbers
+        if cleaned.startswith('9779'):
+            cleaned = '+' + cleaned
+        elif cleaned.startswith('9'):
+            cleaned = '+977' + cleaned
+        elif cleaned.startswith('+9779'):
+            cleaned = cleaned
+        elif cleaned.startswith('+63'): #enable for philippines numbers for testing
+            cleaned = cleaned
+        else:
+            raise ValueError(f"Invalid phone number: {phone_number}")
+        return cleaned
+
     def _hash_value(self, value: str) -> str:
         return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
@@ -252,10 +317,11 @@ class BaseDatabaseManager:
         return {'complainant_fields':complainant_fields, 'grievance_fields':grievance_fields}
 
     
-    def generate_id(self, type: str='grievance_id', province: str='KO', district: str='JH',  office: str=None, suffix: str='bot'):
+    def generate_id(self, type: str='grievance_id', province: Optional[str]=None, district: Optional[str]=None, office: Optional[str]=None, suffix: str='bot'):
         """Generate a unique ID based on type, province, and district"""
         import uuid
         from datetime import datetime
+        import re
 
         # Define type mappings
         type_prefixes = {
@@ -265,11 +331,22 @@ class BaseDatabaseManager:
             'transcription_id': 'TR',
             'translation_id': 'TL'
         }
-        if office:
-            office_suffix = office.upper().replace('_', '')[:3]
+        if province:
+            self.province = province
+            province_suffix = self.province.upper()[:2]
         else:
-            office_suffix = province.upper()[:2] + district.upper()[:2]
-
+            province_suffix = ''
+        if district:
+            self.district = district
+            district_suffix = self.district.upper()[:2]
+        else:
+            district_suffix = ''
+        if office:
+            self.office = office
+            office_number = re.sub(r'[^0-9]', '', self.office.upper())
+            office_suffix = self.office.upper().replace('_', '')[:2]+ office_number
+        else:
+            office_suffix = self.province.upper()[:2] + self.district.upper()[:2]
 
         try:
             prefix = type_prefixes.get(type)
@@ -682,7 +759,7 @@ class TableDbManager(BaseDatabaseManager):
         self.migrations_logger.info("Creating/recreating grievance_voice_recordings table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
-                recording_id UUID PRIMARY KEY,
+                recording_id TEXT PRIMARY KEY,
                 complainant_id TEXT REFERENCES complainants(complainant_id),
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 task_id TEXT,
@@ -690,24 +767,24 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 duration_seconds INTEGER,
                 file_size INTEGER,
-                processing_status TEXT DEFAULT 'pending' REFERENCES processing_statuses(status_code),
+                processing_status TEXT DEFAULT %s REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """, (TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']))
         
         self.migrations_logger.info("Creating/recreating grievance_transcriptions table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_transcriptions (
-                transcription_id SERIAL PRIMARY KEY,  -- Use SERIAL for auto-increment
-                recording_id UUID REFERENCES grievance_voice_recordings(recording_id),
+                transcription_id  TEXT PRIMARY KEY,  
+                recording_id TEXT REFERENCES grievance_voice_recordings(recording_id),
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT 'pending' REFERENCES processing_statuses(status_code),
+                verification_status TEXT DEFAULT %s REFERENCES processing_statuses(status_code),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -718,13 +795,13 @@ class TableDbManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """, (TRANSCRIPTION_PROCESSING_STATUS['FOR_VERIFICATION']))
 
         # Translations table
         self.migrations_logger.info("Creating/recreating grievance_translations table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_translations (
-                translation_id SERIAL PRIMARY KEY,  -- Use SERIAL for auto-increment
+                translation_id TEXT PRIMARY KEY, 
                 grievance_id TEXT REFERENCES grievances(grievance_id),
                 task_id TEXT,
                 grievance_description_en TEXT,
@@ -861,8 +938,12 @@ class TableDbManager(BaseDatabaseManager):
 class TaskDbManager(BaseDatabaseManager):
     """Manager for task-related database operations"""
     
-    VALID_ENTITY_KEYS = { 'grievance_id', 'complainant_id', 'recording_id', 'transcription_id', 'translation_id'}
     
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.VALID_ENTITY_KEYS = { 'grievance_id', 'complainant_id', 'recording_id', 'transcription_id', 'translation_id'}
+        
     def is_valid_entity_key(self, entity_key: str) -> bool:
         """Check if the entity key is valid"""
         result = entity_key in self.VALID_ENTITY_KEYS
@@ -897,10 +978,10 @@ class TaskDbManager(BaseDatabaseManager):
                 task_query = """
                     INSERT INTO tasks (
                         task_id, task_name, task_status_code
-                    ) VALUES (%s, %s, 'PENDING')
+                    ) VALUES (%s, %s, %s)
                     RETURNING task_id
                 """
-                cur.execute(task_query, (task_id, task_name))
+                cur.execute(task_query, (task_id, task_name, self.TASK_STATUS['STARTED']))
                 task_result = cur.fetchone()
                 
                 if not task_result:
@@ -966,37 +1047,7 @@ class TaskDbManager(BaseDatabaseManager):
             self.logger.error(f"Failed to get tasks: {str(e)}")
             return []
 
-    def get_pending_tasks(self, entity_key: str = "") -> List[Dict]:
-        """Get all pending tasks, optionally filtered by entity type"""
-        pending_statuses_code = [self.TASK_STATUS['QUEUED'], self.TASK_STATUS['IN_PROGRESS']]
-        query = """
-            SELECT t.*, ts.status_name,
-                   json_agg(json_build_object(
-                       'entity_key', te.entity_key,
-                       'entity_id', te.entity_id
-                   )) as entities
-            FROM tasks t
-            JOIN task_statuses ts ON t.task_status_code = ts.task_status_code
-            LEFT JOIN task_entities te ON t.task_id = te.task_id
-            WHERE t.task_status_code IN ({pending_statuses_code})
-            {entity_key_filter}
-            GROUP BY t.task_id, ts.task_status_name
-            ORDER BY t.created_at ASC
-        """
-        
-        try:
-            query = query.format(task_status_code=self.TASK_STATUS['PENDING'])
-            if entity_key:
-                if not self.is_valid_entity_key(entity_key):
-                    return []
-                query = query.format(entity_key_filter=f"AND te.entity_key = '{entity_key}'")
-                return self.execute_query(query, operation="get_pending_tasks")
-            else:
-                query = query.format(entity_key_filter="")
-                return self.execute_query(query, operation="get_pending_tasks")
-        except DatabaseError as e:
-            self.logger.error(f"Failed to get pending tasks: {str(e)}")
-            return []
+    #TODO: Add get_pending_tasks method to get the tasks from celery queue
 
     def update_task(self, task_id: str, update_data: dict) -> bool:
         """

@@ -26,9 +26,8 @@ SERVICE_NAME = "file_processor"
 UPLOAD_FOLDER = 'uploads'
 
 SUCCESS = TASK_STATUS['SUCCESS']
-IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+STARTED = TASK_STATUS['STARTED']
 FAILED = TASK_STATUS['FAILED']
-ERROR = TASK_STATUS['ERROR']
 RETRYING = TASK_STATUS['RETRYING']
 
         
@@ -56,7 +55,7 @@ class FileServerCore(APIManager):
     def get_valid_file(self, file_id: str) -> dict:
         """Retrieve and validate a file by ID."""
         try:
-            self.log_event(event_type=IN_PROGRESS, details={'file_id': file_id})
+            self.log_event(event_type=STARTED, details={'file_id': file_id})
             
             file_data = db_manager.get_file_by_id(file_id)
             if file_data and os.path.exists(file_data['file_path']):
@@ -72,7 +71,7 @@ class FileServerCore(APIManager):
     def get_audio_metadata(self, file_path: str) -> dict:
         """Get metadata for an audio file"""
         try:
-            self.log_event(event_type=IN_PROGRESS, details={'file_path': file_path})
+            self.log_event(event_type=STARTED, details={'file_path': file_path})
             
             metadata = {}
             
@@ -105,7 +104,7 @@ class FileServerCore(APIManager):
     def get_file_metadata(self, file_path: str) -> dict:
         """Get metadata for a file"""
         try:
-            self.log_event(event_type=IN_PROGRESS, details={'file_path': file_path})
+            self.log_event(event_type=STARTED, details={'file_path': file_path})
             
             file_stats = os.stat(file_path)
             metadata = {
@@ -150,7 +149,7 @@ class FileServerCore(APIManager):
 
     def process_batch_files(self, grievance_id: str, file_list: list) -> dict:
         """Process a batch of files for a grievance"""
-        self.log_event(event_type=IN_PROGRESS, details={'grievance_id': grievance_id, 'file_count': len(file_list)})
+        self.log_event(event_type=STARTED, details={'grievance_id': grievance_id, 'file_count': len(file_list)})
         
         try:
             results = []

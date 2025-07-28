@@ -1,6 +1,7 @@
 
 
 from typing import Dict, List, Optional, Any, TypeVar, Generic
+import traceback
 
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG, DEFAULT_VALUES
@@ -83,11 +84,11 @@ class DatabaseManager(BaseDatabaseManager):
 
     def _encrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Encrypt complainant data"""
-        return self.complainant._encrypt_complainant_data(data)
+        return self.complainant._encrypt_sensitive_data(data)
     
     def _decrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Decrypt complainant data"""
-        return self.complainant._decrypt_complainant_data(data)
+        return self.complainant._decrypt_sensitive_data(data)
     
     # ===== GRIEVANCE OPERATIONS =====
     
@@ -96,6 +97,10 @@ class DatabaseManager(BaseDatabaseManager):
         try:
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
+            if not (grievance_id and complainant_id):
+                self.logger.error(f"Error submitting grievance to db: Grievance ID or Complainant ID is missing: {data}")
+                return False
+            
             source = self.get_grievance_or_complainant_source(grievance_id)
             data['source'] = source
 
@@ -122,21 +127,21 @@ class DatabaseManager(BaseDatabaseManager):
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing grievance"""
         try:
-            grievance_id = data.get('grievance_id')
-            complainant_id = data.get('complainant_id')
+            
             source = self.get_grievance_or_complainant_source(grievance_id)
             data['source'] = source
 
             data = self.get_complainant_and_grievance_fields(data)
             complainant_data = data['complainant_fields']
             grievance_data = data['grievance_fields']
-
+            #deal with the complainant data
             if complainant_data:
+                complainant_id = self.complainant.get_complainant_id_from_grievance_id(grievance_id)
                 self.complainant.update_complainant(complainant_id, complainant_data)
-                self.logger.info(f"Complainant updated in db: {complainant_id}")
-                if grievance_data:
-                    self.grievance.update_grievance(grievance_id, grievance_data)
-                    self.logger.info(f"Grievance updated in db: {grievance_id}")
+                self.logger.info(f"Complainant updated in db: {grievance_id}")
+            if grievance_data:
+                self.grievance.update_grievance(grievance_id, grievance_data)
+                self.logger.info(f"Grievance updated in db: {grievance_id}")
             return True
         except Exception as e:
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
@@ -161,9 +166,13 @@ class DatabaseManager(BaseDatabaseManager):
     
     # ===== RECORDING OPERATIONS =====
     
-    def create_or_update_recording(self, data: Dict[str, Any]) -> Optional[str]:
+    def create_recording(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new voice recording"""
-        return self.recording.create_or_update_recording(data)
+        return self.recording.create_recording(data)
+
+    def update_recording(self, recording_id: str, data: Dict[str, Any]) -> bool:
+        """Update an existing voice recording"""
+        return self.recording.update_recording(recording_id, data)
     
     
     # ===== TRANSCRIPTION OPERATIONS =====

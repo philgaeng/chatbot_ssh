@@ -20,10 +20,12 @@ from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
 
 SUCCESS = TASK_STATUS['SUCCESS']
-IN_PROGRESS = TASK_STATUS['IN_PROGRESS']
+STARTED = TASK_STATUS['STARTED']
 FAILED = TASK_STATUS['FAILED']
-ERROR = TASK_STATUS['ERROR']
+
 RETRYING = TASK_STATUS['RETRYING']
+
+
 
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
 DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
@@ -43,7 +45,7 @@ def accessible_file_upload():
     """Handle file uploads from the accessible interface directly"""
     
     try:
-        task_logger.log_task_event('accessible_file_upload', IN_PROGRESS, {})
+        task_logger.log_task_event('accessible_file_upload', STARTED, {})
         
         # Check if grievance_id is provided
         grievance_id = request.form.get('grievance_id')
@@ -84,7 +86,7 @@ def accessible_file_upload():
         if not files_data:
             task_logger.log_task_event('accessible_file_upload', FAILED, {'error': 'Failed to save any files'})
             return jsonify({
-                'status': ERROR,
+                'status': FAILED,
                 'error': 'Failed to save any files'
             }), 500
         
@@ -118,7 +120,7 @@ def get_grievance_status(grievance_id):
         grievance = db_manager.get_grievance_by_id(grievance_id)
         if not grievance:
             return jsonify({
-                'status': 'error',
+                'status': FAILED,
                 'error': 'Grievance not found'
             }), 404
         
@@ -146,7 +148,7 @@ def get_grievance_status(grievance_id):
 def submit_grievance():
     """Unified endpoint for submitting a grievance with user info and audio recordings"""
     try:
-        task_logger.log_task_event('submit_grievance', IN_PROGRESS, {})
+        task_logger.log_task_event('submit_grievance', STARTED, {})
         
         # Extract complainant_id, grievance_id, province, and district from the form data
         complainant_id = request.form.get('complainant_id')
@@ -154,7 +156,7 @@ def submit_grievance():
         province = request.form.get('province', DEFAULT_PROVINCE)
         district = request.form.get('district', DEFAULT_DISTRICT)
         
-        task_logger.log_task_event('submit_grievance', IN_PROGRESS, {
+        task_logger.log_task_event('submit_grievance', STARTED, {
             'received_complainant_id': complainant_id,
             'received_grievance_id': grievance_id,
             'form_keys': list(request.form.keys()),
@@ -174,7 +176,7 @@ def submit_grievance():
                 field_name = next((field for field in VALID_FIELD_NAMES if field in file_path), None)
                 if not field_name:
                     task_logger.log_task_event('submit_grievance', FAILED, {'error': f'No field name found for file {file_path}'})
-                    return jsonify({'status': ERROR, 'error': f'No field name found for file {file_path}'}), 400
+                    return jsonify({'status': FAILED, 'error': f'No field name found for file {file_path}'}), 400
                 #sanitize duration to int
                 duration = request.form.get(f'duration', None)
                 if duration in ['float', 'int']:
@@ -199,7 +201,7 @@ def submit_grievance():
                 }
                 if duration and duration is not None:
                     recording_data['duration_seconds'] = duration
-                task_logger.log_task_event('submit_grievance', IN_PROGRESS, f"has_duration: {'TRUE' if duration else 'FALSE'}")
+                task_logger.log_task_event('submit_grievance', STARTED, f"has_duration: {'TRUE' if duration else 'FALSE'}")
                 
                 # Store recording in database directly (not using result storage task)
                 recording_id = db_manager.create_or_update_recording(recording_data)
@@ -208,13 +210,13 @@ def submit_grievance():
                     audio_files.append(recording_data)
                 else:
                     task_logger.log_task_event('submit_grievance', FAILED, {'error': f'Failed to create recording {recording_data}'})
-                    return jsonify({'status': ERROR, 'error': f'Failed to create recording {recording_data}'}), 500
+                    return jsonify({'status': FAILED, 'error': f'Failed to create recording {recording_data}'}), 500
                     
         if not audio_files:
             task_logger.log_task_event('submit_grievance', FAILED, {'error': 'No audio files provided in submission'})
-            return jsonify({'status': ERROR, 'error': 'No audio files provided'}), 400
+            return jsonify({'status': FAILED, 'error': 'No audio files provided'}), 400
         else:
-            task_logger.log_task_event('submit_grievance', IN_PROGRESS, f"audio_files: {audio_files}")
+            task_logger.log_task_event('submit_grievance', STARTED, f"audio_files: {audio_files}")
             
         # Queue Celery tasks for each file
         result = orchestrate_voice_processing(audio_files)

@@ -15,12 +15,6 @@ TASK_SLOTS_TO_UPDATE_MAP = {
     "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
    }
 
-IN_PROGRESS = TASK_STATUS["IN_PROGRESS"]
-SUCCESS = TASK_STATUS["SUCCESS"]
-FAILED = TASK_STATUS["FAILED"]
-ERROR = TASK_STATUS["ERROR"]
-RETRYING = TASK_STATUS["RETRYING"]
-
 
 class ActionWrapper(BaseAction):
     """Wrapper to catch and log registration errors for actions"""
