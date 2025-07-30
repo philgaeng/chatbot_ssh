@@ -46,8 +46,8 @@ class ActionStartGrievanceProcess(BaseAction):
             'source': 'bot'
         }
         # Create the grievance with temporary status and specify source as 'bot'
-        complainant_id = self.db_manager.create_complainant_id(set_id_data)
-        grievance_id = self.db_manager.create_grievance_id(set_id_data)
+        complainant_id = self.db_manager.generate_complainant_id(set_id_data)
+        grievance_id = self.db_manager.generate_grievance_id(set_id_data)
         self.logger.info(f"Created temporary grievance with ID: {grievance_id} and complainant ID: {complainant_id}")
         
         # Get utterance and buttons from mapping
@@ -79,7 +79,7 @@ class ActionStartGrievanceProcess(BaseAction):
                 SlotSet("grievance_summary_status", None),
                 SlotSet("grievance_categories_status", None),
                 SlotSet("main_story", "new_grievance"),
-                SlotSet("gender_issues_reported", False),
+                SlotSet("sensitive_issues_detected", False),
                 SlotSet("grievance_description_status", None)]
 
 
@@ -120,6 +120,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 'language_code': self.language_code,
                 'complainant_province': tracker.get_slot("complainant_province") or self.province,
                 'complainant_district': tracker.get_slot("complainant_district") or self.district,
+                'flask_session_id': tracker.get_slot("flask_session_id"),  # Get flask_session_id from slot
                 'values': {
                     'grievance_description': grievance_description
                 }
@@ -157,7 +158,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
     ) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed"
-        if tracker.get_slot("sensitive_issues_reported"):
+        if tracker.get_slot("sensitive_issues_detected"):
             return ["sensitive_issues_follow_up", "grievance_new_detail"]
         if tracker.get_slot("grievance_new_detail") == "completed":
             
@@ -166,9 +167,6 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         # Otherwise, keep asking for grievance_new_detail
         return ["grievance_new_detail"]
     
-    async def _dispatch_openai_message(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]):
-        if tracker.latest_message.get("text") == "/submit_details":
-            dispatcher.utter_message(text="Calling OpenAI for classification... This may take a few seconds...")
 
     def _update_grievance_text(self, current_text: str, new_text: str) -> str:
         """Helper method to update the grievance text."""
@@ -185,7 +183,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-
+        self.logger.debug(f"Extracting grievance_new_detail : {tracker.latest_message.get('text')}")
         return await self._handle_slot_extraction(
                                             "grievance_new_detail",
                                             tracker,
@@ -212,6 +210,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         
         """
         try:
+            self.logger.debug(f"Validating grievance_new_detail: {slot_value}")
             # Handle restart the process
             if slot_value == "/restart":
                 return {"grievance_new_detail": None,
@@ -224,16 +223,30 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             
             # Handle form completion
             if slot_value == "/submit_details":
+                self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
                 # Get base slots - async classification will be triggered here
                 slots_to_set = {
                     "grievance_new_detail": "completed",
                     "grievance_description": tracker.get_slot('grievance_description'),
                 }
                 
-                # Trigger async classification when form is completed
-                classification_slots = await self._trigger_async_classification(tracker, dispatcher)
-                slots_to_set.update(classification_slots)
-                self.logger.info(f"Slots to set: {slots_to_set}")
+                # Trigger async classification when form is completed if LLM_CLASSIFICATION is True
+                if self.LLM_CLASSIFICATION:
+                    classification_slots = await self._trigger_async_classification(tracker, dispatcher)
+                    slots_to_set.update(classification_slots)
+                self.logger.debug(f"Slots to set: {slots_to_set}")
+
+                # create the grievance in the database (this is necessary for the classification results to be stored)
+                grievance_data = {
+                    'grievance_id': tracker.get_slot('grievance_id'),
+                    'complainant_id': tracker.get_slot('complainant_id'),
+                    'grievance_description': tracker.get_slot('grievance_description'),
+                    'complainant_province': tracker.get_slot('complainant_province'),
+                    'complainant_district': tracker.get_slot('complainant_district'),
+                    'complainant_office': tracker.get_slot('complainant_office'),
+                    'source': 'bot'
+                }
+                await self.db_manager.create_complainant_and_grievance(grievance_data) #create the complainant and grievance in the database in one go and let the user move to the next without waiting for the storage to complete
                 return slots_to_set
             
             # Handle valid grievance text
@@ -288,349 +301,6 @@ class ActionAskGrievanceNewDetail(BaseAction):
 
 
 
-
-############################ STEP 4 - SUBMIT GRIEVANCE ############################
-class ActionSubmitGrievance(BaseAction):
-
-    def name(self) -> Text:
-        return "action_submit_grievance"
-
-    def get_current_datetime(self) -> str:
-        """Get current date and time in YYYY-MM-DD HH:MM format."""
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-
-    def is_valid_email(self, email: str) -> bool:
-        """Check if the provided string is a valid email address."""
-        if not email:
-            return False
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
-
-    def collect_grievance_data(self, tracker: Tracker) -> Dict[str, Any]:
-        """Collect and separate user and grievance data from slots."""
-        # set up the timestamp and timeline
-        grievance_timestamp = self.get_current_datetime()
-        grievance_timeline = (datetime.strptime(grievance_timestamp, "%Y-%m-%d %H:%M") + 
-                            timedelta(days=15)).strftime("%Y-%m-%d")
-        
-        # user data
-        grievance_data={k : tracker.get_slot(k) for k in ["complainant_id",
-                                                          "complainant_phone",
-                                                          "complainant_email",
-                                                          "complainant_full_name",
-                                                          "complainant_gender",
-                                                          "complainant_province",
-                                                          "complainant_district",
-                                                          "complainant_municipality",
-                                                          "complainant_project",
-                                                          "complainant_ward",
-                                                          "complainant_village",
-                                                          "complainant_address",
-                                                          "grievance_id",
-                                                          "grievance_description",
-                                                          "otp_verified",
-                                                          "grievance_categories",
-                                                          "grievance_summary"
-                                                          ]}
-        
-        grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
-        grievance_data["submission_type"] = "new_grievance"
-        grievance_data["grievance_timestamp"] = grievance_timestamp
-        grievance_data["grievance_timeline"] = grievance_timeline
-        # change all the values of the slots_skipped or None to "NOT_PROVIDED"
-        grievance_data = self._update_key_values_for_db_storage(grievance_data)
-        self.logger.info(f"Grievance data: {grievance_data}")
-                
-        return grievance_data
-
-    def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update the values of the grievance data for the database storage."""
-        for key, value in grievance_data.items():
-            if value == self.SKIP_VALUE or value is None:
-                grievance_data[key] = self.NOT_PROVIDED
-        return grievance_data
-    
-    def _get_attached_files_info(self, grievance_id: str) -> Dict[str, Any]:
-        """Get information about files attached to a grievance.
-        
-        Args:
-            grievance_id (str): The ID of the grievance to check for files
-            
-        Returns:
-            str: A formatted string containing file information, or empty string if no files
-        """
-        try:
-            files = self.db_manager.get_grievance_files(grievance_id)
-            if not files:
-                return {"has_files": False,
-                        "files_info": ""}
-            else:
-                files_info = "\nAttached files:\n" + "\n".join([
-                f"- {file['file_name']} ({file['file_size']} bytes)"
-                for file in files
-            ])
-                return {"has_files": True,
-                        "files_info": files_info}
-
-        except Exception as e:
-            self.logger.error(f"❌ Error getting attached files info: {str(e)}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            raise Exception(f"Failed to get attached files info: {str(e)}")
-
-        
-    def create_confirmation_message(self, 
-                                    grievance_data: Dict[str, Any]) -> str:
-        """Create a formatted confirmation message."""
-
-        allowed_keys = ['grievance_id',
-                        'grievance_timestamp',
-                        'grievance_description',
-                        'complainant_email',
-                        'complainant_phone',
-                        'grievance_outro',
-                        'grievance_timeline']
-        
-        message_keys = [i for i in allowed_keys if grievance_data.get(i) and grievance_data.get(i) != self.NOT_PROVIDED]
-
-        all_message_elements =  {
-                'grievance_id': {
-                    'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
-                    'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
-                },
-                'grievance_timestamp': {
-                    'en': "Grievance filed on: {grievance_timestamp}",
-                    'ne': "गुनासो दर्ता गरिएको: {grievance_timestamp}"
-                },
-                'grievance_summary': {
-                    'en': "**Summary: {grievance_summary}**",
-                    'ne': "**सारांश: {grievance_summary}**"
-                },
-                'grievance_categories': {
-                    'en': "**Category: {grievance_categories}**",
-                    'ne': "**श्रेणी: {grievance_categories}**"
-                },
-                'grievance_description': {
-                    'en': "**Details: {grievance_description}**",
-                    'ne': "**विवरण: {grievance_description}**"
-                },
-                'complainant_email': {
-                    'en': "\nA confirmation email will be sent to {complainant_email}",
-                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {complainant_email}"
-                },
-                'complainant_phone': {
-                    'en': "**A confirmation SMS will be sent to your phone: {complainant_phone}**",
-                    'ne': "**तपाईंको फोनमा सुनिश्चित गर्ने संदेश भेटिन्छ। {complainant_phone}**"
-                },
-                'grievance_outro': {
-                    'en': "Our team will review it shortly and contact you if more information is needed.",
-                    'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
-                },
-                'grievance_timeline': {
-                    'en': "The standard resolution time for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
-                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
-                },
-                'grievance_status': {
-                    'en': "**Status:**",
-                    'ne': "**स्थिति:**"
-                }
-            }
-
-        message_elements = [all_message_elements[i][self.language_code] for i in message_keys]
-
-        # Get attached files information using the helper function
-        has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
-        files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
-        
-
-        
-        message = "\n".join(message_elements).format(grievance_id=grievance_data['grievance_id'], 
-                                            grievance_timestamp=grievance_data['grievance_timestamp'],
-                                            grievance_description=grievance_data['grievance_description'],
-                                            complainant_email=grievance_data['complainant_email'],
-                                            complainant_phone=grievance_data['complainant_phone'],
-                                            grievance_timeline=grievance_data['grievance_timeline']
-                                           )
-
-        # Add files information to the message
-        if has_files:
-            message = message + files_info
-        return message
-    
-    async def _send_grievance_recap_email(self, 
-                                          to_emails: List[str],
-                                          email_data: Dict[str, Any],
-                                          body_name: str,
-                                          dispatcher: CollectingDispatcher) -> None:
-        """Send a recap email to the user."""
-        
-        json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
-        
-        if email_data['grievance_categories'] and email_data['grievance_categories'] != self.NOT_PROVIDED:
-            categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_categories'] or []))
-        else:
-            categories_html = ""
-        # Create email body using template
-        
-        if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-            complainant_name=email_data['complainant_full_name'],
-            grievance_description=email_data['grievance_description'],
-            project=email_data['complainant_project'],
-            municipality=email_data['complainant_municipality'],
-            village=email_data['complainant_village'],
-            address=email_data['complainant_address'],
-            phone=email_data['complainant_phone'],
-            grievance_id=email_data['grievance_id'],
-            email=email_data['complainant_email'],
-            grievance_timeline=email_data['grievance_timeline'],
-            grievance_timestamp=email_data['grievance_timestamp'],
-            grievance_categories=email_data['grievance_categories'],
-            grievance_summary=email_data['grievance_summary']
-        ) 
-        if body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-                json_data=json_data,
-                grievance_status=self.GRIEVANCE_STATUS["SUBMITTED"],
-            )
-
-        subject = EMAIL_TEMPLATES["GRIEVANCE_RECAP_SUBJECT"].format(
-            grievance_id=email_data['grievance_id']
-        )
-        try:
-            self.messaging.send_email(to_emails,
-                                        subject = subject,
-                                        body=body
-                                        )
-            if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-                message = self.get_utterance(2)
-                dispatcher.utter_message(text=message)
-                
-        except Exception as e:
-            self.logger.error(f"Failed to send system notification email: {e}"
-            )
-            
-    # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
-    #         """Handle the case of gender follow up."""
-    #         utterance = self.get_utterance(1)
-    #         buttons = self.get_buttons(1)
-    #         ic(utterance, buttons)
-    #         dispatcher.utter_message(text=utterance, buttons=buttons)
-    
-    def send_last_utterance_buttons(self, 
-                                     gender_tag: bool, 
-                                     has_files: bool, 
-                                     dispatcher: CollectingDispatcher) -> str:
-        buttons = None
-        self.logger.info("send last utterance and buttons")
-        try:
-            if gender_tag:
-                    utterance = self.get_utterance(5) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
-                    buttons = self.get_buttons(1)
-            elif not has_files:
-                utterance = self.get_utterance(6)
-            else:
-                utterance = self.get_utterance(7)
-            
-            if buttons:
-                dispatcher.utter_message(text=utterance, buttons=buttons)
-            else:
-                dispatcher.utter_message(text=utterance)
-        except Exception as e:
-            self.logger.error(f"Error in send_last_utterance_buttons: {e}")
-
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
-        self.grievance_id = tracker.get_slot("grievance_id")
-        self.complainant_id = tracker.get_slot("complainant_id")
-        
-        self.logger.debug(f"Submit grievance - All tracker slots: {tracker.slots}")
-        self.logger.debug(f"Submit grievance - grievance_id from tracker: {self.grievance_id}")
-        self.logger.debug(f"Submit grievance - complainant_id from tracker: {self.complainant_id}")
-        
-        try:
-            # Collect grievance data
-            grievance_data = self.collect_grievance_data(tracker)
-            self.logger.debug(f"Submit grievance - collected grievance data from tracker: {grievance_data}")
-            # Update the existing grievance with complete data
-            try:
-                self.db_manager.submit_grievance_to_db(data=grievance_data)
-            except Exception as e:
-                self.logger.error(f"❌ Error updating grievance: {str(e)}")
-                self.logger.error(f"Traceback: {traceback.format_exc()}")
-                raise Exception("Failed to update grievance in the database")
-        
-
-            self.logger.info(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
-            
-            # Create confirmation message to be sent by sms and through the bot
-            confirmation_message = self.create_confirmation_message(
-                grievance_data
-            )
-                
-            # Send confirmation message
-            dispatcher.utter_message(text=confirmation_message)
-            
-            if grievance_data.get('otp_verified') == True:
-                #send sms
-                complainant_phone = grievance_data.get('complainant_phone')
-                if complainant_phone != self.NOT_PROVIDED:
-                    self.messaging.send_sms(phone_number=complainant_phone, message=confirmation_message)
-                    #utter sms confirmation message
-                    utterance = self.get_utterance(2)
-                    utterance = utterance.format(complainant_phone=complainant_phone)
-                    dispatcher.utter_message(text=utterance)
-            
-            #send email to admin
-            await self._send_grievance_recap_email(ADMIN_EMAILS, 
-                                                   grievance_data, 
-                                                   "GRIEVANCE_RECAP_ADMIN_BODY", 
-                                                   dispatcher=dispatcher)
-            
-            #send email to user
-            complainant_email = grievance_data.get('complainant_email')
-            if complainant_email and complainant_email != self.NOT_PROVIDED:
-                await self._send_grievance_recap_email([complainant_email], 
-                                                       grievance_data, 
-                                                       "GRIEVANCE_RECAP_COMPLAINANT_BODY", 
-                                                       dispatcher=dispatcher)
-                
-                # Send email confirmation message
-                utterance = self.get_utterance(3)
-                utterance = utterance.format(complainant_email=complainant_email)
-                dispatcher.utter_message(text=utterance)
-            
-            #send the last utterance and buttons
-            self.send_last_utterance_buttons(self.gender_issues_reported, 
-                                              
-                                                self._get_attached_files_info(self.grievance_id)["has_files"],
-                                                dispatcher=dispatcher)
-                
-            
-            # #deal with the case of gender follow up
-            # if self.gender_issues_reported:
-            #     self._grievance_submit_gender_follow_up(dispatcher)
-            
-            # #send utter to users if they have not attached any files or a reminder to attach more files
-            # elif not self._get_attached_files_info(grievance_id)["has_files"]:
-            #     utterance = self.get_utterance(4)
-            #     dispatcher.utter_message(text=utterance)
-            
-            # else:
-            #         utterance = self.get_utterance(5)
-            #         dispatcher.utter_message(text=utterance)
-                
-            # Prepare events
-            return [
-                SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"])
-            ]
-
-        except Exception as e:
-            self.logger.error(f"❌ Error submitting grievance: {str(e)}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            utterance = self.get_utterance(4)
-            dispatcher.utter_message(text=utterance)
-            return []
         
     
                 

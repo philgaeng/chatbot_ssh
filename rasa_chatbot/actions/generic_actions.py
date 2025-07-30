@@ -11,7 +11,7 @@ import json
 
 TASK_SLOTS_TO_UPDATE_MAP = {
     "process_file_upload_task": {"slot_name": "file_upload_status", "followup_action": None},
-    "classify_and_summarize_grievance_task": {"slot_name": "classification_status", "followup_action": "action_trigger_summary_form"},
+    "classify_and_summarize_grievance_task": {"slot_name": "classification_status", },
     "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
    }
 
@@ -36,104 +36,6 @@ class ActionWrapper(BaseAction):
 
 
 
-# class ActionReopenConversationForEmitStatusUpdate(BaseAction):
-#     def name(self) -> Text:
-#         return "action_reopen_conversation_for_emit_status_update"
-
-#     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-#         return []
-
-# class ActionEmitStatusUpdate(BaseAction):
-#     def name(self) -> Text:
-#         return "action_emit_status_update"
-    
-#     def extract_slots_to_update(self, data: Dict[Text, Any], domain: DomainDict) -> List[Dict[Text, Any]]:
-#         task_name = data.get("task_name")
-#         task_status = data.get("status")
-#         values = data.get("values", {})
-        
-#         # Extract domain slots included in the values
-#         slots_to_set = []
-#         for slot_name, slot_value in values.items():
-#             if slot_name in domain["slots"]:
-#                 slots_to_set.append(SlotSet(slot_name, slot_value))
-        
-#         # Add task-specific slot if mapped
-#         if task_name in TASK_SLOTS_TO_UPDATE_MAP:
-#             slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
-#             slots_to_set.append(SlotSet(slot_name, task_status))
-        
-#         # Clear the data_to_emit slot
-#         slots_to_set.append(SlotSet("data_to_emit", None))
-        
-#         return slots_to_set
-
-#     def extract_followup_action(self, data: Dict[Text, Any], domain: DomainDict) -> Text:
-#         task_name = data.get("task_name")
-#         if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
-#             return TASK_SLOTS_TO_UPDATE_MAP[task_name]['followup_action']
-#         return None
-
-#     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-#         self.logger.debug(f"🔍 [RASA DEBUG] ActionEmitStatusUpdate triggered")
-#         self.logger.debug(f"   - data_to_emit slot: {tracker.get_slot('data_to_emit')}")
-        
-#         if tracker.get_slot("data_to_emit") is None:
-#             self.logger.error(f"{self.name()} - ❌ [RASA DEBUG] No data to emit - raising exception")
-#             raise Exception("No data to emit")
-        
-#         data = tracker.get_slot("data_to_emit")
-#         task_status = data.get("status")
-#         task_name = data.get("task_name")
-#         task_id = data.get("task_id", 'not_provided')
-        
-#         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Processing task: {task_name}, status: {task_status}")
-#         self.logger.debug(f"{self.name()} -   - Full data: {data}")
-        
-#         if task_status in [SUCCESS, FAILED]:  # Only emit status update for success or failure to not clutter websocket
-#             # Structure the data for frontend consumption
-#             structured_data = {
-#                 'task_status': {
-#                     'task_id': task_id,
-#                     'status': task_status,
-#                     'result': data if task_status == SUCCESS else None,
-#                     'error': data if task_status == FAILED else None
-#                 }
-#             }
-#             self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Emitting status update via dispatcher.utter_message: {structured_data}")
-#             dispatcher.utter_message(json_message=structured_data)
-#             if task_name in TASK_SLOTS_TO_UPDATE_MAP.keys():
-#                 slot_name = TASK_SLOTS_TO_UPDATE_MAP[task_name]['slot_name']
-#                 self.logger.debug(f"{self.name()} -   - Setting slot {slot_name} to {task_status}")
-#                 return [SlotSet(slot_name, task_status)]
-                
-#         if task_status == SUCCESS:
-#             self.logger.debug(f"{self.name()} - ✅ [RASA DEBUG] Processing SUCCESS status")
-#             # Structure the data for frontend consumption
-#             structured_data = {
-#                 'task_status': {
-#                     'task_id': task_id,
-#                     'status': task_status,
-#                     'result': data
-#                 }
-#             }
-#             dispatcher.utter_message(json_message=structured_data)
-#             slots_to_set = self.extract_slots_to_update(data, domain)
-#             followup_action = self.extract_followup_action(data, domain)
-#             if followup_action:
-#                 self.logger.debug(f"{self.name()} -   - Adding followup action: {followup_action}")
-#                 slots_to_set.append(FollowupAction(followup_action))
-#             self.logger.debug(f"{self.name()} -   - Returning slots: {slots_to_set}")
-#             return slots_to_set
-#         else:
-#             self.logger.debug(f"{self.name()} - ⚠️ [RASA DEBUG] Task status not in [SUCCESS, FAILED]: {task_status}")
-#             return []
-
-
-
-
-
-
 class ActionSessionStart(BaseAction):
     def name(self) -> Text:
         return "action_session_start"
@@ -148,15 +50,16 @@ class ActionIntroduce(BaseAction):
     def name(self) -> Text:
         return "action_introduce"
     
-    def get_province_and_district(self, message: str) -> str:
+    def get_province_and_district_and_flask_session_id(self, message: str) -> tuple:
         if '{' in message and '}' in message:
             json_str = message[message.index('{'):message.rindex('}')+1]
             data = json.loads(json_str)
             province = data.get('province')
             district = data.get('district')
-            return province, district
+            flask_session_id = data.get('flask_session_id')
+            return province, district, flask_session_id
         else:
-            return None, None
+            return None, None, None
 
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
@@ -165,12 +68,14 @@ class ActionIntroduce(BaseAction):
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {message}")
         if message:
             if "introduce" in message.lower():
-                province, district = self.get_province_and_district(message)
+                province, district, flask_session_id = self.get_province_and_district_and_flask_session_id(message)
                 if province and district:
                     events.extend([
                         SlotSet("complainant_province", province),
                         SlotSet("complainant_district", district)
                     ])
+                if flask_session_id:
+                    events.append(SlotSet("flask_session_id", flask_session_id))
         #dispatch message to choose language
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
@@ -473,4 +378,5 @@ class ActionFileUploadStatus(BaseAction):
             }
         )
         return []
+
 

@@ -500,7 +500,9 @@ UTTERANCE_MAPPING = {
             'buttons': {
                 4: BUTTONS_GRIEVANCE_SUBMISSION
             }
-        },
+        }
+    },
+    'action_submit_grievance': {
         'action_submit_grievance': {
             'utterances': {
                 1: {
@@ -581,22 +583,34 @@ UTTERANCE_MAPPING = {
         'action_ask_form_grievance_summary_grievance_categories_status': {
             'utterances': {
                 1: {
-                    'en': "No categories have been identified yet.",
-                    'ne': "कृपया आफ्नो गुनासोको लागि निम्न श्रेणीहरू समीक्षा गर्नुहोस्:"
+                    'en': "We have not identified any categories for your grievance.",
+                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन।"
                 },
                 2: {
-                    'en': "Here are the suggested categories for your grievance:\n{category_text}\nDoes this seem correct?",
-                    'ne': "तपाईंको गुनासोको लागि सुझाव गरिएका श्रेणीहरू यहाँ छन्:\n{category_text}\nके यो सही लाग्दैन?"
+                    'en': """We have generated categories for your grievance.
+                    Here are the suggested categories:\n{category_text}\nDoes this seem correct?""",
+                    'ne': """हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
+                    यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"""
+                },
+                3: {
+                    'en': "Here is the list of modified categories:\n{category_text}\nDoes this seem correct?",
+                    'ne': "यहाँ संशोधित श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"
+                },
+                4: {
+                    'en': "You have removed all the categories, is it correct",
+                    'ne': "तपाईंले सबै श्रेणीहरू हटाएको छ, के यो सही छ?"
                 }
             },
             'buttons': {
                 1: {'en' :[
                     {"title": "Add category", "payload": "/add_category"},
-                    {"title": "Continue without categories", "payload": "/slot_confirmed"}
+                    {"title": "Continue without categories", "payload": "/slot_confirmed"},
+                    BUTTON_SKIP
                 ],
                 'ne': [
                     {"title": "श्रेणी थप्नुहोस्", "payload": "/add_category"},
-                    {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"}
+                    {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"},
+                    BUTTON_SKIP
                 ]
             },
                 2: {

@@ -21,37 +21,7 @@ export function setupSocketEventHandlers(socket, sessionState) {
     handleTaskStatusEvent(data);
   });
 
-  // Listen for file status updates on the Flask socket
-  if (window.flaskSocket) {
-    window.flaskSocket.on("connect", () => {
-      console.log("🔗 Flask socket connected with ID:", window.flaskSocket.id);
-
-      // Store Flask session ID globally for use in API calls
-      window.flaskSessionId = window.flaskSocket.id;
-      console.log("🔗 Flask session ID stored:", window.flaskSessionId);
-    });
-
-    window.flaskSocket.on("file_status_update", (data) => {
-      console.log(
-        "🎉 FLASK WEBSOCKET EVENT RECEIVED: file_status_update",
-        data
-      );
-      console.log("Flask socket ID:", window.flaskSocket.id);
-      console.log("Session ID from data:", data.session_id);
-      handleFileStatusUpdate(data);
-    });
-
-    window.flaskSocket.on("task_status", (data) => {
-      console.log("🎉 FLASK WEBSOCKET EVENT RECEIVED: task_status", data);
-      handleTaskStatusEvent(data);
-    });
-  } else {
-    console.warn(
-      "⚠️ Flask socket not available, file status updates will not be received"
-    );
-  }
-
-  // Error handling
+  // Error handling for Rasa socket
   socket.on("error", (error) => {
     console.error("Socket error:", error);
   });
@@ -87,37 +57,38 @@ export function setupSocketEventHandlers(socket, sessionState) {
     console.log("📩 User message sent:", message);
   });
 
-  // Error handling
-  socket.on("error", (error) => {
-    console.error("Socket error:", error);
-  });
+  // Set up Flask socket event handlers when Flask socket is available
+  if (window.flaskSocket) {
+    console.log("🔧 Setting up Flask socket event handlers");
 
-  socket.on("connect_error", (error) => {
-    console.error("Connection error:", error);
-    uiActions.showConnectionError();
-  });
+    // Set up Flask socket event handlers after connection
+    window.flaskSocket.on("connect", () => {
+      console.log("🔗 Flask socket connected with ID:", window.flaskSocket.id);
+      window.flaskSessionId = window.flaskSocket.id;
+      console.log("🔗 Flask session ID stored:", window.flaskSessionId);
+    });
 
-  socket.on("connect_timeout", () => {
-    console.error("Connection timeout");
-    uiActions.showTimeoutError();
-  });
+    window.flaskSocket.on("file_status_update", (data) => {
+      console.log(
+        "🎉 FLASK WEBSOCKET EVENT RECEIVED: file_status_update",
+        data
+      );
+      console.log("Flask socket ID:", window.flaskSocket.id);
+      console.log("Session ID from data:", data.session_id);
+      handleFileStatusUpdate(data);
+    });
 
-  socket.on("reconnect_attempt", (attemptNumber) => {
-    console.log("Reconnection attempt:", attemptNumber);
-  });
+    window.flaskSocket.on("task_status", (data) => {
+      console.log("🎉 FLASK WEBSOCKET EVENT RECEIVED: task_status", data);
+      handleTaskStatusEvent(data);
+    });
 
-  socket.on("reconnect", (attemptNumber) => {
-    console.log("Reconnected after", attemptNumber, "attempts");
-  });
-
-  socket.on("reconnect_error", (error) => {
-    console.error("Reconnection error:", error);
-  });
-
-  socket.on("reconnect_failed", () => {
-    console.error("Reconnection failed");
-    uiActions.showReconnectError();
-  });
+    console.log("✅ Flask socket event handlers set up successfully");
+  } else {
+    console.warn(
+      "⚠️ Flask socket not available, file status updates will not be received"
+    );
+  }
 }
 
 // Socket event handler functions
@@ -220,7 +191,16 @@ function handleTaskStatusEvent(data) {
     statusElement = document.createElement("div");
     statusElement.id = `task-status-${task_name}`;
     statusElement.className = "task-status";
-    document.querySelector(".chat-messages").appendChild(statusElement);
+
+    // Check if chat-messages element exists before appending
+    const chatMessages = document.querySelector(".chat-messages");
+    if (chatMessages) {
+      chatMessages.appendChild(statusElement);
+    } else {
+      console.warn(
+        "⚠️ .chat-messages element not found, cannot display task status"
+      );
+    }
   }
 
   // Update status message
@@ -233,6 +213,18 @@ function handleTaskStatusEvent(data) {
       statusClass = "success";
       if (taskData && taskData.message) {
         uiActions.appendMessage(taskData.message, "received");
+      }
+
+      // NEW: Send classification results to Rasa if this is a classification task
+      if (task_name === "classify_and_summarize_grievance_task" && taskData) {
+        console.log("🎯 Classification completed, sending results to Rasa...");
+        console.log("Task data:", taskData);
+        sendClassificationResultsToRasa(taskData);
+      } else {
+        console.log("🔍 Not a classification task or no task data:", {
+          task_name,
+          taskData,
+        });
       }
       break;
 
@@ -267,6 +259,79 @@ function handleTaskStatusEvent(data) {
         statusElement.remove();
       }
     }, 5000);
+  }
+}
+
+// NEW: Function to send classification results to Rasa
+function sendClassificationResultsToRasa(taskData) {
+  console.log("🚀 sendClassificationResultsToRasa called with:", taskData);
+
+  try {
+    // Prepare the classification data
+    const classificationData = {
+      grievance_summary: taskData.grievance_summary || "",
+      grievance_categories: taskData.grievance_categories || [],
+      grievance_description: taskData.grievance_description || "",
+      task_name: taskData.task_name || "classify_and_summarize_grievance_task",
+      status: taskData.status || "SUCCESS",
+    };
+
+    console.log("📋 Prepared classification data:", classificationData);
+
+    // Create the message to send to Rasa (same pattern as /introduce)
+    const message = `/classification_results${JSON.stringify(
+      classificationData
+    )}`;
+
+    console.log("📤 Sending classification results to Rasa:", message);
+
+    // Check if Rasa connection is available
+    if (!window.socket || !window.socket.connected) {
+      console.error(
+        "❌ Rasa socket not connected, cannot send classification results"
+      );
+      uiActions.appendMessage(
+        "⚠️ Unable to send classification results - connection lost. Please refresh the page.",
+        "received"
+      );
+      return false;
+    }
+
+    // Check if safeSendMessage function is available
+    if (!window.safeSendMessage) {
+      console.error("❌ safeSendMessage function not available");
+      uiActions.appendMessage(
+        "⚠️ System error - unable to send classification results.",
+        "received"
+      );
+      return false;
+    }
+
+    // Send to Rasa using the existing safeSendMessage function
+    const success = window.safeSendMessage(message);
+    if (success) {
+      console.log("✅ Classification results sent to Rasa successfully");
+      // Show a brief status message to user
+      uiActions.appendMessage(
+        "🔄 Processing classification results...",
+        "received"
+      );
+      return true;
+    } else {
+      console.error("❌ Failed to send classification results to Rasa");
+      uiActions.appendMessage(
+        "⚠️ Failed to send classification results. Please try again.",
+        "received"
+      );
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Error sending classification results to Rasa:", error);
+    uiActions.appendMessage(
+      "⚠️ Error processing classification results. Please contact support.",
+      "received"
+    );
+    return false;
   }
 }
 

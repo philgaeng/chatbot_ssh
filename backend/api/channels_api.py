@@ -228,7 +228,7 @@ class FileServerAPI:
             # Check if grievance_id is provided
             grievance_id = request.form.get('grievance_id')
             rasa_session_id = request.form.get('rasa_session_id')  # For bot context
-            session_id = request.form.get('session_id')  # Flask session ID for websocket emissions
+            flask_session_id = request.form.get('flask_session_id')  # Flask session ID for websocket emissions
             self.source = self._extract_session_type_from_grievance_id(grievance_id)
 
             
@@ -236,7 +236,7 @@ class FileServerAPI:
                 'grievance_id': grievance_id,
                 'source': self.source,
                 'rasa_session_id': rasa_session_id,
-                'session_id': session_id
+                'flask_session_id': flask_session_id
             })
             
             if not grievance_id:
@@ -271,12 +271,11 @@ class FileServerAPI:
 
             else:
                 file = uploaded_files[0]
-                result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, session_id=session_id)
+                result = process_file_upload_task.delay(grievance_id=grievance_id, file_data=file, session_id=flask_session_id)
 
                 response_data = jsonify({
                     "status": STARTED,
-                    "session_id": session_id,  # Flask session ID for websocket emissions
-                    "rasa_session_id": rasa_session_id,  # Rasa session ID for bot context
+                    "flask_session_id": flask_session_id,  # Flask session ID for websocket emissions
                     "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
                     "files": [file['file_id'] for file in uploaded_files],
                     "oversized_files": oversized_files,
@@ -427,9 +426,9 @@ class FileServerAPI:
             if not data:
                 return jsonify({'error': 'No data provided'}), 400
             
-            # Extract required fields - support both grievance_id and session_id
+            # Extract required fields - support both grievance_id and flask_session_id
             grievance_id = data.get('grievance_id')
-            session_id = data.get('session_id')
+            flask_session_id = data.get('flask_session_id')
             source = 'A' if grievance_id and grievance_id.endswith('A') else 'B'  # default to B "Bot"
             status = data.get('status')
             task_data = data.get('data', {})
@@ -437,13 +436,13 @@ class FileServerAPI:
             if not status:
                 return jsonify({'error': 'Missing required field: status'}), 400
             
-            if not grievance_id and not session_id:
-                return jsonify({'error': 'Missing required field: grievance_id or session_id'}), 400
+            if not grievance_id and not flask_session_id:
+                return jsonify({'error': 'Missing required field: grievance_id or flask_session_id'}), 400
             
             # Log the incoming request
             self.core.log_event(event_type='task_status_update', details={
                 'grievance_id': grievance_id,
-                'session_id': session_id,
+                'flask_session_id': flask_session_id,
                 'status': status,
                 'data': task_data,
                 'source': source
@@ -467,7 +466,7 @@ class FileServerAPI:
             else:
                 # Emit to the bot interface (source 'B')
                 # The frontend listens for 'task_status' and 'file_status_update' events
-                if session_id:
+                if flask_session_id:
                     # Determine the event type based on task name
                     task_name = task_data.get('task_name', 'unknown')
                     if 'file' in task_name.lower():
@@ -480,12 +479,12 @@ class FileServerAPI:
                         'status': status,
                         'data': task_data,
                         'grievance_id': grievance_id,
-                        'session_id': session_id,
+                        'flask_session_id': flask_session_id,
                         'task_name': task_name
-                    }, room=session_id)
+                    }, room=flask_session_id)
             self.core.log_event(event_type='task_status_emitted', details={
                 'grievance_id': grievance_id,
-                'session_id': session_id,
+                'flask_session_id': flask_session_id,
                 'emit_websocket': True if source == 'A' else False,
                 'status': status,
                 'source': source
@@ -495,7 +494,7 @@ class FileServerAPI:
                 'status': status,
                 'message': 'Task status update sent',
                 'grievance_id': grievance_id,
-                'session_id': session_id,
+                'flask_session_id': flask_session_id,
                 'source': source,
                 'data': task_data
             }), 200

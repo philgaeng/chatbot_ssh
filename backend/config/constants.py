@@ -34,6 +34,9 @@ def load_environment():
 # Load environment variables BEFORE any config is set
 ENV_SOURCE = load_environment()
 
+# Call OpenAI API for classification
+LLM_CLASSIFICATION = True
+
 ############################
 # CORE DEFAULT VALUES
 ############################
@@ -84,7 +87,8 @@ GRIEVANCE_CLASSIFICATION_STATUS_DICT = {
     "LLM_error": {'code': "LLM_error", 'name': "LLM Error", 'description': "Grievance classification is in error by LLM"},
     "complainant_confirmed": {'code': "complainant_confirmed", 'name': "Complainant Confirmed", 'description': "Grievance classification is confirmed by complainant"},
     "officer_confirmed": {'code': "officer_confirmed", 'name': "Officer Confirmed", 'description': "Grievance classification is confirmed by officer"},
-    "SKIP_VALUE": {'code': DEFAULT_VALUES["SKIP_VALUE"], 'name': DEFAULT_VALUES["SKIP_VALUE"], 'description': DEFAULT_VALUES["SKIP_VALUE"]}
+    "SKIP_VALUE": {'code': DEFAULT_VALUES["SKIP_VALUE"], 'name': DEFAULT_VALUES["SKIP_VALUE"], 'description': DEFAULT_VALUES["SKIP_VALUE"]},
+    "REVIEWING": {'code': "REVIEWING", 'name': "Reviewing", 'description': "Temporary status used to review the classification results in the App"}
 }
 
 

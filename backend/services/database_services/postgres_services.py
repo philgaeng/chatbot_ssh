@@ -42,7 +42,7 @@ class DatabaseManager(BaseDatabaseManager):
 
     # ===== ID GENERATION =====
 
-    def create_complainant_id(self, data: Dict[str, Any]) -> Optional[str]:
+    def generate_complainant_id(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new complainant ID"""
         province = data.get('complainant_province', DEFAULT_PROVINCE)
         district = data.get('complainant_district', DEFAULT_DISTRICT)
@@ -50,7 +50,7 @@ class DatabaseManager(BaseDatabaseManager):
         source = data.get('source', 'bot')
         return self.generate_id(type='complainant_id', province=province, district=district, office=office, suffix=source)
     
-    def create_grievance_id(self, data: Dict[str, Any]) -> Optional[str]:
+    def generate_grievance_id(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new grievance ID"""
         province = data.get('complainant_province', DEFAULT_PROVINCE)
         district = data.get('complainant_district', DEFAULT_DISTRICT)
@@ -62,9 +62,14 @@ class DatabaseManager(BaseDatabaseManager):
     
     # ===== COMPLAINANT OPERATIONS =====
 
-    def create_complainant(self, data: Dict[str, Any]) -> bool:
+    def create_complainant(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new complainant"""
-        return self.complainant.create_complainant(data)
+        complainant_id = data.get('complainant_id')
+        if not complainant_id:
+            complainant_id = self.generate_complainant_id(data)
+            data['complainant_id'] = complainant_id
+        self.complainant.create_complainant(data)
+        return complainant_id
     
     def update_complainant(self, complainant_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing complainant"""
@@ -91,6 +96,28 @@ class DatabaseManager(BaseDatabaseManager):
         return self.complainant._decrypt_sensitive_data(data)
     
     # ===== GRIEVANCE OPERATIONS =====
+
+    async def create_complainant_and_grievance(self, data: Dict[str, Any]) -> None:
+        """Create a new complainant and grievance"""
+        try:
+            complainant_id = data.get('complainant_id')
+            if not complainant_id:
+                complainant_id = self.generate_complainant_id(data)
+                data['complainant_id'] = complainant_id
+            self.complainant.create_complainant(data)
+        except Exception as e:
+            self.logger.error(f"Error creating complainant: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+        try:
+            grievance_id = data.get('grievance_id')
+            if not grievance_id:
+                grievance_id = self.generate_grievance_id(data)
+                data['grievance_id'] = grievance_id
+            self.grievance.create_grievance(data)
+        except Exception as e:
+            self.logger.error(f"Error creating grievance: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+        
     
     def submit_grievance_to_db(self, data: Dict[str, Any]) -> bool:
         """Submit a new grievance to the database"""
@@ -98,22 +125,32 @@ class DatabaseManager(BaseDatabaseManager):
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
             if not (grievance_id and complainant_id):
-                self.logger.error(f"Error submitting grievance to db: Grievance ID or Complainant ID is missing: {data}")
+                self.logger.error(f"Error - submitting_grievance_to_db: grievance_id or complainant_id is missing in input_data: {data}")
                 return False
             
             source = self.get_grievance_or_complainant_source(grievance_id)
             data['source'] = source
+
+            #validate that the complainant and grievance ids are already in the database
+            complainant = self.get_complainant_by_id(complainant_id)
+            if not complainant:
+                self.logger.error(f"Error - submitting_grievance_to_db: complainant_id not found in db: {complainant_id}")
+                return False
+            grievance = self.get_grievance_by_id(grievance_id)
+            if not grievance:
+                self.logger.error(f"Error - submitting_grievance_to_db: grievance_id not found in db: {grievance_id}")
+                return False
 
             data = self.get_complainant_and_grievance_fields(data)
             complainant_data = data['complainant_fields']
             grievance_data = data['grievance_fields']
 
             if complainant_data:
-                self.complainant.create_complainant(complainant_data)
-                self.logger.info(f"Complainant created in db: {complainant_id}")
+                self.complainant.update_complainant(complainant_id, complainant_data)
+                self.logger.info(f"Complainant updated in db: {complainant_id}")
                 if grievance_data:
-                    self.grievance.create_grievance(grievance_data)
-                    self.logger.info(f"Grievance created in db: {grievance_id}")
+                    self.grievance.update_grievance(grievance_id, grievance_data)
+                    self.logger.info(f"Grievance updated in db: {grievance_id}")
             return True
         except Exception as e:
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
@@ -122,7 +159,12 @@ class DatabaseManager(BaseDatabaseManager):
             
     def create_grievance(self, data: Dict[str, Any]) -> bool:
         """Create a new grievance"""
-        return self.grievance.create_grievance(data)
+        grievance_id = data.get('grievance_id')
+        if not grievance_id:
+            grievance_id = self.generate_grievance_id(data)
+            data['grievance_id'] = grievance_id
+        self.grievance.create_grievance(data)
+        return grievance_id
     
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing grievance"""

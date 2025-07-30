@@ -433,6 +433,11 @@ def classify_and_summarize_grievance_task(self,
     if not grievance_id:
         raise ValueError(f"Missing grievance_id in input data: {input_data}")
     
+    # Extract flask_session_id for websocket emission
+    flask_session_id = input_data.get('flask_session_id')
+    if not flask_session_id:
+        raise ValueError(f"Missing flask_session_id in input data: {input_data} - emission will fail")
+    
     # Extract data directly from file_data (transcription result)
     language_code = input_data.get('language_code', 'ne')
     grievance_description = input_data.get('values', {}).get('grievance_description')  # The transcription text
@@ -440,11 +445,12 @@ def classify_and_summarize_grievance_task(self,
     complainant_province = input_data.get('complainant_province')
         
     if not grievance_description:
-        raise ValueError(f"No transcription text found in input data: {file_data.get('values')}")
+        raise ValueError(f"No transcription text found in input data: {input_data.get('values')}")
     
     task_mgr.start_task(entity_key='grievance_id', 
                         entity_id=grievance_id,
-                        grievance_id=grievance_id)
+                        grievance_id=grievance_id,
+                        session_id=flask_session_id)
     try:
         from backend.services.LLM_services import classify_and_summarize_grievance
         values = classify_and_summarize_grievance(grievance_description, language_code, complainant_district, complainant_province) #values is a dict with keys: grievance_summary, grievance_categories

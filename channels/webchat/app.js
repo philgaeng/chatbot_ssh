@@ -196,10 +196,11 @@ function sendIntroduceMessage() {
   }
 
   const { province, district } = getUrlParams();
+  const flaskSessionId = window.flaskSessionId || socket.id;
   const initialMessage =
     province && district
-      ? `/introduce{"province": "${province}", "district": "${district}"}`
-      : "/introduce";
+      ? `/introduce{"province": "${province}", "district": "${district}", "flask_session_id": "${flaskSessionId}"}`
+      : `/introduce{"flask_session_id": "${flaskSessionId}"}`;
 
   console.log("Preparing to send initial message:", initialMessage);
 
@@ -429,7 +430,7 @@ async function handleFileUpload(files) {
   formData.append("grievance_id", window.grievanceId);
   formData.append("client_type", "rasa");
   formData.append("rasa_session_id", socket.id); // Rasa session ID for bot context
-  formData.append("session_id", window.flaskSessionId || socket.id); // Flask session ID for websocket emissions
+  formData.append("flask_session_id", window.flaskSessionId || socket.id); // Flask session ID for websocket emissions
 
   // Check for audio files
   const audioFiles = Array.from(files).filter((file) => {

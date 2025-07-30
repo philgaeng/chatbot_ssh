@@ -123,7 +123,7 @@ class ValidateFormOtp(BaseFormValidationAction):
         #skip the form_otp if no phone number is provided
         if not tracker.get_slot("complainant_phone") or tracker.get_slot("complainant_phone") == "slot_skipped":
             return []
-        if tracker.get_slot("gender_issues_reported"):
+        if tracker.get_slot("sensitive_issues_detected"):
             self.logger.info(f"{self.name()} - gender issues reported")
             if tracker.get_slot("otp_consent") == False:
                 required_slots =  ["otp_consent"]

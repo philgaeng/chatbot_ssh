@@ -36,25 +36,91 @@ FAILED = TASK_STATUS["FAILED"]
 
 ############################ STEP 1 - VALIDATE GRIEVANCE SUMMARY AND CATEGORIES ############################
 
-class ActionTriggerSummaryForm(BaseAction):
+
+class ActionHandleClassificationResults(BaseAction):
     def name(self) -> Text:
-        return "action_trigger_summary_form"
-    
+        return "action_handle_classification_results"
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
-        Trigger the grievance summary form only if classification is complete.
-        This action should be called after ActionEmitStatusUpdate when classification results are received.
+        Handle classification results received from the frontend
         """
-        classification_status = tracker.get_slot("classification_status")
-        grievance_status = tracker.get_slot("grievance_status")
-        grievance_categories = tracker.get_slot("grievance_categories")
-        grievance_summary = tracker.get_slot("grievance_summary")
-        
-        # Check if we have classification results
-        if classification_status == SUCCESS and grievance_status == GRIEVANCE_STATUS["SUBMITTED"] and grievance_categories and grievance_summary:
-            # Classification is complete, activate the form
-            return [ActiveLoop("grievance_summary_form")]
-        elif classification_status == FAILED: #no followup action is needed
+        try:
+            # Get the message text which contains the classification data
+            message_text = tracker.latest_message.get('text', '')
+            
+            # Extract the JSON data from the message
+            if message_text.startswith('/classification_results'):
+                json_str = message_text.replace('/classification_results', '')
+                
+                try:
+                    classification_data = json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"JSON parsing error in classification results: {e}")
+                    if self.language_code == "ne":
+                        dispatcher.utter_message(text="❌ वर्गीकरण डाटा प्रक्रिया गर्न त्रुटि। कृपया पुनः प्रयास गर्नुहोस्।")
+                    else:
+                        dispatcher.utter_message(text="❌ Error processing classification data. Please try again.")
+                    return []
+                
+                self.logger.info(f"Processing classification results: {classification_data}")
+                
+                # Extract the classification results with validation
+                grievance_summary = classification_data.get('grievance_summary', '')
+                grievance_categories = classification_data.get('grievance_categories', [])
+                grievance_description = classification_data.get('grievance_description', '')
+                
+                # Validate that we have the essential data
+                if not grievance_summary and not grievance_categories:
+                    self.logger.warning("Classification results missing essential data")
+                    if self.language_code == "ne":
+                        dispatcher.utter_message(text="⚠️ वर्गीकरण परिणामहरू अपूर्ण छन्। कृपया पुनः प्रयास गर्नुहोस्।")
+                    else:
+                        dispatcher.utter_message(text="⚠️ Classification results are incomplete. Please try again.")
+                    return []
+                
+                # Set the slots with the classification results and reset the slots for form grievance_summary
+                slots_to_set = [
+                    SlotSet("grievance_summary", grievance_summary),
+                    SlotSet("grievance_categories", grievance_categories),
+                    SlotSet("classification_status", self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
+                    SlotSet("grievance_categories_status", None),
+                    SlotSet("grievance_summary_status", None),
+                    SlotSet("grievance_summary_temp", None),
+                    SlotSet("grievance_cat_modify", None)
+                ]
+                
+                # Send a message to the user about the classification results
+                if grievance_summary and grievance_categories:
+                    # Format the message based on language
+                    if self.language_code == "ne":
+                        message = f"✅ वर्गीकरण पूरा भयो!\n\n📋 **सारांश:** {grievance_summary}\n\n🏷️ **श्रेणीहरू:** {', '.join(grievance_categories)}"
+                    else:
+                        message = f"✅ Classification completed!\n\n📋 **Summary:** {grievance_summary}\n\n🏷️ **Categories:** {', '.join(grievance_categories)}"
+                    
+                    dispatcher.utter_message(text=message)
+
+                else:
+                    if self.language_code == "ne":
+                        dispatcher.utter_message(text="⚠️ वर्गीकरण पूरा भयो तर कुनै परिणाम उत्पन्न भएनन्।")
+                    else:
+                        dispatcher.utter_message(text="⚠️ Classification completed but no results were generated.")
+                
+                return slots_to_set
+            else:
+                self.logger.error(f"Invalid classification results message format: {message_text}")
+                if self.language_code == "ne":
+                    dispatcher.utter_message(text="❌ वर्गीकरण परिणामहरू प्रक्रिया गर्न त्रुटि।")
+                else:
+                    dispatcher.utter_message(text="❌ Error processing classification results.")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error handling classification results: {str(e)}")
+            if self.language_code == "ne":
+                dispatcher.utter_message(text="❌ वर्गीकरण परिणामहरू प्रक्रिया गर्न त्रुटि। कृपया पुनः प्रयास गर्नुहोस्।")
+            else:
+                dispatcher.utter_message(text="❌ Error processing classification results. Please try again.")
             return []
 
 class ValidateFormGrievanceSummary(BaseFormValidationAction):
@@ -64,6 +130,9 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
     def __init__(self):
         """Initialize form action"""
         super().__init__()
+        self.LLM_GENERATED = self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']
+        self.CM_COMFIRMED = self.GRIEVANCE_CLASSIFICATION_STATUS['complainant_confirmed']
+        self.REVIEWING = self.GRIEVANCE_CLASSIFICATION_STATUS['REVIEWING']
         
     def name(self) -> Text:
         return "validate_form_grievance_summary"
@@ -71,12 +140,27 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
     
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
-        return [
-            "grievance_categories_status",
-            "grievance_cat_modify", 
-            "grievance_summary_status",
-            "grievance_summary_temp"
-        ]
+        grievance_categories = tracker.get_slot("grievance_categories")
+        grievance_summary = tracker.get_slot("grievance_summary")
+        grievance_categories_status = tracker.get_slot("grievance_categories_status")
+        grievance_summary_status = tracker.get_slot("grievance_summary_status")
+        grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
+        grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
+        self.logger.debug(f"Grievance summary form - Values of slots: grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_status: {grievance_categories_status}, grievance_summary_status: {grievance_summary_status}, grievance_cat_modify: {grievance_cat_modify}, grievance_summary_temp: {grievance_summary_temp}")
+        
+        if tracker.get_slot("sensitive_issues_detected"):
+            return [
+            ]
+        if tracker.get_slot("grievance_categories_status") in [ self.CM_COMFIRMED, self.SKIP_VALUE] and tracker.get_slot("grievance_summary_status") in [self.CM_COMFIRMED, self.SKIP_VALUE]:
+            return []
+        else:
+            self.logger.debug(f"Grievance summary form - Required slots: {domain_slots}")
+            return [
+                "grievance_categories_status",
+                "grievance_cat_modify", 
+                "grievance_summary_status",
+                "grievance_summary_temp"
+            ]
     
     
 
@@ -96,15 +180,15 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
             """
             Helper function to report gender issues and return the specific updated slots
             the changes in requested_slot are not handled in that specific function
-            the utterance and buttons are handled in the action_ask_grievance_summary_form_gender_follow_up
+            the utterance and buttons are handled in the action_ask_form_grievance_summary_gender_follow_up
             """
-            # update all the regular slots to validate the form and add the gender_issues_reported slot
-            return {"grievance_categories_status": LLM_GENERATED,
-                    "grievance_cat_modify": SKIP_VALUE,
+            # update all the regular slots to validate the form and add the sensitive_issues_detected slot
+            return {"grievance_categories_status": self.LLM_GENERATED,
+                    "grievance_cat_modify": self.SKIP_VALUE,
                     "grievance_categories": tracker.get_slot("grievance_categories"),
                     "grievance_summary": tracker.get_slot("grievance_summary_temp"),
-                    "grievance_summary_confirmed": SKIP_VALUE,
-                    "sensitive_issues_reported": True}
+                    "grievance_summary_confirmed": self.SKIP_VALUE,
+                    "sensitive_issues_detected": True}
             
     async def extract_grievance_categories_status(self, 
                                                    dispatcher: CollectingDispatcher,
@@ -122,29 +206,39 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
-                                                   ) -> List[Dict[Text, Any]]:
+                                                   ) -> Dict[Text, Any]:
         slot_value = slot_value.strip('/')
         try:      
-            if slot_value == SKIP_VALUE:
-                return {"grievance_categories_status": LLM_GENERATED}
+            if slot_value == self.SKIP_VALUE:
+                return {"grievance_categories_status": self.LLM_GENERATED,
+                        "grievance_cat_modify": self.SKIP_VALUE}
+                
             
             # Fallback to original logic if no async results
-            if slot_value == "slot_confirmed":
+            if slot_value == 'slot_confirmed':
                 if self._detect_sensitive_issues_category(tracker):
                     return self._report_sensitive_issues_category(dispatcher, tracker)
                 else:
-                    return {"grievance_categories_status": complainant_CONFIRMED}
+                    return {"grievance_categories_status": self.CM_COMFIRMED,
+                            "grievance_cat_modify": self.SKIP_VALUE}
                 
-            else:
+            elif slot_value == 'add_category':
                 #return the slot_value as selected by the user and move to category_modify slot
-                return {"grievance_categories_status": slot_value}
+                return {"grievance_categories_status": self.REVIEWING,
+                        "grievance_cat_modify": None}
+
+            elif slot_value == 'delete_category':
+                #return the slot_value as selected by the user and move to category_modify slot
+                return {"grievance_categories_status": self.REVIEWING,
+                        "grievance_cat_modify": None}
+
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_categories_status: {e}")
-            return {"grievance_categories_status": LLM_GENERATED}
+            return {"grievance_categories_status": self.LLM_GENERATED}
     
     
     
-    async def extract_grievance_cat_modify(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def extract_grievance_cat_modify(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
             "grievance_cat_modify",
             tracker,
@@ -175,7 +269,7 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
-                                                   ) -> List[Dict[Text, Any]]:
+                                                   ) -> Dict[Text, Any]:
         # provide the detailed doc of the function
         """
         Validates the modification of grievance categories.
@@ -212,10 +306,10 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
         
         #if no category is selected or the slot_value is SKIP_VALUE, return the LLM_GENERATED status and the SKIP_VALUE for the grievance_cat_modify slot
         try:
-            if not selected_category or slot_value == SKIP_VALUE:
+            if not selected_category or slot_value == self.SKIP_VALUE:
                 dispatcher.utter_message(text="No category selected. skipping this step.")
-                return {"grievance_categories_status": LLM_GENERATED,
-                    "grievance_cat_modify": SKIP_VALUE}
+                return {"grievance_categories_status": self.LLM_GENERATED,
+                    "grievance_cat_modify": self.SKIP_VALUE}
       
             #case 2: delete the category
             if tracker.get_slot("grievance_categories_status") == "slot_deleted":
@@ -233,7 +327,7 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
             #deal with the case where sensitive issues is part of list_of_cat
             if self._detect_sensitive_issues_category(tracker):
                 return self._report_sensitive_issues_category(dispatcher, tracker)
-                
+            #validate the slots
             return {
                 "grievance_categories": list_of_cat,
                 "grievance_categories_status": None,
@@ -241,15 +335,15 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
             }
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_cat_modify: {e}")
-            return {"grievance_categories_status": LLM_GENERATED,
-                    "grievance_cat_modify": SKIP_VALUE}
+            return {"grievance_categories_status": self.LLM_GENERATED,
+                    "grievance_cat_modify": self.SKIP_VALUE}
         
         
         
     
 
     
-    async def extract_grievance_summary_status(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def extract_grievance_summary_status(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
             "grievance_summary_status",
             tracker,
@@ -262,29 +356,29 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
-                                                   ) -> List[Dict[Text, Any]]:
+                                                   ) -> Dict[Text, Any]:
         slot_value = slot_value.strip('/')
         try:
-            if slot_value == SKIP_VALUE:
-                return {"grievance_summary_status": LLM_GENERATED,
-                    "grievance_summary_temp": SKIP_VALUE} #this will validate the slot and the form
+            if slot_value == self.SKIP_VALUE:
+                return {"grievance_summary_status": self.LLM_GENERATED,
+                    "grievance_summary_temp": self.SKIP_VALUE} #this will validate the slot and the form
             
             
             if slot_value == "slot_confirmed":
-                return {"grievance_summary_status": complainant_CONFIRMED,
-                        "grievance_summary_temp": SKIP_VALUE} #this will validate the slot and the form
+                return {"grievance_summary_status": self.CM_COMFIRMED,
+                        "grievance_summary_temp": self.SKIP_VALUE} #this will validate the slot and the form
             
             if slot_value == "slot_edited":
-                return {"grievance_summary_status": "slot_edited",
+                return {"grievance_summary_status": self.REVIEWING,
                         "grievance_summary_temp": None
                         }
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_summary_status: {e}")
-            return {"grievance_summary_status": LLM_GENERATED,
-                    "grievance_summary_temp": SKIP_VALUE}
+            return {"grievance_summary_status": self.LLM_GENERATED,
+                    "grievance_summary_temp": self.SKIP_VALUE}
 
     
-    async def extract_grievance_summary_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+    async def extract_grievance_summary_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
             "grievance_summary_temp",
             tracker,
@@ -297,13 +391,13 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
                                                    dispatcher: CollectingDispatcher, 
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
-                                                   ) -> List[Dict[Text, Any]]:
+                                                   ) -> Dict[Text, Any]:
         slot_value = slot_value.strip('/')
         try:
             if slot_value == SKIP_VALUE:
                 self.logger.info("SKIP_VALUE in validate_grievance_summary_temp")
-                return {"grievance_summary_status": LLM_GENERATED,
-                    "grievance_summary_temp": SKIP_VALUE}
+                return {"grievance_summary_status": self.LLM_GENERATED,
+                    "grievance_summary_temp": self.SKIP_VALUE}
         
             if slot_value:
                 self.logger.info(f"validate_grievance_summary_temp: {slot_value}")
@@ -318,7 +412,7 @@ class ValidateFormGrievanceSummary(BaseFormValidationAction):
 
 
 
-class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
+class ActionAskFormGrievanceSummaryGrievanceCategoriesStatus(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_grievance_summary_grievance_categories_status"
 
@@ -329,57 +423,31 @@ class ActionAskGrievanceSummaryFormGrievanceListCatStatus(BaseAction):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
-        classification_status = tracker.get_slot("classification_status")
-        
-        # Handle async classification status
-        if classification_status == "processing":
-            utterance = self.get_utterance( 3 )
-            dispatcher.utter_message(text=utterance)
-            return []
-        elif classification_status == "failed":
-            utterance = self.get_utterance(2)
-            dispatcher.utter_message(text=utterance)
-            return []
-        elif classification_status == "skipped":
-            # No classification available, proceed with manual input
-            utterance = self.get_utterance(4)
-            dispatcher.utter_message(text=utterance)
-            return []
-        elif classification_status == "completed":
+        if tracker.get_slot("classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']:
             # Classification is complete, show results
             grievance_categories = tracker.get_slot("grievance_categories")
-            grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
-            
-            if grievance_categories and grievance_summary_temp:
-                
-                # Show success message
-                utterance = self.get_utterance(5)
-                dispatcher.utter_message(text=utterance)
-            
-        if BaseFormValidationAction.message_display_list_cat:
-            grievance_categories = tracker.get_slot("grievance_categories")
-            print(f"Current categories: {grievance_categories}")
-            
-            if not grievance_categories or grievance_categories == []:
-                print("No categories found, sending no categories message")
+            category_text = "|".join([v for v in grievance_categories])
+            if len(grievance_categories) == 0:
                 utterance = self.get_utterance(1)
                 buttons = self.get_buttons(1)
-                dispatcher.utter_message(text=utterance, buttons=buttons)
-            
             else:
-                print(f"Sending message with categories: {grievance_categories}")
-                category_text = "\n".join([v for v in grievance_categories])
-                utterance = self.get_utterance(2)
-                utterance = utterance.format(category_text=category_text)  
-                buttons = self.get_buttons(2)
-                dispatcher.utter_message(text=utterance, buttons=buttons)
+                utterance = self.get_utterance(2).format(category_text=category_text)
 
-            BaseFormValidationAction.message_display_list_cat = False
+        elif tracker.get_slot("classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['REVIEWING']:
+            grievance_categories = tracker.get_slot("grievance_categories")
+            if len(grievance_categories) > 0:
+                category_text = "|".join([v for v in grievance_categories])
+                utterance = self.get_utterance(3).format(category_text=category_text)
+                buttons = self.get_buttons(3)
+            else:
+                utterance = self.get_utterance(4)
+                buttons = self.get_buttons(4)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
 
         return []
 
 
-class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
+class ActionAskFormGrievanceSummaryGrievanceCatModify(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_grievance_summary_grievance_cat_modify"
     
@@ -388,8 +456,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
         dispatcher: CollectingDispatcher, 
         tracker: Tracker,
         domain: DomainDict
-        ) -> List[Dict[Text, Any]]:
-        language_code = tracker.get_slot("language_code") or "en"
+        ) -> Dict[Text, Any]:
         ask_cat_modify_flag = tracker.get_slot("grievance_categories_status")
         list_of_cat = tracker.get_slot("grievance_categories")
         
@@ -397,7 +464,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
             if not list_of_cat:
                 utterance = self.get_utterance(1)
                 dispatcher.utter_message(text=utterance)
-                return {"grievance_categories_status": SKIP_VALUE}
+                return {"grievance_categories_status": self.SKIP_VALUE}
             else:
                 buttons = [
                     {"title": cat, "payload": f'/delete_category{{"category_to_delete": "{cat}"}}'}
@@ -418,7 +485,7 @@ class ActionAskGrievanceSummaryFormGrievanceCatModify(BaseAction):
         return []
     
     
-class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
+class ActionAskFormGrievanceSummaryGrievanceSummaryStatus(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_grievance_summary_grievance_summary_status"
     
@@ -428,7 +495,6 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
         tracker: Tracker,
         domain: DomainDict
         ) -> List[Dict[Text, Any]]:
-        language_code = tracker.get_slot("language_code") or "en"
         current_summary = tracker.get_slot("grievance_summary_temp")
         if current_summary:
             utterance = self.get_utterance(1)
@@ -440,7 +506,7 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryStatus(BaseAction):
             buttons = BUTTON_SKIP
             dispatcher.utter_message(text=utterance)
 
-class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(BaseAction):
+class ActionAskFormGrievanceSummaryGrievanceSummaryTemp(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_grievance_summary_grievance_summary_temp"
     
@@ -451,9 +517,9 @@ class ActionAskGrievanceSummaryFormGrievanceSummaryTemp(BaseAction):
             dispatcher.utter_message(text=utterance)
         return []
 
-class ActionAskGrievanceSummaryFormGenderFollowUp(BaseAction):
+class ActionAskFormGrievanceSummaryGenderFollowUp(BaseAction):
     def name(self) -> Text:
-        return "action_ask_grievance_summary_form_gender_follow_up"
+        return "action_ask_form_grievance_summary_gender_follow_up"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
@@ -465,288 +531,3 @@ class ActionAskGrievanceSummaryFormGenderFollowUp(BaseAction):
         dispatcher.utter_message(text=utterance, buttons=buttons)
 
 
-############################ STEP 2 - SUBMIT VALIDATED GRIEVANCE ############################
-class ActionSubmitLLMValidatedGrievance(BaseAction):
-    def name(self) -> Text:
-        return "action_submit_llm_validated_grievance"
-
-    def get_current_datetime(self) -> str:
-        """Get current date and time in YYYY-MM-DD HH:MM format."""
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-
-    def is_valid_email(self, email: str) -> bool:
-        """Check if the provided string is a valid email address."""
-        if not email:
-            return False
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
-
-    def collect_grievance_data(self, tracker: Tracker) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Collect and separate user and grievance data from slots."""
-        # set up the timestamp and timeline
-        grievance_timestamp = self.get_current_datetime()
-        grievance_timeline = (datetime.strptime(grievance_timestamp, "%Y-%m-%d %H:%M") + 
-                            timedelta(days=15)).strftime("%Y-%m-%d")
-        
-        # user data
-        grievance_data={k : tracker.get_slot(k) for k in ["complainant_phone",
-        "complainant_email",
-        "complainant_full_name",
-        "complainant_province",
-        "complainant_district",
-        "complainant_municipality",
-        "complainant_project",
-        "complainant_ward",
-        "complainant_village",
-        "complainant_address",
-        "grievance_id",
-        "grievance_summary",
-        "grievance_description",
-        "grievance_categories",
-        "grievance_claimed_amount",
-        "otp_verified"
-        ]}
-        
-        grievance_data["grievance_status"] = GRIEVANCE_STATUS["SUBMITTED"]
-        grievance_data["submission_type"] = "new_grievance"
-        grievance_data["grievance_timestamp"] = grievance_timestamp
-        grievance_data["grievance_timeline"] = grievance_timeline
-        # grievance_data["complainant_unique_id"] = self.generate_complainant_id(grievance_data)
-        # change all the values of the slots_skipped or None to "NOT_PROVIDED"
-        grievance_data = self._update_key_values_for_db_storage(grievance_data)
-                
-        return grievance_data
-
-    def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update the values of the grievance data for the database storage."""
-        for key, value in grievance_data.items():
-            if value == SKIP_VALUE or value is None:
-                grievance_data[key] = DEFAULT_VALUES["NOT_PROVIDED"]
-        return grievance_data
-    
-    def _get_attached_files_info(self, grievance_id: str) -> str:
-        """Get information about files attached to a grievance.
-        
-        Args:
-            grievance_id (str): The ID of the grievance to check for files
-            
-        Returns:
-            str: A formatted string containing file information, or empty string if no files
-        """
-        try:
-            files = self.db_manager.get_grievance_files(grievance_id)
-            if not files:
-                return {"has_files": False,
-                        "files_info": ""}
-            else:
-                files_info = "\nAttached files:\n" + "\n".join([
-                f"- {file['file_name']} ({file['file_size']} bytes)"
-                for file in files
-            ])
-                return {"has_files": True,
-                        "files_info": files_info}
-        except Exception as e:
-            self.logger.error(f"Error in get_attached_files_info: {e}")
-            return {"has_files": False,
-                    "files_info": ""}
-        
-    def create_confirmation_message(self, 
-                                    grievance_data: Dict[str, Any]) -> str:
-        """Create a formatted confirmation message."""
-        
-        # Get attached files information using the helper function
-        has_files = self.db_manager.get_attached_files_info(grievance_data['grievance_id'])["has_files"]
-        files_info = self.db_manager.get_attached_files_info(grievance_data['grievance_id'])["files_info"]
-        
-        message = [self.get_utterance("form_grievance", 
-                                 'create_confirmation_message', 
-                                 i, 
-                                 self.language_code) for i in ['grievance_id',
-                                    'grievance_timestamp',
-                                    'grievance_summary',
-                                    'grievance_categories',
-                                    'grievance_description',
-                                    'complainant_email',
-                                    'complainant_phone',
-                                    'grievance_outro',
-                                    'grievance_timeline'] if grievance_data.get(i) is not DEFAULT_VALUES["NOT_PROVIDED"]]
-        
-        message = "\n".join(message).format(grievance_id=grievance_data['grievance_id'], 
-                grievance_timestamp=grievance_data['grievance_timestamp'],
-                grievance_summary=grievance_data['grievance_summary'],
-                grievance_categories=grievance_data['grievance_categories'],
-                grievance_description=grievance_data['grievance_description'],
-                complainant_email=grievance_data['complainant_email'],
-                complainant_phone=grievance_data['complainant_phone'],
-                grievance_timeline=grievance_data['grievance_timeline']
-                )
-
-        # Add files information to the message
-        if has_files:
-            message = message + files_info
-        return message
-    
-    async def _send_grievance_recap_email(self, 
-                                          to_emails: List[str],
-                                          email_data: Dict[str, Any],
-                                          body_name: str,
-                                          dispatcher: CollectingDispatcher) -> None:
-        """Send a recap email to the user."""
-        
-        json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
-        
-        categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_categories'] or []))
-        # Create email body using template
-        
-        if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-            complainant_name=email_data['complainant_full_name'],
-            grievance_summary=email_data['grievance_summary'],
-            grievance_description=email_data['grievance_description'],
-            categories_html=categories_html,
-            project=email_data['complainant_project'],
-            municipality=email_data['complainant_municipality'],
-            village=email_data['complainant_village'],
-            address=email_data['complainant_address'],
-            phone=email_data['complainant_phone'],
-            grievance_id=email_data['grievance_id'],
-            email=email_data['complainant_email'],
-            grievance_timeline=email_data['grievance_timeline'],
-            grievance_timestamp=email_data['grievance_timestamp']
-        ) 
-        if body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-                json_data=json_data,
-                grievance_status=GRIEVANCE_STATUS["SUBMITTED"],
-            )
-
-        subject = EMAIL_TEMPLATES["GRIEVANCE_RECAP_SUBJECT"].format(
-            grievance_id=email_data['grievance_id']
-        )
-        try:
-            self.messaging.send_email(to_emails,
-                                        subject = subject,
-                                        body=body
-                                        )
-            if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-                utterance = self.get_utterance(2)
-                utterance = utterance.format(complainant_email=email_data['complainant_email'])
-                dispatcher.utter_message(text=utterance)
-                
-        except Exception as e:
-            print(f"Failed to send system notification email: {e}"
-            )
-            
-    # def _grievance_submit_gender_follow_up(self, dispatcher: CollectingDispatcher):
-    #         """Handle the case of gender follow up."""
-    #         utterance = self.get_utterance("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
-    #         buttons = self.get_buttons("form_grievance", "action_submit_grievance_gender_follow_up", 1, self.language_code)
-    #         dispatcher.utter_message(text=utterance, buttons=buttons)
-    
-    def _send_last_utterance_buttons(self, 
-                                     gender_tag: bool, 
-                                     has_files: bool, 
-                                     dispatcher: CollectingDispatcher) -> str:
-        buttons = None
-        if gender_tag:
-                utterance = self.get_utterance(1)
-                buttons = self.get_buttons(1)
-        elif not has_files:
-            utterance = self.get_utterance(2)
-        else:
-            utterance = self.get_utterance(3)
-        
-        if buttons:
-            dispatcher.utter_message(text=utterance, buttons=buttons)
-        else:
-            dispatcher.utter_message(text=utterance)
-
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-
-        self.language_code = tracker.get_slot("language_code") or "en"
-        self.gender_issues_reported = tracker.get_slot("gender_issues_reported")
-        self.grievance_id = tracker.get_slot("grievance_id")
-        self.complainant_id = tracker.get_slot("complainant_id")
-        
-        self.logger.info("Debug - All tracker slots:", tracker.slots)
-        self.logger.info("Debug - grievance_id from tracker:", self.grievance_id)
-        self.logger.info("Debug - complainant_id from tracker:", self.complainant_id)
-        
-        try:
-            # Collect grievance data
-            grievance_data = self.collect_grievance_data(tracker)
-            self.db_manager.update_grievance(grievance_id=self.grievance_id,
-                                                    data=grievance_data)
-            self.db_manager.update_grievance_status(grievance_id=self.grievance_id,
-                                                    status=GRIEVANCE_STATUS["SUBMITTED"])
-
-        
-            
-            # Create confirmation message to be sent by sms and through the bot
-            confirmation_message = self.create_confirmation_message(
-                grievance_data
-            )
-                
-            # Send confirmation message
-            dispatcher.utter_message(text=confirmation_message)
-            
-            if grievance_data.get('otp_verified') == True:
-                #send sms
-                complainant_phone = grievance_data.get('complainant_phone')
-                if complainant_phone != DEFAULT_VALUES["NOT_PROVIDED"]:
-                    self.messaging.send_sms(complainant_phone, confirmation_message)
-                    #utter sms confirmation message
-                    utterance = self.get_utterance(2)
-                    utterance = utterance.format(complainant_phone=complainant_phone)
-                    dispatcher.utter_message(text=utterance)
-            
-            #send email to admin
-            await self._send_grievance_recap_email(ADMIN_EMAILS, 
-                                                   grievance_data, 
-                                                   "GRIEVANCE_RECAP_ADMIN_BODY", 
-                                                   dispatcher=dispatcher)
-            
-            #send email to user
-            complainant_email = grievance_data.get('complainant_email')
-            if complainant_email and complainant_email != DEFAULT_VALUES["NOT_PROVIDED"]:
-                await self._send_grievance_recap_email([complainant_email], 
-                                                       grievance_data, 
-                                                       "GRIEVANCE_RECAP_complainant_BODY", 
-                                                       dispatcher=dispatcher)
-                
-                # Send email confirmation message
-                utterance = self.get_utterance(3)
-                utterance = utterance.format(complainant_email=complainant_email)
-                dispatcher.utter_message(text=utterance)
-            
-            #send the last utterance and buttons
-            self._send_last_utterance_buttons(self.gender_issues_reported, 
-                                              
-                                                self._get_attached_files_info(self.grievance_id)["has_files"],
-                                                dispatcher=dispatcher)
-                
-            
-            # #deal with the case of gender follow up
-            # if self.gender_issues_reported:
-            #     self._grievance_submit_gender_follow_up(dispatcher)
-            
-            # #send utter to users if they have not attached any files or a reminder to attach more files
-            # elif not self._get_attached_files_info(grievance_id)["has_files"]:
-            #     utterance = self.get_utterance("form_grievance", self.name(), 4, self.language_code)
-            #     dispatcher.utter_message(text=utterance)
-            
-            # else:
-            #         utterance = self.get_utterance("form_grievance", self.name(), 5, self.language_code)
-            #         dispatcher.utter_message(text=utterance)
-                
-            # Prepare events
-            return [
-                SlotSet("grievance_status", GRIEVANCE_STATUS["SUBMITTED"])
-            ]
-
-        except Exception as e:
-            utterance = self.get_utterance("form_grievance", self.name(), 4, self.language_code)
-            dispatcher.utter_message(text=utterance)
-            return []
-        

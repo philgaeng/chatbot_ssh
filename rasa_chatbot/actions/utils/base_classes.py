@@ -11,7 +11,7 @@ from .utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSIT
 from .mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, LLM_CLASSIFICATION
 from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
@@ -168,6 +168,7 @@ class BaseAction(Action, ABC):
         self.GRIEVANCE_CLASSIFICATION_STATUS = GRIEVANCE_CLASSIFICATION_STATUS
         self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
         self.NOT_PROVIDED = self.DEFAULT_VALUES["NOT_PROVIDED"]
+        self.LLM_CLASSIFICATION = LLM_CLASSIFICATION
         
     @abstractmethod
     def name(self) -> Text:
@@ -183,11 +184,11 @@ class BaseAction(Action, ABC):
         if not hasattr(self, 'language_code'):
             self.language_code = tracker.get_slot("language_code") or self.DEFAULT_LANGUAGE_CODE
         if not hasattr(self, 'province'):
-            self.province = tracker.get_slot("province") or self.DEFAULT_PROVINCE
+            self.province = tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE
         if not hasattr(self, 'district'):
-            self.district = tracker.get_slot("district") or self.DEFAULT_DISTRICT
+            self.district = tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT
         if not hasattr(self, 'office'):
-            self.office = tracker.get_slot("office") or self.DEFAULT_OFFICE
+            self.office = tracker.get_slot("complainant_office") or self.DEFAULT_OFFICE
 
     def _initialize_language_and_helpers(self, tracker: Tracker) -> None:
         """Initialize language code and update all helper services."""
@@ -242,6 +243,12 @@ class BaseAction(Action, ABC):
     def get_buttons(self, button_index: int=1):
         return get_buttons_base(self.file_name, self.name(), button_index, self.language_code)
             
+    def is_valid_email(self, email: str) -> bool:
+        """Check if the provided string is a valid email address."""
+        if not email:
+            return False
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """
