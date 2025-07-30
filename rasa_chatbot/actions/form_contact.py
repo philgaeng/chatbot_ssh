@@ -137,7 +137,7 @@ class ActionAskFormContactUserFullName(BaseAction):
         return "action_ask_form_contact_complainant_full_name"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        if tracker.get_slot("gender_issues_reported") ==self.SKIP_VALUE:
+        if tracker.get_slot("sensitive_issues_detected") ==self.SKIP_VALUE:
             message = self.get_utterance(1)
         else:
             message = self.get_utterance(2)

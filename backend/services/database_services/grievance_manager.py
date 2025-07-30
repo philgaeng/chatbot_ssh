@@ -27,7 +27,7 @@ class GrievanceDbManager(BaseDatabaseManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-    def create_grievance(self, data: Dict[str, Any], source: str = 'bot') -> bool:
+    def create_grievance(self, data: Dict[str, Any], source: str = 'bot') -> None:
         """Create a new grievance record
         Args:
             data: Dictionary containing grievance data including:
@@ -48,7 +48,6 @@ class GrievanceDbManager(BaseDatabaseManager):
             self.execute_insert(table_name='grievances', input_data=data, allowed_fields=allowed_fields, returning = 'grievance_id')
 
             self.logger.info(f"create_grievance: Successfully created grievance with ID: {grievance_id}")
-            return True
 
         except Exception as e:
             if not complainant_id:
@@ -60,7 +59,6 @@ class GrievanceDbManager(BaseDatabaseManager):
             else:
                 self.logger.error(f"Error in create_grievance: {str(e)}")
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
-            return False
 
     
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> int:

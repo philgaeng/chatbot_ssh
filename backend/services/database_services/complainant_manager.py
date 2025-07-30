@@ -127,7 +127,7 @@ class ComplainantDbManager(BaseDatabaseManager):
 
             data = {k: v for k, v in data.items() if k in allowed_fields}
 
-            if data['complainant_phone']:
+            if data.get('complainant_phone'):
                 data['complainant_phone'] = self._standardize_phone_number(data['complainant_phone'])
 
             input_data = self._encrypt_and_hash_sensitive_data(data) #manage encryption and hashing when required

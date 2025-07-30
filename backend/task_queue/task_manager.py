@@ -305,15 +305,15 @@ class TaskManager:
                 'status': status,
                 'data': data,
                 'grievance_id': self.grievance_id,
-                'session_id': self.session_id,
+                'flask_session_id': self.session_id,
             }
             
-            # Add grievance_id and session_id if available
+            # Add grievance_id and flask_session_id if available
             if hasattr(self, 'grievance_id') and self.grievance_id:
                 payload['grievance_id'] = self.grievance_id
             
             if hasattr(self, 'session_id') and self.session_id:
-                payload['session_id'] = self.session_id
+                payload['flask_session_id'] = self.session_id
             
             self.monitoring.log_task_event(
                 task_name=self.task_name,
