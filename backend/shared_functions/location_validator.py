@@ -6,6 +6,7 @@ from datetime import datetime
 import json  # For loading JSON files
 from rapidfuzz import process
 from typing import Optional, Dict, Any, Tuple, List
+import pandas as pd
 
 # Direct access to constants
 from backend.config.constants import (    
@@ -29,12 +30,18 @@ class ContactLocationValidator:
     
         json_path_en = f"{json_path}_en_cleaned.json"
         json_path_ne = f"{json_path}_ne_cleaned.json"
+        json_path_municipality_villages = f"{json_path}_municipality_villages.csv"
         self.logger = logging.getLogger(__name__)
         self.locations_both_language = dict()
         with open(json_path_en, "r") as file:
             self.locations_both_language["en"] = self._normalize_locations(json.load(file))
         with open(json_path_ne, "r") as file:
             self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
+        
+        self.municipality_villages = pd.read_csv(json_path_municipality_villages)
+        #update the columns name to lowercase
+        self.municipality_villages.columns = self.municipality_villages.columns.str.lower()
+        self.municipality_villages['municipality'] = self.municipality_villages['municipality'].str.title().str.replace(' Municipality', '').str.strip()
 
     def _validate_location(self, location_string, qr_province=None, qr_district=None):
         """Validate location from a single string input and QR defaults."""
@@ -319,4 +326,32 @@ class ContactLocationValidator:
             print(f"✅ Municipality validated: {municipality}")
             
             return municipality
+
+
+    def validate_village_input(
+            self,
+            input_text: str,
+            qr_municipality: str,
+        ) -> tuple[str, str]:
+            """Validate new village input.
+            Used the dataframe self.municipality_villages to match the village name with the municipality name using fuzzy matching. Return the tuple of village name and ward number if found, otherwise return None, None."""
+
+            #standardize the municipality name
+            qr_municipality = qr_municipality.title().replace('Municipality', '').strip()
+            
+            # Get the municipality data
+            municipality_data = self.municipality_villages[self.municipality_villages["municipality"] == qr_municipality]
+            
+            # Get the village names
+            village_names = municipality_data["village"].tolist()
+
+            # Try to match the village name with the municipality name using fuzzy matching
+            matched_village = self._find_best_match(input_text, village_names)
+            print(f"######## LocationValidator: Matched village: {matched_village}")
+            if matched_village:
+                ward_number = municipality_data[municipality_data["village"] == matched_village]["ward"].values[0]
+                return matched_village, str(ward_number)
+            
+            return None, None
+            
             
