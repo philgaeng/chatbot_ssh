@@ -100,7 +100,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_village': {
+        'action_ask_form_contact_complainant_village_temp': {
             'utterances': {
                 1: {
                     'en': "Please provide your village name or Skip to skip",
@@ -108,6 +108,28 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_contact_complainant_village_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Is {validated_village} in ward number {validated_ward} your correct village?",
+                    'ne': "के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_form_contact_complainant_ward': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your ward number (number between 1 and 20) or Skip to skip",
+                    'ne': "कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {    
                 1: BUTTONS_SKIP
             }
         },
@@ -187,7 +209,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'validate_complainant_village': {
+        'validate_complainant_village_temp': {
             'utterances': {
                 1: {
                     'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
@@ -203,7 +225,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'validate_complainant_confirmed': {
+        'validate_complainant_address_confirmed': {
             'utterances': {
                 1: {
                     'en': "Please enter your correct village and address",

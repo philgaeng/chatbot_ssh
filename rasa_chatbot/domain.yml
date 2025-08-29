@@ -154,6 +154,16 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
+  complainant_ward:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  complainant_village_temp:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
   complainant_village:
     type: text
     influence_conversation: true
@@ -201,12 +211,6 @@ slots:
       - type: custom
   complainant_project:
     type: text
-    influence_conversation: false
-    mappings:
-      - type: custom
-  complainant_ward:
-    type: text
-    initial_value: "0"
     influence_conversation: false
     mappings:
       - type: custom
@@ -465,7 +469,9 @@ actions:
   - action_ask_form_contact_complainant_municipality_confirmed
   - action_ask_form_contact_complainant_municipality_temp
   - action_ask_form_contact_complainant_province
-  - action_ask_form_contact_complainant_village
+  - action_ask_form_contact_complainant_village_confirmed
+  - action_ask_form_contact_complainant_village_temp
+  - action_ask_form_contact_complainant_ward
   - action_ask_grievance_new_detail
   - action_ask_sensitive_issues_follow_up
   - action_ask_sensitive_issues_nickname
@@ -543,14 +549,6 @@ forms:
       - main_story
     ignored_intents: *common-ignore-intents
   form_contact:
-    required_slots:
-      - complainant_location_consent
-      - complainant_consent
-      - complainant_full_name
-      - complainant_phone
-      - phone_validation_required
-      - complainant_email_temp
-      - complainant_email_confirmed
     ignored_intents: *common-ignore-intents
   collect_phone_form:
     required_slots:

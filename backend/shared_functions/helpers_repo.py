@@ -31,6 +31,11 @@ class HelpersRepo:
     def check_district(self, district: str, province: str) -> bool:
         """Check if the district is valid."""
         return self.location_validator.check_district(input_text=district, province_name=province)
+
+    def validate_village_input(self, location_string: str,
+                        qr_municipality: str) -> dict[str, str]:
+        """Validate location using the location validator."""
+        return self.location_validator.validate_village_input(location_string, qr_municipality)
     
     def detect_sensitive_content(self, text: str, language_code: str = "en") -> dict:
         """

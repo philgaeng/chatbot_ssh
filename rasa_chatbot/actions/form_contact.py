@@ -21,7 +21,7 @@ def get_language_code(tracker: Tracker) -> str:
  ######################## AskFormContactSlots Actions ########################
  #-----------------------------------------------------------------------------
  
-class ActionAskFormContactUserLocationConsent(BaseAction):
+class ActionAskFormContactComplainantLocationConsent(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_location_consent"
 
@@ -31,7 +31,7 @@ class ActionAskFormContactUserLocationConsent(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserMunicipalityTemp(BaseAction):
+class ActionAskFormContactComplainantMunicipalityTemp(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_municipality_temp"
     
@@ -44,7 +44,7 @@ class ActionAskFormContactUserMunicipalityTemp(BaseAction):
         return []
 
     
-class ActionAskFormContactUserMunicipalityConfirmed(BaseAction):
+class ActionAskFormContactComplainantMunicipalityConfirmed(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_municipality_confirmed"
     
@@ -55,9 +55,31 @@ class ActionAskFormContactUserMunicipalityConfirmed(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
        
-class ActionAskFormContactUserVillage(BaseAction):
+class ActionAskFormContactComplainantVillageTemp(BaseAction):
     def name(self) -> str:
-        return "action_ask_form_contact_complainant_village"
+        return "action_ask_form_contact_complainant_village_temp"
+    
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+
+class ActionAskFormContactComplainantVillageConfirmed(BaseAction):
+    def name(self) -> str:
+        return "action_ask_form_contact_complainant_village_confirmed"
+    
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
+        validated_village = tracker.get_slot('complainant_village_temp')
+        validated_ward = tracker.get_slot('complainant_ward')
+        message = self.get_utterance(1).format(validated_village=validated_village, validated_ward=validated_ward)
+        buttons = self.get_buttons(1)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+
+class ActionAskFormContactComplainantWard(BaseAction):
+    def name(self) -> str:
+        return "action_ask_form_contact_complainant_ward"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         message = self.get_utterance(1)
@@ -65,7 +87,7 @@ class ActionAskFormContactUserVillage(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserAddressTemp(BaseAction):
+class ActionAskFormContactComplainantAddressTemp(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_address_temp"
     
@@ -75,7 +97,7 @@ class ActionAskFormContactUserAddressTemp(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserAddressConfirmed(BaseAction):
+class ActionAskFormContactComplainantAddressConfirmed(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_address_confirmed"
     
@@ -99,7 +121,7 @@ class ActionAskFormContactUserAddressConfirmed(BaseAction):
         return []
     
 
-class ActionAskFormContactUserProvince(BaseAction):
+class ActionAskFormContactComplainantProvince(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_province"
     
@@ -110,7 +132,7 @@ class ActionAskFormContactUserProvince(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserDistrict(BaseAction):
+class ActionAskFormContactComplainantDistrict(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_district"
     
@@ -122,7 +144,7 @@ class ActionAskFormContactUserDistrict(BaseAction):
         return []
  
 
-class AskFormContactUserContactConsent(BaseAction):
+class AskFormContactComplainantContactConsent(BaseAction):
     def name(self) -> str:
         return "action_ask_form_contact_complainant_consent"
 
@@ -132,7 +154,7 @@ class AskFormContactUserContactConsent(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserFullName(BaseAction):
+class ActionAskFormContactComplainantFullName(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_contact_complainant_full_name"
     
@@ -145,7 +167,7 @@ class ActionAskFormContactUserFullName(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserContactPhone(BaseAction):
+class ActionAskFormContactComplainantContactPhone(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_contact_complainant_phone"
     
@@ -168,7 +190,7 @@ class ActionAskFormContactPhoneValidationRequired(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserContactEmailTemp(BaseAction):
+class ActionAskFormContactComplainantContactEmailTemp(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_contact_complainant_email_temp"
     
@@ -178,7 +200,7 @@ class ActionAskFormContactUserContactEmailTemp(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskFormContactUserContactEmailConfirmed(BaseAction):
+class ActionAskFormContactComplainantContactEmailConfirmed(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_contact_complainant_email_confirmed"
     
@@ -223,7 +245,9 @@ class ValidateFormContact(BaseFormValidationAction):
                           "complainant_district",
                           "complainant_municipality_temp", 
                           "complainant_municipality_confirmed", 
-                          "complainant_village", 
+                          "complainant_village_temp",
+                          "complainant_village_confirmed",
+                          "complainant_ward",
                           "complainant_address_temp", 
                           "complainant_address_confirmed", 
                           "complainant_address"]
@@ -449,20 +473,20 @@ class ValidateFormContact(BaseFormValidationAction):
         self.logger.debug(f"Validate complainant_municipality_confirmed: {result}")
         return result
     
-    async def extract_complainant_village(
+    async def extract_complainant_village_temp(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
-            "complainant_village",
+            "complainant_village_temp",
             tracker,
             dispatcher,
             domain# When skipped, assume confirmed
         )
     
-    async def validate_complainant_village(
+    async def validate_complainant_village_temp(
         self,
         slot_value: Text,
         dispatcher: CollectingDispatcher,
@@ -470,21 +494,126 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
         if slot_value == self.SKIP_VALUE:
-            result = {"complainant_village": self.SKIP_VALUE}
-            
-        # First validate string length
-        if not self._validate_string_length(slot_value, min_length=2):
-            message = self.get_utterance(1)
-            dispatcher.utter_message(
-                text=message
-            )
+            result = {"complainant_village_temp": self.SKIP_VALUE,
+                      "complainant_village_confirmed": False,
+                      "complainant_village": self.SKIP_VALUE,
+                      "complainant_ward": self.SKIP_VALUE
+            }
+        try:
+            slot_value = slot_value.title().strip()
+            # First validate string length
+            if not self.helpers.validate_string_length(slot_value, min_length=2):
+                message = self.get_utterance(1)
+                dispatcher.utter_message(
+                    text=message
+                )
+                result = {"complainant_village_temp": None}
+        except Exception as e:
+            self.logger.error(f"Error validating complainant_village - cannot validate string length: {e}")
+            result = {"complainant_village_temp": None}
+        try:
+            complainant_municipality = tracker.get_slot("complainant_municipality")
+            self.logger.debug(f"complainant_municipality: {complainant_municipality}")
+            #validate the village name with the municipality name using fuzzy matching
+            validated_village, validated_ward = self.helpers.validate_village_input(slot_value, 
+                                                                    tracker.get_slot("complainant_municipality"))
+            self.logger.debug(f"output of validate_village_input: {validated_village} {validated_ward}")
+        except Exception as e:
+            self.logger.error(f"Error validating complainant_village - cannot validate village name using fuzzy matching: {e}")
             result = {"complainant_village": None}
-            
-        result = {"complainant_village": slot_value}
-        self.logger.debug(f"Validate complainant_village: {result}")
+        try:
+            if validated_village and validated_village == slot_value:
+                result = {"complainant_village_temp": validated_village,
+                        "complainant_village_confirmed": True,
+                        "complainant_village": validated_village,
+                        "complainant_ward": validated_ward}
+            elif validated_village and validated_village != slot_value:
+                result = {"complainant_village_temp": validated_village,
+                        "complainant_ward": validated_ward}
+            else:
+                result = {"complainant_village_temp": slot_value,
+                        "complainant_village_confirmed" : False,
+                        "complainant_village": slot_value}
+                
+            self.logger.debug(f"Validate complainant_village: {result}")
+        except Exception as e:
+            self.logger.error(f"Error validating complainant_village - validate_village_input {validated_village} {validated_ward}: {e}")
+            result = {"complainant_village_temp": None}
         return result
     
-        
+    async def extract_complainant_village_confirmed(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        # First check if we have a municipality to confirm
+        if not tracker.get_slot("complainant_village_temp"):
+            return {}
+
+        return await self._handle_boolean_slot_extraction(
+            "complainant_village_confirmed",
+            tracker,
+            dispatcher,
+            domain  # When skipped, assume confirmed
+        )
+    
+    async def validate_complainant_village_confirmed(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+
+        if slot_value == True:
+            
+        #save the municipality to the slot
+            result = {"complainant_village_confirmed": True,
+                    "complainant_village": tracker.get_slot("complainant_village_temp"),
+                    "complainant_ward": tracker.get_slot("complainant_ward")}
+            
+        elif slot_value == False:
+            result = {"complainant_village_confirmed": False,
+                    "complainant_village": tracker.get_slot("complainant_village_temp"),
+                    "complainant_ward": None
+                    }
+        else:
+            result = {}
+        self.logger.debug(f"Validate complainant_village_confirmed: {result}")
+        return result
+    
+    async def extract_complainant_ward(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "complainant_ward",
+            tracker,
+            dispatcher,
+            domain
+        )
+
+    async def validate_complainant_ward(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        if slot_value == self.SKIP_VALUE:
+            result = {"complainant_ward": self.SKIP_VALUE}
+        else:
+            # ensure the ward is an integer
+            if not slot_value.isdigit():
+                result = {"complainant_ward": None}
+            else:
+                result = {"complainant_ward": int(slot_value)}
+            result = {"complainant_ward": slot_value}
+        self.logger.debug(f"Validate complainant_ward: {result}")
+        return result
     
     async def extract_complainant_address_temp(
         self,
@@ -521,6 +650,8 @@ class ValidateFormContact(BaseFormValidationAction):
         result = {"complainant_address_temp": slot_value}
         self.logger.debug(f"Validate complainant_address_temp: {result}")
         return result
+
+    
 
     async def extract_complainant_address_confirmed(
         self,
