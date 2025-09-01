@@ -543,15 +543,19 @@ UTTERANCE_MAPPING = {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 },
-                5: {
+            },
+        },
+        'action_submit_grievance_outro': {
+            'utterances': {
+                1: {
                     'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
                     'ne': "तपाईंको गुनासो दर्ता गरिएको छ। हामीलाई एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ।"
                 },
-                6: {
+                2: {
                     'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
                     'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
                 },
-                7: {
+                3: {
                     'en': "You can still attach more files to your grievance  by clicking on the attachment button below.",
                     'ne': "तपाईं अभी भी तपाईंको गुनासोको लागि अधिक फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
                 }
@@ -699,6 +703,29 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया नयाँ सारांश प्रविष्ट गर्नुहोस् र फेरी सुनिश्चित गर्नुहोस्।"
                 }
             }
+        },
+        'action_retrieve_classification_results': {
+            'utterances': {
+                1: {
+                    'en': "Categorization of your grievance is available.",
+                    'ne': "हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।"
+                },
+                2: {
+                    'en': "Categorization of your grievance is not available. Our officer will review your grievance and contact you soon.",
+                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन। हामी तपाईंको गुनासो मानिसाले सारांशित गर्नेछौं।"
+                }
+            }
+        # },
+        # 'action_ask_form_grievance_complainant_review': {
+        #     'utterances': {
+        #         1: {
+        #             'en': "Here are the suggested categories:\n{grievance_categories}\n and the summary:\n{grievance_summary}\n Do you want to modify these results?",
+        #             'ne': "यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{grievance_categories}\nके यो सही लाग्दैन?"
+        #         }
+        #     },
+        #     'buttons': {
+        #         1: BUTTONS_AFFIRM_DENY
+        #     }
         }
     },
     'generic_actions': {

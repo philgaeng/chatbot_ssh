@@ -264,7 +264,8 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 return {
                     "grievance_new_detail": None,
                     "grievance_description": updated_temp,
-                    "grievance_description_status": "show_options"
+                    "grievance_description_status": "show_options",
+                    "sensitive_issues_detected": False
                 }
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_new_detail: {e}")

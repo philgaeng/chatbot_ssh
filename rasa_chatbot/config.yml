@@ -19,10 +19,12 @@ pipeline:
     ambiguity_threshold: 0.05
 
 policies:
-  - name: MemoizationPolicy
-    max_history: 6
   - name: AugmentedMemoizationPolicy
     max_history: 8
+    priority: 2
+  - name: MemoizationPolicy
+    max_history: 6
+    priority: 3
   - name: TEDPolicy
     max_history: 8
     epochs: 100
@@ -33,4 +35,3 @@ policies:
     core_fallback_action_name: "action_custom_fallback"
     enable_fallback_prediction: true
     enable_prediction_debugging: true
-

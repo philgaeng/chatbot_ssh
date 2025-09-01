@@ -722,7 +722,7 @@ def store_result_to_db_task(self, input_data: Dict[str, Any], emit_websocket: bo
         - operation: 'store_result'
         - error: Error message if status is 'error'
     """
-    task_mgr = DatabaseTaskManager(task=self, task_type='Database', emit_websocket=emit_websocket)
+    task_mgr = DatabaseTaskManager(task=self, emit_websocket=emit_websocket)
     try:
         
         # Handle database operation with retroactive task creation

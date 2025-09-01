@@ -215,16 +215,17 @@ function handleTaskStatusEvent(data) {
         uiActions.appendMessage(taskData.message, "received");
       }
 
-      // NEW: Send classification results to Rasa if this is a classification task
+      // DEBUG: Log classification completion for debugging (no longer sending to Rasa)
       if (task_name === "classify_and_summarize_grievance_task" && taskData) {
-        console.log("🎯 Classification completed, sending results to Rasa...");
+        console.log("🎯 Classification completed - DEBUG INFO:");
+        console.log("Task name:", task_name);
         console.log("Task data:", taskData);
-        sendClassificationResultsToRasa(taskData);
-      } else {
-        console.log("🔍 Not a classification task or no task data:", {
-          task_name,
-          taskData,
-        });
+        console.log(
+          "📝 Note: Classification results are now controlled via database storage"
+        );
+        console.log(
+          "⏰ Rasa will be notified when ready through the new workflow"
+        );
       }
       break;
 

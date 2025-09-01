@@ -315,6 +315,11 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  grievance_complainant_review:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
   grievance_categories:
     type: list
     influence_conversation: true
@@ -482,11 +487,11 @@ actions:
   - action_ask_otp_consent
   - action_ask_otp_input
   - action_ask_otp_number
-  - action_ask_form_grievance_summary_grievance_cat_modify
-  - action_ask_form_grievance_summary_grievance_summary_status
-  - action_ask_form_grievance_summary_grievance_summary_temp
-  - action_ask_form_grievance_summary_grievance_categories_status
-  - action_ask_form_grievance_summary_grievance_gender_follow_up
+  - action_ask_form_grievance_complainant_review_grievance_cat_modify
+  - action_ask_form_grievance_complainant_review_grievance_summary_status
+  - action_ask_form_grievance_complainant_review_grievance_summary_temp
+  - action_ask_form_grievance_complainant_review_grievance_categories_status
+  - action_ask_form_grievance_complainant_review_grievance_gender_follow_up
   - action_attach_file
   - action_back_to_previous_step
   - action_check_status
@@ -515,6 +520,7 @@ actions:
   - action_restart_grievance
   - action_restart_story
   - action_retrieve_another_grievance
+  - action_retrieve_classification_results
   - action_retrieve_grievance_with_id
   - action_retrieve_with_phone
   - action_retry_otp
@@ -528,18 +534,19 @@ actions:
   - action_start_grievance_process
   - action_submit_grievance
   - action_submit_grievance_as_is
-  - action_submit_llm_validated_grievance
+  - action_update_grievance_categorization
   - action_validate_categories
   - action_validate_summary
   - action_handle_sensitive_content_affirm
   - action_handle_sensitive_content_deny
   - validate_form_contact
   - validate_form_grievance
-  - validate_form_grievance_summary
+  - validate_form_grievance_complainant_review
   - validate_form_grievance_id
   - validate_form_menu
   - validate_form_otp
   - validate_form_sensitive_issues
+  - action_grievance_outro
   - action_outro
 
 forms:
@@ -549,6 +556,8 @@ forms:
       - main_story
     ignored_intents: *common-ignore-intents
   form_contact:
+    required_slots:
+      - complainant_phone
     ignored_intents: *common-ignore-intents
   collect_phone_form:
     required_slots:
@@ -571,12 +580,9 @@ forms:
     required_slots:
       - grievance_new_detail
     ignored_intents: *common-ignore-intents
-  form_grievance_summary:
+  form_grievance_complainant_review:
     required_slots:
-      - grievance_categories
-      - grievance_summary
-      - grievance_categories_status
-      - grievance_summary_status
+      - grievance_cat_modify
     ignored_intents: *common-ignore-intents
   form_sensitive_issues:
     required_slots:

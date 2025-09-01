@@ -1,0 +1,313 @@
+version: "3.1"
+
+stories:
+  # Generated stories for all binary combinations after form_contact -> form_otp -> action_submit_grievance
+  # These stories cover all possible states to prevent action_listen fallback
+
+  # ===== USER PROVIDES PHONE (phone_validation_required: True) =====
+
+  # All location details confirmed
+  - story: User provides phone and all location details confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: true
+          - complainant_address_confirmed: true
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Village not confirmed
+  - story: User provides phone but village not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: true
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Municipality not confirmed
+  - story: User provides phone but municipality not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: false
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Address not confirmed
+  - story: User provides phone but address not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: true
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Location consent false
+  - story: User provides phone but no location consent
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: false
+          - complainant_municipality_confirmed: false
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Multiple location details not confirmed
+  - story: User provides phone but multiple location details not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: true
+          - complainant_municipality: "slot_skipped"
+          - complainant_municipality_confirmed: false
+          - complainant_village: "slot_skipped"
+          - complainant_village_confirmed: false
+          - complainant_ward: "slot_skipped"
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - slot_was_set:
+          - otp_status: "verified"
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # ===== USER DOESN'T PROVIDE PHONE (phone_validation_required: False) =====
+
+  # No phone but all location details confirmed
+  - story: User doesn't provide phone but all location details confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: true
+          - complainant_address_confirmed: true
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # No phone and village not confirmed
+  - story: User doesn't provide phone and village not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: true
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # No phone and municipality not confirmed
+  - story: User doesn't provide phone and municipality not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: false
+          - complainant_municipality: "slot_skipped"
+          - complainant_village_confirmed: false
+          - complainant_ward: "slot_skipped"
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: true
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # No phone and address not confirmed
+  - story: User doesn't provide phone and address not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: true
+          - complainant_village_confirmed: false
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # No phone and no location consent
+  - story: User doesn't provide phone and no location consent
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: false
+          - complainant_municipality_confirmed: false
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # No phone and multiple location details not confirmed
+  - story: User doesn't provide phone and multiple location details not confirmed
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: true
+          - complainant_municipality_confirmed: false
+          - complainant_municipality: "slot_skipped"
+          - complainant_village: "slot_skipped"
+          - complainant_ward: "slot_skipped"
+          - complainant_village_confirmed: false
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # ===== EDGE CASES =====
+
+  # User provides phone but denies consent
+  - story: User provides phone but denies consent
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: true
+          - complainant_location_consent: false
+          - complainant_municipality_confirmed: false
+          - complainant_municipality: "slot_skipped"
+          - complainant_village: "slot_skipped"
+          - complainant_ward: "slot_skipped"
+          - complainant_village_confirmed: false
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # User doesn't provide phone but gives consent
+  - story: User doesn't provide phone but gives consent
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: true
+          - phone_validation_required: false
+          - complainant_location_consent: false
+          - complainant_municipality_confirmed: false
+          - complainant_municipality: "slot_skipped"
+          - complainant_village: "slot_skipped"
+          - complainant_ward: "slot_skipped"
+          - complainant_village_confirmed: false
+          - complainant_address: "slot_skipped"
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+
+  # Minimal information provided
+  - story: User provides minimal information
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - complainant_consent: false
+          - phone_validation_required: false
+          - complainant_location_consent: false
+          - complainant_municipality_confirmed: false
+          - complainant_village_confirmed: false
+          - complainant_address_confirmed: false
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
