@@ -47,3 +47,23 @@ rules:
     steps:
       - intent: question_attach_files
       - action: action_question_attach_files
+
+  - rule: main flow
+    steps:
+      - active_loop: form_grievance
+      - active_loop: null
+      - slot_was_set:
+          - sensitive_issues_detected: false
+      - action: form_contact
+      - active_loop: form_contact
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro

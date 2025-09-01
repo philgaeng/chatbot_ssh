@@ -71,32 +71,7 @@ class BaseActionSubmit(BaseAction):
                 grievance_data[key] = self.NOT_PROVIDED
         return grievance_data
     
-    def _get_attached_files_info(self, grievance_id: str) -> Dict[str, Any]:
-        """Get information about files attached to a grievance.
-        
-        Args:
-            grievance_id (str): The ID of the grievance to check for files
-            
-        Returns:
-            str: A formatted string containing file information, or empty string if no files
-        """
-        try:
-            files = self.db_manager.get_grievance_files(grievance_id)
-            if not files:
-                return {"has_files": False,
-                        "files_info": ""}
-            else:
-                files_info = "\nAttached files:\n" + "\n".join([
-                f"- {file['file_name']} ({file['file_size']} bytes)"
-                for file in files
-            ])
-                return {"has_files": True,
-                        "files_info": files_info}
-
-        except Exception as e:
-            self.logger.error(f"❌ Error getting attached files info: {str(e)}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            raise Exception(f"Failed to get attached files info: {str(e)}")
+    
 
         
     def create_confirmation_message(self, 
@@ -247,8 +222,6 @@ class BaseActionSubmit(BaseAction):
                                                 grievance_data, 
                                                 body_name = "GRIEVANCE_RECAP_ADMIN_BODY"
                                                 )
-            message = self.get_utterance(2)
-            dispatcher.utter_message(text=message)
         except Exception as e:
             self.logger.error(f"Failed to send recap email to admin: {e}")
 
@@ -268,6 +241,33 @@ class BaseActionSubmit(BaseAction):
             dispatcher.utter_message(text=utterance)
         except Exception as e:
             self.logger.error(f"Failed to send recap email to complainant {complainant_email}: {e}")
+
+    def _get_attached_files_info(self, grievance_id: str) -> Dict[str, Any]:
+        """Get information about files attached to a grievance.
+        
+        Args:
+            grievance_id (str): The ID of the grievance to check for files
+            
+        Returns:
+            str: A formatted string containing file information, or empty string if no files
+        """
+        try:
+            files = self.db_manager.get_grievance_files(grievance_id)
+            if not files:
+                return {"has_files": False,
+                        "files_info": ""}
+            else:
+                files_info = "\nAttached files:\n" + "\n".join([
+                f"- {file['file_name']} ({file['file_size']} bytes)"
+                for file in files
+            ])
+                return {"has_files": True,
+                        "files_info": files_info}
+
+        except Exception as e:
+            self.logger.error(f"❌ Error getting attached files info: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            raise Exception(f"Failed to get attached files info: {str(e)}")
 
 
     async def _send_grievance_recap_sms(self, 
@@ -296,27 +296,7 @@ class BaseActionSubmit(BaseAction):
             self.logger.error(f"Failed to send recap sms to {complainant_phone}: {e}")
   
     
-    def send_last_utterance_buttons(self, 
-                                     gender_tag: bool, 
-                                     has_files: bool, 
-                                     dispatcher: CollectingDispatcher) -> None:
-        buttons = None
-        self.logger.info("send last utterance and buttons")
-        try:
-            if gender_tag:
-                    utterance = self.get_utterance(5) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
-                    buttons = self.get_buttons(1)
-            elif not has_files:
-                utterance = self.get_utterance(6)
-            else:
-                utterance = self.get_utterance(7)
-            
-            if buttons:
-                dispatcher.utter_message(text=utterance, buttons=buttons)
-            else:
-                dispatcher.utter_message(text=utterance)
-        except Exception as e:
-            self.logger.error(f"Error in send_last_utterance_buttons: {e}")
+
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any], review: bool = False) -> List[Dict[Text, Any]]:
         self.sensitive_issues_detected = tracker.get_slot("sensitive_issues_detected")
@@ -354,11 +334,7 @@ class BaseActionSubmit(BaseAction):
                 await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
                 
                 
-            #send the last utterance and buttons
-            self.send_last_utterance_buttons(self.sensitive_issues_detected, 
-                                              
-                                                self._get_attached_files_info(self.grievance_id)["has_files"],
-                                                dispatcher=dispatcher)
+
                 
             
             return [
@@ -380,9 +356,29 @@ class ActionSubmitGrievance(BaseActionSubmit):
         return await super().execute_action(dispatcher, tracker, domain, review = False)
 
 
-class ActionSubmitGrievanceReview(BaseActionSubmit):
+class ActionGrievanceOutro(BaseActionSubmit):
     def name(self) -> Text:
-        return "action_submit_grievance_review"
+        return "action_grievance_outro"
+
+
     
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        return await super().execute_action(dispatcher, tracker, domain, review = True)
+    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
+        
+        self.sensitive_issues_detected = tracker.get_slot("sensitive_issues_detected")
+        self.logger.info("send last utterance and buttons")
+        try:
+            if self.sensitive_issues_detected:
+                    utterance = self.get_utterance(1) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
+                    buttons = self.get_buttons(1)
+            elif not self._get_attached_files_info(self.grievance_id)["has_files"]:
+                utterance = self.get_utterance(2)
+            else:
+                utterance = self.get_utterance(3)
+            
+            if buttons:
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+            else:
+                dispatcher.utter_message(text=utterance)
+            return []
+        except Exception as e:
+            self.logger.error(f"Error in send_last_utterance_buttons: {e}")

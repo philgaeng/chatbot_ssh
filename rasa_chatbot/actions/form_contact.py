@@ -287,6 +287,8 @@ class ValidateFormContact(BaseFormValidationAction):
                     "complainant_municipality":self.SKIP_VALUE,
                     "complainant_municipality_confirmed": False,
                     "complainant_village":self.SKIP_VALUE,
+                    "complainant_village_confirmed": False,
+                    "complainant_ward":self.SKIP_VALUE,
                     "complainant_address_temp":self.SKIP_VALUE,
                     "complainant_address":self.SKIP_VALUE,
                     "complainant_address_confirmed": False}
