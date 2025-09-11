@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
 from backend.logger.logger import TaskLogger
-from ..config.constants import CLASSIFICATION_DATA, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
+from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
 from backend.services.database_services.postgres_services import db_manager
 # Set up logging
 logger = TaskLogger(service_name='llm_service').logger
@@ -146,7 +146,8 @@ def classify_and_summarize_grievance(
     language_code: str = DEFAULT_LANGUAGE_CODE,
     complainant_district: str = DEFAULT_DISTRICT,
     complainant_province: str = DEFAULT_PROVINCE,
-    categories: List[str] = CLASSIFICATION_DATA
+    categories: List[str] = LIST_OF_CATEGORIES,
+    categories_list: Dict[str, Any] = CLASSIFICATION_DATA
 ) -> Dict[str, Any]:
     """
     Classify and summarize a grievance using LLM.
@@ -177,9 +178,14 @@ def classify_and_summarize_grievance(
             }
 
         # Use provided categories or default to CLASSIFICATION_DATA
-        category_list = categories or CLASSIFICATION_DATA
-        category_list_str = "\n".join(f"- {c}" for c in category_list)
-
+        category_list = [f"{item.get('classification')} - {item.get('generic_grievance_name')}" for item in CLASSIFICATION_DATA.values()]
+        result_dict = {}
+        for key, value in CLASSIFICATION_DATA.items():
+            result_dict[key] = {k:v for k,v in value.items() if "_"+language_code not in k}
+        #transform the dict into a string using json.dumps
+        category_list_str = json.dumps(category_list)
+        result_dict_str = json.dumps(result_dict)
+        
         # Initialize OpenAI client
         client = OpenAI(api_key=open_ai_key)
         if not client:
@@ -193,23 +199,26 @@ def classify_and_summarize_grievance(
                     Step 1:
                     Categorize this grievance: "{grievance_text}"
                     Only choose from the following categories:
-                    {category_list_str}
+                    {category_list_str}. The categories response is always in English for consistency. Another process will be used to translate the categories to the language of the grievance for the bot.
                     Do not create new categories.
                     Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
                     [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt.
-                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories are only coming from the following list: {category_list_str}
+                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories are only coming from the following list: {category_list_str}.
                     Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
                     For the summary, reply in the language of the grievance eg if the input is in English, reply in English, if the input is in Nepali, reply in Nepali.
+                    Step 3: Prepare a follow up question that the complainant can answer to provide more information about the grievance especially quantifying the impact of the grievance (health, economic, etc). Sample questions are provided in the dictionary. The follow up question is in the language of the grievance.
                     Finally,
                     Return the response in **strict JSON format** like this:
                     {{
-                        "grievance_summary": "Summarized grievance text",
-                        "grievance_categories": ["Category 1", "Category 2"]
-                        "grievance_categories_alternative": ["Category 3", "Category 4", "Category 5"]
+                        "grievance_summary": "Summarized grievance text in the language of the grievance",
+                        "grievance_categories": ["Category 1", "Category 2"] in English
+                        "grievance_categories_alternative": ["Category 3", "Category 4", "Category 5"] in English
+                        "follow_up_question": "Follow up question in the language of the grievance"
                     }}
+                    Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
                 """}
             ],
-            model="gpt-4",
+            model="gpt-4o-mini",
         )
 
         # Parse the response
@@ -222,6 +231,7 @@ def classify_and_summarize_grievance(
             "grievance_summary": "",
             "grievance_categories": [],
             "grievance_categories_alternative": [],
+            "follow_up_question": "",
             "status": "error",
             "error": str(e)
         }
@@ -236,7 +246,7 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
         response: Raw LLM response string
     """
     fields = {
-        "grievance_response": ["grievance_summary", "grievance_categories", "grievance_categories_alternative"],
+        "grievance_response": ["grievance_summary", "grievance_categories", "grievance_categories_alternative", "follow_up_question"],
         "contact_response": ["complainant_phone", "complainant_full_name", "complainant_district", "complainant_municipality", "complainant_village", "complainant_address"]
     }
     try:
@@ -252,7 +262,8 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
                 return {
                     "grievance_summary": error_response,
                     "grievance_categories": [error_response],
-                    "grievance_categories_alternative": [error_response]
+                    "grievance_categories_alternative": [error_response],
+                    "follow_up_question": error_response
                 }
         result_dict = json.loads(response)
         for field in fields[type]:

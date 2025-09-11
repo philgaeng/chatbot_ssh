@@ -304,6 +304,11 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  follow_up_question:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
   grievance_complainant_review:
     type: bool
     influence_conversation: true
@@ -315,6 +320,16 @@ slots:
     mappings:
       - type: custom
   grievance_categories_alternative:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  grievance_categories_local:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  grievance_categories_alternative_local:
     type: list
     influence_conversation: true
     mappings:

@@ -11,6 +11,7 @@ ALLOWED_UPDATE_FIELDS = [
         'complainant_id',
         'grievance_categories',
         'grievance_categories_alternative',
+        'follow_up_question',
         'grievance_summary',
         'grievance_description',
         'grievance_claimed_amount',
@@ -67,7 +68,7 @@ class GrievanceDbManager(BaseDatabaseManager):
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
-            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code']
+            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question']
             update_fields, update_values = self.generate_update_query(data, expected_fields)
 
             if update_fields and update_values:

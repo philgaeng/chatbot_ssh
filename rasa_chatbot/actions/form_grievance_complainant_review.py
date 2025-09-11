@@ -64,8 +64,11 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             grievance_summary = grievance_data.get('grievance_summary', '')
             grievance_categories = grievance_data.get('grievance_categories', [])
             grievance_categories_alternative = grievance_data.get('grievance_categories_alternative', [])
+            follow_up_question = grievance_data.get('follow_up_question', '')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
+            grievance_categories_local = self._get_categories_in_local_language(grievance_categories)
+            grievance_categories_alternative_local = self._get_categories_in_local_language(grievance_categories_alternative)
 
             if sensitive_categories:
                 return [SlotSet('sensitive_issues_detected', True),
@@ -74,6 +77,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                         SlotSet('grievance_summary_temp', grievance_summary),
                         SlotSet('grievance_categories', grievance_categories), 
                         SlotSet('grievance_categories_alternative', grievance_categories_alternative),
+                        SlotSet('grievance_categories_local', grievance_categories_local),
+                        SlotSet('grievance_categories_alternative_local', grievance_categories_alternative_local),
+                        SlotSet('follow_up_question', follow_up_question),
                         SlotSet('grievance_summary_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']), 
                         SlotSet('grievance_categories_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
                         SlotSet('grievance_complainant_review', False)]
@@ -88,6 +94,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                         SlotSet('grievance_summary_temp', grievance_summary),
                         SlotSet('grievance_categories', grievance_categories),
                         SlotSet('grievance_categories_alternative', grievance_categories_alternative),
+                        SlotSet('grievance_categories_local', grievance_categories_local),
+                        SlotSet('grievance_categories_alternative_local', grievance_categories_alternative_local),
+                        SlotSet('follow_up_question', follow_up_question),
                         SlotSet('grievance_complainant_review', True)
                         ]
             else :
@@ -98,6 +107,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                         SlotSet('grievance_summary', 'N/A'), 
                         SlotSet('grievance_categories', 'N/A'), 
                         SlotSet('grievance_categories_alternative', 'N/A'),
+                        SlotSet('grievance_categories_local', 'N/A'),
+                        SlotSet('grievance_categories_alternative_local', 'N/A'),
+                        SlotSet('follow_up_question', 'N/A'),
                         SlotSet('grievance_complainant_review', False)
                         ]
                 
@@ -232,7 +244,7 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
             elif 'slot_added' in slot_value:
                 #return the slot_value as selected by the user and move to category_modify slot
                 return {"grievance_categories_status": slot_value,
-                    "grievance_classification_status": self.REVIEWING,
+                        "grievance_classification_status": self.REVIEWING,
                         "grievance_cat_modify": None}
 
             elif 'slot_deleted' in slot_value:
@@ -308,8 +320,8 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         
         if slot_value:
 
-            grievance_categories = tracker.get_slot("grievance_categories")
-            alternative_categories = tracker.get_slot("grievance_categories_alternative")
+            grievance_categories = tracker.get_slot("grievance_categories_local")
+            alternative_categories = tracker.get_slot("grievance_categories_alternative_local")
             self.logger.info(f"validate_grievance_cat_modify input: {slot_value}, grievance_categories: {grievance_categories}, alternative_categories: {alternative_categories}")
             #get the category to modify from the slot_value
             selected_category = self.get_category_to_modify(alternative_categories = alternative_categories + grievance_categories, input_text=slot_value) #we add the grievance_categories to the alternative_categories to get the complete list of categories that can be deleted
@@ -333,7 +345,7 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     grievance_categories.append(selected_category)
                     alternative_categories.remove(selected_category)
             
-                self.logger.debug(f"validate_grievance_cat_modify output: selected_category: {selected_category}, grievance_categories: {grievance_categories}, alternative_categories: {alternative_categories}")
+                self.logger.debug(f"validate_grievance_cat_modify output: selected_category: {selected_category}, grievance_categories_local: {grievance_categories}, alternative_categories_local: {alternative_categories}")
                 #reset the message_display_list_cat to True
                 BaseFormValidationAction.message_display_list_cat = True
                 
@@ -342,8 +354,8 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     return self._report_sensitive_issues_category(dispatcher, tracker)
                 #validate the slots
                 return {
-                    "grievance_categories": grievance_categories,
-                    "grievance_categories_alternative": alternative_categories,
+                    "grievance_categories_locaL": grievance_categories,
+                    "grievance_categories_alternative_local": alternative_categories,
                     "grievance_categories_status": None,
                     "grievance_cat_modify": "Done",
                 }
@@ -454,22 +466,20 @@ class ActionAskFormGrievanceComplainantReviewGrievanceCategoriesStatus(BaseActio
         self.logger.debug(f"action_ask_form_grievance_complainant_review_grievance_categories_status - grievance_classification_status: {tracker.get_slot('grievance_classification_status')}")
         buttons = None
         utterance = None
+        grievance_categories = tracker.get_slot("grievance_categories_local")
+        category_text = "|".join([v for v in grievance_categories]) if grievance_categories else "[]"
+        
         if tracker.get_slot("grievance_classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']:
             # Classification is complete, show results
-            grievance_categories = tracker.get_slot("grievance_categories")
-            category_text = "|".join([v for v in grievance_categories]) if grievance_categories else "[]"
             if grievance_categories:
                 utterance = self.get_utterance(1).format(category_text=category_text)
                 buttons = self.get_buttons(1)
-            
             else:
                 utterance = self.get_utterance(2)
                 buttons = self.get_buttons(2)
 
         elif tracker.get_slot("grievance_classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['REVIEWING']:
-            grievance_categories = tracker.get_slot("grievance_categories")
             if grievance_categories:
-                category_text = "|".join([v for v in grievance_categories])
                 utterance = self.get_utterance(3).format(category_text=category_text)
                 buttons = self.get_buttons(1)
             else:

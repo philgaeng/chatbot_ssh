@@ -359,6 +359,17 @@ class ActionGrievanceOutro(BaseActionSubmit):
     def name(self) -> Text:
         return "action_grievance_outro"
 
+    def _prepare_grievance_outro_data(self, tracker: Tracker) -> Dict[str, Any]:
+        """Prepare the grievance outro data from the slots and updating the categories to the english ones"""
+         #saving results to the database
+        grievance_data = self.collect_grievance_data(tracker, review = True)
+        grievance_categories_local = tracker.get_slot("grievance_categories_local")
+        grievance_categories_en = self._get_categories_in_english((grievance_categories_local))
+        grievance_categories_alternative_local = tracker.get_slot("grievance_categories_alternative_local")
+        grievance_categories_alternative_en = self._get_categories_in_english((grievance_categories_alternative_local))
+        grievance_data["grievance_categories"] = grievance_categories_en
+        grievance_data["grievance_categories_alternative"] = grievance_categories_alternative_en
+        return grievance_data
 
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
@@ -382,6 +393,13 @@ class ActionGrievanceOutro(BaseActionSubmit):
                 dispatcher.utter_message(text=utterance, buttons=buttons)
             else:
                 dispatcher.utter_message(text=utterance)
+            self.logger.debug(f"action_grievance_outro - outro sent")
+
+            #final saving to the database
+            grievance_data = self._prepare_grievance_outro_data(tracker)
+           
+            self.db_manager.submit_grievance_to_db(grievance_data)
+            self.logger.debug(f"action_grievance_outro - grievance data saved to the database: {grievance_data}")
 
             return []
         except Exception as e:

@@ -9,7 +9,7 @@ Environmental - Drainage And Sewage Management
 Environmental - Noise Pollution
 Environmental, Social - Cutting Of Trees
 Gender - Gender Discrimination And Harrassment
-Gender, Social - Gender-Based Access Issues
+Gender, Social - Gender Based Access Issues
 Malicious Behavior - Theft Of Crops
 Malicious Behavior - Theft Of Tools Or Equipment
 Malicious Behavior, Environmental - Fire Incidents
