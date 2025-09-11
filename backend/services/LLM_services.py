@@ -160,7 +160,8 @@ def classify_and_summarize_grievance(
         Dict containing:
         {
             "grievance_summary": str,
-            "list_categories": List[str],
+            "grievance_categories": List[str],
+            "grievance_categories_alternative": List[str],
             "status": str,
             "error": Optional[str]
         }
@@ -169,7 +170,8 @@ def classify_and_summarize_grievance(
         if not grievance_text:
             return {
                 "grievance_summary": "",
-                "list_categories": [],
+                "grievance_categories": [],
+                "grievance_categories_alternative": [],
                 "status": "error",
                 "error": "No grievance text provided"
             }
@@ -186,7 +188,7 @@ def classify_and_summarize_grievance(
         # Make API call
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}."},
+                {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. You will be given a grievance text and you will need to categorize it into one or more categories as provided to you. You will also need to summarize the grievance text."},
                 {"role": "user", "content": f"""
                     Step 1:
                     Categorize this grievance: "{grievance_text}"
@@ -194,14 +196,16 @@ def classify_and_summarize_grievance(
                     {category_list_str}
                     Do not create new categories.
                     Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
-                    [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt
+                    [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt.
+                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories are only coming from the following list: {category_list_str}
                     Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
-                    For the summary, reply in the language of the grievance.
+                    For the summary, reply in the language of the grievance eg if the input is in English, reply in English, if the input is in Nepali, reply in Nepali.
                     Finally,
                     Return the response in **strict JSON format** like this:
                     {{
                         "grievance_summary": "Summarized grievance text",
                         "grievance_categories": ["Category 1", "Category 2"]
+                        "grievance_categories_alternative": ["Category 3", "Category 4", "Category 5"]
                     }}
                 """}
             ],
@@ -217,6 +221,7 @@ def classify_and_summarize_grievance(
         return {
             "grievance_summary": "",
             "grievance_categories": [],
+            "grievance_categories_alternative": [],
             "status": "error",
             "error": str(e)
         }
@@ -231,7 +236,7 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
         response: Raw LLM response string
     """
     fields = {
-        "grievance_response": ["grievance_summary", "grievance_categories"],
+        "grievance_response": ["grievance_summary", "grievance_categories", "grievance_categories_alternative"],
         "contact_response": ["complainant_phone", "complainant_full_name", "complainant_district", "complainant_municipality", "complainant_village", "complainant_address"]
     }
     try:
@@ -246,7 +251,8 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
             if type == "grievance_response":
                 return {
                     "grievance_summary": error_response,
-                    "grievance_categories": [error_response]
+                    "grievance_categories": [error_response],
+                    "grievance_categories_alternative": [error_response]
                 }
         result_dict = json.loads(response)
         for field in fields[type]:

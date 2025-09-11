@@ -139,7 +139,7 @@ class ValidateFormOtp(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "otp_consent",
             tracker,
             dispatcher,

@@ -38,6 +38,9 @@ BUTTON_MAIN_MENU = "/main_menu"
 BUTTON_TRY_AGAIN = "/restart_story{\"restart_type\": \"story\"}"
 BUTTON_EXIT = "/exit"
 
+BUTTON_SKIP_EN = {"title": "Skip", "payload": BUTTON_SKIP}
+BUTTON_SKIP_NE = {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+
 # Button dictionary constants
 BUTTONS_AFFIRM_DENY = {
     'en': [
@@ -63,10 +66,10 @@ BUTTONS_LANGUAGE_OPTIONS = {
 
 BUTTONS_SKIP = {
     'en': [
-        {"title": "Skip", "payload": BUTTON_SKIP}
+        BUTTON_SKIP_EN
     ],
     'ne': [
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+        BUTTON_SKIP_NE
     ]
 }
 

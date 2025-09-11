@@ -6,15 +6,11 @@ from .base_manager import BaseDatabaseManager
 from backend.config.constants import TRANSCRIPTION_PROCESSING_STATUS
 
 
-
-
-class GrievanceDbManager(BaseDatabaseManager):
-    """Handles grievance CRUD and business logic"""
-    
-    # Whitelist of fields that can be updated
-    ALLOWED_UPDATE_FIELDS = {
+# Whitelist of fields that can be updated
+ALLOWED_UPDATE_FIELDS = [
         'complainant_id',
         'grievance_categories',
+        'grievance_categories_alternative',
         'grievance_summary',
         'grievance_description',
         'grievance_claimed_amount',
@@ -22,8 +18,13 @@ class GrievanceDbManager(BaseDatabaseManager):
         'is_temporary',
         'source',
         'language_code',
-        'classification_status'
-    }
+        'grievance_classification_status'
+    ]
+
+class GrievanceDbManager(BaseDatabaseManager):
+    """Handles grievance CRUD and business logic"""
+    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -43,8 +44,9 @@ class GrievanceDbManager(BaseDatabaseManager):
                 data['source'] = source
                 
             self.logger.info(f"create_grievance: Creating grievance with ID: {grievance_id}")
-            allowed_fields = ['grievance_id', 'complainant_id', 'grievance_categories', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'source']
+            allowed_fields = ['grievance_id'] + ALLOWED_UPDATE_FIELDS
            
+            self.logger.info(f"create_grievance: Creating grievance with allowed fields: {allowed_fields}")
             self.execute_insert(table_name='grievances', input_data=data, allowed_fields=allowed_fields, returning = 'grievance_id')
 
             self.logger.info(f"create_grievance: Successfully created grievance with ID: {grievance_id}")
@@ -65,30 +67,31 @@ class GrievanceDbManager(BaseDatabaseManager):
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
+            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code']
+            update_fields, update_values = self.generate_update_query(data, expected_fields)
+
+            if update_fields and update_values:
             
-            update_query = """
+                # Always update the modification date
+                update_fields.append("grievance_modification_date = CURRENT_TIMESTAMP")
+                
+                # Build the complete query
+                update_query = f"""
                     UPDATE grievances 
-                    SET grievance_categories = %s,
-                        grievance_summary = %s,
-                        grievance_description = %s,
-                        grievance_claimed_amount = %s,
-                        grievance_location = %s,
-                        language_code = %s,
-                        grievance_modification_date = CURRENT_TIMESTAMP
+                    SET {', '.join(update_fields)}
                     WHERE grievance_id = %s
                     RETURNING grievance_id
                 """
-            affected_rows = self.execute_update(update_query, (
-                    data.get('grievance_categories'),
-                    data.get('grievance_summary'),
-                    data.get('grievance_description'),
-                    data.get('grievance_claimed_amount'),
-                    data.get('grievance_location'),
-                    data.get('language_code', 'ne'),
-                    grievance_id
-                ))
-            self.logger.info(f"update_grievance: Updated grievance with ID: {grievance_id}, rows affected: {affected_rows}")
-            return affected_rows
+                
+                # Add grievance_id to the values tuple
+                update_values.append(grievance_id)
+                
+                affected_rows = self.execute_update(update_query, tuple(update_values))
+                self.logger.info(f"update_grievance: Updated grievance with ID: {grievance_id}, rows affected: {affected_rows}")
+                return affected_rows
+            else:
+                self.logger.warning(f"update_grievance: No fields to update for this query: {data} with expected fields: {expected_fields} for grievance_id: {grievance_id}")
+                return False
             
         except Exception as e:
             self.logger.error(f"Error in update_grievance: {str(e)}")
@@ -105,7 +108,12 @@ class GrievanceDbManager(BaseDatabaseManager):
         """
         try:
             results = self.execute_query(query, (grievance_id,), "get_grievance_by_id")
-            return results[0] if results else None
+            if results:
+                # Parse the result to convert JSON fields back to Python objects
+                parsed_result = self._parse_database_result(results[0])
+                self.logger.debug(f"get_grievance_by_id: grievance_id: {parsed_result}, results: {results}")
+                return parsed_result
+            return None
         except Exception as e:
             self.logger.error(f"Error retrieving grievance by ID: {str(e)}")
             return None
@@ -255,6 +263,16 @@ class RecordingDbManager(BaseDatabaseManager):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def get_recording_by_id(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Get recording by ID"""
+        query = "SELECT * FROM grievance_voice_recordings WHERE recording_id = %s"
+        try:
+            results = self.execute_query(query, (recording_id,), "get_recording_by_id")
+            return results[0] if results else None
+        except Exception as e:
+            self.logger.error(f"Error retrieving recording by ID: {str(e)}")
+            return None
         
     def create_recording(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new recording record - pure SQL function
@@ -398,6 +416,16 @@ class RecordingDbManager(BaseDatabaseManager):
 class TranslationDbManager(BaseDatabaseManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def get_translation_by_id(self, translation_id: str) -> Optional[Dict[str, Any]]:
+        """Get translation by ID"""
+        query = "SELECT * FROM grievance_translations WHERE translation_id = %s"
+        try:
+            results = self.execute_query(query, (translation_id,), "get_translation_by_id")
+            return results[0] if results else None
+        except Exception as e:
+            self.logger.error(f"Error retrieving translation by ID: {str(e)}")
+            return None
         
     def create_translation(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new translation record - pure SQL function
@@ -502,6 +530,16 @@ class TranscriptionDbManager(BaseDatabaseManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.transcription_processing_status = TRANSCRIPTION_PROCESSING_STATUS
+
+    def get_transcription_by_id(self, transcription_id: str) -> Optional[Dict[str, Any]]:
+        """Get transcription by ID"""
+        query = "SELECT * FROM grievance_transcriptions WHERE transcription_id = %s"
+        try:
+            results = self.execute_query(query, (transcription_id,), "get_transcription_by_id")
+            return results[0] if results else None
+        except Exception as e:
+            self.logger.error(f"Error retrieving transcription by ID: {str(e)}")
+            return None
         
     def create_transcription(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new transcription record - pure SQL function

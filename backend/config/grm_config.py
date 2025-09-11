@@ -62,7 +62,7 @@ GRM_FIELD_MAPPING = {
     
     # System Fields
     'grievance_creation_date': 'submission_date',
-    'classification_status': 'processing_status',
+    'grievance_classification_status': 'processing_status',
     'language_code': 'language'
 }
 

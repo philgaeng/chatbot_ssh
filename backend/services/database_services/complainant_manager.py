@@ -160,12 +160,16 @@ class ComplainantDbManager(BaseDatabaseManager):
             encrypted_data = self._encrypt_and_hash_sensitive_data(input_data)
             self.logger.debug(f"encrypted_data at update_complainant: {encrypted_data}")
             #prepare the query
-            set_clause = ', '.join([f'{k} = %s' for k in encrypted_data.keys()])
-            query = f"UPDATE complainants SET {set_clause} WHERE complainant_id = %s"
-            values = tuple(encrypted_data.values()) + (complainant_id,)
-            #execute the update query
-            affected_rows = self.execute_update(query, values)
-            return affected_rows  # Just return True if any rows were updated
+            if encrypted_data:
+                set_clause = ', '.join([f'{k} = %s' for k in encrypted_data.keys()])
+                query = f"UPDATE complainants SET {set_clause} WHERE complainant_id = %s"
+                values = tuple(encrypted_data.values()) + (complainant_id,)
+                #execute the update query
+                affected_rows = self.execute_update(query, values)
+                return affected_rows  # Just return True if any rows were updated
+            else:
+                self.logger.debug(f"No complainant field to update")
+                return False
             
         except Exception as e:
             self.logger.error(f"Error in update_complainant: {str(e)}")

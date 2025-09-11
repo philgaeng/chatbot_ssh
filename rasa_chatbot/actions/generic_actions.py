@@ -11,7 +11,7 @@ import json
 
 TASK_SLOTS_TO_UPDATE_MAP = {
     "process_file_upload_task": {"slot_name": "file_upload_status", "followup_action": None},
-    "classify_and_summarize_grievance_task": {"slot_name": "classification_status", },
+    "classify_and_summarize_grievance_task": {"slot_name": "grievance_classification_status", },
     "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
    }
 

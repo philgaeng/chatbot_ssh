@@ -41,8 +41,7 @@ class BaseActionSubmit(BaseAction):
                  "grievance_id",
                  "grievance_description",
                  "otp_verified",
-                 "grievance_categories",
-                 "grievance_summary"]
+                 ]
 
         if review:
             review_keys = ["grievance_categories",
@@ -362,23 +361,28 @@ class ActionGrievanceOutro(BaseActionSubmit):
 
 
     
-    async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
         
         self.sensitive_issues_detected = tracker.get_slot("sensitive_issues_detected")
         self.logger.info("send last utterance and buttons")
+        grievance_id = tracker.get_slot("grievance_id")
+        buttons = None
         try:
             if self.sensitive_issues_detected:
                     utterance = self.get_utterance(1) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
                     buttons = self.get_buttons(1)
-            elif not self._get_attached_files_info(self.grievance_id)["has_files"]:
+                    
+            elif not self._get_attached_files_info(grievance_id)["has_files"]:
                 utterance = self.get_utterance(2)
             else:
                 utterance = self.get_utterance(3)
+            self.logger.debug(f"action_grievance_outro - utterance: {utterance} - buttons: {buttons if buttons else 'None'}")
             
             if buttons:
                 dispatcher.utter_message(text=utterance, buttons=buttons)
             else:
                 dispatcher.utter_message(text=utterance)
+
             return []
         except Exception as e:
-            self.logger.error(f"Error in send_last_utterance_buttons: {e}")
+            self.logger.error(f"Error in action_grievance_outro: {e}")

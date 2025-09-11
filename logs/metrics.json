@@ -1,16 +1,19 @@
 {
   "classify_and_summarize_grievance_task": {
-    "start_time": 1756738422.6903186,
-    "failed_tasks": 44
+    "start_time": 1757490812.6953015,
+    "failed_tasks": 53
   },
   "upload_files": {
-    "start_time": 1753747939.569685
+    "start_time": 1757382113.9713218
   },
   "get_file_metadata": {
-    "start_time": 1753747939.57183
+    "start_time": 1757382113.9727457
   },
   "process_file_upload_task": {
-    "start_time": 1753747939.6100194,
+    "start_time": 1757382114.0192442,
     "failed_tasks": 5
+  },
+  "operation_failed": {
+    "failed_tasks": 49
   }
 }

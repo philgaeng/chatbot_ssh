@@ -263,7 +263,7 @@ class ValidateFormContact(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        result = await self._handle_boolean_slot_extraction(
+        result = await self._handle_boolean_and_category_slot_extraction(
             "complainant_location_consent",
             tracker,
             dispatcher,
@@ -287,6 +287,7 @@ class ValidateFormContact(BaseFormValidationAction):
                     "complainant_municipality":self.SKIP_VALUE,
                     "complainant_municipality_confirmed": False,
                     "complainant_village":self.SKIP_VALUE,
+                    "complainant_village_temp":self.SKIP_VALUE,
                     "complainant_village_confirmed": False,
                     "complainant_ward":self.SKIP_VALUE,
                     "complainant_address_temp":self.SKIP_VALUE,
@@ -444,7 +445,7 @@ class ValidateFormContact(BaseFormValidationAction):
         if not tracker.get_slot("complainant_municipality_temp"):
             return {}
 
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "complainant_municipality_confirmed",
             tracker,
             dispatcher,
@@ -553,7 +554,7 @@ class ValidateFormContact(BaseFormValidationAction):
         if not tracker.get_slot("complainant_village_temp"):
             return {}
 
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "complainant_village_confirmed",
             tracker,
             dispatcher,
@@ -662,12 +663,11 @@ class ValidateFormContact(BaseFormValidationAction):
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
 
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "complainant_address_confirmed",
             tracker,
             dispatcher,
-            domain,
-            skip_value=True  # When skipped, assume confirmed
+            domain
         )
 
     async def validate_complainant_address_confirmed(
@@ -677,7 +677,6 @@ class ValidateFormContact(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-
         # Handle rejection of address confirmation
         if slot_value == False:
             message = self.get_utterance(1)
@@ -700,7 +699,7 @@ class ValidateFormContact(BaseFormValidationAction):
         return result
     
     async def extract_complainant_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "complainant_consent",
             tracker,
             dispatcher,
@@ -801,7 +800,7 @@ class ValidateFormContact(BaseFormValidationAction):
         return result
 
     async def extract_phone_validation_required(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
-        return await self._handle_boolean_slot_extraction(
+        return await self._handle_boolean_and_category_slot_extraction(
             "phone_validation_required",
             tracker,
             dispatcher,
