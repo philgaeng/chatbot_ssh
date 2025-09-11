@@ -11,7 +11,7 @@ from .utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSIT
 from .mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, LLM_CLASSIFICATION
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, LLM_CLASSIFICATION, CLASSIFICATION_DATA
 from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
@@ -138,6 +138,8 @@ class LanguageHelper:
             #print(f"Error in skip detection: {e} ---- is_skip_instruction")
             #print(f"Traceback: {traceback.format_exc()}")
             return False, False, ""
+
+    
         
 class BaseAction(Action, ABC):
     """Abstract base class for all actions.
@@ -208,6 +210,40 @@ class BaseAction(Action, ABC):
                 self.location_validator._initialize_constants(self.language_code)
             if self.location_validator.language_code != self.language_code:
                 self.location_validator._initialize_constants(self.language_code)
+    
+    def _get_categories_in_local_language(self, categories: List[str]) -> List[str]:
+        """Get the categories in the local language."""
+        if self.language_code == "en":
+            return categories
+        categories_local = []
+        key_local_1 = f"generic_grievance_name_{self.language_code}"
+        key_local_2 = f"classification_{self.language_code}"
+        for category in categories:
+            category = category.split(" - ")[1].strip()
+            category_data = CLASSIFICATION_DATA.get(category, {})
+            category_name_local_1 = category_data.get(key_local_1, category)
+            category_name_local_2 = category_data.get(key_local_2, category)
+            category_name_local = f"{category_name_local_2} - {category_name_local_1}"
+            categories_local.append(category_name_local)
+        return categories_local
+
+    def _get_categories_in_english(self, categories: List[str]) -> List[str]:
+        """Get the categories in the English language."""
+        if self.language_code == "en":
+            return categories
+        
+        key_local_1 = f"classification_{self.language_code}"
+        key_local_2 = f"generic_grievance_name_{self.language_code}"
+    
+        list_of_categories_local = [item.get(key_local_1) + ' - ' + item.get(key_local_2) for item in CLASSIFICATION_DATA.values()]
+        categories_en = []
+        for category in categories:
+            if category in list_of_categories_local:
+                key_cat = category.split(" - ")[1].strip()
+                for item in CLASSIFICATION_DATA.values():
+                    if item.get(key_local_2) == key_cat:
+                        categories_en.append(item.get(key_local_1) + ' - ' + item.get(key_local_2))
+        return categories_en
 
     def detect_sensitive_content(self, dispatcher: CollectingDispatcher, slot_value: str) -> Dict[Text, Any]:
         """Check for sensitive content using keyword detection"""
@@ -249,6 +285,8 @@ class BaseAction(Action, ABC):
             return False
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
+
+
 
     async def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         """

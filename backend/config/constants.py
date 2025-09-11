@@ -441,33 +441,46 @@ def load_categories_from_lookup():
 
 def load_classification_data(csv_path=DEFAULT_CSV_PATH):
     """
-    Loads grievance classification data from a CSV file, updates the lookup table,
-    and returns a unique sorted list of categories.
+    Loads grievance classification data from a CSV file and returns a JSON structure
+    where keys are category names and values contain all grievance data.
     """
-    categories = []
+    classification_data = {}
 
     try:
         with open(csv_path, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                # Normalize case and format as "Classification - Grievance Name"
-                category = f"{row['Classification'].title()} - {row['Generic Grievance Name'].title()}"
-                categories.append(category)
+                # Create category key as "Classification - Grievance Name"
+                category_key = f"{row['classification'].replace('-', ' ').title()} - {row['generic_grievance_name'].replace('-', ' ').title()}"
+                
+                # Create the data structure for this category
+                classification_data[category_key] = {
+                    'generic_grievance_name': row['generic_grievance_name'],
+                    'generic_grievance_name_ne': row['generic_grievance_name_ne'],
+                    'short_description': row['short_description'],
+                    'short_description_ne': row['short_description_ne'],
+                    'classification': row['classification'],
+                    'classification_ne': row['classification_ne'],
+                    'description': row['description'],
+                    'description_ne': row['description_ne'],
+                    'follow_up_question_description': row['follow_up_question_description'],
+                    'follow_up_question_description_ne': row['follow_up_question_description_ne'],
+                    'follow_up_question_quantification': row['follow_up_question_quantification'],
+                    'follow_up_question_quantification_ne': row['follow_up_question_quantification_ne']
+                }
 
-        # Remove duplicates and sort
-        unique_categories = sorted(set(categories))
-
-        # Update lookup table
+        # Update lookup table with category names
+        unique_categories = sorted(classification_data.keys())
         update_lookup_table(unique_categories)
 
-        return unique_categories
+        return classification_data, unique_categories
 
     except FileNotFoundError:
         logger.error(f"⚠ Classification CSV file not found: {csv_path}")
-        return []
+        return {}
     except Exception as e:
         logger.error(f"⚠ Error loading classification data: {e}")
-        return []
+        return {}
 
 def update_lookup_table(categories):
     """Writes the latest category list to the lookup table file (list_category.txt)."""
@@ -484,8 +497,8 @@ def update_lookup_table(categories):
 ############################
 
 # Load classification data and categories as constants
-CLASSIFICATION_DATA = load_classification_data()
-LIST_OF_CATEGORIES = [cat.strip("-").strip() for cat in load_categories_from_lookup()]
+CLASSIFICATION_DATA, LIST_OF_CATEGORIES = load_classification_data()
+
 
 ############################
 # LOGGING AND INITIALIZATION

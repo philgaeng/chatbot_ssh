@@ -428,6 +428,7 @@ class BaseDatabaseManager:
         field_mapping = {
             'grievance_categories': 'grievance_categories',
             'grievance_categories_alternative': 'grievance_categories_alternative',
+            'follow_up_question': 'follow_up_question',
             'grievance_summary': 'grievance_summary',
             'grievance_description': 'grievance_description',
             'grievance_claimed_amount': 'grievance_claimed_amount',
@@ -443,7 +444,8 @@ class BaseDatabaseManager:
         json_fields = {
             'grievance_categories',
             'grievance_categories_alternative',
-            'grievance_categories_en'
+            'grievance_categories_en',
+            'follow_up_question'
         }
         
         # Check if this field should be treated as JSON
@@ -728,6 +730,7 @@ class TableDbManager(BaseDatabaseManager):
                     ('grievance_summary', 'Grievance summary'),
                     ('grievance_categories', 'Grievance categories'),
                     ('grievance_categories_alternative', 'Grievance categories alternative for manual selection by user'),
+                    ('follow_up_question', 'Grievance follow up question'),
                     ('grievance_location', 'Grievance location'),
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
@@ -801,6 +804,7 @@ class TableDbManager(BaseDatabaseManager):
                 complainant_id TEXT REFERENCES complainants(complainant_id),
                 grievance_categories TEXT,
                 grievance_categories_alternative TEXT,
+                follow_up_question TEXT,
                 grievance_summary TEXT,
                 grievance_description TEXT,
                 grievance_claimed_amount DECIMAL,
@@ -1313,6 +1317,7 @@ class GSheetDbManager(BaseDatabaseManager):
                 g.grievance_summary,
                 g.grievance_categories,
                 g.grievance_categories_alternative,
+                g.follow_up_question,
                 g.grievance_creation_date,
                 g.grievance_classification_status as status
             FROM grievances g
