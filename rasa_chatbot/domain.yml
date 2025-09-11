@@ -12,6 +12,7 @@ x-common-ignore-intents: &common-ignore-intents
   - nav_close_browser_tab
   - nav_introduce
   - nav_restart
+  - restart
   - set_english
   - set_nepali
   - mood_great
@@ -51,6 +52,7 @@ intents:
   - nav_introduce
   - nav_menu_main
   - nav_restart
+  - restart
   - nlu_fallback
   - question_attach_files
   - set_english
@@ -64,25 +66,13 @@ intents:
   - status_check_start
   - dummy_intent_for_payload
 
-entities:
-  - municipality
-  - monetary
-  - contact_phone
-  - village
-  - address
-  - otp_number
-  - contact_email
-  - full_name
-  - qr_code
-  - district
-  - ward
-  - first_name
-  - last_name
-  - grievance_category
 slots:
   language_code:
-    type: text
+    type: categorical
     influence_conversation: false
+    values:
+      - en
+      - ne
     mappings:
       - type: custom
   current_process:
@@ -113,15 +103,6 @@ slots:
       - modify_grievance
       - modify_contact
     influence_conversation: true
-    mappings:
-      - type: custom
-  classification_status:
-    type: categorical
-    values:
-      - SUCCESS
-      - FAILED
-      - REVIEWED
-      - IN_PROGRESS
     mappings:
       - type: custom
   classification_task_id:
@@ -248,6 +229,14 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  complainant_gender:
+    type: categorical
+    values:
+      - male
+      - female
+      - other
+    mappings:
+      - type: custom
   phone_validation_required:
     type: bool
     influence_conversation: true
@@ -325,12 +314,22 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
+  grievance_categories_alternative:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
   grievance_categories_status:
     type: text
     influence_conversation: true
     mappings:
       - type: custom
   grievance_cat_modify:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  grievance_classification_status:
     type: text
     influence_conversation: true
     mappings:
@@ -388,7 +387,7 @@ slots:
     mappings:
       - type: custom
   skip_validation_needed:
-    type: text
+    type: bool
     influence_conversation: true
     mappings:
       - type: custom
@@ -547,7 +546,6 @@ actions:
   - validate_form_otp
   - validate_form_sensitive_issues
   - action_grievance_outro
-  - action_outro
 
 forms:
   form_menu:

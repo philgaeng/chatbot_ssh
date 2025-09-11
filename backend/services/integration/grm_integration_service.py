@@ -60,7 +60,7 @@ class GRMDataMapper:
             grm_data['submission_date'] = grievance_data['grievance_creation_date']
         
         # Map status
-        chatbot_status = grievance_data.get('classification_status', 'pending')
+        chatbot_status = grievance_data.get('grievance_classification_status', 'pending')
         grm_data['status'] = GRM_STATUS_MAPPING.get(chatbot_status, 'pending')
         
         # Add metadata
@@ -88,7 +88,7 @@ class GRMDataMapper:
         # Map status back
         grm_status = grm_data.get('status', 'pending')
         reverse_status_mapping = {v: k for k, v in GRM_STATUS_MAPPING.items()}
-        grievance_data['classification_status'] = reverse_status_mapping.get(grm_status, 'pending')
+        grievance_data['grievance_grievance_classification_status'] = reverse_status_mapping.get(grm_status, 'pending')
         
         return grievance_data
 
@@ -374,7 +374,7 @@ if __name__ == "__main__":
             'complainant_email': 'test@example.com',
             'grievance_description': 'This is a test grievance',
             'grievance_location': 'Kathmandu',
-            'classification_status': 'pending'
+            'grievance_classification_status': 'pending'
         }
         
         print("\nTesting grievance sync...")

@@ -233,142 +233,6 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_form_contact_complainant_location_consent': {
-            'utterances': {
-                1: {
-                    'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
-                    'ne': "के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_form_contact_complainant_municipality_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
-                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_form_contact_complainant_municipality_confirmed': {
-            'utterances': {
-                1: {
-                    'en': "Is {validated_municipality} your correct municipality?",
-                    'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_form_contact_complainant_village': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your village name or Skip to skip",
-                    'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_form_contact_complainant_address_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your address or Skip to skip",
-                    'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_form_contact_complainant_address_confirmed': {
-            'utterances': {
-                1: {
-                    'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
-                    'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_form_contact_complainant_province': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your province name or Skip",
-                    'ne': "कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_form_contact_complainant_district': {
-            'utterances': {
-                1: {
-                    'en': "Please provide your district name or Skip",
-                    'ne': "कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'validate_complainant_province': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid province name, this is required to file your grievance",
-                    'ne': "कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
-                },
-                2: {
-                    'en': "We cannot match your entry {slot_value} to a valid province. Please try again",
-                    'ne': "आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
-                },
-                3: {
-                    'en': "We have matched your entry {slot_value} to {result}.",
-                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
-                }
-            }
-        },
-        'validate_complainant_district': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid district name, this is required to file your grievance",
-                    'ne': "कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
-                },
-                2: {
-                    'en': "We cannot match your entry {slot_value} to a valid district. Please try again",
-                    'ne': "आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्"
-                },
-                3: {
-                    'en': "We have matched your entry {slot_value} to {result}.",
-                    'ne': "हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।"
-                }
-            }
-        },
-        'validate_complainant_village': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid village name (at least 3 characters) or type 'skip' to skip",
-                    'ne': "कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्"
-                }
-            }
-        },
-        'validate_complainant_address_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a valid address (at least 3 characters)",
-                    'ne': "कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)"
-                }
-            }
-        },
         'validate_complainant_phone': {
             'utterances': {
                 1: {
@@ -487,8 +351,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_form_grievance_summary_sensitive_issues_follow_up': SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS,  
-        'action_ask_grievance_new_detail': {
+         'action_ask_grievance_new_detail': {
             'utterances': {
                 1: {
                     'en': "Great! Let's start by understanding your grievance...",
@@ -503,20 +366,19 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया थप विवरण प्रविष्ट गर्नुहोस्..."
                 },
                 4: {
-                    'en': 'Thank you for your entry: "{grievance_description}"',
-                    'ne': 'तपाईंको प्रविष्टिको लागि धन्यवाद। "{grievance_description}"'
-                },
-                5: {
-                    'en': "Do you want to add more details to your grievance, such as:\n"
-                    "- Location information\n"
-                    "- Persons involved\n"
-                    "- Quantification of damages (e.g., number of bags of rice lost)\n"
-                    "- Monetary value of damages",
-                    'ne': "के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n"
-                    "- स्थान जानकारी\n"
-                    "- भागहरूको सम्बन्धमा\n"
-                    "- हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)\n"
-                    "- हानिको मुनाफा मूल्य"
+                    'en': """Thank you for your entry: "{grievance_description}\n. 
+                    Do you want to add more details to your grievance, such as:\n
+                    - Location information\n
+                    - Persons involved\n
+                    - Quantification of damages (e.g., number of bags of rice lost)\n"
+                    - Monetary value of damages""",
+                    'ne': """
+                    तपाईंको प्रविष्टिको लागि धन्यवाद। "{grievance_description}\n. 
+                    के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n
+                    - स्थान जानकारी\n
+                    - भागहरूको सम्बन्धमा\n
+                    - हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)\n"
+                    - हानिको मुनाफा मूल्य"""
                 }
             },
             'buttons': {
@@ -545,7 +407,7 @@ UTTERANCE_MAPPING = {
                 },
             },
         },
-        'action_submit_grievance_outro': {
+        'action_grievance_outro': {
             'utterances': {
                 1: {
                     'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
@@ -605,18 +467,26 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'form_grievance_summary': {
-        'action_ask_form_grievance_summary_grievance_categories_status': {
+    'form_grievance_complainant_review': {
+        'validate_form_grievance_complainant_review': {
             'utterances': {
                 1: {
-                    'en': "We have not identified any categories for your grievance.",
-                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन।"
-                },
-                2: {
+                    'en': "No category selected. skipping this step.",
+                    'ne': "कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।"
+                }
+            }
+        },
+        'action_ask_form_grievance_complainant_review_grievance_categories_status': {
+            'utterances': {
+                1: {
                     'en': """We have generated categories for your grievance.
                     Here are the suggested categories:\n{category_text}\nDoes this seem correct?""",
                     'ne': """हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
                     यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"""
+                },
+                2: {
+                    'en': "We have not identified any categories for your grievance.",
+                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन।"
                 },
                 3: {
                     'en': "Here is the list of modified categories:\n{category_text}\nDoes this seem correct?",
@@ -628,50 +498,50 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: {'en' :[
-                    {"title": "Add category", "payload": "/add_category"},
-                    {"title": "Continue without categories", "payload": "/slot_confirmed"},
-                    BUTTON_SKIP
-                ],
-                'ne': [
-                    {"title": "श्रेणी थप्नुहोस्", "payload": "/add_category"},
-                    {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"},
-                    BUTTON_SKIP
-                ]
-            },
-                2: {
+                1: {
                     'en': [
                         {"title": "Yes", "payload": "/slot_confirmed"},
                         {"title": "Add category", "payload": "/slot_added"},
                         {"title": "Delete category", "payload": "/slot_deleted"},
-                        {"title": "Skip", "payload": "/skip"}
+                        BUTTON_SKIP_EN
                     ],
                     'ne': [
                         {"title": "हो", "payload": "/slot_confirmed"},
                         {"title": "श्रेणी थप्नुहोस्", "payload": "/slot_added"},
                         {"title": "श्रेणी हटाउनुहोस्", "payload": "/slot_deleted"},
-                        {"title": "छोड्नुहोस्", "payload": "/skip"}
+                        BUTTON_SKIP_NE
+                    ]
+                },
+                2: {'en' :[
+                    {"title": "Add category", "payload": "/slot_added"},
+                    {"title": "Continue without categories", "payload": "/slot_confirmed"},
+                    BUTTON_SKIP_EN
+                    ],
+                    'ne': [
+                        {"title": "श्रेणी थप्नुहोस्", "payload": "/slot_added"},
+                        {"title": "श्रेणी छोड्नुहोस्", "payload": "/slot_confirmed"},
+                        BUTTON_SKIP_NE
                     ]
                 }
             }
         },
-        'action_ask_form_grievance_summary_grievance_cat_modify': {
+        'action_ask_form_grievance_complainant_review_grievance_cat_modify': {
             'utterances': {
                 1: {
                     'en': "No categories selected. Skipping this step.",
                     'ne': "कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।"
                 },
                 2: {
-                    'en': "Which category would you like to delete?",
-                    'ne': "तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ?"
+                    'en': "Which category would you like to delete? Skip if you don't want to delete any category.",
+                    'ne': "तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ? छोड्नुहोस् यदि तपाईं कुनै श्रेणी हटाउन चाहनुहुन्छ।"
                 },
                 3: {
-                    'en': "Select the category you want to add from the list below:",
-                    'ne': "निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस्:"
+                    'en': "Select the category you want to add from the list below, Skip if you don't want to add any category.",
+                    'ne': "निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस् , छोड्नुहोस् यदि तपाईं कुनै श्रेणी थप्न चाहनुहुन्छ।"
                 }
             }
         },
-        'action_ask_form_grievance_summary_grievance_summary_status': {
+        'action_ask_form_grievance_complainant_review_grievance_summary_status': {
             'utterances': {
                 1: {
                     'en': "Here is the current summary: '{current_summary}'.\n Is this correct?",
@@ -686,17 +556,26 @@ UTTERANCE_MAPPING = {
                 1: {'en':[
                     {"title": "Validate summary", "payload": "/slot_confirmed"},
                     {"title": "Edit summary", "payload": "/slot_edited"},
-                    {"title": "Skip", "payload": "/skip"}
-                ],
-                'ne': [
-                    {"title": "सारांश सुनिश्चित गर्नुहोस्", "payload": "/slot_confirmed"},
-                    {"title": "सारांश संपादन गर्नुहोस्", "payload": "/slot_edited"},
-                    {"title": "छोड्नुहोस्", "payload": "/skip"}
-                ]
+                    BUTTON_SKIP_EN
+                    ],
+                    'ne': [
+                        {"title": "सारांश सुनिश्चित गर्नुहोस्", "payload": "/slot_confirmed"},
+                        {"title": "सारांश संपादन गर्नुहोस्", "payload": "/slot_edited"},
+                        BUTTON_SKIP_NE
+                    ]
+                },
+                2: {'en':[
+                    {"title": "Edit summary", "payload": "/slot_edited"},
+                    BUTTON_SKIP_EN
+                    ],
+                    'ne': [
+                        {"title": "सारांश संपादन गर्नुहोस्", "payload": "/slot_edited"},
+                        BUTTON_SKIP_NE
+                    ]
                 }
             }
         },
-        'action_ask_form_grievance_summary_grievance_summary_temp': {
+        'action_ask_form_grievance_complainant_review_grievance_summary_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter the new summary and confirm again.",
@@ -715,18 +594,9 @@ UTTERANCE_MAPPING = {
                     'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन। हामी तपाईंको गुनासो मानिसाले सारांशित गर्नेछौं।"
                 }
             }
-        # },
-        # 'action_ask_form_grievance_complainant_review': {
-        #     'utterances': {
-        #         1: {
-        #             'en': "Here are the suggested categories:\n{grievance_categories}\n and the summary:\n{grievance_summary}\n Do you want to modify these results?",
-        #             'ne': "यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{grievance_categories}\nके यो सही लाग्दैन?"
-        #         }
-        #     },
-        #     'buttons': {
-        #         1: BUTTONS_AFFIRM_DENY
-        #     }
-        }
+        },
+        'action_ask_form_grievance_complainant_review_sensitive_issues_follow_up': SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS,  
+       
     },
     'generic_actions': {
         'action_introduce': {
@@ -1025,11 +895,11 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "Resend", "payload": "/resend"},
-                        {"title": "Skip", "payload": "/skip"}
+                        BUTTON_SKIP_EN
                     ],
                     'ne': [
                         {"title": "पुनः प्रमाणित गर्नुहोस्", "payload": "/resend"},
-                        {"title": "छोड्नुहोस्", "payload": "/skip"}
+                        BUTTON_SKIP_NE
                     ]
                 }
             }

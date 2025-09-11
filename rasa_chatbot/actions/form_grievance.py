@@ -50,13 +50,13 @@ class ActionStartGrievanceProcess(BaseAction):
         grievance_id = self.db_manager.generate_grievance_id(set_id_data)
         self.logger.info(f"Created temporary grievance with ID: {grievance_id} and complainant ID: {complainant_id}")
         
-        # Get utterance and buttons from mapping
-        utterance = self.get_utterance(1)
+        # # Get utterance and buttons from mapping
+        # utterance = self.get_utterance(1)
         
-        # Send utterance with grievance ID in the text
-        dispatcher.utter_message(
-            text=utterance,
-        )
+        # # Send utterance with grievance ID in the text
+        # dispatcher.utter_message(
+        #     text=utterance,
+        # )
         
         # Emit custom event with grievance ID for frontend
         dispatcher.utter_message(
@@ -104,7 +104,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         # If no grievance details or ID, skip classification
         if not grievance_description or not grievance_id:
             return {
-                "classification_status": self.SKIP_VALUE,
+                "grievance_classification_status": self.SKIP_VALUE,
                 "grievance_summary": "",
                 "grievance_categories": [],
                 "grievance_summary_status": self.SKIP_VALUE,
@@ -134,15 +134,13 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             
             # Return slots to indicate async processing
             return {
-                "classification_task_id": task_id,
-                "classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_generated"]
             }
             
         except Exception as e:
             self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
             return {
-                "classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_error"],
+                "grievance_classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_error"],
                 "grievance_summary": "",
                 "grievance_categories": [],
                 "grievance_summary_status": self.SKIP_VALUE,
@@ -188,8 +186,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                                             "grievance_new_detail",
                                             tracker,
                                             dispatcher,
-                                            domain,
-                                            skip_value=True,  # When skipped, assume confirmed
+                                            domain
                                         )
 
     async def validate_grievance_new_detail(
@@ -267,6 +264,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     "grievance_description_status": "show_options",
                     "sensitive_issues_detected": False
                 }
+            return {}
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_new_detail: {e}")
             raise Exception(f"Error in validate_grievance_new_detail: {e}")

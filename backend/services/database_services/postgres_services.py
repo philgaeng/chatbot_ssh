@@ -71,9 +71,21 @@ class DatabaseManager(BaseDatabaseManager):
         self.complainant.create_complainant(data)
         return complainant_id
     
-    def update_complainant(self, complainant_id: str, data: Dict[str, Any]) -> bool:
+    def update_complainant(self, complainant_id: str, data: Dict[str, Any]):
         """Update an existing complainant"""
-        return self.complainant.update_complainant(complainant_id, data)
+        self.complainant.update_complainant(complainant_id, data)
+
+    def create_or_update_complainant(self, data: Dict[str, Any]):
+        """Create or update a complainant"""
+        try:
+            complainant_id = data.get('complainant_id')
+            if self.complainant.get_complainant_by_id(complainant_id):
+                self.update_complainant(complainant_id, data)
+            else:
+                self.create_complainant(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating complainant: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
     
     def get_complainant_by_id(self, complainant_id: str) -> Optional[Dict[str, Any]]:
         """Get complainant by ID"""
@@ -157,7 +169,7 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
             
-    def create_grievance(self, data: Dict[str, Any]) -> bool:
+    def create_grievance(self, data: Dict[str, Any]) -> str:
         """Create a new grievance"""
         grievance_id = data.get('grievance_id')
         if not grievance_id:
@@ -189,6 +201,20 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+
+    def create_or_update_grievance(self, data: Dict[str, Any]):
+        """Create or update a grievance"""
+        try:
+            grievance_id = data.get('grievance_id')
+            self.logger.debug(f"create_or_update_grievance: for grievance_id: {grievance_id}")
+            if self.grievance.get_grievance_by_id(grievance_id):
+                self.update_grievance(grievance_id, data)
+            else:
+                self.create_grievance(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating grievance: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            
     
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get grievance by ID"""
@@ -215,7 +241,22 @@ class DatabaseManager(BaseDatabaseManager):
     def update_recording(self, recording_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing voice recording"""
         return self.recording.update_recording(recording_id, data)
+
+    def get_recording_by_id(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Get recording by ID"""
+        return self.recording.get_recording_by_id(recording_id)
     
+    def create_or_update_recording(self, data: Dict[str, Any]):
+        """Create or update a recording"""
+        try:
+            recording_id = data.get('recording_id')
+            if self.recording.get_recording_by_id(recording_id):
+                self.update_recording(recording_id, data)
+            else:
+                self.create_recording(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating recording: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
     
     # ===== TRANSCRIPTION OPERATIONS =====
     
@@ -226,8 +267,28 @@ class DatabaseManager(BaseDatabaseManager):
     def update_transcription(self, transcription_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing transcription"""
         return self.transcription.update_transcription(transcription_id, data)
+
+    def get_transcription_by_id(self, transcription_id: str) -> Optional[Dict[str, Any]]:
+        """Get transcription by ID"""
+        return self.transcription.get_transcription_by_id(transcription_id)
+
+    def create_or_update_transcription(self, data: Dict[str, Any]):
+        """Create or update a transcription"""
+        try:
+            transcription_id = data.get('transcription_id')
+            if self.transcription.get_transcription_by_id(transcription_id):
+                self.update_transcription(transcription_id, data)
+            else:
+                self.create_transcription(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating transcription: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
     
     # ===== TRANSLATION OPERATIONS =====
+
+    def get_translation_by_id(self, translation_id: str) -> Optional[Dict[str, Any]]:
+        """Get translation by ID"""
+        return self.translation.get_translation_by_id(translation_id)
     
     def create_translation(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new translation"""
@@ -236,7 +297,45 @@ class DatabaseManager(BaseDatabaseManager):
     def update_translation(self, translation_id: str, data: Dict[str, Any]) -> bool:
         """Update an existing translation"""
         return self.translation.update_translation(translation_id, data)
+
+    def create_or_update_translation(self, data: Dict[str, Any]):
+        """Create or update a translation"""
+        try:
+            translation_id = data.get('translation_id')
+            if self.translation.get_translation_by_id(translation_id):
+                self.update_translation(translation_id, data)
+            else:
+                self.create_translation(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating translation: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+
+
+    # ===== RECORDING OPERATIONS =====
+
+    def create_recording(self, data: Dict[str, Any]) -> Optional[str]:
+        """Create a new recording"""
+        return self.recording.create_recording(data)
     
+    def update_recording(self, recording_id: str, data: Dict[str, Any]) -> bool:
+        """Update an existing recording"""
+        return self.recording.update_recording(recording_id, data)
+    
+    def get_recording_by_id(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Get recording by ID"""
+        return self.recording.get_recording_by_id(recording_id)
+    
+    def create_or_update_recording(self, data: Dict[str, Any]):
+        """Create or update a recording"""
+        try:
+            recording_id = data.get('recording_id')
+            if self.recording.get_recording_by_id(recording_id):
+                self.update_recording(recording_id, data)
+            else:
+                self.create_recording(data)
+        except Exception as e:
+            self.logger.error(f"Error creating or updating recording: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
     # ===== TASK OPERATIONS =====
     
     def create_task(self, task_id: str, task_name: str, entity_key: str, entity_id: str) -> Optional[str]:

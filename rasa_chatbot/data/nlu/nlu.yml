@@ -58,14 +58,6 @@ nlu:
       - skp
       - dont need
 
-  - intent: dummy_intent_for_payload
-    examples: |
-      - /dummy_intent_for_payload
-      - /submit_details
-      - /add_more_details
-      - /restart
-      - /start_grievance_process
-
   ######################### mood #########################
   - intent: mood_great
     examples: |

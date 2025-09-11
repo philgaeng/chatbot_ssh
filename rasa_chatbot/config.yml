@@ -20,10 +20,10 @@ pipeline:
 
 policies:
   - name: AugmentedMemoizationPolicy
-    max_history: 8
+    max_history: 10
     priority: 2
   - name: MemoizationPolicy
-    max_history: 6
+    max_history: 10
     priority: 3
   - name: TEDPolicy
     max_history: 8

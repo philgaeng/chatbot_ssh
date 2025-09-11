@@ -367,12 +367,15 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
             return False
         return len(text.strip()) > min_length
 
+    def _define_skip_value(self, slot_name: Text, domain: DomainDict) -> Any:
+        slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
+        return False if slot_type == "bool" else self.SKIP_VALUE
+
     def _handle_skip_validation(
         self,
         slot_name: Text,
         tracker: Tracker,
-        domain: DomainDict,
-        skip_value: Any = SKIP_VALUE
+        domain: DomainDict
     ) -> Dict[Text, Any]:
         """
         Handle skip validation response.
@@ -381,7 +384,6 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
             slot_name: Name of the slot being validated
             tracker: Conversation tracker
             domain: Domain configuration
-            skip_value: Value to use when skipping
             
         Returns:
             Dict[Text, Any]: Slot updates
@@ -394,10 +396,7 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
         # Determine if user confirmed skip
         if text == "/affirm_skip" or intent == "skip":
             # User confirmed skip - use provided or default skip value
-            if skip_value is None:
-                slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                skip_value = False if slot_type == "bool" else SKIP_VALUE
-            
+            skip_value = self._define_skip_value(slot_name, domain)
             return {
                 slot_name: skip_value,
                 "skip_validation_needed": None,
@@ -425,28 +424,27 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
         slot_name: Text,
         tracker: Tracker,
         dispatcher: CollectingDispatcher,
-        domain: DomainDict,
-        skip_value: Any = None,
-        custom_action: Callable = None
+        domain: DomainDict
     ) -> Dict[Text, Any]:
         """Helper method for slot extraction logic."""
         
-        
+        #check if the slot is a boolean slot
+        slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
+        if slot_type in ["bool", "category", "categorical"]:
+            return await self._handle_boolean_and_category_slot_extraction(slot_name, tracker, dispatcher, domain)
+
         if tracker.get_slot("requested_slot") == slot_name:
             # Check if we're in skip validation mode
             if tracker.get_slot("skip_validation_needed") == slot_name:
-                return self._handle_skip_validation(slot_name, tracker, domain, skip_value)
+                return self._handle_skip_validation(slot_name, tracker, domain)
                 
             latest_message = tracker.latest_message
             message_text = latest_message.get("text", "")
             intent = latest_message.get("intent", {}).get("name", "")
 
             if intent == "skip":
-                return {slot_name: SKIP_VALUE}
+                return {slot_name: self.SKIP_VALUE}
             
-            # Execute custom action if provided
-            if custom_action:
-                await custom_action(dispatcher, tracker, domain)
 
             try:
                 skip_result = self._is_skip_requested(tracker.latest_message)
@@ -470,26 +468,24 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
                 
                 # Direct skip (high confidence match)
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
-                skip_value = False if slot_type == "bool" else SKIP_VALUE
-                return {slot_name: skip_value}
-            self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | skip_value: {skip_value}")
+                return {slot_name: self.SKIP_VALUE}
+            self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | skip_value: {self.SKIP_VALUE}")
             if message_text:
                 self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | message_text: {message_text}")
                 return {slot_name: message_text}
         
         return {}
 
-    async def _handle_boolean_slot_extraction(
+    async def _handle_boolean_and_category_slot_extraction(
         self,
         slot_name: Text,
         tracker: Tracker,
         dispatcher: CollectingDispatcher,
         domain: DomainDict,
-        skip_value: bool = False,
-        custom_affirm_action: Callable = None
     ) -> Dict[Text, Any]:
         """
-        Helper method for boolean slot extraction with affirm/deny handling.
+        Helper method for boolean slot extraction with affirm/deny handling. Updated the function so it works with any category type of slot. This was needed because in some cases, the slot is not a boolean slot.
+        The boolean slot extraction is a particular case of the slot extraction.
         
         Args:
             slot_name: Name of the boolean slot to extract
@@ -502,48 +498,59 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
         Returns:
             Dict[Text, Any]: Slot updates
         """
+        skip_value = self._define_skip_value(slot_name, domain)
         if tracker.get_slot("requested_slot") == slot_name:
             latest_message = tracker.latest_message
             message_text = latest_message.get("text", "")
             intent = latest_message.get("intent", {}).get("name", "")
 
             if intent == "skip":
-                return {slot_name: SKIP_VALUE}
-
-            # Check if we're in skip validation mode
-            if tracker.get_slot("skip_validation_needed") == slot_name:
-                return self._handle_skip_validation(slot_name, tracker, domain, skip_value)
-
-            # Check for skip using the updated method
-            try:
-                is_skip, needs_validation, matched_word = self._is_skip_requested(latest_message)
-
-            except Exception as e:
-
-                is_skip, needs_validation, matched_word = False, False, ""
-            if is_skip:
-                if needs_validation:
-                    dispatcher.utter_message(
-                        text= VALIDATION_SKIP["utterance"][self.language_code].format(matched_word=matched_word),
-                        buttons= VALIDATION_SKIP["buttons"][self.language_code]
-                    )
-                    return {
-                        "skip_validation_needed": slot_name,
-                        "skipped_detected_text": message_text
-                    }
                 return {slot_name: skip_value}
 
+            # # Check if we're in skip validation mode
+            # if tracker.get_slot("skip_validation_needed") == slot_name:
+            #     return self._handle_skip_validation(slot_name, tracker, domain, skip_value)
+
+            # Check for skip using the updated method
+            skip_result = self._handle_skip_case(latest_message, slot_name, dispatcher, domain)
+            if skip_result:
+                return skip_result
+
             # Handle affirmative responses
-            if message_text.startswith("/affirm") or intent == "affirm":
-                if custom_affirm_action:
-                    return await custom_affirm_action(dispatcher)
+            if message_text.startswith("/affirm"):
                 self.logger.debug(f"Boolean slot extraction: {self.name()} - {slot_name} | slot_value: True")
                 return {slot_name: True}
 
             # Handle negative responses
-            if message_text.startswith("/deny") or intent == "deny":
+            if message_text.startswith("/deny"):
                 self.logger.debug(f"Boolean_slot_extraction: {self.name()} - {slot_name} | slot_value: False")
                 return {slot_name: False}
 
-        return {}
+            if message_text.startswith("/"): #this is for the category type of slot
+                return {slot_name: message_text.strip("/").strip()}
 
+            return {slot_name: None} #handle the case where the user enters a not expected value
+        return {} #handle the case where the slot is not requested
+
+
+    def _handle_skip_case(self, latest_message: Dict[Text, Any], slot_name: Text, dispatcher: CollectingDispatcher,  domain: DomainDict) -> Dict[Text, Any]:
+
+        skip_value = self._define_skip_value(slot_name, domain)
+        try:
+            is_skip, needs_validation, matched_word = self._is_skip_requested(latest_message)
+        except Exception as e:
+            is_skip, needs_validation, matched_word = False, False, ""
+
+        if is_skip:
+            if needs_validation:
+                dispatcher.utter_message(
+                    text= VALIDATION_SKIP["utterance"][self.language_code].format(matched_word=matched_word),
+                    buttons= VALIDATION_SKIP["buttons"][self.language_code]
+                )
+                return {
+                    "skip_validation_needed": slot_name,
+                    "skipped_detected_text": matched_word
+                }
+            return {slot_name: skip_value}
+        else:
+            return {}

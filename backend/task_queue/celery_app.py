@@ -40,7 +40,12 @@ celery_app.conf.update(
     task_queues=(
         Queue(QUEUE_LLM, Exchange(QUEUE_LLM), routing_key=QUEUE_LLM),
         Queue(QUEUE_DEFAULT, Exchange(QUEUE_DEFAULT), routing_key=QUEUE_DEFAULT),
-    )
+    ),
+    # Logger settings
+    worker_log_level='DEBUG',
+    worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
+    task_always_eager=False,
+    task_eager_propagates=True
 )
 
 

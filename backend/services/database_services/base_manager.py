@@ -7,6 +7,7 @@ import pytz
 from typing import Dict, List, Optional, Any, Sequence, TypeVar, Generic
 from psycopg2.extras import DictCursor
 import json
+import ast
 import sys
 import time
 import traceback
@@ -14,7 +15,7 @@ from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_STATUS_DICT, GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS, TRANSCRIPTION_PROCESSING_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, TASK_STATUS_DICT, GRIEVANCE_STATUS_DICT, GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS, TRANSCRIPTION_PROCESSING_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
@@ -64,6 +65,7 @@ class BaseDatabaseManager:
         missing_params = [param for param in required_params if not self.db_params.get(param)]
         if missing_params:
             raise DatabaseConnectionError(f"Missing required database parameters: {', '.join(missing_params)}")
+            
 
     @contextmanager
     def get_connection(self):
@@ -205,8 +207,8 @@ class BaseDatabaseManager:
 
     
     def generate_values_tuple(self, input_data: Dict[str, Any]) -> tuple:
-        """Generate a tuple of values from the input data"""
-        return tuple(input_data[k] for k in input_data.keys()) 
+        """Generate a tuple of values from the input data, preparing fields for database storage"""
+        return tuple(self._prepare_field_for_database(k, input_data[k]) for k in input_data.keys()) 
 
 
     def _encrypt_field(self, value: str) -> Optional[str]:
@@ -420,6 +422,104 @@ class BaseDatabaseManager:
             self.logger.error(f"Error checking entity existence: {str(e)}")
             return False
 
+    def map_fields_between_backend_and_database(self, expected_fields: List[str]) -> List[str]:
+        """Map the fields between the backend and the database
+        fields of the database are stored in the values of the dictionary, while the fields of the backend are stored in the keys of the dictionary"""
+        field_mapping = {
+            'grievance_categories': 'grievance_categories',
+            'grievance_categories_alternative': 'grievance_categories_alternative',
+            'grievance_summary': 'grievance_summary',
+            'grievance_description': 'grievance_description',
+            'grievance_claimed_amount': 'grievance_claimed_amount',
+            'grievance_location': 'grievance_location',
+            'language_code': 'language_code'
+        }
+        expected_fields_db = [field_mapping[field] for field in expected_fields]
+        return expected_fields_db
+
+    def _prepare_field_for_database(self, field_name: str, value: Any) -> Any:
+        """Prepare field value for database storage, converting lists to JSON strings where needed"""
+        # Fields that should be stored as JSON strings in the database
+        json_fields = {
+            'grievance_categories',
+            'grievance_categories_alternative',
+            'grievance_categories_en'
+        }
+        
+        # Check if this field should be treated as JSON
+        should_convert_to_json = field_name in json_fields
+        
+        if isinstance(value, list):
+            # Convert list to JSON string for database storage
+            return json.dumps(value)
+        elif isinstance(value, str):
+            # Check if it's already valid JSON
+            try:
+                json.loads(value)  # Validate it's valid JSON
+                return value
+            except (json.JSONDecodeError, TypeError):
+                # Check if it's a string representation of a list
+                value_str = value.strip()
+                if value_str.startswith("['") and value_str.endswith("']"):
+                    # It's a string representation of a list, convert to proper JSON
+                    try:
+                        # Use ast.literal_eval to safely parse the string representation
+                        parsed_list = ast.literal_eval(value_str)
+                        if isinstance(parsed_list, list):
+                            return json.dumps(parsed_list)
+                    except (ValueError, SyntaxError):
+                        pass
+                
+                # If it's a JSON field and not valid JSON, treat as single item list
+                if should_convert_to_json:
+                    return json.dumps([value])
+        
+        return value
+
+    def _parse_field_from_database(self, field_name: str, value: Any) -> Any:
+        """Parse field value from database storage, converting JSON strings back to Python objects where needed"""
+        if isinstance(value, str):
+            try:
+                # Try to parse as JSON - this will work for any valid JSON string
+                parsed_value = json.loads(value)
+                return parsed_value
+            except (json.JSONDecodeError, TypeError):
+                # If it's not valid JSON, return as is
+                return value
+        
+        return value
+
+    def _parse_database_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse database result, converting JSON fields back to Python objects"""
+        parsed_result = {}
+        for field_name, value in result.items():
+            parsed_result[field_name] = self._parse_field_from_database(field_name, value)
+        return parsed_result
+
+    def generate_update_query(self, input_data: Dict[str, Any], expected_fields: List[str]) -> tuple:
+        """Generate an update query based on the input data"""
+         # Define the mapping of data keys to database column names
+        
+        #filter the fields from the input data based on the expected fields - we use this to maintain easy compatibility between the backend functions and the database schema
+        expected_fields_db = self.map_fields_between_backend_and_database(expected_fields)
+
+        # Filter out None values and build the SET clause
+        update_fields = []
+        update_values = []
+        
+        for field in expected_fields_db:
+            if input_data.get(field) is not None:
+                # Prepare the field value for database storage (convert lists to JSON strings)
+                prepared_value = self._prepare_field_for_database(field, input_data.get(field))
+                update_fields.append(f"{field} = %s")
+                update_values.append(prepared_value)
+        
+        # If no fields to update, return empty lists
+        if not update_fields:
+            self.logger.warning(f"update_grievance: No fields to update for this query")
+            return [], []
+        return update_fields, update_values
+
 
 class TableDbManager(BaseDatabaseManager):
     """Handles schema creation and migration"""
@@ -627,6 +727,7 @@ class TableDbManager(BaseDatabaseManager):
                     ('complainant_ward', 'User ward'),
                     ('grievance_summary', 'Grievance summary'),
                     ('grievance_categories', 'Grievance categories'),
+                    ('grievance_categories_alternative', 'Grievance categories alternative for manual selection by user'),
                     ('grievance_location', 'Grievance location'),
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
@@ -699,12 +800,13 @@ class TableDbManager(BaseDatabaseManager):
                 grievance_id TEXT PRIMARY KEY,
                 complainant_id TEXT REFERENCES complainants(complainant_id),
                 grievance_categories TEXT,
+                grievance_categories_alternative TEXT,
                 grievance_summary TEXT,
                 grievance_description TEXT,
                 grievance_claimed_amount DECIMAL,
                 grievance_location TEXT,
                 language_code TEXT DEFAULT 'ne',
-                classification_status TEXT DEFAULT 'pending',
+                grievance_classification_status TEXT DEFAULT 'pending',
                 grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 is_temporary BOOLEAN DEFAULT TRUE,
@@ -758,7 +860,7 @@ class TableDbManager(BaseDatabaseManager):
 
         # Voice recording tables with language_code fields
         self.migrations_logger.info("Creating/recreating grievance_voice_recordings table...")
-        cur.execute("""
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
                 recording_id TEXT PRIMARY KEY,
                 complainant_id TEXT REFERENCES complainants(complainant_id),
@@ -768,16 +870,16 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 duration_seconds INTEGER,
                 file_size INTEGER,
-                processing_status TEXT DEFAULT %s REFERENCES processing_statuses(status_code),
+                processing_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']}' REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
-        """, (TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']))
+        """)
         
         self.migrations_logger.info("Creating/recreating grievance_transcriptions table...")
-        cur.execute("""
+        cur.execute(f"""
             CREATE TABLE IF NOT EXISTS grievance_transcriptions (
                 transcription_id  TEXT PRIMARY KEY,  
                 recording_id TEXT REFERENCES grievance_voice_recordings(recording_id),
@@ -785,7 +887,7 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT %s REFERENCES processing_statuses(status_code),
+                verification_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['FOR_VERIFICATION']}' REFERENCES processing_statuses(status_code),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -796,7 +898,7 @@ class TableDbManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
-        """, (TRANSCRIPTION_PROCESSING_STATUS['FOR_VERIFICATION']))
+        """)
 
         # Translations table
         self.migrations_logger.info("Creating/recreating grievance_translations table...")
@@ -944,13 +1046,14 @@ class TaskDbManager(BaseDatabaseManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.VALID_ENTITY_KEYS = { 'grievance_id', 'complainant_id', 'recording_id', 'transcription_id', 'translation_id'}
-        
+
     def is_valid_entity_key(self, entity_key: str) -> bool:
         """Check if the entity key is valid"""
         result = entity_key in self.VALID_ENTITY_KEYS
         if not result:
             self.logger.error(f"Invalid entity key: {entity_key}")
         return result
+
     
     def create_task(self, task_id: str, task_name: str, entity_key: str, entity_id: str) -> Optional[str]:
         """Create a new task record with entity relationship
@@ -1209,8 +1312,9 @@ class GSheetDbManager(BaseDatabaseManager):
                 g.grievance_description,
                 g.grievance_summary,
                 g.grievance_categories,
+                g.grievance_categories_alternative,
                 g.grievance_creation_date,
-                g.classification_status as status
+                g.grievance_classification_status as status
             FROM grievances g
             LEFT JOIN complainants c ON g.complainant_id = c.id
             WHERE 1=1
