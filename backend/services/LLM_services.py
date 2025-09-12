@@ -218,7 +218,7 @@ def classify_and_summarize_grievance(
                     Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
                 """}
             ],
-            model="gpt-4o-mini",
+            model="gpt-5-nano",
         )
 
         # Parse the response
@@ -270,7 +270,7 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
             result_dict[field] = result_dict.get(field, "")
         return result_dict
     except json.JSONDecodeError as e:
-        logger.error(f"Error parsing LLM response: {str(e)}")
+        logger.error(f"Error parsing LLM response: {str(e)} - raw response from LLM: {response}")
         return {}
     
     
