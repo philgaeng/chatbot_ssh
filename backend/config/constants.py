@@ -121,7 +121,7 @@ SMS_ENABLED = False  # Set to True to enable SMS
 # Dynamic file paths based on project root
 PROJECT_ROOT = Path(__file__).parent.parent
 LOOKUP_FILE_PATH = str(PROJECT_ROOT / "resources/lookup_tables/list_category.txt")
-DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.csv")
+DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.1.csv")
 LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
 
 ############################

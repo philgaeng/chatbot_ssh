@@ -235,14 +235,22 @@ class BaseAction(Action, ABC):
         key_local_1 = f"classification_{self.language_code}"
         key_local_2 = f"generic_grievance_name_{self.language_code}"
     
-        list_of_categories_local = [item.get(key_local_1) + ' - ' + item.get(key_local_2) for item in CLASSIFICATION_DATA.values()]
         categories_en = []
         for category in categories:
-            if category in list_of_categories_local:
-                key_cat = category.split(" - ")[1].strip()
-                for item in CLASSIFICATION_DATA.values():
-                    if item.get(key_local_2) == key_cat:
-                        categories_en.append(item.get(key_local_1) + ' - ' + item.get(key_local_2))
+            # Find the matching item in CLASSIFICATION_DATA
+            for item in CLASSIFICATION_DATA.values():
+                local_classification = item.get(key_local_1, "")
+                local_grievance_name = item.get(key_local_2, "")
+                local_category = f"{local_classification} - {local_grievance_name}"
+                
+                if category == local_category:
+                    # Found match, get the English version
+                    english_classification = item.get('classification', "")
+                    english_grievance_name = item.get('generic_grievance_name', "")
+                    english_category = f"{english_classification} - {english_grievance_name}"
+                    categories_en.append(english_category)
+                    break
+        
         return categories_en
 
     def detect_sensitive_content(self, dispatcher: CollectingDispatcher, slot_value: str) -> Dict[Text, Any]:
