@@ -21,24 +21,33 @@ class Messaging:
     """
     Main messaging class that provides functions called by Rasa Actions.
     Uses separate service classes for SMS and Email functionality.
+    Implements singleton pattern to prevent multiple initializations.
     """
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
     
     def __init__(self):
-        try:
-            self.sms_client = SMSClient()
-            self.email_client = EmailClient()
-            self.task_logger = TaskLogger(service_name='messaging_service')
-            self.logger = self.task_logger.logger
-            self.log_event = self.task_logger.log_event
-            self.logger.info("Successfully initialized Messaging repository")
-        except Exception as e:
-            # Create a basic logger for error reporting if the main one failed
+        if not Messaging._initialized:
             try:
-                
-                self.logger.error(f"Failed to initialize Messaging repository: {str(e)}")
-            except:
-                pass  # If even the error logger fails, just raise the original exception
-            raise
+                self.sms_client = SMSClient()
+                self.email_client = EmailClient()
+                self.task_logger = TaskLogger(service_name='messaging_service')
+                self.logger = self.task_logger.logger
+                self.log_event = self.task_logger.log_event
+                self.logger.info("Successfully initialized Messaging repository")
+                Messaging._initialized = True
+            except Exception as e:
+                # Create a basic logger for error reporting if the main one failed
+                try:
+                    self.logger.error(f"Failed to initialize Messaging repository: {str(e)}")
+                except:
+                    pass  # If even the error logger fails, just raise the original exception
+                raise
 
     def send_sms(self, phone_number: str, message: str) -> bool:
         """
@@ -251,4 +260,5 @@ class EmailClient:
             return False
 
 
+# Global instance for backward compatibility
 messaging = Messaging()

@@ -349,6 +349,11 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
+  grievance_classification_consent:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
   grievance_summary:
     type: text
     influence_conversation: true
@@ -501,6 +506,7 @@ actions:
   - action_ask_otp_consent
   - action_ask_otp_input
   - action_ask_otp_number
+  - action_ask_form_grievance_complainant_review_grievance_classification_consent
   - action_ask_form_grievance_complainant_review_grievance_cat_modify
   - action_ask_form_grievance_complainant_review_grievance_summary_status
   - action_ask_form_grievance_complainant_review_grievance_summary_temp

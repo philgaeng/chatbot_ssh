@@ -172,8 +172,9 @@ ADMIN_EMAILS: List[str] = [
 
 # Email Templates
 EMAIL_TEMPLATES = {
-    "GRIEVANCE_RECAP_SUBJECT": "Grievance Submission Recap - ID: {grievance_id}",
-    "GRIEVANCE_RECAP_USER_BODY": """
+    "GRIEVANCE_SUBJECT_COMPLAINANT": {"en": "Grievance submitted to Department Of Roads - ID: {grievance_id}", "ne": "गुनासो दर्ता गरिएको छ - ID: {grievance_id}"},
+    "GRIEVANCE_SUBJECT_ADMIN": {"en": "New Grievance Submission - ID: {grievance_id}", "ne": "नया गुनासो दर्ता - ID: {grievance_id}"},
+    "GRIEVANCE_RECAP_COMPLAINANT_BODY": {"en":"""
         <h2>Grievance Submission Recap</h2>
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
         <p><strong>Grievance Filed on:</strong> {grievance_timestamp}</p>
@@ -192,24 +193,49 @@ EMAIL_TEMPLATES = {
         </ul>
         
         <h3>Location:</h3>
-        <p>Municipality: {municipality}</p>
-        <p>Village: {village}</p>
-        <p>Address: {address}</p>
+        <p>Municipality: {complainant_municipality}</p>
+        <p>Village: {complainant_village}</p>
+        <p>Address: {complainant_address}</p>
         
         <h3>Contact Information:</h3>
-        <p>Phone: {phone}</p>
-        <p>Email: {email}</p>
-    """,
-    "GRIEVANCE_RECAP_ADMIN_BODY": """
-        New grievance submission received.
-        Status: {grievance_status}
+        <p>Phone: {complainant_phone}</p>
+        <p>Email: {complainant_email}</p>
 
-        Complete Grievance Data:
-        {json_data}
+        This is an automated notification. Please do not reply to this email.
+    """,
+     "ne": """
+        <h2>गुनासो दर्ता सारांश</h2>
+        <p><strong>गुनासो ID:</strong> {grievance_id}</p>
+        <p><strong>गुनासो दर्ता गरिएको:</strong> {grievance_timestamp}</p>
+        <p><strong>अनुमानित समाधान तिथि:</strong> {grievance_timeline}</p>
+        <p><strong>दर्ता गर्ने:</strong> {complainant_name}</p>
+        
+        <h3>गुनासो सारांश:</h3>
+        <p>{grievance_summary}</p>
+        
+        <h3>गुनासो विवरण:</h3>
+        <p>{grievance_description}</p>
+        
+        <h3>श्रेणी:</h3>
+        <ul>
+            {categories_html}
+        </ul>
+        
+        <h3>स्थान:</h3>
+        <p>महानगरपालिका: {complainant_municipality}</p>
+        <p>गाउँपालिका: {complainant_village}</p>
+        <p>पत्ता: {complainant_address}</p>
+        
+        <h3>संपर्क जानकारी:</h3>
+        <p>फोन: {complainant_phone}</p>
+        <p>इमेल: {complainant_email}</p>
 
         This is an automated notification. Please do not reply to this email.
     """
+    }
 }
+
+EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']
 
 # SMS Templates
 DIC_SMS_TEMPLATES = {
