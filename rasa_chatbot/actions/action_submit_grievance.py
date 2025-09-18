@@ -38,6 +38,9 @@ class BaseActionSubmit(BaseAction):
                  "complainant_gender",
                  "complainant_province",
                  "complainant_district",
+                 "complainant_municipality",
+                 "complainant_village",
+                 "complainant_address",
                  "grievance_id",
                  "grievance_description",
                  "otp_verified",
@@ -52,7 +55,7 @@ class BaseActionSubmit(BaseAction):
         # collect the data from the tracker
         grievance_data={k : tracker.get_slot(k) for k in keys}
         
-        grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"] if not review else self.GRIEVANCE_STATUS["REVIEW"]
+        grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
 
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp
@@ -156,42 +159,70 @@ class BaseActionSubmit(BaseAction):
                                           email_data: Dict[str, Any],
                                           body_name: str) -> Tuple[str]:
         """Send a recap email to the user."""
-        
-        json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
-        
-        if email_data['grievance_categories'] and email_data['grievance_categories'] != self.NOT_PROVIDED:
-            categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_categories'] or []))
-        else:
-            categories_html = ""
-        # Create email body using template
-        
-        if body_name == "GRIEVANCE_RECAP_complainant_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-            complainant_name=email_data['complainant_full_name'],
-            grievance_description=email_data['grievance_description'],
-            project=email_data['complainant_project'],
-            municipality=email_data['complainant_municipality'],
-            village=email_data['complainant_village'],
-            address=email_data['complainant_address'],
-            phone=email_data['complainant_phone'],
-            grievance_id=email_data['grievance_id'],
-            email=email_data['complainant_email'],
-            grievance_timeline=email_data['grievance_timeline'],
-            grievance_timestamp=email_data['grievance_timestamp'],
-            grievance_categories=email_data['grievance_categories'],
-            grievance_summary=email_data['grievance_summary']
-        ) 
-        if body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
-            body = EMAIL_TEMPLATES[body_name].format(
-                json_data=json_data,
-                grievance_status=self.GRIEVANCE_STATUS["SUBMITTED"],
-            )
+        try:
+            self.logger.debug(f"_prepare_recap_email called with body_name: {body_name}")
+            self.logger.debug(f"_prepare_recap_email email_data keys: {list(email_data.keys())}")
+            self.logger.debug(f"_prepare_recap_email email_data: {email_data}")
+            
+            json_data = json.dumps(email_data, indent=2, ensure_ascii=False)
+            
+            if email_data.get('grievance_categories') and email_data.get('grievance_categories') != self.NOT_PROVIDED:
+                categories_html = ''.join(f'<li>{category}</li>' for category in (email_data['grievance_categories'] or []))
+            else:
+                self.logger.debug(f"_prepare_recap_email no grievance_categories or it's NOT_PROVIDED")
+                categories_html = ""
+            # Create email body using template
+            self.logger.debug(f"_prepare_recap_email checking EMAIL_TEMPLATES for body_name: {body_name}")
+            self.logger.debug(f"_prepare_recap_email available EMAIL_TEMPLATES keys: {list(EMAIL_TEMPLATES.keys())}")
+            
+            if body_name == "GRIEVANCE_RECAP_COMPLAINANT_BODY":
+                self.logger.debug(f"_prepare_recap_email using COMPLAINANT template")
+                if body_name not in EMAIL_TEMPLATES:
+                    self.logger.error(f"Template {body_name} not found in EMAIL_TEMPLATES")
+                    return "", ""
+                body = EMAIL_TEMPLATES[body_name][self.language_code]
+                subject = EMAIL_TEMPLATES["GRIEVANCE_SUBJECT_COMPLAINANT"][self.language_code]
 
-        subject = EMAIL_TEMPLATES["GRIEVANCE_RECAP_SUBJECT"].format(
-            grievance_id=email_data['grievance_id']
-        )
+            elif body_name == "GRIEVANCE_RECAP_ADMIN_BODY":
+                self.logger.debug(f"_prepare_recap_email using ADMIN template")
+                if body_name not in EMAIL_TEMPLATES:
+                    self.logger.error(f"Template {body_name} not found in EMAIL_TEMPLATES")
+                    return "", ""
+                body = EMAIL_TEMPLATES[body_name][self.language_code]
+                subject = EMAIL_TEMPLATES["GRIEVANCE_SUBJECT_ADMIN"][self.language_code]
+            else:
+                self.logger.error(f"Unknown body_name: {body_name}")
+                return "", ""
+
+            self.logger.debug(f"_prepare_recap_email formatting subject and body")
+            #format subject and body
+            subject = subject.format(
+                grievance_id=email_data.get('grievance_id', '')
+            )
+            body = body.format(
+            complainant_name=email_data.get('complainant_full_name', self.NOT_PROVIDED),
+            grievance_description=email_data.get('grievance_description', self.NOT_PROVIDED),
+            project=email_data.get('complainant_project', self.NOT_PROVIDED),
+            complainant_municipality=email_data.get('complainant_municipality', self.NOT_PROVIDED),
+            complainant_village=email_data.get('complainant_village', self.NOT_PROVIDED),
+            complainant_address=email_data.get('complainant_address', self.NOT_PROVIDED),
+            complainant_phone=email_data.get('complainant_phone', self.NOT_PROVIDED),
+            grievance_id=email_data.get('grievance_id', ''),
+            complainant_email=email_data.get('complainant_email', self.NOT_PROVIDED),
+            grievance_timeline=email_data.get('grievance_timeline', self.NOT_PROVIDED),
+            grievance_timestamp=email_data.get('grievance_timestamp', self.NOT_PROVIDED),
+            categories_html=categories_html,
+            grievance_summary=email_data.get('grievance_summary', self.NOT_PROVIDED)
+            )
+            
+            self.logger.debug(f"_prepare_recap_email successfully prepared email")
+            return body, subject
+
+            
+        except Exception as e:
+            self.logger.error(f"Failed to prepare recap email: {e}")
+            return "", ""
         
-        return body, subject
     
     async def _send_grievance_recap_email(self, to_emails: List[str],
                                                          grievance_data: Dict[str, Any],
@@ -217,12 +248,14 @@ class BaseActionSubmit(BaseAction):
                                                    dispatcher: CollectingDispatcher) -> None:
         """Send a recap email to the admin."""
         try:
+            self.logger.debug(f"_send_grievance_recap_email_to_admin called with grievance_data keys: {list(grievance_data.keys())}")
             await self._send_grievance_recap_email(ADMIN_EMAILS, 
                                                 grievance_data, 
                                                 body_name = "GRIEVANCE_RECAP_ADMIN_BODY"
                                                 )
         except Exception as e:
             self.logger.error(f"Failed to send recap email to admin: {e}")
+            self.logger.error(f"Admin email error details: {traceback.format_exc()}")
 
 
     async def _send_grievance_recap_email_to_complainant(self, 
@@ -231,6 +264,8 @@ class BaseActionSubmit(BaseAction):
                                                          dispatcher: CollectingDispatcher) -> None:
         """Send a recap email to the complainant."""
         try:
+            self.logger.debug(f"_send_grievance_recap_email_to_complainant called with email: {complainant_email}")
+            self.logger.debug(f"_send_grievance_recap_email_to_complainant grievance_data keys: {list(grievance_data.keys())}")
             await self._send_grievance_recap_email([complainant_email], 
                                                 grievance_data, 
                                                 body_name = "GRIEVANCE_RECAP_COMPLAINANT_BODY"
@@ -240,6 +275,7 @@ class BaseActionSubmit(BaseAction):
             dispatcher.utter_message(text=utterance)
         except Exception as e:
             self.logger.error(f"Failed to send recap email to complainant {complainant_email}: {e}")
+            self.logger.error(f"Complainant email error details: {traceback.format_exc()}")
 
     def _get_attached_files_info(self, grievance_id: str) -> Dict[str, Any]:
         """Get information about files attached to a grievance.
@@ -323,19 +359,16 @@ class BaseActionSubmit(BaseAction):
             
             await self._send_grievance_recap_sms(grievance_data, dispatcher) #call the function that extracts the phone number, generates the confirmation message and sends it to the user
             
-            #send email to admin
-            await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
+            # #send email to admin
+            # await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
             
-            #send email to complainant
-            complainant_email = grievance_data.get('complainant_email')
+            # #send email to complainant
+            # complainant_email = grievance_data.get('complainant_email')
 
-            if complainant_email and self.is_valid_email(complainant_email):
-                await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
+            # if complainant_email and self.is_valid_email(complainant_email):
+            #     await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
                 
-                
-
-                
-            
+                 
             return [
                 SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"])
             ]
@@ -361,14 +394,24 @@ class ActionGrievanceOutro(BaseActionSubmit):
 
     def _prepare_grievance_outro_data(self, tracker: Tracker) -> Dict[str, Any]:
         """Prepare the grievance outro data from the slots and updating the categories to the english ones"""
-         #saving results to the database
+        # Get original slot values for messaging (not encrypted database values)
         grievance_data = self.collect_grievance_data(tracker, review = True)
+        
+        # Get categories from slots and convert to English if needed
         grievance_categories_local = tracker.get_slot("grievance_categories_local")
-        grievance_categories_en = self._get_categories_in_english((grievance_categories_local))
-        grievance_categories_alternative_local = tracker.get_slot("grievance_categories_alternative_local")
-        grievance_categories_alternative_en = self._get_categories_in_english((grievance_categories_alternative_local))
-        grievance_data["grievance_categories"] = grievance_categories_en
-        grievance_data["grievance_categories_alternative"] = grievance_categories_alternative_en
+
+        
+        # Use the current slot values for categories (these are the user-confirmed values)
+        current_categories = tracker.get_slot("grievance_categories")
+
+        
+        # If we have local language categories, convert them to English
+        if grievance_categories_local and self.language_code != "en":
+            grievance_categories_en = self._get_categories_in_english(grievance_categories_local)
+            grievance_data["grievance_categories"] = grievance_categories_en
+        elif current_categories:
+            grievance_data["grievance_categories"] = current_categories
+
         return grievance_data
 
     
@@ -400,6 +443,15 @@ class ActionGrievanceOutro(BaseActionSubmit):
            
             self.db_manager.submit_grievance_to_db(grievance_data)
             self.logger.debug(f"action_grievance_outro - grievance data saved to the database: {grievance_data}")
+
+            #send email to admin
+            await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
+            
+            #send email to complainant
+            complainant_email = grievance_data.get('complainant_email')
+
+            if complainant_email and self.is_valid_email(complainant_email):
+                await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
 
             return []
         except Exception as e:

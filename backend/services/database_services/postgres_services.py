@@ -19,25 +19,35 @@ class DatabaseManager(BaseDatabaseManager):
     """
     High-level API interface for all database operations.
     This provides a clean, consistent interface for the rest of the application.
+    Implements singleton pattern to prevent multiple initializations.
     """
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
     
     def __init__(self):
-        # Import managers directly to avoid circular imports
-        super().__init__()
-        from .base_manager import TableDbManager, TaskDbManager, FileDbManager, GSheetDbManager
-        from .complainant_manager import ComplainantDbManager
-        from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
-        
-        # Direct attribute assignment - much cleaner!
-        self.table = TableDbManager()
-        self.task = TaskDbManager()
-        self.file = FileDbManager()
-        self.gsheet = GSheetDbManager()
-        self.complainant = ComplainantDbManager()
-        self.grievance = GrievanceDbManager()
-        self.recording = RecordingDbManager()
-        self.transcription = TranscriptionDbManager()
-        self.translation = TranslationDbManager()
+        if not DatabaseManager._initialized:
+            # Import managers directly to avoid circular imports
+            super().__init__()
+            from .base_manager import TableDbManager, TaskDbManager, FileDbManager, GSheetDbManager
+            from .complainant_manager import ComplainantDbManager
+            from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
+            
+            # Direct attribute assignment - much cleaner!
+            self.table = TableDbManager()
+            self.task = TaskDbManager()
+            self.file = FileDbManager()
+            self.gsheet = GSheetDbManager()
+            self.complainant = ComplainantDbManager()
+            self.grievance = GrievanceDbManager()
+            self.recording = RecordingDbManager()
+            self.transcription = TranscriptionDbManager()
+            self.translation = TranslationDbManager()
+            DatabaseManager._initialized = True
 
 
     # ===== ID GENERATION =====

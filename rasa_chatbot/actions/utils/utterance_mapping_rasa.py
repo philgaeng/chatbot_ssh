@@ -476,11 +476,22 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'action_ask_form_grievance_complainant_review_grievance_classification_consent': {
+            'utterances': {
+                1: {
+                    'en': "We have generated categories and summary for your grievance. They will help our officer to treat your grievance faster. Do you want to review if they are correct and possibly answer one more question?",
+                    'ne': "हामीले तपाईंको गुनासोको लागि श्रेणी व सारांश उत्पन्न गरिएको छ। यी श्रेणीहरू व सारांश हामीले तपाईंको गुनासो जल्दी सेवाउन मद्दत गर्नेछ। के यो सही छ वा अधिक एक प्रश्न जाँच गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
         'action_ask_form_grievance_complainant_review_grievance_categories_status': {
             'utterances': {
                 1: {
-                    'en': """We have generated categories for your grievance.
-                    Here are the suggested categories:\n{category_text}\nDoes this seem correct?""",
+                    'en': """
+                    Here are the categories suggested by our classification:\n{category_text}\nDoes this seem correct?""",
                     'ne': """हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
                     यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"""
                 },

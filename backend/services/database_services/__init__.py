@@ -16,9 +16,19 @@ from .grievance_manager import (
 )
 
 class DatabaseManagers:
-    """Unified access point for all database managers with lazy loading"""
+    """Unified access point for all database managers with lazy loading and singleton pattern"""
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
     def __init__(self):
-        self._managers = {}
+        if not DatabaseManagers._initialized:
+            self._managers = {}
+            DatabaseManagers._initialized = True
     
     def _get_manager(self, name, manager_class):
         """Lazy load a manager instance"""
