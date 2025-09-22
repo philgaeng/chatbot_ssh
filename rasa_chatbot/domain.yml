@@ -19,11 +19,11 @@ x-common-ignore-intents: &common-ignore-intents
   - mood_unhappy
   - bot_challenge
   - slot_extraction
+  - start_status_check
   - status_check
   - status_check_another
   - status_check_id
   - status_check_phone
-  - status_check_start
   - classification_results
   - affirm_sensitive_content
   - deny_sensitive_content
@@ -480,6 +480,112 @@ slots:
     mappings:
       - type: custom
 
+  form_skip_status_check_complainant_province:
+    type: text
+    mappings:
+      - type: custom
+  form_skip_status_check_complainant_district:
+    type: text
+    mappings:
+      - type: custom
+  form_skip_status_check_complainant_municipality:
+    type: text
+    mappings:
+      - type: custom
+  form_skip_status_check_complainant_municipality_temp:
+    type: text
+    mappings:
+      - type: custom
+  form_skip_status_check_complainant_municipality_confirmed:
+    type: bool
+    mappings:
+      - type: custom
+  form_skip_status_check_valid_province_and_district:
+    type: bool
+    mappings:
+      - type: custom
+  form_skip_status_check_valid_district:
+    type: bool
+    mappings:
+      - type: custom
+  status_check_method:
+    type: categorical
+    values:
+      - grievance_id
+      - complainant_phone
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_list_grievance_id:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_list_grievances_by_id:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_list_grievance_id_valid:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_complainant_phone:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_complainant_phone_valid:
+    type: categorical
+    values:
+      - invalid_number
+      - no_phone_found
+      - true
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_list_grievances_by_phone:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_complainant_name:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_unique_full_names:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_complainant_full_name:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_full_name_validated:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_complainant_full_name_valid:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_list_grievances_by_full_name:
+    type: list
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_valid_province_and_district:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
+
 actions:
   - action_ask_form_contact_complainant_address_confirmed
   - action_ask_form_contact_complainant_address_temp
@@ -515,8 +621,20 @@ actions:
   - action_attach_file
   - action_back_to_previous_step
   - action_check_status
-  - action_status_check_start
+  - action_start_status_check
   - action_choose_retrieval_method
+  - action_ask_status_check_method
+  - action_ask_status_check_list_grievance_id
+  - action_ask_status_check_complainant_phone
+  - action_ask_status_check_complainant_full_name
+  - action_ask_form_skip_status_check_valid_province_and_district
+  - action_ask_form_skip_status_check_complainant_province
+  - action_ask_form_skip_status_check_complainant_district
+  - action_ask_form_skip_status_check_complainant_municipality
+  - action_ask_form_skip_status_check_complainant_municipality_confirmed
+  - action_ask_form_skip_status_check_complainant_municipality_temp
+  - action_display_grievance_id
+  - action_form_skip_status_check_outro
   - action_clear_session
   - action_close_browser_tab
   - action_continue
@@ -551,6 +669,7 @@ actions:
   - action_set_nepali
   - action_show_current_story
   - action_show_status_history
+  - action_skip_status_check_outro
   - action_start_grievance_process
   - action_submit_grievance
   - action_submit_grievance_as_is
@@ -565,7 +684,9 @@ actions:
   - validate_form_grievance_id
   - validate_form_menu
   - validate_form_otp
+  - validate_form_status_check
   - validate_form_sensitive_issues
+  - validate_form_skip_status_check
   - action_grievance_outro
 
 forms:
@@ -606,4 +727,12 @@ forms:
   form_sensitive_issues:
     required_slots:
       - sensitive_issues_follow_up
+    ignored_intents: *common-ignore-intents
+  form_status_check:
+    required_slots:
+      - status_check_method
+    ignored_intents: *common-ignore-intents
+  form_skip_status_check:
+    required_slots:
+      - status_check_valid_province_and_district
     ignored_intents: *common-ignore-intents

@@ -1021,7 +1021,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_status_check_complainant_grievance_id': {
+        'action_ask_status_check_list_grievance_id': {
             'utterances': {
                 1: {
                     'en': "Please provide your grievance ID? Alternatively, you can exit by skipping or search by phone number instead.",
@@ -1092,10 +1092,86 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Are you in {province}, {district}?",
                     'ne': "के {province}, {district} मा हुनुहुन्छ?"
+                },
+                2: {
+                    'en': "Are you in {province}?",
+                    'ne': "के {province} मा हुनुहुन्छ?"
+                },
+                3: {
+                    'en': "Are you in {district}?",
+                    'ne': "के {district} मा हुनुहुन्छ?"
                 }
             },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_form_skip_status_check_complainant_province': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your province name or Skip",
+                    'ne': "कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_skip_status_check_complainant_district': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your district name or Skip",
+                    'ne': "कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_skip_status_check_complainant_municipality_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
+                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_form_skip_status_check_complainant_municipality_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "Is {validated_municipality} your correct municipality?",
+                    'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_form_skip_status_check_outro': {
+            'utterances': {
+                1: {
+                    'en': "To get more information about your grievance, please contact our nearest office:",
+                    'ne': "तपाईंको गुनासोको लागि अधिक जानकारी प्राप्त गर्न, कृपया हाम्रो सबैभन्दा निर्धारित कार्यालयमा सम्पर्क गर्नुहोस्:"
+                },
+                2: {
+                    'en': "Name: {office_name}",
+                    'ne': "नाम: {office_name}"
+                },
+                3: {
+                    'en': "Address: {office_address}",
+                    'ne': "ठेगाना: {office_address}"
+                },
+                4: {
+                    'en': "Phone Number: {office_phone_number}",
+                    'ne': "फोन नम्बर: {office_phone_number}"
+                },
+                5: {
+                    'en': "Thank you for contacting us. We will get back to you soon.",
+                    'ne': "तपाईंको सम्पर्क गर्नुभएकोमा धन्यवाद. हामी थिच्ने छौं।"
+                }
             }
         }
     },
