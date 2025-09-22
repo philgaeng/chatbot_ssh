@@ -1,13 +1,28 @@
 from .location_validator import ContactLocationValidator
 from .keyword_detector import KeywordDetector
 from backend.config.constants import DEFAULT_VALUES, EMAIL_PROVIDERS_NEPAL_LIST
-from typing import Optional
+from rapidfuzz import process
+from typing import Optional, List, Tuple
 import re
 
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
 DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
+TITLE_LIST_DIC = {"en": [ 'mr', 'mrs', 'miss', 'ms','professor', 'prof', "pr", 'engineer', 'eng', "engr", 'doctor', 'dr', "honorary", "hon"],
+"ne": ['श्री', 'shree', 'shri', 'श्रीमती', 'shrimati', 'कुमारी', 'kumari',
+    'डाक्टर', 'डॉ',  'प्रधान', 'pradhan', 'ठेकेदार', 'thekedar']}
+SUFFIX_LIST_DIC = {"en": ["Jr", "Sr", "Ph.D", "B.A", "B.S", "B.Sc", "B.Com", "MD"],
+"ne": ['जी', 'ji', 'ज्यू', 'jyu',
+    'दाइ', 'dai', 'दिदी', 'didi', 'भाइ', 'bhai', 'बहिनी', 'bahini',
+    'बाजे', 'baje', 'बजै', 'bajai', 'सरकार', 'sarkaar', 'हजुर', 'hajur']}
+
+
+TITLE_LIST = TITLE_LIST_DIC["en"] + TITLE_LIST_DIC["ne"]
+TITLE_LIST = list(set([i.lower().strip() for i in TITLE_LIST]))
+SUFFIX_LIST = SUFFIX_LIST_DIC["en"] + SUFFIX_LIST_DIC["ne"]
+SUFFIX_LIST = list(set([i.lower().strip() for i in SUFFIX_LIST]))
+    
 class HelpersRepo:
     def __init__(self):
         self.location_validator = ContactLocationValidator()
@@ -95,6 +110,12 @@ class HelpersRepo:
             return True
         return False
 
+    def standardize_phone(self, language_code: str, phone: str) -> str:
+        if language_code == 'ne':
+            phone = phone.replace('9', '+9779') if phone.startswith('9') else phone.replace('+9779', '+9779') if phone.startswith('+9779') else phone
+            return phone
+        return phone
+
     def is_philippine_phone(self, phone: str) -> bool:
         if re.match(r'^09\d{9}$', phone) or re.match(r'^639\d{8}$', phone):
             phone = phone.replace('09', '+639') if phone.startswith('09') else phone.replace('639', '+639') if phone.startswith('639') else phone
@@ -116,6 +137,31 @@ class HelpersRepo:
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
+    def match_full_name(self, input_full_name: str, reference_full_names: list) -> list:
+        """Match the input full name with the reference full names using fuzzy matching.
+        First we need to parse the input and output full names to remove the title, and suffixes
+        Then we need to split the input and reference full names
+        Then we need to match the  each input word with each reference word using fuzzy matching
+        for each input word, return the best match with its score from the list of reference words
+        If the list of matched words is equal or greater than two return the matching reference full name
+        return the list of matched words"""
+        input_full_name = self._standardize_name(input_full_name)
+        reference_full_names =  list(set([self._standardize_name(reference_full_name) for reference_full_name in reference_full_names]))
+        result_list = process.extract(input_full_name, reference_full_names, score_cutoff=90)
+
+        return result_list
+
+    def _standardize_name(self, name: str) -> str:
+        "standardize the name by removing the title, suffixes, and extra spaces"
+
+        name = name.lower().strip()
+    
+        name_list = [word.strip() for word in name.split()]
+        if name[0] in TITLE_LIST:
+            name_list.pop(0)
+        if name_list[-1] in SUFFIX_LIST:
+            name_list.pop(-1)
+        return (' '.join(name_list))
 
 
 

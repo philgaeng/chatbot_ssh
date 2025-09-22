@@ -37,11 +37,12 @@ class GrievanceHelpers:
             buttons.append({"payload": f"/check_status{{'grievance_id': '{k}'}}", "title": f"{title_buttons} {k}"})
         return buttons
 
-class ActionCheckStatusStart(BaseAction):
+class ActionStatusCheckStart(BaseAction):
     def name(self) -> Text:
-        return "action_check_status_start"
+        return "action_status_check_start"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        self.logger.debug(f"ActionStatusCheckStart - tracker: {tracker}")
         return [SlotSet("main_story", "status_update")]
 
 class ActionChooseRetrievalMethod(BaseAction):

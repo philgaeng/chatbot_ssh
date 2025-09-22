@@ -15,7 +15,7 @@ stories:
           - language_code: "en"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - active_loop: null
@@ -43,7 +43,7 @@ stories:
           - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - active_loop: null
@@ -71,7 +71,7 @@ stories:
           - language_code: "en"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - action: action_choose_retrieval_method
@@ -93,7 +93,7 @@ stories:
           - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - active_loop: null
@@ -116,10 +116,9 @@ stories:
           - language_code: "en"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
-      - active_loop: null
       - action: action_choose_retrieval_method
       - intent: status_check_phone
       - action: form_contact
@@ -150,7 +149,7 @@ stories:
           - language_code: "ne"
       - action: action_menu
       - intent: status_check_start
-      - action: action_check_status_start
+      - action: action_status_check_start
       - slot_was_set:
           - main_story: "status_update"
       - action: action_choose_retrieval_method

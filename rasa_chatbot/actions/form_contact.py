@@ -793,7 +793,7 @@ class ValidateFormContact(BaseFormValidationAction):
                 dispatcher.utter_message(text="You entered a PH number for validation.")
             else:
                 result = {
-                "complainant_phone": slot_value,
+                "complainant_phone": self.helpers.standardize_phone(self.language_code, slot_value),
                 "phone_validation_required": True
             }
         self.logger.debug(f"Validate complainant_phone: {result['complainant_phone']}")

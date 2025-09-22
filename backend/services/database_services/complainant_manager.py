@@ -62,7 +62,7 @@ class ComplainantDbManager(BaseDatabaseManager):
 
 
 
-    def get_complainants_by_phone_number(self, phone_number: str) -> List[Dict[str, Any]]:
+    def get_complainants_by_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
         self.logger.debug(f"original phone number: {phone_number}")
         standardized_phone = self._standardize_phone_number(phone_number)
@@ -297,3 +297,23 @@ class ComplainantDbManager(BaseDatabaseManager):
                 'merge_failed_complainants': [],
                 'manual_review_complainants': []
             }
+    
+    def get_all_complainant_full_names_query(self) -> List[str]:
+        "select all the unique full names from the complainants table"
+        query = """
+            SELECT DISTINCT complainant_full_name
+            FROM complainants
+        """
+        try:
+            results = self.execute_query(query, (), "get_all_full_names")
+            return list(set([result['complainant_full_name'] for result in results]))
+        except Exception as e:
+            self.logger.error(f"Error retrieving all full names: {str(e)}")
+            return []
+
+    def get_all_complainant_full_names(self) -> List[str]:
+        "we need to unhash all the full names from the query"
+        all_full_names_encrypted = self.get_all_complainant_full_names_query()
+        results = list(set([self._decrypt_field(item) for item in all_full_names_encrypted]))
+        return results
+        
