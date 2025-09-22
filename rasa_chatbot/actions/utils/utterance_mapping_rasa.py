@@ -258,12 +258,12 @@ UTTERANCE_MAPPING = {
         'action_ask_form_contact_complainant_full_name': {
             'utterances': {
                 1: {
-                    'en': "Please enter the name you want us to address you by. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    'en': "Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
                 },
                 2: {
-                    'en': "Please enter your full name. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    'en': "Please enter your full name. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
                 }
             },
             'buttons': {
@@ -967,6 +967,135 @@ UTTERANCE_MAPPING = {
                                 {"title": "No, let me enter a value", "payload": "/deny_skip"}
                             ]
                 }
+            }
+        }
+    },
+    'form_status_check': {
+        "action_skip_status_check": {
+            'utterances': {
+                1: {
+                    'en': "Our bot cannot provide you with the status of your grievance. Please contact directly the officer in charge at {officer_in_charge_phone} or visit the office in person. {office_name_and_address}",
+                    'ne': "हामीलाई तपाईंको गुनासो स्थिति जाँच गर्न मद्दत गर्न सकिनौं। कृपया अधिकारीको फोन नम्बर {officer_in_charge_phone} वा अनुसरण गर्नु होस्। {office_name_and_address}"
+                }
+            }
+        },
+        "validate_form_status_check": {
+            'utterances': {
+                1: {
+                    'en': "We have matched your full name with the grievance ID {grievance_id}",
+                    'ne': "हामी तपाईंको नामलाई {grievance_id} गुनासो ID सँग मिलाउन सकिनौं"
+                },
+                2: {
+                    'en': "We have found several grievances of closed grievances, we selected the latest one {grievance_id}",
+                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                },
+                3: {
+                    'en': "We have found one grievance with the status {status} and one or several already closed, we selected the latest one {grievance_id}",
+                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                },
+                4: {
+                    'en': "We have found several grievances, we selected the latest one {grievance_id}",
+                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                }
+            }
+        },
+        'action_ask_status_check_method': {
+            'utterances': {
+                1: {
+                    'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
+                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Phone Number", "payload": "/retrieve_with_phone"},
+                        {"title": "Grievance ID", "payload": "/retrieve_grievance_with_id"},
+                        {"title": "Skip", "payload": BUTTON_SKIP}
+                    ],
+                    'ne': [
+                        {"title": "फोन नम्बर", "payload": "/retrieve_with_phone"},
+                        {"title": "गुनासो ID", "payload": "/retrieve_grievance_with_id"},
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+                    ]
+                }
+            }
+        },
+        'action_ask_status_check_complainant_grievance_id': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your grievance ID? Alternatively, you can exit by skipping or search by phone number instead.",
+                    'ne': "कृपया तपाईंको गुनासो ID प्रदान गर्नुहोस्? वा अर्को तरिका छोड्न वा फोन नम्बर सेव्नु सक्नुहुन्छ।"
+                },
+                2: {
+                    'en': "We cannot find any grievance associated with this grievance ID. You can try providing another ID or choose to search by phone number or skip to exit",
+                    'ne': "हामी यो गुनासो IDसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को ID प्रदान गर्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न वा छोड्न बाहिर निस्क्न सक्नुहुन्छ"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Skip", "payload": BUTTON_SKIP},
+                        {"title": "Search by phone number", "payload": "/retrieve_with_phone"}
+                    ],
+                    'ne': [
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+                        {"title": "फोन नम्बर सेव्नुहोस्", "payload": "/retrieve_with_phone"}
+                    ]
+                }
+            }
+        },
+        'action_ask_status_check_complainant_phone': {
+            'utterances': {
+                1: {
+                    'en': "Please provide the phone number associated with your grievance - it should start by 9 and be 10 digits long",
+                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                },
+                2: {
+                    'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
+                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                },
+                3: {
+                    'en': "We cannot find any grievance associated with this phone number. You can try providing another number or skip to exit",
+                    'ne': "हामी यो फोन नम्बरसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को नम्बर प्रदान गर्न सक्नुहुन्छ वा छोड्न बाहिर निस्क्न सक्नुहुन्छ"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_status_check_complainant_full_name': {
+            'utterances': {
+                1: {
+                    'en': "We have found multiple grievances associated with this phone number. Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?",
+                    'ne': "हामी यो फोन नम्बरसँग बहुवचन गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+                },
+                2: {
+                    'en': "We didn't find any grievance associated with your full name. Please provide your complete full name again?",
+                    'ne': "हामी तपाईंको पूरा नामसँग कुनै गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम पुनः प्रदान गर्नुहोस्?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_status_check_complainant_full_name_validation_required': {
+            'utterances': {
+                1: {
+                    'en': "Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?",
+                    'ne': "कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+                }
+            }
+        },
+        'action_ask_form_skip_status_check_valid_province_and_district': {
+            'utterances': {
+                1: {
+                    'en': "Are you in {province}, {district}?",
+                    'ne': "के {province}, {district} मा हुनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
             }
         }
     },

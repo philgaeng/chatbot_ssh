@@ -101,9 +101,9 @@ class DatabaseManager(BaseDatabaseManager):
         """Get complainant by ID"""
         return self.complainant.get_complainant_by_id(complainant_id)
     
-    def find_complainant_by_phone(self, phone_number: str) -> List[Dict[str, Any]]:
+    def get_complainants_by_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         """Find complainants by phone number"""
-        return self.complainant.get_complainants_by_phone_number(phone_number)
+        return self.complainant.get_complainants_by_phone(phone_number)
     
     def get_complainant_from_grievance(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get complainant associated with a grievance""" 
@@ -116,6 +116,10 @@ class DatabaseManager(BaseDatabaseManager):
     def _decrypt_complainant_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Decrypt complainant data"""
         return self.complainant._decrypt_sensitive_data(data)
+
+    def get_all_complainant_full_names(self) -> List[str]:
+        """Get all complainant full names"""
+        return self.complainant.get_all_complainant_full_names()
     
     # ===== GRIEVANCE OPERATIONS =====
 
@@ -241,6 +245,10 @@ class DatabaseManager(BaseDatabaseManager):
     def get_grievance_files(self, grievance_id: str) -> List[Dict[str, Any]]:
         """Get files attached to a grievance"""
         return self.grievance.get_grievance_files(grievance_id)
+
+    def get_grievance_by_complainant_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+        """Get grievance by complainant phone number"""
+        return self.grievance.get_grievance_by_complainant_phone(phone_number)
     
     # ===== RECORDING OPERATIONS =====
     

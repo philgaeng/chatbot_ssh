@@ -515,7 +515,7 @@ actions:
   - action_attach_file
   - action_back_to_previous_step
   - action_check_status
-  - action_check_status_start
+  - action_status_check_start
   - action_choose_retrieval_method
   - action_clear_session
   - action_close_browser_tab

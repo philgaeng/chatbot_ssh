@@ -257,6 +257,55 @@ class GrievanceDbManager(BaseDatabaseManager):
         except Exception as e:
             self.logger.error(f"Error validating grievance ID: {str(e)}")
             return False
+
+    def get_grievance_by_complainant_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+        # Encrypt the phone number for search if encryption is enabled
+        self.logger.debug(f"original phone number: {phone_number}")
+        standardized_phone = self._standardize_phone_number(phone_number)
+        search_phone = self._hash_value(standardized_phone) if self.encryption_key else standardized_phone
+        self.logger.debug(f"hashed phone number: {search_phone}")
+        
+        # Add debug logging to track the hash
+        self.logger.debug(f"Phone number '{standardized_phone}' hashed to '{search_phone}' in search")
+        
+        query = """
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+                    grievance_id,
+                    status_code as grievance_status,
+                    created_at as grievance_status_update_date
+                FROM grievance_status_history
+                ORDER BY grievance_id, created_at DESC
+            )
+            SELECT 
+                g.grievance_id,
+                g.grievance_creation_date,
+                g.grievance_categories,
+                c.complainant_full_name,
+                c.complainant_phone,
+                ls.grievance_status,
+                ls.grievance_status_update_date
+            FROM complainants c
+            INNER JOIN grievances g ON c.complainant_id = g.complainant_id
+            LEFT JOIN latest_status ls ON g.grievance_id = ls.grievance_id
+            WHERE c.complainant_phone_hash = %s
+            ORDER BY g.grievance_creation_date DESC, ls.grievance_status_update_date DESC
+        """
+        try:
+            self.logger.debug(f"search_phone at query time: {search_phone}")
+            results = self.execute_query(query, (search_phone,), "get_complainants_by_phone_number")
+            # Decrypt sensitive fields in results
+            decrypted_results = []
+            self.logger.debug(f"{len(results)} complainants found")
+            self.logger.debug(f"results: {results}")
+            for complainant in results:
+                decrypted_results.append(self._decrypt_sensitive_data(complainant))
+            self.logger.debug(f"{len(decrypted_results)} complainants successfully decrypted")
+            self.logger.debug(f"decrypted results: {decrypted_results}")
+            return decrypted_results
+        except Exception as e:
+            self.logger.error(f"Error retrieving complainants by phone number: {str(e)}")
+            return []
   
 
 class RecordingDbManager(BaseDatabaseManager):

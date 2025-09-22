@@ -47,8 +47,18 @@ class BaseDatabaseManager:
         else:
             self.logger.info("Encryption enabled for sensitive fields")
         self.DEFAULT_USER = DEFAULT_VALUES['DEFAULT_USER']
-        self.ENCRYPTED_FIELDS = {}
-        self.HASHED_FIELDS = {}
+        self.ENCRYPTED_FIELDS = [
+            'complainant_phone',
+            'complainant_email', 
+            'complainant_full_name',
+            'complainant_address'
+        ]
+        self.HASHED_FIELDS = [
+            'complainant_phone',
+            'complainant_email', 
+            'complainant_full_name',
+            'complainant_address'
+        ]
         self.DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
         self.TASK_STATUS = TASK_STATUS
         self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
@@ -962,6 +972,7 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_complainant_phone ON complainants(complainant_phone);
             CREATE INDEX IF NOT EXISTS idx_complainant_email ON complainants(complainant_email);
             CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON complainants(complainant_unique_id);
+            CREATE INDEX IF NOT EXISTS idx_complainant_phone_hash ON complainants(complainant_phone_hash);
         """)
 
         # Grievances table indexes
@@ -984,6 +995,8 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_status_history_status ON grievance_status_history(status_code);
             CREATE INDEX IF NOT EXISTS idx_status_history_created ON grievance_status_history(created_at);
             CREATE INDEX IF NOT EXISTS idx_status_history_assigned ON grievance_status_history(assigned_to);
+            -- Composite index for DISTINCT ON optimization
+            CREATE INDEX IF NOT EXISTS idx_status_history_grievance_created ON grievance_status_history(grievance_id, created_at DESC);
         """)
 
         # Legacy history table

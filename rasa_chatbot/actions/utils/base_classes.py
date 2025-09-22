@@ -11,7 +11,7 @@ from .utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSIT
 from .mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, LLM_CLASSIFICATION, CLASSIFICATION_DATA
+from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT, LLM_CLASSIFICATION, CLASSIFICATION_DATA
 from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
@@ -293,6 +293,18 @@ class BaseAction(Action, ABC):
             return False
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
+
+    def validate_full_name_to_list(self, full_name: str) -> list:
+        """Check if the provided string is a valid full name."""
+        #we want to fuzzy match the full name with the full name in the database
+        full_name = full_name.lower().strip()
+        all_full_names = self.db_manager.get_all_complainant_full_names()
+        results = self.helpers.match_full_name(full_name, all_full_names)
+        return results
+
+    def get_status_and_description_str_in_language(self, status: str) -> str:
+        """Get the status and description string in the language."""
+        return GRIEVANCE_STATUS_DICT[status]["name_" + self.language_code] + " - " + GRIEVANCE_STATUS_DICT[status]["description_" + self.language_code]
 
 
 

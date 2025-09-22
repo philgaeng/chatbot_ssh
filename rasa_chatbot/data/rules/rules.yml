@@ -67,3 +67,12 @@ rules:
       - active_loop: null
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
+
+rule: status check flow exit without retrieval
+  steps:
+    - active_loop: form_status_check
+    - active_loop: null
+    - slot_was_set:
+        - status_check_method: slot_skipped
+    - action: action_skip_status_check
+    
