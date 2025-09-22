@@ -22,6 +22,8 @@ TITLE_LIST = TITLE_LIST_DIC["en"] + TITLE_LIST_DIC["ne"]
 TITLE_LIST = list(set([i.lower().strip() for i in TITLE_LIST]))
 SUFFIX_LIST = SUFFIX_LIST_DIC["en"] + SUFFIX_LIST_DIC["ne"]
 SUFFIX_LIST = list(set([i.lower().strip() for i in SUFFIX_LIST]))
+SKIP_VALUE = DEFAULT_VALUES["SKIP_VALUE"]
+NOT_PROVIDED = DEFAULT_VALUES["NOT_PROVIDED"]
     
 class HelpersRepo:
     def __init__(self):
@@ -154,14 +156,28 @@ class HelpersRepo:
     def _standardize_name(self, name: str) -> str:
         "standardize the name by removing the title, suffixes, and extra spaces"
 
+        # Handle empty names
+        if not name:
+            return ""
+        if name.lower() == SKIP_VALUE.lower():
+            return ""
+        if name.lower() == NOT_PROVIDED.lower():
+            return ""
         name = name.lower().strip()
-    
+        
+
         name_list = [word.strip() for word in name.split()]
-        if name[0] in TITLE_LIST:
+        if name_list and name_list[0] in TITLE_LIST:
             name_list.pop(0)
-        if name_list[-1] in SUFFIX_LIST:
+        if name_list and name_list[-1] in SUFFIX_LIST:
             name_list.pop(-1)
         return (' '.join(name_list))
+
+    def get_office_in_charge_info(self, municipality, district = None, province = None):
+        """Get the office in charge info from the municipality data."""
+        return self.location_validator.get_office_in_charge_info(municipality, district, province)
+
+    
 
 
 

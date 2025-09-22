@@ -31,6 +31,7 @@ class ContactLocationValidator:
         json_path_en = f"{json_path}_en_cleaned.json"
         json_path_ne = f"{json_path}_ne_cleaned.json"
         json_path_municipality_villages = f"{json_path}_municipality_villages.csv"
+        self.json_path_office_in_charge = f"{json_path}_GRM_list_office_in_charge.csv"
         self.logger = logging.getLogger(__name__)
         self.locations_both_language = dict()
         with open(json_path_en, "r") as file:
@@ -353,5 +354,25 @@ class ContactLocationValidator:
                 return matched_village, str(ward_number)
             
             return None, None
+
+    def get_office_in_charge_info(self, municipality, district = None, province = None):
+        """Get the office in charge info from the municipality data."""
+        office_in_charge = pd.read_csv(self.json_path_office_in_charge)
+        office_in_charge.columns = office_in_charge.columns.str.lower()
+        office_in_charge["municipality"] = office_in_charge["municipality"].str.title().str.replace('Municipality', '').str.strip()
+        office_in_charge["district"] = office_in_charge["district"].str.title().str.replace('District', '').str.strip()
+        if province in office_in_charge.columns:
+            office_in_charge["province"] = office_in_charge["province"].str.title().str.replace('Province', '').str.strip()
+        municipality = municipality.title().replace('Municipality', '').strip()
+        district = district.title().replace('District', '').strip()
+        province = province.title().replace('Province', '').strip()
+
+        office_in_charge_info = office_in_charge[(office_in_charge["municipality"] == municipality) & (office_in_charge["district"] == district)]
+
+        if office_in_charge_info.empty:
+            return None
+        else:
+            return office_in_charge_info.iloc[0].to_dict()
+        
             
             
