@@ -40,13 +40,14 @@ class ValidateFormStatusCheck(BaseFormValidationAction):
 
     async def validate_status_check_list_grievance_id(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         if slot_value == self.SKIP_VALUE:
-            return {"status_check_list_grievances_by_id": self.SKIP_VALUE}
+            return {"status_check_list_grievance_id": self.SKIP_VALUE,
+            "status_check_method": self.SKIP_VALUE}
         if "phone" in slot_value:
-            return {"status_check_list_grievances_by_id": None,
+            return {"status_check_list_grievance_id": None,
             "status_check_method": "complainant_phone"}
         else:
             if self.db_manager.is_valid_grievance_id(slot_value):
-                return {"status_check_list_grievances_by_id": [slot_value],
+                return {"status_check_list_grievance_id": [slot_value],
                 "status_check_list_grievance_id_valid": True}
             else:
                 return {"status_check_list_grievance_id_valid": False}
@@ -66,17 +67,27 @@ class ValidateFormStatusCheck(BaseFormValidationAction):
         - if the full name is not the same, validate complainant_phone slot and move to the next slot eg full name validation
         """
         if slot_value == self.SKIP_VALUE:
-            return {"status_check_complainant_phone": self.SKIP_VALUE}
+            return {"status_check_complainant_phone": self.SKIP_VALUE,
+            "status_check_method": self.SKIP_VALUE}
         
         if not self.helpers.is_valid_phone(slot_value):
-                return {"status_check_complainant_phone_valid": "invalid_number"}
+            self.logger.debug(f"validate_status_check_complainant_phone: phone not valid - the slot is not validated and shoule be asked again")
+            return {
+                "status_check_complainant_phone_valid": "invalid_number",
+                "status_check_complainant_phone": None
+                }
 
 
         standardized_phone = self.helpers.standardize_phone(language_code=self.language_code, phone=slot_value)
         list_grievances_by_phone = self.db_manager.get_grievance_by_complainant_phone(standardized_phone)
         self.logger.debug(f"validate_status_check_complainant_phone: list_grievances_by_phone: {list_grievances_by_phone}")
+
         if len(list_grievances_by_phone) == 0:
-            return {"status_check_complainant_phone_valid": "no_phone_found"}
+            self.logger.debug(f"validate_status_check_complainant_phone: no phone found - the slot is not validated and shoule be asked again")
+            return {
+                "status_check_complainant_phone_valid": "no_phone_found",
+                "status_check_complainant_phone": None
+                }
 
         # Convert datetime objects to strings for JSON serialization
         serializable_grievances = []
@@ -90,18 +101,25 @@ class ValidateFormStatusCheck(BaseFormValidationAction):
             serializable_grievances.append(serializable_grievance)
 
         list_full_names = [grievance["complainant_full_name"] for grievance in serializable_grievances]
+        self.logger.debug(f"validate_status_check_complainant_phone: list_full_names: {list_full_names}")
         unique_full_names = self.match_similar_full_names_in_list(list_full_names)
+        self.logger.debug(f"validate_status_check_complainant_phone: unique_full_names: {unique_full_names}")
         if len(unique_full_names) == 1:
-            return {"status_check_complainant_phone": slot_value,
+            return {
+                "status_check_complainant_phone": slot_value,
                 "status_check_list_grievances_by_phone": serializable_grievances,
-                "status_check_complainant_name": serializable_grievances[0]["complainant_full_name"],
+                "status_check_complainant_full_name": serializable_grievances[0]["complainant_full_name"],
                 "status_check_list_grievance_id": serializable_grievances,
-                "status_check_complainant_phone_valid": True}
+                "status_check_complainant_phone_valid": True,
+                "status_check_unique_full_names": unique_full_names
+                }
         else:
-                return {"status_check_complainant_phone": slot_value,
+                return {
+                    "status_check_complainant_phone": slot_value,
                 "status_check_list_grievances_by_phone": serializable_grievances,
                 "status_check_complainant_phone_valid": True,
-                "status_check_unique_full_names": unique_full_names}
+                "status_check_unique_full_names": unique_full_names
+                }
 
 
     async def extract_status_check_complainant_full_name(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
@@ -109,35 +127,59 @@ class ValidateFormStatusCheck(BaseFormValidationAction):
         return await self._handle_slot_extraction("status_check_complainant_full_name", tracker, dispatcher, domain)
 
     async def validate_status_check_complainant_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        if slot_value == self.SKIP_VALUE:
-            return {"status_check_complainant_full_name": self.SKIP_VALUE,
-            "status_check_list_grievance_id": self.SKIP_VALUE,
-            "status_check_full_name_validated": False}
-        unique_full_names = tracker.get_slot("status_check_unique_full_names")
-        full_name_matches = self.helpers.match_full_name(slot_value, unique_full_names)
-        if len(full_name_matches) == 0:
-            return {"status_check_complainant_full_name": None,
-            "status_check_full_name_validated": False}
-        else:
-            match_full_name = full_name_matches[0][0]
+        try:
+            if slot_value == self.SKIP_VALUE:
+                return {"status_check_complainant_full_name": self.SKIP_VALUE,
+                "status_check_list_grievance_id": self.SKIP_VALUE,
+                "status_check_method": self.SKIP_VALUE,
+                "status_check_full_name_validated": False}
+            unique_full_names = tracker.get_slot("status_check_unique_full_names")
+            full_name_matches = self.helpers.match_full_name(slot_value, unique_full_names)
             list_grievances_by_phone = tracker.get_slot("status_check_list_grievances_by_phone")
-            list_grievances_by_full_name = self.select_grievances_from_full_name_list(match_full_name,  list_grievances_by_phone, dispatcher)
-            return {"status_check_complainant_full_name": slot_value,
-            "status_check_list_grievances_by_full_name": list_grievances_by_full_name,
-            "status_check_complainant_full_name_valid": True,
-            "status_check_full_name_validated": True}
+            self.logger.debug(f"validate_status_check_complainant_full_name: full_name_matches: {full_name_matches}")
+            if len(full_name_matches) == 0:
+                self.logger.debug(f"validate_status_check_complainant_full_name: no matches: {full_name_matches} - slot not validated")
+                return {
+                    "status_check_complainant_full_name": None,
+                "status_check_full_name_validated": False
+                }
 
-    def select_grievances_from_full_name_list(self, full_name: str, list_grievances_by_phone: list, dispatcher: CollectingDispatcher) -> List[str]:
+            if full_name_matches:
+                list_grievances_by_full_name = self.select_grievances_from_full_name_list(full_name_matches,  list_grievances_by_phone, dispatcher)
+                self.logger.debug(f"validate_status_check_complainant_full_name: list_grievances_by_full_name: {list_grievances_by_full_name}")
+                if list_grievances_by_full_name:
+                    return {
+                        "status_check_complainant_full_name": list_grievances_by_full_name[0]["complainant_full_name"],
+                    "status_check_list_grievances_by_full_name": list_grievances_by_full_name, "status_check_list_grievance_id": list_grievances_by_full_name,
+                        "status_check_complainant_full_name_valid": True,
+                        "status_check_full_name_validated": True
+                        }
+                else:
+                    return {
+                        "status_check_complainant_full_name": None,
+                    "status_check_complainant_full_name_valid": False,
+                    "status_check_full_name_validated": False
+                    }
+        except Exception as e:
+            self.logger.error(f"validate_status_check_complainant_full_name: error: {e}")
+            return {
+            }
+
+    def select_grievances_from_full_name_list(self, full_name_matches: List[Tuple[str, float, int]], list_grievances_by_phone: list, dispatcher: CollectingDispatcher) -> List[str]:
         matching_grievance_list = []
+        self.logger.debug(f"select_grievances_from_full_name_list: full_name: {full_name_matches}")
+        self.logger.debug(f"select_grievances_from_full_name_list: list_grievances_by_phone: {list_grievances_by_phone}")
         for grievance in list_grievances_by_phone:
-            if self.helpers.match_full_name(full_name, grievance["complainant_full_name"]):
-                matching_grievance_list.append(grievance)
+            for full_name in full_name_matches:
+                if grievance["complainant_full_name"] == full_name[0]:
+                    matching_grievance_list.append(grievance)
+        self.logger.debug(f"select_grievances_from_full_name_list: matching_grievance_list: {matching_grievance_list}")
         if len(matching_grievance_list) == 0:
             return []
         #sort the matching grievances by status and status date
-        #first we sort by status, where all the closed cases are at the end and the rest are at the beginning
+        #first we sort by status, where all the closed cases are at the en d and the rest are at the beginning
         #amongst the rest we sort by status date
-        matching_grievance_not_closed = [grievance for grievance in matching_grievance_list if grievance["grievance_status"] not in ["CLOSED"]]
+        matching_grievance_not_closed = [grievance for grievance in matching_grievance_list if grievance.get("grievance_status") and grievance.get("grievance_status") not in ["CLOSED"]]
         matching_grievance_not_closed.sort(key=lambda x: x["grievance_creation_date"], reverse=True)
         matching_grievance_closed = [grievance for grievance in matching_grievance_list if grievance["grievance_status"] in ["CLOSED"]]
         matching_grievance_closed.sort(key=lambda x: x["grievance_creation_date"], reverse=True)
@@ -164,51 +206,52 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
 
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
         """Determine required slots based on validation status"""
-        
-        # Case 1: Province and district are already valid - only need municipality
-        if tracker.get_slot("form_skip_status_check_valid_province_and_district"):
-            return ["form_skip_status_check_complainant_municipality_temp", "form_skip_status_check_complainant_municipality_confirmed"]
-        
+        # self.logger.debug(f"validate_form_skip_status_check: form_skip_status_check_valid_province_and_district: {tracker.get_slot('form_skip_status_check_valid_province_and_district')}")
+        # # Case 1: Province and district are already valid - only need municipality
+        # if tracker.get_slot("form_skip_status_check_valid_province_and_district"):
+        #     self.logger.debug(f"validate_form_skip_status_check: form_skip_status_check_valid_province_and_district: True - collect municipality data")
+        #     required_slots = ["form_skip_status_check_complainant_municipality_temp", "form_skip_status_check_complainant_municipality_confirmed"]
+        #     self.logger.debug(f"validate_form_skip_status_check: required_slots: {required_slots}")
+        #     return required_slots
+        if tracker.get_slot("form_skip_status_check_valid_province_and_district") == self.SKIP_VALUE:
+            return []
         # Case 2: Province and district are invalid - need to re-collect all location data
         if tracker.get_slot("form_skip_status_check_valid_province_and_district") == False:
-            return [
+            self.logger.debug(f"validate_form_skip_status_check: form_skip_status_check_valid_province_and_district: False - re-collect all location data")
+            required_slots = ["form_skip_status_check_valid_province_and_district",
                 "form_skip_status_check_complainant_province", 
                 "form_skip_status_check_complainant_district", 
                 "form_skip_status_check_complainant_municipality_temp", 
                 "form_skip_status_check_complainant_municipality_confirmed"
             ]
-        
-        # Case 3: No validation status set yet - need to validate existing data
-        if tracker.get_slot("form_skip_status_check_valid_district") is None:
-            return ["status_check_valid_province_and_district"]
+            self.logger.debug(f"validate_form_skip_status_check: required_slots: {required_slots}")
+            return required_slots
         
         # Default case - no slots required
-        return []
+        required_slots = ["form_skip_status_check_valid_province_and_district", 
+        "form_skip_status_check_complainant_municipality_temp",
+        "form_skip_status_check_complainant_municipality_confirmed"
+        ]
+        self.logger.debug(f"validate_form_skip_status_check: required_slots: {required_slots}")
+        return required_slots
 
-    async def extract_form_skip_status_check_complainant_district(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+    async def extract_form_skip_status_check_valid_province_and_district(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
         return await self._handle_boolean_and_category_slot_extraction(
-            "form_skip_status_check_complainant_district",
+            "form_skip_status_check_valid_province_and_district",
             tracker,
             dispatcher,
             domain
         )
     
-    async def validate_form_skip_status_check_complainant_district(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-
-        return {"form_skip_status_check_complainant_district": slot_value}
-        
-    async def extract_form_skip_status_check_complainant_province(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        return await self._handle_slot_extraction(
-            "form_skip_status_check_complainant_province",
-            tracker,
-            dispatcher,
-            domain
-        )
+    async def validate_form_skip_status_check_valid_province_and_district(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        if slot_value:
+            return {"form_skip_status_check_valid_province_and_district": slot_value,
+            "form_skip_status_check_complainant_province": tracker.get_slot("complainant_province"),
+            "form_skip_status_check_complainant_district": tracker.get_slot("complainant_district"),
+            }
+        else:
+            return {"form_skip_status_check_valid_province_and_district": slot_value}
+    
         
     async def validate_form_skip_status_check_complainant_province(
         self,
@@ -249,7 +292,7 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(  
-            "complainant_district",
+            "form_skip_status_check_complainant_district",
             tracker,
             dispatcher,
             domain
@@ -297,7 +340,7 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         return await self._handle_slot_extraction(
-            "complainant_municipality_temp",
+            "form_skip_status_check_complainant_municipality_temp",
             tracker,
             dispatcher,
             domain
@@ -313,9 +356,11 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         
         #deal with the slot_skipped case
         if slot_value == self.SKIP_VALUE:
-            return {"form_skip_status_check_complainant_municipality_temp": self.SKIP_VALUE,
+            return {
+                "form_skip_status_check_complainant_municipality_temp": self.SKIP_VALUE,
                     "form_skip_status_check_complainant_municipality": self.SKIP_VALUE,
-                    "form_skip_status_check_complainant_municipality_confirmed": False}
+                    "form_skip_status_check_complainant_municipality_confirmed": False
+                    }
         
         # First validate string length
         if not self._validate_string_length(slot_value, min_length=2):
@@ -516,6 +561,7 @@ class ActionAskFormSkipStatusCheckComplainantMunicipalityTemp(BaseAction):
         return "action_ask_form_skip_status_check_complainant_municipality_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        self.logger.debug(f"action_ask_form_skip_status_check_complainant_municipality_temp: ")
         utterance = self.get_utterance(1).format(district=tracker.get_slot("form_skip_status_check_complainant_district"), province=tracker.get_slot("form_skip_status_check_complainant_province"))
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=utterance, buttons=buttons)
@@ -529,14 +575,32 @@ class ActionDisplayGrievanceId(BaseAction):
         return "action_display_grievance_id"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        list_grievances_by_id = tracker.get_slot("status_check_list_grievances_by_id")
-        for grievance in list_grievances_by_id:
-            utterance = self.display_grievance_id(grievance)
-            dispatcher.utter_message(text=utterance)
-        utterance = self.get_utterance(1)
-        buttons = self.get_buttons(1)
-        dispatcher.utter_message(text=utterance, buttons=buttons)
-        return []
+        try:
+            list_grievances_by_id = tracker.get_slot("status_check_list_grievance_id")
+            self.logger.debug(f"action_display_grievance_id: status_check_list_grievance_id: {list_grievances_by_id}")
+            if list_grievances_by_id:
+                buttons = []
+                for grievance in list_grievances_by_id:
+                    utterance = self.display_grievance_id(grievance)
+                    if grievance.get("grievance_id"):
+                        button = {"payload": f"/check_status{{'grievance_id': '{grievance['grievance_id']}'}}", "title": f"Check {grievance['grievance_id']}"}
+                        buttons.append(button)
+                        dispatcher.utter_message(text=utterance)
+                skip_button = self.get_buttons(1)[0]
+                self.logger.debug(f"action_display_grievance_id: skip_button: {skip_button}")
+                self.logger.debug(f"action_display_grievance_id: buttons before appending skip_button: {buttons}")
+                buttons.append(skip_button)
+                utterance = self.get_utterance(1)
+                self.logger.debug(f"action_display_grievance_id: buttons after appending skip_button: {buttons}")
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+            else:
+                utterance = self.get_utterance(2)
+                buttons = self.get_buttons(1)
+                dispatcher.utter_message(text=utterance, buttons=buttons)
+            return []
+        except Exception as e:
+            self.logger.error(f"action_display_grievance_id: error: {e}")
+            return []
 
     def display_grievance_id(self, grievance: Dict) -> str:
         key_mapping_language = {
@@ -547,19 +611,23 @@ class ActionDisplayGrievanceId(BaseAction):
             "grievance_categories": {"en": "Grievance categories", "ne": "गुनासो श्रेणी"},
         }
         utterance = []
+        i = 0
         for k,v in grievance.items():
+            i += 1
+            self.logger.debug(f"display_grievance_id: grievance {i}: {grievance}")
             if k in key_mapping_language:
                 denomination = key_mapping_language[k][self.language_code]
                 if k == "grievance_status":
                     v = self.get_status_and_description_str_in_language(v)
                 if v:
                     utterance.append(f"{denomination}: {v}")
+        self.logger.debug(f"display_grievance_id: utterance_list: {utterance}")
         utterance = "\n".join(utterance)
         return utterance
 
 class ActionFormSkipStatusCheckOutro(BaseAction):
     def name(self) -> Text:
-        return "action_form_skip_status_check_outro"
+        return "action_skip_status_check_outro"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         province = tracker.get_slot("form_skip_status_check_complainant_province")
@@ -584,3 +652,4 @@ class ActionFormSkipStatusCheckOutro(BaseAction):
             utterance = "\n".join(utterances)
         dispatcher.utter_message(text=utterance)
         return []
+

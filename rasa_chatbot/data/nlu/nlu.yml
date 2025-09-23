@@ -244,14 +244,6 @@ nlu:
       - i have the complaint id
       - track with grievance number
 
-  - intent: status_check_phone
-    examples: |
-      - retrieve with my phone number
-      - use my phone number
-      - check with mobile number
-      - phone number
-      - i'll use my phone
-
   - intent: status_check_start
     examples: |
       - check my status
@@ -284,6 +276,27 @@ nlu:
       - Send file
       - Attach photo
       - Share document
+
+  - intent: phone_number_intent
+    examples: |
+      - phone number
+      - mobile number
+      - 9876543210
+      - 9999998989
+      - 999-999-9999
+      - 937 999 9999 999
+      - 09876543210
+      - 0999998989
+      - 0999-999-9999
+      - 0937 999 9999 999
+      - +9779876543210
+      - +977999998989
+      - +977999-999-9999
+      - +977937 999 9999 999
+      - +639876543210
+      - +63999998989
+      - +63999-999-9999
+      - +63937 999 9999 999
 
   - intent: classification_results
     examples: |

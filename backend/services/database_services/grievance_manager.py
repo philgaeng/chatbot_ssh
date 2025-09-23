@@ -258,7 +258,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             self.logger.error(f"Error validating grievance ID: {str(e)}")
             return False
 
-    def get_grievance_by_complainant_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+    def get_grievance_by_complainant_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
         self.logger.debug(f"original phone number: {phone_number}")
         standardized_phone = self._standardize_phone_number(phone_number)

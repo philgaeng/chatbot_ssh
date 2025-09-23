@@ -174,9 +174,22 @@ class DatabaseManager(BaseDatabaseManager):
             if complainant_data:
                 self.complainant.update_complainant(complainant_id, complainant_data)
                 self.logger.info(f"Complainant updated in db: {complainant_id}")
-                if grievance_data:
-                    self.grievance.update_grievance(grievance_id, grievance_data)
-                    self.logger.info(f"Grievance updated in db: {grievance_id}")
+            if grievance_data:
+                self.grievance.update_grievance(grievance_id, grievance_data)
+                self.logger.info(f"Grievance updated in db: {grievance_id}")
+
+            if grievance_data or complainant_data:
+                    # Add status history entry for SUBMITTED status
+                status_update_success = self.update_grievance_status(
+                    grievance_id=grievance_id,
+                    status_code="SUBMITTED",
+                    notes="Grievance submitted to the system"
+                )
+                if status_update_success:
+                    self.logger.info(f"Status history updated for grievance: {grievance_id}")
+                else:
+                    self.logger.warning(f"Failed to update status history for grievance: {grievance_id}")
+            
             return True
         except Exception as e:
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
@@ -246,7 +259,7 @@ class DatabaseManager(BaseDatabaseManager):
         """Get files attached to a grievance"""
         return self.grievance.get_grievance_files(grievance_id)
 
-    def get_grievance_by_complainant_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+    def get_grievance_by_complainant_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         """Get grievance by complainant phone number"""
         return self.grievance.get_grievance_by_complainant_phone(phone_number)
     
