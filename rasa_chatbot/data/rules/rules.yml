@@ -70,10 +70,11 @@ rules:
 
   - rule: status check flow exit without retrieval
     steps:
+      - action: form_status_check
       - active_loop: form_status_check
-      - active_loop: null
       - slot_was_set:
           - status_check_method: slot_skipped
+      - active_loop: null
       - action: form_skip_status_check
       - active_loop: form_skip_status_check
       - active_loop: null
@@ -81,20 +82,19 @@ rules:
 
   - rule: status check flow with phone number
     steps:
+      - action: form_status_check
       - active_loop: form_status_check
-      - active_loop: null
       - slot_was_set:
           - status_check_method: complainant_phone
-      - action: form_skip_status_check
-      - active_loop: form_skip_status_check
       - active_loop: null
+      - action: action_display_grievance_id
 
-  - rule: status check flow exit without retrieval
+  - rule: status check flow exit wit grievance id
     steps:
+      - action: form_status_check
       - active_loop: form_status_check
-      - active_loop: null
       - slot_was_set:
           - status_check_method: grievance_id
-      - action: form_skip_status_check
-      - active_loop: form_skip_status_check
       - active_loop: null
+
+      - action: action_display_grievance_id

@@ -1150,6 +1150,21 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
+        'action_display_grievance_id': {
+            'utterances': {
+                1: {
+                    'en': "Select any of the grievances if you want to check or amend the details",
+                    'ne': "गुनासो ID: {grievance_id}"
+                },
+                2: {
+                    'en': "We have not found any grievance, do you want to try again?",
+                    'ne': "हामी कुनै गुनासो भेट्टाउन सकिनौं। के तपाईं पुनः प्रयास गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
         'action_form_skip_status_check_outro': {
             'utterances': {
                 1: {

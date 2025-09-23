@@ -27,6 +27,7 @@ x-common-ignore-intents: &common-ignore-intents
   - classification_results
   - affirm_sensitive_content
   - deny_sensitive_content
+  - nlu_fallback
 
 version: "3.1"
 session_config:
@@ -64,7 +65,9 @@ intents:
   - status_check_id
   - status_check_phone
   - status_check_start
+  - start_check_status
   - dummy_intent_for_payload
+  - phone_number_intent
 
 slots:
   language_code:
@@ -521,11 +524,6 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
-  status_check_list_grievances_by_id:
-    type: list
-    influence_conversation: true
-    mappings:
-      - type: custom
   status_check_list_grievance_id_valid:
     type: bool
     influence_conversation: true
@@ -580,11 +578,6 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
-  status_check_valid_province_and_district:
-    type: bool
-    influence_conversation: true
-    mappings:
-      - type: custom
 
 actions:
   - action_ask_form_contact_complainant_address_confirmed
@@ -634,7 +627,6 @@ actions:
   - action_ask_form_skip_status_check_complainant_municipality_confirmed
   - action_ask_form_skip_status_check_complainant_municipality_temp
   - action_display_grievance_id
-  - action_form_skip_status_check_outro
   - action_clear_session
   - action_close_browser_tab
   - action_continue
@@ -734,5 +726,7 @@ forms:
     ignored_intents: *common-ignore-intents
   form_skip_status_check:
     required_slots:
-      - status_check_valid_province_and_district
+      - form_skip_status_check_valid_province_and_district
+      - form_skip_status_check_complainant_municipality_temp
+      - form_skip_status_check_complainant_municipality_confirmed
     ignored_intents: *common-ignore-intents

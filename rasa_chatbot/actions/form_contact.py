@@ -249,8 +249,9 @@ class ValidateFormContact(BaseFormValidationAction):
                           "complainant_village_confirmed",
                           "complainant_ward",
                           "complainant_address_temp", 
-                          "complainant_address_confirmed", 
-                          "complainant_address"]
+                          "complainant_address_confirmed",
+                          "complainant_address"
+                          ]
             required_slots_contact = ["complainant_consent",  "complainant_phone", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
             return required_slots_location + required_slots_contact
 
