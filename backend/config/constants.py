@@ -174,6 +174,7 @@ ADMIN_EMAILS: List[str] = [
 EMAIL_TEMPLATES = {
     "GRIEVANCE_SUBJECT_COMPLAINANT": {"en": "Grievance submitted to Department Of Roads - ID: {grievance_id}", "ne": "गुनासो दर्ता गरिएको छ - ID: {grievance_id}"},
     "GRIEVANCE_SUBJECT_ADMIN": {"en": "New Grievance Submission - ID: {grievance_id}", "ne": "नया गुनासो दर्ता - ID: {grievance_id}"},
+    "GRIEVANCE_STATUS_UPDATE_SUBJECT": {"en": "Grievance Status Updated - ID: {grievance_id}", "ne": "गुनासो स्थिति अपडेट - ID: {grievance_id}"},
     "GRIEVANCE_RECAP_COMPLAINANT_BODY": {"en":"""
         <h2>Grievance Submission Recap</h2>
         <p><strong>Grievance ID:</strong> {grievance_id}</p>
@@ -232,6 +233,51 @@ EMAIL_TEMPLATES = {
 
         This is an automated notification. Please do not reply to this email.
     """
+    },
+    "GRIEVANCE_STATUS_UPDATE_BODY": {"en": """
+        <h2>Grievance Status Update Notification</h2>
+        <p><strong>Grievance ID:</strong> {grievance_id}</p>
+        <p><strong>Complainant ID:</strong> {complainant_id}</p>
+        <p><strong>Status Updated to:</strong> {grievance_status}</p>
+        <p><strong>Updated on:</strong> {grievance_status_update_date}</p>
+        <p><strong>Expected Resolution Date:</strong> {grievance_timeline}</p>
+        
+        <h3>Complainant Information:</h3>
+        <p><strong>Name:</strong> {complainant_full_name}</p>
+        <p><strong>Phone:</strong> {complainant_phone}</p>
+        <p><strong>Municipality:</strong> {municipality}</p>
+        <p><strong>Village:</strong> {village}</p>
+        <p><strong>Address:</strong> {address}</p>
+        
+        <h3>Grievance Details:</h3>
+        <p><strong>Summary:</strong> {grievance_summary}</p>
+        <p><strong>Description:</strong> {grievance_details}</p>
+        <p><strong>Categories:</strong> {grievance_categories}</p>
+        
+        <p><em>This is an automated notification for office staff. Please do not reply to this email.</em></p>
+    """,
+    "ne": """
+        <h2>गुनासो स्थिति अपडेट सूचना</h2>
+        <p><strong>गुनासो ID:</strong> {grievance_id}</p>
+        <p><strong>गुनासो दर्ताकर्ता ID:</strong> {complainant_id}</p>
+        <p><strong>स्थिति अपडेट:</strong> {grievance_status}</p>
+        <p><strong>अपडेट मिति:</strong> {grievance_status_update_date}</p>
+        <p><strong>अनुमानित समाधान तिथि:</strong> {grievance_timeline}</p>
+        
+        <h3>गुनासो दर्ताकर्ता जानकारी:</h3>
+        <p><strong>नाम:</strong> {complainant_full_name}</p>
+        <p><strong>फोन:</strong> {complainant_phone}</p>
+        <p><strong>महानगरपालिका:</strong> {municipality}</p>
+        <p><strong>गाउँपालिका:</strong> {village}</p>
+        <p><strong>पत्ता:</strong> {address}</p>
+        
+        <h3>गुनासो विवरण:</h3>
+        <p><strong>सारांश:</strong> {grievance_summary}</p>
+        <p><strong>विवरण:</strong> {grievance_details}</p>
+        <p><strong>श्रेणी:</strong> {grievance_categories}</p>
+        
+        <p><em>यो कार्यालय कर्मचारीहरूको लागि स्वचालित सूचना हो। कृपया यस इमेलमा जवाफ नदिनुहोस्।</em></p>
+    """
     }
 }
 
@@ -250,6 +296,14 @@ You will receive updates about your grievance through this number.""",
         'ne': """तपाईंको गुनासो दर्ता गर्ने लागि धन्यवाद (ID: {grievance_id})।
         हामीले तपाईंको गुनासो ग्रहण गरेको छ र तपाईंको गुनासोको अनुसार सुनिश्चित गर्नेछौं।
         तपाईंलाई तपाईंको गुनासोको अपडेट यो नम्बरमा प्राप्त हुनेछ।"""
+    },
+    "GRIEVANCE_STATUS_UPDATE": {
+        'en': """Your grievance (ID: {grievance_id}) status has been updated to: {grievance_status}.
+Expected resolution date: {grievance_timeline}.
+Thank you for your patience.""",
+        'ne': """तपाईंको गुनासो (ID: {grievance_id}) को स्थिति अपडेट भएको छ: {grievance_status}।
+अनुमानित समाधान तिथि: {grievance_timeline}।
+तपाईंको धैर्यको लागि धन्यवाद।"""
     }
 }
 
@@ -492,7 +546,8 @@ def load_classification_data(csv_path=DEFAULT_CSV_PATH):
                     'follow_up_question_description': row['follow_up_question_description'],
                     'follow_up_question_description_ne': row['follow_up_question_description_ne'],
                     'follow_up_question_quantification': row['follow_up_question_quantification'],
-                    'follow_up_question_quantification_ne': row['follow_up_question_quantification_ne']
+                    'follow_up_question_quantification_ne': row['follow_up_question_quantification_ne'],
+                    'high_priority': row['high_priority'].lower() == 'true' if row.get('high_priority') else False
                 }
 
         # Update lookup table with category names

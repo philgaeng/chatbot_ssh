@@ -114,7 +114,7 @@ stories:
       - action: form_grievance
       - active_loop: form_grievance
       - slot_was_set:
-          - sensitive_issues_detected: True
+          - grievance_sensitive_issue: True
       - active_loop: null
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
@@ -132,7 +132,7 @@ stories:
       - action: form_grievance
       - active_loop: form_grievance
       - slot_was_set:
-          - sensitive_issues_detected: True
+          - grievance_sensitive_issue: True
       - active_loop: null
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
@@ -152,12 +152,12 @@ stories:
       - action: form_grievance
       - active_loop: form_grievance
       - slot_was_set:
-          - sensitive_issues_detected: True
+          - grievance_sensitive_issue: True
       - active_loop: null
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - slot_was_set:
-          - sensitive_issues_detected: False
+          - grievance_sensitive_issue: False
       - active_loop: null
       - action: form_grievance
       - active_loop: form_grievance
@@ -181,7 +181,7 @@ stories:
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - slot_was_set:
-          - sensitive_issues_detected: True
+          - grievance_sensitive_issue: True
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - active_loop: null
@@ -192,11 +192,11 @@ stories:
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - slot_was_set:
-          - sensitive_issues_detected: True
+          - grievance_sensitive_issue: True
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - slot_was_set:
-          - sensitive_issues_detected: False
+          - grievance_sensitive_issue: False
       - active_loop: null
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review

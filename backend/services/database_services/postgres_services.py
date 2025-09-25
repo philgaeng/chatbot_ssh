@@ -33,7 +33,8 @@ class DatabaseManager(BaseDatabaseManager):
         if not DatabaseManager._initialized:
             # Import managers directly to avoid circular imports
             super().__init__()
-            from .base_manager import TableDbManager, TaskDbManager, FileDbManager, GSheetDbManager
+            from .base_manager import TableDbManager, TaskDbManager, FileDbManager
+            from .gsheet_query_manager import GSheetDbManager
             from .complainant_manager import ComplainantDbManager
             from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
             

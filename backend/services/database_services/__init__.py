@@ -3,9 +3,9 @@ from .base_manager import (
     BaseDatabaseManager,
     TableDbManager,
     TaskDbManager,
-    FileDbManager,
-    GSheetDbManager
+    FileDbManager
 )
+from .gsheet_query_manager import GSheetDbManager
 
 from .complainant_manager import ComplainantDbManager
 from .grievance_manager import (

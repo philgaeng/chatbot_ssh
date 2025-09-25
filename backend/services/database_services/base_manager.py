@@ -259,10 +259,171 @@ class BaseDatabaseManager:
     def _decrypt_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Decrypt sensitive fields in complainant data"""
         decrypted_data = data.copy()
+        
+        # Collect all encrypted fields that need decryption
+        fields_to_decrypt = {}
         for field in self.ENCRYPTED_FIELDS:
             if field in decrypted_data and decrypted_data[field]:
-                decrypted_data[field] = self._decrypt_field(decrypted_data[field])
+                fields_to_decrypt[field] = decrypted_data[field]
+        
+        # If no fields need decryption, return as is
+        if not fields_to_decrypt:
+            return decrypted_data
+        
+        # Decrypt all fields in a single database connection
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    for field, encrypted_value in fields_to_decrypt.items():
+                        query = "SELECT pgp_sym_decrypt(decode(%s, 'hex'), %s) AS decrypted"
+                        cur.execute(query, (encrypted_value, self.encryption_key))
+                        result = cur.fetchone()
+                        if result:
+                            decrypted_data[field] = result[0]
+                        else:
+                            decrypted_data[field] = encrypted_value
+        except Exception as e:
+            self.logger.error(f"Error batch decrypting fields: {str(e)}")
+            # Fall back to individual decryption if batch fails
+            for field in fields_to_decrypt:
+                decrypted_data[field] = self._decrypt_field(fields_to_decrypt[field])
+        
         return decrypted_data
+
+    def _batch_decrypt_grievances(self, grievances: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Batch decrypt sensitive fields for multiple grievances in a single database connection"""
+        if not grievances:
+            self.logger.debug("No grievances to decrypt")
+            return grievances
+        
+        self.logger.debug(f"Starting batch decryption of {len(grievances)} grievances")
+        
+        try:
+            decryption_count = 0
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    for i, grievance in enumerate(grievances):
+                        for field in self.ENCRYPTED_FIELDS:
+                            if field in grievance and grievance[field]:
+                                query = "SELECT pgp_sym_decrypt(decode(%s, 'hex'), %s) AS decrypted"
+                                cur.execute(query, (grievance[field], self.encryption_key))
+                                result = cur.fetchone()
+                                if result:
+                                    old_value = grievance[field]
+                                    grievance[field] = result[0]
+                                    decryption_count += 1
+                                    if i < 2:  # Log first 2 decryptions for debugging
+                                        self.logger.debug(f"Decrypted field '{field}' for grievance {i}: {old_value[:20]}... -> {grievance[field][:20]}...")
+                                else:
+                                    if i < 2:  # Log first 2 failures for debugging
+                                        self.logger.warning(f"Failed to decrypt field '{field}' for grievance {i}")
+            
+            self.logger.debug(f"Batch decryption complete: {decryption_count} fields decrypted across {len(grievances)} grievances")
+        except Exception as e:
+            self.logger.error(f"Error batch decrypting grievances: {str(e)}")
+            # Fall back to individual decryption if batch fails
+            self.logger.debug("Falling back to individual decryption")
+            for grievance in grievances:
+                grievance = self._decrypt_sensitive_data(grievance)
+        
+        return grievances
+
+    def _execute_query_with_conditional_decryption(self, query: str, params: List[Any], 
+                                                 decrypt_field: str = "NOT_SENSITIVE") -> List[Dict[str, Any]]:
+        """
+        Execute a query and conditionally decrypt fields based on the decrypt_field parameter.
+        
+        Args:
+            query: SQL query to execute
+            params: Query parameters
+            decrypt_field: Decryption strategy - "NONE", "ALL", or "NOT_SENSITIVE"
+                - "NONE": No decryption (all data remains encrypted)
+                - "ALL": Decrypt all records regardless of sensitivity
+                - "NOT_SENSITIVE": Decrypt only non-sensitive records (default)
+        
+        Returns:
+            List of grievance dictionaries with appropriate decryption applied
+        """
+        try:
+            self.logger.debug(f"Executing query with decrypt_field='{decrypt_field}': {query[:10]}...")
+            self.logger.debug(f"Query params: {params}")
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    columns = [desc[0] for desc in cur.description]
+                    rows = cur.fetchall()
+                    
+                    self.logger.debug(f"Raw query results: {len(rows)} rows, columns: {columns}")
+                    if rows:
+                        self.logger.debug(f"First row sample: {dict(zip(columns, rows[0]))}")
+                    
+                    grievances = []
+                    grievances_to_decrypt = []
+                    sensitive_grievances = []
+                    
+                    # First pass: process rows and segregate based on decryption strategy
+                    for i, row in enumerate(rows):
+                        grievance = dict(zip(columns, row))
+                        if grievance.get('grievance_creation_date'):
+                            grievance['grievance_creation_date'] = grievance['grievance_creation_date'].isoformat()
+                        
+                        # Apply decryption strategy
+                        if decrypt_field == "NONE":
+                            sensitive_grievances.append(grievance)
+                            if i < 2:  # Log first 2 for debugging
+                                self.logger.debug(f"Row {i}: Added to sensitive_grievances (NONE strategy)")
+                        elif decrypt_field == "ALL":
+                            grievances_to_decrypt.append(grievance)
+                            if i < 2:  # Log first 2 for debugging
+                                self.logger.debug(f"Row {i}: Added to grievances_to_decrypt (ALL strategy)")
+                        elif decrypt_field == "NOT_SENSITIVE":
+                            # Segregate based on sensitivity
+                            is_sensitive = grievance.get('grievance_sensitive_issue', True)
+                            if not is_sensitive:
+                                grievances_to_decrypt.append(grievance)
+                                if i < 2:  # Log first 2 for debugging
+                                    self.logger.debug(f"Row {i}: Added to grievances_to_decrypt (NOT_SENSITIVE strategy, is_sensitive={is_sensitive})")
+                            else:
+                                sensitive_grievances.append(grievance)
+                                if i < 2:  # Log first 2 for debugging
+                                    self.logger.debug(f"Row {i}: Added to sensitive_grievances (NOT_SENSITIVE strategy, is_sensitive={is_sensitive})")
+                        else:
+                            raise ValueError(f"Invalid decrypt_field value: {decrypt_field}. Must be 'NONE', 'ALL', or 'NOT_SENSITIVE'")
+                    
+                    self.logger.debug(f"Segregation complete: {len(grievances_to_decrypt)} to decrypt, {len(sensitive_grievances)} sensitive")
+                    
+                    # Batch decrypt grievances that need decryption
+                    if grievances_to_decrypt:
+                        self.logger.debug(f"Starting batch decryption of {len(grievances_to_decrypt)} grievances")
+                        grievances_to_decrypt = self._batch_decrypt_grievances(grievances_to_decrypt)
+                        self.logger.debug(f"Batch decryption complete: {len(grievances_to_decrypt)} grievances processed")
+                    
+                    # Combine all grievances
+                    grievances = grievances_to_decrypt + sensitive_grievances
+
+                    self.logger.debug(f"Final result: {len(grievances)} total grievances")
+                    if grievances:
+                        self.logger.debug(f"First grievance sample: {grievances[0]}")
+                    else:
+                        self.logger.warning("No grievances returned from query!")
+                    
+                    return grievances
+        except Exception as e:
+            self.logger.error(f"Error executing query with conditional decryption: {str(e)}")
+            raise DatabaseQueryError(f"Failed to execute query with decryption: {str(e)}")
+
+    def _execute_query_with_no_decryption(self, query: str, params: List[Any]) -> List[Dict[str, Any]]:
+        """Execute query with no decryption (all data remains encrypted)"""
+        return self._execute_query_with_conditional_decryption(query, params, "NONE")
+    
+    def _execute_query_with_full_decryption(self, query: str, params: List[Any]) -> List[Dict[str, Any]]:
+        """Execute query with full decryption (all records decrypted regardless of sensitivity)"""
+        return self._execute_query_with_conditional_decryption(query, params, "ALL")
+    
+    def _execute_query_with_selective_decryption(self, query: str, params: List[Any]) -> List[Dict[str, Any]]:
+        """Execute query with selective decryption (only non-sensitive records decrypted)"""
+        return self._execute_query_with_conditional_decryption(query, params, "NOT_SENSITIVE")
 
     def _encrypt_and_hash_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Encrypt and hash sensitive fields in complainant data"""
@@ -440,6 +601,8 @@ class BaseDatabaseManager:
             'grievance_categories_alternative': 'grievance_categories_alternative',
             'follow_up_question': 'follow_up_question',
             'grievance_summary': 'grievance_summary',
+            'grievance_high_priority': 'grievance_high_priority',
+            'grievance_sensitive_issue': 'grievance_sensitive_issue',
             'grievance_description': 'grievance_description',
             'grievance_claimed_amount': 'grievance_claimed_amount',
             'grievance_location': 'grievance_location',
@@ -543,6 +706,8 @@ class TableDbManager(BaseDatabaseManager):
         'task_statuses',
         'field_names',
         'complainants',
+        'office_management',
+        'office_municipality_ward',
         'office_user',
         'tasks',
         'grievances',
@@ -738,6 +903,8 @@ class TableDbManager(BaseDatabaseManager):
                     ('complainant_district', 'User district'),
                     ('complainant_ward', 'User ward'),
                     ('grievance_summary', 'Grievance summary'),
+                    ('grievance_high_priority', 'Grievance high priority'),
+                    ('grievance_sensitive_issue', 'Grievance sensitive issue'),
                     ('grievance_categories', 'Grievance categories'),
                     ('grievance_categories_alternative', 'Grievance categories alternative for manual selection by user'),
                     ('follow_up_question', 'Grievance follow up question'),
@@ -745,6 +912,37 @@ class TableDbManager(BaseDatabaseManager):
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
 
+        # Office management table
+        self.migrations_logger.info("Creating/recreating office_management table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS office_management (
+                office_id TEXT PRIMARY KEY,
+                office_name TEXT NOT NULL,
+                office_address TEXT,
+                office_email TEXT,
+                office_pic_name TEXT,
+                office_phone TEXT,
+                district TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Office municipality ward junction table
+        self.migrations_logger.info("Creating/recreating office_municipality_ward table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS office_municipality_ward (
+                id SERIAL PRIMARY KEY,
+                office_id TEXT NOT NULL,
+                municipality TEXT NOT NULL,
+                ward INTEGER NOT NULL,
+                village TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (office_id) REFERENCES office_management(office_id) ON DELETE CASCADE,
+                UNIQUE(office_id, municipality, ward, village)
+            )
+        """)
+        
         # Users table
         self.migrations_logger.info("Creating/recreating office_user table...")
         cur.execute("""
@@ -816,10 +1014,13 @@ class TableDbManager(BaseDatabaseManager):
                 grievance_categories_alternative TEXT,
                 follow_up_question TEXT,
                 grievance_summary TEXT,
+                grievance_sensitive_issue BOOLEAN DEFAULT FALSE,
+                grievance_high_priority BOOLEAN DEFAULT FALSE,
                 grievance_description TEXT,
                 grievance_claimed_amount DECIMAL,
                 grievance_location TEXT,
                 language_code TEXT DEFAULT 'ne',
+                grievance_timeline TEXT,
                 grievance_classification_status TEXT DEFAULT 'pending',
                 grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -966,6 +1167,23 @@ class TableDbManager(BaseDatabaseManager):
         """)
 
 
+        # Office management indexes
+        self.migrations_logger.info("Creating/recreating office management indexes...")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_office_management_district ON office_management(district);
+            CREATE INDEX IF NOT EXISTS idx_office_management_name ON office_management(office_name);
+        """)
+        
+        # Office municipality ward indexes
+        self.migrations_logger.info("Creating/recreating office municipality ward indexes...")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_office ON office_municipality_ward(office_id);
+            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_municipality ON office_municipality_ward(municipality);
+            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_ward ON office_municipality_ward(ward);
+            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_village ON office_municipality_ward(village);
+            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_office_municipality ON office_municipality_ward(office_id, municipality);
+        """)
+        
         # Users table indexes
         self.migrations_logger.info("Creating/recreating user indexes...")
         cur.execute("""
@@ -984,6 +1202,7 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_grievance_source ON grievances(source);
             CREATE INDEX IF NOT EXISTS idx_grievance_temporary ON grievances(is_temporary);
             CREATE INDEX IF NOT EXISTS idx_grievance_language ON grievances(language_code);
+            CREATE INDEX IF NOT EXISTS idx_grievance_timeline ON grievances(grievance_timeline);
         """)
 
         # Status tables indexes
@@ -1054,6 +1273,57 @@ class TableDbManager(BaseDatabaseManager):
         except Exception as e:
             self.logger.error(f"Error getting field names: {str(e)}")
             return []
+
+    def migrate_grievance_timeline_column(self) -> bool:
+        """Add grievance_timeline column if it doesn't exist and populate it with calculated values"""
+        try:
+            self.logger.info("Starting grievance_timeline column migration...")
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if column exists
+                    cur.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'grievances' AND column_name = 'grievance_timeline'
+                    """)
+                    
+                    column_exists = cur.fetchone()
+                    
+                    if not column_exists:
+                        self.logger.info("Adding grievance_timeline column...")
+                        # Add the column
+                        cur.execute("""
+                            ALTER TABLE grievances 
+                            ADD COLUMN grievance_timeline TEXT
+                        """)
+                        self.logger.info("grievance_timeline column added successfully")
+                    
+                    # Populate grievance_timeline for existing records where it's NULL
+                    self.logger.info("Populating grievance_timeline for existing records...")
+                    cur.execute("""
+                        UPDATE grievances 
+                        SET grievance_timeline = TO_CHAR(grievance_creation_date + INTERVAL '15 days', 'YYYY-MM-DD')
+                        WHERE grievance_timeline IS NULL
+                    """)
+                    
+                    affected_rows = cur.rowcount
+                    self.logger.info(f"Updated {affected_rows} records with grievance_timeline")
+                    
+                    # Create index if it doesn't exist
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_grievance_timeline 
+                        ON grievances(grievance_timeline)
+                    """)
+                    self.logger.info("grievance_timeline index created/verified")
+                    
+                    conn.commit()
+                    self.logger.info("grievance_timeline migration completed successfully")
+                    return True
+                    
+        except Exception as e:
+            self.logger.error(f"Error in grievance_timeline migration: {str(e)}")
+            return False
 
 class TaskDbManager(BaseDatabaseManager):
     """Manager for task-related database operations"""
@@ -1310,65 +1580,3 @@ class FileDbManager(BaseDatabaseManager):
             self.logger.error(f"Error checking if file exists: {str(e)}")
             return False
 
-class GSheetDbManager(BaseDatabaseManager):
-    
-    def get_grievances_for_gsheet(self, status: Optional[str] = None, 
-                                 start_date: Optional[str] = None, 
-                                 end_date: Optional[str] = None) -> List[Dict]:
-        """Get grievances for Google Sheets monitoring with optional filters"""
-        query = """
-        
-            SELECT 
-                g.grievance_id,
-                g.complainant_id,
-                c.complainant_full_name,
-                c.complainant_phone,
-                c.complainant_municipality,
-                c.complainant_village,
-                c.complainant_address,
-                g.grievance_description,
-                g.grievance_summary,
-                g.grievance_categories,
-                g.grievance_categories_alternative,
-                g.follow_up_question,
-                g.grievance_creation_date,
-                g.grievance_classification_status as status
-            FROM grievances g
-            LEFT JOIN complainants c ON g.complainant_id = c.id
-            WHERE 1=1
-            AND g.grievance_description IS NOT NULL
-        """
-        params = []
-
-        if status:
-            query += " AND status = %s"
-            params.append(status)
-        if start_date:
-            query += " AND grievance_creation_date >= %s"
-            params.append(start_date)
-        if end_date:
-            query += " AND grievance_creation_date <= %s"
-            params.append(end_date)
-
-        query += " ORDER BY grievance_creation_date DESC"
-
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query, params)
-                    columns = [desc[0] for desc in cur.description]
-                    rows = cur.fetchall()
-                    
-                    grievances = []
-                    for row in rows:
-                        grievance = dict(zip(columns, row))
-                        if grievance.get('grievance_creation_date'):
-                            grievance['grievance_creation_date'] = grievance['grievance_creation_date'].isoformat()
-                        grievances.append(grievance)
-                    
-                    return grievances
-        except Exception as e:
-            self.logger.error(f"Error fetching grievances for GSheet: {str(e)}")
-            raise DatabaseQueryError(f"Failed to fetch grievances: {str(e)}")
-
-# --- End moved classes --- 

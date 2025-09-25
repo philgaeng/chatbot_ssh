@@ -6,7 +6,7 @@ from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
 import json
 import traceback
-from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES
+from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
 from rasa_sdk.events import SlotSet
 
 
@@ -20,6 +20,38 @@ class BaseActionSubmit(BaseAction):
     def get_current_datetime(self) -> str:
         """Get current date and time in YYYY-MM-DD HH:MM format."""
         return datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    def check_grievance_high_priority(self, grievance_categories: Any) -> bool:
+        """
+        Check if any of the grievance categories has high_priority set to True.
+        
+        Args:
+            grievance_categories: List of category names (e.g., ["Economic, Social - Land Acquisition Issues"])
+            
+        Returns:
+            bool: True if at least one category has high_priority = True, False otherwise
+        """
+        try:
+            # Check if any of the grievance categories has high priority
+            
+            if isinstance(grievance_categories, str):
+                # If it's a string, try to parse it as JSON
+                try:
+                    grievance_categories = json.loads(grievance_categories)
+                except (json.JSONDecodeError, TypeError):
+                    grievance_categories = [grievance_categories]
+            # Check if any of the categories has high_priority = True
+            if isinstance(grievance_categories, list):
+                for category in grievance_categories:
+                    if category in CLASSIFICATION_DATA:
+                        if CLASSIFICATION_DATA[category].get('high_priority', False):
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error checking grievance high priority: {str(e)}")
+            return False
     
 
 
@@ -48,7 +80,9 @@ class BaseActionSubmit(BaseAction):
 
         if review:
             review_keys = ["grievance_categories",
-                           "grievance_summary"]
+                           "grievance_summary",
+                           "grievance_sensitive_issue"]
+
             keys = keys + review_keys
         
         
@@ -56,6 +90,9 @@ class BaseActionSubmit(BaseAction):
         grievance_data={k : tracker.get_slot(k) for k in keys}
         
         grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
+        if review:
+            grievance_data["grievance_high_priority"] = self.check_grievance_high_priority(grievance_data["grievance_categories"])
+
 
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp
@@ -334,7 +371,7 @@ class BaseActionSubmit(BaseAction):
 
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any], review: bool = False) -> List[Dict[Text, Any]]:
-        self.sensitive_issues_detected = tracker.get_slot("sensitive_issues_detected")
+        self.grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
         self.grievance_id = tracker.get_slot("grievance_id")
         self.complainant_id = tracker.get_slot("complainant_id")
         
@@ -417,12 +454,12 @@ class ActionGrievanceOutro(BaseActionSubmit):
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
         
-        self.sensitive_issues_detected = tracker.get_slot("sensitive_issues_detected")
+        self.grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
         self.logger.info("send last utterance and buttons")
         grievance_id = tracker.get_slot("grievance_id")
         buttons = None
         try:
-            if self.sensitive_issues_detected:
+            if self.grievance_sensitive_issue:
                     utterance = self.get_utterance(1) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
                     buttons = self.get_buttons(1)
                     

@@ -11,7 +11,7 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
     async def required_slots(self, domain_slots: List[Text], dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Text]:
         required_slots = ["sensitive_issues_follow_up", "complainant_phone"]
         # case where the user declares that the content is not sensitive
-        if tracker.get_slot("sensitive_issues_detected") == False:
+        if tracker.get_slot("grievance_sensitive_issue") == False:
             return []
         #case where the user provides a phone number, when he skips the form is closed
         if tracker.get_slot("complainant_phone") not in [self.SKIP_VALUE, None]:
@@ -39,7 +39,7 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
         
         if slot_value == "/not_sensitive_content" or self.SKIP_VALUE in slot_value:
             
-            return {"sensitive_issues_detected": False,
+            return {"grievance_sensitive_issue": False,
                     "sensitive_issues_category": None,
                     "sensitive_issues_level": None,
                     "sensitive_issues_message": None,

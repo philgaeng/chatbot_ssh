@@ -77,7 +77,7 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             if sensitive_categories:
                 grievance_categories_local = self._get_categories_in_local_language(grievance_categories)
                 self.logger.debug(f"Sensitive categories detected: {sensitive_categories}")
-                return [SlotSet('sensitive_issues_detected', True),
+                return [SlotSet('grievance_sensitive_issue', True),
                         SlotSet('sensitive_issues_categories', sensitive_categories),
                         SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
                         SlotSet('grievance_summary_temp', grievance_summary),
@@ -153,7 +153,7 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
 
         #display the values of required slots from the tracker
         #case where sensitive issues are detected, form is skipped
-        if tracker.get_slot("sensitive_issues_detected"):
+        if tracker.get_slot("grievance_sensitive_issue"):
             self.logger.debug(f"form_grievance_complainant_review - sensitive issues detected - form skipped")
             return [
             ]
@@ -193,9 +193,9 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         """
         
         categories = tracker.get_slot("grievance_categories")
-        sensitive_issues_detected = any("sensitive" in category.lower() for category in categories)
+        grievance_sensitive_issue = any("sensitive" in category.lower() for category in categories)
         #check if the string "sensitive" is in any of the categories in the list_of_cat
-        return sensitive_issues_detected
+        return grievance_sensitive_issue
     
     def _report_sensitive_issues_category(self, 
                                  dispatcher: CollectingDispatcher, 
@@ -205,14 +205,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
             the changes in requested_slot are not handled in that specific function
             the utterance and buttons are handled in the action_ask_form_grievance_complainant_review_gender_follow_up
             """
-            # update all the regular slots to validate the form and add the sensitive_issues_detected slot
+            # update all the regular slots to validate the form and add the grievance_sensitive_issue slot
             return {"grievance_classification_status": False,
                 "grievance_categories_status": self.LLM_GENERATED,
                     "grievance_cat_modify": self.SKIP_VALUE,
                     "grievance_categories": tracker.get_slot("grievance_categories"),
                     "grievance_summary": tracker.get_slot("grievance_summary_temp"),
                     "grievance_summary_confirmed": self.SKIP_VALUE,
-                    "sensitive_issues_detected": True}
+                    "grievance_sensitive_issue": True}
 
     async def extract_grievance_classification_consent(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         return await self._handle_boolean_and_category_slot_extraction(

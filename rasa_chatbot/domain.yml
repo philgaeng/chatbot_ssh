@@ -434,7 +434,7 @@ slots:
     type: text
     mappings:
       - type: custom
-  sensitive_issues_detected:
+  grievance_sensitive_issue:
     type: bool
     influence_conversation: true
     mappings:
