@@ -50,6 +50,8 @@ class ActionStartGrievanceProcess(BaseAction):
         grievance_id = self.db_manager.generate_grievance_id(set_id_data)
         self.logger.info(f"Created temporary grievance with ID: {grievance_id} and complainant ID: {complainant_id}")
         
+        #reset the slots
+        reset_slots = self.reset_slots(tracker, "grievance_submission")
         # # Get utterance and buttons from mapping
         # utterance = self.get_utterance(1)
         
@@ -72,15 +74,8 @@ class ActionStartGrievanceProcess(BaseAction):
         return [
                 SlotSet("grievance_id", grievance_id),
                 SlotSet("complainant_id", complainant_id),
-                SlotSet("grievance_new_detail", None),
-                SlotSet("grievance_description", None),
-                SlotSet("grievance_summary", None),
-                SlotSet("grievance_categories", None),
-                SlotSet("grievance_summary_status", None),
-                SlotSet("grievance_categories_status", None),
                 SlotSet("main_story", "new_grievance"),
-                SlotSet("sensitive_issues_detected", False),
-                SlotSet("grievance_description_status", None)]
+                SlotSet("sensitive_issues_detected", False)] + reset_slots
 
 
 ############################ STEP 1 - GRIEVANCE FORM DETAILS ############################

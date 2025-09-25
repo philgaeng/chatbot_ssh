@@ -34,12 +34,33 @@ BUTTON_CANCEL_MODIFICATION = "/cancel_modification_contact"
 BUTTON_RESTART = "/restart"
 BUTTON_RESTART_PROCESS = "/restart_story{\"restart_type\": \"process\"}"
 BUTTON_RESTART_STORY = "/restart_story{\"restart_type\": \"story\"}"
-BUTTON_MAIN_MENU = "/main_menu"
+BUTTON_MAIN_MENU = "/nav_main_menu"
 BUTTON_TRY_AGAIN = "/restart_story{\"restart_type\": \"story\"}"
 BUTTON_EXIT = "/exit"
 
+BUTTON_GOODBYE = "/nav_goodbye"
+
 BUTTON_SKIP_EN = {"title": "Skip", "payload": BUTTON_SKIP}
 BUTTON_SKIP_NE = {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+
+BUTTONS_GOODBYE = {
+    'en': [
+        {"title": "Goodbye", "payload": BUTTON_GOODBYE}
+    ],
+    'ne': [
+        {"title": "बाहिर निस्कनुहोस्", "payload": BUTTON_GOODBYE}
+    ]
+}
+
+BUTTONS_MAIN_MENU = {
+    'en': [
+        {"title": "Main Menu", "payload": BUTTON_MAIN_MENU}
+    ],
+    'ne': [
+        {"title": "मुख्य मेनुमा फर्कनुहोस्", "payload": BUTTON_MAIN_MENU}
+    ]
+}
+
 
 # Button dictionary constants
 BUTTONS_AFFIRM_DENY = {

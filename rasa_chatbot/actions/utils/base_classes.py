@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk import Tracker, Action
+from rasa_sdk.events import SlotSet
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 from typing import Dict, Text, Any, Tuple, List, Callable
@@ -305,6 +306,25 @@ class BaseAction(Action, ABC):
     def get_status_and_description_str_in_language(self, status: str) -> str:
         """Get the status and description string in the language."""
         return GRIEVANCE_STATUS_DICT[status]["name_" + self.language_code] + " - " + GRIEVANCE_STATUS_DICT[status]["description_" + self.language_code]
+
+    def reset_slots(self, tracker: Tracker, flow: str) -> List[Dict[Text, Any]]:
+        if flow not in ["status_check", "grievance_submission"]:
+            self.logger.error(f"ActionStartStatusCheck - reset_slots - flow: {flow} is not valid")
+            raise ValueError(f"ActionStartStatusCheck - reset_slots - flow: {flow} is not valid")
+        self.logger.info(f"ActionStartStatusCheck - reset_slots - tracker: {tracker} - flow: {flow}")
+
+        dic_flow_prefix = {
+            "status_check": {"prefix" :["status_check"], "avoid_slots": []},
+            "grievance_submission": {"prefix" :["grievance"], "avoid_slots": ["grievance_id", "complainant_id"]},
+            "otp_submission": {"prefix" :["otp"], "avoid_slots": []}
+        }
+
+        #select the slots to reset
+        prefix = dic_flow_prefix[flow]["prefix"]
+        avoid_slots = dic_flow_prefix[flow]["avoid_slots"]
+        slots_to_reset = [slot for slot in tracker.slots if any(prefix in slot for prefix in prefix) and slot not in avoid_slots]
+        self.logger.info(f"ActionStartStatusCheck - reset_slots - slots_to_reset: {slots_to_reset}")
+        return [SlotSet(slot, None) for slot in slots_to_reset]
 
 
 

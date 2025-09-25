@@ -43,7 +43,12 @@ class ActionStartStatusCheck(BaseAction):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         self.logger.debug(f"ActionStartStatusCheck - tracker: {tracker}")
-        return [SlotSet("main_story", "status_update")]
+
+        reset_slots = self.reset_slots(tracker, "status_check")
+        return reset_slots + [SlotSet("main_story", "status_update")]
+
+    
+
 
 class ActionChooseRetrievalMethod(BaseAction):
     def name(self) -> Text:

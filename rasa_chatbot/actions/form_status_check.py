@@ -219,7 +219,7 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         if tracker.get_slot("form_skip_status_check_valid_province_and_district") == False:
             self.logger.debug(f"validate_form_skip_status_check: form_skip_status_check_valid_province_and_district: False - re-collect all location data")
             required_slots = ["form_skip_status_check_valid_province_and_district",
-                "form_skip_status_check_complainant_province", 
+                # "form_skip_status_check_complainant_province", 
                 "form_skip_status_check_complainant_district", 
                 "form_skip_status_check_complainant_municipality_temp", 
                 "form_skip_status_check_complainant_municipality_confirmed"
@@ -260,13 +260,14 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        self.logger.debug(f"validate_form_skip_status_check_complainant_province: slot_value: {slot_value}")
         if slot_value == self.SKIP_VALUE:
             message = self.get_utterance(1)
             dispatcher.utter_message(
                 text=message
             )
             return {"form_skip_status_check_complainant_province": None}
-        
+        self.logger.debug(f"validate_form_skip_status_check_complainant_province: valid province: {self.helpers.check_province(slot_value)}")
         #check if the province is valid
         if not self.helpers.check_province(slot_value):
             message = self.get_utterance(2)
@@ -305,7 +306,7 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-
+        self.logger.debug(f"validate_form_skip_status_check_complainant_district: slot_value: {slot_value}")
         if slot_value == self.SKIP_VALUE:
             message = self.get_utterance(1)
             dispatcher.utter_message(
@@ -314,7 +315,10 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
             return {"form_skip_status_check_complainant_district": None}
             
         province = tracker.get_slot("form_skip_status_check_complainant_province").title()
-        if not self.helpers.check_district(slot_value, province):
+        self.logger.debug(f"validate_form_skip_status_check_complainant_district: province: {province}")
+        result = self.helpers.check_district(slot_value, province).title()
+        self.logger.debug(f"validate_form_skip_status_check_complainant_district: valid district: {result}")
+        if not result:
             message = self.get_utterance(2)
             message = message.format(slot_value=slot_value)
             dispatcher.utter_message(
@@ -322,7 +326,7 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
             )
             return {"form_skip_status_check_complainant_district": None}
             
-        result = self.helpers.check_district(slot_value, province).title()
+        
         message = self.get_utterance(3)
         message = message.format(slot_value=slot_value, result=result)
         dispatcher.utter_message(
@@ -492,21 +496,23 @@ class ValidateFormSkipStatusCheck(BaseFormValidationAction):
             return "action_ask_form_skip_status_check_valid_province_and_district"
         
         async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+            intro_utterance = self.get_utterance(1)
+            dispatcher.utter_message(text=intro_utterance)
             if tracker.get_slot("form_skip_status_check_valid_province_and_district") == None:
                 province = tracker.get_slot("complainant_province")
                 district = tracker.get_slot("complainant_district")
                 if province and district:
-                    utterance = self.get_utterance(1)
+                    utterance = self.get_utterance(2)
                     utterance = utterance.format(province=province, district=district)
                     buttons = self.get_buttons(1)
                     dispatcher.utter_message(text=utterance, buttons=buttons)
                 elif province:
-                    utterance = self.get_utterance(2)
+                    utterance = self.get_utterance(3)
                     utterance = utterance.format(province=province)
                     buttons = self.get_buttons(1)
                     dispatcher.utter_message(text=utterance, buttons=buttons)
                 elif district:
-                    utterance = self.get_utterance(3)
+                    utterance = self.get_utterance(4)
                     utterance = utterance.format(district=district)
                     buttons = self.get_buttons(1)
                     dispatcher.utter_message(text=utterance, buttons=buttons)
@@ -625,7 +631,7 @@ class ActionDisplayGrievanceId(BaseAction):
         utterance = "\n".join(utterance)
         return utterance
 
-class ActionFormSkipStatusCheckOutro(BaseAction):
+class ActionSkipStatusCheckOutro(BaseAction):
     def name(self) -> Text:
         return "action_skip_status_check_outro"
     
@@ -634,22 +640,33 @@ class ActionFormSkipStatusCheckOutro(BaseAction):
         district = tracker.get_slot("form_skip_status_check_complainant_district")
         municipality = tracker.get_slot("form_skip_status_check_complainant_municipality")
         office_in_charge_info = self.helpers.get_office_in_charge_info(municipality, district, province)
-        office_phone_number = office_in_charge_info.get("office_phone")
+        buttons = self.get_buttons(1)
+        if not office_in_charge_info: #no location information provided, exit 
+            utterance = self.get_utterance(7)
+            dispatcher.utter_message(text=utterance, buttons=buttons)
+            return []
+
+        self.logger.debug(f"action_skip_status_check_outro: office_in_charge_info: {office_in_charge_info}")
+        office_phone = office_in_charge_info.get("office_phone")
         office_name = office_in_charge_info.get("office_name")
         office_address = office_in_charge_info.get("office_address")
+        office_pic_name = office_in_charge_info.get("office_pic_name")
         utterances = []
     
-        if office_name:
-            utterances.append(self.get_utterance(3).format(office_name=office_name))
+        if office_name: # information about the office found, compile and display the information
+            utterances.append(self.get_utterance(2).format(office_name=office_name))
         if office_address:
-            utterances.append(self.get_utterance(4).format(office_address=office_address)) 
-        if office_phone_number:
-            utterances.append(self.get_utterance(2).format(office_phone_number=office_phone_number))
+            utterances.append(self.get_utterance(3).format(office_address=office_address)) 
+        if office_phone:
+            utterances.append(self.get_utterance(4).format(office_phone=office_phone))
+        if office_pic_name:
+            utterances.append(self.get_utterance(5).format(office_pic_name=office_pic_name))
         if len(utterances) == 0:
-            utterance = self.get_utterance(5)
+            utterance = self.get_utterance(6)
         else:
-            utterances.append(self.get_utterance(1))
+            utterances = [self.get_utterance(1)] + utterances
             utterance = "\n".join(utterances)
-        dispatcher.utter_message(text=utterance)
+        
+        dispatcher.utter_message(text=utterance, buttons=buttons)
         return []
 

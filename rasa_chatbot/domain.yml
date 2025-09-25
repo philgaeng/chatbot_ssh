@@ -6,6 +6,7 @@ x-common-ignore-intents: &common-ignore-intents
   - introduce
   - nav_back
   - nav_menu
+  - nav_main_menu
   - nav_exit
   - nav_goodbye
   - nav_clear
@@ -51,7 +52,7 @@ intents:
   - nav_exit
   - nav_goodbye
   - nav_introduce
-  - nav_menu_main
+  - nav_main_menu
   - nav_restart
   - restart
   - nlu_fallback
@@ -642,7 +643,6 @@ actions:
   - action_handle_skip
   - action_introduce
   - action_main_menu
-  - action_menu
   - action_mood_unhappy
   - action_question_attach_files
   - action_recommend_phone_validation
