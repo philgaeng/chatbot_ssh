@@ -264,7 +264,7 @@ class BaseAction(Action, ABC):
             self.logger.info(f"Message: {detection_result.get('message')}")
             
             return {
-                "sensitive_issues_detected": True,
+                "grievance_sensitive_issue": True,
                 "sensitive_issues_category": detection_result.get('category'),
                 "sensitive_issues_level": detection_result.get('level'),
                 "sensitive_issues_message": detection_result.get('message'),

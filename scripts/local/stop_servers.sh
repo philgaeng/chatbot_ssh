@@ -306,6 +306,12 @@ stop_celery_worker() {
     fi
 }
 
+# Clean Python cache files
+echo "Cleaning Python cache files..."
+find "$BASE_DIR" -name "*.pyc" -delete 2>/dev/null || true
+find "$BASE_DIR" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+echo "✅ Python cache cleaned"
+
 # Stop all services
 echo "Stopping all services..."
 

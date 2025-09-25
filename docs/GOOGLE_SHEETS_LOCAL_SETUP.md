@@ -193,20 +193,22 @@ The sheet should populate with grievance data from your local database!
 
 The Google Sheet will display these fields:
 
-| Column | Database Field           | Description       |
-| ------ | ------------------------ | ----------------- |
-| A      | complainant_id           | User ID           |
-| B      | grievance_id             | Grievance ID      |
-| C      | complainant_full_name    | Full Name         |
-| D      | complainant_phone        | Contact Phone     |
-| E      | complainant_municipality | Municipality      |
-| F      | complainant_village      | Village           |
-| G      | complainant_address      | Address           |
-| H      | grievance_description    | Grievance Details |
-| I      | grievance_summary        | Summary           |
-| J      | grievance_categories     | Categories        |
-| K      | grievance_creation_date  | Creation Date     |
-| L      | status                   | Status            |
+| Column | Database Field            | Description       |
+| ------ | ------------------------- | ----------------- |
+| A      | complainant_id            | User ID           |
+| B      | grievance_id              | Grievance ID      |
+| C      | complainant_full_name     | Full Name         |
+| D      | complainant_phone         | Contact Phone     |
+| E      | complainant_municipality  | Municipality      |
+| F      | complainant_village       | Village           |
+| G      | complainant_address       | Address           |
+| H      | grievance_description     | Grievance Details |
+| I      | grievance_summary         | Summary           |
+| J      | grievance_categories      | Categories        |
+| K      | grievance_creation_date   | Creation Date     |
+| L      | status                    | Status            |
+| M      | grievance_sensitive_issue | Sensitive Issue   |
+| N      | grievance_high_priority   | High Priority     |
 
 ## Security Notes
 

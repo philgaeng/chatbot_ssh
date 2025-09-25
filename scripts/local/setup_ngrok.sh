@@ -65,10 +65,13 @@ start_ngrok() {
     NGROK_PID=$!
     
     # Wait for ngrok to start
-    sleep 3
+    sleep 5
     
-    # Get the public URL
-    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url' 2>/dev/null || echo "")
+    # Get the public URL (without jq dependency)
+    echo "Checking ngrok API..."
+    NGROK_RESPONSE=$(curl -s http://localhost:4040/api/tunnels)
+    echo "ngrok API response: $NGROK_RESPONSE"
+    NGROK_URL=$(echo "$NGROK_RESPONSE" | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     
     if [ -n "$NGROK_URL" ] && [ "$NGROK_URL" != "null" ]; then
         echo -e "${GREEN}✅ ngrok tunnel started successfully!${NC}"

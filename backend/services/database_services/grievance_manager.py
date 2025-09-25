@@ -13,6 +13,8 @@ ALLOWED_UPDATE_FIELDS = [
         'grievance_categories_alternative',
         'follow_up_question',
         'grievance_summary',
+        'grievance_sensitive_issue',
+        'grievance_high_priority',
         'grievance_description',
         'grievance_claimed_amount',
         'grievance_location',
@@ -68,7 +70,7 @@ class GrievanceDbManager(BaseDatabaseManager):
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
-            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question']
+            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority']
             update_fields, update_values = self.generate_update_query(data, expected_fields)
 
             if update_fields and update_values:
@@ -280,6 +282,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             SELECT 
                 g.grievance_id,
                 g.grievance_creation_date,
+                g.grievance_timeline,
                 g.grievance_categories,
                 c.complainant_full_name,
                 c.complainant_phone,
@@ -668,3 +671,53 @@ class TranscriptionDbManager(BaseDatabaseManager):
         except Exception as e:
             self.logger.error(f"Error in update_transcription: {str(e)}")
             return False
+
+    def get_office_emails_for_grievance(self, grievance_id: str) -> List[str]:
+        """
+        Get email addresses of offices responsible for a grievance
+        Args:
+            grievance_id: The ID of the grievance
+        Returns:
+            List of email addresses
+        """
+        try:
+            # Get the grievance's municipality to find responsible office
+            grievance_query = """
+                SELECT c.complainant_municipality
+                FROM grievances g
+                JOIN complainants c ON g.complainant_id = c.complainant_id
+                WHERE g.grievance_id = %s
+            """
+            grievance_result = self.execute_query(grievance_query, (grievance_id,), "get_grievance_municipality")
+            
+            if not grievance_result:
+                return []
+            
+            municipality = grievance_result[0]['complainant_municipality']
+            
+            # Get emails for:
+            # 1. PD Office (always included)
+            # 2. Office responsible for the municipality
+            email_query = """
+                SELECT DISTINCT ou.email
+                FROM office_user ou
+                JOIN office_management om ON ou.office_id = om.office_id
+                WHERE om.office_id = 'pd_office' 
+                   OR om.office_id IN (
+                       SELECT DISTINCT omw.office_id 
+                       FROM office_municipality_ward omw 
+                       WHERE LOWER(omw.municipality) LIKE LOWER(%s)
+                   )
+                AND ou.email IS NOT NULL
+                AND ou.email != ''
+            """
+            
+            # Use ILIKE with wildcards for municipality matching
+            municipality_pattern = f"%{municipality}%"
+            email_results = self.execute_query(email_query, (municipality_pattern,), "get_office_emails")
+            
+            return [result['email'] for result in email_results if result['email']]
+            
+        except Exception as e:
+            self.logger.error(f"Error getting office emails for grievance {grievance_id}: {str(e)}")
+            return []

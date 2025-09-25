@@ -58,7 +58,7 @@ rules:
       - active_loop: form_grievance
       - active_loop: null
       - slot_was_set:
-          - sensitive_issues_detected: false
+          - grievance_sensitive_issue: false
       - action: form_contact
       - active_loop: form_contact
       - active_loop: null

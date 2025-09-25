@@ -75,7 +75,7 @@ class ActionStartGrievanceProcess(BaseAction):
                 SlotSet("grievance_id", grievance_id),
                 SlotSet("complainant_id", complainant_id),
                 SlotSet("main_story", "new_grievance"),
-                SlotSet("sensitive_issues_detected", False)] + reset_slots
+                SlotSet("grievance_sensitive_issue", False)] + reset_slots
 
 
 ############################ STEP 1 - GRIEVANCE FORM DETAILS ############################
@@ -151,7 +151,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
     ) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed"
-        if tracker.get_slot("sensitive_issues_detected"):
+        if tracker.get_slot("grievance_sensitive_issue"):
             return ["sensitive_issues_follow_up", "grievance_new_detail"]
         if tracker.get_slot("grievance_new_detail") == "completed":
             
@@ -257,7 +257,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     "grievance_new_detail": None,
                     "grievance_description": updated_temp,
                     "grievance_description_status": "show_options",
-                    "sensitive_issues_detected": False
+                    "grievance_sensitive_issue": False
                 }
             return {}
         except Exception as e:
