@@ -1,19 +1,17 @@
 version: "3.1"
 
 stories:
+  - story: unhappy user restarts story
+    steps:
+      - intent: mood_unhappy
+      - action: action_mood_unhappy
+      - intent: nav_restart
+      - action: action_restart_story
 
-- story: unhappy user restarts story
-  steps:
-    - intent: mood_unhappy
-    - action: action_mood_unhappy
-    - intent: nav_restart
-    - action: action_restart_story
- 
-
-- story: unhappy user exits
-  steps:
-    - intent: mood_unhappy
-    - action: action_mood_unhappy
-    - intent: nav_exit
-    - action: action_exit_without_filing
-    - action: action_menu
+  - story: unhappy user exits
+    steps:
+      - intent: mood_unhappy
+      - action: action_mood_unhappy
+      - intent: nav_exit
+      - action: action_exit_without_filing
+      - action: action_main_menu

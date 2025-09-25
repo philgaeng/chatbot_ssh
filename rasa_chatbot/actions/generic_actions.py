@@ -107,9 +107,9 @@ class ActionSetNepali(BaseAction):
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return [SlotSet("language_code", "ne")]
 
-class ActionMenu(BaseAction):
+class ActionMainMenu(BaseAction):
     def name(self) -> Text:
-        return "action_menu"
+        return "action_main_menu"
 
     async def execute_action(
         self,
@@ -132,7 +132,9 @@ class ActionMenu(BaseAction):
             message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
-        return []
+
+
+        return [SlotSet("main_story", None)]
 
 class ActionOutro(BaseAction):
     def name(self) -> Text:
@@ -354,8 +356,8 @@ class ActionDefaultFallback(BaseAction):
         return "action_default_fallback"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        #run the action_menu action
-        return [ActionExecuted("action_menu")]
+        #run the action_main_menu action
+        return [ActionExecuted("action_main_menu")]
 
 class ActionFileUploadStatus(BaseAction):
     def name(self) -> Text:

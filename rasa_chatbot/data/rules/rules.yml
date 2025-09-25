@@ -11,6 +11,11 @@ rules:
       - intent: nav_goodbye
       - action: action_goodbye
 
+  - rule: Back to main menu
+    steps:
+      - intent: nav_main_menu
+      - action: action_main_menu
+
   - rule: Respond to user challenge
     steps:
       - intent: bot_challenge
@@ -31,7 +36,7 @@ rules:
       - intent: nav_exit
       - action: action_exit_without_filing
       - active_loop: null
-      - action: action_menu
+      - action: action_main_menu
 
   - rule: Implementation of the Two-Stage-Fallback
     steps:

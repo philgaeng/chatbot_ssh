@@ -23,7 +23,8 @@ class ActionAskOtpConsent(BaseAction):
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
-        return []
+        reset_otp_slots = self.reset_slots(tracker, "otp_submission")
+        return reset_otp_slots
     
 class ActionAskOtpInput(BaseAction):
     def name(self) -> Text:

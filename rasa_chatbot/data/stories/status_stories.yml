@@ -13,7 +13,7 @@ stories:
       - action: action_set_english
       - slot_was_set:
           - language_code: "en"
-      - action: action_menu
+      - action: action_main_menu
       - intent: start_status_check
       - action: action_start_status_check
       - slot_was_set:
@@ -28,7 +28,7 @@ stories:
       - action: action_set_nepali
       - slot_was_set:
           - language_code: "ne"
-      - action: action_menu
+      - action: action_main_menu
       - intent: start_status_check
       - action: action_start_status_check
       - slot_was_set:

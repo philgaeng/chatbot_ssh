@@ -623,7 +623,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_LANGUAGE_OPTIONS
             }
         },
-        'action_menu': {
+        'action_main_menu': {
             'utterances': {
                 1: {
                     'en': "Hello! Welcome to the Grievance Management Chatbot.\nI am here to help you file a grievance or check its status. What would you like to do?",
@@ -765,7 +765,8 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Goodbye! If you need further assistance, feel free to ask.",
-                    'ne': "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
+                    'ne': "बाहिर निस्कनुहोस्! यदि तपाईंलाई अधिक मद्दत चाहिनुहुन्छ भने, कृपया प्रश्न गर्नुहोस्।"
+                }
                 }
             },
         'action_attach_file': {
@@ -1090,14 +1091,18 @@ UTTERANCE_MAPPING = {
         'action_ask_form_skip_status_check_valid_province_and_district': {
             'utterances': {
                 1: {
+                    'en': "We will ask you questions about your location, so we can provide you the contact information of the officer in charge of your grievance.",
+                    'ne': "हामी तपाईंको स्थानको बारेमा प्रश्न प्रदान गर्नेछौं, तसर्थ हामी तपाईंको गुनासोको लागि अधिकारीको सम्पर्क जानकारी प्रदान गर्न सक्नुहुन्छ।"
+                },
+                2: {
                     'en': "Are you in {province}, {district}?",
                     'ne': "के {province}, {district} मा हुनुहुन्छ?"
                 },
-                2: {
+                3: {
                     'en': "Are you in {province}?",
                     'ne': "के {province} मा हुनुहुन्छ?"
                 },
-                3: {
+                4: {
                     'en': "Are you in {district}?",
                     'ne': "के {district} मा हुनुहुन्छ?"
                 }
@@ -1154,7 +1159,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Select any of the grievances if you want to check or amend the details",
-                    'ne': "गुनासो ID: {grievance_id}"
+                    'ne': "यदि तपाईं विवरण जाँच वा सम्पादन गर्न चाहनुहुन्छ भने, कृपया कुनै एक गुनासो चुन्नुहोस्"
                 },
                 2: {
                     'en': "We have not found any grievance, do you want to try again?",
@@ -1165,7 +1170,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_form_skip_status_check_outro': {
+        'action_skip_status_check_outro': {
             'utterances': {
                 1: {
                     'en': "To get more information about your grievance, please contact our nearest office:",
@@ -1180,12 +1185,32 @@ UTTERANCE_MAPPING = {
                     'ne': "ठेगाना: {office_address}"
                 },
                 4: {
-                    'en': "Phone Number: {office_phone_number}",
-                    'ne': "फोन नम्बर: {office_phone_number}"
+                    'en': "Phone Number: {office_phone}",
+                    'ne': "फोन नम्बर: {office_phone}"
                 },
                 5: {
+                    'en': "PIC Name: {office_pic_name}",
+                    'ne': "पिए नाम: {office_pic_name}"
+                },
+                6: {
                     'en': "Thank you for contacting us. We will get back to you soon.",
                     'ne': "तपाईंको सम्पर्क गर्नुभएकोमा धन्यवाद. हामी थिच्ने छौं।"
+                },
+                7: {
+                    'en': "You have not provided any location information. We cannot provide you the contact information of the officer in charge of your grievance. You can restart the conversation or end the conversation and walk into the nearest KL-road office.",
+                    'ne': "तपाईंले कुनै स्थान जानकारी प्रदान गरिएन। हामी तपाईंको गुनासोको लागि कुनै अधिकारी भेट्टाउन सकिनौं। कृपया पुनः प्रयास गर्नुहोस् वा बाहिर निस्क्नुहोस् र सबैभन्दा निर्धारित कार्यालयमा जानुहोस्।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        BUTTONS_MAIN_MENU['en'][0],
+                        BUTTONS_GOODBYE['en'][0]
+                    ],
+                    'ne': [
+                        BUTTONS_MAIN_MENU['ne'][0],
+                        BUTTONS_GOODBYE['ne'][0]
+                    ]
                 }
             }
         }

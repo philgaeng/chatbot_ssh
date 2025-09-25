@@ -15,5 +15,8 @@
   },
   "operation_failed": {
     "failed_tasks": 88
+  },
+  "wrapper": {
+    "failed_tasks": 2
   }
 }

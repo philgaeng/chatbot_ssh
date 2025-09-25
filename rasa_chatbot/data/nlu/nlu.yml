@@ -186,7 +186,7 @@ nlu:
       - /introduce{"province": "${province}", "district": "${district}"}
       - /introduce{"province": "${province}", "district": "${district}"}
 
-  - intent: nav_menu_main
+  - intent: nav_main_menu
     examples: |
       - main menu
       - go to main menu
