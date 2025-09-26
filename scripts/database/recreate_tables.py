@@ -2,13 +2,6 @@
 
 import os
 import sys
-import time
-import logging
-from logging.handlers import RotatingFileHandler
-import traceback
-from typing import List, Optional
-import argparse
-import json
 
 # Add the project directory to the Python path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,8 +11,17 @@ sys.path.insert(0, PROJECT_ROOT)
 # Set PYTHONPATH to include the project root
 os.environ['PYTHONPATH'] = PROJECT_ROOT
 
-# Import the db_manager singleton
-from actions_server.db_manager import db_manager
+# Now import everything else
+import time
+import logging
+from logging.handlers import RotatingFileHandler
+import traceback
+from typing import List, Optional
+import argparse
+from backend.config.constants import load_environment
+
+# Import the db_manager from the new modular structure
+from backend.services.database_services import db_manager
 
 # Load configuration
 def load_config():
@@ -91,7 +93,21 @@ class DatabaseRecreateError(Exception):
     """Custom exception for database recreation errors"""
     pass
 
-def recreate_tables_with_retry(max_retries: int = None, retry_delay: int = None) -> bool:
+def enable_pgcrypto_extension() -> bool:
+    """Enable pgcrypto extension for encryption support"""
+    try:
+        logger.info("Enabling pgcrypto extension for encryption...")
+        with db_manager.base.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+                conn.commit()
+        logger.info("✅ pgcrypto extension enabled successfully")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to enable pgcrypto extension: {str(e)}")
+        return False
+
+def recreate_tables_with_retry(max_retries: int, retry_delay: int) -> bool:
     """Recreate tables with retry mechanism"""
     max_retries = max_retries or config['HEALTH_CHECK_RETRIES']
     retry_delay = retry_delay or config['HEALTH_CHECK_DELAY']
@@ -130,16 +146,59 @@ def verify_tables() -> bool:
         logger.error(f"Table verification failed: {str(e)}")
         return False
 
+def test_encryption_setup() -> bool:
+    """Test encryption functionality if encryption key is available"""
+    try:
+        encryption_key = os.getenv('DB_ENCRYPTION_KEY')
+        if not encryption_key:
+            logger.warning("DB_ENCRYPTION_KEY not set - encryption will be disabled")
+            return True
+        
+        logger.info("Testing encryption functionality...")
+        from backend.services.database_services import ComplainantDbManager
+        
+        manager = ComplainantDbManager()
+        
+        # Test data
+        test_data = {
+            'complainant_full_name': 'Test User',
+            'complainant_phone': '+977-1234567890',
+            'complainant_email': 'test@example.com'
+        }
+        
+        # Test encryption
+        encrypted = manager._encrypt_complainant_data(test_data)
+        logger.info("✅ Encryption test passed")
+        
+        # Test decryption
+        decrypted = manager._decrypt_complainant_data(encrypted)
+        logger.info("✅ Decryption test passed")
+        
+        # Verify integrity
+        for key in test_data:
+            if test_data[key] != decrypted[key]:
+                logger.error(f"❌ Data integrity check failed for {key}")
+                return False
+        
+        logger.info("✅ Encryption setup verified successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Encryption test failed: {str(e)}")
+        return False
+
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='Recreate database tables')
     parser.add_argument('--all', action='store_true', help='Recreate all tables')
     parser.add_argument('--retries', type=int, help='Number of retry attempts')
     parser.add_argument('--delay', type=int, help='Delay between retries in seconds')
+    parser.add_argument('--enable-encryption', action='store_true', help='Enable pgcrypto extension')
+    parser.add_argument('--test-encryption', action='store_true', help='Test encryption functionality')
     return parser.parse_args()
 
 def main():
-    """Recreate database tables with enhanced error handling"""
+    """Recreate database tables with enhanced error handling and encryption support"""
     args = parse_args()
     
     try:
@@ -149,6 +208,11 @@ def main():
         
         logger.info("Starting recreation of all tables...")
         
+        # Enable pgcrypto extension if requested
+        if args.enable_encryption:
+            if not enable_pgcrypto_extension():
+                logger.warning("Failed to enable pgcrypto extension - continuing without encryption")
+        
         # Recreate tables with retry mechanism
         if not recreate_tables_with_retry(args.retries, args.delay):
             raise DatabaseRecreateError("Failed to recreate tables")
@@ -156,6 +220,11 @@ def main():
         # Verify the recreation
         if not verify_tables():
             raise DatabaseRecreateError("Table verification failed")
+        
+        # Test encryption if requested
+        if args.test_encryption:
+            if not test_encryption_setup():
+                logger.warning("Encryption test failed - check DB_ENCRYPTION_KEY environment variable")
         
         logger.info("Table recreation completed successfully")
         return 0

@@ -1,0 +1,36 @@
+version: "3.1"
+
+#navigation stories linked mostly to buttons
+
+stories:
+  # - story: User chooses to go back
+  #   steps:
+  #   - intent: mood_unhappy
+  #   - action: utter_mood_unhappy
+  #   - intent: go_back
+  #   - action: action_go_back
+
+  - story: User chooses to restart the story
+    steps:
+      - intent: nav_restart
+      - action: action_restart_story
+
+  - story: Action main menu if file a grievance
+    steps:
+      - intent: nav_main_menu
+      - action: action_main_menu
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - slot_was_set:
+          - main_story: "new_grievance"
+      - action: form_grievance
+
+  - story: Action main menu if status check
+    steps:
+      - intent: nav_main_menu
+      - action: action_main_menu
+      - intent: start_status_check
+      - action: action_start_status_check
+      - slot_was_set:
+          - main_story: "status_update"
+      - action: form_status_check

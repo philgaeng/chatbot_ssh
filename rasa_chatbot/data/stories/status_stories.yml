@@ -1,0 +1,36 @@
+version: "3.1"
+# #Stories that enable an user to retrieve its grievance and check its status
+# #The first story is for retrieving the grievance with phone number and OTP verification
+# #The second story is for retrieving the grievance with the grievance ID
+# #The third story is for checking the status of the grievance that happens once the grievance is retrieved
+
+stories:
+  - story: Happy path - retrieve grievance with phone and check status in english
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+          - language_code: "en"
+      - action: action_main_menu
+      - intent: start_status_check
+      - action: action_start_status_check
+      - slot_was_set:
+          - main_story: "status_update"
+      - action: form_status_check
+
+  - story: Happy path - retrieve grievance with phone and check status in nepali
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+          - language_code: "ne"
+      - action: action_main_menu
+      - intent: start_status_check
+      - action: action_start_status_check
+      - slot_was_set:
+          - main_story: "status_update"
+      - action: form_status_check

@@ -1,0 +1,205 @@
+version: "3.1"
+
+stories:
+  #Main story: User files a grievance in english with optional location and contact details
+  # Step 1: User files a grievance
+  # Step 1.1: User files a grievance with only one input in the grievance details form
+  - story: User files a grievance with optional location and contact details
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+          - language_code: "en"
+      - action: action_main_menu
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - slot_was_set:
+          - main_story: "new_grievance"
+      - action: form_grievance
+      - active_loop: form_grievance
+      - active_loop: null
+      - action: form_contact
+      - active_loop: form_contact
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  # # Step 1.1 repeated version
+  - story: User files a grievance in nepali with optional location and contact details
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+          - language_code: "ne"
+      - action: action_main_menu
+      - intent: start_grievance_process
+      - action: action_start_grievance_process
+      - slot_was_set:
+          - main_story: "new_grievance"
+      - action: form_grievance
+      - active_loop: form_grievance
+      - active_loop: null
+      - action: form_contact
+      - active_loop: form_contact
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  # User does not provide phone number
+  - story: User does not provide phone number
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - slot_was_set:
+          - phone_validation_required: false
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  #Step 5: Collect contact details with OTP verification
+  - story: User provides contact consent with phone verification
+    steps:
+      - action: form_contact
+      - active_loop: form_contact
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  #Stories for classification review
+  - story: No classification results are available
+    steps:
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  - story: Sensitive issues are detected by script during grievance description with phone number
+    steps:
+      - action: form_grievance
+      - active_loop: form_grievance
+      - slot_was_set:
+          - grievance_sensitive_issue: True
+      - active_loop: null
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues
+      - slot_was_set:
+          - phone_validation_required: True
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_grievance_outro
+
+  - story: Sensitive issues are detected by script during grievance description
+    steps:
+      - action: form_grievance
+      - active_loop: form_grievance
+      - slot_was_set:
+          - grievance_sensitive_issue: True
+      - active_loop: null
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues
+      - slot_was_set:
+          - phone_validation_required: False
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  - story: Sensitive issues are detected by script during grievance description but user does not quote them as sensitive issues (detection bug)
+    steps:
+      - action: form_grievance
+      - active_loop: form_grievance
+      - slot_was_set:
+          - grievance_sensitive_issue: True
+      - active_loop: null
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues
+      - slot_was_set:
+          - grievance_sensitive_issue: False
+      - active_loop: null
+      - action: form_grievance
+      - active_loop: form_grievance
+      - active_loop: null
+      - action: form_contact
+      - active_loop: form_contact
+      - active_loop: null
+      - action: form_otp
+      - active_loop: form_otp
+      - active_loop: null
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
+
+  - story: Sensitive issues are detected by script during grievance categorization but user quotes them as sensitive issues (detection bug)
+    steps:
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - slot_was_set:
+          - grievance_sensitive_issue: True
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues
+      - active_loop: null
+      - action: action_grievance_outro
+
+  - story: Sensitive issues are detected by script during grievance categorization but user does not quote them as sensitive issues (detection bug)
+    steps:
+      - action: action_submit_grievance
+      - action: action_retrieve_classification_results
+      - slot_was_set:
+          - grievance_sensitive_issue: True
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues
+      - slot_was_set:
+          - grievance_sensitive_issue: False
+      - active_loop: null
+      - action: form_grievance_complainant_review
+      - active_loop: form_grievance_complainant_review
+      - active_loop: null
+      - action: action_update_grievance_categorization
+      - action: action_grievance_outro
