@@ -29,6 +29,7 @@ x-common-ignore-intents: &common-ignore-intents
   - affirm_sensitive_content
   - deny_sensitive_content
   - nlu_fallback
+  - choose_grievance_details
 
 version: "3.1"
 session_config:
@@ -69,6 +70,8 @@ intents:
   - start_check_status
   - dummy_intent_for_payload
   - phone_number_intent
+  - status_check_grievance_selected
+  - choose_grievance_details
 
 slots:
   language_code:
@@ -202,7 +205,8 @@ slots:
   last_message_saved:
     type: text
     influence_conversation: false
-    mappings: []
+    mappings:
+      - type: custom
   complainant_phone:
     type: text
     influence_conversation: false
@@ -579,6 +583,12 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
+  grievance_id_status_check:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_grievance_id_status_check:
 
 actions:
   - action_ask_form_contact_complainant_address_confirmed
@@ -628,6 +638,8 @@ actions:
   - action_ask_form_skip_status_check_complainant_municipality_confirmed
   - action_ask_form_skip_status_check_complainant_municipality_temp
   - action_display_grievance_id
+  - action_display_grievance_details_init
+  - action_display_grievance_details
   - action_clear_session
   - action_close_browser_tab
   - action_continue

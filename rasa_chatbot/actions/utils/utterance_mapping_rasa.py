@@ -1170,6 +1170,18 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
+        'action_display_grievance_details': {
+            'utterances': {
+                1: {
+                    'en': "Here are the details of the grievance:",
+                    'ne': "यो गुनासोको विवरण छ:"
+                },
+                2: {
+                    'en': "We couldn't find any grievance details.",
+                    'ne': "हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।"
+                }
+            }
+        },
         'action_skip_status_check_outro': {
             'utterances': {
                 1: {

@@ -298,6 +298,15 @@ nlu:
       - +63999-999-9999
       - +63937 999 9999 999
 
+  - intent: choose_grievance_details
+    examples: |
+      - /check_status{"grievance_id": "GR-20250721-KOJH-3562-A"}
+      - /check_status{"grievance_id": "GR-20250926-KOJH-34218-B"}
+      - /check_status{"grievance_id": "GR-20250612-KOJH-1218-B"}
+      - /[GR-20250926-KOJH-9718-B]
+      - /[GR-20250926-KOJH-9718-B]
+      - /[GR-20250926-KOJH-9718-B]
+
   - intent: classification_results
     examples: |
       - /classification_results{"grievance_summary": "test summary", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "test description", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}

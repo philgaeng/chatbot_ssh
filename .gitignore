@@ -68,6 +68,7 @@ Thumbs.db
 
 # Project-specific
 aws/            # AWS related files
+github_connection_setup.txt  # Contains sensitive setup information
 
 # AWS CLI and uploads
 **/awscliv2.zip    # Ignore awscliv2.zip in any directory
