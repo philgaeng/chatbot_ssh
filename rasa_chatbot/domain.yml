@@ -4,6 +4,7 @@ x-common-ignore-intents: &common-ignore-intents
   - deny
   - skip
   - introduce
+  - bot_challenge
   - nav_back
   - nav_menu
   - nav_main_menu
@@ -14,33 +15,25 @@ x-common-ignore-intents: &common-ignore-intents
   - nav_introduce
   - nav_restart
   - restart
-  - set_english
-  - set_nepali
   - mood_great
   - mood_unhappy
-  - bot_challenge
+  - phone_number_intent
   - slot_extraction
   - start_status_check
-  - status_check
-  - status_check_another
-  - status_check_id
-  - status_check_phone
-  - classification_results
   - affirm_sensitive_content
   - deny_sensitive_content
   - nlu_fallback
-  - choose_grievance_details
 
 version: "3.1"
 session_config:
   session_expiration_time: 300 # 5 minutes instead of 1 minute
   carry_over_slots_to_new_session: true
+
 intents:
   - action_session_start
   - affirm
   - attach_files
   - bot_challenge
-  - classification_results
   - deny
   - grievance_process_start
   - grievance_submit_as_is
@@ -57,21 +50,20 @@ intents:
   - nav_restart
   - restart
   - nlu_fallback
+  - phone_number_intent
   - question_attach_files
   - set_english
   - set_nepali
   - skip
   - start_grievance_process
-  - status_check
-  - status_check_another
-  - status_check_id
-  - status_check_phone
-  - status_check_start
-  - start_check_status
-  - dummy_intent_for_payload
-  - phone_number_intent
-  - status_check_grievance_selected
-  - choose_grievance_details
+  - start_status_check
+  - test_tracker_access
+  - test_disconnection
+  - test_disconnection_log
+  - retrieve_with_phone
+  - retrieve_grievance_with_id
+  - status_check_request_follow_up
+  - status_check_modify_grievance
 
 slots:
   language_code:
@@ -478,6 +470,11 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  status_check_grievance_selected:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
   data_to_emit:
     type: any
     influence_conversation: false
@@ -583,12 +580,52 @@ slots:
     influence_conversation: true
     mappings:
       - type: custom
+  status_check_grievance_id_selected:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  status_check_grievance_selected_action:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
   grievance_id_status_check:
     type: text
     influence_conversation: true
     mappings:
       - type: custom
-  status_check_grievance_id_status_check:
+    # Test slots for disconnection testing
+  additional_description:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  has_draft_updates:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  status_check_update_major:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  test_disconnection_logged:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  tracker_access_test_passed:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  disconnection_simulation_completed:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
 
 actions:
   - action_ask_form_contact_complainant_address_confirmed
@@ -631,6 +668,8 @@ actions:
   - action_ask_status_check_list_grievance_id
   - action_ask_status_check_complainant_phone
   - action_ask_status_check_complainant_full_name
+  - action_ask_status_check_grievance_id_selected
+  - action_ask_status_check_grievance_selected_action
   - action_ask_form_skip_status_check_valid_province_and_district
   - action_ask_form_skip_status_check_complainant_province
   - action_ask_form_skip_status_check_complainant_district
@@ -640,6 +679,8 @@ actions:
   - action_display_grievance_id
   - action_display_grievance_details_init
   - action_display_grievance_details
+  - action_test_tracker_access
+  - action_simulate_disconnection
   - action_clear_session
   - action_close_browser_tab
   - action_continue
@@ -677,6 +718,8 @@ actions:
   - action_start_grievance_process
   - action_submit_grievance
   - action_submit_grievance_as_is
+  - action_test_disconnection_log
+  - action_test_disconnection
   - action_update_grievance_categorization
   - action_validate_categories
   - action_validate_summary
@@ -692,6 +735,8 @@ actions:
   - validate_form_sensitive_issues
   - validate_form_skip_status_check
   - action_grievance_outro
+  - action_status_check_request_follow_up
+  - action_status_check_modify_grievance
 
 forms:
   form_menu:

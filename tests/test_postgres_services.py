@@ -3,7 +3,8 @@ import uuid
 from random import randint
 from unittest.mock import patch, MagicMock
 from backend.services.database_services.postgres_services import db_manager
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, TRANSCRIPTION_PROCESSING_STATUS
+from backend.config.constants import DEFAULT_VALUES
+from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, TRANSCRIPTION_PROCESSING_STATUS
 from backend.services.database_services.base_manager import BaseDatabaseManager
 
 

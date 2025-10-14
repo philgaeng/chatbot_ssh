@@ -11,12 +11,16 @@ from backend.task_queue.registered_tasks import (
     store_result_to_db_task
 )
 from backend.logger.logger import TaskLogger
-from backend.config.constants import TASK_STATUS
+# TASK_STATUS is now accessed through database_constants.py
 
-SUCCESS = TASK_STATUS['SUCCESS']
-STARTED = TASK_STATUS['STARTED']
-FAILED = TASK_STATUS['FAILED']
-RETRYING = TASK_STATUS['RETRYING']
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
+
+status_codes = get_task_status_codes()
+SUCCESS = status_codes['SUCCESS']
+STARTED = status_codes['STARTED']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
 
 task_logger = TaskLogger(service_name='voice_grievance')
 logger = task_logger.logger

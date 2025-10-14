@@ -4,14 +4,21 @@ from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from dotenv import load_dotenv
 from backend.logger.logger import TaskLogger
-from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS
+from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
 # Set up logging
 logger = TaskLogger(service_name='llm_service').logger
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
 DEFAULT_DISTRICT = DEFAULT_VALUES["DEFAULT_DISTRICT"]
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
-SUCCESS = TASK_STATUS["SUCCESS"]
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
+
+status_codes = get_task_status_codes()
+SUCCESS = status_codes['SUCCESS']
+FAILED = status_codes['FAILED']
+STARTED = status_codes['STARTED']
+RETRYING = status_codes['RETRYING']
 
 # Load environment variables
 load_dotenv('/home/ubuntu/nepal_chatbot/.env')

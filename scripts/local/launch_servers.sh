@@ -219,7 +219,7 @@ start_celery_worker() {
     cd "$BASE_DIR" && \
     PYTHONPATH=$BASE_DIR \
     CELERY_PID_FILE="$pid_file" \
-    celery -A backend.task_queue.celery_app worker -Q "$queue_name" \
+    /home/philg/miniconda/envs/rasa-env-21/bin/celery -A backend.task_queue.celery_app worker -Q "$queue_name" \
         --concurrency="$concurrency" \
         --logfile="$log_file" \
         --pidfile="$pid_file" \
@@ -368,7 +368,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup rasa run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
+            nohup /home/philg/miniconda/envs/rasa-env-21/bin/rasa run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa_actions.pid"
@@ -393,7 +393,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup rasa run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
+            nohup /home/philg/miniconda/envs/rasa-env-21/bin/rasa run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa.pid"
@@ -417,7 +417,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "flower")
-            if ! start_service "$service" "celery -A backend.task_queue.celery_app --broker=redis://:3fduLmg25%40k@localhost:6379/0 flower --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
+            if ! start_service "$service" "/home/philg/miniconda/envs/rasa-env-21/bin/celery -A backend.task_queue.celery_app --broker=redis://:3fduLmg25%40k@localhost:6379/0 flower --port=5555 --broker_api=redis://:3fduLmg25%40k@localhost:6379/0 --logging=info"; then
                 echo "❌ Failed to start $service. Exiting..."
                 exit 1
             fi

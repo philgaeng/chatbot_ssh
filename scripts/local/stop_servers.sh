@@ -282,8 +282,12 @@ stop_celery_worker() {
                 kill -9 $pid
                 sleep 2
             fi
+        else
+            echo "PID $pid not found for celery_$queue_name"
         fi
         rm -f "$pid_file"
+    else
+        echo "No PID file found for celery_$queue_name"
     fi
 
     # Find and kill any processes by queue name
@@ -291,6 +295,7 @@ stop_celery_worker() {
     if [ ! -z "$worker_pids" ]; then
         echo "Found additional celery_$queue_name processes: $worker_pids"
         for pid in $worker_pids; do
+            echo "Killing celery_$queue_name process $pid..."
             kill -9 $pid 2>/dev/null
         done
         sleep 2
@@ -327,6 +332,12 @@ done
 echo "Stopping Celery workers..."
 stop_celery_worker "default"
 stop_celery_worker "llm_queue"
+
+# Clean up any remaining Celery PID files
+echo "Cleaning up Celery PID files..."
+rm -f "$LOG_DIR/celery_default.pid"
+rm -f "$LOG_DIR/celery_llm_queue.pid"
+rm -f "$LOG_DIR/celery.pid"
 
 # Stop Flower monitoring
 stop_flower

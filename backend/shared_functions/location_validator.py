@@ -359,15 +359,28 @@ class ContactLocationValidator:
         """Get the office in charge info from the municipality data."""
         office_in_charge = pd.read_csv(self.json_path_office_in_charge)
         office_in_charge.columns = office_in_charge.columns.str.lower()
-        office_in_charge["municipality"] = office_in_charge["municipality"].str.title().str.replace('Municipality', '').str.strip()
+        
+        # Check if municipality column exists, if not, work with district only
+        if "municipality" in office_in_charge.columns:
+            office_in_charge["municipality"] = office_in_charge["municipality"].str.title().str.replace('Municipality', '').str.strip()
+            municipality = municipality.title().replace('Municipality', '').strip()
+        else:
+            # If no municipality column, we'll match by district only
+            municipality = None
+            
         office_in_charge["district"] = office_in_charge["district"].str.title().str.replace('District', '').str.strip()
         if province in office_in_charge.columns:
             office_in_charge["province"] = office_in_charge["province"].str.title().str.replace('Province', '').str.strip()
-        municipality = municipality.title().replace('Municipality', '').strip()
+        
         district = district.title().replace('District', '').strip()
         province = province.title().replace('Province', '').strip()
 
-        office_in_charge_info = office_in_charge[(office_in_charge["municipality"] == municipality) & (office_in_charge["district"] == district)]
+        # Filter by district first, then by municipality if available
+        if municipality is not None:
+            office_in_charge_info = office_in_charge[(office_in_charge["municipality"] == municipality) & (office_in_charge["district"] == district)]
+        else:
+            # If no municipality column, just filter by district
+            office_in_charge_info = office_in_charge[office_in_charge["district"] == district]
 
         if office_in_charge_info.empty:
             return None

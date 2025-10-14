@@ -5,7 +5,7 @@ from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupActi
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .utils.base_classes import BaseAction
-from backend.config.constants import TASK_STATUS
+from backend.config.database_constants import TASK_STATUS
 import json
 
 

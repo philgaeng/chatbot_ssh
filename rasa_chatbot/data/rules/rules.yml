@@ -73,33 +73,59 @@ rules:
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
-  - rule: status check flow exit without retrieval
+  - rule: request follow up during status check
     steps:
-      - action: form_status_check
-      - active_loop: form_status_check
-      - slot_was_set:
-          - status_check_method: slot_skipped
-      - active_loop: null
-      - action: form_skip_status_check
-      - active_loop: form_skip_status_check
-      - active_loop: null
-      - action: action_skip_status_check_outro
+      - intent: status_check_request_follow_up
+      - action: action_status_check_request_follow_up
 
-  - rule: status check flow with phone number
+  - rule: modify grievance during status check
     steps:
-      - action: form_status_check
-      - active_loop: form_status_check
-      - slot_was_set:
-          - status_check_method: complainant_phone
-      - active_loop: null
-      - action: action_display_grievance_id
+      - intent: status_check_modify_grievance
+      - action: action_status_check_modify_grievance
 
-  - rule: status check flow exit wit grievance id
-    steps:
-      - action: form_status_check
-      - active_loop: form_status_check
-      - slot_was_set:
-          - status_check_method: grievance_id
-      - active_loop: null
+  # - rule: status check flow
+  #   steps:
+  #     - action: form_status_check
+  #     - active_loop: form_status_check
+  #     - active_loop: null
 
-      - action: action_display_grievance_id
+  # - rule: status check flow exit without retrieval
+  #   steps:
+  #     - action: form_status_check
+  #     - active_loop: form_status_check
+  #     - slot_was_set:
+  #         - status_check_method: slot_skipped
+  #     - active_loop: null
+  #     - action: form_skip_status_check
+  #     - active_loop: form_skip_status_check
+  #     - active_loop: null
+  #     - action: action_skip_status_check_outro
+  #     - intent: test_disconnection_log
+  #     - action: action_test_disconnection_log
+  #     - action: action_test_disconnection
+
+  # - rule: status check flow with phone number
+  #   steps:
+  #     - action: form_status_check
+  #     - active_loop: form_status_check
+  #     - active_loop: null
+  #     - action: action_display_grievance_id
+  #     - intent: choose_grievance_details # Different intent!
+  #     - action: action_display_grievance_details_init
+  #     - intent: test_disconnection_log
+  #     - action: action_test_disconnection_log
+  #     - action: action_test_disconnection
+
+  # - rule: status check flow exit with grievance id
+  #   steps:
+  #     - action: form_status_check
+  #     - active_loop: form_status_check
+  #     - slot_was_set:
+  #         - status_check_method: grievance_id
+  #     - active_loop: null
+  #     - action: action_display_grievance_id
+  #     - intent: choose_grievance_details # Different intent!
+  #     - action: action_display_grievance_details_init
+  #     - intent: test_disconnection_log
+  #     - action: action_test_disconnection_log
+  #     - action: action_test_disconnection

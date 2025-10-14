@@ -49,7 +49,7 @@ Architecture Benefits:
 import json
 from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
-from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING, TASK_STATUS
+from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.messaging import messaging
 from backend.services.file_server_core import FileServerCore
@@ -73,11 +73,15 @@ __all__ = [
 # Initialize FileServerCore
 file_server_core = FileServerCore()
 
-# Define task status constants
-STARTED = TASK_STATUS['STARTED']
-SUCCESS = TASK_STATUS['SUCCESS']
-FAILED = TASK_STATUS['FAILED']
-RETRYING = TASK_STATUS['RETRYING']
+# Define task status constants from database
+from backend.config.database_constants import get_task_status_codes
+
+# Get status codes from database constants (ensuring cohesiveness)
+status_codes = get_task_status_codes()
+STARTED = status_codes['STARTED']
+SUCCESS = status_codes['SUCCESS']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
 
 
 

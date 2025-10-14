@@ -7,6 +7,7 @@ from rasa_sdk.executor import CollectingDispatcher
 import json
 import traceback
 from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
+from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 
 
@@ -17,9 +18,7 @@ from rasa_sdk.events import SlotSet
 class BaseActionSubmit(BaseAction):
 
 
-    def get_current_datetime(self) -> str:
-        """Get current date and time in YYYY-MM-DD HH:MM format."""
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
+
     
     def check_grievance_high_priority(self, grievance_categories: Any) -> bool:
         """
@@ -59,9 +58,7 @@ class BaseActionSubmit(BaseAction):
     def collect_grievance_data(self, tracker: Tracker, review: bool = False) -> Dict[str, Any]:
         """Collect and separate user and grievance data from slots."""
         # set up the timestamp and timeline
-        grievance_timestamp = self.get_current_datetime()
-        grievance_timeline = (datetime.strptime(grievance_timestamp, "%Y-%m-%d %H:%M") + 
-                            timedelta(days=15)).strftime("%Y-%m-%d")
+        
 
         keys = ["complainant_id",
                  "complainant_phone",
@@ -88,11 +85,15 @@ class BaseActionSubmit(BaseAction):
         
         # collect the data from the tracker
         grievance_data={k : tracker.get_slot(k) for k in keys}
-        
+        grievance_timestamp = self.helpers_repo.get_current_datetime()
         grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
         if review:
             grievance_data["grievance_high_priority"] = self.check_grievance_high_priority(grievance_data["grievance_categories"])
-
+        
+        grievance_timeline = self.helpers_repo.get_timeline_by_status_code(status_update_code=self.GRIEVANCE_STATUS["SUBMITTED"],
+        grievance_high_priority=grievance_data.get("grievance_high_priority", False),
+        sensitive_issues_detected=grievance_data.get("grievance_sensitive_issue", False))
+        
 
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp

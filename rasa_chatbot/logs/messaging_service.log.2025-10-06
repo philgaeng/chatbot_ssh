@@ -1,0 +1,66 @@
+2025-10-06 08:40:03,575 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 08:40:03,592 - messaging_service - INFO - SES Configuration:
+2025-10-06 08:40:03,592 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 08:40:03,592 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 08:40:03,592 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 08:40:03,592 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 08:51:00,140 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 08:51:00,151 - messaging_service - INFO - SES Configuration:
+2025-10-06 08:51:00,151 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 08:51:00,151 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 08:51:00,151 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 08:51:00,151 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 09:34:44,462 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 09:34:44,471 - messaging_service - INFO - SES Configuration:
+2025-10-06 09:34:44,472 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 09:34:44,472 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 09:34:44,472 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 09:34:44,472 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 09:42:45,048 - messaging_service - INFO - Attempting to send email to: ['philgaeng@gmail.com', 'philgaeng@project.com.ph']
+2025-10-06 09:42:45,049 - messaging_service - INFO - Using sender email: philgaeng@project.com.ph
+2025-10-06 09:42:45,360 - messaging_service - INFO - Email sent successfully! MessageId: 010e0199b72f6ec7-5baf13af-5ab9-44b1-86e0-ce0ffe131cb5-000000
+2025-10-06 10:08:12,838 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 10:08:12,855 - messaging_service - INFO - SES Configuration:
+2025-10-06 10:08:12,855 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 10:08:12,855 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 10:08:12,855 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 10:08:12,855 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 10:15:03,298 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 10:15:03,309 - messaging_service - INFO - SES Configuration:
+2025-10-06 10:15:03,310 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 10:15:03,310 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 10:15:03,310 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 10:15:03,310 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 10:41:27,260 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 10:41:27,270 - messaging_service - INFO - SES Configuration:
+2025-10-06 10:41:27,270 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 10:41:27,270 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 10:41:27,270 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 10:41:27,270 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 17:42:57,237 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 17:42:57,253 - messaging_service - INFO - SES Configuration:
+2025-10-06 17:42:57,253 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 17:42:57,253 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 17:42:57,253 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 17:42:57,253 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 18:09:39,530 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 18:09:39,543 - messaging_service - INFO - SES Configuration:
+2025-10-06 18:09:39,544 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 18:09:39,544 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 18:09:39,544 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 18:09:39,544 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 18:35:43,605 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 18:35:43,616 - messaging_service - INFO - SES Configuration:
+2025-10-06 18:35:43,616 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 18:35:43,616 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 18:35:43,616 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 18:35:43,616 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 20:31:55,152 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-06 20:31:55,168 - messaging_service - INFO - SES Configuration:
+2025-10-06 20:31:55,168 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-06 20:31:55,168 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-06 20:31:55,168 - messaging_service - INFO - Successfully initialized SES client
+2025-10-06 20:31:55,168 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-06 20:34:58,598 - messaging_service - INFO - Attempting to send email to: ['philgaeng@gmail.com', 'philgaeng@project.com.ph']
+2025-10-06 20:34:58,599 - messaging_service - INFO - Using sender email: philgaeng@project.com.ph
+2025-10-06 20:35:00,134 - messaging_service - INFO - Email sent successfully! MessageId: 010e0199b9849d0d-b6988cae-a1fe-4cdc-a15f-5a9d669f3f06-000000

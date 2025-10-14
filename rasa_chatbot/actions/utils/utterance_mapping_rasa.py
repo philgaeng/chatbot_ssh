@@ -638,12 +638,12 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "File a grievance", "payload": "/start_grievance_process"},
-                        {"title": "Check my status", "payload": "/start_check_status"},
+                        {"title": "Check my status", "payload": "/start_status_check"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
                     'ne': [
                         {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/start_grievance_process"},
-                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/start_check_status"},
+                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/start_status_check"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                     ]
                 }
@@ -1155,7 +1155,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_display_grievance_id': {
+        'action_ask_status_check_grievance_id_selected': {
             'utterances': {
                 1: {
                     'en': "Select any of the grievances if you want to check or amend the details",
@@ -1170,7 +1170,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_display_grievance_details': {
+        'action_ask_status_check_grievance_selected_action': {
             'utterances': {
                 1: {
                     'en': "Here are the details of the grievance:",
@@ -1179,6 +1179,18 @@ UTTERANCE_MAPPING = {
                 2: {
                     'en': "We couldn't find any grievance details.",
                     'ne': "हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।"
+                }
+            },
+            'buttons': {
+                1: {'en':[
+                    {"title": "Request follow up", "payload": "/status_check_request_follow_up"},
+                    {"title": "Modify grievance", "payload": "/status_check_modify_grievance"},
+                    {"title": "Skip", "payload": BUTTON_SKIP}
+                ],
+                'ne': [
+                    {"title": "अनुसंधान अनुसंधान गर्नुहोस्", "payload": "/status_check_request_follow_up"},
+                    {"title": "गुनासो सम्पादन गर्नुहोस्", "payload": "/status_check_modify_grievance"},
+                    {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}]
                 }
             }
         },

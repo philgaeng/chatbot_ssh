@@ -12,7 +12,8 @@ from .utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSIT
 from .mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT, LLM_CLASSIFICATION, CLASSIFICATION_DATA
+from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, CLASSIFICATION_DATA
+from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT
 from backend.services.database_services.postgres_services import db_manager
 import inspect
 import logging
@@ -170,6 +171,7 @@ class BaseAction(Action, ABC):
         self.TASK_STATUS = TASK_STATUS
         self.GRIEVANCE_CLASSIFICATION_STATUS = GRIEVANCE_CLASSIFICATION_STATUS
         self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
+        self.helpers_repo = helpers_repo  # Add helpers_repo as instance attribute
         self.NOT_PROVIDED = self.DEFAULT_VALUES["NOT_PROVIDED"]
         self.LLM_CLASSIFICATION = LLM_CLASSIFICATION
         
@@ -300,7 +302,7 @@ class BaseAction(Action, ABC):
         #we want to fuzzy match the full name with the full name in the database
         full_name = full_name.lower().strip()
         all_full_names = self.db_manager.get_all_complainant_full_names()
-        results = self.helpers.match_full_name(full_name, all_full_names)
+        results = self.helpers.match_full_name_list(full_name, all_full_names)
         return results
 
     def get_status_and_description_str_in_language(self, status: str) -> str:
@@ -325,6 +327,41 @@ class BaseAction(Action, ABC):
         slots_to_reset = [slot for slot in tracker.slots if any(prefix in slot for prefix in prefix) and slot not in avoid_slots]
         self.logger.info(f"ActionStartStatusCheck - reset_slots - slots_to_reset: {slots_to_reset}")
         return [SlotSet(slot, None) for slot in slots_to_reset]
+
+    def display_grievance_id(self, grievance: Dict, display_only_short: bool = True) -> str:
+        key_mapping_language= {
+            "grievance_id": {"en": "grievance_id", "ne": "गुनासो ID"},
+            
+            "grievance_status": {"en": "Grievance status", "ne": "गुनासो स्थिति"},
+            "grievance_timeline": {"en": "Grievance timeline", "ne": "गुनासो टाइमलाइन"},
+            
+            "grievance_categories": {"en": "Grievance categories", "ne": "गुनासो श्रेणी"},
+        }
+
+        key_mapping_language_long = {
+            "grievance_creation_date": {"en": "Grievance creation date", "ne": "गुनासो सिर्जना गरिएको"},
+            "grievance_description": {"en": "Grievance description", "ne": "गुनासो विवरण"},
+            "grievance_summary": {"en": "Grievance summary", "ne": "गुनासो सारांश"}, 
+            "grievance_status_update_date": {"en": "Grievance status update date", "ne": "गुनासो स्थिति अपडेट गरिएको"},
+        }
+
+        if not display_only_short:
+            key_mapping_language.update(key_mapping_language_long)
+        
+        utterance = []
+        i = 0
+        for k,v in grievance.items():
+            i += 1
+            self.logger.debug(f"display_grievance_id: grievance {i}: {grievance}")
+            if k in key_mapping_language:
+                denomination = key_mapping_language[k][self.language_code]
+                if k == "grievance_status":
+                    v = self.get_status_and_description_str_in_language(v)
+                if v:
+                    utterance.append(f"{denomination}: {v}")
+        self.logger.debug(f"display_grievance_id: utterance_list: {utterance}")
+        utterance = "\n".join(utterance)
+        return utterance
 
 
 
@@ -546,8 +583,9 @@ class BaseFormValidationAction(FormValidationAction, BaseAction, ABC):
                 
                 # Direct skip (high confidence match)
                 slot_type = domain.get("slots", {}).get(slot_name, {}).get("type")
+                self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | skip_value: {self.SKIP_VALUE}")
                 return {slot_name: self.SKIP_VALUE}
-            self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | skip_value: {self.SKIP_VALUE}")
+            
             if message_text:
                 self.logger.debug(f"Slot extraction: {self.name()} - {slot_name} | message_text: {message_text}")
                 return {slot_name: message_text}

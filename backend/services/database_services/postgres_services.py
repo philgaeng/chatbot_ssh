@@ -180,11 +180,15 @@ class DatabaseManager(BaseDatabaseManager):
                 self.logger.info(f"Grievance updated in db: {grievance_id}")
 
             if grievance_data or complainant_data:
-                    # Add status history entry for SUBMITTED status
-                status_update_success = self.update_grievance_status(
+                # Add initial creation entry for SUBMITTED status
+                status_update_success = self.grievance.log_grievance_change(
                     grievance_id=grievance_id,
-                    status_code="SUBMITTED",
-                    notes="Grievance submitted to the system"
+                    change_type='creation',
+                    created_by=self.DEFAULT_USER,
+                    status_code='SUBMITTED',
+                    assigned_to=None,
+                    notes='Initial grievance creation (first submission)',
+                    source='user_input'
                 )
                 if status_update_success:
                     self.logger.info(f"Status history updated for grievance: {grievance_id}")
@@ -247,6 +251,10 @@ class DatabaseManager(BaseDatabaseManager):
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get grievance by ID"""
         return self.grievance.get_grievance_by_id(grievance_id)
+    
+    def is_valid_grievance_id(self, grievance_id: str) -> bool:
+        """Check if a grievance ID exists in the database"""
+        return self.grievance.is_valid_grievance_id(grievance_id)
     
     def get_grievance_status(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get current status of a grievance"""

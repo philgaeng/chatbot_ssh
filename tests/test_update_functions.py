@@ -3,7 +3,7 @@ from random import randint
 from backend.services.database_services.grievance_manager import GrievanceDbManager, RecordingDbManager, TranslationDbManager, TranscriptionDbManager
 from backend.services.database_services.complainant_manager import ComplainantDbManager
 from backend.services.database_services.postgres_services import DatabaseManager
-from backend.config.constants import GRIEVANCE_STATUS, TASK_STATUS
+from backend.config.database_constants import GRIEVANCE_STATUS, TASK_STATUS
 
 # Initialize database managers
 db_manager = DatabaseManager()  # This has all the methods we need

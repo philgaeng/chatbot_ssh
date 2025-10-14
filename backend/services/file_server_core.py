@@ -13,7 +13,7 @@ from ..config.constants import (
     ALLOWED_MIME_TYPES, 
     FILE_TYPE_MAX_SIZES,
     FILE_TYPES,
-    TASK_STATUS
+    # TASK_STATUS is now accessed through database_constants.py
 )
 from ..shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
@@ -25,10 +25,14 @@ SERVICE_NAME = "file_processor"
 
 UPLOAD_FOLDER = 'uploads'
 
-SUCCESS = TASK_STATUS['SUCCESS']
-STARTED = TASK_STATUS['STARTED']
-FAILED = TASK_STATUS['FAILED']
-RETRYING = TASK_STATUS['RETRYING']
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
+
+status_codes = get_task_status_codes()
+SUCCESS = status_codes['SUCCESS']
+STARTED = status_codes['STARTED']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
 
         
 class FileServerCore(APIManager):

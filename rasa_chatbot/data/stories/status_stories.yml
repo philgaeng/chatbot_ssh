@@ -34,3 +34,137 @@ stories:
       - slot_was_set:
           - main_story: "status_update"
       - action: form_status_check
+
+  # - story: Happy path - retrieve specific grievance with grievance id - contact info
+  #   steps:
+  #     - action: action_display_grievance_id
+  #     - intent: status_check_grievance_selected
+  #     - action: action_display_grievance_details_init
+  #     - slot_was_set:
+  #         - status_check_grievance_selected: "GR-20250926-KOJH-9718-B"
+  #     - action: action_display_grievance_details
+  #     - intent: status_check_add_description
+  #     - action: form_status_check_add_description
+  #     - active_loop: form_status_check_add_description
+  #     - active_loop: null
+  #     - action: action_display_grievance_details
+
+  # - story: Happy path - retrieve specific grievance with grievance id - contact info
+  #   steps:
+  #     - action: action_display_grievance_id
+  #     - intent: status_check_grievance_selected
+  #     - action: action_display_grievance_details_init
+  #     - slot_was_set:
+  #         - status_check_grievance_selected: "GR-20250926-KOJH-9718-B"
+  #     - action: action_display_grievance_details
+  #     - intent: status_check_add_contact_info
+  #     - action: form_contact
+  #     - active_loop: form_contact
+  #     - active_loop: null
+  #     - action: form_otp
+  #     - active_loop: form_otp
+  #     - active_loop: null
+  #     - action: action_display_grievance_details
+
+  - story: status check flow exit without retrieval
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: slot_skipped
+      - active_loop: null
+      - action: form_skip_status_check
+      - active_loop: form_skip_status_check
+      - active_loop: null
+      - action: action_skip_status_check_outro
+      - intent: test_disconnection_log
+      - action: action_test_disconnection_log
+      - action: action_test_disconnection
+
+  - story: status check flow with phone number
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: complainant_phone
+          - status_check_complainant_phone: "9800000000"
+          - status_check_complainant_phone_valid: True
+          - status_check_complainant_full_name: "John Doe"
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-B"]
+          - status_check_grievance_id_selected: "GR-20250926-KOJH-9718-B"
+          - status_check_grievance_selected_action: "slot_skipped"
+      - active_loop: null
+      - action: action_test_disconnection_log
+      - action: action_test_disconnection
+
+  - story: status check flow with phone number and full name
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: complainant_phone
+          - status_check_complainant_phone: "9876543210"
+          - status_check_complainant_phone_valid: True
+          - status_check_complainant_full_name: "Kamal Kumar Shrestha"
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-B"]
+          - status_check_grievance_id_selected: "GR-20250926-KOJH-9718-B"
+          - status_check_grievance_selected_action: "slot_skipped"
+      - active_loop: null
+      - action: action_test_disconnection_log
+      - action: action_test_disconnection
+
+  - story: status check flow with phone number and request follow up
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: complainant_phone
+          - status_check_complainant_phone: "9876543210"
+          - status_check_complainant_phone_valid: True
+          - status_check_complainant_full_name: "Kamal Kumar Shrestha"
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-B"]
+          - status_check_grievance_id_selected: "GR-20250926-KOJH-9718-B"
+          - status_check_grievance_selected_action: "status_check_request_follow_up"
+      - active_loop: null
+      - intent: status_check_request_follow_up
+      - action: action_status_check_request_follow_up
+
+  - story: status check flow with phone number and modify grievance
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: complainant_phone
+          - status_check_complainant_phone: "9876543210"
+          - status_check_complainant_phone_valid: True
+          - status_check_complainant_full_name: "Kamal Kumar Shrestha"
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-B"]
+          - status_check_grievance_id_selected: "GR-20250926-KOJH-9718-B"
+          - status_check_grievance_selected_action: "status_check_modify_grievance"
+      - active_loop: null
+      - intent: status_check_modify_grievance
+      - action: action_status_check_modify_grievance
+
+  - story: status check flow with grievance id
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: grievance_id
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-B"]
+          - status_check_grievance_selected_action: "slot_skipped"
+      - active_loop: null
+      - action: action_test_disconnection_log
+      - action: action_test_disconnection
+
+  - story: status check flow with grievance id
+    steps:
+      - action: form_status_check
+      - active_loop: form_status_check
+      - slot_was_set:
+          - status_check_method: grievance_id
+          - status_check_list_grievance_id: ["GR-20250926-KOJH-9718-C"]
+          - status_check_grievance_selected_action: "slot_skipped"
+      - active_loop: null
+      - action: action_test_disconnection_log
+      - action: action_test_disconnection

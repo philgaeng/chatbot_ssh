@@ -1,0 +1,20 @@
+{
+  "0": "affirm",
+  "1": "bot_challenge",
+  "2": "deny",
+  "3": "introduce",
+  "4": "mood_great",
+  "5": "mood_unhappy",
+  "6": "nav_back",
+  "7": "nav_clear",
+  "8": "nav_close_browser_tab",
+  "9": "nav_exit",
+  "10": "nav_goodbye",
+  "11": "nav_introduce",
+  "12": "nav_main_menu",
+  "13": "nav_restart",
+  "14": "phone_number_intent",
+  "15": "question_attach_files",
+  "16": "skip",
+  "17": "status_check_grievance_selected"
+}

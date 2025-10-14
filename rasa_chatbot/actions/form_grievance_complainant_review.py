@@ -19,9 +19,11 @@ from rasa_chatbot.actions.utils.utterance_mapping_rasa import BUTTON_SKIP, BUTTO
 from rapidfuzz import process
 from datetime import datetime, timedelta
 from backend.config.constants import (
-    GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, EMAIL_TEMPLATES, DEFAULT_VALUES,
+    EMAIL_TEMPLATES, DEFAULT_VALUES,
     ADMIN_EMAILS, CLASSIFICATION_DATA, LIST_OF_CATEGORIES,
-    TASK_STATUS,
+)
+from backend.config.database_constants import (
+    GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, TASK_STATUS
 )
 
 

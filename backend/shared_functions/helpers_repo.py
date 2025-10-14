@@ -1,8 +1,10 @@
 from .location_validator import ContactLocationValidator
 from .keyword_detector import KeywordDetector
 from backend.config.constants import DEFAULT_VALUES, EMAIL_PROVIDERS_NEPAL_LIST
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 from typing import Optional, List, Tuple
+from datetime import datetime, timedelta
+import pandas as pd
 import re
 
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
@@ -139,17 +141,50 @@ class HelpersRepo:
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
 
-    def match_full_name(self, input_full_name: str, reference_full_names: list) -> list:
-        """Match the input full name with the reference full names using fuzzy matching.
-        First we need to parse the input and output full names to remove the title, and suffixes
-        Then we need to split the input and reference full names
-        Then we need to match the  each input word with each reference word using fuzzy matching
-        for each input word, return the best match with its score from the list of reference words
-        If the list of matched words is equal or greater than two return the matching reference full name
-        return the list of matched words"""
+    def match_full_name_word(self, input_full_name: str, reference_full_name: str) -> list:
+        """Match the input full name with the reference full name using fuzzy matching.
+        Uses partial_ratio for optimal partial name matching (first name or last name only).
+        """
         input_full_name = self._standardize_name(input_full_name)
-        reference_full_names =  list(set([self._standardize_name(reference_full_name) for reference_full_name in reference_full_names]))
-        result_list = process.extract(input_full_name, reference_full_names, score_cutoff=90)
+        reference_full_name = self._standardize_name(reference_full_name)
+        
+        # Use partial_ratio for optimal partial matching (first name or last name only)
+        result = process.extractOne(
+            input_full_name, 
+            [reference_full_name], 
+            scorer=fuzz.partial_ratio, 
+            score_cutoff=60
+        )
+        print(f"match_full_name_word: result: {result}")
+        return [(result[0], result[1])] if result else []
+
+    def match_full_name_list(self, input_full_name: str, reference_full_names: list) -> list:
+        """Match the input full name with the reference full names using fuzzy matching.
+        
+        This function normalizes both the input name and all reference names by removing
+        titles, suffixes, and extra spaces before performing fuzzy matching. This makes it
+        very forgiving with different spellings and non-normalized database entries (especially
+        useful for legacy data or external databases).
+        
+        Args:
+            input_full_name: The name to match against the reference list
+            reference_full_names: List of reference names to match against
+            
+        Returns:
+            List of original (non-standardized) reference names that match the input
+            above the cutoff threshold (70%). Results are sorted by similarity score.
+            
+        Example:
+            Input: "राम", References: ["राम शर्मा", "श्याम शर्मा", "राम शाह"]
+            Returns: ["राम शर्मा", "राम शाह"]  # Original names, not standardized
+        """
+        input_full_name = self._standardize_name(input_full_name)
+        reference_standardized_dic = {reference_full_name :self._standardize_name(reference_full_name) for reference_full_name in reference_full_names}
+        reference_full_names_standardized = list(set(list(reference_standardized_dic.values())))     
+        standardized_matches = process.extract(input_full_name, reference_full_names_standardized, score_cutoff=60)
+        # process.extract returns list of tuples: (matched_string, score, index)
+        matched_standardized_values = {m[0] for m in standardized_matches}
+        result_list = [original for original, std in reference_standardized_dic.items() if std in matched_standardized_values]
 
         return result_list
 
@@ -177,9 +212,40 @@ class HelpersRepo:
         """Get the office in charge info from the municipality data."""
         return self.location_validator.get_office_in_charge_info(municipality, district, province)
 
-    
+    def get_current_datetime(self) -> str:
+        """Get current date and time in YYYY-MM-DD HH:MM format."""
+        return datetime.now().strftime("%Y-%m-%d %H:%M")
 
-
+    def get_timeline_by_status_code(self, status_update_code: str, grievance_high_priority: bool = False, 
+                                  sensitive_issues_detected: bool = False) -> str:
+        """
+        Get the status update timeline from the database constants.
+        
+        Args:
+            status_update_code: The status code to get timeline for
+            grievance_high_priority: Whether the grievance is high priority
+            sensitive_issues_detected: Whether sensitive issues are detected
+            
+        Returns:
+            Timeline in days
+        """
+        try:
+            # Import here to avoid circular imports
+            from backend.config.database_constants import get_timedelta_for_status
+            
+            # Use the pre-loaded constants (super fast!)
+            timeline_days = get_timedelta_for_status(
+                status_code=status_update_code,
+                grievance_high_priority=grievance_high_priority,
+                sensitive_issues_detected=sensitive_issues_detected
+            )
+            current_date = datetime.now()
+            timeline_date = current_date + timedelta(days=timeline_days)
+            return timeline_date.strftime("%Y-%m-%d")
+            
+        except Exception as e:
+            # Fallback to default timeline if database is unavailable
+            return None
 
 # Global instance for easy access
 helpers_repo = HelpersRepo()

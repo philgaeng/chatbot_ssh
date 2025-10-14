@@ -6,7 +6,7 @@ from datetime import datetime
 from backend.services.database_services.postgres_services import db_manager
 from backend.config.constants import (
     MAX_FILE_SIZE, 
-    TASK_STATUS
+    # TASK_STATUS is now accessed through database_constants.py
 )
 from backend.shared_functions.utterance_mapping_server import get_utterance
 from typing import Dict, Any, Optional, List
@@ -15,10 +15,14 @@ from backend.services.file_server_core import FileServerCore
 from backend.task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
 from backend.api.websocket_utils import socketio
 
-SUCCESS = TASK_STATUS['SUCCESS']
-FAILED = TASK_STATUS['FAILED']
-RETRYING = TASK_STATUS['RETRYING']
-STARTED = TASK_STATUS['STARTED']
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
+
+status_codes = get_task_status_codes()
+SUCCESS = status_codes['SUCCESS']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
+STARTED = status_codes['STARTED']
 
 file_server_core = FileServerCore()
 

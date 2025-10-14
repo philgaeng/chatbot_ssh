@@ -1,0 +1,234 @@
+2025-10-03 08:35:29,999 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,001 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,001 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,001 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,001 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,001 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,001 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:35:30,002 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 08:35:30,002 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 08:35:30,002 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 08:36:21,370 - db_manager - DEBUG - original phone number: 9876543210
+2025-10-03 08:36:21,370 - db_manager - DEBUG - hashed phone number: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-10-03 08:36:21,370 - db_manager - DEBUG - Phone number '+9779876543210' hashed to 'c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0' in search
+2025-10-03 08:36:21,370 - db_manager - DEBUG - search_phone at query time: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-10-03 08:36:21,371 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,383 - db_manager - INFO - Starting database transaction
+2025-10-03 08:36:21,383 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-10-03 08:36:21,403 - db_manager - INFO - get_complainants_by_phone_number completed in 0.03s. Rows: 5
+2025-10-03 08:36:21,403 - db_manager - INFO - Transaction committed successfully
+2025-10-03 08:36:21,403 - db_manager - INFO - Database connection closed. Duration: 0.03s
+2025-10-03 08:36:21,404 - db_manager - DEBUG - 5 complainants found
+2025-10-03 08:36:21,404 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302fcd07169d974810364d24501846b89f239c1385447a45617d2a6ea4199d6284fd3347653f040842792bd3173f7ace0dfc1b99332e47740d4850ed7b98917b296c486ac03bac81b9337da0a8368316cbb', 'complainant_phone': 'c30d040703024eaeb1ab9d044a4079d23f0107f24e27e5fcd5651951228bbedb9e4400031fb90f212147e5ee4bd00e89e3ed66d10e95613aa28c85d3fc9fa527043d55e8f07d9fbe8a8e3f8f21834788', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302955ef63a049cd45e6cd23d01709143417e19bf39322890625c695366a88b4ba3a2ae925137ce9c2793c88954bef7fc3b33cf42bed858ca0904754754978f5b8bd3e63f8523e88501', 'complainant_phone': 'c30d0407030247d84536eb9b30ce65d23f01433e6bdc015d076a7597f0db204b7c49a289c07786b62d194995a21919d78365df1d24ca6621154dc15a7d9db2637d626fac4bbecd97a60042e01a5ac2bf', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d0407030221d1d99dc52a76db7dd23d0125b3b5302704c491bba412efc922f1787cc3833496bd09397576fc54e69a289c81ecd3069ce8ccb152f4e3df0c4f7bfe57b7c82c29823e5867daf6cf', 'complainant_phone': 'c30d040703022c5e6efc0ad92ea573d23f019875886a738a11b021efa5f4cd771aff87ef4f93bb303787d4051050a01062986509596f22b5094f371ca82233c64112867e1c4e2bb950c5e5118b60aa09', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302065fcf3e9986e68477d23d011e895ea30e4ef8adf73c300cc9da3130477acd926194c17ce2d44ecdb492352e528ff1109a4395a7e42c87493d42777dc3f6660e90fd659904ca4d69', 'complainant_phone': 'c30d04070302993a9056eb4260cc72d23f01d5f349bc0b38180babbcee991ae71a172d348011038c7c1aeac8e8c8dd8e49e2941d74f8ba0630e3d60081caee26c8b53bc12ce4b8905ec8112f53bf063d', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'c30d040703023d1d8279e9a8d3cc69d2390106592665dd3b5a2586600bd8c373eb759e189d8838686138c3f07f2fbb2a8b981ea875e10114ec66d58bf1f06c3ed4e2b1ccfe972f651d0a', 'complainant_phone': 'c30d0407030222a23a8a577bc9b07dd23f01d02581715cb672f0993635864107dd7d780c40c53aa86620d14da142ce0f82a42bc1414e6ce1f4dc8d81a48dcd28d409fd2dab3d060f83af8d70dfcad306', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-10-03 08:36:21,404 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,419 - db_manager - INFO - Database connection closed. Duration: 0.02s
+2025-10-03 08:36:21,420 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,428 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 08:36:21,429 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,437 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 08:36:21,437 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,448 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 08:36:21,448 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 08:36:21,461 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 08:36:21,461 - db_manager - DEBUG - 5 complainants successfully decrypted
+2025-10-03 08:36:21,461 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'pipo offisde inzaghi', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'pipo ppp', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-10-03 16:14:12,856 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,856 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,856 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,857 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,857 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,857 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,857 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,857 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,857 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,857 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,857 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,857 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,857 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,857 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,857 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,857 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,858 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,858 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,858 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,858 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,858 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,858 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,858 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,858 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,858 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,858 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,858 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 16:14:12,858 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 16:14:12,858 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 16:14:12,858 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,559 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,560 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,560 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,560 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,560 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,560 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,560 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,560 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,560 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,560 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,560 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,560 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,560 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,561 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,561 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,561 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,561 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,561 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,561 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,561 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,561 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,561 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,561 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,561 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,561 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,561 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,561 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:07:25,561 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:07:25,562 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:07:25,562 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,442 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,442 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,443 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,443 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,443 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,444 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,444 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,444 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,444 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,444 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,444 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:37:02,444 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:37:02,444 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:37:02,444 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,832 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,832 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,832 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,832 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,833 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,833 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,833 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,833 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,833 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,833 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,834 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,834 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,834 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,834 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,834 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,834 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,834 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,834 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,835 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,835 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,835 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,835 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,835 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,835 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,836 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,836 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,836 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:38:41,836 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:38:41,836 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:38:41,836 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,054 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,054 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,054 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,055 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,055 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,055 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,055 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,055 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,055 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,056 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,056 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,056 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,056 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,056 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,056 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,056 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,056 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,056 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,056 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,056 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,057 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,057 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:50:28,057 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-10-03 17:50:28,057 - db_manager - INFO - Database manager initialized successfully
+2025-10-03 17:50:28,057 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-10-03 17:52:00,608 - db_manager - DEBUG - original phone number: 9876543210
+2025-10-03 17:52:00,608 - db_manager - DEBUG - hashed phone number: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-10-03 17:52:00,608 - db_manager - DEBUG - Phone number '+9779876543210' hashed to 'c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0' in search
+2025-10-03 17:52:00,608 - db_manager - DEBUG - search_phone at query time: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-10-03 17:52:00,609 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,617 - db_manager - INFO - Starting database transaction
+2025-10-03 17:52:00,618 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-10-03 17:52:00,624 - db_manager - INFO - get_complainants_by_phone_number completed in 0.02s. Rows: 5
+2025-10-03 17:52:00,625 - db_manager - INFO - Transaction committed successfully
+2025-10-03 17:52:00,625 - db_manager - INFO - Database connection closed. Duration: 0.02s
+2025-10-03 17:52:00,626 - db_manager - DEBUG - 5 complainants found
+2025-10-03 17:52:00,626 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302fcd07169d974810364d24501846b89f239c1385447a45617d2a6ea4199d6284fd3347653f040842792bd3173f7ace0dfc1b99332e47740d4850ed7b98917b296c486ac03bac81b9337da0a8368316cbb', 'complainant_phone': 'c30d040703024eaeb1ab9d044a4079d23f0107f24e27e5fcd5651951228bbedb9e4400031fb90f212147e5ee4bd00e89e3ed66d10e95613aa28c85d3fc9fa527043d55e8f07d9fbe8a8e3f8f21834788', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302955ef63a049cd45e6cd23d01709143417e19bf39322890625c695366a88b4ba3a2ae925137ce9c2793c88954bef7fc3b33cf42bed858ca0904754754978f5b8bd3e63f8523e88501', 'complainant_phone': 'c30d0407030247d84536eb9b30ce65d23f01433e6bdc015d076a7597f0db204b7c49a289c07786b62d194995a21919d78365df1d24ca6621154dc15a7d9db2637d626fac4bbecd97a60042e01a5ac2bf', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d0407030221d1d99dc52a76db7dd23d0125b3b5302704c491bba412efc922f1787cc3833496bd09397576fc54e69a289c81ecd3069ce8ccb152f4e3df0c4f7bfe57b7c82c29823e5867daf6cf', 'complainant_phone': 'c30d040703022c5e6efc0ad92ea573d23f019875886a738a11b021efa5f4cd771aff87ef4f93bb303787d4051050a01062986509596f22b5094f371ca82233c64112867e1c4e2bb950c5e5118b60aa09', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302065fcf3e9986e68477d23d011e895ea30e4ef8adf73c300cc9da3130477acd926194c17ce2d44ecdb492352e528ff1109a4395a7e42c87493d42777dc3f6660e90fd659904ca4d69', 'complainant_phone': 'c30d04070302993a9056eb4260cc72d23f01d5f349bc0b38180babbcee991ae71a172d348011038c7c1aeac8e8c8dd8e49e2941d74f8ba0630e3d60081caee26c8b53bc12ce4b8905ec8112f53bf063d', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'c30d040703023d1d8279e9a8d3cc69d2390106592665dd3b5a2586600bd8c373eb759e189d8838686138c3f07f2fbb2a8b981ea875e10114ec66d58bf1f06c3ed4e2b1ccfe972f651d0a', 'complainant_phone': 'c30d0407030222a23a8a577bc9b07dd23f01d02581715cb672f0993635864107dd7d780c40c53aa86620d14da142ce0f82a42bc1414e6ce1f4dc8d81a48dcd28d409fd2dab3d060f83af8d70dfcad306', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-10-03 17:52:00,626 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,639 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 17:52:00,640 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,648 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 17:52:00,649 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,656 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 17:52:00,657 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,668 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 17:52:00,669 - db_manager - INFO - Connecting to database: grievance_db
+2025-10-03 17:52:00,680 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-10-03 17:52:00,680 - db_manager - DEBUG - 5 complainants successfully decrypted
+2025-10-03 17:52:00,681 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'pipo offisde inzaghi', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'pipo ppp', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}]

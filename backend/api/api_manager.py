@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 from backend.logger.logger import TaskLogger
 from flask import jsonify
 import inspect
-from backend.config.constants import TASK_STATUS, DEFAULT_VALUES
+from backend.config.constants import DEFAULT_VALUES
 
 
 class APIManager:
@@ -12,10 +12,13 @@ class APIManager:
     def __init__(self, service_name: str):
         self.task_logger = TaskLogger(service_name)
         self.service_name = service_name
-        self.STARTED = TASK_STATUS['STARTED']
-        self.SUCCESS = TASK_STATUS['SUCCESS']
-        self.FAILED = TASK_STATUS['FAILED']
-        self.RETRYING = TASK_STATUS['RETRYING']
+        # Get status codes from database constants (ensuring cohesiveness)
+        from backend.config.database_constants import get_task_status_codes
+        status_codes = get_task_status_codes()
+        self.STARTED = status_codes['STARTED']
+        self.SUCCESS = status_codes['SUCCESS']
+        self.FAILED = status_codes['FAILED']
+        self.RETRYING = status_codes['RETRYING']
     
     def log_event(self, event_type: str, details: Optional[Dict[str, Any]] = None) -> None:
         """Log an event with consistent formatting"""

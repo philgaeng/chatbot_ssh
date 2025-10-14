@@ -1,0 +1,36 @@
+2025-10-03 08:35:29,987 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 08:35:29,998 - messaging_service - INFO - SES Configuration:
+2025-10-03 08:35:29,998 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 08:35:29,998 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 08:35:29,998 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 08:35:29,998 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-03 16:14:12,842 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 16:14:12,854 - messaging_service - INFO - SES Configuration:
+2025-10-03 16:14:12,854 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 16:14:12,854 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 16:14:12,854 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 16:14:12,854 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-03 17:07:25,548 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 17:07:25,558 - messaging_service - INFO - SES Configuration:
+2025-10-03 17:07:25,558 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 17:07:25,558 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 17:07:25,558 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 17:07:25,558 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-03 17:37:02,431 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 17:37:02,441 - messaging_service - INFO - SES Configuration:
+2025-10-03 17:37:02,441 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 17:37:02,441 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 17:37:02,441 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 17:37:02,441 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-03 17:38:41,818 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 17:38:41,830 - messaging_service - INFO - SES Configuration:
+2025-10-03 17:38:41,830 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 17:38:41,831 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 17:38:41,831 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 17:38:41,831 - messaging_service - INFO - Successfully initialized Messaging repository
+2025-10-03 17:50:28,041 - messaging_service - INFO - Successfully initialized SNS client
+2025-10-03 17:50:28,053 - messaging_service - INFO - SES Configuration:
+2025-10-03 17:50:28,053 - messaging_service - INFO - Region: ap-southeast-1
+2025-10-03 17:50:28,053 - messaging_service - INFO - Sender Email: philgaeng@project.com.ph
+2025-10-03 17:50:28,053 - messaging_service - INFO - Successfully initialized SES client
+2025-10-03 17:50:28,053 - messaging_service - INFO - Successfully initialized Messaging repository

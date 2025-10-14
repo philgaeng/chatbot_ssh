@@ -71,7 +71,7 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import functools
 from backend.logger.logger import TaskLogger, LoggingConfig  # Import LoggingConfig
-from backend.config.constants import FIELD_MAPPING, VALID_FIELD_NAMES, TASK_STATUS, RASA_API_URL, FLASK_URL
+from backend.config.constants import FIELD_MAPPING, VALID_FIELD_NAMES, RASA_API_URL, FLASK_URL
 from .celery_app import celery_app  # Safe to import at module level now
 from celery import current_task
 
@@ -159,10 +159,14 @@ TASK_CONFIG = {
 
 
 
-STARTED = TASK_STATUS['STARTED']
-SUCCESS = TASK_STATUS['SUCCESS']
-FAILED = TASK_STATUS['FAILED']
-RETRYING = TASK_STATUS['RETRYING']
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
+
+status_codes = get_task_status_codes()
+STARTED = status_codes['STARTED']
+SUCCESS = status_codes['SUCCESS']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
 
 
 class MonitoringConfig:

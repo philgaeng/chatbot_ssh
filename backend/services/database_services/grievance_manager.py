@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Optional, Any
 import traceback
 from .base_manager import BaseDatabaseManager
-from backend.config.constants import TRANSCRIPTION_PROCESSING_STATUS
+# Database constants are now accessed through database_constants.py
 
 
 # Whitelist of fields that can be updated
@@ -70,7 +70,7 @@ class GrievanceDbManager(BaseDatabaseManager):
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
-            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority']
+            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_timeline', 'grievance_classification_status']
             update_fields, update_values = self.generate_update_query(data, expected_fields)
 
             if update_fields and update_values:
@@ -176,14 +176,21 @@ class GrievanceDbManager(BaseDatabaseManager):
             if not status_check:
                 self.logger.error(f"Invalid or inactive status code: {status_code}")
                 return False
-            # Add status history entry
-            self.execute_insert(table_name='grievance_status_history', input_data={
-                'grievance_id': grievance_id,
-                'status_code': status_code,
-                'assigned_to': assigned_to,
-                'notes': notes,
-                'created_by': created_by
-            })
+            
+            # Use the new enhanced logging method
+            success = self.log_grievance_change(
+                grievance_id=grievance_id,
+                change_type='status_change',
+                created_by=created_by,
+                status_code=status_code,
+                assigned_to=assigned_to,
+                notes=notes,
+                source='admin_update'
+            )
+            
+            if not success:
+                return False
+            
             # Update grievance modification date
             update_query = """
                 UPDATE grievances SET
@@ -234,18 +241,99 @@ class GrievanceDbManager(BaseDatabaseManager):
             return []
             
     def get_grievance_history(self, grievance_id: str) -> List[Dict]:
-        query = """
-                SELECT id, grievance_id, previous_status, new_status,
-                       next_step, notes, created_at
-                FROM grievance_history
-                WHERE grievance_id = %s
-                ORDER BY created_at DESC
+        """
+        Get comprehensive grievance history including status changes and field updates
+        This method maintains backward compatibility while using the new enhanced system
         """
         try:
-            return self.execute_query(query, (grievance_id,), "get_grievance_history")
+            return self.get_grievance_change_history(grievance_id)
         except Exception as e:
             self.logger.error(f"Error retrieving grievance history: {str(e)}")
             return []
+
+    def update_grievance_with_tracking(self, grievance_id: str, update_data: Dict[str, Any], 
+                                     created_by: str, source: str = "user_input", 
+                                     session_id: Optional[str] = None, 
+                                     change_reason: Optional[str] = None) -> bool:
+        """
+        Update grievance fields with automatic change tracking
+        
+        Args:
+            grievance_id: ID of the grievance to update
+            update_data: Dictionary of fields to update
+            created_by: Who is making the changes
+            source: Source of the change ('user_input', 'admin_update', 'system_update')
+            session_id: Session ID for user-initiated changes
+            change_reason: Reason for the changes
+            
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        try:
+            # Get current grievance data for comparison
+            current_data = self.get_grievance_by_id(grievance_id)
+            if not current_data:
+                self.logger.error(f"Grievance {grievance_id} not found")
+                return False
+            
+            # Prepare update data (filter and map fields)
+            allowed_fields = [
+                'grievance_description', 'grievance_summary', 'grievance_categories',
+                'grievance_categories_alternative', 'follow_up_question', 'grievance_location',
+                'grievance_claimed_amount', 'grievance_high_priority', 'grievance_sensitive_issue'
+            ]
+            
+            # Filter update data to only include allowed fields
+            filtered_update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
+            
+            if not filtered_update_data:
+                self.logger.warning(f"No valid fields to update for grievance {grievance_id}")
+                return True
+            
+            # Log the changes before updating
+            success = self.compare_and_log_field_changes(
+                grievance_id=grievance_id,
+                old_data=current_data,
+                new_data=filtered_update_data,
+                created_by=created_by,
+                source=source,
+                session_id=session_id,
+                change_reason=change_reason
+            )
+            
+            if not success:
+                self.logger.error(f"Failed to log changes for grievance {grievance_id}")
+                return False
+            
+            # Perform the actual update
+            update_fields, update_values = self.generate_update_query(filtered_update_data, allowed_fields)
+            
+            if not update_fields:
+                self.logger.warning(f"No fields to update for grievance {grievance_id}")
+                return True
+            
+            # Add grievance_modification_date update
+            update_fields.append("grievance_modification_date = CURRENT_TIMESTAMP")
+            update_values.append(grievance_id)
+            
+            update_query = f"""
+                UPDATE grievances 
+                SET {', '.join(update_fields)}
+                WHERE grievance_id = %s
+            """
+            
+            affected_rows = self.execute_update(update_query, tuple(update_values))
+            
+            if affected_rows > 0:
+                self.logger.info(f"Successfully updated grievance {grievance_id}")
+                return True
+            else:
+                self.logger.warning(f"No rows updated for grievance {grievance_id}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error updating grievance with tracking: {str(e)}")
+            return False
 
     def is_valid_grievance_id(self, grievance_id: str) -> bool:
         if not grievance_id or not isinstance(grievance_id, str):
@@ -582,7 +670,7 @@ class TranslationDbManager(BaseDatabaseManager):
 class TranscriptionDbManager(BaseDatabaseManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.transcription_processing_status = TRANSCRIPTION_PROCESSING_STATUS
+        # Database constants are now accessed through database_constants.py
 
     def get_transcription_by_id(self, transcription_id: str) -> Optional[Dict[str, Any]]:
         """Get transcription by ID"""

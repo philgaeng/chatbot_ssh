@@ -1,0 +1,988 @@
+2025-09-26 00:11:00,379 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,381 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,381 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,381 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,381 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,381 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,381 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,381 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,381 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:11:00,382 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:11:00,382 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:11:00,382 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,887 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,888 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,888 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,888 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,888 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,888 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,888 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,889 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,889 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,889 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 00:13:59,890 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 00:13:59,890 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 00:13:59,890 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,730 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,730 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,730 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,730 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,730 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,730 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:17:36,731 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:17:36,731 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:17:36,731 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:18:48,363 - db_manager - INFO - create_complainant: Creating complainant with ID: CM-20250926-KOJH-11B6-B
+2025-09-26 11:18:48,363 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_id': 'CM-20250926-KOJH-11B6-B', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_unique_id': 'CM-20250926-KOJH-11B6-B'}
+2025-09-26 11:18:48,363 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['complainant_id', 'complainant_province', 'complainant_district', 'complainant_unique_id'])
+2025-09-26 11:18:48,363 - db_manager - DEBUG - Generated query: INSERT INTO complainants (complainant_id, complainant_province, complainant_district, complainant_unique_id) VALUES (%s, %s, %s, %s)
+2025-09-26 11:18:48,363 - db_manager - DEBUG - len of query_keys: 4
+2025-09-26 11:18:48,363 - db_manager - DEBUG - Generated query: INSERT INTO complainants (complainant_id, complainant_province, complainant_district, complainant_unique_id) VALUES (%s, %s, %s, %s)
+2025-09-26 11:18:48,363 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:18:48,370 - db_manager - INFO - Starting database transaction
+2025-09-26 11:18:48,376 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:18:48,376 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:18:48,376 - db_manager - INFO - create_complainant: Successfully created complainant with ID: CM-20250926-KOJH-11B6-B
+2025-09-26 11:18:48,376 - db_manager - INFO - create_grievance: Creating grievance with data: {'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_office': None, 'source': 'bot', 'complainant_unique_id': 'CM-20250926-KOJH-11B6-B'}
+2025-09-26 11:18:48,376 - db_manager - INFO - create_grievance: Creating grievance with ID: GR-20250926-KOJH-9718-B
+2025-09-26 11:18:48,376 - db_manager - INFO - create_grievance: Creating grievance with allowed fields: ['grievance_id', 'complainant_id', 'grievance_categories', 'grievance_categories_alternative', 'follow_up_question', 'grievance_summary', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'is_temporary', 'source', 'language_code', 'grievance_classification_status']
+2025-09-26 11:18:48,376 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'complainant_id', 'grievance_description', 'source'])
+2025-09-26 11:18:48,376 - db_manager - DEBUG - Generated query: INSERT INTO grievances (grievance_id, complainant_id, grievance_description, source) VALUES (%s, %s, %s, %s) RETURNING grievance_id
+2025-09-26 11:18:48,376 - db_manager - DEBUG - len of query_keys: 4
+2025-09-26 11:18:48,376 - db_manager - DEBUG - Generated query: INSERT INTO grievances (grievance_id, complainant_id, grievance_description, source) VALUES (%s, %s, %s, %s) RETURNING grievance_id
+2025-09-26 11:18:48,377 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:18:48,382 - db_manager - INFO - Starting database transaction
+2025-09-26 11:18:48,389 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:18:48,389 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:18:48,389 - db_manager - INFO - create_grievance: Successfully created grievance with ID: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:25,530 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,536 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,536 - db_manager - INFO - Executing get_complainant_by_id: 
+            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_pho...
+2025-09-26 11:21:25,537 - db_manager - INFO - get_complainant_by_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,538 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,538 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,538 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,543 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,543 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 11:21:25,545 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,545 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,545 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,546 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': ['Environmental - Air Pollution'], 'grievance_categories_alternative': ['Environmental - Noise Pollution', 'Environmental - Drainage and Sewage Management'], 'follow_up_question': ['How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?'], 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 18, 57, 946236, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': None, 'complainant_phone': None, 'complainant_email': None, 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': None, 'complainant_ward': None, 'complainant_village': None, 'complainant_address': None}, results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': '["Environmental - Air Pollution"]', 'grievance_categories_alternative': '["Environmental - Noise Pollution", "Environmental - Drainage and Sewage Management"]', 'follow_up_question': '["How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?"]', 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 18, 57, 946236, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': None, 'complainant_phone': None, 'complainant_email': None, 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': None, 'complainant_ward': None, 'complainant_village': None, 'complainant_address': None}]
+2025-09-26 11:21:25,546 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-11B6-B
+2025-09-26 11:21:25,546 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,551 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,551 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:25,554 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,554 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,554 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,554 - db_manager - DEBUG - encrypted phone number +9779876543212 at encrypt_complainant_data: c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a
+2025-09-26 11:21:25,554 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,559 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,559 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:25,560 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,560 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,560 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,560 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,564 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,565 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:25,565 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,566 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,566 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,566 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,570 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,570 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:25,571 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,571 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,571 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,572 - db_manager - DEBUG - phone number +9779876543212 hashed to 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2 at hash_sensitive_data
+2025-09-26 11:21:25,572 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c', 'complainant_phone_hash': '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'complainant_full_name_hash': 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 11:21:25,572 - db_manager - DEBUG - encrypted_data at update_complainant: {'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c', 'complainant_phone_hash': '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'complainant_full_name_hash': 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 11:21:25,572 - db_manager - DEBUG - execute_update values: ('c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'Koshi', 'Jhapa', 'Mechinagar Municipality', 'Polu', 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c', '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f', 'CM-20250926-KOJH-11B6-B')
+2025-09-26 11:21:25,572 - db_manager - DEBUG - execute_update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, complainant_province = %s, complainant_district = %s, complainant_municipality = %s, complainant_village = %s, complainant_address = %s, complainant_phone_hash = %s, complainant_full_name_hash = %s, complainant_email_hash = %s WHERE complainant_id = %s
+2025-09-26 11:21:25,572 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,576 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,577 - db_manager - INFO - execute_update: Executing update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, ...
+2025-09-26 11:21:25,577 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:25,580 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,580 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,580 - db_manager - INFO - Complainant updated in db: CM-20250926-KOJH-11B6-B
+2025-09-26 11:21:25,580 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:25,580 - db_manager - DEBUG - execute_update values: ('there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'GR-20250926-KOJH-9718-B')
+2025-09-26 11:21:25,580 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_description = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 11:21:25,580 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,585 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,585 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_description = %s, grievanc...
+2025-09-26 11:21:25,586 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:25,587 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,587 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,588 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-9718-B, rows affected: 1
+2025-09-26 11:21:25,588 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:25,588 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,592 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,592 - db_manager - INFO - Executing check_status_code: 
+                SELECT status_code FROM grievance_statuses
+                WHERE status_code = %s A...
+2025-09-26 11:21:25,594 - db_manager - INFO - check_status_code completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,594 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,594 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,594 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'status_code', 'assigned_to', 'notes', 'created_by'])
+2025-09-26 11:21:25,594 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 11:21:25,594 - db_manager - DEBUG - len of query_keys: 5
+2025-09-26 11:21:25,594 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 11:21:25,594 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,599 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,604 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,605 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,605 - db_manager - DEBUG - execute_update values: ('GR-20250926-KOJH-9718-B',)
+2025-09-26 11:21:25,605 - db_manager - DEBUG - execute_update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIMESTAMP
+                WHERE grievance_id = %s
+            
+2025-09-26 11:21:25,605 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,609 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,609 - db_manager - INFO - execute_update: Executing update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIM...
+2025-09-26 11:21:25,610 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:25,612 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,612 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,612 - db_manager - INFO - Status history updated for grievance: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:25,612 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,616 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,616 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 11:21:25,618 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 11:21:25,618 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,618 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,619 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,623 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,623 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 11:21:25,624 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 11:21:25,624 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,624 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,673 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:25,678 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:25,678 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 11:21:25,680 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:25,680 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:25,680 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:25,680 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': ['Environmental - Air Pollution'], 'grievance_categories_alternative': ['Environmental - Noise Pollution', 'Environmental - Drainage and Sewage Management'], 'follow_up_question': ['How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?'], 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 21, 25, 609917, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_ward': None, 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c'}, results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': '["Environmental - Air Pollution"]', 'grievance_categories_alternative': '["Environmental - Noise Pollution", "Environmental - Drainage and Sewage Management"]', 'follow_up_question': '["How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?"]', 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 21, 25, 609917, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_ward': None, 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c'}]
+2025-09-26 11:21:54,748 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,753 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,753 - db_manager - INFO - Executing get_complainant_id_from_grievance_id: 
+            SELECT complainant_id
+            FROM grievances
+            WHERE grievance_id = %s
+ ...
+2025-09-26 11:21:54,754 - db_manager - INFO - get_complainant_id_from_grievance_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,754 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,755 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,755 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-11B6-B
+2025-09-26 11:21:54,755 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {}
+2025-09-26 11:21:54,755 - db_manager - DEBUG - encrypted_data at update_complainant: {}
+2025-09-26 11:21:54,755 - db_manager - DEBUG - No complainant field to update
+2025-09-26 11:21:54,755 - db_manager - INFO - Complainant updated in db: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:54,755 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:54,755 - db_manager - DEBUG - execute_update values: ('["Environmental - Air Pollution"]', 'GR-20250926-KOJH-9718-B')
+2025-09-26 11:21:54,755 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 11:21:54,755 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,760 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,760 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance...
+2025-09-26 11:21:54,761 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:54,763 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,763 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,763 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-9718-B, rows affected: 1
+2025-09-26 11:21:54,763 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:54,812 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,817 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,817 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 11:21:54,818 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 11:21:54,818 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,818 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,819 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,823 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,823 - db_manager - INFO - Executing get_complainant_by_id: 
+            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_pho...
+2025-09-26 11:21:54,824 - db_manager - INFO - get_complainant_by_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,824 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,824 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,825 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,832 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,832 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,836 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,836 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 11:21:54,838 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,838 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,838 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,838 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': ['Environmental - Air Pollution'], 'grievance_categories_alternative': ['Environmental - Noise Pollution', 'Environmental - Drainage and Sewage Management'], 'follow_up_question': ['How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?'], 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 760348, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_ward': None, 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c'}, results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'complainant_id': 'CM-20250926-KOJH-11B6-B', 'grievance_categories': '["Environmental - Air Pollution"]', 'grievance_categories_alternative': '["Environmental - Noise Pollution", "Environmental - Drainage and Sewage Management"]', 'follow_up_question': '["How many people in your household are affected by the dust, and what health issues have you noticed (e.g., coughing, breathing difficulties)?"]', 'grievance_summary': 'Dust from road works is entering my home, causing my kids to cough. I don’t know what to do.', 'grievance_description': 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 760348, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030249aebbe98bc696d861d24101e2d393aaa6bbbe992f5f0570a49ffda87379b99f1c62dd6bcece38104016b569cd2779a99f11167c9f9d7d2e7cdc9034b8df0769062723b0bf4d59baa04f9d4a', 'complainant_phone': 'c30d04070302a8eabb06396c21c875d23f01834ef6e5dab666c65e03c8ff77dc389892a7d7061df95bf0938c985a97f8571514674f40f7dea42d88b5fdfef08965730f44ff64b1f7cd9d242fbbbe1f9a', 'complainant_email': 'c30d040703022aec18bb66cf182166d23d0188e9630ed5e81556a8419aeadb420cc9e6603ad7c9516945ca774118466c3793edef1b82bbc178f2163835a8ffd5f3722b99de8fc254034f81235ef6', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_ward': None, 'complainant_village': 'Polu', 'complainant_address': 'c30d040703023a3ec3683a879aa162d23a0106ddbf600f14759ae8f23bfa8600a11fce8a96b07d37d94843901ca782c649b8e5f86ef6a74e651878123319aa8ee0469c1aaaa8e6280a366c'}]
+2025-09-26 11:21:54,838 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-11B6-B
+2025-09-26 11:21:54,838 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,843 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,843 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:54,844 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,844 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,844 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,844 - db_manager - DEBUG - encrypted phone number +9779876543212 at encrypt_complainant_data: c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22
+2025-09-26 11:21:54,844 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,848 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,848 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:54,849 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,849 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,849 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,850 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,854 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,854 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:54,855 - db_manager - INFO - encrypt_field completed in 0.00s. Rows: 1
+2025-09-26 11:21:54,855 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,855 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,855 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,859 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,859 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 11:21:54,860 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 11:21:54,860 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,860 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,860 - db_manager - DEBUG - phone number +9779876543212 hashed to 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2 at hash_sensitive_data
+2025-09-26 11:21:54,861 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'complainant_email': 'c30d0407030295f1590f726e90ec62d23d018f9416cc9a65009e048c6b5103b0ef21dddb0b33ed2647cf184a15165af71d1ef6a475534fc4bed22070af7c6d0e701941f4009eb2aed7c5feef2abd', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_village': 'Polu', 'complainant_address': 'c30d04070302dc5cd5d4c6f3462865d23a01697b336dbcd39ba1df9440528cc36eca10a3e94369d2dcff524ae7ee47acab5476c5d155fc49171b8e587e1e693a979bbfe0ed1e242854d76b', 'complainant_phone_hash': '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'complainant_full_name_hash': 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 11:21:54,861 - db_manager - DEBUG - encrypted_data at update_complainant: {'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'complainant_email': 'c30d0407030295f1590f726e90ec62d23d018f9416cc9a65009e048c6b5103b0ef21dddb0b33ed2647cf184a15165af71d1ef6a475534fc4bed22070af7c6d0e701941f4009eb2aed7c5feef2abd', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Mechinagar Municipality', 'complainant_village': 'Polu', 'complainant_address': 'c30d04070302dc5cd5d4c6f3462865d23a01697b336dbcd39ba1df9440528cc36eca10a3e94369d2dcff524ae7ee47acab5476c5d155fc49171b8e587e1e693a979bbfe0ed1e242854d76b', 'complainant_phone_hash': '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'complainant_full_name_hash': 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 11:21:54,861 - db_manager - DEBUG - execute_update values: ('c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'c30d0407030295f1590f726e90ec62d23d018f9416cc9a65009e048c6b5103b0ef21dddb0b33ed2647cf184a15165af71d1ef6a475534fc4bed22070af7c6d0e701941f4009eb2aed7c5feef2abd', 'Koshi', 'Jhapa', 'Mechinagar Municipality', 'Polu', 'c30d04070302dc5cd5d4c6f3462865d23a01697b336dbcd39ba1df9440528cc36eca10a3e94369d2dcff524ae7ee47acab5476c5d155fc49171b8e587e1e693a979bbfe0ed1e242854d76b', '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2', 'f0f4af4806e3b24ab16bd89d15c90d21084a0a2b88dba1d7209a2ae8611e3b21', 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f', 'CM-20250926-KOJH-11B6-B')
+2025-09-26 11:21:54,861 - db_manager - DEBUG - execute_update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, complainant_province = %s, complainant_district = %s, complainant_municipality = %s, complainant_village = %s, complainant_address = %s, complainant_phone_hash = %s, complainant_full_name_hash = %s, complainant_email_hash = %s WHERE complainant_id = %s
+2025-09-26 11:21:54,861 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,865 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,865 - db_manager - INFO - execute_update: Executing update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, ...
+2025-09-26 11:21:54,866 - db_manager - INFO - execute_update: Update completed in 0.00s. Affected rows: 1
+2025-09-26 11:21:54,868 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,868 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,868 - db_manager - INFO - Complainant updated in db: CM-20250926-KOJH-11B6-B
+2025-09-26 11:21:54,868 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:54,868 - db_manager - DEBUG - execute_update values: ('["Environmental - Air Pollution"]', 'Not provided', 'there is dust everywhere in my house\nmy kids are coughing I dont know what to do at all', False, False, 'GR-20250926-KOJH-9718-B')
+2025-09-26 11:21:54,868 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance_summary = %s, grievance_description = %s, grievance_sensitive_issue = %s, grievance_high_priority = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 11:21:54,869 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,873 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,873 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance...
+2025-09-26 11:21:54,874 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:54,875 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,876 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,876 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-9718-B, rows affected: 1
+2025-09-26 11:21:54,876 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-9718-B
+2025-09-26 11:21:54,876 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,880 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,880 - db_manager - INFO - Executing check_status_code: 
+                SELECT status_code FROM grievance_statuses
+                WHERE status_code = %s A...
+2025-09-26 11:21:54,881 - db_manager - INFO - check_status_code completed in 0.00s. Rows: 1
+2025-09-26 11:21:54,881 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,881 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,881 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'status_code', 'assigned_to', 'notes', 'created_by'])
+2025-09-26 11:21:54,881 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 11:21:54,881 - db_manager - DEBUG - len of query_keys: 5
+2025-09-26 11:21:54,881 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 11:21:54,881 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,885 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,889 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,889 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,889 - db_manager - DEBUG - execute_update values: ('GR-20250926-KOJH-9718-B',)
+2025-09-26 11:21:54,889 - db_manager - DEBUG - execute_update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIMESTAMP
+                WHERE grievance_id = %s
+            
+2025-09-26 11:21:54,889 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:21:54,893 - db_manager - INFO - Starting database transaction
+2025-09-26 11:21:54,893 - db_manager - INFO - execute_update: Executing update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIM...
+2025-09-26 11:21:54,894 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 11:21:54,896 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:21:54,896 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:21:54,896 - db_manager - INFO - Status history updated for grievance: GR-20250926-KOJH-9718-B
+2025-09-26 11:26:05,023 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,023 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,023 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,023 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,023 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,023 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,023 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,024 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,024 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:05,024 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 11:26:05,025 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 11:26:05,025 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 11:26:59,705 - db_manager - DEBUG - original phone number: 9876543212
+2025-09-26 11:26:59,705 - db_manager - DEBUG - hashed phone number: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 11:26:59,705 - db_manager - DEBUG - Phone number '+9779876543212' hashed to '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2' in search
+2025-09-26 11:26:59,705 - db_manager - DEBUG - search_phone at query time: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 11:26:59,705 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:26:59,712 - db_manager - INFO - Starting database transaction
+2025-09-26 11:26:59,712 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 11:26:59,714 - db_manager - INFO - get_complainants_by_phone_number completed in 0.01s. Rows: 1
+2025-09-26 11:26:59,715 - db_manager - INFO - Transaction committed successfully
+2025-09-26 11:26:59,715 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:26:59,715 - db_manager - DEBUG - 1 complainants found
+2025-09-26 11:26:59,715 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 11:26:59,715 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 11:26:59,723 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 11:26:59,723 - db_manager - DEBUG - 1 complainants successfully decrypted
+2025-09-26 11:26:59,723 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'paul kamar ketal', 'complainant_phone': '+9779876543212', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 12:18:29,490 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,490 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,490 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,491 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,491 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,491 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,492 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,492 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,492 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,492 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,492 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:18:29,492 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:18:29,492 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:18:29,492 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:19:21,985 - db_manager - DEBUG - original phone number: 9876543219
+2025-09-26 12:19:21,985 - db_manager - DEBUG - hashed phone number: cf42591c8ae28c8a9db30d058769bfba382f6eb81a5fe2cc3a94a43243277a6c
+2025-09-26 12:19:21,985 - db_manager - DEBUG - Phone number '+9779876543219' hashed to 'cf42591c8ae28c8a9db30d058769bfba382f6eb81a5fe2cc3a94a43243277a6c' in search
+2025-09-26 12:19:21,985 - db_manager - DEBUG - search_phone at query time: cf42591c8ae28c8a9db30d058769bfba382f6eb81a5fe2cc3a94a43243277a6c
+2025-09-26 12:19:21,986 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:19:21,993 - db_manager - INFO - Starting database transaction
+2025-09-26 12:19:21,993 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 12:19:21,997 - db_manager - INFO - get_complainants_by_phone_number completed in 0.01s. Rows: 2
+2025-09-26 12:19:21,997 - db_manager - INFO - Transaction committed successfully
+2025-09-26 12:19:21,997 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:19:21,998 - db_manager - DEBUG - 2 complainants found
+2025-09-26 12:19:21,998 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250918-KOJH-BBEF-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 11, 53, 35, 622758, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302edfbe04daeb4c4d07ad23d014c062ce043ebf363cfb932c5072e4884468ef42891828701434c971c6f24c14a1a766f325fc4712d6649530a4cf5a2c0f29e2dfb1b32b707e050ce26', 'complainant_phone': 'c30d0407030221a7ecd24b080f4970d23f01d5d3094da3dcce546027cfe418cdb5151758317d63a95341084300e3c9196361b5c122e47ceb4c5747b6082f93ff637c5fa58df79c48f2c25869c67dc446', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-917B-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 9, 46, 30, 372537, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d0407030242cf3d9a12ff84a168d238019361d0b94766fc5d18120e12f11ef6faee34e381a0017155c0669580b7629a0bec0f5ede9a5c60ed1723a1f16de76063d5b8ca3f7a24d3', 'complainant_phone': 'c30d040703021cd4d5fef029694478d23f01ef61b0fc2bf769e710090ec10dcff428bb0f65f6f365eaf8fd35b65b04aabcc7da980ea912634087166929a6d3c9db0202e1025c32da6f7275014d790a6e', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-09-26 12:19:21,998 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:19:22,006 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:19:22,007 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:19:22,015 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:19:22,015 - db_manager - DEBUG - 2 complainants successfully decrypted
+2025-09-26 12:19:22,015 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250918-KOJH-BBEF-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 11, 53, 35, 622758, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543219', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-917B-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 9, 46, 30, 372537, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'palol m', 'complainant_phone': '+9779876543219', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-09-26 12:20:22,541 - db_manager - DEBUG - original phone number: 9876543212
+2025-09-26 12:20:22,541 - db_manager - DEBUG - hashed phone number: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 12:20:22,541 - db_manager - DEBUG - Phone number '+9779876543212' hashed to '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2' in search
+2025-09-26 12:20:22,541 - db_manager - DEBUG - search_phone at query time: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 12:20:22,542 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:20:22,547 - db_manager - INFO - Starting database transaction
+2025-09-26 12:20:22,548 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 12:20:22,550 - db_manager - INFO - get_complainants_by_phone_number completed in 0.01s. Rows: 1
+2025-09-26 12:20:22,550 - db_manager - INFO - Transaction committed successfully
+2025-09-26 12:20:22,550 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:20:22,550 - db_manager - DEBUG - 1 complainants found
+2025-09-26 12:20:22,550 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 12:20:22,550 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:20:22,557 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:20:22,558 - db_manager - DEBUG - 1 complainants successfully decrypted
+2025-09-26 12:20:22,558 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'paul kamar ketal', 'complainant_phone': '+9779876543212', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 12:23:52,502 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,502 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,502 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,502 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,502 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,502 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,502 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,502 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,502 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,502 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,503 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:23:52,503 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:23:52,503 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:23:52,504 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:24:45,896 - db_manager - DEBUG - original phone number: 9876543212
+2025-09-26 12:24:45,896 - db_manager - DEBUG - hashed phone number: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 12:24:45,896 - db_manager - DEBUG - Phone number '+9779876543212' hashed to '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2' in search
+2025-09-26 12:24:45,896 - db_manager - DEBUG - search_phone at query time: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 12:24:45,896 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:24:45,903 - db_manager - INFO - Starting database transaction
+2025-09-26 12:24:45,903 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 12:24:45,906 - db_manager - INFO - get_complainants_by_phone_number completed in 0.01s. Rows: 1
+2025-09-26 12:24:45,906 - db_manager - INFO - Transaction committed successfully
+2025-09-26 12:24:45,906 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:24:45,906 - db_manager - DEBUG - 1 complainants found
+2025-09-26 12:24:45,907 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 12:24:45,907 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 12:24:45,913 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 12:24:45,914 - db_manager - DEBUG - 1 complainants successfully decrypted
+2025-09-26 12:24:45,914 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'paul kamar ketal', 'complainant_phone': '+9779876543212', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 12:37:01,200 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,201 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,201 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,201 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,201 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,201 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,201 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,201 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,201 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,201 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,201 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,201 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,201 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,201 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,201 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,201 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,202 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,202 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,202 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,202 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,202 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,202 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,202 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,202 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,202 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,202 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,202 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 12:37:01,202 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 12:37:01,202 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 12:37:01,202 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,031 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,031 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,032 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,032 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,032 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,033 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,033 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,033 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,033 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:16:03,033 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:16:03,033 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:16:03,033 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:17:03,035 - db_manager - DEBUG - original phone number: 9876543212
+2025-09-26 13:17:03,035 - db_manager - DEBUG - hashed phone number: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 13:17:03,035 - db_manager - DEBUG - Phone number '+9779876543212' hashed to '8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2' in search
+2025-09-26 13:17:03,035 - db_manager - DEBUG - search_phone at query time: 8b41308902f6302fbcd498e067d57d5eaf71f2ea0a36fc00c79b2f4218560dd2
+2025-09-26 13:17:03,035 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:17:03,042 - db_manager - INFO - Starting database transaction
+2025-09-26 13:17:03,042 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 13:17:03,055 - db_manager - INFO - get_complainants_by_phone_number completed in 0.02s. Rows: 1
+2025-09-26 13:17:03,055 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:17:03,055 - db_manager - INFO - Database connection closed. Duration: 0.02s
+2025-09-26 13:17:03,056 - db_manager - DEBUG - 1 complainants found
+2025-09-26 13:17:03,056 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302ae757073861a926f69d2410154fd301f86f4f639f0ac346fdfae2dd7c906697e05f52778236db33987934ff73d89f5a84f67f5882063d8d1b316e6b9e97643178ab42d53ec47b3b25abb1b1d', 'complainant_phone': 'c30d0407030249c34827bbd804f462d23f017a66f90129ded650e3c083f9beeb915b4972088d6ac34733916fe0b5df85f72af3e8cc3c453a3718a88e5110be704526bbb32bd7aa9216944ea197de2f22', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 13:17:03,056 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:17:03,066 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:17:03,066 - db_manager - DEBUG - 1 complainants successfully decrypted
+2025-09-26 13:17:03,066 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250926-KOJH-9718-B', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 11, 18, 48, 382454, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': None, 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'paul kamar ketal', 'complainant_phone': '+9779876543212', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 26, 11, 21, 54, 886120, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}]
+2025-09-26 13:26:14,348 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,349 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,349 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,349 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,349 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,349 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,349 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,349 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,349 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,349 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,349 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,349 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,350 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,350 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,350 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,350 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,350 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,350 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,350 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,350 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,350 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,350 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:26:14,350 - db_manager - INFO - Database parameters: {'host': 'localhost', 'database': 'grievance_db', 'user': 'nepal_grievance_admin', 'password': 'K9!mP2$vL5nX8&qR4jW7', 'port': '5432'}
+2025-09-26 13:26:14,350 - db_manager - INFO - Database manager initialized successfully
+2025-09-26 13:26:14,350 - db_manager - INFO - Encryption enabled for sensitive fields
+2025-09-26 13:52:14,111 - db_manager - INFO - create_complainant: Creating complainant with ID: CM-20250926-KOJH-0A42-B
+2025-09-26 13:52:14,111 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_id': 'CM-20250926-KOJH-0A42-B', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_unique_id': 'CM-20250926-KOJH-0A42-B'}
+2025-09-26 13:52:14,111 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['complainant_id', 'complainant_province', 'complainant_district', 'complainant_unique_id'])
+2025-09-26 13:52:14,111 - db_manager - DEBUG - Generated query: INSERT INTO complainants (complainant_id, complainant_province, complainant_district, complainant_unique_id) VALUES (%s, %s, %s, %s)
+2025-09-26 13:52:14,111 - db_manager - DEBUG - len of query_keys: 4
+2025-09-26 13:52:14,111 - db_manager - DEBUG - Generated query: INSERT INTO complainants (complainant_id, complainant_province, complainant_district, complainant_unique_id) VALUES (%s, %s, %s, %s)
+2025-09-26 13:52:14,111 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:52:14,117 - db_manager - INFO - Starting database transaction
+2025-09-26 13:52:14,121 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:52:14,121 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:52:14,121 - db_manager - INFO - create_complainant: Successfully created complainant with ID: CM-20250926-KOJH-0A42-B
+2025-09-26 13:52:14,121 - db_manager - INFO - create_grievance: Creating grievance with data: {'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_office': None, 'source': 'bot', 'complainant_unique_id': 'CM-20250926-KOJH-0A42-B'}
+2025-09-26 13:52:14,121 - db_manager - INFO - create_grievance: Creating grievance with ID: GR-20250926-KOJH-66A6-B
+2025-09-26 13:52:14,121 - db_manager - INFO - create_grievance: Creating grievance with allowed fields: ['grievance_id', 'complainant_id', 'grievance_categories', 'grievance_categories_alternative', 'follow_up_question', 'grievance_summary', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'is_temporary', 'source', 'language_code', 'grievance_classification_status']
+2025-09-26 13:52:14,122 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'complainant_id', 'grievance_description', 'source'])
+2025-09-26 13:52:14,122 - db_manager - DEBUG - Generated query: INSERT INTO grievances (grievance_id, complainant_id, grievance_description, source) VALUES (%s, %s, %s, %s) RETURNING grievance_id
+2025-09-26 13:52:14,122 - db_manager - DEBUG - len of query_keys: 4
+2025-09-26 13:52:14,122 - db_manager - DEBUG - Generated query: INSERT INTO grievances (grievance_id, complainant_id, grievance_description, source) VALUES (%s, %s, %s, %s) RETURNING grievance_id
+2025-09-26 13:52:14,122 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:52:14,127 - db_manager - INFO - Starting database transaction
+2025-09-26 13:52:14,134 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:52:14,134 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:52:14,134 - db_manager - INFO - create_grievance: Successfully created grievance with ID: GR-20250926-KOJH-66A6-B
+2025-09-26 13:54:56,031 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,037 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,037 - db_manager - INFO - Executing get_complainant_by_id: 
+            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_pho...
+2025-09-26 13:54:56,039 - db_manager - INFO - get_complainant_by_id completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,039 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,039 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,040 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,045 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,045 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 13:54:56,047 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,048 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,048 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,048 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': ['Environmental - Noise Pollution'], 'grievance_categories_alternative': ['Environmental - Air Pollution', 'Safety - Road Safety Provisions'], 'follow_up_question': ['How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?'], 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 13, 52, 22, 533032, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': None, 'complainant_phone': None, 'complainant_email': None, 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': None, 'complainant_ward': None, 'complainant_village': None, 'complainant_address': None}, results: [{'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': '["Environmental - Noise Pollution"]', 'grievance_categories_alternative': '["Environmental - Air Pollution", "Safety - Road Safety Provisions"]', 'follow_up_question': '["How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?"]', 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 13, 52, 22, 533032, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': None, 'complainant_phone': None, 'complainant_email': None, 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': None, 'complainant_ward': None, 'complainant_village': None, 'complainant_address': None}]
+2025-09-26 13:54:56,048 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-0A42-B
+2025-09-26 13:54:56,048 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,053 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,054 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 13:54:56,057 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,057 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,057 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,057 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,063 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,063 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 13:54:56,064 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,064 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,064 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,064 - db_manager - DEBUG - encrypted phone number +9779876543215 at encrypt_complainant_data: c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232
+2025-09-26 13:54:56,064 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,069 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,069 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 13:54:56,070 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,070 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,070 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,070 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,075 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,076 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 13:54:56,077 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,077 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,077 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,077 - db_manager - DEBUG - phone number +9779876543215 hashed to e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459 at hash_sensitive_data
+2025-09-26 13:54:56,077 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6', 'complainant_full_name_hash': '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'complainant_phone_hash': 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 13:54:56,077 - db_manager - DEBUG - encrypted_data at update_complainant: {'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6', 'complainant_full_name_hash': '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'complainant_phone_hash': 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 13:54:56,077 - db_manager - DEBUG - execute_update values: ('c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'Koshi', 'Jhapa', 'Birtamod Municipality', 'Polur', 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6', '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f', 'CM-20250926-KOJH-0A42-B')
+2025-09-26 13:54:56,077 - db_manager - DEBUG - execute_update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, complainant_province = %s, complainant_district = %s, complainant_municipality = %s, complainant_village = %s, complainant_address = %s, complainant_full_name_hash = %s, complainant_phone_hash = %s, complainant_email_hash = %s WHERE complainant_id = %s
+2025-09-26 13:54:56,077 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,082 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,082 - db_manager - INFO - execute_update: Executing update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, ...
+2025-09-26 13:54:56,083 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 13:54:56,085 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,085 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,085 - db_manager - INFO - Complainant updated in db: CM-20250926-KOJH-0A42-B
+2025-09-26 13:54:56,085 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-66A6-B
+2025-09-26 13:54:56,085 - db_manager - DEBUG - execute_update values: ("noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'GR-20250926-KOJH-66A6-B')
+2025-09-26 13:54:56,085 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_description = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 13:54:56,085 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,090 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,090 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_description = %s, grievanc...
+2025-09-26 13:54:56,091 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 13:54:56,093 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,093 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,093 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-66A6-B, rows affected: 1
+2025-09-26 13:54:56,093 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-66A6-B
+2025-09-26 13:54:56,093 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,098 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,098 - db_manager - INFO - Executing check_status_code: 
+                SELECT status_code FROM grievance_statuses
+                WHERE status_code = %s A...
+2025-09-26 13:54:56,100 - db_manager - INFO - check_status_code completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,100 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,100 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,100 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'status_code', 'assigned_to', 'notes', 'created_by'])
+2025-09-26 13:54:56,100 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 13:54:56,100 - db_manager - DEBUG - len of query_keys: 5
+2025-09-26 13:54:56,100 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 13:54:56,100 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,105 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,109 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,109 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,109 - db_manager - DEBUG - execute_update values: ('GR-20250926-KOJH-66A6-B',)
+2025-09-26 13:54:56,109 - db_manager - DEBUG - execute_update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIMESTAMP
+                WHERE grievance_id = %s
+            
+2025-09-26 13:54:56,109 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,114 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,114 - db_manager - INFO - execute_update: Executing update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIM...
+2025-09-26 13:54:56,115 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 13:54:56,117 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,117 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,117 - db_manager - INFO - Status history updated for grievance: GR-20250926-KOJH-66A6-B
+2025-09-26 13:54:56,117 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,122 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,122 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 13:54:56,124 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 13:54:56,125 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,125 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,125 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,130 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,130 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 13:54:56,131 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 13:54:56,131 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,131 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,178 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 13:54:56,183 - db_manager - INFO - Starting database transaction
+2025-09-26 13:54:56,184 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 13:54:56,186 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 13:54:56,186 - db_manager - INFO - Transaction committed successfully
+2025-09-26 13:54:56,186 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 13:54:56,186 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': ['Environmental - Noise Pollution'], 'grievance_categories_alternative': ['Environmental - Air Pollution', 'Safety - Road Safety Provisions'], 'follow_up_question': ['How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?'], 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 13, 54, 56, 114689, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_ward': None, 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6'}, results: [{'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': '["Environmental - Noise Pollution"]', 'grievance_categories_alternative': '["Environmental - Air Pollution", "Safety - Road Safety Provisions"]', 'follow_up_question': '["How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?"]', 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 13, 54, 56, 114689, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_ward': None, 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6'}]
+2025-09-26 14:01:27,548 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,554 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,555 - db_manager - INFO - Executing get_complainant_id_from_grievance_id: 
+            SELECT complainant_id
+            FROM grievances
+            WHERE grievance_id = %s
+ ...
+2025-09-26 14:01:27,556 - db_manager - INFO - get_complainant_id_from_grievance_id completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,556 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,556 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,556 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-0A42-B
+2025-09-26 14:01:27,556 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {}
+2025-09-26 14:01:27,556 - db_manager - DEBUG - encrypted_data at update_complainant: {}
+2025-09-26 14:01:27,556 - db_manager - DEBUG - No complainant field to update
+2025-09-26 14:01:27,556 - db_manager - INFO - Complainant updated in db: GR-20250926-KOJH-66A6-B
+2025-09-26 14:01:27,557 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-66A6-B
+2025-09-26 14:01:27,557 - db_manager - DEBUG - execute_update values: ('["Environmental - Noise Pollution"]', 'GR-20250926-KOJH-66A6-B')
+2025-09-26 14:01:27,557 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 14:01:27,557 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,562 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,562 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance...
+2025-09-26 14:01:27,563 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 14:01:27,566 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,566 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,566 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-66A6-B, rows affected: 1
+2025-09-26 14:01:27,566 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-66A6-B
+2025-09-26 14:01:27,624 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,629 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,629 - db_manager - INFO - Executing get_grievance_files: 
+            SELECT file_id, file_name, file_type, file_size, upload_timestamp
+            FROM file...
+2025-09-26 14:01:27,631 - db_manager - INFO - get_grievance_files completed in 0.01s. Rows: 0
+2025-09-26 14:01:27,631 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,631 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,632 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,637 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,637 - db_manager - INFO - Executing get_complainant_by_id: 
+            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_pho...
+2025-09-26 14:01:27,638 - db_manager - INFO - get_complainant_by_id completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,639 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,639 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,639 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,645 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,646 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,651 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,651 - db_manager - INFO - Executing get_grievance_by_id: 
+                SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
+    ...
+2025-09-26 14:01:27,653 - db_manager - INFO - get_grievance_by_id completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,653 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,653 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,653 - db_manager - DEBUG - get_grievance_by_id: grievance_id: {'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': ['Environmental - Noise Pollution'], 'grievance_categories_alternative': ['Environmental - Air Pollution', 'Safety - Road Safety Provisions'], 'follow_up_question': ['How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?'], 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 14, 1, 27, 562565, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_ward': None, 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6'}, results: [{'grievance_id': 'GR-20250926-KOJH-66A6-B', 'complainant_id': 'CM-20250926-KOJH-0A42-B', 'grievance_categories': '["Environmental - Noise Pollution"]', 'grievance_categories_alternative': '["Environmental - Air Pollution", "Safety - Road Safety Provisions"]', 'follow_up_question': '["How many hours per day is the noise from the batching plant affecting you and your family, and what health or daily life problems has it caused?"]', 'grievance_summary': "Construction noise is affecting my family's life; we are at km 45 and live right beside the batching plant.", 'grievance_description': "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", 'grievance_claimed_amount': None, 'grievance_location': None, 'language_code': 'en', 'grievance_classification_status': 'pending', 'grievance_creation_date': datetime.datetime(2025, 9, 26, 13, 52, 14, 127706, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_modification_date': datetime.datetime(2025, 9, 26, 14, 1, 27, 562565, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'is_temporary': True, 'source': 'bot', 'grievance_sensitive_issue': False, 'grievance_high_priority': False, 'grievance_timeline': None, 'complainant_full_name': 'c30d0407030238799c51e63b1de86ed2400120a445b132679c227c93eaadfd980bb113490e2676f9ebc5ce5b0674da9a412a9b7b623d067d13e1bff4bc534bec370044354f692c5ad57896c3e242d9e2fd', 'complainant_phone': 'c30d04070302a4bafa204b845f787ed23f01dbd3b8c0656de6acb880a5cd5586a83e8322abe54cdaa7ab32f25fed9ecbce65d65ae5b7800b6fe97ed055f05cb9ab4770fac254e32972555485214b6232', 'complainant_email': 'c30d0407030231ca5e05f2ad092e66d23d01e8668a949ac5e7efb547543f37ada2738dedf0ba7699adc9a4a244172fa4c397b3cd8b1e4916efe855d477a79ab15a9b33c2f08f01f641d356de1c46', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_ward': None, 'complainant_village': 'Polur', 'complainant_address': 'c30d0407030235e1251e13797af872d23a016e4a6777d98790ddaa64188572f6bedb6c6c8c65089f0722900936bc68ca811a9287b7612d0ae3f75b83e194d337dfd7ed60bf18972e2621c6'}]
+2025-09-26 14:01:27,653 - db_manager - INFO - update_complainant: Updating complainant with ID: CM-20250926-KOJH-0A42-B
+2025-09-26 14:01:27,654 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,659 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,659 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 14:01:27,660 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,660 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,660 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,660 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,665 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,665 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 14:01:27,666 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,667 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,667 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,667 - db_manager - DEBUG - encrypted phone number +9779876543215 at encrypt_complainant_data: c30d04070302b63b7b47289582a76ed23f0185f796eda9b5dcdc21c788892d4bda7b5454b33294b9eb3085d0503f4119ede1e9d0626c9e0124824369a16e5594b58fe70046a9f43892380093344df4b5
+2025-09-26 14:01:27,667 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,672 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,672 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 14:01:27,673 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,673 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,673 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,673 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,678 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,678 - db_manager - INFO - Executing encrypt_field: SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted...
+2025-09-26 14:01:27,679 - db_manager - INFO - encrypt_field completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,679 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,679 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,680 - db_manager - DEBUG - phone number +9779876543215 hashed to e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459 at hash_sensitive_data
+2025-09-26 14:01:27,680 - db_manager - DEBUG - encrypted and hashed data at encrypt_and_hash_sensitive_data: {'complainant_full_name': 'c30d0407030204b6630919aa184d62d2400159dce5b7d37005a96fa5effb76f09f6d5c86b4818c382b3f91e454864a2b251719b065083b4ed797fe89eb27c5c0806bce9adae74ebaddae58c4ae5772ca33', 'complainant_phone': 'c30d04070302b63b7b47289582a76ed23f0185f796eda9b5dcdc21c788892d4bda7b5454b33294b9eb3085d0503f4119ede1e9d0626c9e0124824369a16e5594b58fe70046a9f43892380093344df4b5', 'complainant_email': 'c30d040703029adbe86f4f357ced71d23d01a829bc2aaefa357838c173ca8c65a32f7bf93474aba2296e87ee5a703c851117ad72af0e2661b1efcec3adeadd2f16c5c0b584123e3c051969ca2bd7', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_village': 'Polur', 'complainant_address': 'c30d04070302cefc023217b0e73d67d23a010564fc80a38e511ac13abb4bc94e34db80e074ca196ae8838a3c99687b4e3390fea9bbd8af46f87b587703f49cfb7ae8d9dac64786a7ee12bc', 'complainant_full_name_hash': '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'complainant_phone_hash': 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 14:01:27,680 - db_manager - DEBUG - encrypted_data at update_complainant: {'complainant_full_name': 'c30d0407030204b6630919aa184d62d2400159dce5b7d37005a96fa5effb76f09f6d5c86b4818c382b3f91e454864a2b251719b065083b4ed797fe89eb27c5c0806bce9adae74ebaddae58c4ae5772ca33', 'complainant_phone': 'c30d04070302b63b7b47289582a76ed23f0185f796eda9b5dcdc21c788892d4bda7b5454b33294b9eb3085d0503f4119ede1e9d0626c9e0124824369a16e5594b58fe70046a9f43892380093344df4b5', 'complainant_email': 'c30d040703029adbe86f4f357ced71d23d01a829bc2aaefa357838c173ca8c65a32f7bf93474aba2296e87ee5a703c851117ad72af0e2661b1efcec3adeadd2f16c5c0b584123e3c051969ca2bd7', 'complainant_province': 'Koshi', 'complainant_district': 'Jhapa', 'complainant_municipality': 'Birtamod Municipality', 'complainant_village': 'Polur', 'complainant_address': 'c30d04070302cefc023217b0e73d67d23a010564fc80a38e511ac13abb4bc94e34db80e074ca196ae8838a3c99687b4e3390fea9bbd8af46f87b587703f49cfb7ae8d9dac64786a7ee12bc', 'complainant_full_name_hash': '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'complainant_phone_hash': 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'complainant_email_hash': 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f'}
+2025-09-26 14:01:27,680 - db_manager - DEBUG - execute_update values: ('c30d0407030204b6630919aa184d62d2400159dce5b7d37005a96fa5effb76f09f6d5c86b4818c382b3f91e454864a2b251719b065083b4ed797fe89eb27c5c0806bce9adae74ebaddae58c4ae5772ca33', 'c30d04070302b63b7b47289582a76ed23f0185f796eda9b5dcdc21c788892d4bda7b5454b33294b9eb3085d0503f4119ede1e9d0626c9e0124824369a16e5594b58fe70046a9f43892380093344df4b5', 'c30d040703029adbe86f4f357ced71d23d01a829bc2aaefa357838c173ca8c65a32f7bf93474aba2296e87ee5a703c851117ad72af0e2661b1efcec3adeadd2f16c5c0b584123e3c051969ca2bd7', 'Koshi', 'Jhapa', 'Birtamod Municipality', 'Polur', 'c30d04070302cefc023217b0e73d67d23a010564fc80a38e511ac13abb4bc94e34db80e074ca196ae8838a3c99687b4e3390fea9bbd8af46f87b587703f49cfb7ae8d9dac64786a7ee12bc', '4b55ba97cde3bdb1097ee544e9fd0297e8764f1cc751d5cf8acfdae603379a73', 'e6b33b9bccce197c90f12905d3a80c4a2f0428f699e3a322c4b1dbae8c63d459', 'd83b9ff3c07a8390e2ea0a2af45fba37595da25f31b85ba625363ee98c0c796f', 'CM-20250926-KOJH-0A42-B')
+2025-09-26 14:01:27,680 - db_manager - DEBUG - execute_update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, complainant_province = %s, complainant_district = %s, complainant_municipality = %s, complainant_village = %s, complainant_address = %s, complainant_full_name_hash = %s, complainant_phone_hash = %s, complainant_email_hash = %s WHERE complainant_id = %s
+2025-09-26 14:01:27,680 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,685 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,685 - db_manager - INFO - execute_update: Executing update query: UPDATE complainants SET complainant_full_name = %s, complainant_phone = %s, complainant_email = %s, ...
+2025-09-26 14:01:27,686 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 14:01:27,689 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,689 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,689 - db_manager - INFO - Complainant updated in db: CM-20250926-KOJH-0A42-B
+2025-09-26 14:01:27,689 - db_manager - INFO - update_grievance: Updating grievance with ID: GR-20250926-KOJH-66A6-B
+2025-09-26 14:01:27,689 - db_manager - DEBUG - execute_update values: ('["Environmental - Noise Pollution"]', 'Not provided', "noise of the construction is ruining my family's life\nwe are at km 45 and I live just beside the batching plant", False, False, 'GR-20250926-KOJH-66A6-B')
+2025-09-26 14:01:27,689 - db_manager - DEBUG - execute_update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance_summary = %s, grievance_description = %s, grievance_sensitive_issue = %s, grievance_high_priority = %s, grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                    RETURNING grievance_id
+                
+2025-09-26 14:01:27,689 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,695 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,695 - db_manager - INFO - execute_update: Executing update query: 
+                    UPDATE grievances 
+                    SET grievance_categories = %s, grievance...
+2025-09-26 14:01:27,696 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 14:01:27,699 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,699 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,699 - db_manager - INFO - update_grievance: Updated grievance with ID: GR-20250926-KOJH-66A6-B, rows affected: 1
+2025-09-26 14:01:27,699 - db_manager - INFO - Grievance updated in db: GR-20250926-KOJH-66A6-B
+2025-09-26 14:01:27,699 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,705 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,705 - db_manager - INFO - Executing check_status_code: 
+                SELECT status_code FROM grievance_statuses
+                WHERE status_code = %s A...
+2025-09-26 14:01:27,706 - db_manager - INFO - check_status_code completed in 0.01s. Rows: 1
+2025-09-26 14:01:27,706 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,706 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,706 - db_manager - DEBUG - query_keys at generate_query_string: dict_keys(['grievance_id', 'status_code', 'assigned_to', 'notes', 'created_by'])
+2025-09-26 14:01:27,706 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 14:01:27,706 - db_manager - DEBUG - len of query_keys: 5
+2025-09-26 14:01:27,706 - db_manager - DEBUG - Generated query: INSERT INTO grievance_status_history (grievance_id, status_code, assigned_to, notes, created_by) VALUES (%s, %s, %s, %s, %s)
+2025-09-26 14:01:27,706 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,711 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,714 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,714 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,715 - db_manager - DEBUG - execute_update values: ('GR-20250926-KOJH-66A6-B',)
+2025-09-26 14:01:27,715 - db_manager - DEBUG - execute_update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIMESTAMP
+                WHERE grievance_id = %s
+            
+2025-09-26 14:01:27,715 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:01:27,719 - db_manager - INFO - Starting database transaction
+2025-09-26 14:01:27,719 - db_manager - INFO - execute_update: Executing update query: 
+                UPDATE grievances SET
+                    grievance_modification_date = CURRENT_TIM...
+2025-09-26 14:01:27,721 - db_manager - INFO - execute_update: Update completed in 0.01s. Affected rows: 1
+2025-09-26 14:01:27,723 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:01:27,723 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:01:27,723 - db_manager - INFO - Status history updated for grievance: GR-20250926-KOJH-66A6-B
+2025-09-26 14:26:08,576 - db_manager - DEBUG - original phone number: 9876543210
+2025-09-26 14:26:08,576 - db_manager - DEBUG - hashed phone number: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-09-26 14:26:08,576 - db_manager - DEBUG - Phone number '+9779876543210' hashed to 'c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0' in search
+2025-09-26 14:26:08,576 - db_manager - DEBUG - search_phone at query time: c95ee4a714418be9379a77482c9a8b2003400429703eabebc8d6d971e864f8e0
+2025-09-26 14:26:08,576 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,583 - db_manager - INFO - Starting database transaction
+2025-09-26 14:26:08,583 - db_manager - INFO - Executing get_complainants_by_phone_number: 
+            WITH latest_status AS (
+                SELECT DISTINCT ON (grievance_id) 
+            ...
+2025-09-26 14:26:08,586 - db_manager - INFO - get_complainants_by_phone_number completed in 0.01s. Rows: 5
+2025-09-26 14:26:08,586 - db_manager - INFO - Transaction committed successfully
+2025-09-26 14:26:08,586 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,586 - db_manager - DEBUG - 5 complainants found
+2025-09-26 14:26:08,586 - db_manager - DEBUG - results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302fcd07169d974810364d24501846b89f239c1385447a45617d2a6ea4199d6284fd3347653f040842792bd3173f7ace0dfc1b99332e47740d4850ed7b98917b296c486ac03bac81b9337da0a8368316cbb', 'complainant_phone': 'c30d040703024eaeb1ab9d044a4079d23f0107f24e27e5fcd5651951228bbedb9e4400031fb90f212147e5ee4bd00e89e3ed66d10e95613aa28c85d3fc9fa527043d55e8f07d9fbe8a8e3f8f21834788', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302955ef63a049cd45e6cd23d01709143417e19bf39322890625c695366a88b4ba3a2ae925137ce9c2793c88954bef7fc3b33cf42bed858ca0904754754978f5b8bd3e63f8523e88501', 'complainant_phone': 'c30d0407030247d84536eb9b30ce65d23f01433e6bdc015d076a7597f0db204b7c49a289c07786b62d194995a21919d78365df1d24ca6621154dc15a7d9db2637d626fac4bbecd97a60042e01a5ac2bf', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d0407030221d1d99dc52a76db7dd23d0125b3b5302704c491bba412efc922f1787cc3833496bd09397576fc54e69a289c81ecd3069ce8ccb152f4e3df0c4f7bfe57b7c82c29823e5867daf6cf', 'complainant_phone': 'c30d040703022c5e6efc0ad92ea573d23f019875886a738a11b021efa5f4cd771aff87ef4f93bb303787d4051050a01062986509596f22b5094f371ca82233c64112867e1c4e2bb950c5e5118b60aa09', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'c30d04070302065fcf3e9986e68477d23d011e895ea30e4ef8adf73c300cc9da3130477acd926194c17ce2d44ecdb492352e528ff1109a4395a7e42c87493d42777dc3f6660e90fd659904ca4d69', 'complainant_phone': 'c30d04070302993a9056eb4260cc72d23f01d5f349bc0b38180babbcee991ae71a172d348011038c7c1aeac8e8c8dd8e49e2941d74f8ba0630e3d60081caee26c8b53bc12ce4b8905ec8112f53bf063d', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'c30d040703023d1d8279e9a8d3cc69d2390106592665dd3b5a2586600bd8c373eb759e189d8838686138c3f07f2fbb2a8b981ea875e10114ec66d58bf1f06c3ed4e2b1ccfe972f651d0a', 'complainant_phone': 'c30d0407030222a23a8a577bc9b07dd23f01d02581715cb672f0993635864107dd7d780c40c53aa86620d14da142ce0f82a42bc1414e6ce1f4dc8d81a48dcd28d409fd2dab3d060f83af8d70dfcad306', 'grievance_status': None, 'grievance_status_update_date': None}]
+2025-09-26 14:26:08,586 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,594 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,595 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,602 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,603 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,612 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,612 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,621 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,621 - db_manager - INFO - Connecting to database: grievance_db
+2025-09-26 14:26:08,629 - db_manager - INFO - Database connection closed. Duration: 0.01s
+2025-09-26 14:26:08,629 - db_manager - DEBUG - 5 complainants successfully decrypted
+2025-09-26 14:26:08,629 - db_manager - DEBUG - decrypted results: [{'grievance_id': 'GR-20250923-KOJH-0A53-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 19, 34, 311488, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'pipo offisde inzaghi', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 21, 22, 168989, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250923-KOJH-9215-B', 'grievance_creation_date': datetime.datetime(2025, 9, 23, 9, 9, 3, 676289, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-08', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': 'SUBMITTED', 'grievance_status_update_date': datetime.datetime(2025, 9, 23, 9, 10, 8, 754362, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800)))}, {'grievance_id': 'GR-20250918-KOJH-5DA1-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 41, 38, 407036, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250918-KOJH-4CAD-B', 'grievance_creation_date': datetime.datetime(2025, 9, 18, 10, 28, 54, 507139, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-10-03', 'grievance_categories': '["Environmental - Air Pollution"]', 'complainant_full_name': 'Not provided', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}, {'grievance_id': 'GR-20250912-KOJH-BB3E-B', 'grievance_creation_date': datetime.datetime(2025, 9, 12, 9, 44, 43, 897937, tzinfo=datetime.timezone(datetime.timedelta(seconds=28800))), 'grievance_timeline': '2025-09-27', 'grievance_categories': None, 'complainant_full_name': 'pipo ppp', 'complainant_phone': '+9779876543210', 'grievance_status': None, 'grievance_status_update_date': None}]

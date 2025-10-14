@@ -15,15 +15,18 @@ from werkzeug.utils import secure_filename
 from backend.services.database_services.postgres_services import db_manager
 from backend.api.websocket_utils import emit_status_update_accessible
 from backend.task_queue.registered_tasks import process_batch_files_task
-from backend.config.constants import VALID_FIELD_NAMES,DEFAULT_VALUES, TASK_STATUS
+from backend.config.constants import VALID_FIELD_NAMES,DEFAULT_VALUES
 from .voice_grievance_helpers import *
 from .voice_grievance_orchestration import *
 
-SUCCESS = TASK_STATUS['SUCCESS']
-STARTED = TASK_STATUS['STARTED']
-FAILED = TASK_STATUS['FAILED']
+# Get status codes from database constants (ensuring cohesiveness)
+from backend.config.database_constants import get_task_status_codes
 
-RETRYING = TASK_STATUS['RETRYING']
+status_codes = get_task_status_codes()
+SUCCESS = status_codes['SUCCESS']
+STARTED = status_codes['STARTED']
+FAILED = status_codes['FAILED']
+RETRYING = status_codes['RETRYING']
 
 
 

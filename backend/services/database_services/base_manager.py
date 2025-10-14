@@ -15,7 +15,13 @@ from contextlib import contextmanager
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
-from backend.config.constants import DEFAULT_VALUES, TASK_STATUS, TASK_STATUS_DICT, GRIEVANCE_STATUS_DICT, GRIEVANCE_STATUS, GRIEVANCE_CLASSIFICATION_STATUS_DICT, GRIEVANCE_CLASSIFICATION_STATUS, TRANSCRIPTION_PROCESSING_STATUS_DICT, TRANSCRIPTION_PROCESSING_STATUS
+from backend.config.constants import DEFAULT_VALUES
+from backend.config.database_tables import (
+    TABLE_CREATION_ORDER, TABLE_DEPENDENCIES, FIELD_NAMES, FIELD_DESCRIPTIONS,
+    TASK_STATUS_SEED_DATA, GRIEVANCE_STATUS_SEED_DATA, 
+    GRIEVANCE_CLASSIFICATION_STATUS_SEED_DATA, TRANSCRIPTION_PROCESSING_STATUS_SEED_DATA
+)
+# Database constants are now accessed through database_constants.py
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
@@ -53,6 +59,7 @@ class BaseDatabaseManager:
             'complainant_full_name',
             'complainant_address'
         ]
+        # Timeline data is now accessed through database_constants.py
         self.HASHED_FIELDS = [
             'complainant_phone',
             'complainant_email', 
@@ -60,14 +67,14 @@ class BaseDatabaseManager:
             'complainant_address'
         ]
         self.DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
-        self.TASK_STATUS = TASK_STATUS
-        self.GRIEVANCE_STATUS = GRIEVANCE_STATUS
-        self.GRIEVANCE_CLASSIFICATION_STATUS = GRIEVANCE_CLASSIFICATION_STATUS
-        self.TRANSCRIPTION_PROCESSING_STATUS = TRANSCRIPTION_PROCESSING_STATUS
+        # Status constants are now accessed through DatabaseLookupService
+        # The database is the authoritative source of truth
         self.province = DEFAULT_VALUES['DEFAULT_PROVINCE']
         self.district = DEFAULT_VALUES['DEFAULT_DISTRICT']
         self.office = DEFAULT_VALUES['DEFAULT_OFFICE']
         self.NOT_PROVIDED = DEFAULT_VALUES['NOT_PROVIDED']
+        
+        # Database constants are now accessed directly via database_constants.py
 
     def _validate_db_params(self):
         """Validate database connection parameters"""
@@ -84,7 +91,7 @@ class BaseDatabaseManager:
         start_time = datetime.now()
         try:
             self.logger.info(f"Connecting to database: {self.db_params['database']}")
-            conn = psycopg2.connect(**self.db_params, cursor_factory=DictCursor)
+            conn = psycopg2.connect(**self.db_params, cursor_factory=DictCursor)  # type: ignore
             yield conn
         except Exception as e:
             self.logger.error(f"Database connection error: {str(e)}")
@@ -695,30 +702,201 @@ class BaseDatabaseManager:
             return [], []
         return update_fields, update_values
 
+    def log_grievance_change(self, grievance_id: str, change_type: str, created_by: str, 
+                           status_code: Optional[str] = None, field_changes: Optional[Dict[str, Any]] = None,
+                           assigned_to: Optional[str] = None, notes: Optional[str] = None,
+                           source: str = "system_update", session_id: Optional[str] = None) -> bool:
+        """
+        Log a change to a grievance in the enhanced status history table
+        
+        Args:
+            grievance_id: ID of the grievance being changed
+            change_type: Type of change ('status_change', 'field_update', 'complainant_update', 'system_update')
+            created_by: Who made the change
+            status_code: Status code (required for status_change)
+            field_changes: Dictionary of field changes (required for field updates)
+            assigned_to: Who the grievance is assigned to
+            notes: Additional notes
+            source: Source of the change ('user_input', 'admin_update', 'system_update')
+            session_id: Session ID for user-initiated changes
+            
+        Returns:
+            bool: True if logged successfully, False otherwise
+        """
+        try:
+            # Validate change type (include 'creation' for initial submission)
+            valid_change_types = {'status_change', 'field_update', 'complainant_update', 'system_update', 'creation'}
+            if change_type not in valid_change_types:
+                self.logger.error(f"Invalid change_type: {change_type}")
+                return False
+            
+            # Validate required fields based on change type
+            if change_type in {'status_change', 'creation'} and not status_code:
+                self.logger.error("status_code is required for status_change")
+                return False
+            
+            if change_type in {'field_update', 'complainant_update', 'system_update'} and not field_changes:
+                self.logger.error(f"field_changes is required for {change_type}")
+                return False
+            
+            # Prepare field_changes with metadata if provided
+            if field_changes:
+                enhanced_field_changes = {
+                    "updated_fields": field_changes,
+                    "source": source,
+                    "session_id": session_id,
+                    "timestamp": datetime.now(self.nepal_tz).isoformat()
+                }
+            else:
+                enhanced_field_changes = None
+            
+            # Insert into status history
+            self.execute_insert(
+                table_name='grievance_status_history',
+                input_data={
+                    'grievance_id': grievance_id,
+                    'change_type': change_type,
+                    'status_code': status_code,
+                    'field_changes': enhanced_field_changes,
+                    'assigned_to': assigned_to,
+                    'notes': notes,
+                    'created_by': created_by
+                }
+            )
+            
+            self.logger.info(f"Successfully logged {change_type} for grievance {grievance_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error logging grievance change: {str(e)}")
+            return False
+
+    def get_grievance_change_history(self, grievance_id: str, change_type: Optional[str] = None, 
+                                   language: str = 'en') -> List[Dict]:
+        """
+        Get comprehensive change history for a grievance
+        
+        Args:
+            grievance_id: ID of the grievance
+            change_type: Optional filter for change type
+            language: Language for status names ('en' or 'ne')
+            
+        Returns:
+            List of change history records
+        """
+        try:
+            query = """
+                SELECT 
+                    h.id,
+                    h.grievance_id,
+                    h.change_type,
+                    h.status_code,
+                    CASE WHEN %s = 'en' THEN s.status_name_en ELSE s.status_name_ne END as status_name,
+                    h.field_changes,
+                    h.assigned_to,
+                    h.notes,
+                    h.created_by,
+                    h.created_at
+                FROM grievance_status_history h
+                LEFT JOIN grievance_statuses s ON h.status_code = s.status_code
+                WHERE h.grievance_id = %s
+            """
+            params = [language, grievance_id]
+            
+            if change_type:
+                query += " AND h.change_type = %s"
+                params.append(change_type)
+            
+            query += " ORDER BY h.created_at DESC"
+            
+            return self.execute_query(query, tuple(params), "get_grievance_change_history")
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving grievance change history: {str(e)}")
+            return []
+
+    def compare_and_log_field_changes(self, grievance_id: str, old_data: Dict[str, Any], 
+                                    new_data: Dict[str, Any], created_by: str, 
+                                    source: str = "user_input", session_id: Optional[str] = None,
+                                    change_reason: Optional[str] = None) -> bool:
+        """
+        Compare old and new grievance data and log only the fields that changed
+        
+        Args:
+            grievance_id: ID of the grievance
+            old_data: Original grievance data
+            new_data: Updated grievance data
+            created_by: Who made the changes
+            source: Source of the change
+            session_id: Session ID for user-initiated changes
+            change_reason: Reason for the changes
+            
+        Returns:
+            bool: True if changes were logged, False if no changes or error
+        """
+        try:
+            field_changes = {}
+            fields_to_track = {
+                'grievance_description', 'grievance_summary', 'grievance_categories', 
+                'grievance_categories_alternative', 'follow_up_question', 'grievance_location',
+                'grievance_claimed_amount', 'grievance_high_priority', 'grievance_sensitive_issue'
+            }
+            
+            # Compare fields and build change log
+            for field in fields_to_track:
+                old_value = old_data.get(field)
+                new_value = new_data.get(field)
+                
+                # Handle different data types for comparison
+                if isinstance(old_value, list) and isinstance(new_value, list):
+                    # Compare lists
+                    if set(old_value) != set(new_value):
+                        field_changes[field] = {
+                            'old_value': old_value,
+                            'new_value': new_value,
+                            'change_reason': change_reason or 'Field updated'
+                        }
+                elif old_value != new_value:
+                    field_changes[field] = {
+                        'old_value': old_value,
+                        'new_value': new_value,
+                        'change_reason': change_reason or 'Field updated'
+                    }
+            
+            # If no changes detected, return True (no error, just no changes)
+            if not field_changes:
+                self.logger.info(f"No field changes detected for grievance {grievance_id}")
+                return True
+            
+            # Determine change type based on source
+            change_type = 'field_update'
+            if source == 'system_update':
+                change_type = 'system_update'
+            elif any(field.startswith('complainant_') for field in field_changes.keys()):
+                change_type = 'complainant_update'
+            
+            # Log the changes
+            return self.log_grievance_change(
+                grievance_id=grievance_id,
+                change_type=change_type,
+                created_by=created_by,
+                field_changes=field_changes,
+                source=source,
+                session_id=session_id
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error comparing and logging field changes: {str(e)}")
+            return False
+
+    # Timeline methods removed - now handled by database_constants.py
+
 
 class TableDbManager(BaseDatabaseManager):
     """Handles schema creation and migration"""
     
     # List of all tables in the correct order (dependencies first)
-    ALL_TABLES = [
-        'grievance_statuses',
-        'processing_statuses',
-        'task_statuses',
-        'field_names',
-        'complainants',
-        'office_management',
-        'office_municipality_ward',
-        'office_user',
-        'tasks',
-        'grievances',
-        'task_entities',
-        'grievance_status_history',
-        'grievance_history',
-        'file_attachments',
-        'grievance_voice_recordings',
-        'grievance_transcriptions',
-        'grievance_translations'
-    ]
+    ALL_TABLES = TABLE_CREATION_ORDER
 
     def __init__(self, **kwargs):
         super().__init__(logger_name='db_manager', **kwargs)
@@ -828,7 +1006,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM grievance_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default grievance statuses...")
-            statuses = [(v['code'], v['name_en'], v['name_ne'], v['description_en'], v['description_ne'], 0) for v in GRIEVANCE_STATUS_DICT.values()]
+            statuses = [(v['code'], v['name_en'], v['name_ne'], v['description_en'], v['description_ne'], 0) for v in GRIEVANCE_STATUS_SEED_DATA]
             cur.executemany("INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES (%s, %s, %s, %s, %s, %s)", statuses)
             
         
@@ -849,7 +1027,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM processing_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default processing statuses...")
-            statuses = [(v['code'], v['name'], v['description']) for v in TRANSCRIPTION_PROCESSING_STATUS_DICT.values()]
+            statuses = [(v['code'], v['name'], v['description']) for v in TRANSCRIPTION_PROCESSING_STATUS_SEED_DATA]
             cur.executemany("INSERT INTO processing_statuses (status_code, status_name, description) VALUES (%s, %s, %s)", statuses)
         
         
@@ -871,9 +1049,31 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("SELECT COUNT(*) FROM task_statuses")
         if cur.fetchone()[0] == 0:
             self.migrations_logger.info("Initializing default task statuses...")
-            statuses = [(v['code'], v['name'], v['description']) for v in TASK_STATUS_DICT.values()]
+            statuses = [(v['code'], v['name'], v['description']) for v in TASK_STATUS_SEED_DATA]
             cur.executemany(
                 "INSERT INTO task_statuses (task_status_code, task_status_name, description) VALUES (%s, %s, %s)",
+                statuses
+            )
+
+        # Grievance classification statuses table
+        self.migrations_logger.info("Creating/recreating grievance_classification_statuses table...")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS grievance_classification_statuses (
+                code VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Insert default classification statuses if not present
+        cur.execute("SELECT COUNT(*) FROM grievance_classification_statuses")
+        if cur.fetchone()[0] == 0:
+            self.migrations_logger.info("Initializing default grievance classification statuses...")
+            statuses = [(v['code'], v['name'], v['description']) for v in GRIEVANCE_CLASSIFICATION_STATUS_SEED_DATA]
+            cur.executemany(
+                "INSERT INTO grievance_classification_statuses (code, name, description) VALUES (%s, %s, %s)",
                 statuses
             )
 
@@ -1029,34 +1229,28 @@ class TableDbManager(BaseDatabaseManager):
             )
         """)
 
-        # Status history table (after grievances table is created)
+        # Enhanced status history table (after grievances table is created)
         self.migrations_logger.info("Creating/recreating grievance_status_history table...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grievance_status_history (
                 id SERIAL PRIMARY KEY,
                 grievance_id TEXT NOT NULL,
-                status_code TEXT NOT NULL REFERENCES grievance_statuses(status_code),
+                change_type TEXT NOT NULL CHECK (change_type IN ('status_change', 'field_update', 'complainant_update', 'system_update')),
+                status_code TEXT REFERENCES grievance_statuses(status_code),
+                field_changes JSONB,
                 assigned_to TEXT,
                 notes TEXT,
                 created_by TEXT NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (grievance_id) REFERENCES grievances(grievance_id)
+                FOREIGN KEY (grievance_id) REFERENCES grievances(grievance_id),
+                CONSTRAINT status_or_fields_check CHECK (
+                    (change_type = 'status_change' AND status_code IS NOT NULL) OR
+                    (change_type IN ('field_update', 'complainant_update', 'system_update') AND field_changes IS NOT NULL)
+                )
             )
         """)
                 
-        # For backward compatibility - legacy history table
-        self.migrations_logger.info("Creating/recreating grievance_history table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievance_history (
-                id SERIAL PRIMARY KEY,
-                grievance_id TEXT NOT NULL REFERENCES grievances(grievance_id),
-                previous_status TEXT,
-                new_status TEXT,
-                next_step TEXT,
-                notes TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Legacy grievance_history table removed - functionality consolidated into grievance_status_history
 
         # File attachments table
         self.migrations_logger.info("Creating/recreating file_attachments table...")
@@ -1165,6 +1359,12 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_task_status_active ON task_statuses(is_active);
         """)
+        
+        # Grievance classification statuses indexes
+        self.migrations_logger.info("Creating/recreating classification status indexes...")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_classification_status_code ON grievance_classification_statuses(code);
+        """)
 
 
         # Office management indexes
@@ -1218,12 +1418,12 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_status_history_grievance_created ON grievance_status_history(grievance_id, created_at DESC);
         """)
 
-        # Legacy history table
-        self.migrations_logger.info("Creating/recreating history indexes...")
+        # Enhanced status history indexes
+        self.migrations_logger.info("Creating/recreating enhanced status history indexes...")
         cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_grievance_history_id ON grievance_history(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_grievance_history_new_status ON grievance_history(new_status);
-            CREATE INDEX IF NOT EXISTS idx_grievance_history_created ON grievance_history(created_at);
+            CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON grievance_status_history(change_type);
+            CREATE INDEX IF NOT EXISTS idx_status_history_field_changes ON grievance_status_history USING GIN(field_changes);
+            CREATE INDEX IF NOT EXISTS idx_status_history_grievance_change_type ON grievance_status_history(grievance_id, change_type);
         """)
 
         # File attachments indexes
@@ -1269,7 +1469,8 @@ class TableDbManager(BaseDatabaseManager):
         """Get all field names from the field_names table"""
         try:
             query = "SELECT field_name FROM field_names"
-            return self.execute_query(query, operation="get_field_names")
+            results = self.execute_query(query, operation="get_field_names")
+            return [row['field_name'] for row in results]
         except Exception as e:
             self.logger.error(f"Error getting field names: {str(e)}")
             return []
@@ -1325,6 +1526,202 @@ class TableDbManager(BaseDatabaseManager):
             self.logger.error(f"Error in grievance_timeline migration: {str(e)}")
             return False
 
+    def migrate_to_enhanced_history_system(self) -> bool:
+        """
+        Migrate from old grievance_history table to enhanced grievance_status_history system
+        This method handles the transition and data migration
+        """
+        try:
+            self.logger.info("Starting migration to enhanced history system...")
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if old table exists
+                    cur.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_name = 'grievance_history'
+                        )
+                    """)
+                    
+                    old_table_exists = cur.fetchone()[0]
+                    
+                    if old_table_exists:
+                        self.logger.info("Migrating data from grievance_history to grievance_status_history...")
+                        
+                        # Migrate existing data from old table to new enhanced table
+                        cur.execute("""
+                            INSERT INTO grievance_status_history (
+                                grievance_id, change_type, status_code, notes, created_by, created_at
+                            )
+                            SELECT 
+                                grievance_id,
+                                'status_change' as change_type,
+                                new_status as status_code,
+                                COALESCE(notes, 'Migrated from legacy history table') as notes,
+                                'system_migration' as created_by,
+                                created_at
+                            FROM grievance_history 
+                            WHERE new_status IS NOT NULL
+                            AND NOT EXISTS (
+                                SELECT 1 FROM grievance_status_history gsh 
+                                WHERE gsh.grievance_id = grievance_history.grievance_id 
+                                AND gsh.created_at = grievance_history.created_at
+                            )
+                        """)
+                        
+                        migrated_rows = cur.rowcount
+                        self.logger.info(f"Migrated {migrated_rows} status change records")
+                        
+                        # Drop the old table
+                        cur.execute("DROP TABLE IF EXISTS grievance_history CASCADE")
+                        self.logger.info("Dropped legacy grievance_history table")
+                    
+                    # Ensure the enhanced table has the new columns
+                    cur.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'grievance_status_history' AND column_name = 'change_type'
+                    """)
+                    
+                    if not cur.fetchone():
+                        self.logger.info("Adding enhanced columns to grievance_status_history...")
+                        
+                        # Add new columns to existing table
+                        cur.execute("""
+                            ALTER TABLE grievance_status_history 
+                            ADD COLUMN IF NOT EXISTS change_type TEXT DEFAULT 'status_change',
+                            ADD COLUMN IF NOT EXISTS field_changes JSONB
+                        """)
+                        
+                        # Add constraint
+                        cur.execute("""
+                            ALTER TABLE grievance_status_history 
+                            ADD CONSTRAINT status_or_fields_check CHECK (
+                                (change_type = 'status_change' AND status_code IS NOT NULL) OR
+                                (change_type IN ('field_update', 'complainant_update', 'system_update') AND field_changes IS NOT NULL)
+                            )
+                        """)
+                        
+                        # Update existing records to have change_type
+                        cur.execute("""
+                            UPDATE grievance_status_history 
+                            SET change_type = 'status_change' 
+                            WHERE change_type IS NULL
+                        """)
+                        
+                        self.logger.info("Enhanced columns added successfully")
+                    
+                    # Create new indexes
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON grievance_status_history(change_type);
+                        CREATE INDEX IF NOT EXISTS idx_status_history_field_changes ON grievance_status_history USING GIN(field_changes);
+                        CREATE INDEX IF NOT EXISTS idx_status_history_grievance_change_type ON grievance_status_history(grievance_id, change_type);
+                    """)
+                    
+                    conn.commit()
+                    self.logger.info("Migration to enhanced history system completed successfully")
+                    return True
+                    
+        except Exception as e:
+            self.logger.error(f"Error in enhanced history system migration: {str(e)}")
+            return False
+
+    def update_null_status_to_submitted(self) -> bool:
+        """
+        Update all grievance status history records with NULL status_code to 'SUBMITTED'
+        """
+        try:
+            self.logger.info("Starting update of NULL status codes to SUBMITTED...")
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # First, check how many records have NULL status_code
+                    cur.execute("""
+                        SELECT COUNT(*) 
+                        FROM grievance_status_history 
+                        WHERE status_code IS NULL
+                    """)
+                    
+                    null_count = cur.fetchone()[0]
+                    self.logger.info(f"Found {null_count} records with NULL status_code")
+                    
+                    if null_count > 0:
+                        # Update NULL status_code to 'SUBMITTED'
+                        cur.execute("""
+                            UPDATE grievance_status_history 
+                            SET status_code = 'SUBMITTED'
+                            WHERE status_code IS NULL
+                        """)
+                        
+                        updated_rows = cur.rowcount
+                        self.logger.info(f"Updated {updated_rows} records to status_code 'SUBMITTED'")
+                        
+                        conn.commit()
+                        self.logger.info("Successfully updated NULL status codes to SUBMITTED")
+                        return True
+                    else:
+                        self.logger.info("No records with NULL status_code found")
+                        return True
+                        
+        except Exception as e:
+            self.logger.error(f"Error updating NULL status codes: {str(e)}")
+            return False
+
+    def backfill_missing_status_history(self) -> bool:
+        """
+        Backfill missing status history entries for grievances that don't have any status history.
+        Creates a SUBMITTED status entry for grievances without status history.
+        """
+        try:
+            self.logger.info("Starting backfill of missing status history entries...")
+            
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Find grievances without any status history
+                    cur.execute("""
+                        SELECT g.grievance_id, g.grievance_creation_date
+                        FROM grievances g
+                        LEFT JOIN grievance_status_history gsh ON g.grievance_id = gsh.grievance_id
+                        WHERE gsh.grievance_id IS NULL
+                        ORDER BY g.grievance_creation_date
+                    """)
+                    
+                    missing_grievances = cur.fetchall()
+                    self.logger.info(f"Found {len(missing_grievances)} grievances without status history")
+                    
+                    if missing_grievances:
+                        # Insert SUBMITTED status for each missing grievance
+                        for grievance_id, creation_date in missing_grievances:
+                            cur.execute("""
+                                INSERT INTO grievance_status_history (
+                                    grievance_id, 
+                                    change_type, 
+                                    status_code, 
+                                    notes, 
+                                    created_by, 
+                                    created_at
+                                ) VALUES (
+                                    %s, 
+                                    'status_change', 
+                                    'SUBMITTED', 
+                                    'Backfilled initial status history entry', 
+                                    'system_backfill',
+                                    %s
+                                )
+                            """, (grievance_id, creation_date))
+                        
+                        conn.commit()
+                        self.logger.info(f"Successfully backfilled {len(missing_grievances)} status history entries")
+                        return True
+                    else:
+                        self.logger.info("No grievances found without status history")
+                        return True
+                        
+        except Exception as e:
+            self.logger.error(f"Error backfilling missing status history: {str(e)}")
+            return False
+
 class TaskDbManager(BaseDatabaseManager):
     """Manager for task-related database operations"""
     
@@ -1372,7 +1769,7 @@ class TaskDbManager(BaseDatabaseManager):
                     ) VALUES (%s, %s, %s)
                     RETURNING task_id
                 """
-                cur.execute(task_query, (task_id, task_name, self.TASK_STATUS['STARTED']))
+                cur.execute(task_query, (task_id, task_name, 'started'))
                 task_result = cur.fetchone()
                 
                 if not task_result:

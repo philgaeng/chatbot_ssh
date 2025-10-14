@@ -171,7 +171,6 @@ nlu:
       - close the browser
       - close the tab
       - close the window
-      - /nav_close_browser_tab
 
   - intent: introduce
     examples: |
@@ -224,43 +223,6 @@ nlu:
       - let's restart the current process
 
   ######################### status check #########################
-  - intent: status_check
-    examples: |
-      - /check_status
-
-  - intent: status_check_another
-    examples: |
-      - check another grievance
-      - i have another complaint to check
-      - check status of different complaint
-      - retrieve another grievance
-      - check one more complaint
-
-  - intent: status_check_id
-    examples: |
-      - i have the grievance id
-      - use grievance id
-      - check with complaint number
-      - i have the complaint id
-      - track with grievance number
-
-  - intent: status_check_start
-    examples: |
-      - check my status
-      - check my grievance status
-      - check my grievance
-      - what's the current status
-      - tell me the status
-      - has there been any progress
-      - what's happening with my complaint
-      - show me the status
-
-  - intent: set_nepali
-    examples: |
-      - /ne
-      - /nepali
-      - nepali
-      - नेपाली
 
   - intent: question_attach_files
     examples: |
@@ -298,7 +260,7 @@ nlu:
       - +63999-999-9999
       - +63937 999 9999 999
 
-  - intent: choose_grievance_details
+  - intent: status_check_grievance_selected
     examples: |
       - /check_status{"grievance_id": "GR-20250721-KOJH-3562-A"}
       - /check_status{"grievance_id": "GR-20250926-KOJH-34218-B"}
@@ -306,16 +268,3 @@ nlu:
       - /[GR-20250926-KOJH-9718-B]
       - /[GR-20250926-KOJH-9718-B]
       - /[GR-20250926-KOJH-9718-B]
-
-  - intent: classification_results
-    examples: |
-      - /classification_results{"grievance_summary": "test summary", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "test description", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
-      - /classification_results{"grievance_summary": "धूलो समस्या", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "घरमा धूलो छ", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
-      - /classification_results{"grievance_summary": "Dust problem", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "dust everywhere", "task_name": "classify_and_summarize_grievance_task", "status": "FAILED"}
-      - /classification_results{"grievance_summary": "धूलो समस्या", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "घरमा धूलो छ", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
-      - /classification_results{"grievance_summary": "Dust problem", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "dust everywhere", "task_name": "classify_and_summarize_grievance_task", "status": "FAILED"}
-      - /classification_results{"grievance_summary": "धूलो समस्या", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "घरमा धूलो छ", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
-      - /classification_results{"grievance_summary": "Dust problem", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "dust everywhere", "task_name": "classify_and_summarize_grievance_task", "status": "FAILED"}
-      - /classification_results{"grievance_summary": "धूलो समस्या", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "घरमा धूलो छ", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
-      - /classification_results{"grievance_summary": "chicken and cow died", "grievance_categories": ["Economic - Lost of crops"], "grievance_description": "chicken and cow died", "task_name": "classify_and_summarize_grievance_task", "status": "FAILED"}
-      - /classification_results{"grievance_summary": "धूलो समस्या", "grievance_categories": ["Environmental - Air Pollution"], "grievance_description": "घरमा धूलो छ", "task_name": "classify_and_summarize_grievance_task", "status": "SUCCESS"}
