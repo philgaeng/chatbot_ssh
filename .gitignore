@@ -68,10 +68,13 @@ Thumbs.db
 
 # Project-specific
 aws/            # AWS related files
+deployment/aws/ # AWS deployment files
+**/dist/        # Distribution files
 github_connection_setup.txt  # Contains sensitive setup information
 
 # AWS CLI and uploads
 **/awscliv2.zip    # Ignore awscliv2.zip in any directory
+*.zip           # Ignore all zip files
 /logs/              # Ignore entire logs directory
 /task_queue/logs/   # Ignore entire logs directory
 /models/            # Ignore entire models directory
