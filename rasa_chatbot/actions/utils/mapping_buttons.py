@@ -106,14 +106,6 @@ BUTTONS_CLEAN_WINDOW_OPTIONS = {
 }
 
 
-BUTTONS_SLOT_SKIPPED = {
-    'en': [
-        {"title": "Skip", "payload": BUTTON_SKIP}
-    ],
-    'ne': [
-        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
-    ]
-}
 
 BUTTONS_CONTACT_CONSENT = {
     'en': [
@@ -142,10 +134,12 @@ BUTTONS_PHONE_VALIDATION = {
 BUTTONS_OTP_VERIFICATION = {
     'en': [
         {"title": "Resend", "payload": BUTTON_RESEND},
+        {"title": "Change Phone", "payload": BUTTON_MODIFY_PHONE},
         {"title": "Skip", "payload": BUTTON_SKIP}
     ],
     'ne': [
         {"title": "पुनः पठाउनुहोस्", "payload": BUTTON_RESEND},
+        {"title": "फोन परिवर्तन गर्नुहोस्", "payload": BUTTON_MODIFY_PHONE},
         {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
     ]
 }

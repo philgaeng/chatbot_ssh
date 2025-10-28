@@ -361,14 +361,19 @@ fi
 for service in "rasa_actions" "rasa" "flask_server" "flower"; do
     case $service in
         "rasa_actions")
+            # Clear old log file
+            rm -f "$LOG_DIR/rasa_actions.log"
+            touch "$LOG_DIR/rasa_actions.log"
+            
             cd "$RASA_DIR" && \
             PYTHONPATH=$BASE_DIR \
+            PYTHONUNBUFFERED=1 \
             FLASK_APP=backend.api.app.py \
             FLASK_ENV=development \
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup /home/philg/miniconda/envs/rasa-env-21/bin/rasa run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
+            /home/philg/miniconda/envs/rasa-env-21/bin/rasa run actions --debug >> "$LOG_DIR/rasa_actions.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa_actions.pid"
@@ -379,6 +384,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             # Check if process started successfully
             if ps -p $(cat "$LOG_DIR/rasa_actions.pid") > /dev/null 2>&1; then
                 echo "rasa_actions started with PID $(cat $LOG_DIR/rasa_actions.pid)"
+                echo "✅ Logging to: $LOG_DIR/rasa_actions.log"
             else
                 echo "❌ Failed to start rasa_actions. Check logs at $LOG_DIR/rasa_actions.log"
                 rm -f "$LOG_DIR/rasa_actions.pid"
@@ -386,14 +392,19 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "rasa")
+            # Clear old log file
+            rm -f "$LOG_DIR/rasa.log"
+            touch "$LOG_DIR/rasa.log"
+            
             cd "$RASA_DIR" && \
             PYTHONPATH=$BASE_DIR \
+            PYTHONUNBUFFERED=1 \
             FLASK_APP=backend.api.app.py \
             FLASK_ENV=development \
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup /home/philg/miniconda/envs/rasa-env-21/bin/rasa run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
+            /home/philg/miniconda/envs/rasa-env-21/bin/rasa run --enable-api --cors "*" --debug >> "$LOG_DIR/rasa.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa.pid"
@@ -404,6 +415,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             # Check if process started successfully
             if ps -p $(cat "$LOG_DIR/rasa.pid") > /dev/null 2>&1; then
                 echo "rasa started with PID $(cat $LOG_DIR/rasa.pid)"
+                echo "✅ Logging to: $LOG_DIR/rasa.log"
             else
                 echo "❌ Failed to start rasa. Check logs at $LOG_DIR/rasa.log"
                 rm -f "$LOG_DIR/rasa.pid"

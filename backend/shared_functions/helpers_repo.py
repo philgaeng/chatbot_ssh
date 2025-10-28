@@ -106,6 +106,8 @@ class HelpersRepo:
         """Check if the phone number is valid."""
         # Add your phone validation logic here
         #Nepalese logic
+        #remove spaces and special characters
+        phone = re.sub(r'[^0-9]', '', phone)
         # 1. Must be 10 digits and start with 9
         if re.match(r'^9\d{9}$', phone):
             return True
@@ -115,6 +117,8 @@ class HelpersRepo:
         return False
 
     def standardize_phone(self, language_code: str, phone: str) -> str:
+        #remove spaces and special characters
+        phone = re.sub(r'[^0-9]', '', phone)
         if language_code == 'ne':
             phone = phone.replace('9', '+9779') if phone.startswith('9') else phone.replace('+9779', '+9779') if phone.startswith('+9779') else phone
             return phone

@@ -498,7 +498,7 @@ class BaseDatabaseManager:
         return {'complainant_fields':complainant_fields, 'grievance_fields':grievance_fields}
 
     
-    def generate_id(self, type: str='grievance_id', province: Optional[str]=None, district: Optional[str]=None, office: Optional[str]=None, suffix: str='bot'):
+    def generate_id(self, type: str='grievance_id', province: Optional[str]=None, district: Optional[str]=None, office: Optional[str]=None, source: str='bot'):
         """Generate a unique ID based on type, province, and district"""
         import uuid
         from datetime import datetime
@@ -534,15 +534,17 @@ class BaseDatabaseManager:
             date_str = datetime.now().strftime('%Y%m%d')
 
             random_suffix = str(uuid.uuid4())[:4].upper()
-            suffix = suffix.upper()[0] if suffix else ''
-            
-            return f"{prefix}-{date_str}-{office_suffix}-{random_suffix}-{suffix}"
+
+            if source:
+                source = source.upper()[0]
+                
+            return f"{source + '-' if source else ''}{prefix}-{date_str}-{office_suffix}-{random_suffix}"
 
         except Exception as e:
             self.logger.error(f"Error generating ID: {str(e)}")
             # Fallback to a simpler ID format if UUID generation fails
             timestamp = int(time.time() * 1000)
-            return f"{prefix}{timestamp}{f'_{suffix}' if suffix else ''}"
+            return f"{prefix}{timestamp}"
 
     def check_entry_exists_for_entity_key(self, entity_key: str, entity_id: str) -> bool:
         """Check if an entity exists in the database based on entity_key and entity_id

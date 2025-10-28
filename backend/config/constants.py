@@ -240,7 +240,59 @@ EMAIL_TEMPLATES = {
         
         <p><em>यो कार्यालय कर्मचारीहरूको लागि स्वचालित सूचना हो। कृपया यस इमेलमा जवाफ नदिनुहोस्।</em></p>
     """
-    }
+    },
+    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP": {
+        "en": """<html>
+<body>
+<h2>Grievance Follow-Up Request</h2>
+<p>The complainant has requested to follow up on their grievance:</p>
+
+<h3>Grievance Details</h3>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>Timeline:</strong> {grievance_timeline}</li>
+<li><strong>Summary:</strong> {grievance_summary}</li>
+<li><strong>Description:</strong> {grievance_description}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+</ul>
+
+<h3>Complainant Information</h3>
+<ul>
+<li><strong>Name:</strong> {complainant_name}</li>
+<li><strong>Phone:</strong> {complainant_phone}</li>
+<li><strong>Email:</strong> {complainant_email}</li>
+<li><strong>Municipality:</strong> {complainant_municipality}</li>
+<li><strong>Village:</strong> {complainant_village}</li>
+<li><strong>Address:</strong> {complainant_address}</li>
+</ul>
+</body>
+</html>""",
+        "ne": """<html>
+<body>
+<h2>गुनासो फलोअप अनुरोध</h2>
+<p>उजुरीकर्ताले आफ्नो गुनासोको फलोअप गर्न अनुरोध गर्नुभएको छ:</p>
+
+<h3>गुनासो विवरण</h3>
+<ul>
+<li><strong>गुनासो आईडी:</strong> {grievance_id}</li>
+<li><strong>समयरेखा:</strong> {grievance_timeline}</li>
+<li><strong>सारांश:</strong> {grievance_summary}</li>
+<li><strong>विवरण:</strong> {grievance_description}</li>
+<li><strong>श्रेणीहरू:</strong> {grievance_categories}</li>
+</ul>
+
+<h3>उजुरीकर्ता जानकारी</h3>
+<ul>
+<li><strong>नाम:</strong> {complainant_name}</li>
+<li><strong>फोन:</strong> {complainant_phone}</li>
+<li><strong>इमेल:</strong> {complainant_email}</li>
+<li><strong>नगरपालिका:</strong> {complainant_municipality}</li>
+<li><strong>गाउँ:</strong> {complainant_village}</li>
+<li><strong>ठेगाना:</strong> {complainant_address}</li>
+</ul>
+</body>
+</html>"""
+    },
 }
 
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']
@@ -266,6 +318,10 @@ Thank you for your patience.""",
         'ne': """तपाईंको गुनासो (ID: {grievance_id}) को स्थिति अपडेट भएको छ: {grievance_status}।
 अनुमानित समाधान तिथि: {grievance_timeline}।
 तपाईंको धैर्यको लागि धन्यवाद।"""
+    },
+    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP": {
+        'en': """Thank you for connecting with us. Our officer will follow up on your grievance (ID: {grievance_id}) and contact you shortly on this number: {complainant_phone}.""",
+        'ne': """तपाईंको संपर्क गर्ने लागि धन्यवाद। हामीको कर्मचारी तपाईंको गुनासो (ID: {grievance_id}) को फलोअप गर्नेछ र तपाईंको लागि यो नम्बरमा जस्तै सम्पर्क गर्नेछ: {complainant_phone}"""
     }
 }
 

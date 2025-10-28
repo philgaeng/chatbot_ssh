@@ -4,7 +4,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupAction, Restarted, UserUtteranceReverted, ActiveLoop
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
-from .utils.base_classes import BaseAction
+from .base_classes.base_classes  import BaseAction
 from backend.config.database_constants import TASK_STATUS
 import json
 
@@ -15,6 +15,15 @@ TASK_SLOTS_TO_UPDATE_MAP = {
     "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
    }
 
+
+class ActionNextAction(BaseAction):
+    def name(self) -> Text:
+        return "action_next_action"
+    
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        next_action = self.get_next_action_for_form(tracker)
+        self.logger.debug(f"{self.name()} - Next action selected: {next_action}")
+        return [FollowupAction(next_action)]
 
 class ActionWrapper(BaseAction):
     """Wrapper to catch and log registration errors for actions"""
@@ -134,7 +143,7 @@ class ActionMainMenu(BaseAction):
         dispatcher.utter_message(text=message, buttons=buttons)
 
 
-        return [SlotSet("main_story", None)]
+        return [SlotSet("story_main", None)]
 
 class ActionOutro(BaseAction):
     def name(self) -> Text:
@@ -151,11 +160,11 @@ class ActionSetCurrentProcess(BaseAction):
         return "action_set_current_process"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        current_story = "Filing a Complaint"  # Replace with dynamic logic if needed
+        story_current = "Filing a Complaint"  # Replace with dynamic logic if needed
         message = self.get_utterance(1)
-        message = message.format(current_story=current_story)
+        message = message.format(story_current=story_current)
         dispatcher.utter_message(text=message)
-        return [SlotSet("current_process", current_story)]
+        return [SlotSet("current_process", story_current)]
 
 
 
@@ -180,10 +189,10 @@ class ActionRestartStory(BaseAction):
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         current_process = tracker.get_slot("current_process")
-        current_story = tracker.get_slot("current_story")
+        story_current = tracker.get_slot("story_current")
 
         process_name = current_process if current_process else "current process"
-        story_name = current_story if current_story else "current story"
+        story_name = story_current if story_current else "current story"
 
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
@@ -195,14 +204,14 @@ class ActionRestartStory(BaseAction):
     
 class ActionShowCurrentStory(BaseAction):
     def name(self):
-        return "action_show_current_story"
+        return "action_show_story_current"
 
     async def execute_action(self, dispatcher, tracker, domain):
-        current_story = tracker.get_slot("current_story")
+        story_current = tracker.get_slot("story_current")
         
-        if current_story:
+        if story_current:
             message = self.get_utterance(1)
-            message = message.format(current_story=current_story)
+            message = message.format(story_current=story_current)
         else:
             message = self.get_utterance(2)
             

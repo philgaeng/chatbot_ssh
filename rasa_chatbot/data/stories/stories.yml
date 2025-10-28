@@ -13,24 +13,28 @@ stories:
       - slot_was_set:
           - language_code: "en"
       - action: action_main_menu
-      - intent: start_grievance_process
+      - intent: new_grievance
       - action: action_start_grievance_process
       - slot_was_set:
-          - main_story: "new_grievance"
+          - story_main: "new_grievance"
       - action: form_grievance
       - active_loop: form_grievance
       - active_loop: null
+      - action: action_next_action
       - action: form_contact
       - active_loop: form_contact
       - active_loop: null
+      - action: action_next_action
       - action: form_otp
       - active_loop: form_otp
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -44,24 +48,28 @@ stories:
       - slot_was_set:
           - language_code: "ne"
       - action: action_main_menu
-      - intent: start_grievance_process
+      - intent: new_grievance
       - action: action_start_grievance_process
       - slot_was_set:
-          - main_story: "new_grievance"
+          - story_main: "new_grievance"
       - action: form_grievance
       - active_loop: form_grievance
       - active_loop: null
+      - action: action_next_action
       - action: form_contact
       - active_loop: form_contact
       - active_loop: null
+      - action: action_next_action
       - action: form_otp
       - active_loop: form_otp
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -73,11 +81,14 @@ stories:
       - slot_was_set:
           - phone_validation_required: false
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
+      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -87,14 +98,18 @@ stories:
       - action: form_contact
       - active_loop: form_contact
       - active_loop: null
+      - action: action_next_action
       - action: form_otp
       - active_loop: form_otp
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
+      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -103,9 +118,11 @@ stories:
     steps:
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
+      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -116,14 +133,17 @@ stories:
       - slot_was_set:
           - grievance_sensitive_issue: True
       - active_loop: null
+      - action: action_next_action
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - slot_was_set:
           - phone_validation_required: True
       - active_loop: null
+      - action: action_next_action
       - action: form_otp
       - active_loop: form_otp
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_grievance_outro
 
@@ -134,16 +154,19 @@ stories:
       - slot_was_set:
           - grievance_sensitive_issue: True
       - active_loop: null
+      - action: action_next_action
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - slot_was_set:
           - phone_validation_required: False
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -154,25 +177,31 @@ stories:
       - slot_was_set:
           - grievance_sensitive_issue: True
       - active_loop: null
+      - action: action_next_action
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - slot_was_set:
           - grievance_sensitive_issue: False
       - active_loop: null
+      - action: action_next_action
       - action: form_grievance
       - active_loop: form_grievance
       - active_loop: null
+      - action: action_next_action
       - action: form_contact
       - active_loop: form_contact
       - active_loop: null
+      - action: action_next_action
       - action: form_otp
       - active_loop: form_otp
       - active_loop: null
+      - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
 
@@ -185,6 +214,7 @@ stories:
       - action: form_sensitive_issues
       - active_loop: form_sensitive_issues
       - active_loop: null
+      - action: action_next_action
       - action: action_grievance_outro
 
   - story: Sensitive issues are detected by script during grievance categorization but user does not quote them as sensitive issues (detection bug)
@@ -198,8 +228,10 @@ stories:
       - slot_was_set:
           - grievance_sensitive_issue: False
       - active_loop: null
+      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
+      - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro

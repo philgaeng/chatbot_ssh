@@ -66,8 +66,107 @@ SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
         }
 
 UTTERANCE_MAPPING = {
-    'form_contact': {
-        'action_ask_form_contact_complainant_location_consent': {
+    'action_ask_commons': {
+        'action_ask_story_main': {
+            'utterances': {
+                1: {
+                    'en': "I am here to help you file a grievance or check its status. What would you like to do?",
+                    'ne': "म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+                },
+                2: {
+                    'en': "You are reaching out to the office of {district} in {province}.\nI am here to help you file a grievance or check its status. What would you like to do?",
+                    'ne': "तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "File a grievance", "payload": "/new_grievance"},
+                        {"title": "Check my status", "payload": "/check_status"},
+                        {"title": "Exit", "payload": "/goodbye"}
+                    ],
+                    'ne': [
+                        {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
+                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
+                        {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
+                    ]
+                }
+            }
+        },
+        'action_ask_language_code': {
+            'utterances': {
+                1: {
+                    'en':"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nWhat language do you want to use?",
+                    'ne':"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nWhat language do you want to use?",
+                }
+            },
+            'buttons': {
+                1: BUTTONS_LANGUAGE_OPTIONS
+            }
+        },
+        'action_ask_story_route': {
+            'utterances': {
+                1: {
+                    'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
+                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Phone Number", "payload": "/route_status_check_phone"},
+                        {"title": "Grievance ID", "payload": "/route_status_check_grievance_id"},
+                        {"title": "Skip", "payload": BUTTON_SKIP}
+                    ],
+                    'ne': [
+                        {"title": "फोन नम्बर", "payload": "/route_status_check_phone"},
+                        {"title": "गुनासो ID", "payload": "/route_status_check_grievance_id"},
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+                    ]
+                }
+            }
+        },
+        "action_ask_story_step": {
+            'utterances': {
+                1: {
+                    'en': "Here are the details of the grievance:",
+                    'ne': "यो गुनासोको विवरण छ:"
+                },
+                2: {
+                    'en': "We couldn't find any grievance details.",
+                    'ne': "हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en':[
+                    {"title": "Request follow up", "payload": "/status_check_request_follow_up"},
+                    {"title": "Modify grievance", "payload": "/status_check_modify_grievance"},
+                    {"title": "Skip", "payload": BUTTON_SKIP}
+                    ],
+                    'ne': [
+                        {"title": "अनुसंधान अनुसंधान गर्नुहोस्", "payload": "/status_check_request_follow_up"},
+                        {"title": "गुनासो सम्पादन गर्नुहोस्", "payload": "/status_check_modify_grievance"},
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}]
+                }
+            }
+        },
+        'action_ask_complainant_phone': {
+                'utterances': {
+                    1: {
+                        'en': "Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. \nYou can skip this if you prefer to remain anonymous.",
+                        'ne': "कृपया आफ्नो सम्पर्क फोन नम्बर प्रविष्ट गर्नुहोस्। नेपाली फोन नम्बर 9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ।\nयदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    },
+                     2: {
+                    'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
+                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                },
+                },
+                'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_complainant_location_consent': {
             'utterances': {
                 1: {
                     'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
@@ -78,7 +177,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_municipality_temp': {
+        'action_ask_complainant_municipality_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
@@ -89,7 +188,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_municipality_confirmed': {
+        'action_ask_complainant_municipality_confirmed': {
             'utterances': {
                 1: {
                     'en': "Is {validated_municipality} your correct municipality?",
@@ -100,7 +199,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_village_temp': {
+        'action_ask_complainant_village_temp': {
             'utterances': {
                 1: {
                     'en': "Please provide your village name or Skip to skip",
@@ -111,7 +210,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_village_confirmed': {
+        'action_ask_complainant_village_confirmed': {
             'utterances': {
                 1: {
                     'en': "Is {validated_village} in ward number {validated_ward} your correct village?",
@@ -122,7 +221,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_ward': {
+        'action_ask_complainant_ward': {
             'utterances': {
                 1: {
                     'en': "Please provide your ward number (number between 1 and 20) or Skip to skip",
@@ -133,7 +232,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_address_temp': {
+        'action_ask_complainant_address_temp': {
             'utterances': {
                 1: {
                     'en': "Please provide your address or Skip to skip",
@@ -144,7 +243,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_address_confirmed': {
+        'action_ask_complainant_address_confirmed': {
             'utterances': {
                 1: {
                     'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
@@ -155,7 +254,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_province': {
+        'action_ask_complainant_province': {
             'utterances': {
                 1: {
                     'en': "Please provide your province name or Skip",
@@ -166,7 +265,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_district': {
+        'action_ask_complainant_district': {
             'utterances': {
                 1: {
                     'en': "Please provide your district name or Skip",
@@ -233,18 +332,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'validate_complainant_phone': {
-            'utterances': {
-                1: {
-                    'en': "Please enter a correct phone number.",
-                    'ne': "कृपया आफ्नो सम्पर्क फोन नम्बर प्रविष्ट गर्नुहोस्। नेपाली फोन नम्बर 9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SLOT_SKIPPED
-            }
-        },
-        'action_ask_form_contact_complainant_consent': {
+        'action_ask_complainant_consent': {
             'utterances': {
                 1: {
                     'en': "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.",
@@ -255,7 +343,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_contact_complainant_full_name': {
+        'action_ask_complainant_full_name': {
             'utterances': {
                 1: {
                     'en': "Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
@@ -267,32 +355,10 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: BUTTONS_SLOT_SKIPPED
+                1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_phone': {
-            'utterances': {
-                1: {
-                    'en': "Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. \nYou can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया आफ्नो सम्पर्क फोन नम्बर प्रविष्ट गर्नुहोस्। नेपाली फोन नम्बर 9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ।\nयदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SLOT_SKIPPED
-            }
-        },
-        'action_ask_form_contact_phone_validation_required': {
-            'utterances': {
-                1: {
-                    'en': "Your grievance is filed without a validated number. Providing a valid number will help in the follow-up of the grievance and we recommend it. However, you can file the grievance as is.",
-                    'ne': "तपाईंको गुनासो प्रमाणित नम्बर बिना दर्ता गरिएको छ। वैध नम्बर प्रदान गर्दै गुनासोको अनुवर्तीमा मद्दत पुग्छ र हामी यसलाई सिफारिस गर्दछौं। तथापि, तपाईं गुनासो यसै रूपमा दर्ता गर्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_PHONE_VALIDATION
-            }
-        },
-        'action_ask_form_contact_complainant_email_temp': {
+        'action_ask_complainant_email_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
@@ -300,10 +366,10 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: BUTTONS_SLOT_SKIPPED
+                1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_contact_complainant_email_confirmed': {
+        'action_ask_complainant_email_confirmed': {
             'utterances': {
                 1: {
                     'en': "⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
@@ -637,12 +703,12 @@ UTTERANCE_MAPPING = {
             'buttons': {
                 1: {
                     'en': [
-                        {"title": "File a grievance", "payload": "/start_grievance_process"},
+                        {"title": "File a grievance", "payload": "/new_grievance"},
                         {"title": "Check my status", "payload": "/start_status_check"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
                     'ne': [
-                        {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/start_grievance_process"},
+                        {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
                         {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/start_status_check"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                     ]
@@ -660,8 +726,8 @@ UTTERANCE_MAPPING = {
         'action_set_current_process': {
             'utterances': {
                 1: {
-                    'en': "You are currently in the process of {current_story}.",
-                    'ne': "तपाईं हाल {current_story} को प्रक्रियामा हुनुहुन्छ।"
+                    'en': "You are currently in the process of {story_current}.",
+                    'ne': "तपाईं हाल {story_current} को प्रक्रियामा हुनुहुन्छ।"
                 }
             }
         },
@@ -684,11 +750,11 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_RESTART_OPTIONS
             }
         },
-        'action_show_current_story': {
+        'action_show_story_current': {
             'utterances': {
                 1: {
-                    'en': "You are currently in the {current_story} process.",
-                    'ne': "तपाईं हाल {current_story} प्रक्रियामा हुनुहुन्छ।"
+                    'en': "You are currently in the {story_current} process.",
+                    'ne': "तपाईं हाल {story_current} प्रक्रियामा हुनुहुन्छ।"
                 },
                 2: {
                     'en': "I don't know which process you're currently in.",
@@ -813,45 +879,6 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'form_menu': {
-        'action_ask_form_menu_main_story': {
-            'utterances': {
-                1: {
-                    'en': "I am here to help you file a grievance or check its status. What would you like to do?",
-                    'ne': "म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
-                },
-                2: {
-                    'en': "You are reaching out to the office of {district} in {province}.\nI am here to help you file a grievance or check its status. What would you like to do?",
-                    'ne': "तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
-                }
-            },
-            'buttons': {
-                1: {
-                    'en': [
-                        {"title": "File a grievance", "payload": "/start_grievance_process"},
-                        {"title": "Check my status", "payload": "/check_status"},
-                        {"title": "Exit", "payload": "/goodbye"}
-                    ],
-                    'ne': [
-                        {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/start_grievance_process"},
-                        {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
-                        {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
-                    ]
-                }
-            }
-        },
-        'action_ask_form_menu_language_code': {
-            'utterances': {
-                1: {
-                    'en':"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nWhat language do you want to use?",
-                    'ne':"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?\nWhat language do you want to use?",
-                }
-            },
-            'buttons': {
-                1: BUTTONS_LANGUAGE_OPTIONS
-            }
-        }
-    },
     'form_otp': {
         'action_ask_otp_consent': {
             'utterances': {
@@ -904,16 +931,7 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: {
-                    'en': [
-                        {"title": "Resend", "payload": "/resend"},
-                        BUTTON_SKIP_EN
-                    ],
-                    'ne': [
-                        {"title": "पुनः प्रमाणित गर्नुहोस्", "payload": "/resend"},
-                        BUTTON_SKIP_NE
-                    ]
-                }
+                1: BUTTONS_OTP_VERIFICATION
             }
         }
     },
@@ -1000,28 +1018,6 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_status_check_method': {
-            'utterances': {
-                1: {
-                    'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
-                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।"
-                }
-            },
-            'buttons': {
-                1: {
-                    'en': [
-                        {"title": "Phone Number", "payload": "/retrieve_with_phone"},
-                        {"title": "Grievance ID", "payload": "/retrieve_grievance_with_id"},
-                        {"title": "Skip", "payload": BUTTON_SKIP}
-                    ],
-                    'ne': [
-                        {"title": "फोन नम्बर", "payload": "/retrieve_with_phone"},
-                        {"title": "गुनासो ID", "payload": "/retrieve_grievance_with_id"},
-                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
-                    ]
-                }
-            }
-        },
         'action_ask_status_check_list_grievance_id': {
             'utterances': {
                 1: {
@@ -1037,16 +1033,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "Skip", "payload": BUTTON_SKIP},
-                        {"title": "Search by phone number", "payload": "/retrieve_with_phone"}
+                        {"title": "Search by phone number", "payload": "/route_status_check_phone"}
                     ],
                     'ne': [
                         {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
-                        {"title": "फोन नम्बर सेव्नुहोस्", "payload": "/retrieve_with_phone"}
+                        {"title": "फोन नम्बर सेव्नुहोस्", "payload": "/route_status_check_phone"}
                     ]
                 }
             }
         },
-        'action_ask_status_check_complainant_phone': {
+        'action_ask_form_status_check_1_complainant_phone': {
             'utterances': {
                 1: {
                     'en': "Please provide the phone number associated with your grievance - it should start by 9 and be 10 digits long",
@@ -1088,7 +1084,7 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_ask_form_skip_status_check_valid_province_and_district': {
+        'action_ask_form_status_check_skip_valid_province_and_district': {
             'utterances': {
                 1: {
                     'en': "We will ask you questions about your location, so we can provide you the contact information of the officer in charge of your grievance.",
@@ -1111,7 +1107,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
-        'action_ask_form_skip_status_check_complainant_province': {
+        'action_ask_form_status_check_skip_complainant_province': {
             'utterances': {
                 1: {
                     'en': "Please provide your province name or Skip",
@@ -1122,7 +1118,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_skip_status_check_complainant_district': {
+        'action_ask_form_status_check_skip_complainant_district': {
             'utterances': {
                 1: {
                     'en': "Please provide your district name or Skip",
@@ -1133,7 +1129,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_skip_status_check_complainant_municipality_temp': {
+        'action_ask_form_status_check_skip_complainant_municipality_temp': {
             'utterances': {
                 1: {
                     'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
@@ -1144,7 +1140,7 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
-        'action_ask_form_skip_status_check_complainant_municipality_confirmed': {
+        'action_ask_form_status_check_skip_complainant_municipality_confirmed': {
             'utterances': {
                 1: {
                     'en': "Is {validated_municipality} your correct municipality?",
@@ -1158,39 +1154,51 @@ UTTERANCE_MAPPING = {
         'action_ask_status_check_grievance_id_selected': {
             'utterances': {
                 1: {
+                    'en': "Please enter the last 6 characters of the grievance ID without the dash like this: JH7707",
+                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश छोड्नु होला"
+                },
+                2: {
+                    'en': "You have not provided enough characters. Please enter the last 6 characters of the grievance ID without the dash like this: JH7707",
+                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित"
+                },
+                3: {
+                    'en': "We have not found any grievance with that ID. Please try again or choose to search by phone number instead or skip to exit.",
+                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित यो जैसे: JH7707। तपाईं छोड्न बाहिर निस्क्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न सक्नुहुन्छ"
+                },
+                4: {
                     'en': "Select any of the grievances if you want to check or amend the details",
                     'ne': "यदि तपाईं विवरण जाँच वा सम्पादन गर्न चाहनुहुन्छ भने, कृपया कुनै एक गुनासो चुन्नुहोस्"
                 },
-                2: {
+                5: {
                     'en': "We have not found any grievance, do you want to try again?",
                     'ne': "हामी कुनै गुनासो भेट्टाउन सकिनौं। के तपाईं पुनः प्रयास गर्न चाहनुहुन्छ?"
                 }
             },
             'buttons': {
-                1: BUTTONS_SKIP
+                
+                1: {
+                    'en': [
+                        {"title": "Search by Phone Number", "payload": "/route_status_check_phone"},
+                        {"title": "Skip", "payload": BUTTON_SKIP}
+                    ],
+                    'ne': [
+                        {"title": "फोन नम्बर सेव्नुहोस्", "payload": "/route_status_check_phone"},
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
+                    ]
+                },
+                2: BUTTONS_SKIP,
             }
-        },
-        'action_ask_status_check_grievance_selected_action': {
+        }
+        ,
+        'action_status_check_request_follow_up': {
             'utterances': {
                 1: {
-                    'en': "Here are the details of the grievance:",
-                    'ne': "यो गुनासोको विवरण छ:"
+                    'en': "We have received your request for follow up.",
+                    'ne': "हामी तपाईंको फलोअप अनुरोध ग्रहण गरेको छौं।"
                 },
                 2: {
-                    'en': "We couldn't find any grievance details.",
-                    'ne': "हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।"
-                }
-            },
-            'buttons': {
-                1: {'en':[
-                    {"title": "Request follow up", "payload": "/status_check_request_follow_up"},
-                    {"title": "Modify grievance", "payload": "/status_check_modify_grievance"},
-                    {"title": "Skip", "payload": BUTTON_SKIP}
-                ],
-                'ne': [
-                    {"title": "अनुसंधान अनुसंधान गर्नुहोस्", "payload": "/status_check_request_follow_up"},
-                    {"title": "गुनासो सम्पादन गर्नुहोस्", "payload": "/status_check_modify_grievance"},
-                    {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}]
+                    'en': "Our officer will follow up on your grievance (ID: {grievance_id}) and contact you shortly on this number: {complainant_phone}.",
+                    'ne': "हामीको कर्मचारी तपाईंको गुनासो (ID: {grievance_id}) को फलोअप गर्नेछ र तपाईंको लागि यो नम्बरमा जस्तै सम्पर्क गर्नेछ: {complainant_phone}।"
                 }
             }
         },
@@ -1250,12 +1258,12 @@ UTTERANCE_MAPPING = {
             'buttons': {
                 1: {
                     'en': [
-                        {"title": "Use Phone Number", "payload": "/retrieve_with_phone"},
-                        {"title": "Use Grievance ID", "payload": "/retrieve_grievance_with_id"}
+                        {"title": "Use Phone Number", "payload": "/route_status_check_phone"},
+                        {"title": "Use Grievance ID", "payload": "/route_status_check_grievance_id"}
                     ],
                     'ne': [
-                        {"title": "फोन नम्बर प्रयोग गर्नुहोस्", "payload": "/retrieve_with_phone"},
-                        {"title": "गुनासो ID प्रयोग गर्नुहोस्", "payload": "/retrieve_grievance_with_id"}
+                        {"title": "फोन नम्बर प्रयोग गर्नुहोस्", "payload": "/route_status_check_phone"},
+                        {"title": "गुनासो ID प्रयोग गर्नुहोस्", "payload": "/route_status_check_grievance_id"}
                     ]
                 }
             }

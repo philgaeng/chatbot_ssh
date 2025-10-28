@@ -59,7 +59,7 @@ class DatabaseManager(BaseDatabaseManager):
         district = data.get('complainant_district', DEFAULT_DISTRICT)
         office = data.get('complainant_office', None)
         source = data.get('source', 'bot')
-        return self.generate_id(type='complainant_id', province=province, district=district, office=office, suffix=source)
+        return self.generate_id(type='complainant_id', province=province, district=district, office=office, source=source)
     
     def generate_grievance_id(self, data: Dict[str, Any]) -> Optional[str]:
         """Create a new grievance ID"""
@@ -67,7 +67,7 @@ class DatabaseManager(BaseDatabaseManager):
         district = data.get('complainant_district', DEFAULT_DISTRICT)
         office = data.get('complainant_office', None)
         source = data.get('source', 'bot')
-        return self.generate_id(type='grievance_id', province=province, district=district, office=office, suffix=source)
+        return self.generate_id(type='grievance_id', province=province, district=district, office=office, source=source)
     
     
     
@@ -121,6 +121,15 @@ class DatabaseManager(BaseDatabaseManager):
     def get_all_complainant_full_names(self) -> List[str]:
         """Get all complainant full names"""
         return self.complainant.get_all_complainant_full_names()
+
+    def get_complainant_data_by_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
+        """Get complainant data by grievance id"""
+        complainant_id = self.complainant.get_complainant_id_from_grievance_id(grievance_id)
+        if complainant_id:
+            return self.complainant.get_complainant_by_id(complainant_id)
+        else:
+            return None
+        
     
     # ===== GRIEVANCE OPERATIONS =====
 
@@ -271,6 +280,10 @@ class DatabaseManager(BaseDatabaseManager):
     def get_grievance_by_complainant_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         """Get grievance by complainant phone number"""
         return self.grievance.get_grievance_by_complainant_phone(phone_number)
+
+    def get_grievance_id_by_last_6_characters(self, text_standardized: str) -> str:
+        """Get grievance ID by last 6 characters"""
+        return self.grievance.get_grievance_id_by_last_6_characters(text_standardized)
     
     # ===== RECORDING OPERATIONS =====
     

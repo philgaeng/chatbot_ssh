@@ -397,6 +397,31 @@ class GrievanceDbManager(BaseDatabaseManager):
         except Exception as e:
             self.logger.error(f"Error retrieving complainants by phone number: {str(e)}")
             return []
+
+    def get_grievance_id_by_last_6_characters(self, text_standardized: str) -> str:
+        """Get grievance ID by last 6 characters"""
+        # Use wildcard to match any grievance_id that contains the pattern
+        query = "SELECT grievance_id FROM grievances WHERE grievance_id LIKE %s"
+        try:
+            self.logger.debug(f"get_grievance_id_by_last_6_characters: text_standardized: {text_standardized}")
+            # Add wildcard prefix to match IDs containing this pattern
+            search_pattern = f'%{text_standardized}%'
+            self.logger.debug(f"get_grievance_id_by_last_6_characters: search_pattern: {search_pattern}")
+            results = self.execute_query(query, (search_pattern,), "get_grievance_id_by_last_6_characters")
+            
+            # Filter to get exact matches: IDs ending with text_standardized or text_standardized-B/-A
+            exact_matches = [result['grievance_id'] for result in results 
+                           if result['grievance_id'].endswith(text_standardized) or 
+                              result['grievance_id'].endswith(text_standardized + '-B') or 
+                              result['grievance_id'].endswith(text_standardized + '-A')]
+            
+            self.logger.debug(f"get_grievance_id_by_last_6_characters: exact_matches: {exact_matches}")
+            result = exact_matches[0] if exact_matches else None
+            self.logger.debug(f"get_grievance_id_by_last_6_characters: result: {result}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error retrieving grievance ID by last 6 characters: {str(e)}")
+            return None
   
 
 class RecordingDbManager(BaseDatabaseManager):

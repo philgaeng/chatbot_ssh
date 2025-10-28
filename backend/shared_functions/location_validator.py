@@ -357,13 +357,18 @@ class ContactLocationValidator:
 
     def get_office_in_charge_info(self, municipality, district = None, province = None):
         """Get the office in charge info from the municipality data."""
+        # Return None early if we don't have minimum required information
+        if not district and not municipality:
+            return None
+            
         office_in_charge = pd.read_csv(self.json_path_office_in_charge)
         office_in_charge.columns = office_in_charge.columns.str.lower()
         
         # Check if municipality column exists, if not, work with district only
         if "municipality" in office_in_charge.columns:
             office_in_charge["municipality"] = office_in_charge["municipality"].str.title().str.replace('Municipality', '').str.strip()
-            municipality = municipality.title().replace('Municipality', '').strip()
+            if municipality:
+                municipality = municipality.title().replace('Municipality', '').strip()
         else:
             # If no municipality column, we'll match by district only
             municipality = None
@@ -372,15 +377,23 @@ class ContactLocationValidator:
         if province in office_in_charge.columns:
             office_in_charge["province"] = office_in_charge["province"].str.title().str.replace('Province', '').str.strip()
         
-        district = district.title().replace('District', '').strip()
-        province = province.title().replace('Province', '').strip()
+        if district:
+            district = district.title().replace('District', '').strip()
+        if province:
+            province = province.title().replace('Province', '').strip()
 
         # Filter by district first, then by municipality if available
-        if municipality is not None:
+        if municipality and district:
             office_in_charge_info = office_in_charge[(office_in_charge["municipality"] == municipality) & (office_in_charge["district"] == district)]
-        else:
-            # If no municipality column, just filter by district
+        elif district:
+            # If no municipality provided, just filter by district
             office_in_charge_info = office_in_charge[office_in_charge["district"] == district]
+        elif municipality:
+            # If no district but have municipality (edge case)
+            office_in_charge_info = office_in_charge[office_in_charge["municipality"] == municipality]
+        else:
+            # No valid filtering criteria
+            return None
 
         if office_in_charge_info.empty:
             return None

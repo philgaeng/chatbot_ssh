@@ -19,11 +19,17 @@ from backend.services.database_services.postgres_services import db_manager
 
 # Import all action modules
 from .custom_policy import *
-from .form_contact import *
-from .form_grievance import *
-from .form_menu import *
-from .form_otp import *
 from .generic_actions import *
+from .action_ask_commons import *
+from .forms.form_contact import *
+from .forms.form_grievance import *
+from .forms.form_story_main_route_step import *
+from .forms.form_otp import *
+from .forms.form_status_check import *
+from .forms.form_status_check_skip import *
+from .forms.form_grievance_complainant_review import *
+from .forms.form_sensitive_issues import *
+from .test_routing import *
 
 
 def get_action_classes() -> List[Type[Action]]:

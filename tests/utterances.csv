@@ -150,11 +150,11 @@ I am here to help you file a grievance or check its status. What would you like 
 तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
 म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
 generic_actions,action_outro,1,Thank you for using the Grievance Management Chatbot. Have a great day!,गुनासो व्यवस्थापन च्याटबटमा धन्यवाद। एक अच्छा दिन राखौं!
-generic_actions,action_set_current_process,1,You are currently in the process of {current_story}.,तपाईं हाल {current_story} को प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_set_current_process,1,You are currently in the process of {story_current}.,तपाईं हाल {story_current} को प्रक्रियामा हुनुहुन्छ।
 generic_actions,action_go_back,1,Going back to the previous step.,अघिल्लो चरणमा फर्कदै।
 generic_actions,action_restart_story,1,Would you like to restart the current process or story?,के तपाईं वर्तमान प्रक्रिया वा कथामा पुनः सुरु गर्न चाहनुहुन्छ?
-generic_actions,action_show_current_story,1,You are currently in the {current_story} process.,तपाईं हाल {current_story} प्रक्रियामा हुनुहुन्छ।
-generic_actions,action_show_current_story,2,I don't know which process you're currently in.,मलाई थाहा छैन तपाईं हाल कुन प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_show_story_current,1,You are currently in the {story_current} process.,तपाईं हाल {story_current} प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_show_story_current,2,I don't know which process you're currently in.,मलाई थाहा छैन तपाईं हाल कुन प्रक्रियामा हुनुहुन्छ।
 generic_actions,action_handle_mood_great,1,I'm glad you're feeling good! Let's continue with your grievance.,मलाई खुशी लाग्यो कि तपाईं राम्रो महसुस गर्दै हुनुहुन्छ! चल्नुस् तपाईंको गुनासो जारी राखौं।
 generic_actions,action_handle_mood_great,2,That's great! What would you like to do next?,त्यो राम्रो हो! तपाईं अब के गर्न चाहनुहुन्छ?
 generic_actions,action_respond_to_challenge,1,I understand this might be challenging. I'm here to help you through it.,म बुझ्दछु कि यो चुनौतीपूर्ण हुन सक्छ। म तपाईंलाई यसमा मद्दत गर्न यहाँ छु।
@@ -171,8 +171,8 @@ generic_actions,action_attach_file,4,Thank you. Your {count} files ({files}) hav
 generic_actions,action_attach_file,5,You can now attach files to your grievance using the attachment button.,अब तपाईं एट्याचमेन्ट बटन प्रयोग गरेर आफ्नो गुनासोमा फाइलहरू संलग्न गर्न सक्नुहुन्छ।
 generic_actions,action_clean_window_options,1,Your grievance is completed. You can close the browser tab or session.,तपाईंको गुनासो पूरा हुन गरियो। तपाईं ब्राउजर टैब वा सत्र बन्द गर्न सक्नुहुन्छ।
 generic_actions,action_question_attach_files,1,"In order to attach files, please click the attachment button.","फाइलहरू संलग्न गर्न चाहनुहुन्छ भने, कृपया एट्याचमेन्ट बटन प्रयोग गर्नुहोस्।"
-menu_form,action_ask_menu_form_main_story,1,I am here to help you file a grievance or check its status. What would you like to do?,म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?
-menu_form,action_ask_menu_form_main_story,2,"You are reaching out to the office of {district} in {province}.
+menu_form,action_ask_menu_form_story_main,1,I am here to help you file a grievance or check its status. What would you like to do?,म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?
+menu_form,action_ask_menu_form_story_main,2,"You are reaching out to the office of {district} in {province}.
 I am here to help you file a grievance or check its status. What would you like to do?","तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
 म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
 menu_form,action_ask_menu_form_language_code,1,"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?

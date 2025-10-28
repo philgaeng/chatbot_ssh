@@ -37,11 +37,11 @@ class PreviousStatePolicy(RulePolicy):
         if latest_intent:
             tracker.update(SlotSet("current_process", self.get_process_name(latest_intent)))
 
-        # Automatically set the `current_story` slot
+        # Automatically set the `story_current` slot
         if tracker.active_loop_name:
-            tracker.update(SlotSet("current_story", tracker.active_loop_name))
+            tracker.update(SlotSet("story_current", tracker.active_loop_name))
         else:
-            tracker.update(SlotSet("current_story", self.get_story_name(tracker)))
+            tracker.update(SlotSet("story_current", self.get_story_name(tracker)))
 
         return probabilities
 

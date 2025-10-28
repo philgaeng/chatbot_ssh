@@ -37,7 +37,7 @@ generic_actions,action_custom_fallback,1,Try Again,पुनः प्रया�
 generic_actions,action_handle_skip,1,Yes,हो,No,होइन
 generic_actions,action_mood_unhappy,1,Try Again,पुनः प्रयास गर्नुहोस्,Restart the process,प्रक्रिया पुनः सुरु गर्नुहोस्,Restart the story,कथामा पुनः सुरु गर्नुहोस्,File Grievance as Is,यसै रूपमा दर्ता गर्नुहोस्,Exit,बाहिर निस्कनुहोस्
 generic_actions,action_clean_window_options,1,Close Browser,ब्राउजर बन्द गर्नुहोस्,Clear Session,सत्र खाली गर्नुहोस्
-menu_form,action_ask_menu_form_main_story,1,File a grievance,गुनासो दर्ता गर्नुहोस्,Check my status,स्थिति जाँच गर्नुहोस्,Exit,बाहिर निस्कनुहोस्
+menu_form,action_ask_menu_form_story_main,1,File a grievance,गुनासो दर्ता गर्नुहोस्,Check my status,स्थिति जाँच गर्नुहोस्,Exit,बाहिर निस्कनुहोस्
 menu_form,action_ask_menu_form_language_code,1,Nepali / नेपाली,,English / अंग्रेजी,
 base_form,handle_slot_extraction,1,"Yes, skip it","Yes, skip it","No, let me enter a value","No, let me enter a value"
 check_status,action_choose_retrieval_method,1,Use Phone Number,फोन नम्बर प्रयोग गर्नुहोस्,Use Grievance ID,गुनासो ID प्रयोग गर्नुहोस्

@@ -53,9 +53,9 @@ class TestDisconnectionAction(Action):
             # Check for specific status check related slots
             logger.info("\n--- STATUS CHECK RELATED SLOTS ---")
             status_slots = [
-                "status_check_method",
-                "status_check_list_grievance_id", 
-                "status_check_complainant_phone",
+                "story_route",
+                "list_grievance_id", 
+                "complainant_phone",
                 "status_check_complainant_full_name",
                 "grievance_id",
                 "additional_description",
