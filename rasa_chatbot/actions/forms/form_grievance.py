@@ -201,19 +201,22 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         
         """
         try:
+            expected_values = ["restart", "add_more_details", "submit_details"]
+            
+            
             self.logger.debug(f"Validating grievance_new_detail: {slot_value}")
             # Handle restart the process
-            if slot_value == "/restart":
+            if slot_value == "restart":
                 return {"grievance_new_detail": None,
                         "grievance_description": None,
                         "grievance_description_status": "restart"}
 
-            if slot_value == "/add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
+            if slot_value == "add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
                 return {"grievance_new_detail": None,
                     "grievance_description_status": "add_more_details"}
             
             # Handle form completion
-            if slot_value == "/submit_details":
+            if slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
                 # Get base slots - async classification will be triggered here
                 slots_to_set = {
@@ -241,7 +244,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 return slots_to_set
             
             # Handle valid grievance text
-            if slot_value and not slot_value.startswith('/'):
+            if slot_value and slot_value not in expected_values:
                 #update the grievance description with the new detail
                 updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
                 # Check for sensitive content using keyword detection

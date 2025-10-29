@@ -1,0 +1,13 @@
+{
+  "rule_only_slots": [],
+  "rule_only_loops": [
+    "form_story_route",
+    "form_grievance",
+    "form_contact",
+    "form_status_check_2",
+    "form_story_main",
+    "form_otp",
+    "form_story_step",
+    "form_status_check_1"
+  ]
+}

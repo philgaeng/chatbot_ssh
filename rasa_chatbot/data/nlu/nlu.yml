@@ -259,3 +259,27 @@ nlu:
       - +63999998989
       - +63999-999-9999
       - +63937 999 9999 999
+
+  ################## fake intent for forms  #########################
+  - intent: intent_slot_neutral
+    examples: |
+      - /status_check_modify
+      - /status_check_follow_up
+      - /status_check_request_follow_up
+      - /status_check_modify_grievance
+      - /submit_grievance
+      - /submit_details
+      - /new_grievance
+      - /start_status_check
+      - /check_status
+      - /goodbye
+      - /route_status_check_phone
+      - /route_status_check_grievance_id
+      - /slot_confirmed
+      - /slot_added
+      - /slot_deleted
+      - /slot_edited
+      - /show_status_history
+      - /retrieve_another_grievance
+      - /affirm_skip
+      - /deny_skip

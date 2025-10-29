@@ -189,9 +189,7 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         """Validate phone number format and standardize it."""
-
-        
-        return result
+        return self.base_validate_phone(slot_value, dispatcher)
     
     async def extract_otp_consent(
         self,

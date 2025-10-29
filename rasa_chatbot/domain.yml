@@ -31,14 +31,11 @@ x-common-ignore-intents: &common-ignore-intents
   - location_names_nepali
   - status_check_modify
   - status_check_follow_up
-  - status_check_request_follow_up
-  - status_check_modify_grievance
   - status_check_provide_contact
   - status_check_do_not_provide_contact
-  - route_status_check_phone
-  - route_status_check_grievance_id
   - new_grievance
   - status_check
+  - intent_slot_neutral
 
 version: "3.1"
 session_config:
@@ -77,10 +74,6 @@ intents:
   - test_disconnection
   - test_disconnection_log
   - status_check
-  - status_check_modify
-  - status_check_follow_up
-  - status_check_request_follow_up
-  - status_check_modify_grievance
   - status_check_provide_contact
   - status_check_do_not_provide_contact
   - full_names_english_with_middle_name
@@ -89,8 +82,7 @@ intents:
   - full_names_nepali
   - location_names_english
   - location_names_nepali
-  - route_status_check_phone
-  - route_status_check_grievance_id
+  - intent_slot_neutral
 
 slots:
   language_code:
@@ -625,25 +617,52 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  # Modify slots
+  story_route_modify:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  story_step_modify:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  modify_field:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  modify_field_new_value:
+    type: text
+    influence_conversation: true
+    mappings:
+      - type: custom
+  modify_validation:
+    type: bool
+    influence_conversation: true
+    mappings:
+      - type: custom
 
 actions:
   - action_next_action
+  - action_next_action_modify
   - action_retrieve_classification_results
 
-  - action_complainant_address_confirmed
-  - action_complainant_address_temp
-  - action_complainant_consent
-  - action_complainant_email_confirmed
-  - action_complainant_email_temp
-  - action_complainant_district
-  - action_complainant_full_name
-  - action_complainant_location_consent
-  - action_complainant_municipality_confirmed
-  - action_complainant_municipality_temp
-  - action_complainant_province
-  - action_complainant_village_confirmed
-  - action_complainant_village_temp
-  - action_complainant_ward
+  - action_ask_complainant_address_confirmed
+  - action_ask_complainant_address_temp
+  - action_ask_complainant_consent
+  - action_ask_complainant_email_confirmed
+  - action_ask_complainant_email_temp
+  - action_ask_complainant_district
+  - action_ask_complainant_full_name
+  - action_ask_complainant_location_consent
+  - action_ask_complainant_municipality_confirmed
+  - action_ask_complainant_municipality_temp
+  - action_ask_complainant_province
+  - action_ask_complainant_village_confirmed
+  - action_ask_complainant_village_temp
+  - action_ask_complainant_ward
   - action_ask_grievance_new_detail
   - action_ask_sensitive_issues_follow_up
   - action_ask_sensitive_issues_nickname
@@ -733,6 +752,10 @@ actions:
   - validate_form_status_check_2
   - validate_form_sensitive_issues
   - validate_form_status_check_skip
+  - validate_form_status_check_modify
+  - validate_form_contact_modify
+  - validate_form_location_modify
+  - validate_form_grievance_modify
   - action_grievance_outro
   - action_status_check_request_follow_up
   - action_status_check_modify_grievance
@@ -740,7 +763,11 @@ actions:
   - action_ask_story_route
   - action_ask_story_step
   - action_ask_story_main
-
+  - action_ask_story_route_modify
+  - action_ask_story_step_modify
+  - action_ask_modify_field
+  - action_ask_modify_field_new_value
+  - action_ask_modify_validation
 forms:
   form_contact:
     required_slots:
@@ -803,5 +830,17 @@ forms:
     ignored_intents: *common-ignore-intents
   form_status_check_modify:
     required_slots:
-      - story_step
+      - story_step_modify
+    ignored_intents: *common-ignore-intents
+  form_contact_modify:
+    required_slots:
+      - story_step_modify
+    ignored_intents: *common-ignore-intents
+  form_location_modify:
+    required_slots:
+      - story_step_modify
+    ignored_intents: *common-ignore-intents
+  form_grievance_modify:
+    required_slots:
+      - story_step_modify
     ignored_intents: *common-ignore-intents

@@ -96,3 +96,36 @@ stories:
       - active_loop: form_story_step
       - active_loop: null
       - action: action_next_action
+
+  - story: Next action after action_status_check_request_follow_up
+    steps:
+      - action: action_status_check_request_follow_up
+      - action: action_listen
+
+  - story: Next action after form_status_check_modify
+    steps:
+      - action: form_status_check_modify
+      - active_loop: form_status_check_modify
+      - active_loop: null
+      - action: action_next_action_modify
+
+  - story: Next action after form_contact_modify
+    steps:
+      - action: form_contact_modify
+      - active_loop: form_contact_modify
+      - active_loop: null
+      - action: action_next_action_modify
+
+  - story: Next action after form_location_modify
+    steps:
+      - action: form_location_modify
+      - active_loop: form_location_modify
+      - active_loop: null
+      - action: action_next_action_modify
+
+  - story: Next action after form_grievance_modify
+    steps:
+      - action: form_grievance_modify
+      - active_loop: form_grievance_modify
+      - active_loop: null
+      - action: action_next_action_modify

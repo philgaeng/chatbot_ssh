@@ -556,7 +556,7 @@ class ContactFormValidationAction(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        language = get_language_code(tracker)
+        language = self.language_code
         #deal with the slot_skipped case
         if slot_value == self.SKIP_VALUE:
             result = {"complainant_email_temp": self.SKIP_VALUE,
