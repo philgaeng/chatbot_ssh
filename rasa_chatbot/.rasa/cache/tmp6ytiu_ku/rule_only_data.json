@@ -1,6 +1,0 @@
-{
-  "rule_only_slots": [
-    "otp_status"
-  ],
-  "rule_only_loops": []
-}

@@ -1,6 +1,0 @@
-{
-  "rule_only_slots": [
-    "status_check_method"
-  ],
-  "rule_only_loops": []
-}

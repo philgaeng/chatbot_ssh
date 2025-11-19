@@ -39,6 +39,10 @@ results/         # Test results
 events.log       # Rasa server logs
 rasa.db          # SQLite database used by tracker store (if applicable)
 .rasa/cache/
+rasa_chatbot/.rasa/cache/  # Rasa cache files
+rasa_chatbot/logs/         # Rasa log files
+*.dot            # Story graph files (generated)
+story_graph.dot  # Rasa story graph visualization
 
 # Docker-specific
 docker-compose.override.yml
