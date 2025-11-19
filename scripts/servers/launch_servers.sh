@@ -30,7 +30,7 @@ mkdir -p "$LOG_DIR" "$UPLOAD_DIR"
 
 # Generate webchat config from .env
 echo "Generating channels/webchat/config.js from .env..."
-python3 "$BASE_DIR/scripts/generate_webchat_config_prod.py"
+python3 "$BASE_DIR/scripts/generate_webchat_config_server.py"
 
 # Function to check if a port is in use
 check_port() {
