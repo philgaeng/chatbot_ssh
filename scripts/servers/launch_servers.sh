@@ -401,7 +401,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
     case $service in
         "rasa_actions")
             # Use rasa from venv if available
-            local rasa_cmd="rasa"
+            rasa_cmd="rasa"
             if [ -f "$VENV_DIR/bin/rasa" ]; then
                 rasa_cmd="$VENV_DIR/bin/rasa"
             fi
@@ -432,7 +432,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             ;;
         "rasa")
             # Use rasa from venv if available
-            local rasa_cmd="rasa"
+            rasa_cmd="rasa"
             if [ -f "$VENV_DIR/bin/rasa" ]; then
                 rasa_cmd="$VENV_DIR/bin/rasa"
             fi
