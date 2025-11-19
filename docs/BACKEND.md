@@ -33,8 +33,7 @@ The Flask server (`backend/app.py`) handles file uploads, WebSocket connections,
 # Development
 python backend/app.py
 
-# Production (with gunicorn)
-gunicorn -w 4 -b 0.0.0.0:5001 backend.app:app
+
 ```
 
 ### Configuration
@@ -215,165 +214,6 @@ def internal_error(error):
 @app.errorhandler(RequestEntityTooLarge)
 def file_too_large(error):
     return jsonify({'error': 'File too large'}), 413
-```
-
-## Django Helpdesk
-
-### Overview
-
-Django-based ticketing system for grievance management, workflow, and reporting.
-
-**Port**: 8000 (default)
-
-### Features
-
-- Ticket lifecycle management
-- User hierarchy (Admin, PD, PM, Contractor)
-- SLA monitoring and escalation
-- Automated notifications
-- Reporting and analytics
-- Admin interface
-
-### Installation
-
-```bash
-# Install Django dependencies
-pip install -r backend/django_helpdesk/requirements.txt
-
-# Run migrations
-cd backend/django_helpdesk
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Collect static files
-python manage.py collectstatic
-
-# Run server
-python manage.py runserver 0.0.0.0:8000
-```
-
-### Models
-
-#### Ticket Model
-
-```python
-class Ticket(models.Model):
-    ticket_id = models.CharField(max_length=50, primary_key=True)
-    grievance_id = models.CharField(max_length=50)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
-    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES)
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    escalation_level = models.IntegerField(default=1)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['priority']),
-            models.Index(fields=['assigned_to']),
-        ]
-```
-
-#### User Model
-
-```python
-class HelpdeskUser(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    office_id = models.CharField(max_length=50)
-    phone = models.CharField(max_length=20)
-    municipality = models.CharField(max_length=100, blank=True)
-
-    ROLE_CHOICES = [
-        ('admin', 'Administrator'),
-        ('pd', 'Project Director'),
-        ('pm', 'Project Manager'),
-        ('contractor', 'Contractor'),
-    ]
-```
-
-### Workflow
-
-#### Status Lifecycle
-
-```
-New → Assigned → In Progress → Resolved → Closed
-       ↓              ↓
-    Escalated → In Progress (Level 2)
-                      ↓
-                Escalated (Level 3)
-                      ↓
-                Escalated (Level 4)
-```
-
-#### Escalation Levels
-
-1. **Level 1**: Site Safeguards Focal Person (1-2 days)
-2. **Level 2**: PD/PIU Safeguards Focal Person (7 days)
-3. **Level 3**: Project Office Safeguards Focal Person (15 days)
-4. **Level 4**: Legal Institutions (no timeline)
-
-### Admin Interface
-
-```python
-# backend/django_helpdesk/tickets/admin.py
-
-@admin.register(Ticket)
-class TicketAdmin(admin.ModelAdmin):
-    list_display = ['ticket_id', 'status', 'priority', 'assigned_to', 'created_at']
-    list_filter = ['status', 'priority', 'escalation_level']
-    search_fields = ['ticket_id', 'grievance_id']
-    readonly_fields = ['created_at', 'updated_at']
-
-    fieldsets = (
-        ('Ticket Information', {
-            'fields': ('ticket_id', 'grievance_id', 'status', 'priority')
-        }),
-        ('Assignment', {
-            'fields': ('assigned_to', 'escalation_level')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at', 'resolved_at')
-        }),
-    )
-```
-
-### API Endpoints
-
-```python
-# urls.py
-urlpatterns = [
-    path('api/tickets/', TicketListView.as_view()),
-    path('api/tickets/<str:ticket_id>/', TicketDetailView.as_view()),
-    path('api/tickets/<str:ticket_id>/escalate/', EscalateTicketView.as_view()),
-    path('api/tickets/<str:ticket_id>/resolve/', ResolveTicketView.as_view()),
-    path('api/reports/', ReportView.as_view()),
-]
-```
-
-### Notifications
-
-```python
-# Send email notification
-def send_ticket_notification(ticket, event_type):
-    subject = f'Ticket {ticket.ticket_id}: {event_type}'
-    message = render_to_string('email/ticket_notification.html', {
-        'ticket': ticket,
-        'event_type': event_type,
-    })
-
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [ticket.assigned_to.email],
-        html_message=message
-    )
 ```
 
 ## Celery Task Queue
@@ -855,18 +695,6 @@ def get_file_url(file_path):
 | GET    | `/grievance/{id}` | Get grievance details |
 | POST   | `/task-status`    | Update task status    |
 | GET    | `/files/{path}`   | Serve file            |
-
-#### Django Helpdesk (Port 8000)
-
-| Method | Endpoint                      | Description        |
-| ------ | ----------------------------- | ------------------ |
-| GET    | `/api/tickets/`               | List tickets       |
-| POST   | `/api/tickets/`               | Create ticket      |
-| GET    | `/api/tickets/{id}/`          | Get ticket details |
-| PUT    | `/api/tickets/{id}/`          | Update ticket      |
-| POST   | `/api/tickets/{id}/escalate/` | Escalate ticket    |
-| POST   | `/api/tickets/{id}/resolve/`  | Resolve ticket     |
-| GET    | `/api/reports/`               | Generate reports   |
 
 ### Response Formats
 

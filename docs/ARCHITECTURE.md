@@ -35,7 +35,7 @@ Comprehensive overview of the Nepal Chatbot system architecture, components, and
 ┌───────▼────────┐   ┌───────▼────────┐   ┌───────▼────────┐
 │  Rasa Server   │   │  Flask Server  │   │ Django Helpdesk│
 │  (Port 5005)   │   │  (Port 5001)   │   │  (Port 8000)   │
-│                │   │                │   │                │
+│                │   │                │   │   Option       │
 │  - NLU         │   │  - File Upload │   │  - Ticketing   │
 │  - Dialogue    │   │  - WebSocket   │   │  - User Mgmt   │
 │  - Policies    │   │  - REST API    │   │  - Reporting   │
@@ -163,7 +163,7 @@ actions/
 
 **Location:** `backend/app.py`
 
-### 4. Django Helpdesk (Port 8000)
+### 4. Django Helpdesk (Port 8000) - option
 
 **Purpose**: Ticket management and workflow system
 
@@ -307,17 +307,11 @@ actions/
      │ 7. Classification complete
      ▼
 ┌──────────────────┐
-│  WebSocket       │
-│  (Flask)         │
-└────┬─────────────┘
-     │ 8. Send results to frontend
-     ▼
-┌──────────────────┐
-│  Frontend        │
+│  Webchat         │
 │  - Show results  │
 │  - Send to Rasa  │
 └────┬─────────────┘
-     │ 9. User confirms
+     │ 8. User confirms
      ▼
 ┌──────────────────┐
 │  Contact Form    │
@@ -325,7 +319,7 @@ actions/
 │  - Phone         │
 │  - Location      │
 └────┬─────────────┘
-     │ 10. OTP verification
+     │ 9. OTP verification
      ▼
 ┌──────────────────┐
 │  Submit to DB    │
@@ -333,14 +327,7 @@ actions/
 │  - Store files   │
 │  - Generate ID   │
 └────┬─────────────┘
-     │ 11. Create ticket
-     ▼
-┌──────────────────┐
-│  Django Helpdesk │
-│  - Assign        │
-│  - Notify        │
-└────┬─────────────┘
-     │ 12. Confirmation
+     | 10. Confirmation
      ▼
 ┌──────────────┐
 │   User gets  │

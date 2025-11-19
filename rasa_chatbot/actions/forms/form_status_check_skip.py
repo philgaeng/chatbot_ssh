@@ -4,7 +4,7 @@ from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 from rasa_sdk.events import SlotSet, FollowupAction
-from rasa_chatbot.actions.base_classes.contact_form_classes import ContactFormValidationAction
+from rasa_chatbot.actions.forms.form_contact import ContactFormValidationAction
 from rasa_chatbot.actions.base_classes.base_classes import BaseAction
 
 

@@ -375,8 +375,8 @@ logs/
 ├── celery_llm_queue.log       # Celery LLM worker
 ├── celery_default.log         # Celery default worker
 ├── server_manager.log         # Server orchestration
-├── mysql_operations.log       # MySQL operations
-└── mysql_migrations.log       # Database migrations
+├── db_manager.log             # Primary database operations
+└── db_migrations.log          # Database migrations
 ```
 
 **System Logs:**

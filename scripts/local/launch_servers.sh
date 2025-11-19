@@ -92,7 +92,7 @@ start_redis() {
 
     # Start Redis server using the standalone config file
     echo "Starting Redis server with standalone configuration..."
-    redis-server "$BASE_DIR/scripts/servers/redis.conf"
+    redis-server "$BASE_DIR/scripts/local/redis.conf"
 
     # Wait for Redis to start
     local retry=0

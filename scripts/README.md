@@ -47,6 +47,7 @@ python3 run_servers.py --all
 The server can be configured in three ways (in order of precedence):
 
 1. **Command Line Arguments**:
+
    ```bash
    python run_servers.py --all \
      --file-server-port 5002 \
@@ -57,6 +58,7 @@ The server can be configured in three ways (in order of precedence):
    ```
 
 2. **Configuration File** (JSON):
+
    ```json
    {
      "file_server_port": 5001,
@@ -107,6 +109,7 @@ cd scripts/rasa
 ```
 
 This will:
+
 1. Create a Python virtual environment
 2. Install Rasa and required packages
 3. Download spaCy models
@@ -122,6 +125,7 @@ cd scripts/rasa
 ```
 
 The training script will:
+
 1. Start an AWS instance for training
 2. Sync training files
 3. Run the training process
@@ -131,6 +135,7 @@ The training script will:
 #### Training Configuration
 
 Configure training parameters in `config.sh`:
+
 ```bash
 # Training parameters
 TRAIN_BATCH_SIZE=4
@@ -154,6 +159,7 @@ python init.py
 ```
 
 This will:
+
 1. Create necessary tables
 2. Set up indexes
 3. Initialize required data
@@ -178,6 +184,7 @@ Logs are stored in the `logs/` directory with separate files for each component:
 - `accessible_server.log`: Accessibility app logs
 
 Log rotation is configured to:
+
 - Rotate daily
 - Keep logs for 90 days by default
 - Maximum file size of 100MB
@@ -203,6 +210,7 @@ chown -R ubuntu:www-data uploads
 ### Common Issues
 
 1. **Port Conflicts**:
+
    ```bash
    # Check what's using a specific port
    sudo lsof -i:5001
@@ -212,22 +220,24 @@ chown -R ubuntu:www-data uploads
    ```
 
 2. **Database Issues**:
+
    ```bash
    # Check database connection
    sudo -u postgres psql
    \c grievance_db
    \dt
-   
+
    # Check database logs
    sudo tail -f /var/log/postgresql/postgresql-*.log
    ```
 
 3. **Rasa Issues**:
+
    ```bash
    # Check Rasa logs
    tail -f logs/rasa_server.log
    tail -f logs/actions_server.log
-   
+
    # Verify Rasa installation
    rasa --version
    python -c "import rasa; print(rasa.__version__)"
@@ -281,28 +291,31 @@ server {
 ## Development Workflow
 
 1. **Making Changes**:
+
    - Update Rasa files in the project root
    - Update server code in `actions_server/`
    - Update accessible interface in `channels/accessible/`
 
 2. **Testing Changes**:
+
 ```bash
    # Start all servers
    python run_servers.py --all
-   
+
    # Test Rasa
    rasa test
-   
+
    # Test API endpoints
    curl http://localhost:5005/webhooks/rest/webhook
-   ```
+```
 
 3. **Deploying Changes**:
+
    ```bash
    # Train new model
    ./train.sh
-   
+
    # Restart servers
    pkill -f run_servers.py
    python run_servers.py --all
-   ``` 
+   ```

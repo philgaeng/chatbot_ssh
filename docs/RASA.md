@@ -101,20 +101,20 @@ graph TD
     B --> C{Collect Details}
     C --> D[Validate Input]
     D --> E[Trigger Async Classification]
-    E --> F[grievance_summary_form]
-    F --> G{Confirm Categories}
-    G -->|Yes| H{Gender Issues?}
-    G -->|No| I[Modify Categories]
-    I --> G
-    H -->|Yes| J[Gender Follow-up]
-    H -->|No| K[contact_form]
-    J --> K
-    K --> L{Phone Provided?}
-    L -->|Yes| M[otp_verification_form]
-    L -->|No| N[Submit Grievance]
-    M --> N
-    N --> O[Create Ticket]
-    O --> P[Show Grievance ID]
+    E --> F {Gender Issues Detection}
+    F -->|Yes| G[Gender Follow-up]
+    F -->|No| H[contact_form]
+    H --> I
+    I --> J{Phone Provided?}
+    J -->|Yes| K[otp_verification_form]
+    J -->|No| L[Submit Grievance]
+    L --> M
+    M --> N[Create Ticket]
+    N --> O[grievance_summary_form]
+    O --> P{Confirm Categories}
+    O -->|No| Q[Modify Categories]
+    P --> Q[Show Grievance ID]
+    Q --> R [Attach files]
 ```
 
 **Detailed Steps:**
@@ -144,75 +144,7 @@ class ValidateGrievanceDetailsForm(FormValidationAction):
         return {"grievance_new_detail": value}
 ```
 
-#### Step 2: Async Classification
-
-**Trigger:** After grievance details collection
-
-**Process:**
-
-1. Launch Celery task for classification
-2. User proceeds to next form (non-blocking)
-3. Classification runs in background
-4. Results sent to frontend via WebSocket
-5. Frontend sends results back to Rasa
-
-**Task:** `classify_and_summarize_grievance_task`
-
-```python
-@celery_app.task(bind=True, max_retries=3)
-def classify_and_summarize_grievance_task(self, grievance_data):
-    # Call OpenAI for classification
-    categories = classify_grievance(grievance_data['description'])
-    summary = summarize_grievance(grievance_data['description'])
-
-    return {
-        'grievance_summary': summary,
-        'grievance_categories': categories,
-        'status': 'SUCCESS'
-    }
-```
-
-#### Step 3: Confirm Summary & Categories
-
-**Form:** `grievance_summary_form`
-
-**Slots:**
-
-- `grievance_summary_temp` - AI-generated summary
-- `grievance_list_cat_confirmed` - User confirmation
-- `grievance_summary_confirmed` - Summary confirmation
-
-**Validation:**
-
-- Check if classification completed
-- Allow manual category selection
-- Detect gender issues automatically
-
-**Code:** `rasa_chatbot/actions/forms/form_validation_grievance_categories.py`
-
-```python
-class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
-    def run(self, dispatcher, tracker, domain):
-        # Check classification status
-        classification_status = tracker.get_slot('classification_status')
-
-        if classification_status == 'completed':
-            categories = tracker.get_slot('grievance_categories')
-            dispatcher.utter_message(
-                text=f"Your grievance has been categorized as: {categories}. Is this correct?",
-                buttons=[
-                    {"title": "Yes", "payload": "/affirm"},
-                    {"title": "No", "payload": "/deny"}
-                ]
-            )
-        else:
-            # Still processing
-            dispatcher.utter_message(
-                text="Classification is still processing. Please wait..."
-            )
-```
-
-#### Step 4: Gender Issue Detection
+#### Step 2: Gender Issue Detection
 
 **Automatic Detection:**
 
@@ -229,12 +161,9 @@ def _detect_gender_issues(self, description, categories):
 
 **Follow-up Questions:**
 
-- Complainant gender
-- Alleged perpetrator gender
-- Type of incident
-- Date and location of incident
+- Provide contact information of closest gender protection center
 
-#### Step 5: Contact Information
+#### Step 3: Contact Information
 
 **Form:** `contact_form`
 
@@ -287,7 +216,7 @@ class ValidateOTPVerificationForm(FormValidationAction):
                 return {"otp_input": None, "otp_attempts": attempts + 1}
 ```
 
-#### Step 7: Submit Grievance
+#### Step 4: Submit Grievance
 
 **Action:** `action_submit_grievance`
 
@@ -329,6 +258,74 @@ class ActionSubmitGrievance(Action):
         )
 
         return [SlotSet("grievance_id", grievance_id)]
+```
+
+#### Step 5: Async Classification
+
+**Trigger:** After grievance details collection
+
+**Process:**
+
+1. Launch Celery task for classification
+2. User proceeds to next form (non-blocking)
+3. Classification runs in background
+4. Results sent to frontend via WebSocket
+5. Frontend sends results back to Rasa
+
+**Task:** `classify_and_summarize_grievance_task`
+
+```python
+@celery_app.task(bind=True, max_retries=3)
+def classify_and_summarize_grievance_task(self, grievance_data):
+    # Call OpenAI for classification
+    categories = classify_grievance(grievance_data['description'])
+    summary = summarize_grievance(grievance_data['description'])
+
+    return {
+        'grievance_summary': summary,
+        'grievance_categories': categories,
+        'status': 'SUCCESS'
+    }
+```
+
+#### Step 6 Confirm Summary & Categories
+
+**Form:** `grievance_summary_form`
+
+**Slots:**
+
+- `grievance_summary_temp` - AI-generated summary
+- `grievance_list_cat_confirmed` - User confirmation
+- `grievance_summary_confirmed` - Summary confirmation
+
+**Validation:**
+
+- Check if classification completed
+- Allow manual category selection
+- Detect gender issues automatically
+
+**Code:** `rasa_chatbot/actions/forms/form_validation_grievance_categories.py`
+
+```python
+class ActionAskGrievanceSummaryFormGrievanceListCatConfirmed(Action):
+    def run(self, dispatcher, tracker, domain):
+        # Check classification status
+        classification_status = tracker.get_slot('classification_status')
+
+        if classification_status == 'completed':
+            categories = tracker.get_slot('grievance_categories')
+            dispatcher.utter_message(
+                text=f"Your grievance has been categorized as: {categories}. Is this correct?",
+                buttons=[
+                    {"title": "Yes", "payload": "/affirm"},
+                    {"title": "No", "payload": "/deny"}
+                ]
+            )
+        else:
+            # Still processing
+            dispatcher.utter_message(
+                text="Classification is still processing. Please wait..."
+            )
 ```
 
 ### 3. Status Check Flow
@@ -412,33 +409,76 @@ class ValidateMyForm(FormValidationAction):
 
 ### Available Forms
 
-1. **grievance_details_form**
+1. **form_grievance**
 
-   - Collects grievance description
-   - Multi-turn conversation
-   - Allows adding more details
+   - Captures the initial grievance description via `grievance_new_detail`
+   - Supports multi-turn elaboration on the issue the user is reporting
 
-2. **grievance_summary_form**
+2. **form_contact**
 
-   - Confirms AI-generated summary
-   - Confirms categories
-   - Handles gender issues
+   - Collects complainant consent and contact slots (`complainant_location_consent`, `complainant_full_name`, `complainant_email_temp`)
+   - Establishes primary contact details for follow-up
 
-3. **contact_form**
+3. **form_otp**
 
-   - Collects user information
-   - Location details
-   - Contact preferences
+   - Drives OTP generation, validation, and retry handling (`otp_input`, `otp_status`)
+   - Provides skip logic for users who cannot complete verification
 
-4. **otp_verification_form**
+4. **form_grievance_complainant_review**
 
-   - OTP generation and validation
-   - Retry logic
-   - Skip option
+   - Confirms categorisation decisions (`grievance_cat_modify`)
+   - Captures complainant feedback on the proposed classification
 
-5. **status_check_form**
-   - Grievance ID or phone input
-   - Grievance selection (if multiple)
+5. **form_sensitive_issues**
+
+   - Follows up on gender-based or sensitive grievance flags (`sensitive_issues_follow_up`)
+   - Guides the user through safety and escalation options
+
+6. **grievance_id_form**
+
+   - Collects an existing grievance identifier when supplied up-front (`grievance_id`)
+
+7. **form_status_check_1**
+
+   - Determines how the user wants to check status (`story_route`)
+   - Branches between grievance-id lookup and phone-based lookup paths
+
+8. **form_status_check_2**
+
+   - Retrieves/validates grievances and complainant selection (`status_check_retrieve_grievances`, `status_check_grievance_id_selected`, `status_check_complainant_full_name`)
+   - Handles disambiguation when multiple grievances exist
+
+9. **form_status_check_skip**
+
+   - Collects location context (`valid_province_and_district`) to hand off manual follow-up when the user skips automated status tracking
+
+10. **form_status_check_modify**
+
+    - Guides users through modifying a grievance after viewing status (`story_step_modify`)
+
+11. **form_story_main**
+
+    - Chooses the high-level route for the conversation (`story_main`)
+
+12. **form_story_route**
+
+    - Determines the next sub-flow inside the selected story (`story_route`)
+
+13. **form_story_step**
+
+    - Captures granular step decisions within a story (`story_step`)
+
+14. **form_contact_modify**
+
+    - Handles updates to existing contact information (`story_step_modify`)
+
+15. **form_location_modify**
+
+    - Modifies stored location fields when users request changes (`story_step_modify`)
+
+16. **form_grievance_modify**
+
+    - Updates previously captured grievance details in modification flows (`story_step_modify`)
 
 ### Form Activation
 

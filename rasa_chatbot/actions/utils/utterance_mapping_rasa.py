@@ -276,6 +276,56 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_SKIP
             }
         },
+        'action_ask_complainant_consent': {
+            'utterances': {
+                1: {
+                    'en': "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.",
+                    'ne': "के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईं गुमनाम रहन सक्नुहुन्छ तर हामी तपाईंलाई अनुवर्ती वा अपडेटको लागि सम्पर्क गर्न सक्नुहुनेछैनौं।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY
+            }
+        },
+        'action_ask_complainant_full_name': {
+            'utterances': {
+                1: {
+                    'en': "Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                },
+                2: {
+                    'en': "Please enter your full name. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_complainant_email_temp': {
+            'utterances': {
+                1: {
+                    'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
+                    'ne': "कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP
+            }
+        },
+        'action_ask_complainant_email_confirmed': {
+            'utterances': {
+                1: {
+                    'en': "⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
+                    'ne': "⚠️ इमेल डोमेन '{domain_name}' सामान्य नेपाली इमेल प्रदायकको रूपमा पहिचान गरिएको छैन।\nकृपया यो सही हो कि होइन पुष्टि गर्नुहोस् वा अर्को इमेलसँग पुनः प्रयास गर्नुहोस्।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_EMAIL_CONFIRMATION
+            }
+        },
+    },
+    "form_contact": {
         'validate_complainant_province': {
             'utterances': {
                 1: {
@@ -330,54 +380,6 @@ UTTERANCE_MAPPING = {
                     'en': "Please enter your correct village and address",
                     'ne': "कृपया आफ्नो सही गाउँ र ठेगाना प्रविष्ट गर्नुहोस्"
                 }
-            }
-        },
-        'action_ask_complainant_consent': {
-            'utterances': {
-                1: {
-                    'en': "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.",
-                    'ne': "के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईं गुमनाम रहन सक्नुहुन्छ तर हामी तपाईंलाई अनुवर्ती वा अपडेटको लागि सम्पर्क गर्न सक्नुहुनेछैनौं।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
-        },
-        'action_ask_complainant_full_name': {
-            'utterances': {
-                1: {
-                    'en': "Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
-                },
-                2: {
-                    'en': "Please enter your full name. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_complainant_email_temp': {
-            'utterances': {
-                1: {
-                    'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP
-            }
-        },
-        'action_ask_complainant_email_confirmed': {
-            'utterances': {
-                1: {
-                    'en': "⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.\nPlease confirm if this is correct or try again with a different email.",
-                    'ne': "⚠️ इमेल डोमेन '{domain_name}' सामान्य नेपाली इमेल प्रदायकको रूपमा पहिचान गरिएको छैन।\nकृपया यो सही हो कि होइन पुष्टि गर्नुहोस् वा अर्को इमेलसँग पुनः प्रयास गर्नुहोस्।"
-                }
-            },
-            'buttons': {
-                1: BUTTONS_EMAIL_CONFIRMATION
             }
         },
         'action_modify_contact_info': {

@@ -769,32 +769,21 @@ actions:
   - action_ask_modify_field_new_value
   - action_ask_modify_validation
 forms:
+  # === Grievance intake ===
+  form_grievance:
+    required_slots:
+      - grievance_new_detail
+    ignored_intents: *common-ignore-intents
   form_contact:
     required_slots:
       - complainant_location_consent
       - complainant_full_name
       - complainant_email_temp
     ignored_intents: *common-ignore-intents
-  collect_phone_form:
-    required_slots:
-      - complainant_phone
-    ignored_intents: *common-ignore-intents
-  edit_summary_form:
-    required_slots:
-      - grievance_summary
-    ignored_intents: *common-ignore-intents
   form_otp:
     required_slots:
       - otp_input
       - otp_status
-    ignored_intents: *common-ignore-intents
-  grievance_id_form:
-    required_slots:
-      - grievance_id
-    ignored_intents: *common-ignore-intents
-  form_grievance:
-    required_slots:
-      - grievance_new_detail
     ignored_intents: *common-ignore-intents
   form_grievance_complainant_review:
     required_slots:
@@ -804,6 +793,8 @@ forms:
     required_slots:
       - sensitive_issues_follow_up
     ignored_intents: *common-ignore-intents
+
+  # === Status check & existing grievance flows ===
   form_status_check_1:
     required_slots:
       - story_route
@@ -816,6 +807,12 @@ forms:
     required_slots:
       - valid_province_and_district
     ignored_intents: *common-ignore-intents
+  form_status_check_modify:
+    required_slots:
+      - story_step_modify
+    ignored_intents: *common-ignore-intents
+
+  # === Story navigation helpers ===
   form_story_main:
     required_slots:
       - story_main
@@ -828,10 +825,8 @@ forms:
     required_slots:
       - story_step
     ignored_intents: *common-ignore-intents
-  form_status_check_modify:
-    required_slots:
-      - story_step_modify
-    ignored_intents: *common-ignore-intents
+
+  # === Modification flows ===
   form_contact_modify:
     required_slots:
       - story_step_modify
