@@ -29,7 +29,7 @@ socketio = SocketIO(
     log_output=True,
     debug=True,
     message_queue=SOCKETIO_REDIS_URL,
-    transports=['websocket']  # Force WebSocket transport only
+    transports=['websocket', 'polling']  # Allow both WebSocket and polling (client will upgrade to WebSocket)
 )
 
 # Add connection event handlers
