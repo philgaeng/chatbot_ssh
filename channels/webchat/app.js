@@ -3,6 +3,7 @@ import {
   FILE_UPLOAD_CONFIG,
   SESSION_CONFIG,
   WEBSOCKET_CONFIG,
+  FLASK_SOCKET_CONFIG
 } from "./config.js";
 
 // Import modules
@@ -133,9 +134,10 @@ function initializeWebSocket() {
   window.socket = socket;
 
   // Connect to Flask websocket for file status updates
-  const flaskSocket = io("http://localhost:5001", {
-    path: "/socket.io/",
-    transports: ["websocket"],
+  // Use FLASK_SOCKET_CONFIG from config.js for dynamic URL detection
+  const flaskSocket = io(FLASK_SOCKET_CONFIG.URL, {
+    path: FLASK_SOCKET_CONFIG.OPTIONS.path,
+    transports: FLASK_SOCKET_CONFIG.OPTIONS.transports,
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 2000,

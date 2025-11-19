@@ -17,6 +17,8 @@ def parse_env_file(path):
 env_path = '.env'  # Updated to use .env file
 config = parse_env_file(env_path)
 
+# For production, use the domain from environment or detect from hostname
+# If RASA_HOST is localhost but we're on production, use window.location for dynamic detection
 host = config.get('RASA_HOST', 'localhost')
 port = config.get('RASA_PORT', '5005')
 path = config.get('RASA_WS_PATH', '/socket.io/')
@@ -27,6 +29,9 @@ protocol_upload = config.get('FILE_UPLOAD_PROTOCOL', 'http')
 port_upload = config.get('PORT_UPLOAD', ':5001')
 file_upload_path = config.get('FILE_UPLOAD_PATH', '/upload-files')
 file_upload_max_size = config.get('FILE_UPLOAD_MAX_SIZE_MB', '10')
+
+# Production domain - use this when accessed via HTTPS
+production_domain = config.get('PRODUCTION_DOMAIN', '')
 
 session_key = config.get('SESSION_STORAGE_KEY', 'rasa_session_id')
 session_expiry = config.get('SESSION_EXPIRY_DAYS', '7')
@@ -47,8 +52,19 @@ const SERVER_CONFIG = {{
 }};
 
 // WebSocket Configuration
+// Use window.location for dynamic host detection in browser
+// This allows the same config to work in both localhost and production
+const getWebSocketUrl = () => {{
+    // If accessed via HTTPS, use wss:// and current domain (no port needed if proxied)
+    if (window.location.protocol === 'https:') {{
+        return `wss://${{window.location.hostname}}`;
+    }}
+    // For localhost/HTTP, use the configured host and port
+    return `{protocol}://{host}:{port}`;
+}};
+
 const WEBSOCKET_CONFIG = {{
-    URL: `{protocol}://{host}:{port}`, // TODO: check if the port is required when using on remote server
+    URL: getWebSocketUrl(),
     OPTIONS: {{
         path: '{path}',
         transports: {transports}
@@ -56,9 +72,33 @@ const WEBSOCKET_CONFIG = {{
 }};
 
 // File Upload Configuration
+// Use window.location for dynamic host detection
+const getFileUploadUrl = () => {{
+    if (window.location.protocol === 'https:') {{
+        return `https://${{window.location.hostname}}{file_upload_path}`;
+    }}
+    return `{protocol_upload}://{host}{port_upload}{file_upload_path}`;
+}};
+
 const FILE_UPLOAD_CONFIG = {{
-    URL: `{protocol_upload}://{host}{port_upload}{file_upload_path}`,
+    URL: getFileUploadUrl(),
     MAX_SIZE_MB: {file_upload_max_size}
+}};
+
+// Flask Socket Configuration (for file upload status)
+const getFlaskSocketUrl = () => {{
+    if (window.location.protocol === 'https:') {{
+        return `wss://${{window.location.hostname}}`;
+    }}
+    return `{protocol_upload}://{host}{port_upload}`;
+}};
+
+const FLASK_SOCKET_CONFIG = {{
+    URL: getFlaskSocketUrl(),
+    OPTIONS: {{
+        path: '/socket.io/',
+        transports: ['websocket']
+    }}
 }};
 
 // Session Configuration
@@ -76,6 +116,7 @@ export {{
     WEBSOCKET_CONFIG,
     SESSION_CONFIG,
     UI_CONFIG,
-    FILE_UPLOAD_CONFIG
+    FILE_UPLOAD_CONFIG,
+    FLASK_SOCKET_CONFIG
 }};
 """)
