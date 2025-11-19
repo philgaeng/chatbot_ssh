@@ -5,6 +5,7 @@ __pycache__/
 
 # Logs and runtime files
 *.log
+*.log.*
 *.pid
 *.out
 *.err
@@ -79,4 +80,6 @@ task_queue/logs/    # Ignore entire logs directory
 models/             # Ignore entire models directory
 uploads/
 logs/*.log.*
+**/logs/*.log*
+**/logs/*.log.*
 env.local
