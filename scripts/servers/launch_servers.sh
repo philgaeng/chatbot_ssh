@@ -3,7 +3,7 @@
 # Set the base directory and environment variables
 BASE_DIR="/home/ubuntu/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
-VENV_DIR="/home/ubuntu/nepal_chatbot/rasa-env-21"
+VENV_DIR="/home/ubuntu/rasa-env-21"
 UPLOAD_DIR="$BASE_DIR/uploads"
 BACKEND_DIR="$BASE_DIR/backend"
 RASA_DIR="$BASE_DIR/rasa_chatbot"
