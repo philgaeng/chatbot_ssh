@@ -74,16 +74,23 @@ start_redis() {
         redis_cli_cmd="$redis_cli_cmd -a $REDIS_PASSWORD"
     fi
 
-    # Stop any existing Redis processes
-    echo "Checking for existing Redis processes..."
-    $redis_cli_cmd shutdown 2>/dev/null
+    # Check if Redis is already running and responding
+    echo "Checking for existing Redis server..."
+    if $redis_cli_cmd ping &> /dev/null; then
+        echo "✅ Redis server is already running and responding"
+        return 0
+    fi
+
+    # Stop any existing Redis processes (in case it's running but not responding)
+    echo "Stopping any existing Redis processes..."
+    $redis_cli_cmd shutdown 2>/dev/null || true
     sleep 2
     
     # Kill any remaining Redis processes
     local redis_pids=$(pgrep -f "redis-server" 2>/dev/null)
     if [ ! -z "$redis_pids" ]; then
         echo "Stopping Redis processes: $redis_pids"
-        sudo kill -9 $redis_pids 2>/dev/null
+        sudo kill -9 $redis_pids 2>/dev/null || true
         sleep 2
     fi
 
@@ -92,14 +99,21 @@ start_redis() {
 
     # Start Redis server using the standalone config file
     echo "Starting Redis server with standalone configuration..."
-    redis-server "$BASE_DIR/scripts/servers/redis.conf"
+    redis-server "$BASE_DIR/scripts/servers/redis.conf" &
+    local redis_start_pid=$!
+    sleep 2
 
     # Wait for Redis to start
     local retry=0
     while [ $retry -lt 5 ]; do
         sleep 2
-        if [ -f "$LOG_DIR/redis.pid" ] && $redis_cli_cmd ping &> /dev/null; then
+        if $redis_cli_cmd ping &> /dev/null; then
             echo "✅ Redis server started"
+            # Store PID if we can find it
+            local redis_pid=$(pgrep -f "redis-server.*redis.conf" | head -1)
+            if [ ! -z "$redis_pid" ]; then
+                echo $redis_pid > "$LOG_DIR/redis.pid"
+            fi
             return 0
         fi
         retry=$((retry + 1))
