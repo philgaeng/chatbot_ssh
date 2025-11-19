@@ -86,6 +86,7 @@ const FILE_UPLOAD_CONFIG = {{
 }};
 
 // Flask Socket Configuration (for file upload status)
+// Flask socket is proxied via nginx at /accessible-socket.io/ path
 const getFlaskSocketUrl = () => {{
     if (window.location.protocol === 'https:') {{
         return `wss://${{window.location.hostname}}`;
@@ -96,7 +97,7 @@ const getFlaskSocketUrl = () => {{
 const FLASK_SOCKET_CONFIG = {{
     URL: getFlaskSocketUrl(),
     OPTIONS: {{
-        path: '/socket.io/',
+        path: '/accessible-socket.io/',  // Flask socket path via nginx proxy
         transports: ['websocket']
     }}
 }};
