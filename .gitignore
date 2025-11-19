@@ -84,3 +84,6 @@ models/             # Ignore entire models directory
 uploads/
 logs/*.log.*
 env.local
+
+# Server scripts with secrets
+scripts/servers/create_env.sh
