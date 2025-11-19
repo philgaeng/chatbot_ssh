@@ -25,6 +25,15 @@ else
     export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
 fi
 
+# Activate virtual environment
+if [ -f "$VENV_DIR/bin/activate" ]; then
+    echo "Activating virtual environment: $VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+else
+    echo "⚠️  Warning: Virtual environment not found at $VENV_DIR"
+    echo "   Continuing without virtual environment..."
+fi
+
 # Create necessary directories
 mkdir -p "$LOG_DIR" "$UPLOAD_DIR"
 
@@ -230,10 +239,16 @@ start_celery_worker() {
 
     # Start worker with explicit PID file handling
     echo "Starting Celery worker for $queue_name..."
+    # Use celery from venv if available
+    local celery_cmd="celery"
+    if [ -f "$VENV_DIR/bin/celery" ]; then
+        celery_cmd="$VENV_DIR/bin/celery"
+    fi
+    
     cd "$BASE_DIR" && \
     PYTHONPATH=$BASE_DIR \
     CELERY_PID_FILE="$pid_file" \
-    celery -A backend.task_queue.celery_app worker -Q "$queue_name" \
+    $celery_cmd -A backend.task_queue.celery_app worker -Q "$queue_name" \
         --concurrency="$concurrency" \
         --logfile="$log_file" \
         --pidfile="$pid_file" \
@@ -268,6 +283,16 @@ start_service() {
     local command=$2
     local log_file="$LOG_DIR/${name}.log"
     local pid_file="$LOG_DIR/${name}.pid"
+    
+    # Replace python3/celery with venv versions if available
+    local venv_python="$VENV_DIR/bin/python3"
+    local venv_celery="$VENV_DIR/bin/celery"
+    if [ -f "$venv_python" ]; then
+        command=$(echo "$command" | sed "s|python3|$venv_python|g")
+    fi
+    if [ -f "$venv_celery" ]; then
+        command=$(echo "$command" | sed "s|^celery |$venv_celery |g")
+    fi
     
     echo "Starting $name..."
     if check_port $(echo $command | grep -oP '(?<=:)\d+'); then
@@ -375,6 +400,12 @@ fi
 for service in "rasa_actions" "rasa" "flask_server" "flower"; do
     case $service in
         "rasa_actions")
+            # Use rasa from venv if available
+            local rasa_cmd="rasa"
+            if [ -f "$VENV_DIR/bin/rasa" ]; then
+                rasa_cmd="$VENV_DIR/bin/rasa"
+            fi
+            
             cd "$RASA_DIR" && \
             PYTHONPATH=$BASE_DIR \
             FLASK_APP=backend.api.app.py \
@@ -382,7 +413,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup rasa run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
+            nohup $rasa_cmd run actions --debug > "$LOG_DIR/rasa_actions.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa_actions.pid"
@@ -400,6 +431,12 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             fi
             ;;
         "rasa")
+            # Use rasa from venv if available
+            local rasa_cmd="rasa"
+            if [ -f "$VENV_DIR/bin/rasa" ]; then
+                rasa_cmd="$VENV_DIR/bin/rasa"
+            fi
+            
             cd "$RASA_DIR" && \
             PYTHONPATH=$BASE_DIR \
             FLASK_APP=backend.api.app.py \
@@ -407,7 +444,7 @@ for service in "rasa_actions" "rasa" "flask_server" "flower"; do
             UPLOAD_FOLDER=$UPLOAD_DIR \
             SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
             REDIS_PASSWORD="$REDIS_PASSWORD" \
-            nohup rasa run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
+            nohup $rasa_cmd run --enable-api --cors "*" --debug > "$LOG_DIR/rasa.log" 2>&1 &
             
             # Store the PID
             echo $! > "$LOG_DIR/rasa.pid"
