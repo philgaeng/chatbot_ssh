@@ -10,8 +10,8 @@ task_logger = TaskLogger(service_name='socketio')
 logger = task_logger.logger
 
 # Define Socket.IO path constant
-# Use trailing slash to match frontend expectations
-SOCKETIO_PATH = '/accessible-socket.io/'
+# Flask SocketIO path WITHOUT trailing slash (Flask SocketIO requirement)
+SOCKETIO_PATH = '/accessible-socket.io'
 
 # Use SOCKETIO_REDIS_URL from environment, default to DB 0
 SOCKETIO_REDIS_URL = os.getenv('SOCKETIO_REDIS_URL', 'redis://localhost:6379/0')
@@ -29,7 +29,7 @@ socketio = SocketIO(
     log_output=True,
     debug=True,
     message_queue=SOCKETIO_REDIS_URL,
-    transports=['websocket']  # Force WebSocket transport only
+    transports=['websocket', 'polling']  # Allow both WebSocket and polling (client will upgrade to WebSocket)
 )
 
 # Add connection event handlers
@@ -38,6 +38,14 @@ def handle_connect():
     logger.debug("Client connected", extra_data={"sid": request.sid})
     logger.debug(f"Transport: {request.environ.get('socketio').transport}")
     logger.debug(f"Protocol version: {request.environ.get('socketio').protocol}")
+    # Log request headers for debugging Host/domain issues
+    logger.debug(f"Host header: {request.headers.get('Host', 'NOT SET')}")
+    logger.debug(f"X-Forwarded-Host: {request.headers.get('X-Forwarded-Host', 'NOT SET')}")
+    logger.debug(f"X-Real-IP: {request.headers.get('X-Real-IP', 'NOT SET')}")
+    logger.debug(f"X-Forwarded-Proto: {request.headers.get('X-Forwarded-Proto', 'NOT SET')}")
+    logger.debug(f"Origin: {request.headers.get('Origin', 'NOT SET')}")
+    logger.debug(f"Request path: {request.path}")
+    logger.debug(f"Request url: {request.url}")
 
 @socketio.on('join')
 def on_join(data):

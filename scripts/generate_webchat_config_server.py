@@ -97,8 +97,8 @@ const getFlaskSocketUrl = () => {{
 const FLASK_SOCKET_CONFIG = {{
     URL: getFlaskSocketUrl(),
     OPTIONS: {{
-        path: '/accessible-socket.io/',  // Flask socket path via nginx proxy
-        transports: ['websocket']
+        path: '/accessible-socket.io',  // Flask socket path (NO trailing slash - Flask SocketIO requirement)
+        transports: ['websocket', 'polling']  // Allow both transports for upgrade
     }}
 }};
 

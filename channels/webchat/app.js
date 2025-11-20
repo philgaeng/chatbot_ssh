@@ -1,9 +1,9 @@
 // Import configurations
 import {
   FILE_UPLOAD_CONFIG,
+  FLASK_SOCKET_CONFIG,
   SESSION_CONFIG,
-  WEBSOCKET_CONFIG,
-  FLASK_SOCKET_CONFIG
+  WEBSOCKET_CONFIG
 } from "./config.js";
 
 // Import modules
