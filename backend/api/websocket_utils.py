@@ -10,8 +10,9 @@ task_logger = TaskLogger(service_name='socketio')
 logger = task_logger.logger
 
 # Define Socket.IO path constant
-# Flask SocketIO path - using WITH trailing slash to match client behavior
-SOCKETIO_PATH = '/accessible-socket.io/'
+# Flask SocketIO path WITHOUT trailing slash (Flask SocketIO requirement)
+# Client sends /accessible-socket.io/?EIO=4, nginx will rewrite to /accessible-socket.io?EIO=4
+SOCKETIO_PATH = '/accessible-socket.io'
 
 # Use SOCKETIO_REDIS_URL from environment, default to DB 0
 SOCKETIO_REDIS_URL = os.getenv('SOCKETIO_REDIS_URL', 'redis://localhost:6379/0')
