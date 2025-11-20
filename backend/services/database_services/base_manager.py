@@ -615,7 +615,9 @@ class BaseDatabaseManager:
             'grievance_description': 'grievance_description',
             'grievance_claimed_amount': 'grievance_claimed_amount',
             'grievance_location': 'grievance_location',
-            'language_code': 'language_code'
+            'language_code': 'language_code',
+            'grievance_timeline': 'grievance_timeline',
+            'grievance_classification_status': 'grievance_classification_status'
         }
         expected_fields_db = [field_mapping[field] for field in expected_fields]
         return expected_fields_db
