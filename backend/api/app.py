@@ -1,6 +1,14 @@
 import eventlet
 eventlet.monkey_patch()
 
+import os
+import sys
+
+# Add project root to Python path to enable backend imports
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from backend.api.channels_api import FileServerAPI
@@ -12,7 +20,6 @@ from backend.api.gsheet_monitoring_api import gsheet_monitoring_bp
 from backend.services.database_services.grievance_manager import GrievanceDbManager
 from backend.services.messaging import Messaging
 from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
-import os
 from backend.logger.logger import TaskLogger
 from flask_socketio import join_room, rooms
 
