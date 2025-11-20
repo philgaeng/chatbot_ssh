@@ -53,8 +53,8 @@ structlog-sentry==2.1.0
 prometheus_client==0.21.1
 
 # Data Processing
-pandas==2.3.3
-numpy==2.3.4
+pandas==2.2.3
+numpy==1.26.4
 matplotlib==3.5.3
 
 # Development and Testing
