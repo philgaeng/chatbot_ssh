@@ -6,7 +6,7 @@ from flask_cors import CORS
 from backend.api.channels_api import FileServerAPI
 from backend.services.file_server_core import FileServerCore
 from backend.services.accessible.voice_grievance import voice_grievance_bp
-from backend.api.websocket_utils import socketio, emit_status_update_accessible
+from backend.api.websocket_utils import socketio, emit_status_update_accessible, SOCKETIO_PATH
 from backend.config.constants import ALLOWED_EXTENSIONS
 from backend.api.gsheet_monitoring_api import gsheet_monitoring_bp
 from backend.services.database_services.grievance_manager import GrievanceDbManager
@@ -18,7 +18,7 @@ from flask_socketio import join_room, rooms
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-socketio.init_app(app)
+socketio.init_app(app, path=SOCKETIO_PATH)
 
 # Initialize core and API instances
 file_server_core = FileServerCore(
