@@ -42,8 +42,8 @@ mattermostwrapper==2.2
 aiogram==2.15
 
 # HTTP and API Clients
-requests==2.32.3
-aiohttp>=3.10.11
+requests>=2.32.3
+aiohttp>=3.13.1
 httpx==0.28.1
 
 # Monitoring and Logging
@@ -53,18 +53,18 @@ structlog-sentry==2.1.0
 prometheus_client==0.21.1
 
 # Data Processing
-pandas==2.2.3
-numpy==1.23.5
+pandas==2.3.3
+numpy==2.3.4
 matplotlib==3.5.3
 
 # Development and Testing
 pytest==8.3.5
 
 # Utilities
-python-dotenv==1.1.0
+python-dotenv==1.1.1
 questionary==1.10.0
 randomname==0.1.5
-tqdm==4.67.1
+tqdm>=4.67.1
 
 #others
 eventlet>=0.40.3
