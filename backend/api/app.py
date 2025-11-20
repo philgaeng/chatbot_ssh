@@ -5,9 +5,28 @@ import os
 import sys
 
 # Add project root to Python path to enable backend imports
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Try multiple methods to find project root
+try:
+    # Method 1: Use __file__ if available
+    if '__file__' in globals():
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    else:
+        # Method 2: Use current working directory
+        cwd = os.getcwd()
+        if os.path.basename(cwd) == 'nepal_chatbot' and os.path.exists(os.path.join(cwd, 'backend')):
+            project_root = cwd
+        else:
+            # Method 3: Go up from current directory
+            project_root = cwd
+            while project_root != '/' and not os.path.exists(os.path.join(project_root, 'backend')):
+                project_root = os.path.dirname(project_root)
+except Exception:
+    # Fallback: Use environment variable or default
+    project_root = os.getenv('PROJECT_ROOT', '/home/ubuntu/nepal_chatbot')
+
+if project_root and os.path.exists(os.path.join(project_root, 'backend')):
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
