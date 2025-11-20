@@ -134,18 +134,20 @@ function initializeWebSocket() {
   window.socket = socket;
 
   // Connect to Flask websocket for file status updates
+  // COMMENTED OUT - Not required for now (accessible-socket.io disabled in nginx)
   // Use FLASK_SOCKET_CONFIG from config.js for dynamic URL detection
-  const flaskSocket = io(FLASK_SOCKET_CONFIG.URL, {
-    path: FLASK_SOCKET_CONFIG.OPTIONS.path,
-    transports: FLASK_SOCKET_CONFIG.OPTIONS.transports,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000,
-    pingTimeout: 120000,
-  });
+  // const flaskSocket = io(FLASK_SOCKET_CONFIG.URL, {
+  //   path: FLASK_SOCKET_CONFIG.OPTIONS.path,
+  //   transports: FLASK_SOCKET_CONFIG.OPTIONS.transports,
+  //   reconnection: true,
+  //   reconnectionAttempts: 10,
+  //   reconnectionDelay: 2000,
+  //   pingTimeout: 120000,
+  // });
 
   // Make flask socket available globally
-  window.flaskSocket = flaskSocket;
+  // window.flaskSocket = flaskSocket;
+  window.flaskSocket = null; // Disabled - accessible-socket.io not available
 
   setupSocketEventHandlers();
 }
