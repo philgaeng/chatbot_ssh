@@ -246,8 +246,8 @@ start_celery_worker() {
     fi
     
     cd "$BASE_DIR" && \
-    PYTHONPATH=$BASE_DIR \
-    CELERY_PID_FILE="$pid_file" \
+    export PYTHONPATH=$BASE_DIR && \
+    export CELERY_PID_FILE="$pid_file" && \
     $celery_cmd -A backend.task_queue.celery_app worker -Q "$queue_name" \
         --concurrency="$concurrency" \
         --logfile="$log_file" \
@@ -297,12 +297,12 @@ start_service() {
     echo "Starting $name..."
     if check_port $(echo $command | grep -oP '(?<=:)\d+'); then
         cd "$BASE_DIR" && \
-        PYTHONPATH=$BASE_DIR \
-        FLASK_APP=backend.api.app.py \
-        FLASK_ENV=development \
-        UPLOAD_FOLDER=$UPLOAD_DIR \
-        SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" \
-        REDIS_PASSWORD="$REDIS_PASSWORD" \
+        export PYTHONPATH=$BASE_DIR && \
+        export FLASK_APP=backend.api.app.py && \
+        export FLASK_ENV=development && \
+        export UPLOAD_FOLDER=$UPLOAD_DIR && \
+        export SOCKETIO_REDIS_URL="$SOCKETIO_REDIS_URL" && \
+        export REDIS_PASSWORD="$REDIS_PASSWORD" && \
         nohup $command > "$log_file" 2>&1 &
         
         # Store the PID
