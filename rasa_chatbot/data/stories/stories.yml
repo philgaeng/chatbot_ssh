@@ -105,7 +105,6 @@ stories:
       - action: action_next_action
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
-      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null
@@ -118,7 +117,6 @@ stories:
     steps:
       - action: action_submit_grievance
       - action: action_retrieve_classification_results
-      - action: action_next_action
       - action: form_grievance_complainant_review
       - active_loop: form_grievance_complainant_review
       - active_loop: null

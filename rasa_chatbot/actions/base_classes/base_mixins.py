@@ -555,7 +555,8 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
             "new_grievance": {
                 "form_grievance": "form_contact",
                 "form_contact": "form_otp",
-                "form_otp": "action_submit_grievance"
+                "form_otp": "action_submit_grievance",
+                "None": "action_next_action"
             },
             "status_check": {
                 "form_status_check_1": {
