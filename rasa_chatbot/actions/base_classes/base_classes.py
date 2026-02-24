@@ -8,7 +8,7 @@ from rasa_sdk.events import FollowupAction, ActiveLoop
 from typing import Dict, Text, Any, Tuple, List, Callable
 import inspect
 from .base_mixins import ActionFlowHelpersMixin, ActionMessagingHelpersMixin
-from actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base
+from rasa_chatbot.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base
 from backend.config.constants import DEFAULT_VALUES
 
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']

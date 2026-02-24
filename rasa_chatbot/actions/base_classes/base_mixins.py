@@ -11,8 +11,8 @@ import traceback
 import json
 import inspect
 import logging
-from actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
-from actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from rasa_chatbot.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
+from rasa_chatbot.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
 from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, USER_FIELDS, GRIEVANCE_FIELDS, CLASSIFICATION_DATA, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, ADMIN_EMAILS
