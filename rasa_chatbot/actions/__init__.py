@@ -19,7 +19,14 @@ logger = logging.getLogger(__name__)
 from backend.services.database_services.postgres_services import db_manager
 
 # Import all action modules
-from .custom_policy import *
+try:
+    from .custom_policy import *
+except ImportError as e:
+    if "rasa.core" in str(e) or "rasa.engine" in str(e):
+        # Full Rasa not installed (e.g. REST-only env); custom_policy not needed
+        pass
+    else:
+        raise
 from .generic_actions import *
 from .action_ask_commons import *
 from .forms.form_contact import *

@@ -4,12 +4,12 @@ from random import randint
 from typing import Any, Text, Dict, List, Tuple, Union, Optional
 from datetime import datetime, timedelta
 import traceback
+import threading
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from rasa_chatbot.actions.base_classes.base_classes  import BaseFormValidationAction, BaseAction
-from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
 from backend.config.constants import EMAIL_TEMPLATES, ADMIN_EMAILS
 
 
@@ -106,7 +106,21 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             }
             
         try:
-            
+            # Lazy import: Celery/Redis not required in REST-only envs
+            try:
+                from backend.task_queue.registered_tasks import classify_and_summarize_grievance_task
+            except ImportError as ie:
+                self.logger.warning(
+                    f"Celery not available (ImportError: {ie}); skipping async classification for grievance {grievance_id}"
+                )
+                return {
+                    "grievance_classification_status": self.SKIP_VALUE,
+                    "grievance_summary": "",
+                    "grievance_categories": [],
+                    "grievance_summary_status": self.SKIP_VALUE,
+                    "grievance_categories_status": self.SKIP_VALUE,
+                }
+
             # Prepare input data for Celery task
             input_data = {
                 'grievance_id': grievance_id,
@@ -119,17 +133,21 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'grievance_description': grievance_description
                 }
             }
-            
-            # Launch Celery task asynchronously
-            task_result = classify_and_summarize_grievance_task.delay(input_data)
-            task_id = task_result.id
-            
-            self.logger.info(f"Async classification triggered for grievance {grievance_id} with task ID: {task_id}")
-            
-            # Return slots to indicate async processing
-            return {
-            }
-            
+
+            # Launch Celery task in a thread so we never block the request (e.g. if Redis is slow/down)
+            def _fire():
+                try:
+                    task_result = classify_and_summarize_grievance_task.delay(input_data)
+                    self.logger.info(f"Async classification triggered for grievance {grievance_id} with task ID: {task_result.id}")
+                except Exception as e:
+                    self.logger.warning(f"Could not queue classification task for {grievance_id}: {e}")
+
+            t = threading.Thread(target=_fire, daemon=True)
+            t.start()
+
+            # Return immediately so the flow continues to contact form
+            return {}
+
         except Exception as e:
             self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
@@ -218,19 +236,12 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             # Handle form completion
             if slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
-                # Get base slots - async classification will be triggered here
                 slots_to_set = {
                     "grievance_new_detail": "completed",
                     "grievance_description": tracker.get_slot('grievance_description'),
                 }
-                
-                # Trigger async classification when form is completed if LLM_CLASSIFICATION is True
-                if self.LLM_CLASSIFICATION:
-                    classification_slots = await self._trigger_async_classification(tracker, dispatcher)
-                    slots_to_set.update(classification_slots)
-                self.logger.debug(f"Slots to set: {slots_to_set}")
 
-                # create the grievance in the database (this is necessary for the classification results to be stored)
+                # Create the grievance in the DB first so classification task can write results
                 grievance_data = {
                     'grievance_id': tracker.get_slot('grievance_id'),
                     'complainant_id': tracker.get_slot('complainant_id'),
@@ -240,7 +251,13 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'complainant_office': tracker.get_slot('complainant_office'),
                     'source': 'bot'
                 }
-                await self.db_manager.create_complainant_and_grievance(grievance_data) #create the complainant and grievance in the database in one go and let the user move to the next without waiting for the storage to complete
+                await self.db_manager.create_complainant_and_grievance(grievance_data)
+
+                # Trigger async classification after create (runs in thread so request never blocks)
+                if self.LLM_CLASSIFICATION:
+                    classification_slots = await self._trigger_async_classification(tracker, dispatcher)
+                    slots_to_set.update(classification_slots)
+                self.logger.debug(f"Slots to set: {slots_to_set}")
                 return slots_to_set
             
             # Handle valid grievance text

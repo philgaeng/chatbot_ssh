@@ -90,7 +90,9 @@ LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
 # EMAIL CONFIGURATION
 ############################
 
-# List of email providers
+# Email domains accepted without "confirm non-Nepali domain" step.
+# Includes global providers commonly used in Nepal (Gmail, Yahoo, Outlook, etc.)
+# and Nepal-specific providers (.com.np). Used by contact form validation.
 EMAIL_PROVIDERS_NEPAL = {
     "Gmail": ["gmail.com"],
     "Outlook": ["outlook.com", "hotmail.com", "live.com"],

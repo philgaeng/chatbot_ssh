@@ -282,11 +282,22 @@ class ActionAskComplainantEmailTemp(BaseAction):
 class ActionAskComplainantEmailConfirmed(BaseAction):
     def name(self) -> Text:
         return "action_ask_complainant_email_confirmed"
-    
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        domain_name = tracker.get_slot("complainant_email_temp").split('@')[1]
-        message = self.get_utterance(1)
-        buttons = self.get_buttons(1)
-        message = message.format(domain_name=domain_name)
+        email_temp = tracker.get_slot("complainant_email_temp")
+        if email_temp and isinstance(email_temp, str) and "@" in email_temp:
+            domain_name = email_temp.split("@")[-1]
+        else:
+            domain_name = "your email"
+        try:
+            message = self.get_utterance(1)
+            buttons = self.get_buttons(1)
+            message = message.format(domain_name=domain_name)
+        except Exception:
+            message = (
+                "The email domain is not recognized as a common Nepali provider. "
+                "Please confirm if this is correct or try again with a different email."
+            )
+            buttons = []
         dispatcher.utter_message(text=message, buttons=buttons)
         return []

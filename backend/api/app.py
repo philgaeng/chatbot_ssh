@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 import os
 import sys
 
@@ -327,8 +324,7 @@ def health():
 
 
 if __name__ == '__main__':
-    import eventlet
-    import eventlet.wsgi
-    socketio.run(app, host='0.0.0.0', port=5001)
+    # Development-only: allow Werkzeug server with Flask-SocketIO
+    socketio.run(app, host='0.0.0.0', port=5001, allow_unsafe_werkzeug=True)
 
 

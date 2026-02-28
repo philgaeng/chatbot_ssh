@@ -14,6 +14,7 @@ from backend.api.api_manager import APIManager
 from backend.services.file_server_core import FileServerCore
 from backend.task_queue.registered_tasks import process_batch_files_task, process_file_upload_task
 from backend.api.websocket_utils import socketio
+import time
 
 # Get status codes from database constants (ensuring cohesiveness)
 from backend.config.database_constants import get_task_status_codes
@@ -460,9 +461,9 @@ class FileServerAPI:
                 websocket_data = {
                     'status': status,
                     'data': task_data,
-                    'timestamp': eventlet.time.time()
+                    'timestamp': time.time(),
                 }
-                
+
                 # Add grievance_id if available
                 if grievance_id:
                     websocket_data['grievance_id'] = grievance_id

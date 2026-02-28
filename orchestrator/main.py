@@ -9,6 +9,16 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# Load env.local so ENABLE_CELERY_CLASSIFICATION etc. are set (orchestrator is often
+# started by uvicorn without sourcing env.local)
+_env_local = _REPO_ROOT / "env.local"
+if _env_local.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_local)
+    except ImportError:
+        pass
 _RASA_DIR = _REPO_ROOT / "rasa_chatbot"
 if str(_RASA_DIR) not in sys.path:
     sys.path.insert(0, str(_RASA_DIR))
@@ -18,9 +28,13 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
 from orchestrator.session_store import get_session, save_session, create_session
 from orchestrator.state_machine import run_flow_turn
 from orchestrator.config_loader import load_config
+from orchestrator.socket_server import socket_app
 
 app = FastAPI(title="Orchestrator", version="0.1.0")
 
@@ -43,6 +57,11 @@ def startup() -> None:
     global _CONFIG, _DOMAIN
     _CONFIG = load_config()
     _DOMAIN = _load_domain()
+    cel = os.environ.get("ENABLE_CELERY_CLASSIFICATION", "").strip().lower()
+    if cel in ("1", "true", "yes"):
+        print("Orchestrator: ENABLE_CELERY_CLASSIFICATION=1 — grievance LLM classification will run via Celery when user clicks 'File as is'.")
+    else:
+        print("Orchestrator: ENABLE_CELERY_CLASSIFICATION not set — grievance classification is stubbed (no LLM). Set in env.local and restart to enable.")
 
 
 class MessageRequest(BaseModel):
@@ -90,3 +109,13 @@ async def post_message(req: MessageRequest) -> MessageResponse:
 def health() -> Dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+# Combined ASGI app that serves both the FastAPI HTTP API and the Socket.IO bridge.
+# To run both on a single port, point your ASGI server at `orchestrator.main:asgi`.
+asgi = Starlette(
+    routes=[
+        Mount("/socket.io", app=socket_app),
+        Mount("/", app=app),
+    ]
+)

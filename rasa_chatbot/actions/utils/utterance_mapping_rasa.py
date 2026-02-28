@@ -1020,6 +1020,28 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        "action_ask_status_check_method": {
+            'utterances': {
+                1: {
+                    'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
+                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।",
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Phone Number", "payload": "/route_status_check_phone"},
+                        {"title": "Grievance ID", "payload": "/route_status_check_grievance_id"},
+                        {"title": "Skip", "payload": BUTTON_SKIP},
+                    ],
+                    'ne': [
+                        {"title": "फोन नम्बर", "payload": "/route_status_check_phone"},
+                        {"title": "गुनासो ID", "payload": "/route_status_check_grievance_id"},
+                        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+                    ],
+                }
+            },
+        },
         'action_ask_status_check_list_grievance_id': {
             'utterances': {
                 1: {

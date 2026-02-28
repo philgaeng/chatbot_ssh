@@ -20,7 +20,7 @@ logger.debug(f"Initializing Socket.IO with Redis - redis_url: {SOCKETIO_REDIS_UR
 
 # Create a socketio instance that can be imported by other modules
 socketio = SocketIO(
-    async_mode='eventlet',
+    async_mode='threading',
     cors_allowed_origins="*",
     engineio_logger=True,
     logger=True,

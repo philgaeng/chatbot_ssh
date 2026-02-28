@@ -585,19 +585,24 @@ class ContactFormValidationAction(BaseFormValidationAction):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"complainant_email_temp": None}
+            self.logger.debug(f"Validate complainant_email_temp: invalid format")
+            return result
 
-        # Check for Nepali email domain using existing method
-        elif not self.helpers.email_is_valid_nepal_domain(extracted_email):
-            # Keep the email in slot but deactivate form while waiting for user choice
+        # Check for Nepali email domain (includes Gmail, Yahoo, Outlook - commonly used in Nepal)
+        is_nepal_domain = self.helpers.email_is_valid_nepal_domain(extracted_email)
+        self.logger.debug(
+            f"email_is_valid_nepal_domain({extracted_email}) = {is_nepal_domain}"
+        )
+        if not is_nepal_domain:
+            # Keep the email in slot but ask user to confirm non-Nepali domain
             result = {"complainant_email_temp": extracted_email,
                     "complainant_email_confirmed": None}
-            
-        # If all validations pass
         else:
+            # All validations pass (e.g. gmail.com, yahoo.com, .com.np)
             result = {"complainant_email_temp": extracted_email,
                     "complainant_email_confirmed": True,
                     "complainant_email": extracted_email}
-        self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+        self.logger.debug(f"Validate complainant_email_temp: {result.get('complainant_email_temp')}")
         return result
     
     async def extract_complainant_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
@@ -626,12 +631,15 @@ class ContactFormValidationAction(BaseFormValidationAction):
         """
         if slot_value == self.SKIP_VALUE:
             result = {"complainant_email_confirmed": self.SKIP_VALUE}
-        elif slot_value == "slot_confirmed":
+        elif slot_value in ("slot_confirmed", "/slot_confirmed"):
             result = {"complainant_email_confirmed": True}
-        elif slot_value == "slot_edited":
+        elif slot_value in ("slot_edited", "/slot_edited"):
             result = {"complainant_email_temp": None,
                     "complainant_email_confirmed": None}
-        self.logger.debug(f"Validate complainant_email_confirmed: {result['complainant_email_confirmed']}")
+        else:
+            result = {}
+        if result:
+            self.logger.debug(f"Validate complainant_email_confirmed: {result.get('complainant_email_confirmed')}")
         return result
     
 class ValidateFormContact(ContactFormValidationAction):
