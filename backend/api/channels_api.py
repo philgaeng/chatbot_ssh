@@ -25,6 +25,18 @@ FAILED = status_codes['FAILED']
 RETRYING = status_codes['RETRYING']
 STARTED = status_codes['STARTED']
 
+# In-memory store for file upload failures so GET /file-status/<file_id> can return FAILURE (TTL 1h)
+_FILE_FAILURES = {}
+_FILE_FAILURE_TTL_SEC = 3600
+
+
+def _prune_expired_file_failures():
+    now = time.time()
+    expired = [fid for fid, v in _FILE_FAILURES.items() if (now - v.get('timestamp', 0)) > _FILE_FAILURE_TTL_SEC]
+    for fid in expired:
+        del _FILE_FAILURES[fid]
+
+
 file_server_core = FileServerCore()
 
 class FileServerAPI:
@@ -344,7 +356,11 @@ class FileServerAPI:
         try:
             language_code = self._get_language_code()
             self.core.log_event(event_type=STARTED, details={'file_id': file_id})
-            
+            _prune_expired_file_failures()
+            if file_id in _FILE_FAILURES:
+                failure = _FILE_FAILURES[file_id]
+                self.core.log_event(event_type=FAILED, details={'file_id': file_id, 'error': failure.get('error')})
+                return jsonify({"status": "FAILURE", "error": failure.get('error', 'Upload failed')}), 200
             if db_manager.is_file_saved(file_id):
                 self.core.log_event(event_type=SUCCESS, details={'file_id': file_id, 'status': SUCCESS})
                 return jsonify({"status": SUCCESS, "message": "File is saved in the database"}), 200
@@ -452,7 +468,14 @@ class FileServerAPI:
                 'data': task_data,
                 'source': source
             })
-            
+
+            # Record file upload failures so GET /file-status/<file_id> can return FAILURE to the client
+            if status == 'FAILED' and task_data.get('file_id'):
+                _FILE_FAILURES[task_data['file_id']] = {
+                    'error': task_data.get('error', 'Upload failed'),
+                    'timestamp': time.time(),
+                }
+
             # Import socketio here to avoid circular imports
             from .websocket_utils import socketio, emit_status_update_accessible
             

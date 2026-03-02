@@ -6,6 +6,8 @@
 #        Celery default (concurrency 2), Celery llm_queue (concurrency 6)
 # Does NOT include Rasa or Rasa actions (REST stack replaces them)
 #
+# Recommended: conda activate chatbot-rest (or set VENV_DIR) before running.
+#
 # Optional: START_REDIS=1 (default) to start project Redis (scripts/local/redis.conf)
 #           if nothing is listening on REDIS_PORT. Logs go to logs/redis.log.
 #           START_REDIS=0 to only check and use existing Redis.
@@ -14,7 +16,14 @@ set -e
 
 BASE_DIR="/home/philg/projects/nepal_chatbot"
 LOG_DIR="$BASE_DIR/logs"
-VENV_DIR="${VENV_DIR:-$BASE_DIR/rasa-env}"
+# Prefer VENV_DIR; then chatbot-rest (conda), then rasa-env, then .venv
+VENV_DIR="${VENV_DIR:-}"
+if [ -z "$VENV_DIR" ] && [ -n "$CONDA_PREFIX" ] && [[ "$CONDA_PREFIX" == *"chatbot-rest"* ]]; then
+  VENV_DIR="$CONDA_PREFIX"
+fi
+if [ -z "$VENV_DIR" ] || [ ! -d "$VENV_DIR" ]; then
+  VENV_DIR="${VENV_DIR:-$BASE_DIR/rasa-env}"
+fi
 if [ ! -d "$VENV_DIR" ]; then
   VENV_DIR="$BASE_DIR/.venv"
 fi
@@ -24,7 +33,7 @@ mkdir -p "$LOG_DIR"
 # Load env.local entries needed for orchestrator and Celery (so orchestrator sees ENABLE_CELERY_CLASSIFICATION)
 if [ -f "$BASE_DIR/env.local" ]; then
   if [ -z "$REDIS_PASSWORD" ]; then
-    REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' "$BASE_DIR/env.local" | sed 's/^REDIS_PASSWORD=//')"
+    REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' "$BASE_DIR/env.local" | sed 's/^REDIS_PASSWORD=//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     export REDIS_PASSWORD
   fi
   if [ -z "$ENABLE_CELERY_CLASSIFICATION" ]; then
@@ -33,11 +42,26 @@ if [ -f "$BASE_DIR/env.local" ]; then
   fi
 fi
 
-# Redis and Celery env
+# Treat empty or whitespace-only REDIS_PASSWORD as unset (avoids AUTH with no password against system Redis)
+REDIS_PASSWORD="$(echo "${REDIS_PASSWORD:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+if [ -z "$REDIS_PASSWORD" ]; then
+  unset REDIS_PASSWORD
+else
+  export REDIS_PASSWORD
+fi
 export REDIS_HOST="${REDIS_HOST:-localhost}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
 export REDIS_DB="${REDIS_DB:-0}"
 
+# Celery broker/result URLs: use password only if REDIS_PASSWORD is set and non-empty.
+# System Redis (no requirepass) must use no-password URL or Celery fails with "AUTH called without any password configured".
+if [ -n "${REDIS_PASSWORD:-}" ]; then
+  export CELERY_BROKER_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
+  export CELERY_RESULT_BACKEND="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
+else
+  export CELERY_BROKER_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+  export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
+fi
 echo "=== REST API stack + Celery launcher ==="
 echo "Base directory: $BASE_DIR"
 LAUNCH_TIME="$(date +"%Y-%m-%d %H:%M:%S")"
@@ -111,24 +135,9 @@ if [ -n "$REDIS_LOGFILE" ]; then
   echo "Redis logfile: ${REDIS_LOGFILE}"
 fi
 
-# Build Celery URLs based on whether Redis actually requires AUTH.
-# This prevents Celery from breaking when env.local has a password but system Redis has no requirepass.
-if [ -z "$REDIS_REQUIREPASS" ]; then
-  if [ -n "$REDIS_PASSWORD" ]; then
-    echo "ℹ️ Redis does not require a password; ignoring REDIS_PASSWORD for Celery URLs."
-  fi
-  REDIS_PASSWORD=""
-  export CELERY_BROKER_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
-  export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
-else
-  if [ -z "$REDIS_PASSWORD" ]; then
-    echo "❌ Redis requires a password but REDIS_PASSWORD is empty."
-    echo "   Either start Redis with scripts/local/redis.conf or set REDIS_PASSWORD in env.local."
-    exit 1
-  fi
-  export CELERY_BROKER_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
-  export CELERY_RESULT_BACKEND="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
-fi
+# Note: Celery URLs are already set above based on REDIS_PASSWORD.
+# Here we only surface Redis runtime info for debugging; we do not
+# modify auth or broker URLs based on CONFIG GET output.
 
 # Optional: hint if we're not using the project-managed Redis config/logs
 if [ "$REDIS_LOGFILE" != "$LOG_DIR/redis.log" ] && [ -n "$REDIS_LOGFILE" ]; then
@@ -141,7 +150,8 @@ fi
 ########################################
 # 3) Start orchestrator (FastAPI)
 ########################################
-ORCH_LOG="$LOG_DIR/orchestrator_rest_api.log"
+# Daily log file: new file each day, append within the day (each session/restart appends)
+ORCH_LOG="$LOG_DIR/orchestrator_rest_api_$(date +%Y-%m-%d).log"
 ORCH_PID_FILE="$LOG_DIR/orchestrator_rest_api.pid"
 ORCH_PORT=8000
 
@@ -163,7 +173,10 @@ stop_if_running() {
 stop_if_running "$ORCH_PID_FILE"
 # Export so orchestrator form_loop uses real Celery classification (orchestrator also loads env.local)
 export ENABLE_CELERY_CLASSIFICATION="${ENABLE_CELERY_CLASSIFICATION:-1}"
-PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn orchestrator.main:app --host 0.0.0.0 --port "$ORCH_PORT" > "$ORCH_LOG" 2>&1 &
+# ORCHESTRATOR_LOG_LEVEL: DEBUG (default), INFO, WARNING. botocore/boto3 are always WARNING.
+echo "" >> "$ORCH_LOG"
+echo "=== Restart $LAUNCH_TIME ===" >> "$ORCH_LOG"
+PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn orchestrator.main:app --host 0.0.0.0 --port "$ORCH_PORT" >> "$ORCH_LOG" 2>&1 &
 echo $! > "$ORCH_PID_FILE"
 sleep 2
 
@@ -174,17 +187,20 @@ else
 fi
 
 ########################################
-# 4) Start backend/file server (Flask)
+# 4) Start backend/file server (FastAPI)
 ########################################
-BACKEND_LOG="$LOG_DIR/backend_rest_api.log"
+# Daily log file: new file each day, append within the day
+BACKEND_LOG="$LOG_DIR/backend_rest_api_$(date +%Y-%m-%d).log"
 BACKEND_PID_FILE="$LOG_DIR/backend_rest_api.pid"
 BACKEND_PORT=5001
 
 echo
-echo "[4/6] Starting backend/file server on port $BACKEND_PORT..."
+echo "[4/6] Starting backend/file server (FastAPI) on port $BACKEND_PORT..."
 
 stop_if_running "$BACKEND_PID_FILE"
-PYTHONPATH="$BASE_DIR" nohup python3 "$BASE_DIR/backend/api/app.py" > "$BACKEND_LOG" 2>&1 &
+echo "" >> "$BACKEND_LOG"
+echo "=== Restart $LAUNCH_TIME ===" >> "$BACKEND_LOG"
+PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn backend.api.fastapi_app:app --host 0.0.0.0 --port "$BACKEND_PORT" >> "$BACKEND_LOG" 2>&1 &
 echo $! > "$BACKEND_PID_FILE"
 sleep 2
 

@@ -31,6 +31,20 @@ export function handleCustomPayload(custom) {
   if (custom.event_type === "grievance_id_set" && custom.data?.grievance_id) {
     uiActions.setGrievanceId(custom.data.grievance_id);
   }
+  // Orchestrator sends json_message with event_type inside data
+  if (custom.data?.event_type === "grievance_id_set" && custom.data?.grievance_id) {
+    uiActions.setGrievanceId(custom.data.grievance_id);
+  }
+
+  // Grievance created in DB: enable file upload button
+  if (custom.event_type === "grievance_saved_in_db" && custom.data?.grievance_id) {
+    uiActions.setGrievanceId(custom.data.grievance_id);
+    uiActions.setGrievanceCreatedInDb(true);
+  }
+  if (custom.data?.event_type === "grievance_saved_in_db" && custom.data?.grievance_id) {
+    uiActions.setGrievanceId(custom.data.grievance_id);
+    uiActions.setGrievanceCreatedInDb(true);
+  }
 }
 
 // Task status updates from HTTP APIs (if used)
@@ -95,8 +109,25 @@ export function handleApiError(error, context = "API call") {
   uiActions.showError(`Error: ${error.message || error}`);
 }
 
-// Quick reply handler (called from UI Actions)
+// Payloads for file-upload flow (handled locally, no orchestrator call)
+const ADD_MORE_PAYLOAD = "__add_more_files__";
+const GO_BACK_PAYLOAD = "__go_back_to_chat__";
+
+// Quick reply handler (called from UI Actions). Returns true if handled locally (caller should not remove quick replies).
 export function handleQuickReplyClick(payload) {
+  if (payload === ADD_MORE_PAYLOAD) {
+    if (typeof window.handleAddMoreFiles === "function") {
+      window.handleAddMoreFiles();
+    }
+    return true;
+  }
+  if (payload === GO_BACK_PAYLOAD) {
+    if (typeof window.handleGoBackToChat === "function") {
+      window.handleGoBackToChat();
+    }
+    return true;
+  }
   window.safeSendMessage(payload);
+  return false;
 }
 

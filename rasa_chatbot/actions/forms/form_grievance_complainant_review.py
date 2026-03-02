@@ -445,14 +445,18 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     "grievance_summary_temp": self.SKIP_VALUE} #this will validate the slot and the form
             
             
-            if slot_value == "/slot_confirmed":
+            # Accept both "slot_confirmed" and "/slot_confirmed" (REST strips leading slash)
+            if slot_value in ("slot_confirmed", "/slot_confirmed"):
+                summary = tracker.get_slot("grievance_summary_temp")
                 return {"grievance_summary_status": self.CM_COMFIRMED,
-                        "grievance_summary_temp": self.SKIP_VALUE} #this will validate the slot and the form
-            
-            if slot_value == "/slot_edited":
+                        "grievance_summary_temp": self.SKIP_VALUE,
+                        "grievance_summary": summary}  # persist confirmed summary to slot
+
+            if slot_value in ("slot_edited", "/slot_edited"):
                 return {"grievance_summary_status": self.REVIEWING,
                         "grievance_summary_temp": None
                         }
+            return {}
         except Exception as e:
             self.logger.error(f"Error in validate_grievance_summary_status: {e}")
             return {"grievance_summary_status": self.LLM_GENERATED,

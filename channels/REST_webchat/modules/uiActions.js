@@ -4,14 +4,39 @@
 // Global state (will be initialized from app.js)
 let messages;
 let grievanceId = null;
+let attachmentButton = null;
+let messageInput = null;
+let sendButton = null;
+let grievanceCreatedInDb = false;
 
 // Initialize UI Actions with DOM elements
 export function initializeUIActions(
   messagesElement,
-  initialGrievanceId = null
+  initialGrievanceId = null,
+  options = {}
 ) {
   messages = messagesElement;
   grievanceId = initialGrievanceId;
+  attachmentButton = options.attachmentButton ?? document.getElementById("attachment-button");
+  messageInput = options.messageInput ?? document.getElementById("message-input");
+  sendButton = options.sendButton ?? document.querySelector("#form .send-button");
+  updateAttachButtonState();
+}
+
+// Update attach button disabled state and tooltip when grievanceId changes
+function updateAttachButtonState() {
+  if (!attachmentButton) return;
+  const hasGrievance = !!grievanceId;
+  const canUploadFiles = hasGrievance && grievanceCreatedInDb;
+
+  attachmentButton.disabled = !canUploadFiles;
+  if (!hasGrievance) {
+    attachmentButton.title = "Start a grievance first";
+  } else if (!grievanceCreatedInDb) {
+    attachmentButton.title = "Saving your grievance… files will be available shortly";
+  } else {
+    attachmentButton.title = "Files can be uploaded now";
+  }
 }
 
 // Message display functions
@@ -43,15 +68,32 @@ export function appendQuickReplies(quickReplies) {
     button.textContent = reply.title;
     button.onclick = () => {
       appendMessage(reply.title, "sent");
-      // This will be handled by the event handler in app.js
-      window.handleQuickReplyClick(reply.payload);
-      messages.removeChild(quickRepliesDiv);
+      const handledLocally = window.handleQuickReplyClick(reply.payload);
+      if (!handledLocally) {
+        const qr = messages.querySelector(".quick-replies");
+        if (qr) messages.removeChild(qr);
+      }
     };
     quickRepliesDiv.appendChild(button);
   });
 
   messages.appendChild(quickRepliesDiv);
   messages.scrollTop = messages.scrollHeight;
+}
+
+// Replace all quick reply blocks with a single set of buttons (e.g. Add more / Go back)
+export function replaceQuickReplies(quickReplies) {
+  messages.querySelectorAll(".quick-replies").forEach((el) => el.remove());
+  if (Array.isArray(quickReplies) && quickReplies.length > 0) {
+    appendQuickReplies(quickReplies);
+  }
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// Lock or unlock message input and send button (e.g. during file upload)
+export function setInputLocked(locked) {
+  if (messageInput) messageInput.disabled = !!locked;
+  if (sendButton) sendButton.disabled = !!locked;
 }
 
 // Task status display functions
@@ -228,6 +270,13 @@ export function formatTimestamp(date) {
 export function setGrievanceId(id) {
   grievanceId = id;
   window.grievanceId = grievanceId;
+  updateAttachButtonState();
+}
+
+export function setGrievanceCreatedInDb(value) {
+  grievanceCreatedInDb = !!value;
+  window.grievanceCreatedInDb = grievanceCreatedInDb;
+  updateAttachButtonState();
 }
 
 export function getGrievanceId() {

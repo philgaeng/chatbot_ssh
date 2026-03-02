@@ -176,13 +176,21 @@ function handleOrchestratorResponse(response) {
 
   messages.forEach((m) => {
     if (m.text) {
+      window.lastBotMessageText = m.text;
       uiActions.appendMessage(m.text, "received");
     }
     if (m.buttons && m.buttons.length > 0) {
+      window.lastBotQuickReplies = (m.buttons || []).map((btn) => ({
+        title: btn.title || btn.text || "",
+        payload: btn.payload,
+      }));
       eventHandlers.renderQuickReplies(m.buttons);
     }
     if (m.custom) {
       eventHandlers.handleCustomPayload(m.custom);
+    }
+    if (m.json_message) {
+      eventHandlers.handleCustomPayload(m.json_message);
     }
   });
 
@@ -254,8 +262,12 @@ function initializeChat() {
   attachmentButton = document.getElementById("attachment-button");
   messages = document.getElementById("messages");
 
-  // Initialize UI Actions with DOM elements
-  uiActions.initializeUIActions(messages, window.grievanceId);
+  // Initialize UI Actions with DOM elements (pass refs for attach button, input lock)
+  uiActions.initializeUIActions(messages, window.grievanceId, {
+    attachmentButton,
+    messageInput,
+    sendButton: document.querySelector("#form .send-button"),
+  });
 
   // Initialize chat widget visibility
   chatWidget.style.display = "none";
@@ -292,6 +304,14 @@ function setupEventListeners() {
   // File input change
   fileInput.addEventListener("change", handleFileSelection);
 
+  // Enter to send, Shift+Enter for newline (so attached file is sent on Enter instead of form default)
+  messageInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      messageForm.requestSubmit();
+    }
+  });
+
   // Add auto-resize functionality to message input
   messageInput.addEventListener("input", function () {
     // Reset height to auto to get the correct scrollHeight
@@ -304,7 +324,7 @@ function setupEventListeners() {
 }
 
 // Handle message submission
-function handleMessageSubmit(e) {
+async function handleMessageSubmit(e) {
   e.preventDefault();
   const message = messageInput.value.trim();
 
@@ -315,11 +335,19 @@ function handleMessageSubmit(e) {
     messageInput.style.height = "44px";
   }
 
-  // Handle file upload if files are selected
+  // Handle file upload if files are selected: lock input, upload, then unlock when done or on failure
   if (selectedFiles.length > 0) {
-    handleFileUpload(selectedFiles);
+    uiActions.setInputLocked(true);
+    const uploaded = await handleFileUpload(selectedFiles);
+    if (!uploaded) {
+      uiActions.setInputLocked(false);
+      // Keep files in preview so user can retry
+      return;
+    }
     selectedFiles = [];
+    if (fileInput) fileInput.value = "";
     displayFilePreview();
+    // Unlock happens when all files report SUCCESS in updateFileStatus (post-upload message + buttons shown)
   }
 }
 
@@ -331,6 +359,17 @@ function handleFileSelection(e) {
   }
 }
 
+// Take snapshot of last bot message and quick replies (before file upload flow)
+function takeFileUploadSnapshot() {
+  if (fileUploadSnapshot) return; // Keep same snapshot across "Add more files" rounds
+  fileUploadSnapshot = {
+    lastBotMessageText: window.lastBotMessageText || "",
+    lastBotQuickReplies: Array.isArray(window.lastBotQuickReplies)
+      ? window.lastBotQuickReplies.map((r) => ({ ...r }))
+      : [],
+  };
+}
+
 // Handle selected files
 function handleSelectedFiles(files) {
   selectedFiles = [];
@@ -340,6 +379,7 @@ function handleSelectedFiles(files) {
     if (file.size > maxFileSize) {
       compressFile(file).then((compressedFile) => {
         selectedFiles.push(compressedFile);
+        takeFileUploadSnapshot();
         displayFilePreview();
       });
     } else {
@@ -347,6 +387,7 @@ function handleSelectedFiles(files) {
     }
   });
 
+  takeFileUploadSnapshot();
   displayFilePreview();
 }
 
@@ -417,14 +458,23 @@ function compressFile(file) {
 // Global variables
 let selectedFiles = [];
 
-// Handle file upload
+// File upload robustness: snapshot of chat state before user enters file flow (persisted across "Add more" rounds)
+let fileUploadSnapshot = null;
+// Current upload batch: track file IDs and statuses to know when all are done
+let currentUploadFileIds = [];
+let currentUploadStatuses = {};
+
+// Handle file upload. Returns true if upload was attempted and succeeded, false otherwise (caller keeps attachment preview when false).
 async function handleFileUpload(files) {
   console.log("Starting file upload process...", files);
   console.log("Current window.grievanceId:", window.grievanceId);
 
   if (!window.grievanceId) {
-    appendMessage("Please start a grievance submission first.", "received");
-    return;
+    uiActions.appendMessage(
+      "To attach files, first start a grievance: click \"Register a grievance\" (गुनासो दर्ता गर्नुहोस्) above and complete the steps. Once your grievance is created, you can attach files here.",
+      "received"
+    );
+    return false;
   }
 
   const formData = new FormData();
@@ -442,7 +492,7 @@ async function handleFileUpload(files) {
 
   if (audioFiles.length > 0) {
     console.log("Audio files detected:", audioFiles);
-    appendMessage(
+    uiActions.appendMessage(
       "Voice recordings detected. These will be processed and transcribed.",
       "received"
     );
@@ -461,7 +511,7 @@ async function handleFileUpload(files) {
 
   if (oversizedFiles.length > 0) {
     console.log("Oversized files detected:", oversizedFiles);
-    appendMessage(
+    uiActions.appendMessage(
       `Some files are too large and will be skipped: ${oversizedFiles
         .map((f) => f.name)
         .join(", ")}`,
@@ -479,6 +529,10 @@ async function handleFileUpload(files) {
     formData.append("files[]", file);
   }
 
+  if (validFiles.length === 0) {
+    return false;
+  }
+
   try {
     console.log("Sending file upload request...");
     const response = await fetch(FILE_UPLOAD_CONFIG.URL, {
@@ -490,19 +544,28 @@ async function handleFileUpload(files) {
     console.log("File upload response:", data);
 
     if (response.ok) {
-      // Use event handler for API response
       eventHandlers.handleFileUploadApiResponse({
         ok: true,
         data: data,
         audioFiles: audioFiles,
       });
+      if (data.files && data.files.length > 0) {
+        currentUploadFileIds = data.files;
+        currentUploadStatuses = {};
+        pollFileStatus(data.files);
+      } else {
+        showPostUploadMessageAndUnlock();
+      }
+      return true;
     } else {
       console.error("Upload failed:", data.error);
       eventHandlers.handleApiError(data.error, "File upload");
+      return false;
     }
   } catch (error) {
     console.error("Error uploading files:", error);
     eventHandlers.handleApiError(error, "File upload");
+    return false;
   }
 }
 
@@ -549,13 +612,18 @@ async function pollFileStatus(fileIds) {
 
       if (!allProcessed && attempts < maxAttempts) {
         attempts++;
-        setTimeout(poll, 10000); // Poll every 10 seconds
+        // Poll more often at first (2s), then every 10s
+        const delayMs = attempts <= 3 ? 2000 : 10000;
+        setTimeout(poll, delayMs);
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
-        appendMessage(
+        uiActions.appendMessage(
           "File processing is taking longer than expected. You can continue with your submission.",
           "received"
         );
+        uiActions.setInputLocked(false);
+        currentUploadFileIds = [];
+        currentUploadStatuses = {};
       }
     } catch (error) {
       console.error("Error polling file status:", error);
@@ -566,9 +634,59 @@ async function pollFileStatus(fileIds) {
   poll();
 }
 
+// Post-upload: show "Files uploaded. Add more or go back" and unlock input
+const POST_UPLOAD_MESSAGE =
+  "Files uploaded. You can add more files or go back to the chat.";
+const ADD_MORE_PAYLOAD = "__add_more_files__";
+const GO_BACK_PAYLOAD = "__go_back_to_chat__";
+
+function showPostUploadMessageAndUnlock() {
+  uiActions.appendMessage(POST_UPLOAD_MESSAGE, "received");
+  uiActions.replaceQuickReplies([
+    { title: "Add more files", payload: ADD_MORE_PAYLOAD },
+    { title: "Go back to chat", payload: GO_BACK_PAYLOAD },
+  ]);
+  uiActions.setInputLocked(false);
+  currentUploadFileIds = [];
+  currentUploadStatuses = {};
+}
+
+// Check if all files in current batch are terminal; if all SUCCESS show post-upload and unlock, else if any FAILURE show failure message + same buttons
+function checkUploadBatchComplete() {
+  if (currentUploadFileIds.length === 0) return;
+  const statuses = currentUploadFileIds.map((id) => currentUploadStatuses[id]);
+  const allTerminal = statuses.every(
+    (s) => s === "SUCCESS" || s === "FAILURE"
+  );
+  if (!allTerminal) return;
+  const allSuccess = statuses.every((s) => s === "SUCCESS");
+  if (allSuccess) {
+    showPostUploadMessageAndUnlock();
+  } else {
+    showFailureMessageAndUnlock();
+  }
+}
+
+// On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
+function showFailureMessageAndUnlock() {
+  uiActions.appendMessage(
+    "One or more files could not be saved. You can try adding files again or go back to the chat.",
+    "received"
+  );
+  uiActions.replaceQuickReplies([
+    { title: "Add more files", payload: ADD_MORE_PAYLOAD },
+    { title: "Go back to chat", payload: GO_BACK_PAYLOAD },
+  ]);
+  uiActions.setInputLocked(false);
+  currentUploadFileIds = [];
+  currentUploadStatuses = {};
+}
+
 // Update file status in UI
 function updateFileStatus(fileId, data) {
   const { status, progress, result, error } = data;
+
+  currentUploadStatuses[fileId] = status;
 
   // Get messages container
   const chatMessages = document.getElementById("messages");
@@ -579,6 +697,9 @@ function updateFileStatus(fileId, data) {
 
   // Create or update file status message
   let statusElement = document.getElementById(`file-status-${fileId}`);
+  const prevStatus = statusElement
+    ? statusElement.getAttribute("data-status")
+    : null;
   if (!statusElement) {
     statusElement = document.createElement("div");
     statusElement.id = `file-status-${fileId}`;
@@ -611,13 +732,17 @@ function updateFileStatus(fileId, data) {
         statusMessage = "Files processed successfully";
       }
       if (result) {
-        // Handle successful result
         if (result.grievance_id) {
           window.grievanceId = result.grievance_id;
         }
         if (result.message) {
-          appendMessage(result.message, "received");
+          uiActions.appendMessage(result.message, "received");
         }
+      }
+      if (prevStatus !== "SUCCESS" && !(result && result.message)) {
+        const notice =
+          (data && data.message) || "File is saved in the database.";
+        uiActions.appendMessage(notice, "received");
       }
       break;
     case "FAILURE":
@@ -627,8 +752,7 @@ function updateFileStatus(fileId, data) {
       } else {
         statusMessage = `Failed to process files: ${errorMsg}`;
       }
-      // Always show failure message to user
-      appendMessage(statusMessage, "received");
+      uiActions.appendMessage(statusMessage, "received");
       console.error("Task failed:", errorMsg);
       break;
     default:
@@ -638,8 +762,8 @@ function updateFileStatus(fileId, data) {
   statusElement.textContent = statusMessage;
   statusElement.setAttribute("data-status", status);
 
-  // Remove status element after a delay
   if (status === "SUCCESS" || status === "FAILURE") {
+    checkUploadBatchComplete();
     setTimeout(() => {
       if (statusElement && statusElement.parentNode) {
         statusElement.remove();
@@ -648,7 +772,37 @@ function updateFileStatus(fileId, data) {
   }
 }
 
-// Set up global handlers
+// "Go back to chat": restore snapshot, transition message, unlock (no orchestrator call)
+function handleGoBackToChat() {
+  const transitionMessage =
+    "Your files are uploaded. Here's where we left off.";
+  uiActions.appendMessage(transitionMessage, "received");
+  if (fileUploadSnapshot) {
+    if (fileUploadSnapshot.lastBotMessageText) {
+      uiActions.appendMessage(fileUploadSnapshot.lastBotMessageText, "received");
+    }
+    if (
+      Array.isArray(fileUploadSnapshot.lastBotQuickReplies) &&
+      fileUploadSnapshot.lastBotQuickReplies.length > 0
+    ) {
+      uiActions.replaceQuickReplies(fileUploadSnapshot.lastBotQuickReplies);
+    }
+    fileUploadSnapshot = null;
+  } else {
+    uiActions.replaceQuickReplies([]); // Clear Add more / Go back buttons
+    uiActions.appendMessage("You can continue below.", "received");
+  }
+  uiActions.setInputLocked(false);
+}
+
+// "Add more files": re-open file picker (no orchestrator call)
+function handleAddMoreFiles() {
+  if (fileInput) fileInput.click();
+}
+
+// Set up global handlers (eventHandlers.handleQuickReplyClick will call these for file-upload payloads)
+window.handleGoBackToChat = handleGoBackToChat;
+window.handleAddMoreFiles = handleAddMoreFiles;
 window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 
 // Initialize when DOM is loaded

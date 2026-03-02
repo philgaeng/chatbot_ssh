@@ -1,9 +1,13 @@
 # Nepal Chatbot - Backend Guide
 
-Complete backend documentation covering Flask, Django, Celery, and database services.
+Complete backend documentation covering the Orchestrator (FastAPI), Flask backend API, Celery, and database services.
+
+**Current architecture (post-refactor):** We do **not** run the full Rasa server. Conversation is driven by the **Orchestrator** (FastAPI), which uses **Rasa SDK** actions (same Python code as before) and a direct **REST API** (`POST /message`). The REST webchat and any custom ticketing system call this API. See [Refactor specs (March 5)](Refactor%20specs/March%205/01_orchestrator.md) for details.
 
 ## Table of Contents
 
+- [API Overview and Integration](#api-overview-and-integration)
+- [Orchestrator (FastAPI)](#orchestrator-fastapi)
 - [Flask Server](#flask-server)
 - [Django Helpdesk](#django-helpdesk)
 - [Celery Task Queue](#celery-task-queue)
@@ -11,29 +15,115 @@ Complete backend documentation covering Flask, Django, Celery, and database serv
 - [File Management](#file-management)
 - [API Reference](#api-reference)
 
-## Flask Server
+## API Overview and Integration
+
+### Two entry points
+
+| Service | Port / Mount | Role |
+|--------|-------------|------|
+| **Orchestrator** (FastAPI) | Configurable (e.g. same host under `/message`) | Conversation: receive user message, run state machine + Rasa SDK actions, return bot messages. |
+| **Backend API** (FastAPI) | 5001 (default) | Files, grievance CRUD, status updates, WebSocket, gsheet, voice. *(Flask `app.py` is deprecated for production.)* |
+
+- **Conversation:** All chat flows (webchat, future ticketing UI, etc.) should call the Orchestrator **POST /message** endpoint. The REST webchat already does this (see `channels/REST_webchat`).
+- **Ticketing / external systems:** Use the Flask **grievance API** for data: `GET /api/grievance/<id>`, `POST /api/grievance/<id>/status`, `GET /api/grievance/statuses`. For “create conversation turn” from a ticketing system, call Orchestrator **POST /message** with the same request shape (e.g. `user_id`, `text`, `payload`).
+
+### Exposing the API for a custom ticketing system
+
+- **Grievance data:** Use Backend API `GET /api/grievance/<grievance_id>`, `POST /api/grievance/<grievance_id>/status`, `GET /api/grievance/statuses`. These are already REST and can be proxied or called directly.
+- **Conversation (bot turns):** Use Orchestrator `POST /message` with `user_id` (e.g. ticket or session id), `text` and/or `payload`. Response: `messages`, `next_state`, `expected_input_type`.
+- **File uploads:** Use Backend API `POST /upload-files` (with `grievance_id` and files). REST webchat uses this today.
+
+### Messaging (SMS/email) and “all through API”
+
+**Current state:** SMS and email are sent **in-process** only:
+
+- **Backend API:** On grievance status update, `send_status_update_notifications` calls `messaging_service.send_email` and `messaging_service.send_sms` directly (same process).
+- **Orchestrator / Rasa SDK actions:** OTP, submit confirmation, status-check follow-up, etc. call `self.messaging.send_sms` / `send_email` inside the action code (orchestrator process).
+
+There is **no** HTTP API for “send SMS” or “send email” today. To have **all messaging go through an API**:
+
+1. **Add a small Messaging API** (e.g. `POST /api/messaging/send-sms`, `POST /api/messaging/send-email`) on the Backend API (FastAPI) or a dedicated service.
+2. **Backend API:** Change `send_status_update_notifications` to call this API (HTTP) instead of `messaging_service.send_*` in-process.
+3. **Orchestrator / actions:** Replace direct `Messaging` usage with an HTTP client that calls the same Messaging API (or a shared client library used by both Flask and orchestrator).
+
+Then the REST webchat continues to call Orchestrator only for conversation; any SMS/email triggered by the flow is sent via the Messaging API.
+
+### Flask vs FastAPI
+
+- **Orchestrator** is already **FastAPI** (`orchestrator/main.py`). The messaging service (`backend/services/messaging.py`) is a **Python class**, not tied to a framework; it is used by both Flask and by Rasa SDK actions run inside the orchestrator.
+- **Current state:** The **backend** has been migrated to FastAPI; keep **Flask** only for reference (deprecated for production). The live backend is FastAPI; run with: uvicorn backend.api.fastapi_app:app --port 5001..
+
+#### Can FastAPI do everything Flask does here?
+
+**Yes.** For this project, every capability the Flask backend uses has a direct FastAPI (or ASGI) equivalent:
+
+| What Flask does | FastAPI / ASGI equivalent |
+|-----------------|---------------------------|
+| REST routes (`@app.route`, blueprints) | FastAPI `APIRouter`, `@app.get` / `@app.post`, dependency injection. Same or simpler. |
+| JSON request/response | Pydantic models; automatic validation and OpenAPI. |
+| CORS | `fastapi.middleware.cors.CORSMiddleware`. |
+| File uploads (`request.files`, multipart) | `File()`, `UploadFile`; well documented. |
+| Path/query params | Declared parameters or Pydantic; type-safe. |
+| Blueprints (e.g. `FileServerAPI`, `gsheet_monitoring_bp`) | `APIRouter`; include with `app.include_router(router, prefix="...")`. |
+| Socket.IO (Flask-SocketIO + Redis) | **python-socketio** has an ASGI app; you mount it next to the FastAPI app (we already do this in the orchestrator: `Mount("/socket.io", app=socket_app)`). So Socket.IO works with FastAPI; you’d use the same `python-socketio` server and optionally Redis for the message queue. |
+| Running the app | `uvicorn backend.api.fastapi_app:app` (backend); Flask `app.py` deprecated for production. |
+
+So you can run a **single FastAPI application** that mounts:
+
+1. The **orchestrator** (conversation) at `/` or `/chat`.
+2. The **backend** (files, grievance, gsheet, voice) at `/api`, `/upload-files`, etc.
+3. A **Socket.IO** ASGI app at `/accessible-socket.io` (or current path).
+
+Nothing in the current Flask backend requires Flask-specific behaviour you can’t replicate in FastAPI. The only migration work is rewriting routes and replacing `request`/`jsonify` with FastAPI’s style and Pydantic models.
+
+#### Why migrate to FastAPI first (recommended)
+
+- **One stack to troubleshoot:** The backend (files, grievance API, uploads) needs ongoing work. Keeping it in Flask while the orchestrator is FastAPI means two codebases and two runtimes. One FastAPI app simplifies debugging and deployment.
+- **Bot + file integration:** The user interacts with the bot (orchestrator) and adds files in the same session. The webchat gets `grievance_id` from the orchestrator (custom payload `grievance_id_set`) and sends uploads to the backend with that id. Having both in one FastAPI app (or one deployment) gives shared middleware, logging, and error handling, and makes it easier to add real-time feedback (e.g. "File received" in the chat) or fix issues that span conversation and upload.
+- **Build new features once:** Add the Messaging API (and other changes) on the FastAPI backend after migration, so you don't implement in Flask and then port.
+
+**Alternative (short-term Flask):** Keep Flask and add the Messaging API there if you prefer the smallest change first; you can migrate to FastAPI later.
+
+
+## Orchestrator (FastAPI)
 
 ### Overview
 
-The Flask server (`backend/app.py`) handles file uploads, WebSocket connections, and provides REST API endpoints for the frontend.
+The Orchestrator (`orchestrator/main.py`) is a lightweight FastAPI service that handles conversation: it receives user input, runs the state machine, invokes Rasa SDK actions (no full Rasa server), and returns bot messages. Used by the REST webchat and any client that talks to `POST /message`.
+
+### Endpoints
+
+- **POST /message** – Send a user message and get bot replies.  
+  Request: `{ "user_id": "string", "message_id": "string | null", "text": "string", "payload": "string | null", "channel": "string | null" }`  
+  Response: `{ "messages": [...], "next_state": "string", "expected_input_type": "string" }`
+- **GET /health** – Health check.
+
+### Running
+
+Typically run with uvicorn (e.g. `uvicorn orchestrator.main:app`). For Socket.IO bridge and HTTP on one app, use `orchestrator.main:asgi`. See refactor specs: [01_orchestrator.md](Refactor%20specs/March%205/01_orchestrator.md), [05_agent_specs_spike.md](Refactor%20specs/March%205/05_agent_specs_spike.md).
+
+## Backend API (FastAPI)
+
+### Overview
+
+The **Backend API** (`backend/api/fastapi_app.py`) is the live backend for file uploads, WebSocket (Socket.IO), grievance API, voice, gsheet, and REST endpoints. The former Flask server (`backend/api/app.py`) is **deprecated for production** and kept for reference or rollback.
 
 **Port**: 5001 (default)
 
 ### Key Features
 
 - File upload and validation
-- WebSocket for real-time updates
+- WebSocket (Socket.IO) for real-time updates
 - Task status tracking
 - Health monitoring
 - CORS configuration
+- Grievance API, voice grievance, gsheet monitoring
 
-### Starting Flask Server
+### Starting the Backend (FastAPI)
 
 ```bash
-# Development
-python backend/app.py
-
-
+# Production / development
+uvicorn backend.api.fastapi_app:app --host 0.0.0.0 --port 5001
 ```
 
 ### Configuration
@@ -686,15 +776,24 @@ def get_file_url(file_path):
 
 ### REST API Endpoints
 
+#### Orchestrator (FastAPI; port/host configurable, often same host as frontend)
+
+| Method | Endpoint   | Description                          |
+| ------ | ---------- | ------------------------------------ |
+| POST   | `/message` | Send user message; get bot messages  |
+| GET    | `/health`  | Health check                         |
+
 #### Flask Server (Port 5001)
 
-| Method | Endpoint          | Description           |
-| ------ | ----------------- | --------------------- |
-| GET    | `/health`         | Health check          |
-| POST   | `/upload`         | Upload file           |
-| GET    | `/grievance/{id}` | Get grievance details |
-| POST   | `/task-status`    | Update task status    |
-| GET    | `/files/{path}`   | Serve file            |
+| Method | Endpoint                          | Description                    |
+| ------ | --------------------------------- | ----------------------------- |
+| GET    | `/health`                          | Health check                  |
+| POST   | `/upload-files`                    | Upload file(s) for grievance  |
+| GET    | `/api/grievance/<id>`              | Get grievance details         |
+| POST   | `/api/grievance/<id>/status`       | Update grievance status       |
+| GET    | `/api/grievance/statuses`          | List available statuses       |
+| POST   | `/task-status`                     | Task status callback          |
+| GET    | `/files/<grievance_id>`, etc.       | List/download files           |
 
 ### Response Formats
 

@@ -1,6 +1,6 @@
 # Nepal Chatbot - Integrations Guide
 
-External integrations including GRM system, Google Sheets, and OAuth authentication.
+External integrations including GRM system, Google Sheets, OAuth, and channels (WhatsApp, SMS). **Conversation** with the bot is via the **Orchestrator** REST API (`POST /message`); we do not use the full Rasa server. See [BACKEND.md](BACKEND.md) for API overview and ticketing/messaging API notes.
 
 ## Table of Contents
 
@@ -528,8 +528,10 @@ export TWILIO_WHATSAPP_NUMBER=whatsapp:+1234567890
 
 ### Webhook Configuration
 
+Conversation is handled by the **Orchestrator** (FastAPI), not the Rasa server. Send user messages to the Orchestrator `POST /message` endpoint:
+
 ```python
-# backend/app.py
+# backend/api/app.py or a dedicated webhook handler
 
 @app.route('/webhook/whatsapp', methods=['POST'])
 def whatsapp_webhook():
@@ -537,18 +539,24 @@ def whatsapp_webhook():
     from_number = request.form.get('From')
     message_body = request.form.get('Body')
 
-    # Process message with Rasa
+    # Process message via Orchestrator REST API (no Rasa server)
     response = requests.post(
-        'http://localhost:5005/webhooks/rest/webhook',
+        ORCHESTRATOR_URL,  # e.g. http://localhost:8000/message
         json={
-            'sender': from_number,
-            'message': message_body
-        }
+            'user_id': from_number,
+            'text': message_body,
+            'payload': None,
+            'channel': 'whatsapp'
+        },
+        headers={'Content-Type': 'application/json'}
     )
+    data = response.json()
 
-    # Send response via WhatsApp
-    bot_response = response.json()[0]['text']
-    send_whatsapp_message(from_number, bot_response)
+    # Send each bot message via WhatsApp
+    for msg in data.get('messages', []):
+        if msg.get('text'):
+            send_whatsapp_message(from_number, msg['text'])
+        # Handle buttons/custom payloads as needed
 
     return '', 200
 ```
@@ -574,16 +582,9 @@ def send_whatsapp_message(to, message):
     return message.sid
 ```
 
-### Rasa Channel Configuration
+### Channel configuration
 
-**credentials.yml:**
-
-```yaml
-twilio:
-  account_sid: "your_account_sid"
-  auth_token: "your_auth_token"
-  twilio_number: "+1234567890"
-```
+WhatsApp (and other channels) should call the **Orchestrator** `POST /message` endpoint with the same request shape as the REST webchat: `user_id`, `text`, optional `payload`, optional `channel`. No Rasa credentials.yml is required for the orchestrator; configure Twilio (or other provider) for sending/receiving messages and point the incoming webhook at your Orchestrator or a thin bridge that forwards to it.
 
 ## SMS Integration
 

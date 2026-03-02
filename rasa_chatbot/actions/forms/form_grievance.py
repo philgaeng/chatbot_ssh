@@ -122,13 +122,16 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 }
 
             # Prepare input data for Celery task
+            # Use tracker.sender_id for REST flow when flask_session_id slot is not set
+            session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
             input_data = {
                 'grievance_id': grievance_id,
                 'complainant_id': tracker.get_slot("complainant_id"),
                 'language_code': self.language_code,
                 'complainant_province': tracker.get_slot("complainant_province") or self.province,
                 'complainant_district': tracker.get_slot("complainant_district") or self.district,
-                'flask_session_id': tracker.get_slot("flask_session_id"),  # Get flask_session_id from slot
+                'flask_session_id': session_id,
+                'session_id': session_id,
                 'values': {
                     'grievance_description': grievance_description
                 }
@@ -252,6 +255,19 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'source': 'bot'
                 }
                 await self.db_manager.create_complainant_and_grievance(grievance_data)
+
+                # Notify frontend that grievance now exists in DB so file upload can be enabled
+                try:
+                    dispatcher.utter_message(
+                        json_message={
+                            "data": {
+                                "grievance_id": grievance_data.get("grievance_id"),
+                                "event_type": "grievance_saved_in_db",
+                            }
+                        }
+                    )
+                except Exception as e:
+                    self.logger.error(f"Failed to emit grievance_saved_in_db event: {e}")
 
                 # Trigger async classification after create (runs in thread so request never blocks)
                 if self.LLM_CLASSIFICATION:

@@ -4,7 +4,7 @@ from rasa_sdk import Tracker, Action
 from rasa_sdk.events import SlotSet
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
-from typing import Dict, Text, Any, Tuple, List, Callable
+from typing import Dict, Text, Any, Tuple, List, Callable, Optional
 from rapidfuzz import fuzz
 import re
 import traceback
@@ -635,12 +635,16 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
         self.logger.debug(f"get_next_action_for_form - resolved next_action: {next_action}")
         return next_action 
 
-    def _retrieve_and_set_grievances_by_phone(self, tracker: Tracker) -> Dict[Text, Any]:
+    def _retrieve_and_set_grievances_by_phone(
+        self, tracker: Tracker, phone: Optional[Text] = None
+    ) -> Dict[Text, Any]:
         """
         Helper function to retrieve grievances by phone and return slot updates.
         This keeps the validation logic clean and readable.
+        When called from validate_complainant_phone, pass phone= so the just-validated
+        value is used (tracker does not have complainant_phone set yet).
         """
-        complainant_phone = tracker.get_slot("complainant_phone")
+        complainant_phone = phone if phone is not None else tracker.get_slot("complainant_phone")
         
         self.logger.debug(f"{self.name()}: Retrieving grievances for phone: {complainant_phone}")
         
@@ -735,33 +739,39 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
         
 
             if body_name in EMAIL_TEMPLATES:
-                subject = EMAIL_TEMPLATES[body_name][self.language_code]
                 body = EMAIL_TEMPLATES[body_name][self.language_code]
+                # Use separate subject template if available (plain text; SES rejects HTML in subject)
+                subject_key = f"{body_name}_SUBJECT"
+                if subject_key in EMAIL_TEMPLATES:
+                    subject = EMAIL_TEMPLATES[subject_key][self.language_code]
+                else:
+                    subject = body  # fallback for templates that are plain text
             else:
                 self.logger.error(f"Unknown body_name: {body_name}")
                 return "", ""
 
             self.logger.debug(f"_prepare_recap_email formatting subject and body")
-            #format subject and body
-            subject = subject.format(
-                grievance_id=email_data.get('grievance_id', '')
+            # Build format kwargs once so subject and body both get all placeholders
+            # (some templates like GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP use the same
+            # string for both and include grievance_timeline, grievance_summary, etc.)
+            format_kwargs = dict(
+                complainant_name=email_data.get('complainant_full_name', self.NOT_PROVIDED),
+                grievance_description=email_data.get('grievance_description', self.NOT_PROVIDED),
+                project=email_data.get('complainant_project', self.NOT_PROVIDED),
+                complainant_municipality=email_data.get('complainant_municipality', self.NOT_PROVIDED),
+                complainant_village=email_data.get('complainant_village', self.NOT_PROVIDED),
+                complainant_address=email_data.get('complainant_address', self.NOT_PROVIDED),
+                complainant_phone=email_data.get('complainant_phone', self.NOT_PROVIDED),
+                grievance_id=email_data.get('grievance_id', ''),
+                complainant_email=email_data.get('complainant_email', self.NOT_PROVIDED),
+                grievance_timeline=email_data.get('grievance_timeline', self.NOT_PROVIDED),
+                grievance_timestamp=email_data.get('grievance_timestamp', self.NOT_PROVIDED),
+                categories_html=categories_html,
+                grievance_summary=email_data.get('grievance_summary', self.NOT_PROVIDED),
+                grievance_categories=email_data.get('grievance_categories', self.NOT_PROVIDED),
             )
-            body = body.format(
-            complainant_name=email_data.get('complainant_full_name', self.NOT_PROVIDED),
-            grievance_description=email_data.get('grievance_description', self.NOT_PROVIDED),
-            project=email_data.get('complainant_project', self.NOT_PROVIDED),
-            complainant_municipality=email_data.get('complainant_municipality', self.NOT_PROVIDED),
-            complainant_village=email_data.get('complainant_village', self.NOT_PROVIDED),
-            complainant_address=email_data.get('complainant_address', self.NOT_PROVIDED),
-            complainant_phone=email_data.get('complainant_phone', self.NOT_PROVIDED),
-            grievance_id=email_data.get('grievance_id', ''),
-            complainant_email=email_data.get('complainant_email', self.NOT_PROVIDED),
-            grievance_timeline=email_data.get('grievance_timeline', self.NOT_PROVIDED),
-            grievance_timestamp=email_data.get('grievance_timestamp', self.NOT_PROVIDED),
-            categories_html=categories_html,
-            grievance_summary=email_data.get('grievance_summary', self.NOT_PROVIDED)
-            )
-            
+            subject = subject.format(**format_kwargs)
+            body = body.format(**format_kwargs)
             self.logger.debug(f"_prepare_recap_email successfully prepared email")
             return (body, subject)
 
@@ -775,20 +785,38 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
                                                          grievance_data: Dict[str, Any],
                                                          body_name: str
                                                          ) -> None:
-        """Prepare and send a recap email according to the body name."""
-        #send email to user
-        try:    
-            body, subject = self.prepare_recap_email(to_emails, 
-                                                    grievance_data, 
-                                                    body_name)
-            
-            self.messaging.send_email(to_emails,
-                                            subject = subject,
-                                            body=body
-                                            )       
-        except Exception as e:
-            self.logger.error(f"Failed to send system notification email: {e}"
+        """Prepare and enqueue a recap email task so it runs via Celery."""
+        try:
+            body, subject = self.prepare_recap_email(
+                to_emails,
+                grievance_data,
+                body_name,
             )
+
+            if not subject or not body:
+                self.logger.error(
+                    f"Failed to prepare recap email: empty subject/body for {body_name}"
+                )
+                return
+
+            grievance_id = grievance_data.get("grievance_id")
+
+            try:
+                # Prefer Celery-based delivery so email failures/latency never block the chatbot flow.
+                from backend.task_queue.registered_tasks import send_email_task
+
+                send_email_task.delay(to_emails, subject, body, grievance_id=grievance_id)
+                self.logger.debug(
+                    f"Enqueued send_email_task via Celery for grievance_id={grievance_id}"
+                )
+            except Exception as celery_error:
+                # If Celery is unavailable for any reason, fall back to direct send.
+                self.logger.error(
+                    f"Celery send_email_task unavailable, falling back to direct send: {celery_error}"
+                )
+                self.messaging.send_email(to_emails, subject=subject, body=body)
+        except Exception as e:
+            self.logger.error(f"Failed to send system notification email: {e}")
             
     async def send_recap_email_to_admin(self, 
                                                    grievance_data: Dict[str, Any],

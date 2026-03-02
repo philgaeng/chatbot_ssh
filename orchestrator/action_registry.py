@@ -38,6 +38,7 @@ def _get_action(action_name: str) -> Any:
         from rasa_chatbot.actions.forms.form_status_check import (
             ActionStartStatusCheck,
             ActionAskStatusCheckMethod,
+            ActionAskFormStatusCheck1ComplainantPhone,
             ActionAskStatusCheckRetrieveGrievances,
             ActionAskStatusCheckListGrievanceId,
             ActionAskStatusCheckComplainantFullName,
@@ -61,6 +62,11 @@ def _get_action(action_name: str) -> Any:
             ActionAskFormGrievanceComplainantReviewGrievanceCatModify,
             ActionAskFormGrievanceComplainantReviewGrievanceSummaryStatus,
             ActionAskFormGrievanceComplainantReviewGrievanceSummaryTemp,
+            ActionUpdateGrievanceCategorization,
+        )
+        from rasa_chatbot.actions.action_submit_grievance import (
+            ActionSubmitGrievance,
+            ActionGrievanceOutro,
         )
         from rasa_chatbot.actions.action_ask_commons import (
             ActionAskComplainantLocationConsent,
@@ -79,8 +85,6 @@ def _get_action(action_name: str) -> Any:
             ActionAskComplainantEmailConfirmed,
             ActionAskComplainantPhone,
         )
-        from rasa_chatbot.actions.action_submit_grievance import ActionSubmitGrievance
-
         # Intro/menu
         _ACTIONS["action_introduce"] = ActionIntroduce()
         _ACTIONS["action_next_action"] = ActionNextAction()
@@ -121,7 +125,7 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_complainant_email_temp"] = ActionAskComplainantEmailTemp()
         _ACTIONS["action_ask_complainant_email_confirmed"] = ActionAskComplainantEmailConfirmed()
         _ACTIONS["action_ask_complainant_phone"] = ActionAskComplainantPhone()
-        _ACTIONS["action_ask_form_status_check_1_complainant_phone"] = ActionAskComplainantPhone()
+        _ACTIONS["action_ask_form_status_check_1_complainant_phone"] = ActionAskFormStatusCheck1ComplainantPhone()
 
         # OTP
         _ACTIONS["action_ask_otp_consent"] = ActionAskOtpConsent()
@@ -140,6 +144,8 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_cat_modify"] = ActionAskFormGrievanceComplainantReviewGrievanceCatModify()
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_summary_status"] = ActionAskFormGrievanceComplainantReviewGrievanceSummaryStatus()
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_summary_temp"] = ActionAskFormGrievanceComplainantReviewGrievanceSummaryTemp()
+        _ACTIONS["action_update_grievance_categorization"] = ActionUpdateGrievanceCategorization()
+        _ACTIONS["action_grievance_outro"] = ActionGrievanceOutro()
     return _ACTIONS.get(action_name)
 
 

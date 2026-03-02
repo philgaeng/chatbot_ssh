@@ -658,7 +658,7 @@ class TaskManager:
             )
             return False
 
-    def fail_task(self, error: str, grievance_id=None, session_id=None, entity_key=None, entity_id=None) -> bool:
+    def fail_task(self, error: str, grievance_id=None, session_id=None, entity_key=None, entity_id=None, extra_data: Optional[Dict[str, Any]] = None) -> bool:
         """Mark task as failed with logging and websocket emission only - no database interaction.
         Database task record will be created/updated later by store_result_to_db_task.
         
@@ -668,6 +668,7 @@ class TaskManager:
             session_id: Session ID for websocket emission (REQUIRED)
             entity_key: Type of entity for logging (optional, for debugging)
             entity_id: ID of the entity for logging (optional, for debugging)
+            extra_data: Optional dict merged into the payload sent to task-status (e.g. file_id for file upload failures)
         """
         from celery import current_task
         
@@ -706,10 +707,12 @@ class TaskManager:
                 event_type=FAILED
             )
             
-            # Emit websocket status for UI updates
+            # Emit websocket status for UI updates (include extra_data e.g. file_id for file-status lookup)
             if self.emit_websocket:
-                self.emit_status('FAILED', {'task_name': self.task_name, 'error': str(error)},
-                               grievance_id, session_id)
+                payload = {'task_name': self.task_name, 'error': str(error)}
+                if extra_data:
+                    payload.update(extra_data)
+                self.emit_status('FAILED', payload, grievance_id, session_id)
             return True
         except Exception as e:
             self.error = str(e)

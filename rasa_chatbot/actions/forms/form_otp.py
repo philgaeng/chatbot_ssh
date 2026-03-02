@@ -59,6 +59,11 @@ class ActionAskOtpInput(BaseOtpAction):
         tracker: Tracker,
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
+        # If the user has explicitly declined OTP verification, do not send or display OTP.
+        if tracker.get_slot("otp_consent") is False:
+            self.logger.info(f"{self.name()} - Skipping OTP send because otp_consent is False")
+            return []
+
         self.logger.debug(f"{self.name()} - Asking for OTP Input")
         otp_number = tracker.get_slot("otp_number")
         phone_number = self.get_otp_phone_number(tracker)
@@ -143,29 +148,25 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         self.logger.debug(f"{self.name()} - otp_consent : {tracker.get_slot('otp_consent')}")
         self.logger.debug(f"{self.name()} - otp_status : {tracker.get_slot('otp_status')}")
         self.logger.debug(f"{self.name()} - otp_input : {tracker.get_slot('otp_input')}")
-        
-        required_slots = ["complainant_phone", "otp_consent", "otp_input", "otp_status"]
-        
-        # # 1. Collect phone if not already provided
-        # phone = tracker.get_slot("complainant_phone")
-        # if not phone or phone == self.DEFAULT_VALUES['SKIP_VALUE']:
-        #     required_slots.append("complainant_phone")
-        #     # If we need to collect phone, don't ask for OTP yet
-        #     return required_slots
-        
-        # # 2. Phone exists, proceed with OTP verification
-        # if tracker.get_slot("grievance_sensitive_issue"):
-        #     self.logger.debug(f"{self.name()} - sensitive issue reported - OTP is optional")
-        #     if tracker.get_slot("otp_consent") == False:
-        #         required_slots = ["otp_consent"]
-        #     else:
-        #         required_slots = ["otp_consent", "otp_input", "otp_status"]
-        # else:
-        #     required_slots = ["otp_input", "otp_status"]
-        
-        # required_slots.append("form_otp_next_action")
-        
-        return required_slots
+
+        story_main = tracker.get_slot("story_main")
+        complainant_consent = tracker.get_slot("complainant_consent")
+        otp_consent = tracker.get_slot("otp_consent")
+
+        # 1) Grievance flow: if the user refused to share any contact information,
+        # skip OTP entirely (no phone, no OTP prompt).
+        if story_main in ("new_grievance", "grievance_submission") and complainant_consent is False:
+            self.logger.debug(f"{self.name()} - Skipping OTP form because complainant_consent is False")
+            return []
+
+        # 2) If the user has declined OTP verification, only ensure we have phone + consent.
+        # We do NOT require otp_input, so action_ask_otp_input is never called.
+        if otp_consent is False:
+            self.logger.debug(f"{self.name()} - User declined OTP verification; only requiring phone + otp_consent")
+            return ["complainant_phone", "otp_consent"]
+
+        # Default: collect phone, OTP consent, and OTP input/status.
+        return ["complainant_phone", "otp_consent", "otp_input", "otp_status"]
     
     async def extract_complainant_phone(
         self,

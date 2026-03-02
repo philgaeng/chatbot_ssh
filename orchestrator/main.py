@@ -2,6 +2,7 @@
 Orchestrator FastAPI app: POST /message, GET /health.
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -9,6 +10,26 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# Configure logging early so application logs are visible and third-party noise is reduced.
+# Without this, botocore/boto3 DEBUG floods the log and buries orchestrator/rasa_chatbot logs.
+def _configure_orchestrator_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+    for name in ("botocore", "boto3", "urllib3", "s3transfer"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    # Application loggers: keep DEBUG for form flow and actions (set via LOG_LEVEL if desired)
+    log_level = os.environ.get("ORCHESTRATOR_LOG_LEVEL", "DEBUG").upper()
+    level = getattr(logging, log_level, logging.INFO)
+    for name in ("rasa_chatbot", "orchestrator", "backend"):
+        logging.getLogger(name).setLevel(level)
+
+
+_configure_orchestrator_logging()
 
 # Load env.local so ENABLE_CELERY_CLASSIFICATION etc. are set (orchestrator is often
 # started by uvicorn without sourcing env.local)

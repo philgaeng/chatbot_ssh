@@ -193,8 +193,9 @@ def classify_and_summarize_grievance(
         category_list_str = json.dumps(category_list)
         result_dict_str = json.dumps(result_dict)
         
-        # Initialize OpenAI client
-        client = OpenAI(api_key=open_ai_key)
+        # Initialize OpenAI client with explicit timeout for classification (avoids "Request timed out." when API is slow)
+        classification_timeout = float(os.getenv("OPENAI_CLASSIFICATION_TIMEOUT", "120"))
+        client = OpenAI(api_key=open_ai_key, timeout=classification_timeout)
         if not client:
             raise ValueError("OpenAI client initialization failed")
 

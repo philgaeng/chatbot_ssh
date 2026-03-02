@@ -426,7 +426,7 @@ async function handleFileUpload(files) {
   console.log("Current window.grievanceId:", window.grievanceId);
 
   if (!window.grievanceId) {
-    appendMessage("Please start a grievance submission first.", "received");
+    uiActions.appendMessage("Please start a grievance submission first.", "received");
     return;
   }
 
@@ -444,7 +444,7 @@ async function handleFileUpload(files) {
 
   if (audioFiles.length > 0) {
     console.log("Audio files detected:", audioFiles);
-    appendMessage(
+    uiActions.appendMessage(
       "Voice recordings detected. These will be processed and transcribed.",
       "received"
     );
@@ -463,7 +463,7 @@ async function handleFileUpload(files) {
 
   if (oversizedFiles.length > 0) {
     console.log("Oversized files detected:", oversizedFiles);
-    appendMessage(
+    uiActions.appendMessage(
       `Some files are too large and will be skipped: ${oversizedFiles
         .map((f) => f.name)
         .join(", ")}`,
@@ -554,7 +554,7 @@ async function pollFileStatus(fileIds) {
         setTimeout(poll, 10000); // Poll every 10 seconds
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
-        appendMessage(
+        uiActions.appendMessage(
           "File processing is taking longer than expected. You can continue with your submission.",
           "received"
         );
@@ -618,7 +618,7 @@ function updateFileStatus(fileId, data) {
           window.grievanceId = result.grievance_id;
         }
         if (result.message) {
-          appendMessage(result.message, "received");
+          uiActions.appendMessage(result.message, "received");
         }
       }
       break;
@@ -630,7 +630,7 @@ function updateFileStatus(fileId, data) {
         statusMessage = `Failed to process files: ${errorMsg}`;
       }
       // Always show failure message to user
-      appendMessage(statusMessage, "received");
+      uiActions.appendMessage(statusMessage, "received");
       console.error("Task failed:", errorMsg);
       break;
     default:

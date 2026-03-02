@@ -1,0 +1,42 @@
+## Ticket log: bugs to fix
+
+### B1 – File upload button before grievance is saved
+
+- **Status**: Open
+- **Area**: Grievance flow / file upload
+- **Problem**: The REST webchat shows the file upload button before the grievance row is safely stored in the database. This can lead to FK errors when trying to save attachments.
+- **Desired behavior**: Only show/enable the file upload button once the grievance has been created in the DB (or we otherwise guarantee a valid `grievance_id` row exists).
+- **Example transcript (abridged)**:
+  - "Files uploaded successfully. Processing…"
+  - "Failed to process files: Failed to store file <filename> in database (often grievance_id missing or FK violation)"
+  - "One or more files could not be saved. You can try adding files again or go back to the chat."
+
+---
+
+### B2 – Phone requested after user declines contact information
+
+- **Status**: Implemented (needs testing)
+- **Area**: Contact form → OTP form (grievance flow)
+- **Problem**: Even when the user answers **No** to “Would you like to provide your contact information?”, they are still asked to enter a contact phone number.
+- **Example transcript (abridged)**:
+  - "Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates."
+  - User: "No"
+  - Bot: "Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. You can skip this if you prefer to remain anonymous."
+- **Notes**: Logic updated in `form_otp` so that when `complainant_consent` is `False` in the grievance flow, the OTP form completes immediately and does not ask for phone/OTP. Verify end‑to‑end with a fresh conversation.
+
+---
+
+### B3 – OTP sent even when user does not want verification
+
+- **Status**: Implemented (needs testing)
+- **Area**: OTP consent + OTP send
+- **Problem**: After "Do you want to verify your phone number…", if the user chooses **No**, they still receive the OTP prompt and test OTP message.
+- **Example transcript (abridged)**:
+  - "Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you."
+  - User: "No"
+  - Bot: "-------- OTP verification ongoing -------- Please enter the 6-digit One Time Password (OTP)…"
+  - "TEMPORARY MESSAGE FOR TESTING Your verification code is 583117. Please enter this code to verify your phone number."
+- **Notes**: `form_otp` now:
+  - Skips OTP entirely when `complainant_consent` is `False` (anonymous grievance).
+  - When `otp_consent` is `False`, only requires phone + consent and never calls the OTP send action. `ActionAskOtpInput` also early‑returns if `otp_consent` is `False`.
+

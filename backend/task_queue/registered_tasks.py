@@ -134,11 +134,15 @@ def process_file_upload_task(self, grievance_id: str,
         return result
     except Exception as e:
         task_mgr.fail_task(
-            error=str(e), 
-            grievance_id=grievance_id, 
-            session_id=session_id, 
-            entity_key='grievance_id', 
-            entity_id=grievance_id
+            error=str(e),
+            grievance_id=grievance_id,
+            session_id=session_id,
+            entity_key='grievance_id',
+            entity_id=grievance_id,
+            extra_data={
+                'file_id': file_data.get('file_id'),
+                'file_name': file_data.get('file_name'),
+            },
         )
         raise
 
@@ -314,20 +318,26 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
         result = messaging.send_email(to_emails, subject, body)
         if grievance_id:
             task_mgr.complete_task(
-                result=result, 
-                grievance_id=grievance_id, 
-                session_id=None
+                result=result,
+                grievance_id=grievance_id,
+                session_id=None,
             )
         return result
     except Exception as e:
         if grievance_id:
             task_mgr.fail_task(
-                error=str(e), 
-                grievance_id=grievance_id, 
-                session_id=None, 
-                entity_key='grievance_id', 
-                entity_id=grievance_id
+                error=str(e),
+                grievance_id=grievance_id,
+                session_id=None,
+                entity_key='grievance_id',
+                entity_id=grievance_id,
             )
+        # Use centralized retry policy so transient email issues are retried automatically.
+        should_retry, delay = task_mgr.retry_task(e)
+        if should_retry:
+            from celery import current_task
+
+            raise current_task.retry(exc=e, countdown=delay or None)
         raise
 
 # LLM Tasks

@@ -1,5 +1,8 @@
 """
 Task logging functionality for the Nepal Chatbot Queue System.
+
+Logs append to a file per day (e.g. queue_system_2026-03-02.log). Each day gets
+a new file; within the day all sessions/restarts append to that day's file.
 """
 
 import logging
@@ -7,7 +10,7 @@ import json
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional
-from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
 
 class LoggingConfig:
     """Centralized logging configuration for the entire system"""
@@ -17,6 +20,9 @@ class LoggingConfig:
     LOG_MAX_SIZE_MB = 100
     LOG_MAX_FILES = 5
     
+    # Use daily filenames (service_YYYY-MM-DD.log) so each day gets a new file, append within day
+    USE_DAILY_FILENAME = True
+    
     # Format settings
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOG_LEVEL = 'INFO'
@@ -25,38 +31,73 @@ class LoggingConfig:
     METRICS_FILE = 'metrics.json'
     
     # Default services to monitor (centralized service registry)
+    # Base names only; date suffix is added when USE_DAILY_FILENAME is True
     DEFAULT_SERVICES = {
-        'llm_service': 'llm_service.log',
-        'queue_system': 'queue_system.log',
-        'db_operations': 'db_operations.log',
-        'database_service': 'database_service.log',
-        'db_migrations': 'db_migrations.log',
-        'db_backup': 'db_backup.log',
-        'ticket_processor': 'ticket_processor.log',
-        'ticket_notifications': 'ticket_notifications.log',
-        'ticket_assignments': 'ticket_assignments.log',
-        'monitoring_config': 'monitoring_config.log',
-        'socketio': 'socketio.log',
-        'voice_grievance': 'voice_grievance.log',
-        'api_manager': 'api_manager.log',
-        'file_processor': 'file_processor.log',
-        'file_service': 'file_service.log',
-        'messaging_service': 'messaging_service.log',
-        'channels_api': 'channels_api.log'
+        'llm_service': 'llm_service',
+        'queue_system': 'queue_system',
+        'db_operations': 'db_operations',
+        'database_service': 'database_service',
+        'db_migrations': 'db_migrations',
+        'db_backup': 'db_backup',
+        'ticket_processor': 'ticket_processor',
+        'ticket_notifications': 'ticket_notifications',
+        'ticket_assignments': 'ticket_assignments',
+        'monitoring_config': 'monitoring_config',
+        'socketio': 'socketio',
+        'voice_grievance': 'voice_grievance',
+        'api_manager': 'api_manager',
+        'file_processor': 'file_processor',
+        'file_service': 'file_service',
+        'messaging_service': 'messaging_service',
+        'channels_api': 'channels_api'
     }
     
     @classmethod
-    def get_log_path(cls, service_name: str) -> Path:
-        """Get the full log file path for a service"""
+    def get_log_path(cls, service_name: str, date: Optional[datetime] = None) -> Path:
+        """Get the full log file path for a service. If USE_DAILY_FILENAME, includes date."""
         log_dir = Path(cls.LOG_DIR)
         log_dir.mkdir(exist_ok=True)
-        filename = cls.DEFAULT_SERVICES.get(service_name, f'{service_name}.log')
+        base = cls.DEFAULT_SERVICES.get(service_name, service_name)
+        if cls.USE_DAILY_FILENAME:
+            d = (date or datetime.now()).strftime('%Y-%m-%d')
+            filename = f'{base}_{d}.log'
+        else:
+            filename = f'{base}.log'
         return log_dir / filename
     
     @classmethod
     def get_metrics_path(cls) -> Path:
         """Get the full metrics file path"""
         return Path(cls.LOG_DIR) / cls.METRICS_FILE
+
+
+class DailyRotatingFileHandler(logging.FileHandler):
+    """
+    File handler that writes to a file named with the current date
+    (e.g. service_2026-03-02.log). Appends within the day; rolls to a new
+    file when the date changes (e.g. after midnight).
+    """
+
+    def __init__(self, service_name: str, config: LoggingConfig, **kwargs):
+        self._service_name = service_name
+        self._config = config
+        self._current_date: Optional[str] = None
+        path = self._get_today_path()
+        super().__init__(path, mode='a', encoding='utf-8', **kwargs)
+        self._current_date = datetime.now().strftime('%Y-%m-%d')
+
+    def _get_today_path(self) -> Path:
+        return self._config.get_log_path(self._service_name)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        today = datetime.now().strftime('%Y-%m-%d')
+        if self._current_date != today:
+            self.close()
+            self.baseFilename = str(self._get_today_path())
+            self.stream = self._open()
+            self._current_date = today
+        super().emit(record)
+
 
 class TaskLogger:
     """Centralized task logging functionality"""
@@ -67,30 +108,26 @@ class TaskLogger:
         self.logger = self._setup_logger()
         
     def _setup_logger(self) -> logging.Logger:
-        """Set up the logger with file and console handlers"""
+        """Set up the logger with file and console handlers. File: append, new file each day."""
         logger = logging.getLogger(self.service_name)
         if not logger.handlers:
             formatter = logging.Formatter(self.config.LOG_FORMAT)
-            
-            # File handler using centralized config
-            log_file_path = self.config.get_log_path(self.service_name)
-            file_handler = TimedRotatingFileHandler(
-                filename=log_file_path,
-                when='midnight',
-                interval=1,
-                backupCount=self.config.LOG_MAX_FILES,
-                encoding='utf-8'
-            )
+
+            if self.config.USE_DAILY_FILENAME:
+                file_handler = DailyRotatingFileHandler(self.service_name, self.config)
+            else:
+                log_file_path = self.config.get_log_path(self.service_name)
+                file_handler = logging.FileHandler(
+                    log_file_path, mode='a', encoding='utf-8'
+                )
             file_handler.setFormatter(formatter)
-            
-            # Console handler
+
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(formatter)
-            
+
             logger.addHandler(file_handler)
             logger.addHandler(console_handler)
             logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
-            
         return logger
     
     def log_task_event(self, task_name: str, details: Optional[Dict[str, Any]] = None, service_name: str = None, event_type=None) -> None:

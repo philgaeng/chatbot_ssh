@@ -2,8 +2,19 @@
 
 Comprehensive overview of the Nepal Chatbot system architecture, components, and data flow.
 
+## Current Architecture (Post-Refactor)
+
+We **do not run the full Rasa server**. Conversation is driven by:
+
+- **Orchestrator** (FastAPI): Receives `POST /message`, runs the state machine, invokes **Rasa SDK** actions (same Python code in `rasa_chatbot/actions/`), returns `messages`, `next_state`, `expected_input_type`. Optional Socket.IO bridge on `/socket.io` for legacy webchat.
+- **Flask backend** (port 5001): File uploads (`/upload-files`), grievance API (`/api/grievance/*`), status updates, WebSocket, gsheet. Uses `backend/services/messaging.py` in-process for SMS/email (no HTTP messaging API yet).
+- **REST webchat** (`channels/REST_webchat`): Calls Orchestrator `POST /message` and Flask for file uploads. No Rasa or Socket.IO dependency for conversation.
+
+Details: [Refactor specs (March 5)](Refactor%20specs/March%205/01_orchestrator.md), [BACKEND.md](BACKEND.md). The sections below include the **legacy** Rasa Server / Action Server picture for reference; in current deployment these are replaced by the Orchestrator + Rasa SDK.
+
 ## Table of Contents
 
+- [Current Architecture (Post-Refactor)](#current-architecture-post-refactor)
 - [High-Level Architecture](#high-level-architecture)
 - [Core Components](#core-components)
 - [Data Flow](#data-flow)

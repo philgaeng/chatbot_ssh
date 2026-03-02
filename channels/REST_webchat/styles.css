@@ -186,6 +186,12 @@
   font-family: inherit;
 }
 
+#message-input:disabled {
+  background: #f5f5f5;
+  color: #888;
+  cursor: not-allowed;
+}
+
 .attachment-button {
   background: none;
   border: none;
@@ -198,6 +204,12 @@
   justify-content: center;
   min-width: 44px;
   height: 44px;
+}
+
+.attachment-button:disabled {
+  color: #bbb;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .attachment-button svg {
@@ -218,6 +230,12 @@
   justify-content: center;
   padding: 0;
   margin: 0;
+}
+
+.send-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.8;
 }
 
 .send-button svg {

@@ -141,11 +141,14 @@ class FileServerCore(APIManager):
             audio_metadata = self.get_audio_metadata(file_data['file_path'])
             file_data.update(audio_metadata)
         
-        # Store file attachment in DB
+        # Store file attachment in DB (requires grievance_id to exist in grievances table)
         success = db_manager.store_file_attachment(file_data)
         
         if not success:
-            raise Exception(f"Failed to store file {file_data['file_name']} in database")
+            raise Exception(
+                f"Failed to store file {file_data['file_name']} in database "
+                "(check DB logs for cause; often grievance_id missing or FK violation)"
+            )
         
         return file_data
 

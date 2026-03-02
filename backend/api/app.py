@@ -1,3 +1,8 @@
+"""
+Flask backend entry point. DEPRECATED for production.
+The live backend is FastAPI: run with uvicorn backend.api.fastapi_app:app --port 5001.
+This file is kept for reference or rollback. See backend/api/README.md and docs/BACKEND.md.
+"""
 import os
 import sys
 

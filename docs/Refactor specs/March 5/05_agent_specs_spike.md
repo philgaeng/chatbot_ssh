@@ -18,7 +18,9 @@ Agent specifications for building the orchestrator + action layer. Each agent ca
 | Phase 2 Flows | [Agent 5](#agent-5-phase-2-flows) | ✅ Done |
 | Webchat Socket Bridge | [Agent 6](#agent-6-webchat-socket-bridge) | ⬜ Pending |
 | REST Webchat | [Agent 7](#agent-7-rest-webchat) | ⬜ Pending |
+| File upload robustness (REST webchat) | [Agent 12](#agent-12-file-upload-robustness-rest-webchat) | ⬜ Pending |
 | Agents 10.A–10.D | [10_agent_instructions.md](10_agent_instructions.md) | ⬜ Pending |
+| Backend: Flask → FastAPI (8A–8D) | [Agent 8A](#agent-8a-fastapi-skeleton--grievance-api) → [8B](#agent-8b-file-server-router) / [8C](#agent-8c-socketio-asgi-app) → [8D](#agent-8d-voice-gsheet-deprecation-tests) / [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) | ⬜ Pending |
 
 ---
 
@@ -473,5 +475,189 @@ Implement the **REST-based webchat** (Option B, long-term) in a separate folder 
   - Updated `config.js` (no WEBSOCKET_CONFIG dependency or only for file server, if desired).
   - Any updated `eventHandlers.js` / `uiActions.js` helpers tailored for REST responses.
 - Minimal documentation on how to run and test REST_webchat locally.
+
+---
+
+## Agent 12: File Upload Robustness (REST webchat)
+
+### Mission
+
+Implement the **robust file upload flow** in `channels/REST_webchat` so users can add files anytime during a grievance flow without losing their place. The bot remembers the last bot message and quick replies; when the user returns from file upload, we show a transition message and re-display that state. No backend or orchestrator changes.
+
+### Context
+
+- **Spec:** [12_file_upload_robustness.md](12_file_upload_robustness.md) — requirements, resolved decisions (Q1–Q10), exit flow, data flow, proposed architecture.
+- **Location:** `channels/REST_webchat/` only (`app.js`, `modules/eventHandlers.js`, `modules/uiActions.js`, `index.html`, `styles.css`).
+- **Backend / orchestrator:** No changes. File upload and `/file-status` polling remain as today; no new API or payloads.
+
+### Tasks
+
+- [ ] **12.1 Attach button enablement**
+  - In `app.js`: Keep the attach button always visible. **Disable** it (greyed out, not clickable) when `window.grievanceId` is null/undefined.
+  - When disabled, set a `title` (tooltip) on the button: "Start a grievance first" (or equivalent).
+  - When `window.grievanceId` is set (e.g. from `handleCustomPayload` / `json_message`), enable the button and clear the tooltip.
+  - Use existing `uiActions.setGrievanceId` (or equivalent) so that when the orchestrator sends grievance_id, the button becomes enabled; add a single place that updates the button disabled state and tooltip whenever grievanceId changes (e.g. after each `handleOrchestratorResponse` or in `setGrievanceId` callback).
+
+- [ ] **12.2 State snapshot**
+  - When the user selects files (e.g. in `handleFileSelection` or when `selectedFiles.length` becomes > 0 before upload), take a **snapshot** of:
+    - Last bot message text (e.g. `window.lastBotMessageText` or the last received message in the chat).
+    - Last bot quick replies (e.g. `window.lastBotQuickReplies` — array of `{ title, payload }`).
+  - Store in module-level variables or a small object (e.g. `fileUploadSnapshot`) so it is available when the user later clicks "Go back to chat".
+  - Ensure the snapshot is taken **before** the user sends (Enter) to upload, so it captures the state "before file upload flow". If needed, snapshot when the file preview is first shown (user has selected files but not yet submitted).
+
+- [ ] **12.3 Lock message input during upload**
+  - From when the user submits the form with files selected until the upload completes and "File is saved in the database" (and optionally until the "Add more / Go back" message is shown), **lock** the message input and send button (disabled, optionally greyed out).
+  - Unlock when: (a) upload fails (show error, unlock), or (b) file status polling returns SUCCESS for all files and the post-upload message + buttons are shown.
+
+- [ ] **12.4 Post-upload message and buttons**
+  - After "File is saved in the database" (or equivalent success message), append a **bot message**:  
+    `"Files uploaded. You can add more files or go back to the chat."`  
+    with two quick-reply style buttons: **Add more files** | **Go back to chat**.
+  - **Replace** any existing quick replies in the UI with only these two (so the user does not see the previous bot’s buttons until they click "Go back to chat").
+  - Stack: if the user clicks "Add more files" and uploads again, append another "Files uploaded. You can add more files or go back to the chat." message with the same two buttons (do not replace the previous such message).
+
+- [ ] **12.5 "Add more files" button**
+  - When the user clicks **Add more files**, re-open the file picker (programmatic click on the file input) and/or ensure the attachment preview area is ready for a new selection. No orchestrator call. User can select new files and send again; then lock → upload → poll → success → append another post-upload message with [Add more][Go back].
+
+- [ ] **12.6 "Go back to chat" button**
+  - When the user clicks **Go back to chat**:
+    1. Append a **transition message** as a bot message:  
+       *"Your files are uploaded. Here's where we left off."*  
+       (Use this exact string unless the spec is updated.)
+    2. Append the **last bot message** (from snapshot) as a new bot bubble.
+    3. Restore the **original quick replies** from the snapshot (e.g. [Yes] [No]) so they appear under that last bot message.
+    4. **Unlock** the message input and send button.
+  - Do **not** call the orchestrator. The session is unchanged; the next user message or quick-reply click will send the next `POST /message` as usual.
+
+- [ ] **12.7 Persist snapshot across "Add more files" rounds**
+  - If the user clicks "Add more files" and uploads again, keep using the **same** snapshot (the last bot message and quick replies from before they first entered the file upload flow). Do not overwrite the snapshot with the "Files uploaded. Add more or go back" message. When they finally click "Go back to chat", restore from that original snapshot.
+
+- [ ] **12.8 Edge cases**
+  - No grievance_id: button disabled and tooltip as in 12.1; if somehow upload is attempted, keep current error message in chat.
+  - Upload failure: unlock input, show error, do not show "Add more / Go back" (user can try again or continue chatting).
+  - Snapshot missing (e.g. user refreshed mid-upload): on "Go back to chat", if snapshot is empty, still unlock input and optionally append a short message like "You can continue below." so the user is not stuck.
+
+### Deliverables
+
+- Updated `channels/REST_webchat/app.js`: attach button enable/disable and tooltip, snapshot on file selection, lock/unlock input during upload, post-upload message + [Add more files][Go back to chat], "Go back to chat" handler (transition message + restore last bot message + quick replies), "Add more files" re-open picker.
+- Updated `channels/REST_webchat/modules/uiActions.js` (or equivalent): any helpers needed to append a bot message, set quick replies, or update the attach button state from a single place when grievanceId changes.
+- Updated `channels/REST_webchat/modules/eventHandlers.js` (if needed): e.g. handler for the "Go back to chat" and "Add more files" button payloads that calls into app.js logic.
+- Updated `channels/REST_webchat/styles.css` (if needed): disabled state for the attach button (greyed out), and optionally locked state for the message input.
+- No changes to orchestrator, backend, or `utterance_mapping_rasa.py` unless a product decision adds server-side transition text later.
+
+### Reference
+
+- **Spec:** [12_file_upload_robustness.md](12_file_upload_robustness.md) — full requirements, data flow, exit-flow wording, and confirmation on chat order and re-display.
+- **Current implementation:** `channels/REST_webchat/app.js` (handleFileUpload, handleMessageSubmit, pollFileStatus, updateFileStatus), `handleOrchestratorResponse`, `eventHandlers.handleCustomPayload`, `uiActions.setGrievanceId`, quick reply rendering.
+
+---
+
+## Agent 8: Backend Flask → FastAPI Migration (split into 8A–8D)
+
+The migration is split into **four agents** so that (1) each has a focused scope, (2) **8B** (file server) and **8C** (Socket.IO) can run in parallel after **8A**, and (3) **8D** (voice, gsheet, deprecation, tests) runs last with the full backend in place.
+
+**Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – URL surface, components, design choices, phases. All agents preserve the same URLs and response shapes.
+
+**Execution order:**
+```
+8A (skeleton + grievance)  →  8B (file server)  →  8D (voice, gsheet, deprecation, tests)
+                         ↘  8C (Socket.IO)   ↗
+```
+- **8A** must complete first (FastAPI app + grievance router).
+- **8B** and **8C** can run in parallel; 8B may stub `emit_status_update_accessible` until 8C provides the real Socket.IO app (then 8B or 8C wires the call).
+- **8D** runs after 8B (and ideally 8C) so all routers exist for tests and cutover.
+
+---
+
+### Agent 8A: FastAPI skeleton + Grievance API
+
+#### Mission
+Create the FastAPI backend app and migrate the grievance API so the app is runnable with uvicorn and grievance endpoints match current Flask behaviour. This is the foundation for 8B, 8C, and 8D.
+
+#### Context
+- **Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – Phases 1 and 2, URL surface for grievance.
+- **Current:** Grievance routes live in `backend/api/app.py` (inline); `send_status_update_notifications` uses `Messaging` in-process.
+- **Constraints:** Same paths (`/api/grievance/...`), same response JSON. Reuse `GrievanceDbManager`, `Messaging`.
+
+#### Tasks
+- [ ] **8A.1** Create `backend/api/fastapi_app.py` (or `main_fastapi.py`). Add `CORSMiddleware` (same policy as Flask). Add `GET /health` → 200. Verify run with `uvicorn backend.api.fastapi_app:app --port 5001`.
+- [ ] **8A.2** Create `backend/api/routers/grievance.py`. Implement:
+  - `POST /api/grievance/{grievance_id}/status` (body: status_code, optional notes, created_by); call `update_grievance_status` and `send_status_update_notifications`.
+  - `GET /api/grievance/{grievance_id}` (grievance, current_status, status_history, files).
+  - `GET /api/grievance/statuses`.
+- [ ] **8A.3** Use Pydantic for request/response where helpful; preserve response structure. Include router in app (no prefix; paths already have `/api/grievance`). Test with curl or TestClient vs Flask.
+
+#### Deliverables
+- `backend/api/fastapi_app.py` with CORS, `GET /health`, and grievance router.
+- `backend/api/routers/grievance.py` with same URL surface and behaviour as Flask grievance routes.
+
+---
+
+### Agent 8B: File server router
+
+#### Mission
+Migrate all file-server routes from `FileServerAPI` (`backend/api/channels_api.py`) to a FastAPI router. Preserve URLs and behaviour; wire or stub `emit_status_update_accessible` for task-status updates (real emit provided by 8C).
+
+#### Context
+- **Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – Phase 3, file server URL surface.
+- **Current:** `channels_api.FileServerAPI` – upload-files, files, download, file-status, grievance-review, task-status, generate-ids, test-db, test-upload. Uses `FileServerCore`, Celery, and `emit_status_update_accessible` from `websocket_utils`.
+- **Depends on:** 8A (FastAPI app exists). May stub `emit_status_update_accessible` (no-op or log) until 8C mounts Socket.IO; then 8B or 8C connects the file router to the real emit.
+
+#### Tasks
+- [ ] **8B.1** Create `backend/api/routers/files.py`. Implement all routes from `FileServerAPI` with same paths: `GET /`, `GET /test-db`, `POST /generate-ids`, `POST /upload-files`, `GET /files/{grievance_id}`, `GET /download/{file_id}`, `GET /file-status/{file_id}`, `GET /grievance-review/{grievance_id}`, `POST /grievance-review/{grievance_id}`, `GET /files/{filename}`, `POST /test-upload`, `POST /task-status`.
+- [ ] **8B.2** For `POST /upload-files`: use FastAPI `File()`, `UploadFile`, `Form()` for `grievance_id` and optional fields; reuse `FileServerCore` and Celery task. For `POST /task-status`: call a shared `emit_status_update_accessible(grievance_id, status, task_data)` – stub if 8C not done, or wire to 8C’s helper once available.
+- [ ] **8B.3** Include router in FastAPI app. Test: REST webchat upload and file listing with correct `grievance_id`.
+
+#### Deliverables
+- `backend/api/routers/files.py` with same URL surface as `FileServerAPI`; `emit_status_update_accessible` either stubbed or wired to 8C’s Socket.IO helper.
+
+---
+
+### Agent 8C: Socket.IO ASGI app
+
+#### Mission
+Implement the Socket.IO ASGI app for `/accessible-socket.io` and mount it in the FastAPI app. Provide `emit_status_update_accessible` so the file router (8B) can push status updates to clients. Match current Flask-SocketIO events and room behaviour.
+
+#### Context
+- **Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – Phase 4, Socket.IO URL and events.
+- **Current:** `backend/api/websocket_utils.py` – path `/accessible-socket.io`, Redis message queue, events: connect, join, disconnect, status_update, another_event, join_room; `emit_status_update_accessible` used by file server.
+- **Depends on:** 8A (FastAPI app to mount into). Can run in parallel with 8B; 8B will wire to this agent’s emit helper once both are done.
+
+#### Tasks
+- [ ] **8C.1** Create a `python-socketio` ASGI app (e.g. `backend/api/websocket_fastapi.py`). Use Redis as message queue if current app uses `SOCKETIO_REDIS_URL`. Implement handlers: `connect`, `join`, `disconnect`, `status_update`, `another_event`, `join_room`, error handler. Match payload and room behaviour (re-emit to room, etc.).
+- [ ] **8C.2** Expose `emit_status_update_accessible(grievance_id, status, task_data)` (or same signature as Flask) so the file router can emit to the correct room. Document how 8B should import/call it.
+- [ ] **8C.3** Mount the Socket.IO ASGI app in the FastAPI app at `/accessible-socket.io` (e.g. `app.mount("/accessible-socket.io", socket_asgi_app)`). Path must match nginx and clients. Test with accessible UI or a Socket.IO client.
+
+#### Deliverables
+- Socket.IO ASGI app (e.g. `backend/api/websocket_fastapi.py`) with same events and `emit_status_update_accessible`; mounted at `/accessible-socket.io`.
+
+---
+
+### Agent 8D: Voice, gsheet, deprecation, tests
+
+#### Mission
+Add the remaining routers (voice, gsheet), switch production to the FastAPI backend (scripts and docs), and add or adjust tests for the FastAPI app. Runs after 8A, 8B, and ideally 8C so the full backend is in place.
+
+#### Context
+- **Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – Phases 5 and 6, checklist.
+- **Current:** Voice in `backend/services/accessible/voice_grievance.py` (Flask blueprint); gsheet in `backend/api/gsheet_monitoring_api.py`. Startup via `launch_servers_celery.sh` (or similar).
+- **Depends on:** 8A (app), 8B (file router). Prefer 8C done so tests can cover Socket.IO.
+
+#### Tasks
+- [x] **8D.1 Voice router** – Create `backend/api/routers/voice_grievance.py`. Routes: `POST /accessible-file-upload`, `GET /grievance-status/{grievance_id}`, `POST /submit-grievance`. Reuse logic from `voice_grievance.py`; replace Flask with FastAPI (Pydantic, `File`, `Form`, path params). Include in app.
+- [x] **8D.2 Gsheet router** – Create `backend/api/routers/gsheet.py` (or add `APIRouter` in existing gsheet module). Route: `GET /gsheet-get-grievances` with Bearer auth; reuse auth and data logic. Include in app.
+- [x] **8D.3 Deprecate Flask for production** – Update `scripts/rest_api/launch_servers_celery.sh` (or equivalent) to run FastAPI backend with uvicorn (e.g. port 5001). Add comment/README in `backend/api/` that live backend is FastAPI; keep `app.py` for reference. Update [BACKEND.md](../../BACKEND.md) and deployment/nginx notes.
+- [x] **8D.4 Tests** – Add or adjust tests using `TestClient(backend.api.fastapi_app.app)` for: health, grievance endpoints, upload-files (or key file routes), and optionally Socket.IO connect/emit. Ensure REST webchat file upload and grievance_id flow work against FastAPI backend.
+
+#### Deliverables
+- `backend/api/routers/voice_grievance.py`, `backend/api/routers/gsheet.py` with same URL surface as current Flask.
+- Startup scripts and docs updated to uvicorn; Flask deprecated for production.
+- Tests for FastAPI backend; REST webchat verified against it.
+
+---
+
+### Reference (all Agent 8 sub-agents)
+- **Spec:** [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) – URL surface, components, phases, checklist.
+- **Backend overview:** [BACKEND.md](../../BACKEND.md). **Orchestrator:** [01_orchestrator.md](01_orchestrator.md).
 
 

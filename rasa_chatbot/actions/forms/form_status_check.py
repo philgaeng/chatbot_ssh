@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
 from rasa_sdk import Tracker
@@ -40,7 +41,7 @@ class ValidateFormStatusCheck1(BaseFormValidationAction):
         return await self._handle_boolean_and_category_slot_extraction("story_route", tracker, dispatcher, domain)
 
     async def validate_story_route(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
-        if slot_value in ["route_status_check_grievance_id", "route_status_check_grievance_id", self.SKIP_VALUE]:
+        if slot_value in ["route_status_check_phone", "route_status_check_grievance_id", self.SKIP_VALUE]:
             return {"story_route": slot_value}
         return {}
 
@@ -73,8 +74,11 @@ class ValidateFormStatusCheck1(BaseFormValidationAction):
         self.logger.debug(f"validate_complainant_phone: slots from base_validate_phone: {slots}")
         
         if slots.get("complainant_phone_valid") == True:
-            # Phone is valid - retrieve associated grievances
-            retrieve_grievance_slots = self._retrieve_and_set_grievances_by_phone(tracker)
+            # Phone is valid - retrieve associated grievances (pass phone from slots;
+            # tracker does not have complainant_phone set yet during validation)
+            retrieve_grievance_slots = self._retrieve_and_set_grievances_by_phone(
+                tracker, phone=slots.get("complainant_phone")
+            )
             self.logger.debug(f"validate_complainant_phone: retrieve_grievance_slots: {retrieve_grievance_slots}")
             # Merge dictionaries - dict.update() returns None, so we use unpacking
             slots = {**slots, **retrieve_grievance_slots}
@@ -218,11 +222,33 @@ class ValidateFormStatusCheck2(BaseFormValidationAction):
 class ActionAskStatusCheckMethod(BaseAction):
     def name(self) -> Text:
         return "action_ask_status_check_method"
-    
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         utterance = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=utterance, buttons=buttons)
+        return []
+
+
+class ActionAskFormStatusCheck1ComplainantPhone(BaseAction):
+    """Status-check specific phone prompt (uses action_ask_form_status_check_1_complainant_phone utterance)."""
+
+    def name(self) -> Text:
+        return "action_ask_form_status_check_1_complainant_phone"
+
+    async def execute_action(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        if tracker.get_slot("complainant_phone_valid") is False:
+            message = self.get_utterance(2)
+            buttons = self.get_buttons(2)
+        else:
+            message = self.get_utterance(1)
+            buttons = self.get_buttons(1)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
 class ActionAskStatusCheckRetrieveGrievances(BaseAction):
@@ -288,13 +314,41 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
             utterance = self.get_utterance(1)
             dispatcher.utter_message(text=utterance)
         else:
+            # First, show the grievance details so the user can see what was found.
+            if grievance_id:
+                grievance = self.collect_grievance_data_from_id(grievance_id, tracker, domain)
+                if grievance:
+                    grievance_text = self.prepare_grievance_text_for_display(
+                        grievance, display_only_short=False
+                    )
+                    dispatcher.utter_message(text=grievance_text)
+
             utterance = self.get_utterance(2)
             utterance = utterance.format(grievance_id=grievance_id, complainant_phone=complainant_phone)
             dispatcher.utter_message(text=utterance)
             self.send_sms(sms_data = {"grievance_id": grievance_id,"complainant_phone": complainant_phone}, body_name="GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP")
 
+        # Build email data and send admin recap in the background so a slow/failing email
+        # (e.g. AWS SES timeout) does not block or timeout the chatbot response.
         email_data = self.collect_grievance_data_from_tracker(tracker)
-        await self.send_recap_email_to_admin(email_data, "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP", dispatcher)
+        if grievance_id:
+            grievance = self.db_manager.get_grievance_by_id(grievance_id)
+            if grievance:
+                email_data["grievance_id"] = grievance_id
+                email_data["grievance_timeline"] = grievance.get("grievance_timeline") or self.NOT_PROVIDED
+                email_data["grievance_summary"] = grievance.get("grievance_summary") or grievance.get("grievance_description") or self.NOT_PROVIDED
+                email_data["grievance_description"] = email_data.get("grievance_description") or grievance.get("grievance_description") or self.NOT_PROVIDED
+                email_data["grievance_categories"] = grievance.get("grievance_categories") or email_data.get("grievance_categories") or self.NOT_PROVIDED
+        def _log_email_done(task: asyncio.Task) -> None:
+            try:
+                task.result()
+            except Exception as e:
+                self.logger.error(f"Background admin recap email failed: {e}", exc_info=True)
+
+        task = asyncio.create_task(
+            self.send_recap_email_to_admin(email_data, "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP", dispatcher)
+        )
+        task.add_done_callback(_log_email_done)
         return []
 
 class ActionStatusCheckModifyGrievance(BaseAction):

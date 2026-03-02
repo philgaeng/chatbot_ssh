@@ -153,16 +153,18 @@ class RedisConfig:
         except ValueError:
             raise ValueError("REDIS_DB must be a valid integer")
             
-        password = os.getenv('REDIS_PASSWORD')
+        password = os.getenv('REDIS_PASSWORD') or None
+        if password is not None:
+            password = password.strip() or None
         if not password:
-            logger.warning("REDIS_PASSWORD not set in environment variables")
+            logger.warning("REDIS_PASSWORD not set in environment variables (using Redis without auth)")
         
         return cls(
             host=host,
             port=port,
             db=db,
             password=password,
-            require_password=True
+            require_password=bool(password),  # require password only when one is configured
         )
     
     def validate(self) -> None:

@@ -284,11 +284,18 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
                 self.logger.debug(f"Boolean_slot_extraction: {self.name()} - {slot_name} | slot_value: False")
                 return {slot_name: False}
 
-            if message_text.startswith("/"): #this is for the category type of slot
+            if message_text.startswith("/"):  # this is for the category type of slot
                 return {slot_name: message_text.strip("/").strip()}
 
-            return {slot_name: None} #handle the case where the user enters a not expected value
-        return {} #handle the case where the slot is not requested
+            # Fallback: some clients send button payload as intent without slash in text
+            if slot_name == "story_route" and intent in (
+                "route_status_check_phone",
+                "route_status_check_grievance_id",
+            ):
+                return {slot_name: intent}
+
+            return {slot_name: None}  # handle the case where the user enters a not expected value
+        return {}  # handle the case where the slot is not requested
 
     def _handle_skip_case(self, latest_message: Dict[Text, Any], slot_name: Text, dispatcher: CollectingDispatcher, domain: DomainDict) -> Dict[Text, Any]:
         skip_value = self._define_skip_value(slot_name, domain)

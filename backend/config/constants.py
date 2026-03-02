@@ -139,6 +139,7 @@ EMAIL_TEMPLATES = {
     "GRIEVANCE_SUBJECT_COMPLAINANT": {"en": "Grievance submitted to Department Of Roads - ID: {grievance_id}", "ne": "गुनासो दर्ता गरिएको छ - ID: {grievance_id}"},
     "GRIEVANCE_SUBJECT_ADMIN": {"en": "New Grievance Submission - ID: {grievance_id}", "ne": "नया गुनासो दर्ता - ID: {grievance_id}"},
     "GRIEVANCE_STATUS_UPDATE_SUBJECT": {"en": "Grievance Status Updated - ID: {grievance_id}", "ne": "गुनासो स्थिति अपडेट - ID: {grievance_id}"},
+    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP_SUBJECT": {"en": "Grievance Follow-Up Request - ID: {grievance_id}", "ne": "गुनासो फलोअप अनुरोध - ID: {grievance_id}"},
     "GRIEVANCE_RECAP_COMPLAINANT_BODY": {"en":"""
         <h2>Grievance Submission Recap</h2>
         <p><strong>Grievance ID:</strong> {grievance_id}</p>

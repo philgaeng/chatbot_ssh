@@ -4,6 +4,8 @@
 
 Lightweight FastAPI service that receives user input, drives the state machine, invokes actions via the Action Layer, and returns bot messages.
 
+**As-built:** We use **direct REST** only (no Rasa server). Clients (REST webchat, custom ticketing, etc.) call `POST /message`. Actions are **Rasa SDK** classes (same code as before) invoked in-process by the orchestrator; see [02_action_layer.md](02_action_layer.md) and [05_agent_specs_spike.md](05_agent_specs_spike.md).
+
 ---
 
 ## API

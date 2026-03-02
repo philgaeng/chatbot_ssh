@@ -120,7 +120,13 @@ async def run_form_turn(
     tracker._requested_slot = next_slot
     slots["requested_slot"] = next_slot
 
-    if user_input and user_input.get("text"):
+    # Run extraction when we have user input: text (including slash-commands from button
+    # payloads) or intent (some clients send payload as intent.name with empty text).
+    has_input = user_input and (
+        user_input.get("text")
+        or (user_input.get("intent") or {}).get("name")
+    )
+    if has_input:
         extract_name = f"extract_{next_slot}"
         validate_name = f"validate_{next_slot}"
 
