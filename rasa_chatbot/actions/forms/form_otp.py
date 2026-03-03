@@ -189,8 +189,28 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        """Validate phone number format and standardize it."""
-        return self.base_validate_phone(slot_value, dispatcher)
+        """Validate phone number format and standardize it.
+
+        Special case for OTP form:
+        - If the user skips providing a phone number, we also mark all OTP-related
+          slots as skipped so that the form can complete without asking for OTP.
+        """
+        result = self.base_validate_phone(slot_value, dispatcher)
+
+        # When phone collection is skipped, also skip OTP-related slots so that
+        # the OTP form can validate and move to the next step.
+        if result.get("complainant_phone") == self.DEFAULT_VALUES["SKIP_VALUE"]:
+            self.logger.info(f"{self.name()} - Phone skipped; marking OTP slots as skipped")
+            result.update(
+                {
+                    "otp_consent": self.DEFAULT_VALUES["SKIP_VALUE"],
+                    "otp_status": self.DEFAULT_VALUES["SKIP_VALUE"],
+                    "otp_input": self.DEFAULT_VALUES["SKIP_VALUE"],
+                    "otp_resend_count": 0,
+                }
+            )
+
+        return result
     
     async def extract_otp_consent(
         self,

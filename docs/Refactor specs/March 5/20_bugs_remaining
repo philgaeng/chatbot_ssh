@@ -2,7 +2,7 @@
 
 ### B1 – File upload button before grievance is saved
 
-- **Status**: Open
+- **Status**: Done
 - **Area**: Grievance flow / file upload
 - **Problem**: The REST webchat shows the file upload button before the grievance row is safely stored in the database. This can lead to FK errors when trying to save attachments.
 - **Desired behavior**: Only show/enable the file upload button once the grievance has been created in the DB (or we otherwise guarantee a valid `grievance_id` row exists).
@@ -10,12 +10,13 @@
   - "Files uploaded successfully. Processing…"
   - "Failed to process files: Failed to store file <filename> in database (often grievance_id missing or FK violation)"
   - "One or more files could not be saved. You can try adding files again or go back to the chat."
+  
 
 ---
 
 ### B2 – Phone requested after user declines contact information
 
-- **Status**: Implemented (needs testing)
+- **Status**: Done
 - **Area**: Contact form → OTP form (grievance flow)
 - **Problem**: Even when the user answers **No** to “Would you like to provide your contact information?”, they are still asked to enter a contact phone number.
 - **Example transcript (abridged)**:
@@ -28,7 +29,7 @@
 
 ### B3 – OTP sent even when user does not want verification
 
-- **Status**: Implemented (needs testing)
+- **Status**: Done
 - **Area**: OTP consent + OTP send
 - **Problem**: After "Do you want to verify your phone number…", if the user chooses **No**, they still receive the OTP prompt and test OTP message.
 - **Example transcript (abridged)**:
@@ -40,3 +41,105 @@
   - Skips OTP entirely when `complainant_consent` is `False` (anonymous grievance).
   - When `otp_consent` is `False`, only requires phone + consent and never calls the OTP send action. `ActionAskOtpInput` also early‑returns if `otp_consent` is `False`.
 
+
+
+### B4 - Bug when entering contact phone - otp_form
+
+- **Status**: Done
+- **Area**: OTP form – contact phone skip handling
+- **Problem**: When the user skipped the contact phone in the OTP form, `complainant_phone` was set to `slot_skipped` but OTP-related slots stayed `None`, so the form never fully validated and did not move to the next step.
+- **Fix**: Updated `validate_complainant_phone` in `form_otp` to call `base_validate_phone` and, when it returns `complainant_phone = SKIP_VALUE`, also set `otp_consent`, `otp_status`, `otp_input` to `SKIP_VALUE` and `otp_resend_count` to `0`, allowing the OTP form to complete without further OTP prompts.
+- **Verification**: In a fresh conversation, skipping the contact phone now sets all OTP slots to skip/default values and transitions directly to the next action without asking for OTP.
+
+
+### B5 – Handling invalid email/phone errors
+
+- **Status**: Done
+- **Area**: Contact form (`form_contact`) and OTP form (`form_otp`)
+- **Problem**: When entering an invalid email or phone number, Rasa raised a 500 error instead of replying with a user‑friendly validation message because the utterance keys were missing.
+- **Example (email)**:
+  - User enters: `paolodhine`
+  - Error payload:
+    - `"detail": "Error getting utterance: 'validate_complainant_email_temp', form_name: form_contact, action_name: validate_complainant_email_temp, utter_index: 1, language: en"`
+- **Example (phone)**:
+  - User enters: `98765423`
+  - Error payload:
+    - `"detail": "Error getting utterance: 'base_validate_phone', form_name: form_otp, action_name: base_validate_phone, utter_index: 1, language: en"`
+- **Root cause**: `validate_complainant_email_temp` in `form_contact` and `base_validate_phone` in `base_classes` called `self.get_utterance(1)`, but `utterance_mapping_rasa` had no entries for these keys under `form_contact` / `form_otp`, causing lookup failures and 500s.
+- **Fix**:
+  - Added `validate_complainant_email_temp` under `"form_contact"` in `utterance_mapping_rasa` with a clear “invalid email” prompt (EN/NE).
+  - Added `base_validate_phone` under `'form_otp'` in `utterance_mapping_rasa` with a clear “invalid phone number” prompt (EN/NE).
+- **Verification**:
+  - Entering an invalid email now triggers the new validation message and keeps the form running (no 500).
+  - Entering an invalid phone now triggers the phone validation error message and logs correctly, with no 500 in the orchestrator logs.
+
+
+### B6 – Flow stalls when user declines contact info (/deny)
+
+- **Status**: Done
+- **Area**: Contact form → OTP form (orchestrator state machine)
+- **Problem**: When the user answered **No** to providing contact information (payload `/deny`), the contact form completed and `form_otp` correctly skipped (no slots required), but the orchestrator still transitioned to `otp_form` and returned `{"messages": [], "next_state": "otp_form"}`, so the flow stalled with no further bot message or transition.
+- **Example**: User sends `payload: "/deny"`, `text: ""`; response was `messages: []`, `next_state: "otp_form"` with no prompt to continue.
+- **Root cause**: In `state_machine.py`, after `contact_form` completed we always set `next_state = "otp_form"` and ran the OTP form once. When `complainant_consent` is `False`, the OTP form has no required slots and completes immediately with no messages, leaving the user in `otp_form` with nothing to do.
+- **Fix**: In the `contact_form` completion branch, if `story_main` is grievance and `complainant_consent` is `False`, skip the OTP form entirely and run the same path as when OTP form completes (submit grievance → retrieve classification → grievance review), setting `next_state = "grievance_review"`. Otherwise keep the existing transition to `otp_form`.
+- **Verification**: User confirmed: flow now continues correctly when declining contact info; no stall on `otp_form`.
+
+
+### B7 – Grievance classification finishes after user flow
+
+- **Status**: Done
+- **Area**: LLM grievance classification (Celery) → grievance review in chatbot
+- **Problem**: The user can move through the grievance flow faster than the background `classify_and_summarize_grievance_task`. When the Celery task finishes later, the grievance is successfully updated in the DB (see `celery_llm_queue.log` around `B-GR-20260303-KOJH-EDF6`), but the chatbot session has already skipped the `form_grievance_complainant_review` step and logged `Classification results not recorded in the database` / `grievance classification failed - form skipped`. The user never sees the generated summary/categories, even if the chat window is still open.
+- **Example**:
+  - Celery log shows `Task classify_and_summarize_grievance_task[...] succeeded` and DB updates for `grievance_categories`, `grievance_summary`, etc. for grievance `B-GR-20260303-KOJH-EDF6`.
+  - Orchestrator log for the same grievance shows `Sensitive categories: [], grievance_categories: None, grievance_summary: None` and `grievance classification failed - form skipped`.
+- **Fix**: In `channels/webchat/modules/eventHandlers.js`, extended `handleTaskStatusEvent` so that when a `task_status` WebSocket event arrives for `classify_and_summarize_grievance_task` with `status = SUCCESS`, the webchat appends a human‑readable message to the chat showing that classification has finished and, when available, the generated grievance summary and categories.
+- **Verification**: With the chat window still open, completing a grievance now results in a follow‑up chat message once the background classification task completes, confirming that analysis is done and displaying the summary/categories from the task payload.
+
+
+BUg 7 - Deactivate buttons/quick replies once we have passed that step in the process
+
+I have tried that in the flow, when asked to validate the by Yes or No, I have pressed a previous button skip, this will always mess up the bot so we need to make sure that the older quick replies messages are disables as soon as they send their response to the bot
+Please provide your address or Skip to skip
+10:50 AM
+Skip
+Skip
+10:50 AM
+Thank you for providing your location details: - Municipality: Birtamod Municipality - Village: Bulumbatur - Address: slot_skipped Is this correct?
+10:50 AM
+Yes
+No
+Skip
+10:50 AM
+Please enter your correct village and address
+10:50 AM
+Please provide your address or Skip to skip
+10:50 AM
+Skip
+logs below but I think that we can manage this in the UI
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Boolean slot extraction: validate_form_contact - complainant_municipality_confirmed | slot_value: True
+2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_municipality_confirmed: {'complainant_municipality_confirmed': True, 'complainant_municipality': 'Birtamod Municipality'}
+2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_village_temp | Session: temp_1772506017923_68ibyyg8m
+2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_village_temp | Session: temp_1772506017923_68ibyyg8m
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Slot extraction: validate_form_contact - complainant_village_temp | message_text: bulumbatur
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - complainant_municipality: Birtamod Municipality
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - output of validate_village_input: None None
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_village: {'complainant_village_temp': 'Bulumbatur', 'complainant_village_confirmed': False, 'complainant_village': 'Bulumbatur'}
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_ward | Session: temp_1772506017923_68ibyyg8m
+2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_ward | Session: temp_1772506017923_68ibyyg8m
+######## LocationValidator: Matched village: None
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Slot extraction: validate_form_contact - complainant_ward | message_text: 12
+2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_ward: {'complainant_ward': '12'}
+2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
+2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+2026-03-03 10:50:27 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_confirmed | Session: temp_1772506017923_68ibyyg8m
+2026-03-03 10:50:27 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_confirmed | Session: temp_1772506017923_68ibyyg8m
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - get_utterance called from function: validate_complainant_address_confirmed
+2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
+2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
+INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK

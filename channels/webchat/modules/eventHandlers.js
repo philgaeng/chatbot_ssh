@@ -226,6 +226,26 @@ function handleTaskStatusEvent(data) {
         console.log(
           "⏰ Rasa will be notified when ready through the new workflow"
         );
+
+        // Inform the user in the chat when grievance classification finishes
+        const summary = taskData.grievance_summary;
+        const categories = taskData.grievance_categories;
+        if (summary || (Array.isArray(categories) && categories.length > 0)) {
+          let humanMessage =
+            "We’ve finished analyzing your grievance and saved the results.";
+          if (Array.isArray(categories) && categories.length > 0) {
+            humanMessage += `\n\nCategories: ${categories.join(", ")}`;
+          }
+          if (summary) {
+            humanMessage += `\n\nSummary: ${summary}`;
+          }
+          uiActions.appendMessage(humanMessage, "received");
+        } else {
+          uiActions.appendMessage(
+            "We’ve finished analyzing your grievance. The results have been saved and will be used for follow‑up.",
+            "received"
+          );
+        }
       }
       break;
 
