@@ -161,7 +161,99 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 "grievance_summary_status": self.SKIP_VALUE,
                 "grievance_categories_status": self.SKIP_VALUE
             }
-    
+
+    def _trigger_detect_sensitive_content_task(
+        self,
+        text: str,
+        language_code: str,
+        grievance_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        complainant_id: Optional[str] = None,
+    ) -> None:
+        """Fire detect_sensitive_content_task in a background thread (same pattern as async classification). Result is written to DB so Submit can read it."""
+        self.logger.info(
+            "Firing detect_sensitive_content_task in background (grievance_id=%s, session_id=%s)",
+            grievance_id,
+            session_id,
+        )
+        def _fire() -> None:
+            try:
+                from backend.task_queue.registered_tasks import detect_sensitive_content_task
+                detect_sensitive_content_task.delay(
+                    text=text,
+                    language_code=language_code,
+                    grievance_id=grievance_id,
+                    session_id=session_id,
+                    complainant_id=complainant_id,
+                )
+            except Exception as e:
+                self.logger.warning(f"Could not queue detect_sensitive_content task: {e}")
+
+        t = threading.Thread(target=_fire, daemon=True)
+        t.start()
+
+    async def _get_sensitive_issue_slots_on_submit(
+        self,
+        full_description: str,
+        session_id: Optional[str],
+        grievance_id: Optional[str],
+        dispatcher: CollectingDispatcher,
+    ) -> Dict[Text, Any]:
+        """On Submit details: prefer DB flag (grievance.grievance_sensitive_issue) set by Celery task.
+        To reduce race conditions, briefly poll the DB before falling back to keyword detection.
+        """
+        flag_from_db = None
+        if grievance_id:
+            try:
+                # Short polling window so the async detect_sensitive_content_task has a chance to write first.
+                # Total wait is bounded (e.g. 3 * 0.3s = 0.9s).
+                import asyncio  # local import to avoid changing module imports
+                self.logger.debug(
+                    "Sensitive submit: start DB polling | grievance_id=%s, session_id=%s",
+                    grievance_id,
+                    session_id,
+                )
+                for attempt in range(3):
+                    grievance = self.db_manager.get_grievance_by_id(grievance_id)
+                    if grievance is not None and "grievance_sensitive_issue" in grievance:
+                        flag_from_db = grievance.get("grievance_sensitive_issue")
+                        self.logger.debug(
+                            "Sensitive submit: poll %s | grievance_id=%s, grievance_sensitive_issue=%s",
+                            attempt,
+                            grievance_id,
+                            flag_from_db,
+                        )
+                        if flag_from_db:
+                            return {
+                                "grievance_sensitive_issue": True,
+                                "sensitive_issues_category": "sensitive_content",
+                                "sensitive_issues_level": grievance.get("sensitive_issues_level", "low"),
+                                "sensitive_issues_message": grievance.get("sensitive_issues_message", ""),
+                                "sensitive_issues_confidence": grievance.get("sensitive_issues_confidence"),
+                            }
+                    # No flag yet: give the background task a short chance to finish
+                    await asyncio.sleep(0.3)
+            except Exception as e:
+                self.logger.warning(f"Could not read grievance from DB for sensitive slots: {e}")
+
+        # If we saw an explicit False in DB after polling, respect it (no sensitive flow).
+        if flag_from_db is False:
+            self.logger.debug(
+                "Sensitive submit: DB flag is False after polling | grievance_id=%s, session_id=%s",
+                grievance_id,
+                session_id,
+            )
+            return {"grievance_sensitive_issue": False}
+
+        # Fallback: keyword detection (only sets grievance_sensitive_issue for sensitive_content) when
+        # there is no DB flag at all (task not run or failed).
+        self.logger.debug(
+            "Sensitive submit: using keyword detection fallback | grievance_id=%s, session_id=%s",
+            grievance_id,
+            session_id,
+        )
+        return self.detect_sensitive_content(dispatcher, full_description) or {"grievance_sensitive_issue": False}
+
     async def required_slots(
         self,
         domain_slots: List[Text],
@@ -170,13 +262,11 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         domain: DomainDict,
     ) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
-        # Check if grievance_new_detail is "completed"
-        if tracker.get_slot("grievance_sensitive_issue"):
-            return ["sensitive_issues_follow_up", "grievance_new_detail"]
+        # Check if grievance_new_detail is "completed" - form completes
+        # (sensitive-issues subflow is handled by form_sensitive_issues, not here)
         if tracker.get_slot("grievance_new_detail") == "completed":
-            
-            return []  # This will deactivate the form
-        
+            return []  # Form complete; state machine will transition to form_sensitive_issues if sensitive
+
         # Otherwise, keep asking for grievance_new_detail
         return ["grievance_new_detail"]
     
@@ -239,12 +329,22 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             # Handle form completion
             if slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
+                grievance_description = tracker.get_slot("grievance_description")
+                session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
+                grievance_id = tracker.get_slot("grievance_id")
+                sensitive_slots = await self._get_sensitive_issue_slots_on_submit(
+                    grievance_description or "",
+                    session_id=session_id,
+                    grievance_id=grievance_id,
+                    dispatcher=dispatcher,
+                )
                 slots_to_set = {
                     "grievance_new_detail": "completed",
-                    "grievance_description": tracker.get_slot('grievance_description'),
+                    "grievance_description": grievance_description,
+                    **sensitive_slots,
                 }
 
-                # Create the grievance in the DB first so classification task can write results
+                # Create or update grievance in DB (same row if already created on first text for sensitive detection)
                 grievance_data = {
                     'grievance_id': tracker.get_slot('grievance_id'),
                     'complainant_id': tracker.get_slot('complainant_id'),
@@ -254,7 +354,8 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'complainant_office': tracker.get_slot('complainant_office'),
                     'source': 'bot'
                 }
-                await self.db_manager.create_complainant_and_grievance(grievance_data)
+                self.db_manager.create_or_update_complainant(grievance_data)
+                self.db_manager.create_or_update_grievance(grievance_data)
 
                 # Notify frontend that grievance now exists in DB so file upload can be enabled
                 try:
@@ -276,23 +377,41 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 self.logger.debug(f"Slots to set: {slots_to_set}")
                 return slots_to_set
             
-            # Handle valid grievance text
+            # Handle valid grievance text (free text addition)
             if slot_value and slot_value not in expected_values:
-                #update the grievance description with the new detail
                 updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
-                # Check for sensitive content using keyword detection
-                sensitive_content_result = self.detect_sensitive_content(dispatcher, slot_value)
-                if sensitive_content_result:
-                    sensitive_content_result["grievance_description"] = updated_temp
-                    sensitive_content_result["grievance_new_detail"] = "completed"
-                    return sensitive_content_result
-                
-                #handle the case where sensitive content is not detected
+                # Ensure grievance exists in DB so Celery task can update grievance_sensitive_issue (same pattern as classification)
+                grievance_id = tracker.get_slot("grievance_id")
+                complainant_id = tracker.get_slot("complainant_id")
+                if grievance_id and complainant_id:
+                    try:
+                        self.db_manager.create_or_update_complainant({
+                            "complainant_id": complainant_id,
+                            "complainant_province": tracker.get_slot("complainant_province"),
+                            "complainant_district": tracker.get_slot("complainant_district"),
+                        })
+                        self.db_manager.create_or_update_grievance({
+                            "grievance_id": grievance_id,
+                            "complainant_id": complainant_id,
+                            "grievance_description": updated_temp,
+                            "source": "bot",
+                        })
+                    except Exception as e:
+                        self.logger.warning(f"Could not ensure grievance in DB for sensitive task: {e}")
+                session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
+                self._trigger_detect_sensitive_content_task(
+                    text=updated_temp,
+                    language_code=self.language_code,
+                    grievance_id=grievance_id,
+                    session_id=session_id,
+                    complainant_id=complainant_id,
+                )
+                # Do not set grievance_sensitive_issue here; use stored result or keyword on Submit
                 return {
                     "grievance_new_detail": None,
                     "grievance_description": updated_temp,
                     "grievance_description_status": "show_options",
-                    "grievance_sensitive_issue": False
+                    "grievance_sensitive_issue": False,
                 }
             return {}
         except Exception as e:

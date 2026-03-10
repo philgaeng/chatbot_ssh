@@ -317,8 +317,13 @@ class KeywordDetector:
         # Find the highest level match
         highest_match = max(all_matches, key=lambda x: (x.level.value, x.confidence))
         
-        # Determine if action is required
-        action_required = highest_match.level in [DetectionLevel.CRITICAL, DetectionLevel.HIGH]
+        # action_required only for sensitive_content (→ sensitive-issues form). Not for high_priority (land_issues, violence).
+        SENSITIVE_CONTENT_CATEGORIES = ("sexual_assault", "harassment")
+        HIGH_PRIORITY_CATEGORIES = ("land_issues", "violence")  # ADB follow-up only; do not set grievance_sensitive_issue
+        action_required = (
+            highest_match.category in SENSITIVE_CONTENT_CATEGORIES
+            and highest_match.level in [DetectionLevel.CRITICAL, DetectionLevel.HIGH]
+        )
         
         # Generate appropriate message
         message = self._generate_detection_message(highest_match, all_matches)

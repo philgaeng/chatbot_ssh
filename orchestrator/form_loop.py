@@ -51,6 +51,13 @@ _ASK_ACTIONS_BY_SLOT = {
     "grievance_cat_modify": "action_ask_form_grievance_complainant_review_grievance_cat_modify",
     "grievance_summary_status": "action_ask_form_grievance_complainant_review_grievance_summary_status",
     "grievance_summary_temp": "action_ask_form_grievance_complainant_review_grievance_summary_temp",
+    # Modify grievance (add more info)
+    "modify_follow_up_answer": "action_ask_modify_follow_up_answer",
+    "modify_grievance_new_detail": "action_ask_modify_grievance_new_detail",
+    # Sensitive issues form
+    "sensitive_issues_follow_up": "action_ask_sensitive_issues_follow_up",
+    "sensitive_issues_new_detail": "action_ask_sensitive_issues_new_detail",
+    "sensitive_issues_nickname": "action_ask_sensitive_issues_nickname",
 }
 
 # Form-specific overrides for shared slots (check active_loop + slot first)
@@ -60,6 +67,18 @@ _ASK_ACTIONS_BY_FORM_SLOT = {
     ("form_status_check_skip", "complainant_municipality_temp"): "action_ask_form_status_check_skip_complainant_municipality_temp",
     ("form_status_check_skip", "complainant_municipality_confirmed"): "action_ask_form_status_check_skip_complainant_municipality_confirmed",
     ("form_status_check_1", "complainant_phone"): "action_ask_form_status_check_1_complainant_phone",
+    ("form_sensitive_issues", "complainant_phone"): "action_ask_form_sensitive_issues_complainant_phone",
+    # form_modify_contact: use modify-specific ask for all contact slots
+    ("form_modify_contact", "complainant_phone"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_full_name"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_province"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_district"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_municipality_temp"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_village_temp"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_ward"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_address_temp"): "action_ask_modify_missing_field",
+    ("form_modify_contact", "complainant_email_temp"): "action_ask_modify_missing_field",
+    ("form_modify_grievance_details", "modify_follow_up_answer"): "action_ask_modify_follow_up_answer",
 }
 
 
@@ -127,8 +146,17 @@ async def run_form_turn(
         or (user_input.get("intent") or {}).get("name")
     )
     if has_input:
+        active_loop = session.get("active_loop")
         extract_name = f"extract_{next_slot}"
         validate_name = f"validate_{next_slot}"
+        # Form-specific method names (e.g. form_sensitive_issues has extract_form_sensitive_issues_complainant_phone)
+        if active_loop:
+            extract_name_form = f"extract_{active_loop}_{next_slot}".replace(" ", "_")
+            validate_name_form = f"validate_{active_loop}_{next_slot}".replace(" ", "_")
+            if hasattr(form, extract_name_form):
+                extract_name = extract_name_form
+            if hasattr(form, validate_name_form):
+                validate_name = validate_name_form
 
         raw: Dict[str, Any] = {}
         if hasattr(form, extract_name):
@@ -252,6 +280,15 @@ def get_form(active_loop: str) -> Any:
         elif active_loop == "form_grievance_complainant_review":
             from rasa_chatbot.actions.forms.form_grievance_complainant_review import ValidateFormGrievanceComplainantReview
             _FORMS[active_loop] = ValidateFormGrievanceComplainantReview()
+        elif active_loop == "form_sensitive_issues":
+            from rasa_chatbot.actions.forms.form_sensitive_issues import ValidateFormSensitiveIssues
+            _FORMS[active_loop] = ValidateFormSensitiveIssues()
+        elif active_loop == "form_modify_grievance_details":
+            from rasa_chatbot.actions.forms.form_modify_grievance import ValidateFormModifyGrievanceDetails
+            _FORMS[active_loop] = ValidateFormModifyGrievanceDetails()
+        elif active_loop == "form_modify_contact":
+            from rasa_chatbot.actions.forms.form_modify_contact import ValidateFormModifyContact
+            _FORMS[active_loop] = ValidateFormModifyContact()
         else:
             raise ValueError(f"Unknown form: {active_loop}")
     return _FORMS[active_loop]

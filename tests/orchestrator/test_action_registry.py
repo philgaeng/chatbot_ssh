@@ -1,7 +1,7 @@
 import asyncio
 
-from orchestrator.adapters import CollectingDispatcher, SessionTracker
-from orchestrator.action_registry import invoke_action, events_to_slot_updates
+from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
+from backend.orchestrator.action_registry import invoke_action, events_to_slot_updates
 
 
 def _run(coro):

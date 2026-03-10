@@ -18,6 +18,8 @@ Agent specifications for building the orchestrator + action layer. Each agent ca
 | Phase 2 Flows | [Agent 5](#agent-5-phase-2-flows) | ✅ Done |
 | Webchat Socket Bridge | [Agent 6](#agent-6-webchat-socket-bridge) | ⬜ Pending |
 | REST Webchat | [Agent 7](#agent-7-rest-webchat) | ⬜ Pending |
+| Sensitive content detection and flow | [Agent 9](#agent-9-sensitive-content-detection-and-flow) | ⬜ Pending |
+| Grievance modification flow (status check) | [Agent 11](#agent-11-grievance-modification-flow-status-check) | ⬜ Pending |
 | File upload robustness (REST webchat) | [Agent 12](#agent-12-file-upload-robustness-rest-webchat) | ⬜ Pending |
 | Agents 10.A–10.D | [10_agent_instructions.md](10_agent_instructions.md) | ⬜ Pending |
 | Backend: Flask → FastAPI (8A–8D) | [Agent 8A](#agent-8a-fastapi-skeleton--grievance-api) → [8B](#agent-8b-file-server-router) / [8C](#agent-8c-socketio-asgi-app) → [8D](#agent-8d-voice-gsheet-deprecation-tests) / [11_flask_to_fastapi_migration.md](11_flask_to_fastapi_migration.md) | ⬜ Pending |
@@ -478,6 +480,77 @@ Implement the **REST-based webchat** (Option B, long-term) in a separate folder 
 
 ---
 
+## Agent 9: Sensitive Content Detection and Flow
+
+### Mission
+
+Implement **sensitive content detection** (lightweight LLM task + keyword fallback) and wire the **sensitive-issues form** into the orchestrator so that when a user’s grievance text indicates sexual or gender harassment, they are routed to the sensitive-issues flow (anonymous filing, follow-up) before the contact form. Land issues and violence remain **high_priority** for ADB but do **not** trigger the sensitive form.
+
+### Context
+
+- **Spec:** [14_sensible_content_detection_and_flow..md](14_sensible_content_detection_and_flow..md) — current flow, gaps, decisions (when/where to run task, storage, ADB two buckets, helpers_repo shape).
+- **Depends on:** Orchestrator (Agents 1–4), form loop, action registry. No dependency on Agent 6 or 7; can be tested via `POST /message`.
+- **Key decisions:** (1) Run lightweight LLM task **on every text addition** (background); store result in **session/DB**. (2) On Submit details use latest stored result or keyword fallback; show short “Checking…”. (3) **Sensitive content** = sexual/gender harassment only → sensitive form. **High priority** = land, violence → usual flow, no sensitive form. (4) Orchestrator `form_sensitive_issues` uses the **same pattern** as other flows (same form class, slots, ask actions as Rasa). (5) Add `confidence` and string `level` to `helpers_repo.detect_sensitive_content` return dict.
+
+### Tasks
+
+- [ ] **9.1 Lightweight Celery task `detect_sensitive_content_task`**
+  - Register in `backend/task_queue/registered_tasks.py` (and task_manager if used).
+  - **Input:** `{ "text", "language_code", "grievance_id?", "session_id?" }`.
+  - **Output:** Same shape as keyword detector: `{ "detected": bool, "level": "high"|"medium"|"low", "message": str }`. Prompt must target **sexual or gender harassment only**; do not flag land issues or violence.
+  - Implement a small LLM call (reuse existing LLM service pattern if available) that returns this JSON. Parse and validate the response; on parse/LLM failure return `detected: false` or a safe default.
+  - Task should be fast (single boolean + level + excerpt); no follow-up questions.
+
+- [ ] **9.2 Trigger task on every text addition and persist result**
+  - In `rasa_chatbot/actions/forms/form_grievance.py`, in `validate_grievance_new_detail`: when the user sends **free text** (not a payload like `/submit_details`), after updating grievance description, fire `detect_sensitive_content_task.delay(...)` in a background thread (same pattern as `_trigger_async_classification`). Pass `grievance_id`, `session_id` (or `flask_session_id`), `text`, `language_code`.
+  - Define **where** to store the result (session store key, or DB table keyed by `grievance_id`/`session_id`). When the Celery task completes, it must **persist** the result so the next request (e.g. Submit details) can read it. Options: (a) task writes to orchestrator session store via a small API or shared store; (b) task writes to DB and form/orchestrator reads from DB by grievance_id/session_id. Document the choice in code or spec.
+  - Ensure the task completion handler (or callback) writes `detected`, `level`, `message` (and derived `grievance_sensitive_issue`) into that store.
+
+- [ ] **9.3 Use stored result or keyword on Submit details**
+  - When the user sends `/submit_details`, before considering the form complete: (1) Read the latest stored result for this grievance/session (if any). (2) If not available or expired, run **keyword** detection synchronously on the full `grievance_description`. (3) Set `grievance_sensitive_issue` from stored LLM result or keyword result. **Important:** Keyword detector must only set `grievance_sensitive_issue` for **sensitive_content** (sexual/gender harassment), not for land_issues or violence (see 9.5).
+  - If the frontend shows “Checking…” on Submit, that is a separate REST_webchat/orchestrator response concern; the backend must return the correct slots (e.g. `grievance_sensitive_issue`) so the next turn routes correctly.
+
+- [ ] **9.4 helpers_repo and keyword detector**
+  - In `backend/shared_functions/helpers_repo.py`, `detect_sensitive_content`: add **`confidence`** to the return dict (from `result.confidence`). Ensure **`level`** is a string (e.g. `result.level.value` if `result.level` is an enum). Keep `detected`, `category`, `message`, `action_required`; ensure `action_required` is only True for sensitive_content (sexual/gender harassment), not for land_issues/violence (see 9.5).
+  - In `rasa_chatbot/actions/base_classes/base_mixins.py`, `detect_sensitive_content`: ensure it consumes the updated helpers_repo shape (confidence, level as string) and still returns slot updates compatible with `form_grievance` and `form_sensitive_issues`.
+
+- [ ] **9.5 ADB two buckets: sensitive_content vs high_priority**
+  - **Sensitive content (→ sensitive form):** Sexual assault, gender/sexual harassment only. When keyword detector or LLM task detects these, set `grievance_sensitive_issue = True` and route to `form_sensitive_issues`.
+  - **High priority (→ usual flow):** Land issues, violence. Do **not** set `grievance_sensitive_issue` for these; they may set a separate flag (e.g. for ADB officers) but the flow remains the usual grievance → contact → OTP → review.
+  - In `backend/shared_functions/keyword_detector.py`: ensure `action_required` (or the logic that drives routing) is True only for categories that belong to **sensitive_content** (e.g. sexual_assault, harassment that is gender/sexual). For land_issues and violence, detection can remain for analytics/ADB but must **not** set `grievance_sensitive_issue`. Adjust category-to-routing logic and/or add a clear split in code (e.g. SENSITIVE_CONTENT_CATEGORIES vs HIGH_PRIORITY_CATEGORIES).
+  - In the LLM prompt for `detect_sensitive_content_task`, explicitly say: “Do not flag land issues or violence.”
+
+- [ ] **9.6 Orchestrator: form_sensitive_issues state and form**
+  - **state_machine.py:** When `form_grievance` completes (`run_form_turn` returns `completed=True`), **if** `session["slots"].get("grievance_sensitive_issue")` is True, set next state to `form_sensitive_issues` (or equivalent). Run the sensitive-issues form (same pattern as form_grievance → contact_form). When the sensitive-issues form completes, transition to `contact_form`. If `grievance_sensitive_issue` is False, transition directly to `contact_form` as today.
+  - **form_loop.py:** Add `form_sensitive_issues` to `get_form()` (lazy-load `ValidateFormSensitiveIssues`). Add ask-action mappings for slots: `sensitive_issues_follow_up`, `sensitive_issues_new_detail`, `sensitive_issues_nickname`, `complainant_phone` (in context of form_sensitive_issues, e.g. `action_ask_form_sensitive_issues_complainant_phone`). Reuse the same pattern as other forms: required_slots from the form, extract_* / validate_* by slot name, then _get_ask_action(active_loop, next_slot).
+  - **action_registry.py:** Register all actions used by the sensitive-issues form: `action_ask_sensitive_issues_follow_up`, `action_ask_sensitive_issues_new_detail`, `action_ask_sensitive_issues_nickname`, `action_ask_form_sensitive_issues_complainant_phone`. Import and instantiate from `rasa_chatbot.actions.forms.form_sensitive_issues`.
+
+- [ ] **9.7 Payloads and intents**
+  - In `orchestrator/state_machine.py` (or wherever `PAYLOAD_TO_INTENT` or equivalent lives), verify that payloads used by the sensitive-issues form are mapped: `/not_sensitive_content`, `/add_more_details`, `/anonymous`, `/skip`. Add any missing mappings so user replies (e.g. button clicks) are correctly interpreted in the form_sensitive_issues flow.
+
+- [ ] **9.8 Tests**
+  - **Keyword path:** Unit or integration test: call `helpers_repo.detect_sensitive_content` with text that matches sexual_assault patterns; assert `detected` and `action_required` and that land_issues/violence do not set `grievance_sensitive_issue` (or that routing logic excludes them).
+  - **Orchestrator flow:** Simulate a run: form_grievance with text that sets `grievance_sensitive_issue: True` (e.g. slot update from keyword or mock stored result) → assert next state is `form_sensitive_issues`; then complete form_sensitive_issues → assert transition to `contact_form`.
+  - Optional: test that when `grievance_sensitive_issue` is False, form_grievance completion goes directly to contact_form.
+
+### Deliverables
+
+- **Backend:** `backend/task_queue/registered_tasks.py` — new `detect_sensitive_content_task`; persistence of result (session/DB) and consumption on Submit details.
+- **Rasa actions:** `rasa_chatbot/actions/forms/form_grievance.py` — fire task on text addition; on Submit use stored result or keyword; set `grievance_sensitive_issue` only for sensitive_content.
+- **Keyword/helpers:** `backend/shared_functions/helpers_repo.py` — add `confidence`, `level` as string; `backend/shared_functions/keyword_detector.py` — ensure only sensitive_content categories set `grievance_sensitive_issue` (split vs high_priority).
+- **Orchestrator:** `orchestrator/state_machine.py` — branch to `form_sensitive_issues` when `grievance_sensitive_issue` True; `orchestrator/form_loop.py` — register form_sensitive_issues and ask mappings; `orchestrator/action_registry.py` — register sensitive-issues ask actions; payload mappings for `/not_sensitive_content`, `/add_more_details`, `/anonymous`, `/skip`.
+- **Tests:** At least keyword routing logic and orchestrator form_grievance → form_sensitive_issues → contact_form (and direct form_grievance → contact_form when not sensitive).
+
+### Reference
+
+- **Spec:** [14_sensible_content_detection_and_flow..md](14_sensible_content_detection_and_flow..md) — full context, gaps, decisions, next steps.
+- **Forms:** `rasa_chatbot/actions/forms/form_grievance.py`, `rasa_chatbot/actions/forms/form_sensitive_issues.py`.
+- **Detection:** `rasa_chatbot/actions/base_classes/base_mixins.py` (SensitiveContentHelpersMixin), `backend/shared_functions/helpers_repo.py`, `backend/shared_functions/keyword_detector.py`.
+- **Orchestrator:** `orchestrator/state_machine.py`, `orchestrator/form_loop.py`, `orchestrator/action_registry.py`, `orchestrator/session_store.py`.
+- **Heavy task (unchanged):** `backend/task_queue/registered_tasks.py` — `classify_and_summarize_grievance_task` does not set `grievance_sensitive_issue`.
+
+---
+
 ## Agent 12: File Upload Robustness (REST webchat)
 
 ### Mission
@@ -549,6 +622,133 @@ Implement the **robust file upload flow** in `channels/REST_webchat` so users ca
 
 - **Spec:** [12_file_upload_robustness.md](12_file_upload_robustness.md) — full requirements, data flow, exit-flow wording, and confirmation on chat order and re-display.
 - **Current implementation:** `channels/REST_webchat/app.js` (handleFileUpload, handleMessageSubmit, pollFileStatus, updateFileStatus), `handleOrchestratorResponse`, `eventHandlers.handleCustomPayload`, `uiActions.setGrievanceId`, quick reply rendering.
+
+---
+
+## Agent 11: Grievance Modification Flow (Status Check)
+
+### Mission
+
+Implement the **Modify grievance** flow in the status-check journey so users can add pictures, add more narrative info, and fill in missing contact/location fields for an **existing grievance**, following Spec 13. Use dedicated modify forms (Option B) and shared validation mixins, and wire the new flow into the orchestrator state machine and Rasa actions.
+
+### Context
+
+- **Spec:** [13_grievance_modification_flow.md](13_grievance_modification_flow.md) — full UX and backend behavior for the Modify grievance flow (three-option first screen, Flow A/B, missing-fields rules, attachments).
+- **Depends on:**
+  - Status-check and contact/OTP flows from **Agent 5** (status check, grievance review, contact/OTP already exist and expose a Modify grievance button in the status-check details view).
+  - Sensitive-content routing from **Agent 9** (grievance flows and DB structures are already in place).
+- **Key design decisions (Spec 13):**
+  - Entry: user taps **Modify grievance** after seeing grievance details in status-check.
+  - First screen: one explanation line + three options: **Add pictures and documents**, **Add more info to my grievance**, **Add missing info**, plus **Cancel**.
+  - **Flow A (Add more info):** Show grievance summary; append narrative and answer any stored follow-up questions (from classification / complainant review); clear stop; “If incomplete → go to Add missing info”.
+  - **Flow B (Add missing info):** Offer only **missing** fields (phone, name, province/district if empty, municipality → village → ward → address, email). Use ≤4 fields on one screen; otherwise 3 + **See more** pagination; explicit **I’m done**; zero-missing case handled with a “contact/location already complete” message.
+  - Implementation: **Option B** (new modify forms) but reuse existing validation **mixins** for contact/location/phone/name.
+
+### Goals
+
+- Add a robust **Modify grievance** branch under status-check that:
+  - Is triggered from the existing status-check “Modify grievance” button and uses `status_check_grievance_id_selected` to load the grievance + complainant.
+  - Implements both **Add more info** and **Add missing info** flows as per Spec 13.
+  - Keeps all validation rules consistent with the existing contact/location flows, via shared mixins.
+  - Leaves the **frontends** (webchat / REST_webchat) unchanged except for new response keys and button payloads (no JS changes in this agent).
+
+### Tasks
+
+- **Flow & state machine**
+  - Add new orchestrator states (names can follow existing conventions, e.g.):  
+    - `modify_grievance_menu` — three-option first screen.  
+    - `modify_grievance_add_more_info` — Flow A.  
+    - `modify_grievance_add_missing_info` — Flow B.
+  - In `orchestrator/state_machine.py` and `orchestrator/config/flow.yaml`:
+    - Add transitions from the status-check details state to `modify_grievance_menu` when the **Modify grievance** payload/intent is received.
+    - From `modify_grievance_menu`, branch to the two flows (Add more info / Add missing info). The **Add pictures and documents** option should not change the orchestrator state; it only needs the grievance ID available so the frontend can open the upload modal as today.
+    - Define clear exits:
+      - From Flow A and Flow B, after Save / I’m done, return to the status-check summary state for the same grievance.
+      - `Cancel` anywhere in the modify flow returns to the previous list/screen or the status-check summary, without persisting changes from that step.
+
+- **Rasa forms and validation (Option B)**
+  - In `rasa_chatbot/actions/forms/`:
+    - Add a **grievance-details modify form**, e.g. `form_modify_grievance_details` with a corresponding validator class (e.g. `ValidateFormModifyGrievanceDetails`) that:
+      - Loads the grievance by `status_check_grievance_id_selected` using the existing DB manager.
+      - Presents the grievance summary and any **stored follow-up questions** (e.g. from `follow_up_question` in `grievance_data`).
+      - Appends additional narrative text to the existing grievance description (do not overwrite) and saves it.
+      - Provides a clear **stop** / save step; when complete, sets a flag or triggers a slot/event that tells the orchestrator to ask “Do you want to add other contact or related info if something is not complete?” (which then routes to Flow B).
+    - Add a **contact/location modify form**, e.g. `form_modify_contact` with a validator class (e.g. `ValidateFormModifyContact`) that:
+      - Reuses the same validation mixins used by the main contact form (`LocationValidationMixin`, phone/name validators, etc.).
+      - Only considers **missing** fields (empty or not provided) in this order: contact phone, full name, province (if empty), district (if empty), municipality, village, ward, address, email.
+      - Does **not** force the user to re-enter already-complete fields.
+  - Ensure both new validate classes:
+    - Fit the same interface the form loop expects (required_slots, extract_*, validate_*).
+    - Use existing mixins from `base_mixins.py` / other shared classes for validation, not bespoke copies.
+
+- **Missing-fields list and pagination (Flow B)**
+  - Implement a helper (in the modify-contact form or a shared utility) that:
+    - Computes the ordered list of **missing** fields from the current slots (phone, name, province, district, municipality, village, ward, address, email).
+    - Applies the **UI rule** from Spec 13:
+      - If ≤4 missing: return all as buttons on one screen.
+      - If >4: return the first 3 as buttons plus a **See more** button; subsequent “pages” also return up to 3 fields + See more until only ≤4 remain, then return all remaining.
+  - Wire this helper into the ask/utterance logic so that:
+    - The user sees at most 4 options at once, with See more when needed.
+    - After the user fills one field and the form saves it, the next turn shows an updated missing-fields list (same helper) plus an explicit **I’m done** option.
+  - Handle the **zero-missing** case:
+    - When the helper finds no missing fields, surface the “All contact and location info for this grievance is already complete” message and buttons to:
+      - Return to Modify grievance menu (e.g. Add more info / Add pictures).
+      - Or go back to the main status-check summary.
+
+- **Follow-up questions reuse (Flow A)**
+  - In `rasa_chatbot/actions/forms/form_grievance_complainant_review.py` and any related DB access layer:
+    - Confirm that `follow_up_question` (or equivalent) is already persisted with the grievance (Spec 13 assumes this field exists).
+  - In the new `form_modify_grievance_details`:
+    - Load `follow_up_question` for the grievance when present and prompt the user to answer it as part of Add more info.
+    - If no follow-up question is present, skip that step and only append free-text narrative.
+    - Ensure the form handles multiple rounds of “add more detail” gracefully, and only exits when the user explicitly chooses the stop action (Save and continue).
+
+- **Utterances and mapping**
+  - In `rasa_chatbot/actions/utils/utterance_mapping_rasa.py`:
+    - Add entries for:
+      - The first **Modify grievance** menu (prompt + three buttons + Cancel).
+      - All new prompts in Flow A (summary view, follow-up questions, add-more-text prompts, end-of-flow question).
+      - All new prompts and button sets in Flow B (missing-fields screens, See more, zero-missing message, I’m done).
+    - Ensure EN/NE are both covered or that there is a clear placeholder where translation will be supplied.
+  - Make sure the new payloads/buttons used by the modify flows are mapped to intents (or handled directly) so the orchestrator receives unambiguous events from the frontends.
+
+- **Attachments behavior**
+  - Verify that when entering the Modify grievance flow:
+    - The grievance ID for this status-check result is available in the session/slots and is the same ID used for file uploads.
+    - No backend changes are required for the actual upload routes (handled by existing file server and Agent 12); this agent’s responsibility is to ensure the grievance context is correct so the frontend can safely open the existing upload modal.
+  - Optionally add a short confirmation message after returning from attachments (if there is an existing pattern) but avoid introducing new backend-driven attachment flows.
+
+- **Tests / verification**
+  - Add or extend tests (unit or integration) that:
+    - Simulate a status-check session where the user:
+      - Enters Modify grievance → Add more info → appends narrative (with and without follow-up questions) → returns to status-check summary.
+      - Enters Modify grievance → Add missing info with:
+        - Zero missing fields (expects zero-missing message and navigation options).
+        - 1–4 missing fields (all shown on one screen).
+        - >4 missing fields (3 + See more pagination).
+    - Assert that:
+      - Only missing fields are offered; list updates after each Save.
+      - Exiting via Cancel returns to the correct previous state.
+      - On I’m done, the flow returns to the status-check summary for the same grievance.
+
+### Deliverables
+
+- **Rasa actions / forms:**
+  - New modify forms and validators in `rasa_chatbot/actions/forms/` (e.g. `form_modify_grievance_details`, `form_modify_contact`) wired into the existing form loop pattern.
+- **Orchestrator:**
+  - Updated `orchestrator/config/flow.yaml` and `orchestrator/state_machine.py` with the `modify_grievance_*` states and transitions.
+  - Any minor updates in `orchestrator/form_loop.py` and `orchestrator/action_registry.py` needed to register and run the new forms.
+- **Utterances:**
+  - Updated `rasa_chatbot/actions/utils/utterance_mapping_rasa.py` with Modify grievance menu and flow prompts/buttons.
+- **Tests:**
+  - New or extended tests exercising the main Modify grievance happy paths and key edge cases (zero-missing, >4 missing, Cancel vs Save vs I’m done).
+
+### Reference
+
+- **Specs:** [13_grievance_modification_flow.md](13_grievance_modification_flow.md) — complete flow, Option B decision, missing-fields order and UI rules.
+- **Rasa forms:** `rasa_chatbot/actions/forms/form_grievance.py`, `rasa_chatbot/actions/forms/form_grievance_complainant_review.py`, and existing contact/location forms and validation mixins in `rasa_chatbot/actions/base_classes/base_mixins.py`.
+- **Orchestrator:** `orchestrator/state_machine.py`, `orchestrator/form_loop.py`, `orchestrator/action_registry.py`, `orchestrator/config/flow.yaml`.
+- **Status-check context:** Existing status-check flow from Agent 5 that exposes the Modify grievance button and sets `status_check_grievance_id_selected`.
 
 ---
 

@@ -1,4 +1,5 @@
 import * as uiActions from "./uiActions.js";
+import { get } from "../utterances.js";
 
 // REST-specific helpers for rendering orchestrator responses
 
@@ -12,7 +13,9 @@ export function renderQuickReplies(buttons) {
     payload: btn.payload,
   }));
 
-  uiActions.appendQuickReplies(quickReplies);
+  // Always replace existing quick replies with the latest set so only one
+  // step's options are active at a time.
+  uiActions.replaceQuickReplies(quickReplies);
 }
 
 export function handleCustomPayload(custom) {
@@ -45,6 +48,22 @@ export function handleCustomPayload(custom) {
     uiActions.setGrievanceId(custom.data.grievance_id);
     uiActions.setGrievanceCreatedInDb(true);
   }
+
+  // Modify grievance – Add pictures: set grievance for uploads and open file picker (same as clicking attach button)
+  if (custom.event_type === "open_upload_modal" && custom.grievance_id) {
+    uiActions.setGrievanceId(custom.grievance_id);
+    uiActions.setGrievanceCreatedInDb(true);
+    if (typeof window.openFileUploadModal === "function") {
+      window.openFileUploadModal();
+    }
+  }
+  if (custom.data?.event_type === "open_upload_modal" && custom.data?.grievance_id) {
+    uiActions.setGrievanceId(custom.data.grievance_id);
+    uiActions.setGrievanceCreatedInDb(true);
+    if (typeof window.openFileUploadModal === "function") {
+      window.openFileUploadModal();
+    }
+  }
 }
 
 // Task status updates from HTTP APIs (if used)
@@ -64,13 +83,13 @@ export function handleTaskStatusApiResponse(response) {
 
   switch (status) {
     case "SUCCESS":
-      uiActions.appendMessage("Task completed successfully", "received");
+      uiActions.appendMessage(get("task_status.task_success"), "received");
       break;
     case "FAILED":
-      uiActions.appendMessage("Task failed", "received");
+      uiActions.appendMessage(get("task_status.task_failed"), "received");
       break;
     case "IN_PROGRESS":
-      uiActions.appendMessage("Task is processing...", "received");
+      uiActions.appendMessage(get("task_status.task_in_progress"), "received");
       break;
     default:
       break;
@@ -83,18 +102,15 @@ export function handleFileUploadApiResponse(response) {
   if (response.ok) {
     const data = response.data;
 
-    let statusMessage = "Files uploaded successfully. Processing...";
+    let statusMessage = get("file_upload.uploaded_processing");
     if (data.audio_files && data.audio_files.length > 0) {
-      statusMessage =
-        "Voice recordings uploaded. Processing and transcribing...";
+      statusMessage = get("file_upload.voice_uploaded_processing");
     }
     uiActions.appendMessage(statusMessage, "received");
 
     if (data.oversized_files && data.oversized_files.length > 0) {
       uiActions.appendMessage(
-        `Some files were too large and could not be processed: ${data.oversized_files.join(
-          ", "
-        )}`,
+        `${get("file_upload.oversized_api_prefix")} ${data.oversized_files.join(", ")}`,
         "received"
       );
     }

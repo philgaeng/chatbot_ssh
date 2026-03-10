@@ -8,6 +8,7 @@ import {
 // Import modules
 import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
+import { get, format, ADD_MORE_PAYLOAD, GO_BACK_PAYLOAD } from "./utterances.js";
 
 // Make FILE_UPLOAD_CONFIG globally available for the file upload function
 window.FILE_UPLOAD_CONFIG = FILE_UPLOAD_CONFIG;
@@ -136,9 +137,7 @@ async function restSendMessage(message, additionalData = {}) {
 
     if (!resp.ok) {
       console.error("Orchestrator error:", await resp.text());
-      uiActions.showError(
-        "Sorry, there seems to be a connection issue. Please try again."
-      );
+      uiActions.showError(get("errors.connection"));
       return false;
     }
 
@@ -147,9 +146,7 @@ async function restSendMessage(message, additionalData = {}) {
     return true;
   } catch (error) {
     console.error("Error calling orchestrator:", error);
-    uiActions.showError(
-      "Sorry, there seems to be a connection issue. Please try again."
-    );
+    uiActions.showError(get("errors.connection"));
     return false;
   }
 }
@@ -225,9 +222,7 @@ function sendIntroduceMessage() {
           window.currentRetryTimer = null;
         }
         if (messageRetryCount >= MAX_RETRIES) {
-          uiActions.showError(
-            "Sorry, there seems to be a connection issue. Please try again."
-          );
+          uiActions.showError(get("errors.connection"));
         }
       }, 3000);
 
@@ -249,6 +244,67 @@ function sendIntroduceMessage() {
 
 // Make sendIntroduceMessage available globally
 window.sendIntroduceMessage = sendIntroduceMessage;
+
+let taskStatusSocket = null;
+
+function setupTaskStatusSocket() {
+  // Socket.IO client is loaded via CDN in index.html as global `io`
+  if (typeof io === "undefined") {
+    console.warn("Socket.IO client not available; task status socket disabled.");
+    return;
+  }
+
+  try {
+    const roomId = window.flaskSessionId || window.getSessionId();
+    taskStatusSocket = io("/accessible-socket.io", {
+      transports: ["websocket"],
+      path: "/accessible-socket.io",
+    });
+
+    taskStatusSocket.on("connect", () => {
+      console.log("REST_webchat Socket.IO connected, joining room:", roomId);
+      taskStatusSocket.emit("join", { room: roomId });
+    });
+
+    taskStatusSocket.on("task_status", (data) => {
+      console.log("REST_webchat received task_status:", data);
+      const { status, data: taskData, grievance_id, task_name } = data || {};
+
+      if (grievance_id) {
+        uiActions.setGrievanceId(grievance_id);
+      }
+
+      // Only handle LLM grievance classification task here
+      if (
+        task_name === "classify_and_summarize_grievance_task" &&
+        status === "SUCCESS" &&
+        taskData
+      ) {
+        const summary = taskData.grievance_summary;
+        const categories = taskData.grievance_categories;
+
+        if (summary || (Array.isArray(categories) && categories.length > 0)) {
+          let humanMessage = get("task_status.classification_done");
+          if (Array.isArray(categories) && categories.length > 0) {
+            humanMessage += `\n\nCategories: ${categories.join(", ")}`;
+          }
+          if (summary) {
+            humanMessage += `\n\nSummary: ${summary}`;
+          }
+          uiActions.appendMessage(humanMessage, "received");
+        } else {
+          uiActions.appendMessage(get("task_status.classification_done_fallback"), "received");
+        }
+      }
+    });
+
+    taskStatusSocket.on("connect_error", (err) => {
+      console.warn("REST_webchat Socket.IO connect_error:", err.message);
+    });
+  } catch (e) {
+    console.error("Failed to set up task status Socket.IO connection:", e);
+  }
+}
 
 // Initialize the chat application
 function initializeChat() {
@@ -272,6 +328,9 @@ function initializeChat() {
   // Initialize chat widget visibility
   chatWidget.style.display = "none";
   chatLauncher.style.display = "flex";
+
+  // Initialize Socket.IO connection for task status updates (classification, etc.)
+  setupTaskStatusSocket();
 
   // Send initial introduction message via REST
   sendIntroduceMessage();
@@ -297,6 +356,11 @@ function setupEventListeners() {
   attachmentButton.addEventListener("click", () => {
     fileInput.click();
   });
+
+  // Allow backend to open the file picker (e.g. "Add pictures and documents" in Modify grievance)
+  window.openFileUploadModal = function () {
+    if (fileInput) fileInput.click();
+  };
 
   // Form submission
   messageForm.addEventListener("submit", handleMessageSubmit);
@@ -329,6 +393,11 @@ async function handleMessageSubmit(e) {
   const message = messageInput.value.trim();
 
   if (message) {
+    // Once the user has answered (by typing), clear any existing quick replies
+    // so older buttons cannot be clicked out of context.
+    const quickReplyBlocks = messages.querySelectorAll(".quick-replies");
+    quickReplyBlocks.forEach((el) => el.remove());
+
     uiActions.appendMessage(message, "sent");
     window.safeSendMessage(message);
     messageInput.value = "";
@@ -470,10 +539,7 @@ async function handleFileUpload(files) {
   console.log("Current window.grievanceId:", window.grievanceId);
 
   if (!window.grievanceId) {
-    uiActions.appendMessage(
-      "To attach files, first start a grievance: click \"Register a grievance\" (गुनासो दर्ता गर्नुहोस्) above and complete the steps. Once your grievance is created, you can attach files here.",
-      "received"
-    );
+    uiActions.appendMessage(get("file_upload.no_grievance"), "received");
     return false;
   }
 
@@ -492,10 +558,7 @@ async function handleFileUpload(files) {
 
   if (audioFiles.length > 0) {
     console.log("Audio files detected:", audioFiles);
-    uiActions.appendMessage(
-      "Voice recordings detected. These will be processed and transcribed.",
-      "received"
-    );
+    uiActions.appendMessage(get("file_upload.voice_detected"), "received");
   }
 
   // Check file sizes
@@ -512,9 +575,7 @@ async function handleFileUpload(files) {
   if (oversizedFiles.length > 0) {
     console.log("Oversized files detected:", oversizedFiles);
     uiActions.appendMessage(
-      `Some files are too large and will be skipped: ${oversizedFiles
-        .map((f) => f.name)
-        .join(", ")}`,
+      `${get("file_upload.oversized_prefix")} ${oversizedFiles.map((f) => f.name).join(", ")}`,
       "received"
     );
   }
@@ -540,7 +601,15 @@ async function handleFileUpload(files) {
       body: formData,
     });
 
-    const data = await response.json();
+    let data;
+    const contentType = response.headers.get("content-type") || "";
+    try {
+      data = contentType.includes("application/json")
+        ? await response.json()
+        : { error: await response.text() || `Server error (${response.status})` };
+    } catch (_) {
+      data = { error: await response.text().catch(() => `Server error (${response.status})`) };
+    }
     console.log("File upload response:", data);
 
     if (response.ok) {
@@ -558,8 +627,9 @@ async function handleFileUpload(files) {
       }
       return true;
     } else {
-      console.error("Upload failed:", data.error);
-      eventHandlers.handleApiError(data.error, "File upload");
+      const errMsg = data.error || data.detail || data.message || `Upload failed (${response.status})`;
+      console.error("Upload failed:", errMsg);
+      eventHandlers.handleApiError(errMsg, "File upload");
       return false;
     }
   } catch (error) {
@@ -617,10 +687,7 @@ async function pollFileStatus(fileIds) {
         setTimeout(poll, delayMs);
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
-        uiActions.appendMessage(
-          "File processing is taking longer than expected. You can continue with your submission.",
-          "received"
-        );
+        uiActions.appendMessage(get("file_upload.processing_long"), "received");
         uiActions.setInputLocked(false);
         currentUploadFileIds = [];
         currentUploadStatuses = {};
@@ -634,17 +701,11 @@ async function pollFileStatus(fileIds) {
   poll();
 }
 
-// Post-upload: show "Files uploaded. Add more or go back" and unlock input
-const POST_UPLOAD_MESSAGE =
-  "Files uploaded. You can add more files or go back to the chat.";
-const ADD_MORE_PAYLOAD = "__add_more_files__";
-const GO_BACK_PAYLOAD = "__go_back_to_chat__";
-
 function showPostUploadMessageAndUnlock() {
-  uiActions.appendMessage(POST_UPLOAD_MESSAGE, "received");
+  uiActions.appendMessage(get("file_upload.post_upload"), "received");
   uiActions.replaceQuickReplies([
-    { title: "Add more files", payload: ADD_MORE_PAYLOAD },
-    { title: "Go back to chat", payload: GO_BACK_PAYLOAD },
+    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
+    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
   ]);
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
@@ -669,13 +730,10 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
-  uiActions.appendMessage(
-    "One or more files could not be saved. You can try adding files again or go back to the chat.",
-    "received"
-  );
+  uiActions.appendMessage(get("file_upload.failure"), "received");
   uiActions.replaceQuickReplies([
-    { title: "Add more files", payload: ADD_MORE_PAYLOAD },
-    { title: "Go back to chat", payload: GO_BACK_PAYLOAD },
+    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
+    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
   ]);
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
@@ -711,25 +769,24 @@ function updateFileStatus(fileId, data) {
   let statusMessage = "";
   switch (status) {
     case "PENDING":
-      statusMessage = "Processing files...";
+      statusMessage = get("file_upload.processing");
       break;
     case "STARTED":
       if (result && result.file_type === "audio") {
         statusMessage = progress
-          ? `Transcribing audio: ${progress}%`
-          : "Transcribing audio...";
+          ? format(get("file_upload.transcribing_progress"), { progress })
+          : get("file_upload.transcribing");
       } else {
         statusMessage = progress
-          ? `Processing files: ${progress}%`
-          : "Processing files...";
+          ? format(get("file_upload.processing_progress"), { progress })
+          : get("file_upload.processing");
       }
       break;
     case "SUCCESS":
       if (result && result.file_type === "audio") {
-        statusMessage =
-          "Voice recording processed and transcribed successfully";
+        statusMessage = get("file_upload.voice_success");
       } else {
-        statusMessage = "Files processed successfully";
+        statusMessage = get("file_upload.files_success");
       }
       if (result) {
         if (result.grievance_id) {
@@ -740,23 +797,22 @@ function updateFileStatus(fileId, data) {
         }
       }
       if (prevStatus !== "SUCCESS" && !(result && result.message)) {
-        const notice =
-          (data && data.message) || "File is saved in the database.";
+        const notice = (data && data.message) || get("file_upload.file_saved");
         uiActions.appendMessage(notice, "received");
       }
       break;
     case "FAILURE":
       let errorMsg = error || "Unknown error";
       if (result && result.file_type === "audio") {
-        statusMessage = `Failed to process voice recording: ${errorMsg}`;
+        statusMessage = `${get("file_upload.voice_failure_prefix")} ${errorMsg}`;
       } else {
-        statusMessage = `Failed to process files: ${errorMsg}`;
+        statusMessage = `${get("file_upload.files_failure_prefix")} ${errorMsg}`;
       }
       uiActions.appendMessage(statusMessage, "received");
       console.error("Task failed:", errorMsg);
       break;
     default:
-      statusMessage = `Status: ${status}`;
+      statusMessage = `${get("file_upload.status_prefix")} ${status}`;
   }
 
   statusElement.textContent = statusMessage;
@@ -774,9 +830,7 @@ function updateFileStatus(fileId, data) {
 
 // "Go back to chat": restore snapshot, transition message, unlock (no orchestrator call)
 function handleGoBackToChat() {
-  const transitionMessage =
-    "Your files are uploaded. Here's where we left off.";
-  uiActions.appendMessage(transitionMessage, "received");
+  uiActions.appendMessage(get("file_upload.transition"), "received");
   if (fileUploadSnapshot) {
     if (fileUploadSnapshot.lastBotMessageText) {
       uiActions.appendMessage(fileUploadSnapshot.lastBotMessageText, "received");
@@ -790,7 +844,7 @@ function handleGoBackToChat() {
     fileUploadSnapshot = null;
   } else {
     uiActions.replaceQuickReplies([]); // Clear Add more / Go back buttons
-    uiActions.appendMessage("You can continue below.", "received");
+    uiActions.appendMessage(get("file_upload.continue_below"), "received");
   }
   uiActions.setInputLocked(false);
 }

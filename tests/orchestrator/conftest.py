@@ -15,9 +15,9 @@ RASA_DIR = PROJECT_ROOT / "rasa_chatbot"
 if str(RASA_DIR) not in sys.path:
     sys.path.insert(0, str(RASA_DIR))
 
-from orchestrator.adapters import CollectingDispatcher, SessionTracker  # noqa: E402
-from orchestrator.session_store import create_session  # noqa: E402
-from orchestrator.main import app  # noqa: E402
+from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker  # noqa: E402
+from backend.orchestrator.session_store import create_session  # noqa: E402
+from backend.orchestrator.main import app  # noqa: E402
 
 
 @pytest.fixture(scope="session")

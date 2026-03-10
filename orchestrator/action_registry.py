@@ -35,6 +35,20 @@ def _get_action(action_name: str) -> Any:
             ActionStartGrievanceProcess,
             ActionAskGrievanceNewDetail,
         )
+        from rasa_chatbot.actions.forms.form_sensitive_issues import (
+            ActionAskSensitiveIssuesFollowUp,
+            ActionAskSensitiveIssuesNewDetail,
+            ActionAskSensitiveIssuesNickname,
+            ActionAskFormSensitiveIssuesComplainantPhone,
+            ActionOutroSensitiveIssues,
+        )
+        from rasa_chatbot.actions.forms.form_modify_grievance import (
+            ActionAskModifyFollowUpAnswer,
+            ActionAskModifyGrievanceNewDetail,
+        )
+        from rasa_chatbot.actions.forms.form_modify_contact import (
+            ActionAskModifyMissingField,
+        )
         from rasa_chatbot.actions.forms.form_status_check import (
             ActionStartStatusCheck,
             ActionAskStatusCheckMethod,
@@ -44,7 +58,6 @@ def _get_action(action_name: str) -> Any:
             ActionAskStatusCheckComplainantFullName,
             ActionStatusCheckRequestFollowUp,
             ActionStatusCheckModifyGrievance,
-            ActionStatusCheckRetrieveComplainantData,
             ActionSkipStatusCheckOutro,
             ActionAskStatusCheckGrievanceIdSelected,
         )
@@ -69,6 +82,10 @@ def _get_action(action_name: str) -> Any:
             ActionGrievanceOutro,
         )
         from rasa_chatbot.actions.action_ask_commons import (
+            ActionAskStoryStep,
+            ActionAskStoryRoute,
+            ActionAskLanguageCode,
+            ActionAskStoryMain,
             ActionAskComplainantLocationConsent,
             ActionAskComplainantProvince,
             ActionAskComplainantDistrict,
@@ -97,6 +114,13 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_grievance_new_detail"] = ActionAskGrievanceNewDetail()
         _ACTIONS["action_submit_grievance"] = ActionSubmitGrievance()
 
+        # Sensitive issues form
+        _ACTIONS["action_ask_sensitive_issues_follow_up"] = ActionAskSensitiveIssuesFollowUp()
+        _ACTIONS["action_ask_sensitive_issues_new_detail"] = ActionAskSensitiveIssuesNewDetail()
+        _ACTIONS["action_ask_sensitive_issues_nickname"] = ActionAskSensitiveIssuesNickname()
+        _ACTIONS["action_ask_form_sensitive_issues_complainant_phone"] = ActionAskFormSensitiveIssuesComplainantPhone()
+        _ACTIONS["action_outro_sensitive_issues"] = ActionOutroSensitiveIssues()
+
         # Status check
         _ACTIONS["action_start_status_check"] = ActionStartStatusCheck()
         _ACTIONS["action_ask_status_check_method"] = ActionAskStatusCheckMethod()
@@ -105,9 +129,17 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_status_check_complainant_full_name"] = ActionAskStatusCheckComplainantFullName()
         _ACTIONS["action_status_check_request_follow_up"] = ActionStatusCheckRequestFollowUp()
         _ACTIONS["action_status_check_modify_grievance"] = ActionStatusCheckModifyGrievance()
-        _ACTIONS["action_status_check_retrieve_complainant_data"] = ActionStatusCheckRetrieveComplainantData()
+        _ACTIONS["action_ask_modify_follow_up_answer"] = ActionAskModifyFollowUpAnswer()
+        _ACTIONS["action_ask_modify_grievance_new_detail"] = ActionAskModifyGrievanceNewDetail()
+        _ACTIONS["action_ask_modify_missing_field"] = ActionAskModifyMissingField()
         _ACTIONS["action_skip_status_check_outro"] = ActionSkipStatusCheckOutro()
         _ACTIONS["action_ask_status_check_grievance_id_selected"] = ActionAskStatusCheckGrievanceIdSelected()
+
+        # Flow/story common actions (status-check menus and language selection)
+        _ACTIONS["action_ask_story_step"] = ActionAskStoryStep()
+        _ACTIONS["action_ask_story_route"] = ActionAskStoryRoute()
+        _ACTIONS["action_ask_language_code"] = ActionAskLanguageCode()
+        _ACTIONS["action_ask_story_main"] = ActionAskStoryMain()
 
         # Contact
         _ACTIONS["action_ask_complainant_location_consent"] = ActionAskComplainantLocationConsent()

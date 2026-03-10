@@ -1,8 +1,8 @@
 import asyncio
 
-from orchestrator.form_loop import run_form_turn
-from rasa_chatbot.actions.forms.form_grievance import ValidateFormGrievance
-from rasa_chatbot.actions.forms.form_status_check import ValidateFormStatusCheck1
+from backend.orchestrator.form_loop import run_form_turn
+from backend.actions.forms.form_grievance import ValidateFormGrievance
+from backend.actions.forms.form_status_check import ValidateFormStatusCheck1
 
 
 def _run(coro):
@@ -99,7 +99,7 @@ def test_status_check_first_turn_asks_for_method(domain):
 # Agent 10.E: Verify first ask for form_contact, form_otp, form_status_check_skip,
 # form_grievance_complainant_review (no Unknown action errors)
 def test_form_contact_first_ask(domain):
-    from orchestrator.form_loop import get_form
+    from backend.orchestrator.form_loop import get_form
 
     form = get_form("form_contact")
     session = {
@@ -119,7 +119,7 @@ def test_form_contact_first_ask(domain):
 
 
 def test_form_otp_first_ask(domain):
-    from orchestrator.form_loop import get_form
+    from backend.orchestrator.form_loop import get_form
 
     form = get_form("form_otp")
     session = {
@@ -139,7 +139,7 @@ def test_form_otp_first_ask(domain):
 
 
 def test_form_status_check_skip_first_ask(domain):
-    from orchestrator.form_loop import get_form
+    from backend.orchestrator.form_loop import get_form
 
     form = get_form("form_status_check_skip")
     session = {
@@ -164,7 +164,7 @@ def test_form_status_check_skip_first_ask(domain):
 
 
 def test_form_grievance_complainant_review_first_ask(domain):
-    from orchestrator.form_loop import get_form
+    from backend.orchestrator.form_loop import get_form
 
     form = get_form("form_grievance_complainant_review")
     session = {

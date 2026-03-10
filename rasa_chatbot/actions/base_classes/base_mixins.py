@@ -667,7 +667,7 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                 "status_check_retrieve_grievances": True,
                 "status_check_complainant_phone_valid": "no_phone_found",
                 "list_grievances_by_phone": [],
-                "story_route": self.SKIP_VALUE
+                "complainant_phone": None,  # Clear so we re-ask with "no grievances" message
             }
         
         # Convert datetime to string for all grievances

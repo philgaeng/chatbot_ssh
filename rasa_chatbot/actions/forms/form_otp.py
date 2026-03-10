@@ -300,7 +300,8 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
             return {"otp_input": slot_value,
                     "otp_status" : "verified",
                     "otp_verified" : True,
-                    "otp_resend_count" : 0}
+                    "otp_resend_count" : 0,
+            }
         else:
             self.logger.info(f"{self.name()} - OTP verification failed")
             return {"otp_input": None,

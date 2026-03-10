@@ -8,9 +8,16 @@
 #
 # Recommended: conda activate chatbot-rest (or set VENV_DIR) before running.
 #
-# Optional: START_REDIS=1 (default) to start project Redis (scripts/local/redis.conf)
-#           if nothing is listening on REDIS_PORT. Logs go to logs/redis.log.
-#           START_REDIS=0 to only check and use existing Redis.
+# Option B (default): single project Redis with password (recommended for deployment).
+#   START_REDIS=1 (default): start project Redis from scripts/local/redis.conf. Requires
+#   REDIS_PASSWORD in env.local matching redis.conf requirepass. If system Redis is on
+#   port 6379, the script stops it so only project Redis runs. Logs: logs/redis.log.
+#   START_REDIS=0: only check existing Redis; do not start or stop anything.
+#
+# Redis auth: Script probes Redis (no-auth then env.local REDIS_PASSWORD) and sets
+# CELERY_BROKER_URL/CELERY_RESULT_BACKEND to match.
+# - With START_REDIS=1 you must set REDIS_PASSWORD in env.local (copy from redis.conf requirepass).
+# - With START_REDIS=0: if Redis has no password leave REDIS_PASSWORD unset; if it has requirepass set it.
 
 set -e
 
@@ -42,26 +49,15 @@ if [ -f "$BASE_DIR/env.local" ]; then
   fi
 fi
 
-# Treat empty or whitespace-only REDIS_PASSWORD as unset (avoids AUTH with no password against system Redis)
-REDIS_PASSWORD="$(echo "${REDIS_PASSWORD:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-if [ -z "$REDIS_PASSWORD" ]; then
-  unset REDIS_PASSWORD
-else
-  export REDIS_PASSWORD
-fi
+# Treat empty or whitespace-only REDIS_PASSWORD as unset
+REDIS_PASSWORD_RAW="$(echo "${REDIS_PASSWORD:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 export REDIS_HOST="${REDIS_HOST:-localhost}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
 export REDIS_DB="${REDIS_DB:-0}"
 
-# Celery broker/result URLs: use password only if REDIS_PASSWORD is set and non-empty.
-# System Redis (no requirepass) must use no-password URL or Celery fails with "AUTH called without any password configured".
-if [ -n "${REDIS_PASSWORD:-}" ]; then
-  export CELERY_BROKER_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
-  export CELERY_RESULT_BACKEND="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
-else
-  export CELERY_BROKER_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
-  export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
-fi
+# NOTE: Celery broker/result URLs are set AFTER Redis is running (see probe below).
+# We avoid guessing from env.local alone - that causes "AUTH without password configured"
+# when env.local has REDIS_PASSWORD but the running Redis has no requirepass.
 echo "=== REST API stack + Celery launcher ==="
 echo "Base directory: $BASE_DIR"
 LAUNCH_TIME="$(date +"%Y-%m-%d %H:%M:%S")"
@@ -79,7 +75,7 @@ else
 fi
 
 ########################################
-# 2) Ensure Redis is running (optionally start project Redis)
+# 2) Ensure Redis is running (Option B: project Redis with password when START_REDIS=1)
 ########################################
 START_REDIS="${START_REDIS:-1}"
 REDIS_PID_FILE="$LOG_DIR/redis.pid"
@@ -88,39 +84,112 @@ REDIS_CONF="$BASE_DIR/scripts/local/redis.conf"
 echo
 echo "[2/6] Ensuring Redis is running..."
 
-check_redis() {
-  if [ -n "$REDIS_PASSWORD" ]; then
-    redis-cli -a "$REDIS_PASSWORD" -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG
-  else
-    redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG
+# Probes: no-auth first, then with env REDIS_PASSWORD (single source of truth)
+_probe_ping_no_auth() {
+  redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG
+}
+_probe_ping_with_auth() {
+  [ -n "$REDIS_PASSWORD_RAW" ] && redis-cli -a "$REDIS_PASSWORD_RAW" -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG
+}
+check_redis_any() {
+  _probe_ping_no_auth || _probe_ping_with_auth
+}
+
+# Option B: when starting project Redis, we need REDIS_PASSWORD in env.local (matches redis.conf requirepass)
+if [ "$START_REDIS" = "1" ] && [ -f "$REDIS_CONF" ]; then
+  if [ -z "$REDIS_PASSWORD_RAW" ]; then
+    echo "❌ START_REDIS=1 (project Redis) requires REDIS_PASSWORD in env.local to match scripts/local/redis.conf (requirepass)."
+    echo "   See env.local.example. Add to env.local: REDIS_PASSWORD=<value from redis.conf requirepass>"
+    exit 1
+  fi
+fi
+
+# Stop project Redis (process we started previously; pid file from redis.conf or our convention)
+_stop_project_redis() {
+  if [ -f "$REDIS_PID_FILE" ]; then
+    local pid
+    pid=$(cat "$REDIS_PID_FILE" 2>/dev/null || true)
+    if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+      echo "Stopping existing project Redis (PID: $pid)..."
+      kill "$pid" 2>/dev/null || true
+      sleep 2
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$REDIS_PID_FILE"
   fi
 }
 
-if ! check_redis; then
+# When START_REDIS=1: use only project Redis. If system Redis is on 6379, stop it so project Redis can bind.
+if [ "$START_REDIS" = "1" ] && _probe_ping_no_auth; then
+  echo "Redis on $REDIS_HOST:$REDIS_PORT responds without password (likely system Redis)."
+  echo "Stopping it so project Redis (with password) can use port $REDIS_PORT..."
+  sudo systemctl stop redis-server 2>/dev/null || true
+  _stop_project_redis
+  sleep 2
+  if _probe_ping_no_auth; then
+    echo "❌ Redis still responding without password. Stop system Redis and re-run, e.g.:"
+    echo "   sudo systemctl stop redis-server"
+    echo "   START_REDIS=1 $0"
+    exit 1
+  fi
+fi
+
+if ! check_redis_any; then
   echo "Redis not responding at $REDIS_HOST:$REDIS_PORT."
   if [ "$START_REDIS" = "1" ] && [ -f "$REDIS_CONF" ]; then
+    _stop_project_redis
     echo "Starting project Redis (logs: $LOG_DIR/redis.log)..."
     redis-server "$REDIS_CONF" &
     sleep 3
-    if check_redis; then
+    if check_redis_any; then
       echo "✅ Project Redis started (PID file: $REDIS_PID_FILE)"
     fi
   fi
-  if ! check_redis; then
+  if ! check_redis_any; then
     echo "❌ Redis is not running. Start manually: redis-server \"$REDIS_CONF\""
-    echo "   Or set START_REDIS=1 and use scripts/local/redis.conf. Celery will fail without Redis. Continuing..."
+    echo "   With START_REDIS=1, ensure REDIS_PASSWORD in env.local matches redis.conf. Celery will fail without Redis. Continuing..."
   fi
 else
   echo "✅ Redis is running"
 fi
 
+########################################
+# Probe Redis: set Celery URLs from actual Redis (no-auth vs password)
+# _probe_ping_* already defined above.
+########################################
+if _probe_ping_no_auth; then
+  # Redis has NO password - do not send AUTH (causes "AUTH without password configured")
+  REDIS_PASSWORD=""
+  unset REDIS_PASSWORD
+  export CELERY_BROKER_URL="redis://${REDIS_HOST}:${REDIS_PORT}/1"
+  export CELERY_RESULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
+  echo "Redis auth: none (no password)"
+elif _probe_ping_with_auth; then
+  # Redis requires password - use REDIS_PASSWORD from env.local
+  REDIS_PASSWORD="$REDIS_PASSWORD_RAW"
+  export REDIS_PASSWORD
+  export CELERY_BROKER_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
+  export CELERY_RESULT_BACKEND="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
+  echo "Redis auth: password (from env.local)"
+else
+  echo "❌ Redis is running but neither no-auth nor env.local password works."
+  echo "   Fix: ensure REDIS_PASSWORD in env.local matches Redis requirepass, or use Redis without requirepass."
+  exit 1
+fi
+
 # Detect the *actual* Redis configuration we are talking to (systemd Redis vs project Redis)
-REDIS_INFO="$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" INFO server 2>/dev/null || true)"
+_redis_cli() {
+  if [ -n "$REDIS_PASSWORD" ]; then
+    redis-cli -a "$REDIS_PASSWORD" -h "$REDIS_HOST" -p "$REDIS_PORT" "$@"
+  else
+    redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" "$@"
+  fi
+}
+REDIS_INFO="$(_redis_cli INFO server 2>/dev/null || true)"
 REDIS_PID="$(printf "%s\n" "$REDIS_INFO" | awk -F: '/^process_id:/{print $2}' | tr -d '\r')"
 REDIS_CONFIG_FILE="$(printf "%s\n" "$REDIS_INFO" | awk -F: '/^config_file:/{print $2}' | tr -d '\r')"
-REDIS_LOGFILE="$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" CONFIG GET logfile 2>/dev/null | awk 'NR==2{print $0}' | tr -d '\r' || true)"
-REDIS_PIDFILE="$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" CONFIG GET pidfile 2>/dev/null | awk 'NR==2{print $0}' | tr -d '\r' || true)"
-REDIS_REQUIREPASS="$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" CONFIG GET requirepass 2>/dev/null | awk 'NR==2{print $0}' | tr -d '\r' || true)"
+REDIS_LOGFILE="$(_redis_cli CONFIG GET logfile 2>/dev/null | awk 'NR==2{print $0}' | tr -d '\r' || true)"
+REDIS_PIDFILE="$(_redis_cli CONFIG GET pidfile 2>/dev/null | awk 'NR==2{print $0}' | tr -d '\r' || true)"
 
 if [ -n "$REDIS_PID" ]; then
   echo "Redis server PID: ${REDIS_PID}"
@@ -146,6 +215,11 @@ if [ "$REDIS_LOGFILE" != "$LOG_DIR/redis.log" ] && [ -n "$REDIS_LOGFILE" ]; then
   echo "   sudo systemctl stop redis-server                      # stop system Redis"
   echo "   START_REDIS=1 scripts/rest_api/launch_servers_celery.sh"
 fi
+
+# check_redis uses probed auth (for Celery start)
+check_redis() {
+  _redis_cli ping 2>/dev/null | grep -q PONG
+}
 
 ########################################
 # 3) Start orchestrator (FastAPI)
@@ -176,7 +250,7 @@ export ENABLE_CELERY_CLASSIFICATION="${ENABLE_CELERY_CLASSIFICATION:-1}"
 # ORCHESTRATOR_LOG_LEVEL: DEBUG (default), INFO, WARNING. botocore/boto3 are always WARNING.
 echo "" >> "$ORCH_LOG"
 echo "=== Restart $LAUNCH_TIME ===" >> "$ORCH_LOG"
-PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn orchestrator.main:app --host 0.0.0.0 --port "$ORCH_PORT" >> "$ORCH_LOG" 2>&1 &
+PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn backend.orchestrator.main:app --host 0.0.0.0 --port "$ORCH_PORT" >> "$ORCH_LOG" 2>&1 &
 echo $! > "$ORCH_PID_FILE"
 sleep 2
 

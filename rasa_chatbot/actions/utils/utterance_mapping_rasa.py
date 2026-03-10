@@ -382,6 +382,15 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'validate_complainant_email_temp': {
+            'utterances': {
+                1: {
+                    # Reuse the generic email prompt text for invalid email format
+                    'en': "The email you provided is not valid. Please enter a valid email address, or type 'skip' if you prefer to remain anonymous.",
+                    'ne': "तपाईंले प्रदान गर्नुभएको इमेल मान्य छैन। कृपया मान्य इमेल ठेगाना प्रविष्ट गर्नुहोस्, वा गुमनाम रहन चाहनुहुन्छ भने 'skip' टाइप गर्नुहोस्।"
+                }
+            }
+        },
         'action_modify_contact_info': {
             'utterances': {
                 1: {
@@ -893,6 +902,14 @@ UTTERANCE_MAPPING = {
                 1: BUTTONS_AFFIRM_DENY
             }
         },
+        'base_validate_phone': {
+            'utterances': {
+                1: {
+                    'en': "The phone number you provided is not valid. Please enter a valid 10-digit Nepali mobile number starting with 9, or type 'skip' to continue without it.",
+                    'ne': "तपाईंले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको वैध नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्।"
+                }
+            }
+        },
         'validate_otp_input': {
             'utterances': {
                 1: {
@@ -966,6 +983,17 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_SKIP
+            }
+        },
+        'action_outro_sensitive_issues': {
+            'utterances': {
+                1: {
+                    'en': "Thank you for trusting us with this sensitive information. Your grievance has been recorded and will be handled confidentially. We again recommend that you contact the One Stop Crisis Management Centre of Morang for specialized support.",
+                    'ne': "यो संवेदनशील जानकारी हामीलाई विश्वास गरेर साझा गर्नुभएकोमा धन्यवाद। तपाईंको गुनासो गोप्य रूपमा दर्ता गरिएको छ र सम्बन्धित कार्यालयले यसलाई हेर्नेछ। कृपया विशेष सहयोगका लागि मोरङको वन स्टप क्राइसिस म्यानेजमेन्ट सेन्टरसँग सम्पर्क गर्न नहिच्किचाउनुहोस्।"
+                }
+            },
+            'buttons': {
+                1: BUTTONS_CLEAN_WINDOW_OPTIONS
             }
         }
     },
@@ -1226,6 +1254,30 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'action_status_check_modify_grievance': {
+            'utterances': {
+                1: {
+                    'en': "You can add documents, add more to your grievance text, or fill in contact or location details you skipped. What would you like to do?",
+                    'ne': "तपाईंले कागजात थप्न सक्नुहुन्छ, गुनासोको लेख थप्न सक्नुहुन्छ, वा छोडेको सम्पर्क वा ठेगाना भर्न सक्नुहुन्छ। तपाईं के गर्न चाहनुहुन्छ?"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Add pictures and documents", "payload": "/modify_grievance_add_pictures"},
+                        {"title": "Add more info to my grievance", "payload": "/modify_grievance_add_more_info"},
+                        {"title": "Add missing info", "payload": "/modify_grievance_add_missing_info"},
+                        {"title": "Cancel", "payload": "/modify_grievance_cancel"}
+                    ],
+                    'ne': [
+                        {"title": "चित्र र कागजात थप्नुहोस्", "payload": "/modify_grievance_add_pictures"},
+                        {"title": "मेरो गुनासोमा थप जानकारी थप्नुहोस्", "payload": "/modify_grievance_add_more_info"},
+                        {"title": "नभएको जानकारी भर्नुहोस्", "payload": "/modify_grievance_add_missing_info"},
+                        {"title": "रद्द गर्नुहोस्", "payload": "/modify_grievance_cancel"}
+                    ]
+                }
+            }
+        },
         'action_skip_status_check_outro': {
             'utterances': {
                 1: {
@@ -1266,6 +1318,68 @@ UTTERANCE_MAPPING = {
                     'ne': [
                         BUTTONS_MAIN_MENU['ne'][0],
                         BUTTONS_GOODBYE['ne'][0]
+                    ]
+                }
+            }
+        }
+    },
+    'form_modify_contact': {
+        'action_ask_modify_missing_field': {
+            'utterances': {
+                1: {
+                    'en': "Please provide {field_label}. You can skip to move to the next field or click I'm done when finished.",
+                    'ne': "कृपया {field_label} प्रदान गर्नुहोस्। तपाईं अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Skip", "payload": "/skip"},
+                        {"title": "I'm done", "payload": "/modify_missing_done"}
+                    ],
+                    'ne': [
+                        {"title": "छोड्नुहोस्", "payload": "/skip"},
+                        {"title": "म समाप्त गर्छु", "payload": "/modify_missing_done"}
+                    ]
+                }
+            }
+        }
+    },
+    'form_modify_grievance': {
+        'action_ask_modify_follow_up_answer': {
+            'utterances': {
+                1: {
+                    'en': "Please answer the following question about your grievance: {question}",
+                    'ne': "कृपया तपाईंको गुनासोको बारेमा निम्न प्रश्नको उत्तर दिनुहोस्: {question}"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [{"title": "Skip", "payload": "/skip"}],
+                    'ne': [{"title": "छोड्नुहोस्", "payload": "/skip"}]
+                }
+            }
+        },
+        'action_ask_modify_grievance_new_detail': {
+            'utterances': {
+                1: {
+                    'en': "Add more details to your grievance. You can type your additional information below, or use the buttons to save or cancel.",
+                    'ne': "तपाईंको गुनासोमा थप विवरण थप्नुहोस्। तपाईं तल अतिरिक्त जानकारी टाइप गर्न सक्नुहुन्छ वा बटन प्रयोग गरेर बचत गर्न वा रद्द गर्न सक्नुहुन्छ।"
+                },
+                2: {
+                    'en': "Your text has been added. Add more details below or save and continue.",
+                    'ne': "तपाईंको पाठ थपिएको छ। तल थप विवरण थप्नुहोस् वा बचत गर्नुहोस् र जारी राख्नुहोस्।"
+                }
+            },
+            'buttons': {
+                1: {
+                    'en': [
+                        {"title": "Save and continue", "payload": "/submit_details"},
+                        {"title": "Cancel", "payload": "/modify_grievance_cancel"}
+                    ],
+                    'ne': [
+                        {"title": "बचत गर्नुहोस् र जारी राख्नुहोस्", "payload": "/submit_details"},
+                        {"title": "रद्द गर्नुहोस्", "payload": "/modify_grievance_cancel"}
                     ]
                 }
             }
@@ -1545,6 +1659,37 @@ UTTERANCE_MAPPING = {
         "ne": [
             "⚠️ केही फाइलहरू अपलोड गर्न धेरै ठूला छन्। अधिकतम फाइल साइज {max_size_formatted} हो। कृपया फाइलको साइज घटाएर पुन: प्रयास गर्नुहोस्।"  # Simple size limit message
         ]
+    },
+    # Spec 12: REST webchat file upload (post-upload and Go back messages)
+    "rest_webchat_file_upload": {
+        "post_upload": {
+            "utterances": {
+                1: {
+                    "en": "Files uploaded. You can add more files or go back to the chat.",
+                    "ne": "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।"
+                },
+                2: {
+                    "en": "Your files are uploaded. Here's where we left off.",
+                    "ne": "तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।"
+                },
+                3: {
+                    "en": "One or more files could not be saved. You can try adding files again or go back to the chat.",
+                    "ne": "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।"
+                }
+            },
+            "buttons": {
+                1: {
+                    "en": [
+                        {"title": "Add more files", "payload": "__add_more_files__"},
+                        {"title": "Go back to chat", "payload": "__go_back_to_chat__"}
+                    ],
+                    "ne": [
+                        {"title": "थप फाइलहरू थप्नुहोस्", "payload": "__add_more_files__"},
+                        {"title": "च्याटमा फर्कनुहोस्", "payload": "__go_back_to_chat__"}
+                    ]
+                }
+            }
+        }
     },
 }
 
