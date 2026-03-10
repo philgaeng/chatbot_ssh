@@ -47,6 +47,7 @@ A **ticketing system** that manages all grievances produced by one or more chatb
 | [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md) | Domain model: tickets, access levels, orgs, locations, workflows; settings |
 | [03_ticketing_api_integration.md](03_ticketing_api_integration.md) | API contracts: ticketing ↔ chatbot, ticketing ↔ messaging |
 | [Escalation_rules.md](Escalation_rules.md) | SLA and escalation rules (configurable); example: ADB KL Road 4-level workflow and roles |
+| [06_flicket_gap_assessment.md](06_flicket_gap_assessment.md) | Gap assessment: what Flicket provides vs. our specs; effort and approach |
 
 ---
 
