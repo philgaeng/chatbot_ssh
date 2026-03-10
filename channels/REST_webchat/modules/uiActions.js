@@ -1,6 +1,8 @@
 // UI Actions Module - Pure UI manipulation functions
 // Handles DOM manipulation, message display, and UI state updates
 
+import { get } from "../utterances.js";
+
 // Global state (will be initialized from app.js)
 let messages;
 let grievanceId = null;
@@ -31,11 +33,11 @@ function updateAttachButtonState() {
 
   attachmentButton.disabled = !canUploadFiles;
   if (!hasGrievance) {
-    attachmentButton.title = "Start a grievance first";
+    attachmentButton.title = get("attach_button.start_first");
   } else if (!grievanceCreatedInDb) {
-    attachmentButton.title = "Saving your grievance… files will be available shortly";
+    attachmentButton.title = get("attach_button.saving");
   } else {
-    attachmentButton.title = "Files can be uploaded now";
+    attachmentButton.title = get("attach_button.ready");
   }
 }
 
@@ -70,8 +72,11 @@ export function appendQuickReplies(quickReplies) {
       appendMessage(reply.title, "sent");
       const handledLocally = window.handleQuickReplyClick(reply.payload);
       if (!handledLocally) {
-        const qr = messages.querySelector(".quick-replies");
-        if (qr) messages.removeChild(qr);
+        // Remove all quick-reply groups once a choice is made so old
+        // buttons cannot be clicked later in the flow.
+        messages
+          .querySelectorAll(".quick-replies")
+          .forEach((el) => el.remove());
       }
     };
     quickRepliesDiv.appendChild(button);
@@ -289,13 +294,13 @@ export function showError(message) {
 }
 
 export function showConnectionError() {
-  appendMessage("Connection error. Please try again later.", "received");
+  appendMessage(get("errors.connection"), "received");
 }
 
 export function showTimeoutError() {
-  appendMessage("Connection timed out. Please try again later.", "received");
+  appendMessage(get("errors.connection_timeout"), "received");
 }
 
 export function showReconnectError() {
-  appendMessage("Unable to reconnect. Please refresh the page.", "received");
+  appendMessage(get("errors.reconnect"), "received");
 }

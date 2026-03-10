@@ -13,7 +13,7 @@ from unittest.mock import Mock, MagicMock
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 
 # Import the class we want to test
-from rasa_chatbot.actions.form_status_check import ValidateFormStatusCheck
+from backend.actions.forms.form_status_check import ValidateFormStatusCheck
 
 class MockHelpers:
     """Mock helpers class for testing"""

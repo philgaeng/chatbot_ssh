@@ -87,59 +87,29 @@
 
 ### B7 – Grievance classification finishes after user flow
 
-- **Status**: Done
+- **Status**: Implemented (needs live verification)
 - **Area**: LLM grievance classification (Celery) → grievance review in chatbot
 - **Problem**: The user can move through the grievance flow faster than the background `classify_and_summarize_grievance_task`. When the Celery task finishes later, the grievance is successfully updated in the DB (see `celery_llm_queue.log` around `B-GR-20260303-KOJH-EDF6`), but the chatbot session has already skipped the `form_grievance_complainant_review` step and logged `Classification results not recorded in the database` / `grievance classification failed - form skipped`. The user never sees the generated summary/categories, even if the chat window is still open.
 - **Example**:
   - Celery log shows `Task classify_and_summarize_grievance_task[...] succeeded` and DB updates for `grievance_categories`, `grievance_summary`, etc. for grievance `B-GR-20260303-KOJH-EDF6`.
   - Orchestrator log for the same grievance shows `Sensitive categories: [], grievance_categories: None, grievance_summary: None` and `grievance classification failed - form skipped`.
-- **Fix**: In `channels/webchat/modules/eventHandlers.js`, extended `handleTaskStatusEvent` so that when a `task_status` WebSocket event arrives for `classify_and_summarize_grievance_task` with `status = SUCCESS`, the webchat appends a human‑readable message to the chat showing that classification has finished and, when available, the generated grievance summary and categories.
-- **Verification**: With the chat window still open, completing a grievance now results in a follow‑up chat message once the background classification task completes, confirming that analysis is done and displaying the summary/categories from the task payload.
+- **Fix**:
+  - On the **backend**: in `backend/api/routers/files.py` (`POST /task-status`), re‑implemented the old Flask behaviour for `source = "B"` (bot/webchat). When the LLM worker posts a `SUCCESS` update for `classify_and_summarize_grievance_task`, FastAPI now imports `socketio` from `backend.api.websocket_utils` and emits a `task_status` Socket.IO event to the `flask_session_id` room, with `{status, data, grievance_id, task_name}` – matching what `channels/webchat` listens for.
+  - On the **frontend** (`channels/webchat/modules/eventHandlers.js`): `handleTaskStatusEvent` already appends a human‑readable message when it receives a `task_status` for `classify_and_summarize_grievance_task`, using the `grievance_summary` and `grievance_categories` from the payload.
+- **Verification**: For grievance flows in the **Socket.IO webchat** (`channels/webchat`), with the chat window left open after filing, the next Celery `SUCCESS` callback for `classify_and_summarize_grievance_task` should now trigger a chat message like “We’ve finished analyzing your grievance…” with categories/summary. Behaviour for the REST webchat remains unchanged (no push yet).
 
 
-BUg 7 - Deactivate buttons/quick replies once we have passed that step in the process
+### B8 – Deactivate old quick-reply buttons after each step
 
-I have tried that in the flow, when asked to validate the by Yes or No, I have pressed a previous button skip, this will always mess up the bot so we need to make sure that the older quick replies messages are disables as soon as they send their response to the bot
-Please provide your address or Skip to skip
-10:50 AM
-Skip
-Skip
-10:50 AM
-Thank you for providing your location details: - Municipality: Birtamod Municipality - Village: Bulumbatur - Address: slot_skipped Is this correct?
-10:50 AM
-Yes
-No
-Skip
-10:50 AM
-Please enter your correct village and address
-10:50 AM
-Please provide your address or Skip to skip
-10:50 AM
-Skip
-logs below but I think that we can manage this in the UI
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
-2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Boolean slot extraction: validate_form_contact - complainant_municipality_confirmed | slot_value: True
-2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_municipality_confirmed: {'complainant_municipality_confirmed': True, 'complainant_municipality': 'Birtamod Municipality'}
-2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_village_temp | Session: temp_1772506017923_68ibyyg8m
-2026-03-03 10:50:13 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_village_temp | Session: temp_1772506017923_68ibyyg8m
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Slot extraction: validate_form_contact - complainant_village_temp | message_text: bulumbatur
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - complainant_municipality: Birtamod Municipality
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - output of validate_village_input: None None
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_village: {'complainant_village_temp': 'Bulumbatur', 'complainant_village_confirmed': False, 'complainant_village': 'Bulumbatur'}
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_ward | Session: temp_1772506017923_68ibyyg8m
-2026-03-03 10:50:19 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_ward | Session: temp_1772506017923_68ibyyg8m
-######## LocationValidator: Matched village: None
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
-2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Slot extraction: validate_form_contact - complainant_ward | message_text: 12
-2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Validate complainant_ward: {'complainant_ward': '12'}
-2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
-2026-03-03 10:50:25 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
-2026-03-03 10:50:27 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_confirmed | Session: temp_1772506017923_68ibyyg8m
-2026-03-03 10:50:27 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_confirmed | Session: temp_1772506017923_68ibyyg8m
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
-2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - get_utterance called from function: validate_complainant_address_confirmed
-2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action started: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
-2026-03-03 10:50:29 - rasa_chatbot.actions.base_classes.base_mixins - DEBUG - Action completed: action_ask_commons-action_ask_complainant_address_temp | Session: temp_1772506017923_68ibyyg8m
-INFO:     192.168.0.1:0 - "POST /message HTTP/1.0" 200 OK
+- **Status**: Done
+- **Area**: REST webchat UI – quick replies
+- **Problem**: After moving to a new step (e.g. confirming address with **Yes / No / Skip**), previous quick‑reply buttons such as an earlier **Skip** (“Please provide your address or Skip to skip”) remained visible and clickable. Clicking those old buttons later confused the flow (e.g. re‑triggering address prompts after confirmation).
+- **Example**:
+  - Bot: “Please provide your address or Skip to skip” → user presses **Skip**.
+  - Bot: “Thank you for providing your location details… Is this correct?” with **Yes / No / Skip**.
+  - User taps the **old** Skip from the earlier message, causing the bot to re‑ask address questions out of sequence.
+- **Fix**:
+  - In `eventHandlers.renderQuickReplies`, switched from appending to using `uiActions.replaceQuickReplies`, so each new bot message’s buttons replace all older quick‑reply blocks (only one active set at a time).
+  - In `uiActions.appendQuickReplies`, when a quick reply is clicked and sent to the backend, all `.quick-replies` elements are removed so those buttons cannot be reused.
+  - In `handleMessageSubmit` in `app.js`, when the user sends a typed message, all existing quick‑reply blocks are also cleared before sending, so typing an answer also deactivates buttons for that step.
+- **Verification**: In a fresh session, answering a step (by clicking a button or typing) removes that step’s buttons; only the latest question’s quick replies are ever active, and re‑clicking older options is no longer possible.

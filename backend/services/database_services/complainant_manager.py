@@ -73,9 +73,18 @@ class ComplainantDbManager(BaseDatabaseManager):
         self.logger.debug(f"Phone number '{standardized_phone}' hashed to '{search_phone}' in search")
         
         query = """
-            SELECT complainant_id, complainant_unique_id, complainant_full_name, complainant_phone,
-                   complainant_email, complainant_province, complainant_district,
-                   complainant_municipality, complainant_ward, complainant_village, complainant_address,
+            SELECT complainant_id,
+                   complainant_unique_id,
+                   complainant_full_name,
+                   complainant_phone,
+                   complainant_email,
+                   complainant_province,
+                   complainant_district,
+                   complainant_municipality,
+                   complainant_ward,
+                   complainant_village,
+                   complainant_address,
+                   complainant_phone_verified,
                    created_at
             FROM complainants
             WHERE complainant_phone_hash = %s
@@ -99,9 +108,18 @@ class ComplainantDbManager(BaseDatabaseManager):
             
     def get_complainant_by_id(self, complainant_id: str) -> Optional[Dict[str, Any]]:
         query = """
-            SELECT complainant_id, complainant_unique_id, complainant_full_name,    complainant_phone,
-                   complainant_email, complainant_province, complainant_district,
-                   complainant_municipality, complainant_ward, complainant_village, complainant_address,
+            SELECT complainant_id,
+                   complainant_unique_id,
+                   complainant_full_name,
+                   complainant_phone,
+                   complainant_email,
+                   complainant_province,
+                   complainant_district,
+                   complainant_municipality,
+                   complainant_ward,
+                   complainant_village,
+                   complainant_address,
+                   complainant_phone_verified,
                    created_at
             FROM complainants
             WHERE complainant_id = %s
@@ -150,7 +168,7 @@ class ComplainantDbManager(BaseDatabaseManager):
         """Update an existing complainant record with encrypted sensitive fields"""
         try:
             self.logger.info(f"update_complainant: Updating complainant with ID: {complainant_id}")
-            allowed_fields = ['complainant_full_name', 'complainant_phone', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
+            allowed_fields = ['complainant_full_name', 'complainant_phone', 'complainant_phone_verified', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
             # ensure the phone number is standardized
             if data.get('complainant_phone'):
                 data['complainant_phone'] = self._standardize_phone_number(data['complainant_phone'])

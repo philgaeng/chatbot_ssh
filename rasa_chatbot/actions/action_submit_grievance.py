@@ -72,7 +72,7 @@ class BaseActionSubmit(BaseAction):
                  "complainant_address",
                  "grievance_id",
                  "grievance_description",
-                 "otp_verified",
+                 "otp_verified"
                  ]
 
         if review:
@@ -93,7 +93,10 @@ class BaseActionSubmit(BaseAction):
         grievance_timeline = self.helpers_repo.get_timeline_by_status_code(status_update_code=self.GRIEVANCE_STATUS["SUBMITTED"],
         grievance_high_priority=grievance_data.get("grievance_high_priority", False),
         sensitive_issues_detected=grievance_data.get("grievance_sensitive_issue", False))
-        
+
+        #rename the slot otp_verified to complainant_phone_verified to save in db the fact that the phone number was verified - not the OTP status
+        grievance_data["complainant_phone_verified"] = grievance_data.get("otp_verified", False)
+        grievance_data.pop("otp_verified")
 
         grievance_data["submission_type"] = "new_grievance"
         grievance_data["grievance_timestamp"] = grievance_timestamp

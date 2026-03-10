@@ -52,7 +52,7 @@ if [ -f "$ORCH_PID_FILE" ]; then
   fi
 fi
 
-PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn orchestrator.main:app \
+PYTHONPATH="$BASE_DIR" nohup python3 -m uvicorn backend.orchestrator.main:app \
   --host 0.0.0.0 \
   --port "$ORCH_PORT" \
   > "$ORCH_LOG" 2>&1 &

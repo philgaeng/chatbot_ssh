@@ -340,7 +340,68 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
     
     except Exception as e:
         raise ValueError(f"Error translating grievance to English: {str(e)} - input_data: {input_data} - result: {result}")
-        
+
+
+def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:
+    """
+    Lightweight LLM call to detect if text describes sexual or gender harassment only.
+    Does not flag land issues or violence (those are high_priority, not sensitive_content).
+
+    Returns:
+        Dict with: detected (bool), level ("high"|"medium"|"low"), message (str excerpt or "").
+        On parse/LLM failure returns detected=False, level="low", message="".
+    """
+    if not client:
+        logger.warning("detect_sensitive_content_llm: OpenAI client not available")
+        return {"detected": False, "level": "low", "message": ""}
+    if not text or not text.strip():
+        logger.debug("detect_sensitive_content_llm: empty text, skipping detection")
+        return {"detected": False, "level": "low", "message": ""}
+    try:
+        lang_label = "Nepali" if language_code == "ne" else "English"
+        logger.debug(
+            "detect_sensitive_content_llm: calling LLM | language_code=%s, snippet=%r",
+            language_code,
+            text[:120],
+        )
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an assistant that detects if a user is reporting sexual or gender harassment in the cultural context of provincial Nepal - be extra sensitive as awareness around the issue is low and people may be reluctant to report and evasive when reporting, so anything that may imply sexual or gender harassment should be flagged, even things like being looked at or smiled at or followed or touched. Do NOT flag land issues, property disputes, or physical violence—only sexual assault or gender/sexual harassment. Respond with a JSON object only, no other text.",
+                },
+                {
+                    "role": "user",
+                    "content": f"""Does this text in {lang_label} contain any content related to the user reporting sexual or gender harassment in the cultural context of provincial Nepal? Do not flag land issues or violence.
+
+Text: "{text[:2000]}"
+
+Respond with a JSON object only: {{"detected": true or false, "level": "high" or "medium" or "low", "message": "short excerpt of the relevant part of the text, or empty string if not detected"}}""",
+                },
+            ],
+            model="gpt-3.5-turbo",
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content.strip()
+        out = json.loads(raw)
+        detected = bool(out.get("detected", False))
+        level = out.get("level", "low")
+        if level not in ("high", "medium", "low"):
+            level = "low"
+        message = out.get("message") or ""
+        if not isinstance(message, str):
+            message = str(message)[:200]
+        logger.info(
+            "detect_sensitive_content_llm: result | detected=%s, level=%s, message_snippet=%r",
+            detected,
+            level,
+            (message or "")[:120],
+        )
+        return {"detected": detected, "level": level, "message": message}
+    except Exception as e:
+        logger.warning(f"detect_sensitive_content_llm failed: {e}")
+        return {"detected": False, "level": "low", "message": ""}
+
 
 def extract_input_data_for_translation(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Extract the input data for translation from nested data structures

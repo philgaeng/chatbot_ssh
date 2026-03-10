@@ -224,6 +224,18 @@ class ActionAskStatusCheckMethod(BaseAction):
         return "action_ask_status_check_method"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        """
+        Ask the user how they want to retrieve their grievance.
+
+        Guard against duplicate prompts: once a concrete route has already been
+        selected (phone or grievance_id), we avoid re-sending this generic
+        explanation + buttons again in the same flow step.
+        """
+        story_route = tracker.get_slot("story_route")
+        if story_route in ["route_status_check_phone", "route_status_check_grievance_id"]:
+            # Route already chosen; don't repeat the method prompt.
+            return []
+
         utterance = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=utterance, buttons=buttons)
@@ -242,7 +254,11 @@ class ActionAskFormStatusCheck1ComplainantPhone(BaseAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> List[Dict[Text, Any]]:
-        if tracker.get_slot("complainant_phone_valid") is False:
+        status_valid = tracker.get_slot("complainant_phone_verified")
+        if status_valid == "no_phone_found":
+            message = self.get_utterance(3)
+            buttons = self.get_buttons(1)
+        elif tracker.get_slot("complainant_phone_valid") is False:
             message = self.get_utterance(2)
             buttons = self.get_buttons(2)
         else:
@@ -310,7 +326,15 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         complainant_phone = tracker.get_slot("complainant_phone")
         grievance_id = tracker.get_slot("status_check_grievance_id_selected")
-        if not tracker.get_slot("otp_status") == "verified":
+
+        # A phone is considered verified if either:
+        # - the persisted DB flag says so (complainant_phone_verified), or
+        # - in this conversation the OTP status was verified.
+        phone_verified_db = tracker.get_slot("complainant_phone_verified")
+        otp_status = tracker.get_slot("otp_status")
+        is_phone_verified = bool(phone_verified_db) or otp_status == "verified"
+
+        if not (complainant_phone and is_phone_verified):
             utterance = self.get_utterance(1)
             dispatcher.utter_message(text=utterance)
         else:
@@ -354,9 +378,12 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
 class ActionStatusCheckModifyGrievance(BaseAction):
     def name(self) -> Text:
         return "action_status_check_modify_grievance"
-    
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text="utterance - modify grievance")
+        self._initialize_language_and_helpers(tracker)
+        utterance = self.get_utterance(1)
+        buttons = self.get_buttons(1)
+        dispatcher.utter_message(text=utterance, buttons=buttons)
         return []
 
 
@@ -380,19 +407,31 @@ class ActionStatusCheckRetrieveComplainantData(BaseAction):
                 "complainant_municipality",
                 "complainant_village",
                 "complainant_address",
+                "complainant_phone_verified",
             ]
-            
+
             # Set all complainant data slots
-            slot_events = [SlotSet(item, complainant_data.get(item)) 
-                          for item in complainant_data.keys() 
-                          if item in list_complainant_fields]
-            
+            slot_events = [
+                SlotSet(item, complainant_data.get(item))
+                for item in complainant_data.keys()
+                if item in list_complainant_fields
+            ]
+
             # Check if phone is valid and set the validation slot
             if self.helpers.is_valid_phone(complainant_data.get("complainant_phone")):
                 slot_events.append(SlotSet("status_check_complainant_phone_valid", True))
             else:
                 slot_events.append(SlotSet("status_check_complainant_phone_valid", False))
-            
+
+            # Mirror DB flag into tracker slot for downstream status-check logic.
+            if "complainant_phone_verified" in complainant_data:
+                slot_events.append(
+                    SlotSet(
+                        "complainant_phone_verified",
+                        complainant_data.get("complainant_phone_verified"),
+                    )
+                )
+
             return slot_events
         else:
             # No complainant data found

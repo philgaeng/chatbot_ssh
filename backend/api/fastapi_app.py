@@ -37,13 +37,24 @@ elif _env.exists():
     except ImportError:
         pass
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from backend.api.routers import grievance, files, voice_grievance, gsheet
+from backend.api.websocket_fastapi import socketio_app
 
 app = FastAPI(title="Backend API", version="0.1.0")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Ensure 500 and other unhandled errors return JSON so clients do not get plain 'Internal Server Error'."""
+    logging.getLogger(__name__).exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": str(exc)},
+    )
 
 # Same CORS policy as Flask: allow all origins for /*
 app.add_middleware(
@@ -68,3 +79,6 @@ app.include_router(files.router)
 # Voice and gsheet: no prefix (paths are /accessible-file-upload, etc., and /gsheet-get-grievances)
 app.include_router(voice_grievance.router)
 app.include_router(gsheet.router)
+
+# Socket.IO ASGI app for accessible interface, mounted at /accessible-socket.io
+app.mount("/accessible-socket.io", socketio_app)

@@ -1186,6 +1186,7 @@ class TableDbManager(BaseDatabaseManager):
                 complainant_phone_hash TEXT,
                 complainant_email_hash TEXT,
                 complainant_full_name_hash TEXT,
+                complainant_phone_verified BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)

@@ -1,8 +1,12 @@
+import logging
 from typing import Any, Dict, Text, List
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 from rasa_chatbot.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
+
+logger = logging.getLogger(__name__)
+
 
 class ValidateFormSensitiveIssues(BaseFormValidationAction):
     def name(self) -> Text:
@@ -19,7 +23,7 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
         #case where the user wants to add more details
         if tracker.get_slot("sensitive_issues_follow_up") == "more_details":
             required_slots.append("sensitive_issues_new_detail")
-        return domain_slots
+        return required_slots
         
     async def extract_sensitive_issues_follow_up(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         return await self._handle_slot_extraction(
@@ -34,10 +38,12 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
                                                    tracker: Tracker, 
                                                    domain: Dict[Text, Any]
                                                    ) -> List[Dict[Text, Any]]:
-        
-      
-        
-        if slot_value == "/not_sensitive_content" or self.SKIP_VALUE in slot_value:
+        # Normalize command-style payloads (e.g. "/exit", "/anonymous_with_phone") to bare names.
+        raw = slot_value if isinstance(slot_value, str) else str(slot_value)
+        cmd = raw.lstrip("/") if raw else raw
+
+        # Case: user says it's not sensitive after all
+        if cmd == "not_sensitive_content" or (isinstance(slot_value, str) and self.SKIP_VALUE in slot_value):
             
             return {"grievance_sensitive_issue": False,
                     "sensitive_issues_category": None,
@@ -45,26 +51,34 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
                     "sensitive_issues_message": None,
                     "sensitive_issues_confidence": None}
         
-        # Preparing the slots for the anonymous filing
-        filling_slots_for_anonymous_filing = {"complainant_location_consent": False,
-                    "complainant_municipality_temp": self.SKIP_VALUE,
-                    "complainant_municipality": self.SKIP_VALUE,
-                    "complainant_municipality_confirmed": False,
-                    "complainant_village": self.SKIP_VALUE,
-                    "complainant_address_temp": self.SKIP_VALUE,
-                    "complainant_address": self.SKIP_VALUE,
-                    "complainant_address_confirmed": False,
-                    "complainant_consent": self.SKIP_VALUE,
-                    "complainant_full_name": self.SKIP_VALUE,
-                    "complainant_email_temp": self.SKIP_VALUE,
-                    "complainant_email_confirmed": self.SKIP_VALUE
-                    }
+        # Preparing the slots for the anonymous filing.
+        # Must match contact form's required slots so /exit and /anonymous_with_phone skip contact questions.
+        # Align with form_contact.validate_complainant_location_consent(False) + consent slots.
+        filling_slots_for_anonymous_filing = {
+            "complainant_location_consent": False,
+            "complainant_province": self.SKIP_VALUE,
+            "complainant_district": self.SKIP_VALUE,
+            "complainant_municipality_temp": self.SKIP_VALUE,
+            "complainant_municipality": self.SKIP_VALUE,
+            "complainant_municipality_confirmed": False,
+            "complainant_village": self.SKIP_VALUE,
+            "complainant_village_temp": self.SKIP_VALUE,
+            "complainant_village_confirmed": False,
+            "complainant_ward": self.SKIP_VALUE,
+            "complainant_address_temp": self.SKIP_VALUE,
+            "complainant_address": self.SKIP_VALUE,
+            "complainant_address_confirmed": False,
+            "complainant_consent": self.SKIP_VALUE,
+            "complainant_full_name": self.SKIP_VALUE,
+            "complainant_email_temp": self.SKIP_VALUE,
+            "complainant_email_confirmed": self.SKIP_VALUE,
+        }
         #case where the user wants to add more details
-        if slot_value == "/add_more_details":
+        if cmd == "add_more_details":
             filling_slots_for_anonymous_filing["sensitive_issues_follow_up"] = "more_details"
-            filling_slots_for_anonymous_filing['complainant_consent'] = "anonymous"
+            filling_slots_for_anonymous_filing["complainant_consent"] = "anonymous"
+            logger.info("form_sensitive_issues: /add_more_details -> slots for anonymous filing + more_details")
             return filling_slots_for_anonymous_filing
-        
 
         #helper function to update grievance description slots if the content was detected at that step
         def update_grievance_description_slots_sensitive_issues(slots: Dict[Text, Any]):
@@ -72,18 +86,40 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
                 slots["grievance_description_status"] = "completed"
                 slots["grievance_new_detail"] = "completed"
             return slots
-        
+
         filling_slots_for_anonymous_filing = update_grievance_description_slots_sensitive_issues(filling_slots_for_anonymous_filing)
+
+        # /exit = "File anonymously" (no phone) -> same as skip
+        if cmd == "exit":
+            filling_slots_for_anonymous_filing["sensitive_issues_follow_up"] = "anonymous_no_phone"
+            filling_slots_for_anonymous_filing["complainant_consent"] = "anonymous"
+            filling_slots_for_anonymous_filing["complainant_phone"] = self.SKIP_VALUE
+            filling_slots_for_anonymous_filing["phone_validation_required"] = False
+            logger.info(
+                "form_sensitive_issues: /exit -> anonymous_no_phone, contact slots pre-filled (%d slots)",
+                len(filling_slots_for_anonymous_filing),
+            )
+            return filling_slots_for_anonymous_filing
+
+        # /anonymous_with_phone = "File anonymously with one phone number" -> ask for complainant_phone next
+        if cmd == "anonymous_with_phone":
+            filling_slots_for_anonymous_filing["sensitive_issues_follow_up"] = "anonymous_with_phone"
+            filling_slots_for_anonymous_filing["complainant_consent"] = "anonymous"
+            logger.info(
+                "form_sensitive_issues: /anonymous_with_phone -> contact slots pre-filled (%d slots)",
+                len(filling_slots_for_anonymous_filing),
+            )
+            return filling_slots_for_anonymous_filing
 
         #case where the user skips - we proceed with the anonymous filing without phone
         if slot_value == self.SKIP_VALUE:
             filling_slots_for_anonymous_filing["complainant_phone"] = self.SKIP_VALUE
             filling_slots_for_anonymous_filing["phone_validation_required"] = False
-            
             return filling_slots_for_anonymous_filing
-        
-        #case where the user wants to file anonymously with a phone number
-        if slot_value == "/anonymous":
+
+        #case where the user wants to file anonymously with a phone number (legacy payload)
+        if cmd == "anonymous":
+            filling_slots_for_anonymous_filing["sensitive_issues_follow_up"] = "anonymous_with_phone"
             filling_slots_for_anonymous_filing["complainant_consent"] = "anonymous"
             return filling_slots_for_anonymous_filing
         return {}
@@ -129,31 +165,23 @@ class ValidateFormSensitiveIssues(BaseFormValidationAction):
 
     async def validate_form_sensitive_issues_complainant_phone(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         """Validate phone number and set validation requirement."""
-        if self.SKIP_VALUE in slot_value:
-            result = {
-                "complainant_phone": self.SKIP_VALUE
-            }
-        elif slot_value.startswith("/"):
-            result = {"complainant_phone": None}  
-        
-        # Validate phone number format
-        elif not self.helpers.is_valid_phone(slot_value):
+        if slot_value is None or slot_value == self.SKIP_VALUE or (isinstance(slot_value, (list, str)) and self.SKIP_VALUE in slot_value):
+            return {"complainant_phone": self.SKIP_VALUE}
+        if isinstance(slot_value, str) and slot_value.strip().startswith("/"):
+            return {"complainant_phone": None}
+        if not self.helpers.is_valid_phone(slot_value):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            result = {"complainant_phone": None}
-
-
-        
+            return {"complainant_phone": None}
         if self.helpers.is_philippine_phone(slot_value):
-            result = {
-                "complainant_phone": self.helpers.is_philippine_phone(slot_value),
-                "phone_validation_required": True
-            }
             dispatcher.utter_message(text="You entered a PH number for validation.")
-        else:
-            result = {
+            return {
+                "complainant_phone": self.helpers.is_philippine_phone(slot_value),
+                "phone_validation_required": True,
+            }
+        result = {
             "complainant_phone": slot_value,
-            "phone_validation_required": True
+            "phone_validation_required": True,
         }
         self.logger.debug(f"Validate complainant_phone: {result['complainant_phone']}")
         return result
@@ -192,6 +220,21 @@ class ActionAskFormSensitiveIssuesComplainantPhone(BaseAction):
         return "action_ask_form_sensitive_issues_complainant_phone"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        message = self.get_utterance(1)
+        buttons = self.get_buttons(1)
+        dispatcher.utter_message(text=message, buttons=buttons)
+        return []
+
+class ActionOutroSensitiveIssues(BaseAction):
+    def name(self) -> Text:
+        return "action_outro_sensitive_issues"
+    
+    async def execute_action(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Dict[Text, Any]]:
         message = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)

@@ -68,6 +68,7 @@ __all__ = [
     'extract_contact_info_task',
     'translate_grievance_to_english_task',
     'store_result_to_db_task',
+    'detect_sensitive_content_task',
 ]
 
 # Initialize FileServerCore
@@ -689,6 +690,81 @@ def classify_and_summarize_grievance_task(self,
             'task_id': self.request.task_id,
             'entity_key': entity_key,
         }
+
+@TaskManager.register_task(task_type='LLM')
+def detect_sensitive_content_task(
+    self,
+    text: str,
+    language_code: str,
+    grievance_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    complainant_id: Optional[str] = None,
+    emit_websocket: bool = False,
+) -> Dict[str, Any]:
+    """
+    Lightweight LLM task: detect sexual/gender harassment only (not land issues or violence).
+    Input: text, language_code, optional grievance_id, session_id, complainant_id.
+    Output: { "detected": bool, "level": "high"|"medium"|"low", "message": str }.
+    Result is persisted to DB (grievance.grievance_sensitive_issue) via DatabaseTaskManager,
+    same pattern as classify_and_summarize_grievance_task, so Submit details can read it.
+    """
+    logger = __import__("logging").getLogger(__name__)
+    try:
+        from backend.services.LLM_services import detect_sensitive_content_llm
+    except Exception as e:
+        logger.warning(f"detect_sensitive_content_task import failed: {e}")
+        return {"detected": False, "level": "low", "message": ""}
+
+    logger.info(
+        "detect_sensitive_content_task: start | grievance_id=%s, complainant_id=%s, language_code=%s, text_snippet=%r",
+        grievance_id,
+        complainant_id,
+        language_code,
+        (text or "")[:120],
+    )
+    result = detect_sensitive_content_llm(text, language_code)
+    detected = result.get("detected", False)
+    level = result.get("level", "low")
+    message = result.get("message", "")
+    logger.info(
+        "detect_sensitive_content_task: llm_result | grievance_id=%s, complainant_id=%s, detected=%s, level=%s, message_snippet=%r",
+        grievance_id,
+        complainant_id,
+        detected,
+        level,
+        (message or "")[:120],
+    )
+
+    if not grievance_id or not complainant_id:
+        logger.warning(
+            "detect_sensitive_content_task: missing ids for DB write | grievance_id=%s, complainant_id=%s",
+            grievance_id,
+            complainant_id,
+        )
+        return {"detected": detected, "level": level, "message": message}
+    task_id = self.request.id if hasattr(self, "request") else None
+    input_data = {
+        "status": SUCCESS,
+        "operation": "sensitive_detection",
+        "entity_key": "grievance_id",
+        "entity_id": grievance_id,
+        "grievance_id": grievance_id,
+        "complainant_id": complainant_id,
+        "task_id": task_id,
+        "values": {"grievance_sensitive_issue": detected},
+    }
+    try:
+        db_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
+        db_mgr.handle_db_operation(input_data)
+        logger.info(
+            "detect_sensitive_content_task: DB updated | grievance_id=%s, detected=%s",
+            grievance_id,
+            detected,
+        )
+    except Exception as e:
+        logger.warning(f"detect_sensitive_content_task DB write failed: {e}")
+    return {"detected": detected, "level": level, "message": message}
+
 
 @TaskManager.register_task(task_type='LLM')
 def extract_contact_info_task(self, input_data: Dict[str, Any], 

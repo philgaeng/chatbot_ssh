@@ -1,4 +1,4 @@
-from orchestrator.adapters import CollectingDispatcher, SessionTracker
+from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 
 
 def test_collecting_dispatcher_text_and_buttons():

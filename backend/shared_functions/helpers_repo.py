@@ -79,14 +79,16 @@ class HelpersRepo:
             
             # Detect sensitive content
             result = self.keyword_detector.detect_sensitive_content(text)
-            
-            # Return structured result
+            # level as string (e.g. result.level.value if enum) for serialization
+            level = result.level
+            level_str = level.value if hasattr(level, 'value') else str(level)
             return {
                 'detected': result.detected,
-                'level': result.level,
+                'level': level_str,
                 'category': result.category,
                 'message': result.message,
-                'action_required': result.action_required
+                'action_required': result.action_required,
+                'confidence': getattr(result, 'confidence', 0.0),
             }
         except Exception as e:
             # Return safe default on error
@@ -95,7 +97,8 @@ class HelpersRepo:
                 'level': 'low',
                 'category': 'unknown',
                 'message': f'Error in detection: {str(e)}',
-                'action_required': 'none'
+                'action_required': False,
+                'confidence': 0.0,
             }
 
     def validate_string_length(self, text: str, min_length: int = 2) -> bool:

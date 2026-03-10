@@ -248,52 +248,60 @@ async def upload_files(
         },
     )
 
-    if not grievance_id:
-        file_server_core.log_event(event_type=FAILED, details={"error": "No grievance_id provided"})
-        error_message = get_utterance("file_server", "upload_files", 1, language_code)
-        return JSONResponse({"error": error_message}, status_code=400)
+    try:
+        if not grievance_id:
+            file_server_core.log_event(event_type=FAILED, details={"error": "No grievance_id provided"})
+            error_message = get_utterance("file_server", "upload_files", 1, language_code)
+            return JSONResponse({"error": error_message}, status_code=400)
 
-    if not files:
-        file_server_core.log_event(event_type=FAILED, details={"error": "No files in files[] list"})
-        error_message = get_utterance("file_server", "upload_files", 4, language_code)
-        return JSONResponse({"error": error_message}, status_code=400)
+        if not files:
+            file_server_core.log_event(event_type=FAILED, details={"error": "No files in files[] list"})
+            error_message = get_utterance("file_server", "upload_files", 4, language_code)
+            return JSONResponse({"error": error_message}, status_code=400)
 
-    uploaded_files, oversized_files, wrong_extensions_list = _validate_files(
-        file_server_core, files, grievance_id
-    )
-
-    if not uploaded_files:
-        file_server_core.log_event(event_type=FAILED, details={"error": "All files were invalid"})
-        return JSONResponse(
-            {
-                "error": "All files were invalid",
-                "wrong_extensions_list": wrong_extensions_list,
-                "oversized_files": oversized_files,
-                "max_file_size": MAX_FILE_SIZE,
-            },
-            status_code=400,
+        uploaded_files, oversized_files, wrong_extensions_list = _validate_files(
+            file_server_core, files, grievance_id
         )
 
-    file_data = uploaded_files[0]
-    result = process_file_upload_task.delay(
-        grievance_id=grievance_id,
-        file_data=file_data,
-        session_id=flask_session_id,
-    )
+        if not uploaded_files:
+            file_server_core.log_event(event_type=FAILED, details={"error": "All files were invalid"})
+            return JSONResponse(
+                {
+                    "error": "All files were invalid",
+                    "wrong_extensions_list": wrong_extensions_list,
+                    "oversized_files": oversized_files,
+                    "max_file_size": MAX_FILE_SIZE,
+                },
+                status_code=400,
+            )
 
-    return JSONResponse(
-        {
-            "status": STARTED,
-            "flask_session_id": flask_session_id,
-            "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
-            "files": [f["file_id"] for f in uploaded_files],
-            "oversized_files": oversized_files,
-            "wrong_extensions_list": wrong_extensions_list,
-            "max_file_size": MAX_FILE_SIZE,
-            "task_id": result.id,
-        },
-        status_code=202,
-    )
+        file_data = uploaded_files[0]
+        result = process_file_upload_task.delay(
+            grievance_id=grievance_id,
+            file_data=file_data,
+            session_id=flask_session_id,
+        )
+
+        return JSONResponse(
+            {
+                "status": STARTED,
+                "flask_session_id": flask_session_id,
+                "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
+                "files": [f["file_id"] for f in uploaded_files],
+                "oversized_files": oversized_files,
+                "wrong_extensions_list": wrong_extensions_list,
+                "max_file_size": MAX_FILE_SIZE,
+                "task_id": result.id,
+            },
+            status_code=202,
+        )
+    except Exception as e:
+        file_server_core.log_event(event_type=FAILED, details={"error": str(e)})
+        error_message = get_utterance("file_server", "upload_files", 6, language_code)
+        return JSONResponse(
+            {"error": error_message, "detail": str(e)},
+            status_code=500,
+        )
 
 
 @router.get("/files/{item}")
@@ -507,14 +515,39 @@ async def task_status_update(request: Request):
         emit_fn = get_emit_status_update_accessible()
 
         if source == "A":
+            # Accessible interface: emit status updates to the accessible Socket.IO app
             if grievance_id:
                 emit_fn(grievance_id, status, task_data)
         else:
-            # Bot interface: would use socketio.emit to room flask_session_id.
-            # Flask used socketio from websocket_utils here; 8C can provide a similar
-            # helper and we can call it via set_emit_status_update_accessible or a second
-            # callback. For now we only stub the accessible emit.
-            pass
+            # Bot/webchat interface (source "B"): mirror previous Flask behaviour by
+            # emitting Socket.IO events that the webchat listens for ("task_status"
+            # and "file_status_update") using the Flask session ID as the room.
+            if flask_session_id:
+                try:
+                    from backend.api.websocket_utils import socketio  # lazy import
+
+                    task_name = task_data.get("task_name", "unknown")
+                    if "file" in str(task_name).lower():
+                        event_name = "file_status_update"
+                    else:
+                        event_name = "task_status"
+
+                    socketio.emit(
+                        event_name,
+                        {
+                            "status": status,
+                            "data": task_data,
+                            "grievance_id": grievance_id,
+                            "flask_session_id": flask_session_id,
+                            "task_name": task_name,
+                        },
+                        room=flask_session_id,
+                    )
+                except Exception as emit_error:
+                    file_server_core.log_event(
+                        event_type="task_status_emit_error",
+                        details={"error": str(emit_error), "source": source},
+                    )
 
         file_server_core.log_event(
             event_type="task_status_emitted",

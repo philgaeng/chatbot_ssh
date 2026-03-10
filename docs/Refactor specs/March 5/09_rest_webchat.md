@@ -149,6 +149,54 @@ Leave file upload logic unchanged (still hitting Flask) but ensure:
 
 - When grievance ID is set via orchestrator `json_message`/`custom`, you update `window.grievanceId` in your `handleCustomPayload` so uploads continue to work.
 
+### 6. Utterances file (frontend-only copy)
+
+**Purpose:** Centralize all user-facing strings in REST_webchat so copy is maintained in one place. The frontend handles some flows without orchestrator calls (e.g. file upload “Go back”, errors), so these messages live in the frontend.
+
+**File:** `channels/REST_webchat/utterances.js`
+
+**Structure:** Same en/ne pattern as `utterance_mapping_rasa.py` for consistency:
+
+```js
+// utterances.js
+const LANG = "en"; // or "ne" when bilingual
+
+export const U = {
+  errors: {
+    connection: { en: "Sorry, there seems to be a connection issue...", ne: "..." },
+    timeout: { en: "...", ne: "..." },
+  },
+  file_upload: {
+    post_upload: { en: "Files uploaded. You can add more files...", ne: "..." },
+    transition: { en: "Your files are uploaded. Here's where we left off.", ne: "..." },
+    failure: { en: "One or more files could not be saved...", ne: "..." },
+    buttons: { add_more: { en: "Add more files", ne: "..." }, go_back: { en: "Go back to chat", ne: "..." } },
+    no_grievance: { en: "To attach files, first start a grievance...", ne: "..." },
+    voice_detected: { en: "Voice recordings detected...", ne: "..." },
+    oversized: { en: "Some files are too large and will be skipped:", ne: "..." },
+    processing_long: { en: "File processing is taking longer than expected...", ne: "..." },
+    processing: { en: "Processing files...", ne: "..." },
+    file_saved: { en: "File is saved in the database.", ne: "..." },
+    // ...
+  },
+  task_status: {
+    classification_done: { en: "We've finished analyzing your grievance...", ne: "..." },
+    // ...
+  },
+};
+
+export function get(keyPath, lang = LANG) {
+  const keys = keyPath.split(".");
+  let v = U;
+  for (const k of keys) v = v?.[k];
+  return (typeof v === "object" && v?.[lang]) ? v[lang] : (v?.en ?? String(v ?? ""));
+}
+```
+
+**Usage:** `import { get } from "./utterances.js";` then `get("file_upload.post_upload")` or `get("errors.connection")`. All hardcoded strings in `app.js`, `eventHandlers.js`, and `uiActions.js` should be moved to `utterances.js` and referenced via `get(...)`.
+
+**Default language:** `DEFAULT_LANG = "ne"` (Nepali); English (`en`) is for testing. To switch language, call `get(keyPath, "en")` or pass lang from URL/settings.
+
 ---
 
 ## Testing Plan
@@ -195,6 +243,7 @@ These API tests should continue to pass as-is and serve as the backend contract 
 ## Checklist
 
 - [x] `channels/REST_webchat/` created and wired to orchestrator REST API
+- [x] `channels/REST_webchat/utterances.js` created; all frontend-only copy moved from app.js, eventHandlers.js, uiActions.js
 - [x] Socket.IO removed or no-op in REST_webchat (no dependency on Rasa)
 - [x] `safeSendMessage` uses `fetch` to call `POST /message`
 - [x] Orchestrator responses rendered correctly (text, buttons, custom payloads)
