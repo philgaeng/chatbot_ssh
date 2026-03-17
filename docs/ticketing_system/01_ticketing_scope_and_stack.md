@@ -18,18 +18,18 @@
   No direct DB access to the chatbot’s DB. Ticketing exposes REST APIs for:
   - Chatbot (or backend): create/update ticket, link grievance/session.
   - Optional future UI: list tickets, assign, approve, add comments.
-  Messaging (SMS/email) is only via a Messaging API.
+    Messaging (SMS/email) is only via a Messaging API.
 
 ---
 
 ## Stack
 
-| Layer | Technology | Rationale |
-|-------|------------|-----------|
-| **Ticketing API & business logic** | **Python 3.x + FastAPI** | Aligns with existing orchestrator and backend (FastAPI). Same ecosystem (Pydantic, async), easy to share patterns and possibly auth/middleware. |
-| **Background jobs / workers** | **Python (Celery or FastAPI + async tasks)** | Notifications, workflow transitions, scheduled escalation. Reuse Celery if already in use for the chatbot backend, or use async task queue in FastAPI. |
-| **Optional UI / real-time** | **Node.js** | If v1 includes a web UI for agents (dashboard, real-time updates), Node.js can serve the frontend and/or WebSocket/SSE. Keeps UI stack separate from core API. Can be deferred if v1 is API-only. |
-| **Database** | **PostgreSQL** | Same as current grievance DB; can share instance or use dedicated DB. Strong support for JSON (settings, workflow config), roles, and reporting. |
+| Layer                              | Technology                                   | Rationale                                                                                                                                                                                         |
+| ---------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ticketing API & business logic** | **Python 3.x + FastAPI**                     | Aligns with existing orchestrator and backend (FastAPI). Same ecosystem (Pydantic, async), easy to share patterns and possibly auth/middleware.                                                   |
+| **Background jobs / workers**      | **Python (Celery or FastAPI + async tasks)** | Notifications, workflow transitions, scheduled escalation. Reuse Celery if already in use for the chatbot backend, or use async task queue in FastAPI.                                            |
+| **Optional UI / real-time**        | **Node.js**                                  | If v1 includes a web UI for agents (dashboard, real-time updates), Node.js can serve the frontend and/or WebSocket/SSE. Keeps UI stack separate from core API. Can be deferred if v1 is API-only. |
+| **Database**                       | **PostgreSQL**                               | Same as current grievance DB; can share instance or use dedicated DB. Strong support for JSON (settings, workflow config), roles, and reporting.                                                  |
 
 ### Why Python + FastAPI for the core
 
@@ -83,13 +83,14 @@
 
 ## Deployment Options
 
-| Option | Description | When to use |
-|--------|-------------|-------------|
-| **Same repo, same process** | Ticketing routes mounted in the same FastAPI app as backend/orchestrator. Shared DB or schema. | Fastest path; good if ticketing is always used with this chatbot. |
-| **Same repo, separate process** | Ticketing is a separate FastAPI app in the same repo (e.g. `ticketing/main.py`), own port, own DB or schema. | Clear separation, same codebase; deploy separately when needed. |
-| **Separate repo, separate service** | Ticketing in its own repo and deployment; talks to chatbot and messaging only via API. | Maximum independence; multiple chatbots or teams owning ticketing. |
+| Option                              | Description                                                                                                  | When to use                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| **Same repo, same process**         | Ticketing routes mounted in the same FastAPI app as backend/orchestrator. Shared DB or schema.               | Fastest path; good if ticketing is always used with this chatbot.  |
+| **Same repo, separate process**     | Ticketing is a separate FastAPI app in the same repo (e.g. `ticketing/main.py`), own port, own DB or schema. | Clear separation, same codebase; deploy separately when needed.    |
+| **Separate repo, separate service** | Ticketing in its own repo and deployment; talks to chatbot and messaging only via API.                       | Maximum independence; multiple chatbots or teams owning ticketing. |
 
-Recommendation: start with **same repo, separate process** (and optionally separate DB schema) so that:
+Recommendation: start with **same repo, separate process** (and optionally separate DB schema) so that: Agree
+
 - Chatbot and ticketing can be developed and versioned together.
 - Ticketing can later be split into its own repo/service without changing the API contract.
 
@@ -97,11 +98,11 @@ Recommendation: start with **same repo, separate process** (and optionally separ
 
 ## Out of Scope for v1 (candidates for later)
 
-- Full-blown agent UI (can start with API + minimal dashboard or read-only view).
-- SSO / advanced identity provider integration (can start with API keys or simple JWT).
-- Custom report builder; v1 can have a few fixed reports or exports.
-- Mobile app for agents.
-- Multi-language UI (can follow chatbot language strategy later).
+- Full-blown agent UI (can start with API + minimal dashboard or read-only view). -needed
+- SSO / advanced identity provider integration (can start with API keys or simple JWT). -ok
+- Custom report builder; v1 can have a few fixed reports or exports. OK
+- Mobile app for agents. - not needed - web version only
+- Multi-language UI (can follow chatbot language strategy later). - english only
 
 ---
 

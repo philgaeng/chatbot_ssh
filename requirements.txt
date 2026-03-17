@@ -1,74 +1,51 @@
-# Core Rasa and Chatbot Framework
-rasa==3.6.21
+# requirements_rest.txt
+# Python dependencies for the REST application stack only.
+# Python: 3.10 recommended (compatible with rasa-sdk 3.6.x)
+# No Rasa, TensorFlow, or NLU libraries.
+# Use with: pip install -r requirements_rest.txt
+#
+# Stack: orchestrator (FastAPI) + backend (Flask) + rasa_chatbot.actions (via rasa-sdk)
+# Channels: REST_webchat, accessible, shared (frontend - no Python deps)
+
+# --- Orchestrator ---
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pyyaml>=6.0
+pydantic>=2.0
+
+# --- Rasa SDK (for action classes used by orchestrator) ---
 rasa-sdk==3.6.2
 
-# Web Framework and API
+# --- Backend (Flask, file uploads, database, messaging) ---
 Flask==3.1.0
 Flask-SocketIO==5.5.1
 flask-cors>=6.0.0
-sanic>=23.12.0
-Sanic-Cors==2.0.1
-sanic-jwt==1.8.0
 
-# Database and Caching
-redis==4.6.0
+# --- Database ---
 psycopg2-binary==2.9.10
-pymongo==4.3.3
 SQLAlchemy>=2.0.36
+pytz
 
-# Task Queue and Background Jobs
+# --- Task Queue ---
+redis==4.6.0
 celery==5.5.2
 flower==2.0.1
 
-# Machine Learning and AI
-tensorflow==2.12.0
-tensorflow-hub==0.13.0
-tensorflow-text==2.12.0
-scikit-learn==1.1.3
-spacy==3.4.4
-# download model en-core-web-md==3.4.1
-openai==1.70.0
-jiter>=0.4.0,<1.0.0
-
-# AWS and Cloud Services
+# --- Messaging (SES/SMS) ---
 boto3==1.37.28
 
-# Messaging and Communication
-twilio==8.2.2
-slack_sdk==3.35.0
-webexteamssdk==1.6.1
-fbmessenger==6.0.0
-rocketchat-API==1.30.0
-mattermostwrapper==2.2
-aiogram==2.15
+# --- LLM (classification, if LLM_CLASSIFICATION=True) ---
+openai==1.70.0
 
-# HTTP and API Clients
+# --- HTTP clients ---
 requests>=2.32.3
-aiohttp>=3.13.1
 httpx==0.28.1
 
-# Monitoring and Logging
-sentry-sdk==1.14.0
-structlog==23.3.0
-structlog-sentry==2.1.0
-prometheus_client==0.21.1
-
-# Data Processing
+# --- Data (backend shared_functions, gsheet_query_manager) ---
 pandas==2.2.3
 numpy==1.26.4
-matplotlib==3.5.3
 
-# Development and Testing
-pytest==8.3.5
-
-# Utilities
+# --- Utilities ---
 python-dotenv==1.1.1
-questionary==1.10.0
-randomname==0.1.5
-tqdm>=4.67.1
-
-#others
-eventlet>=0.40.3
-icecream
 rapidfuzz==3.13.0
-distro>=1.8.0
+icecream
