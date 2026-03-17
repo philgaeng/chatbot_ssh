@@ -41,7 +41,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from backend.api.routers import grievance, files, voice_grievance, gsheet
+from backend.api.routers import grievance, files, voice_grievance, gsheet, messaging
 from backend.api.websocket_fastapi import socketio_app
 
 app = FastAPI(title="Backend API", version="0.1.0")
@@ -79,6 +79,8 @@ app.include_router(files.router)
 # Voice and gsheet: no prefix (paths are /accessible-file-upload, etc., and /gsheet-get-grievances)
 app.include_router(voice_grievance.router)
 app.include_router(gsheet.router)
+# Messaging API: /api/messaging/*
+app.include_router(messaging.router)
 
 # Socket.IO ASGI app for accessible interface, mounted at /accessible-socket.io
 app.mount("/accessible-socket.io", socketio_app)

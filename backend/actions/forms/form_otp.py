@@ -16,32 +16,42 @@ class BaseOtpAction(BaseAction):
         """
         Get the phone number from the tracker, according to the current flow, language code, standardize it and return it.
         """
-        flow = tracker.get_slot("story_main")
-        if flow == "grievance_submission":
-            phone_number = tracker.get_slot("complainant_phone")
-        elif flow == "status_check":
-            phone_number = tracker.get_slot("complainant_phone")
-        else:
-            phone_number = None
+        phone_number = tracker.get_slot("complainant_phone")
         if phone_number:
             phone_number = self.helpers.standardize_phone(language_code=self.language_code, phone=phone_number)
         return phone_number
+    
+    def get_otp_grievances_by_phone(self, phone_number: str) -> List[Dict[Text, Any]]:
+        """
+        Retrieve grievances by phone number from the database.
+        """
+        grievances = self.collect_grievance_data_from_phone(phone_number, tracker, domain)
+        return grievances
 
 
 
 class ActionAskOtpConsent(BaseOtpAction):
     def name(self) -> Text:
         return "action_ask_otp_consent"
-    
+
+    def _is_status_check_retrieve_flow(self, tracker: Tracker) -> bool:
+        """True when OTP is mandatory: status check to retrieve grievances."""
+        return (
+            tracker.get_slot("story_main") == "status_check"
+            and not tracker.get_slot("status_check_grievance_id_selected")
+        )
+
     async def execute_action(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        language_code = tracker.get_slot("language_code") or "en"
-        message = self.get_utterance(1)
-        buttons = self.get_buttons(1)
+        self._initialize_language_and_helpers(tracker)
+        # Utterance/buttons 1: optional OTP (modify / new grievance); 2: mandatory (status_check retrieve)
+        idx = 2 if self._is_status_check_retrieve_flow(tracker) else 1
+        message = self.get_utterance(idx)
+        buttons = self.get_buttons(idx)
         dispatcher.utter_message(text=message, buttons=buttons)
         reset_otp_slots = self.reset_slots(tracker, flow = "otp_submission", output = "slot_list")
         return reset_otp_slots

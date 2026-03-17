@@ -1,0 +1,263 @@
+form,action,utterance_number,en,ne
+action_ask_commons,action_ask_story_main,1,I am here to help you file a grievance or check its status. What would you like to do?,म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?
+action_ask_commons,action_ask_story_main,2,"You are reaching out to the office of {district} in {province}.
+I am here to help you file a grievance or check its status. What would you like to do?","तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
+म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+action_ask_commons,action_ask_language_code,1,"तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?
+What language do you want to use?","तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?
+What language do you want to use?"
+action_ask_commons,action_ask_story_route,1,You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.,तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।
+action_ask_commons,action_ask_story_step,1,Here are the details of the grievance:,यो गुनासोको विवरण छ:
+action_ask_commons,action_ask_story_step,2,We couldn't find any grievance details.,हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।
+action_ask_commons,action_ask_complainant_phone,1,"Please enter your contact phone number. Nepali phone number starts with 9 and should be 10 digits long. 
+You can skip this if you prefer to remain anonymous.","कृपया आफ्नो सम्पर्क फोन नम्बर प्रविष्ट गर्नुहोस्। नेपाली फोन नम्बर 9 बाट सुरु हुन्छ र 10 अंकको हुनुपर्छ।
+यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+action_ask_commons,action_ask_complainant_phone,2,The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long,कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ
+action_ask_commons,action_ask_complainant_location_consent,1,"Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.","के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
+action_ask_commons,action_ask_complainant_municipality_temp,1,"Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip","कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+action_ask_commons,action_ask_complainant_municipality_confirmed,1,Is {validated_municipality} your correct municipality?,के {validated_municipality} तपाईंको सही नगरपालिका हो?
+action_ask_commons,action_ask_complainant_village_temp,1,Please provide your village name or Skip to skip,कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+action_ask_commons,action_ask_complainant_village_confirmed,1,Is {validated_village} in ward number {validated_ward} your correct village?,के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?
+action_ask_commons,action_ask_complainant_ward,1,Please provide your ward number (number between 1 and 20) or Skip to skip,कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्
+action_ask_commons,action_ask_complainant_address_temp,1,Please provide your address or Skip to skip,कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+action_ask_commons,action_ask_complainant_address_confirmed,1,"Thank you for providing your location details:
+- Municipality: {municipality}
+- Village: {village}
+- Address: {address}
+Is this correct?","तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:
+- नगरपालिका: {municipality}
+- गाउँ: {village}
+- ठेगाना: {address}
+के यो सही हो?"
+action_ask_commons,action_ask_complainant_province,1,Please provide your province name or Skip,कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+action_ask_commons,action_ask_complainant_district,1,Please provide your district name or Skip,कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+action_ask_commons,action_ask_complainant_consent,1,Would you like to provide your contact information? You can file anonymously but we won't be able to contact you for follow-up or updates.,के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईं गुमनाम रहन सक्नुहुन्छ तर हामी तपाईंलाई अनुवर्ती वा अपडेटको लागि सम्पर्क गर्न सक्नुहुनेछैनौं।
+action_ask_commons,action_ask_complainant_full_name,1,"Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.","कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+action_ask_commons,action_ask_complainant_full_name,2,"Please enter your full name. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.","कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+action_ask_commons,action_ask_complainant_email_temp,1,Please enter your contact email. You can skip this if you prefer to remain anonymous.,कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।
+action_ask_commons,action_ask_complainant_email_confirmed,1,"⚠️ The email domain '{domain_name}' is not recognized as a common Nepali email provider.
+Please confirm if this is correct or try again with a different email.","⚠️ इमेल डोमेन '{domain_name}' सामान्य नेपाली इमेल प्रदायकको रूपमा पहिचान गरिएको छैन।
+कृपया यो सही हो कि होइन पुष्टि गर्नुहोस् वा अर्को इमेलसँग पुनः प्रयास गर्नुहोस्।"
+form_contact,validate_complainant_province,1,"Please provide a valid province name, this is required to file your grievance","कृपया एक वैध प्रदेशको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+form_contact,validate_complainant_province,2,We cannot match your entry {slot_value} to a valid province. Please try again,आपको प्रविष्टि {slot_value} एक वैध प्रदेशको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्
+form_contact,validate_complainant_province,3,We have matched your entry {slot_value} to {result}.,हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।
+form_contact,validate_complainant_district,1,"Please provide a valid district name, this is required to file your grievance","कृपया एक वैध जिल्लाको नाम प्रदान गर्नुहोस्, यो आपको ग्रेवियंसको फाइल गर्नको लागि आवश्यक छ"
+form_contact,validate_complainant_district,2,We cannot match your entry {slot_value} to a valid district. Please try again,आपको प्रविष्टि {slot_value} एक वैध जिल्लाको मिल्न सकिन्छ। कृपया पुनरावर्तन गर्नुहोस्
+form_contact,validate_complainant_district,3,We have matched your entry {slot_value} to {result}.,हामीले तपाईंको प्रविष्टि {slot_value} लाई {result} सँग मिलान गरेका छौं।
+form_contact,validate_complainant_village_temp,1,Please provide a valid village name (at least 3 characters) or type 'skip' to skip,कृपया एक वैध गाउँको नाम प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न 'skip' टाइप गर्नुहोस्
+form_contact,validate_complainant_address_temp,1,Please provide a valid address (at least 3 characters),कृपया एक वैध ठेगाना प्रदान गर्नुहोस् (कम्तिमा 3 अक्षर)
+form_contact,validate_complainant_address_confirmed,1,Please enter your correct village and address,कृपया आफ्नो सही गाउँ र ठेगाना प्रविष्ट गर्नुहोस्
+form_contact,validate_complainant_email_temp,1,"The email you provided is not valid. Please enter a valid email address, or type 'skip' if you prefer to remain anonymous.","तपाईंले प्रदान गर्नुभएको इमेल मान्य छैन। कृपया मान्य इमेल ठेगाना प्रविष्ट गर्नुहोस्, वा गुमनाम रहन चाहनुहुन्छ भने 'skip' टाइप गर्नुहोस्।"
+form_contact,action_modify_contact_info,1,Which contact information would you like to modify?,तपाईं कुन सम्पर्क जानकारी परिवर्तन गर्न चाहनुहुन्छ?
+form_contact,action_modify_email,1,Please enter your new email address.,कृपया आफ्नो नयाँ इमेल ठेगाना प्रविष्ट गर्नुहोस्।
+form_contact,action_cancel_modification_contact,1,✅ Modification cancelled. Your contact information remains unchanged.,✅ परिवर्तन रद्द गरिएको छ। तपाईंको सम्पर्क जानकारी परिवर्तन नभएको छ।
+form_grievance,action_start_grievance_process,1,Great!  Let's start by understanding your grievance...,राम्रो!  चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
+form_grievance,action_ask_grievance_new_detail,1,Great! Let's start by understanding your grievance...,राम्रो! चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं...
+form_grievance,action_ask_grievance_new_detail,2,"Lets restart, please enter your grievance details...","प्रक्रिया पुनः सुरु गर्नुहोस्, कृपया आफ्नो गुनासो विवरण प्रविष्ट गर्नुहोस्..."
+form_grievance,action_ask_grievance_new_detail,3,Please enter more details...,कृपया थप विवरण प्रविष्ट गर्नुहोस्...
+form_grievance,action_ask_grievance_new_detail,4,"Thank you for your entry: ""{grievance_description}
+. 
+                    Do you want to add more details to your grievance, such as:
+
+                    - Location information
+
+                    - Persons involved
+
+                    - Quantification of damages (e.g., number of bags of rice lost)
+""
+                    - Monetary value of damages","
+                    तपाईंको प्रविष्टिको लागि धन्यवाद। ""{grievance_description}
+. 
+                    के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:
+
+                    - स्थान जानकारी
+
+                    - भागहरूको सम्बन्धमा
+
+                    - हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)
+""
+                    - हानिको मुनाफा मूल्य"
+action_submit_grievance,action_submit_grievance,1,Your grievance has been filed successfully.,तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।
+action_submit_grievance,action_submit_grievance,2,✅ A recap of your grievance has been sent to your phone : {complainant_phone}.,✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {complainant_phone}
+action_submit_grievance,action_submit_grievance,3,✅ A recap of your grievance has been sent to your email : {complainant_email}.,✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {complainant_email}
+action_submit_grievance,action_submit_grievance,4,"I apologize, but there was an error submitting your grievance. Please try again or contact support.","मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
+action_submit_grievance,action_grievance_outro,1,"Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",तपाईंको गुनासो दर्ता गरिएको छ। हामीलाई एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ।
+action_submit_grievance,action_grievance_outro,2,You have not attached any files. You can still attach them now by clicking on the attachment button below.,तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।
+action_submit_grievance,action_grievance_outro,3,You can still attach more files to your grievance  by clicking on the attachment button below.,तपाईं अभी भी तपाईंको गुनासोको लागि अधिक फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।
+action_submit_grievance,action_submit_grievance_as_is,1,Your grievance has been filed successfully.,तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।
+action_submit_grievance,action_submit_grievance_as_is,2,✅ A recap of your grievance has been sent to your email : {complainant_email}.,✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {complainant_email}
+action_submit_grievance,action_submit_grievance_as_is,3,✅ A recap of your grievance has been sent to your phone : {complainant_phone}.,✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {complainant_phone}
+action_submit_grievance,action_submit_grievance_as_is,4,"I apologize, but there was an error submitting your grievance. Please try again or contact support.","मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
+form_grievance_complainant_review,validate_form_grievance_complainant_review,1,No category selected. skipping this step.,कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_classification_consent,1,We have generated categories and summary for your grievance. They will help our officer to treat your grievance faster. Do you want to review if they are correct and possibly answer one more question?,हामीले तपाईंको गुनासोको लागि श्रेणी व सारांश उत्पन्न गरिएको छ। यी श्रेणीहरू व सारांश हामीले तपाईंको गुनासो जल्दी सेवाउन मद्दत गर्नेछ। के यो सही छ वा अधिक एक प्रश्न जाँच गर्न चाहनुहुन्छ?
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_categories_status,1,"
+                    Here are the categories suggested by our classification:
+{category_text}
+Does this seem correct?","हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
+                    यहाँ सुझाव गरिएका श्रेणीहरू छन्:
+{category_text}
+के यो सही लाग्दैन?"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_categories_status,2,We have not identified any categories for your grievance.,हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन।
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_categories_status,3,"Here is the list of modified categories:
+{category_text}
+Does this seem correct?","यहाँ संशोधित श्रेणीहरू छन्:
+{category_text}
+के यो सही लाग्दैन?"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_categories_status,4,"You have removed all the categories, is it correct","तपाईंले सबै श्रेणीहरू हटाएको छ, के यो सही छ?"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_cat_modify,1,No categories selected. Skipping this step.,कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_cat_modify,2,Which category would you like to delete? Skip if you don't want to delete any category.,तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ? छोड्नुहोस् यदि तपाईं कुनै श्रेणी हटाउन चाहनुहुन्छ।
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_cat_modify,3,"Select the category you want to add from the list below, Skip if you don't want to add any category.","निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस् , छोड्नुहोस् यदि तपाईं कुनै श्रेणी थप्न चाहनुहुन्छ।"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_summary_status,1,"Here is the current summary: '{current_summary}'.
+ Is this correct?","तपाईंको गुनासोको निम्न सारांश यहाँ छ:
+{current_summary}
+के यो सही लाग्दैन?"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_summary_status,2,There is no summary yet. Please type a new summary for your grievance or skip,कुनै सारांश छैन। कृपया तपाईंको गुनासोको लागि नयाँ सारांश प्रविष्ट गर्नुहोस् वा छोड्नुहोस्
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_grievance_summary_temp,1,Please enter the new summary and confirm again.,कृपया नयाँ सारांश प्रविष्ट गर्नुहोस् र फेरी सुनिश्चित गर्नुहोस्।
+form_grievance_complainant_review,action_retrieve_classification_results,1,Categorization of your grievance is available.,हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
+form_grievance_complainant_review,action_retrieve_classification_results,2,Categorization of your grievance is not available. Our officer will review your grievance and contact you soon.,हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन। हामी तपाईंको गुनासो मानिसाले सारांशित गर्नेछौं।
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_sensitive_issues_follow_up,1,"We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
+                    ","गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
+                    "
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_sensitive_issues_follow_up,2,"Address : Koshi Regional Hospital, Biratnagar
+                    Morang
+                    Phone : 021-530103","कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर
+                    फोन : 021-530103"
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_sensitive_issues_follow_up,3, You can get more information on : https://nwchelpline.gov.np,तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_sensitive_issues_follow_up,4,"You can decide to file your grievance anonymously with one phone number or not.
+                    ","तपाईं एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ वा छोड्न सक्नुहुन्छ।
+                    "
+form_grievance_complainant_review,action_ask_form_grievance_complainant_review_sensitive_issues_follow_up,5,"If you desire, you can provide us with more details that we will forward to the OCMC.","यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।"
+generic_actions,action_introduce,1,"नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?
+Hello! Welcome to the Grievance Management Chatbot.
+What language do you want to use?","नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+तपाईं कुन भाषा प्रयोग गर्न चाहनुहुन्छ?
+Hello! Welcome to the Grievance Management Chatbot.
+What language do you want to use?"
+generic_actions,action_main_menu,1,"Hello! Welcome to the Grievance Management Chatbot.
+I am here to help you file a grievance or check its status. What would you like to do?","नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+generic_actions,action_main_menu,2,"Hello! Welcome to the Grievance Management Chatbot.
+You are reaching out to the office of {district} in {province}.
+I am here to help you file a grievance or check its status. What would you like to do?","नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+तपाईं {province} मा {district} को कार्यालयमा सम्पर्क गर्दै हुनुहुन्छ।
+म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+generic_actions,action_outro,1,Thank you for using the Grievance Management Chatbot. Have a great day!,गुनासो व्यवस्थापन च्याटबटमा धन्यवाद। एक अच्छा दिन राखौं!
+generic_actions,action_set_current_process,1,You are currently in the process of {story_current}.,तपाईं हाल {story_current} को प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_go_back,1,Going back to the previous step.,अघिल्लो चरणमा फर्कदै।
+generic_actions,action_restart_story,1,Would you like to restart the current process or story?,के तपाईं वर्तमान प्रक्रिया वा कथामा पुनः सुरु गर्न चाहनुहुन्छ?
+generic_actions,action_show_story_current,1,You are currently in the {story_current} process.,तपाईं हाल {story_current} प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_show_story_current,2,I don't know which process you're currently in.,मलाई थाहा छैन तपाईं हाल कुन प्रक्रियामा हुनुहुन्छ।
+generic_actions,action_handle_mood_great,1,I'm glad you're feeling good! Let's continue with your grievance.,मलाई खुशी लाग्यो कि तपाईं राम्रो महसुस गर्दै हुनुहुन्छ! चल्नुस् तपाईंको गुनासो जारी राखौं।
+generic_actions,action_handle_mood_great,2,That's great! What would you like to do next?,त्यो राम्रो हो! तपाईं अब के गर्न चाहनुहुन्छ?
+generic_actions,action_respond_to_challenge,1,I understand this might be challenging. I'm here to help you through it.,म बुझ्दछु कि यो चुनौतीपूर्ण हुन सक्छ। म तपाईंलाई यसमा मद्दत गर्न यहाँ छु।
+generic_actions,action_custom_fallback,1,I didn't understand that. What would you like to do next?,मैले त्यो बुझिन। तपाईं अब के गर्न चाहनुहुन्छ?
+generic_actions,action_handle_skip,1,Would you like to file your grievance as is?,के तपाईं आफ्नो गुनासो यसै रूपमा दर्ता गर्न चाहनुहुन्छ?
+generic_actions,action_handle_skip,2,Are you sure you want to skip this step?,के तपाईं यो चरण छोड्न निश्चित हुनुहुन्छ?
+generic_actions,action_mood_unhappy,1,I'm sorry to hear that you're not satisfied. How can I help you address that?,मलाई खुशी लाग्यो कि तपाईं अनचाहित छ। म तपाईंलाई के मद्दत गर्न सक्छु?
+generic_actions,action_exit_without_filing,1,"Thank you for your time. If you change your mind, feel free to start the grievance process again.","तपाईंको समय धन्यवाद। यदि तपाईं अपनो मन बदल्न चाहनुहुन्छ भने, कृपया गुनासो प्रक्रिया पुनः सुरु गर्नुहोस्।"
+generic_actions,action_goodbye,1,"Goodbye! If you need further assistance, feel free to ask.","बाहिर निस्कनुहोस्! यदि तपाईंलाई अधिक मद्दत चाहिनुहुन्छ भने, कृपया प्रश्न गर्नुहोस्।"
+generic_actions,action_attach_file,1,No files were attached. Please select files using the attachment button first.,कुनै फाइलहरू संलग्न गरिएको छैन। कृपया पहिले एट्याचमेन्ट बटन प्रयोग गरेर फाइलहरू छान्नुहोस्।
+generic_actions,action_attach_file,2,Thank you. Your file '{file_name}' has been successfully attached to your grievance.,धन्यवाद। तपाईंको फाइल '{file_name}' सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छ।
+generic_actions,action_attach_file,3,Please file a grievance first before attaching files.,कृपया फाइलहरू संलग्न गर्नु अघि गुनासो दर्ता गर्नुहोस्।
+generic_actions,action_attach_file,4,Thank you. Your {count} files ({files}) have been successfully attached to your grievance.,धन्यवाद। तपाईंका {count} फाइलहरू ({files}) सफलतापूर्वक तपाईंको गुनासोमा संलग्न गरिएको छन्।
+generic_actions,action_attach_file,5,You can now attach files to your grievance using the attachment button.,अब तपाईं एट्याचमेन्ट बटन प्रयोग गरेर आफ्नो गुनासोमा फाइलहरू संलग्न गर्न सक्नुहुन्छ।
+generic_actions,action_clean_window_options,1,Your grievance is completed. You can close the browser tab or session.,तपाईंको गुनासो पूरा हुन गरियो। तपाईं ब्राउजर टैब वा सत्र बन्द गर्न सक्नुहुन्छ।
+generic_actions,action_question_attach_files,1,"In order to attach files, please click the attachment button.","फाइलहरू संलग्न गर्न चाहनुहुन्छ भने, कृपया एट्याचमेन्ट बटन प्रयोग गर्नुहोस्।"
+form_otp,action_ask_otp_consent,1,"Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you.","के तपाईं आफ्नो फोन नम्बर सत्यापन गर्न चाहनुहुन्छ? यदि तपाईं सत्यापन गर्न चाहनुहुन्न भने, हामी नम्बर सन्दर्भको लागि राख्छौं तर तपाईंलाई सम्पर्क गर्ने छैनौं।"
+form_otp,action_ask_otp_consent,2,"You must verify your phone number to access your grievance and make changes. Without verification, you can only request a follow-up.",तपाईंको गुनासो पहुँच गर्न र परिवर्तन गर्न फोन नम्बर सत्यापन गर्नुपर्छ। सत्यापन बिना तपाईं अनुवर्तन अनुरोध मात्र गर्न सक्नुहुन्छ।
+form_otp,base_validate_phone,1,"The phone number you provided is not valid. Please enter a valid 10-digit Nepali mobile number starting with 9, or type 'skip' to continue without it.","तपाईंले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको वैध नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्।"
+form_otp,validate_otp_input,1,OTP verified successfully,OTP सुनिश्चित गर्न गरिएको छ।
+form_otp,action_ask_otp_input,1,"Your verification code is {otp_number}. 
+ Please enter this code to verify your phone number.","तपाईंको प्रमाणित कोड {otp_number} हो। 
+ कृपया यो कोड प्रमाणित गर्न तपाईंको फोन नम्बरमा प्रविष्ट गर्नुहोस्।"
+form_otp,action_ask_otp_input,2,"-------- OTP verification ongoing --------
+Please enter the 6-digit One Time Password (OTP) sent to your phone {phone_number} to verify your number.","-------- OTP सुनिश्चित गर्न गरिएको छ --------
+कृपया तपाईंको फोन नम्बर {phone_number}मा पठाईएको 6-अंकीय एक बारमा प्रविष्ट गर्नुहोस्।"
+form_otp,action_ask_otp_input,3,This is your {resend_count} attempt. You have {max_attempts} attempts left.,यो तपाईंको {resend_count} प्रयास हो। तपाईंलाई अब {max_attempts} प्रयास बाँचेको छ।
+form_otp,action_ask_otp_input,4,"Sorry, we couldn't send the verification code.",मलाई खुशी लाग्यो कि तपाईं अपनो मन बदल्न चाहनुहुन्छ। म तपाईंलाई के मद्दत गर्न सक्छु?
+form_otp,action_ask_otp_input,5,❌ Maximum resend attempts reached. Please try again later or skip verification.,❌ अधिकतम प्रयास पुनः प्रयास गर्न गरिएको छ। कृपया फेरि प्रयास गर्नुहोस् वा प्रमाणित गर्न छोड्नुहोस्।
+form_otp,action_ask_otp_input,6,❌ Invalid code. Please try again or type 'resend' to get a new code.,❌ अवैध कोड। कृपया पुनः प्रयास गर्नुहोस् वा 'resend' प्रमाणित गर्न गर्नुहोस्।
+form_otp,action_ask_otp_input,7,Continuing without phone verification. Your grievance details will not be sent via SMS.,"प्रमाणित गर्न छोड्नुहोस्। तपाईंको गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+म तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+form_sensitive_issues,action_ask_sensitive_issues_new_detail,1,"What are the details you want to add, you may add details about the location, date and time, etc.","तपाईं के विवरण थप्न चाहनुहुन्छ, तपाईं स्थान, मिति र समय विवरण थप्न सक्नुहुन्छ।"
+form_sensitive_issues,action_ask_sensitive_issues_nickname,1,Do you want to provide us a nickname that we will use to contact you anonymously - you can skip if you want?,के तपाईं हामीलाई एक नाम दिन चाहनुहुन्छ जुन हामी तपाईंलाई अनामिक रूपमा सम्पर्क गर्न प्रयोग गर्न सक्नुहुन्छ?
+form_sensitive_issues,action_ask_form_sensitive_issues_complainant_phone,1,Do you want to provide us your phone number so we can contact you - or skip?,के तपाईं हामीलाई आफ्नो फोन नम्बर दिन चाहनुहुन्छ जुन हामी तपाईंलाई सम्पर्क गर्न प्रयोग गर्न सक्नुहुन्छ?
+form_sensitive_issues,action_outro_sensitive_issues,1,Thank you for trusting us with this sensitive information. Your grievance has been recorded and will be handled confidentially. We again recommend that you contact the One Stop Crisis Management Centre of Morang for specialized support.,यो संवेदनशील जानकारी हामीलाई विश्वास गरेर साझा गर्नुभएकोमा धन्यवाद। तपाईंको गुनासो गोप्य रूपमा दर्ता गरिएको छ र सम्बन्धित कार्यालयले यसलाई हेर्नेछ। कृपया विशेष सहयोगका लागि मोरङको वन स्टप क्राइसिस म्यानेजमेन्ट सेन्टरसँग सम्पर्क गर्न नहिच्किचाउनुहोस्।
+base_form,handle_slot_extraction,1,Did you want to skip this field? I matched '{matched_word}',के तपाईं यो क्षेत्र छोड्न चाहनुहुन्छ? मलाई '{matched_word}' मिलेको छ।
+form_status_check,base_validate_phone,1,"The phone number you provided is not valid. Please enter a valid 10-digit Nepali mobile number starting with 9, or type 'skip' to continue without it.","तपाईंले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको वैध नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्।"
+form_status_check,action_skip_status_check,1,Our bot cannot provide you with the status of your grievance. Please contact directly the officer in charge at {officer_in_charge_phone} or visit the office in person. {office_name_and_address},हामीलाई तपाईंको गुनासो स्थिति जाँच गर्न मद्दत गर्न सकिनौं। कृपया अधिकारीको फोन नम्बर {officer_in_charge_phone} वा अनुसरण गर्नु होस्। {office_name_and_address}
+form_status_check,validate_form_status_check,1,We have matched your full name with the grievance ID {grievance_id},हामी तपाईंको नामलाई {grievance_id} गुनासो ID सँग मिलाउन सकिनौं
+form_status_check,validate_form_status_check,2,"We have found several grievances of closed grievances, we selected the latest one {grievance_id}","हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+form_status_check,validate_form_status_check,3,"We have found one grievance with the status {status} and one or several already closed, we selected the latest one {grievance_id}","हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+form_status_check,validate_form_status_check,4,"We have found several grievances, we selected the latest one {grievance_id}","हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+form_status_check,action_ask_status_check_method,1,You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.,तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।
+form_status_check,action_ask_status_check_list_grievance_id,1,"Please provide your grievance ID? Alternatively, you can exit by skipping or search by phone number instead.",कृपया तपाईंको गुनासो ID प्रदान गर्नुहोस्? वा अर्को तरिका छोड्न वा फोन नम्बर सेव्नु सक्नुहुन्छ।
+form_status_check,action_ask_status_check_list_grievance_id,2,We cannot find any grievance associated with this grievance ID. You can try providing another ID or choose to search by phone number or skip to exit,हामी यो गुनासो IDसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को ID प्रदान गर्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न वा छोड्न बाहिर निस्क्न सक्नुहुन्छ
+form_status_check,action_ask_form_status_check_1_complainant_phone,1,Please provide the phone number associated with your grievance - it should start by 9 and be 10 digits long,कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ
+form_status_check,action_ask_form_status_check_1_complainant_phone,2,The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long,कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ
+form_status_check,action_ask_form_status_check_1_complainant_phone,3,We cannot find any grievance associated with this phone number. You can try providing another number or skip to exit,हामी यो फोन नम्बरसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को नम्बर प्रदान गर्न सक्नुहुन्छ वा छोड्न बाहिर निस्क्न सक्नुहुन्छ
+form_status_check,action_ask_status_check_complainant_full_name,1,"We have found multiple grievances associated with this phone number. Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?","हामी यो फोन नम्बरसँग बहुवचन गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+form_status_check,action_ask_status_check_complainant_full_name,2,We didn't find any grievance associated with your full name. Please provide your complete full name again?,हामी तपाईंको पूरा नामसँग कुनै गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम पुनः प्रदान गर्नुहोस्?
+form_status_check,action_ask_status_check_complainant_full_name_validation_required,1,"Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?","कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+form_status_check,action_ask_form_status_check_skip_valid_province_and_district,1,"We will ask you questions about your location, so we can provide you the contact information of the officer in charge of your grievance.","हामी तपाईंको स्थानको बारेमा प्रश्न प्रदान गर्नेछौं, तसर्थ हामी तपाईंको गुनासोको लागि अधिकारीको सम्पर्क जानकारी प्रदान गर्न सक्नुहुन्छ।"
+form_status_check,action_ask_form_status_check_skip_valid_province_and_district,2,"Are you in {province}, {district}?","के {province}, {district} मा हुनुहुन्छ?"
+form_status_check,action_ask_form_status_check_skip_valid_province_and_district,3,Are you in {province}?,के {province} मा हुनुहुन्छ?
+form_status_check,action_ask_form_status_check_skip_valid_province_and_district,4,Are you in {district}?,के {district} मा हुनुहुन्छ?
+form_status_check,action_ask_form_status_check_skip_complainant_province,1,Please provide your province name or Skip,कृपया आफ्नो प्रदेशको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+form_status_check,action_ask_form_status_check_skip_complainant_district,1,Please provide your district name or Skip,कृपया आफ्नो जिल्लाको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्
+form_status_check,action_ask_form_status_check_skip_complainant_municipality_temp,1,"Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip","कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+form_status_check,action_ask_form_status_check_skip_complainant_municipality_confirmed,1,Is {validated_municipality} your correct municipality?,के {validated_municipality} तपाईंको सही नगरपालिका हो?
+form_status_check,action_ask_status_check_grievance_id_selected,1,Please enter the last 6 characters of the grievance ID without the dash like this: JH7707,कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश छोड्नु होला
+form_status_check,action_ask_status_check_grievance_id_selected,2,You have not provided enough characters. Please enter the last 6 characters of the grievance ID without the dash like this: JH7707,कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित
+form_status_check,action_ask_status_check_grievance_id_selected,3,We have not found any grievance with that ID. Please try again or choose to search by phone number instead or skip to exit.,कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित यो जैसे: JH7707। तपाईं छोड्न बाहिर निस्क्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न सक्नुहुन्छ
+form_status_check,action_ask_status_check_grievance_id_selected,4,Select any of the grievances if you want to check or amend the details,"यदि तपाईं विवरण जाँच वा सम्पादन गर्न चाहनुहुन्छ भने, कृपया कुनै एक गुनासो चुन्नुहोस्"
+form_status_check,action_ask_status_check_grievance_id_selected,5,"We have not found any grievance, do you want to try again?",हामी कुनै गुनासो भेट्टाउन सकिनौं। के तपाईं पुनः प्रयास गर्न चाहनुहुन्छ?
+form_status_check,action_status_check_request_follow_up,1,We have received your request for follow up.,हामी तपाईंको फलोअप अनुरोध ग्रहण गरेको छौं।
+form_status_check,action_status_check_request_follow_up,2,Our officer will follow up on your grievance (ID: {grievance_id}) and contact you shortly on this number: {complainant_phone}.,हामीको कर्मचारी तपाईंको गुनासो (ID: {grievance_id}) को फलोअप गर्नेछ र तपाईंको लागि यो नम्बरमा जस्तै सम्पर्क गर्नेछ: {complainant_phone}।
+form_status_check,action_status_check_request_follow_up,3,"We do not have a phone number for this grievance, so we cannot send you a follow-up by SMS. You can add or update your contact details and try again.","हामीसँग यो गुनासोको लागि फोन नम्बर छैन, त्यसैले हामी एसएमएस द्वारा फलोअप पठाउन सक्दैनौं। तपाईंले सम्पर्क विवरण थप्न वा अपडेट गर्न सक्नुहुन्छ र पुन: प्रयास गर्न सक्नुहुन्छ।"
+form_status_check,action_status_check_request_follow_up,4,The phone number we have has not been verified yet. Please verify your number first so we can contact you for follow-up.,हामीसँग भएको फोन नम्बर अहिले सम्म सत्यापन भएको छैन। कृपया पहिले तपाईंको नम्बर सत्यापन गर्नुहोस् ताकि हामी फलोअपको लागि तपाईंलाई सम्पर्क गर्न सकौं।
+form_status_check,action_status_check_modify_grievance,1,"You can add documents, add more to your grievance text, or fill in contact or location details you skipped. What would you like to do?","तपाईंले कागजात थप्न सक्नुहुन्छ, गुनासोको लेख थप्न सक्नुहुन्छ, वा छोडेको सम्पर्क वा ठेगाना भर्न सक्नुहुन्छ। तपाईं के गर्न चाहनुहुन्छ?"
+form_status_check,action_skip_status_check_outro,1,"To get more information about your grievance, please contact our nearest office:","तपाईंको गुनासोको लागि अधिक जानकारी प्राप्त गर्न, कृपया हाम्रो सबैभन्दा निर्धारित कार्यालयमा सम्पर्क गर्नुहोस्:"
+form_status_check,action_skip_status_check_outro,2,Name: {office_name},नाम: {office_name}
+form_status_check,action_skip_status_check_outro,3,Address: {office_address},ठेगाना: {office_address}
+form_status_check,action_skip_status_check_outro,4,Phone Number: {office_phone},फोन नम्बर: {office_phone}
+form_status_check,action_skip_status_check_outro,5,PIC Name: {office_pic_name},पिए नाम: {office_pic_name}
+form_status_check,action_skip_status_check_outro,6,Thank you for contacting us. We will get back to you soon.,तपाईंको सम्पर्क गर्नुभएकोमा धन्यवाद. हामी थिच्ने छौं।
+form_status_check,action_skip_status_check_outro,7,You have not provided any location information. We cannot provide you the contact information of the officer in charge of your grievance. You can restart the conversation or end the conversation and walk into the nearest KL-road office.,तपाईंले कुनै स्थान जानकारी प्रदान गरिएन। हामी तपाईंको गुनासोको लागि कुनै अधिकारी भेट्टाउन सकिनौं। कृपया पुनः प्रयास गर्नुहोस् वा बाहिर निस्क्नुहोस् र सबैभन्दा निर्धारित कार्यालयमा जानुहोस्।
+form_modify_contact,action_ask_form_modify_contact_complainant_phone,1,Please provide your phone number for this grievance. You can skip to move to the next field or click I'm done when finished.,कृपया यो गुनासोको लागि तपाईंको फोन नम्बर प्रदान गर्नुहोस्। तपाईं अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।
+form_modify_contact,utterance_all_contact_complete,1,All contact and location info is already complete.,सम्पर्क र स्थान जानकारी पहिले नै पूर्ण छ।
+form_modify_contact,action_ask_modify_missing_field,1,Please provide {field_label}. You can skip to move to the next field or click I'm done when finished.,कृपया {field_label} प्रदान गर्नुहोस्। तपाईं अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।
+form_modify_grievance,action_ask_modify_follow_up_answer,1,Please answer the following question about your grievance: {question},कृपया तपाईंको गुनासोको बारेमा निम्न प्रश्नको उत्तर दिनुहोस्: {question}
+form_modify_grievance,action_ask_modify_grievance_new_detail,1,"Add more details to your grievance. You can type your additional information below, or use the buttons to save or cancel.",तपाईंको गुनासोमा थप विवरण थप्नुहोस्। तपाईं तल अतिरिक्त जानकारी टाइप गर्न सक्नुहुन्छ वा बटन प्रयोग गरेर बचत गर्न वा रद्द गर्न सक्नुहुन्छ।
+form_modify_grievance,action_ask_modify_grievance_new_detail,2,Your text has been added. Add more details below or save and continue.,तपाईंको पाठ थपिएको छ। तल थप विवरण थप्नुहोस् वा बचत गर्नुहोस् र जारी राख्नुहोस्।
+check_status,action_choose_retrieval_method,1,How would you like to retrieve your grievance?,तपाईं आफ्नो गुनासो कसरी पुनः प्राप्त गर्न चाहनुहुन्छ?
+check_status,action_display_grievance,1,"Sorry, I couldn't find any grievance with that ID.","माफ गर्नुहोस्, म त्यो ID सँग कुनै गुनासो भेट्टाउन सकिन।"
+check_status,action_display_grievance,2,No grievances found for this phone number.,यो फोन नम्बरको लागि कुनै गुनासो भेट्टाउन सकिएन।
+check_status,action_display_grievance,3,"Sorry, I need either a grievance ID or phone number to retrieve details.","माफ गर्नुहोस्, मलाई विवरण पुनः प्राप्त गर्न गुनासो ID वा फोन नम्बर चाहिन्छ।"
+check_status,action_display_grievance,4,Found {count} grievances:,{count} वटा गुनासो भेट्टाउन सकिएन:
+check_status,action_display_grievance,5,Which grievance would you like to check?,तपाईं कुन गुनासो जाँच गर्न चाहनुहुन्छ?
+check_status,action_display_grievance,6,Would you like to check the detailed status?,के तपाईं विस्तृत स्थिति जाँच गर्न चाहनुहुन्छ?
+check_status,action_check_status,1,"Sorry, I couldn't determine which grievance to check.","माफ गर्नुहोस्, म कुन गुनासो जाँच गर्ने निर्धारण गर्न सकिन।"
+check_status,action_check_status,2,"Sorry, I couldn't retrieve the status history at this moment.","माफ गर्नुहोस्, म यो समयमा स्थिति इतिहास पुनः प्राप्त गर्न सकिन।"
+check_status,action_check_status,3,Would you like to see the full status history?,के तपाईं पूर्ण स्थिति इतिहास हेर्न चाहनुहुन्छ?
+check_status,action_show_status_history,1,"Sorry, I couldn't determine which grievance to show history for.","माफ गर्नुहोस्, म कुन गुनासोको लागि इतिहास देखाउने निर्धारण गर्न सकिन।"
+check_status,action_show_status_history,2,No status history found for this grievance.,यो गुनासोको लागि कुनै स्थिति इतिहास भेट्टाउन सकिएन।
+check_status,action_show_status_history,3,What would you like to do next?,तपाईं अब के गर्न चाहनुहुन्छ?
+check_status,validate_grievance_id_form,1,We have found your grievance with ID: {grievance_id},हामीलाई तपाईंको गुनासो भेट्टाउने ID: {grievance_id} भेटिन्छ।
+check_status,validate_grievance_id_form,2,"Sorry, we couldn't find a grievance with that ID in our system. Please check the ID and try again.","माफ गर्नुहोस्, हामीले यो ID सँग कुनै गुनासो फेला पार्न सकेनौं। कृपया ID जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।"
+check_status,validate_grievance_id_form,3,Please enter a valid grievance ID. The ID cannot be empty.,कृपया वैध गुनासो ID प्रविष्ट गर्नुहोस्। ID खाली हुन सक्दैन।
+check_status,validate_grievance_id_form,4,The grievance ID must start with 'GR' followed by numbers and letters. Please check the format and try again.,गुनासो ID 'GR' सँग सुरु हुनुपर्छ र त्यसपछि नम्बर र अक्षरहरू आउनुपर्छ। कृपया ढाँचा जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।
+check_status,action_ask_grievance_id_form_grievance_id,1,Please enter a valid grievance ID starting with 'GR'.,कृपया 'GR' शुरु गर्ने एक वैध गुनासो ID प्रविष्ट गर्नुहोस्।
+file_server,upload_files,1,No grievance_id provided,गुनासो ID प्रदान गरिएन
+file_server,upload_files,2,Please complete your grievance details before attaching files,कृपया गुनासो विवरण पूरा गर्न पहिले फाइलहरू अपलोड गर्नुहोस्
+file_server,upload_files,3,No files provided,कुनै फाइल प्रदान गरिएन
+file_server,upload_files,4,No files selected,कुनै फाइल चयन गरिएन
+file_server,upload_files,5,This type of file is not allowed. Please upload a different file.,यो प्रकारको फाइल अनुमति भेटिन्छ नैन। कृपया अर्को फाइल अपलोड गर्नुहोस्।
+file_server,upload_files,6,There was a problem uploading your files. Please try again.,फाइलहरू अपलोड गर्दा समस्या भयो। कृपया पुन: प्रयास गर्नुहोस्।
+file_server,get_files,1,Internal server error,आंतरिक सर्वर त्रुटि
+file_server,download_files,1,File not found,फाइल भेटिन्छ नैन
+file_server,download_files,2,Internal server error,आंतरिक सर्वर त्रुटि
+rest_webchat_file_upload,post_upload,1,Files uploaded. You can add more files or go back to the chat.,फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।
+rest_webchat_file_upload,post_upload,2,Your files are uploaded. Here's where we left off.,तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।
+rest_webchat_file_upload,post_upload,3,One or more files could not be saved. You can try adding files again or go back to the chat.,एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।

@@ -74,6 +74,17 @@ BUTTONS_AFFIRM_DENY = {
     ]
 }
 
+BUTTONS_OTP_CONSENT = {
+    'en': [
+        {"title": "Validate with OTP", "payload": BUTTON_AFFIRM},
+        {"title": "Skip OTP", "payload": BUTTON_DENY}
+    ],
+    'ne': [
+        {"title": "OTP सत्यापन गर्नुहोस्", "payload": BUTTON_AFFIRM},
+        {"title": "OTP छोड्नुहोस्", "payload": BUTTON_DENY}
+    ]
+}
+
 BUTTONS_LANGUAGE_OPTIONS = {
     'en': [
         {"title": "Nepali / नेपाली", "payload": "/set_nepali"},

@@ -1,9 +1,17 @@
 import csv
 import sys
 import os
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_SCRIPT_DIR))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 from backend.actions.utils.utterance_mapping_rasa import UTTERANCE_MAPPING
 
-output_file = 'utterances.csv'
+_OUTPUT_DIR = os.path.join(_SCRIPT_DIR, 'new_mappings')
+os.makedirs(_OUTPUT_DIR, exist_ok=True)
+output_file = os.path.join(_OUTPUT_DIR, 'utterances.csv')
 
 with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
     writer = csv.writer(csvfile)

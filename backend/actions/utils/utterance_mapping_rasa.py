@@ -893,14 +893,22 @@ UTTERANCE_MAPPING = {
     'form_otp': {
         'action_ask_otp_consent': {
             'utterances': {
+                # 1: Modify-grievance / new-grievance flow – OTP optional
                 1: {
                     'en': "Do you want to verify your phone number so we can safely contact you? If you don't confirm the number, we will keep it for reference but will not contact you.",
-                    'ne': "के तपाईं आफ्नो फोन नम्बरको प्रमाणित गर्न चाहनुहुन्छ? यदि तपाईं नम्बर सुनिश्चित गर्न नभएको हुन्, त्यसैले तपाईंको नम्बर सुनिश्चित गर्न हुन्छ र हामीलाई सुनिश्चित गर्न हुन्छ कि तपाईंलाई सम्पर्क गर्न हुन्छ।",
+                    'ne': "के तपाईं आफ्नो फोन नम्बर सत्यापन गर्न चाहनुहुन्छ? यदि तपाईं सत्यापन गर्न चाहनुहुन्न भने, हामी नम्बर सन्दर्भको लागि राख्छौं तर तपाईंलाई सम्पर्क गर्ने छैनौं।",
+                },
+                # 2: Status-check flow – OTP mandatory to access grievance
+                2: {
+                    'en': "You must verify your phone number to access your grievance and make changes. Without verification, you can only request a follow-up.",
+                    'ne': "तपाईंको गुनासो पहुँच गर्न र परिवर्तन गर्न फोन नम्बर सत्यापन गर्नुपर्छ। सत्यापन बिना तपाईं अनुवर्तन अनुरोध मात्र गर्न सक्नुहुन्छ।",
                 }
             },
             'buttons': {
-                1: BUTTONS_AFFIRM_DENY
-            }
+                1: BUTTONS_OTP_CONSENT,
+                2: BUTTONS_OTP_CONSENT
+            },
+
         },
         'base_validate_phone': {
             'utterances': {
