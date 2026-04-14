@@ -61,7 +61,6 @@ Dependencies:
 import datetime
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.database_services.base_manager import TaskDbManager
-from backend.api.websocket_utils import emit_status_update_accessible
 from typing import Dict, Any, Optional, List, Tuple, Callable
 import time
 import random
@@ -287,7 +286,7 @@ class TaskManager:
 
     def emit_status(self, status, data, grievance_id=None, session_id=None):
         """
-        Send task status update directly to Flask API endpoint for websocket emission
+        Send task status update to the backend HTTP API (POST /task-status) for Socket.IO emission
         Args:
             status (str): The status to send
             data (dict): The data to send
@@ -327,8 +326,7 @@ class TaskManager:
             data['task_name'] = self.task_name
             data['status'] = status
             
-            # Send to Flask API endpoint
-            url = FLASK_URL + "/task-status"
+            url = FLASK_URL.rstrip("/") + "/task-status"
             payload = {
                 'status': status,
                 'data': data,
@@ -341,7 +339,7 @@ class TaskManager:
                 details={
                     'url': url,
                     'payload': payload,
-                    'note': 'Sending to Flask API endpoint'
+                    'note': 'Sending to backend /task-status'
                 }
             )
         
@@ -852,12 +850,12 @@ class TaskManager:
 
     def trigger_task_status_update(self, status: str, data: Optional[dict] = None, grievance_id=None, session_id=None):
         """
-        Send task status update directly to Flask API endpoint for websocket emission
+        Send task status update to the backend HTTP API (POST /task-status) for websocket emission.
         Args:
             status (str): The status to send
             data (dict): The data to send
             grievance_id (str): Grievance ID for websocket emission
-            session_id (str): Session ID for websocket emission
+            session_id (str): Client session ID (sent as flask_session_id; webchat room)
         """
         
         self.monitoring.log_task_event(
@@ -867,7 +865,7 @@ class TaskManager:
                 'session_id': session_id,
                 'status': status,
                 'data': data,
-                'note': 'Sending task status update to Flask API'
+                'note': 'Sending task status update to backend /task-status'
             }
         )
         
@@ -878,26 +876,24 @@ class TaskManager:
         data['task_name'] = current_task.name
         data['status'] = status
         
-        # Send to Flask API endpoint
-        url = "http://localhost:5001/api/task-status"
+        url = FLASK_URL.rstrip("/") + "/task-status"
         payload = {
             'status': status,
             'data': data
         }
         
-        # Add grievance_id and session_id if available
         if grievance_id:
             payload['grievance_id'] = grievance_id
         
         if session_id:
-            payload['session_id'] = session_id
+            payload['flask_session_id'] = session_id
         
         self.monitoring.log_task_event(
             task_name='trigger_task_status_update',
             details={
                 'url': url,
                 'payload': payload,
-                'note': 'Sending to Flask API endpoint'
+                'note': 'Sending to backend /task-status'
             }
         )
         

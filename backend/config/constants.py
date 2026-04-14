@@ -518,9 +518,11 @@ RASA_API_PROTOCOL = os.getenv('RASA_API_PROTOCOL', 'http')
 RASA_API_URL = f"{RASA_API_PROTOCOL}://{RASA_HOST}:{RASA_PORT}"
 
 ############################
-# FLASK CONFIGURATION
+# Backend HTTP base URL (FastAPI). Celery posts task status to FLASK_URL + "/task-status".
+# Legacy name FLASK_URL — in Docker set e.g. FLASK_URL=http://backend:5001 so workers reach the API service.
 
-FLASK_URL = os.getenv('FLASK_URL', 'http://localhost:5001')
+BACKEND_HTTP_URL = os.getenv("BACKEND_HTTP_URL") or os.getenv("FLASK_URL", "http://localhost:5001")
+FLASK_URL = BACKEND_HTTP_URL
 
 
 ############################

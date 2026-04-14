@@ -1,6 +1,6 @@
 """
-File server API router. Same URL surface and behaviour as FileServerAPI in channels_api.py.
-Uses FileServerCore and Celery; emit_status_update_accessible is stubbed until 8C wires the Socket.IO helper.
+File server API router (production). Same URL surface as legacy FileServerAPI in channels_api.py.
+Uses FileServerCore and Celery; accessible emit is wired from fastapi_app lifespan (Socket.IO ASGI).
 """
 
 import os
@@ -30,7 +30,7 @@ FAILED = status_codes["FAILED"]
 RETRYING = status_codes["RETRYING"]
 STARTED = status_codes["STARTED"]
 
-# Core instance (same as Flask backend)
+# Core instance (shared with Celery tasks)
 from backend.config.constants import ALLOWED_EXTENSIONS
 
 _upload_folder = os.getenv("UPLOAD_FOLDER", "uploads")
@@ -519,12 +519,10 @@ async def task_status_update(request: Request):
             if grievance_id:
                 emit_fn(grievance_id, status, task_data)
         else:
-            # Bot/webchat interface (source "B"): mirror previous Flask behaviour by
-            # emitting Socket.IO events that the webchat listens for ("task_status"
-            # and "file_status_update") using the Flask session ID as the room.
+            # Bot/webchat (source "B"): emit to the webchat Socket.IO room (session id from client).
             if flask_session_id:
                 try:
-                    from backend.api.websocket_utils import socketio  # lazy import
+                    from backend.api.websocket_fastapi import emit_webchat_task_status
 
                     task_name = task_data.get("task_name", "unknown")
                     if "file" in str(task_name).lower():
@@ -532,7 +530,8 @@ async def task_status_update(request: Request):
                     else:
                         event_name = "task_status"
 
-                    socketio.emit(
+                    emit_webchat_task_status(
+                        flask_session_id,
                         event_name,
                         {
                             "status": status,
@@ -541,7 +540,6 @@ async def task_status_update(request: Request):
                             "flask_session_id": flask_session_id,
                             "task_name": task_name,
                         },
-                        room=flask_session_id,
                     )
                 except Exception as emit_error:
                     file_server_core.log_event(

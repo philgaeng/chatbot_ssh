@@ -1,11 +1,12 @@
 """
-FastAPI backend app (Phase 1–2). Replaces Flask for backend API.
+FastAPI backend app (Phase 1–2). Production backend API.
 Run: uvicorn backend.api.fastapi_app:app --port 5001
 """
 
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,9 +43,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from backend.api.routers import grievance, files, voice_grievance, gsheet, messaging
-from backend.api.websocket_fastapi import socketio_app
+from backend.api.websocket_fastapi import emit_status_update_accessible, socketio_app
 
-app = FastAPI(title="Backend API", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Wire real Socket.IO emit for accessible (grievance suffix A) on POST /task-status.
+    files.set_emit_status_update_accessible(emit_status_update_accessible)
+    yield
+
+
+app = FastAPI(title="Backend API", version="0.1.0", lifespan=_lifespan)
 
 
 @app.exception_handler(Exception)

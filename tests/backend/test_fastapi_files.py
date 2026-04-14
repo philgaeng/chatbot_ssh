@@ -1,22 +1,12 @@
-"""Tests for FastAPI backend file server API (Agent 8B). Same URL surface and behaviour as FileServerAPI."""
+"""Tests for FastAPI backend file server API. Same URL surface as legacy FileServerAPI (channels_api)."""
 
 import io
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# File router imports FileServerCore which requires Flask; skip entire module if Flask missing
-try:
-    from backend.api.fastapi_app import app
-except ModuleNotFoundError as e:
-    if "flask" in str(e).lower():
-        pytest.skip(
-            "Flask not installed; file router depends on FileServerCore which requires Flask",
-            allow_module_level=True,
-        )
-    raise
-
 from fastapi.testclient import TestClient
+
+from backend.api.fastapi_app import app
 
 
 @pytest.fixture

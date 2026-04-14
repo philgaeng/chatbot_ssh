@@ -156,3 +156,32 @@ def emit_status_update_accessible(session_id: str, status: str, message: Dict[st
         asyncio.set_event_loop(loop)
         loop.run_until_complete(_emit())
 
+
+def emit_webchat_task_status(room: str, event_name: str, payload: Dict[str, Any]) -> None:
+    """
+    Emit task_status / file_status_update to a Socket.IO room (webchat uses flask_session_id as room).
+    Uses the same ASGI server + Redis as the mounted /accessible-socket.io app — no Flask-SocketIO required.
+    """
+
+    async def _emit() -> None:
+        try:
+            await sio.emit(event_name, payload, room=room)
+            logger.debug(
+                "ASGI webchat task emit",
+                extra={"room": room, "event_name": event_name},
+            )
+        except Exception as e:  # pragma: no cover - defensive logging
+            logger.error(
+                "ASGI failed webchat task emit",
+                extra={"room": room, "event_name": event_name, "error": str(e)},
+                exc_info=True,
+            )
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(_emit())
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_emit())
+

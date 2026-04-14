@@ -1,7 +1,6 @@
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from backend.logger.logger import TaskLogger
-from flask import jsonify
 import inspect
 from backend.config.constants import DEFAULT_VALUES
 
@@ -35,20 +34,21 @@ class APIManager:
         )
     
     def success_response(self, data: Dict[str, Any], message: str = "Success") -> Dict[str, Any]:
-        """Create a standardized success response"""
-        return jsonify({
+        """Create a standardized success response (plain dict; Flask 2+ / FastAPI return JSON from dict)."""
+        return {
             'status': self.SUCCESS,
             'message': message,
             'data': data
-        })
+        }
     
-    def error_response(self, error: str, status_code: int = 500) -> Dict[str, Any]:
-        """Create a standardized error response"""
-        return jsonify({
+    def error_response(self, error: str, status_code: int = 500) -> Tuple[Dict[str, Any], int]:
+        """Create a standardized error response as (body, http_status) for Flask/Werkzeug."""
+        body = {
             'status': self.FAILED,
             'message': error,
             'status_code': status_code
-        })
+        }
+        return body, status_code
     
     def handle_request(self, func):
         """Decorator to handle common request processing"""

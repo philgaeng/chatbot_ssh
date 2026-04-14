@@ -1,3 +1,7 @@
+"""
+Legacy Flask FileServerAPI — only registered by deprecated `backend.api.app`.
+Production file API: `backend.api.fastapi_app` and `backend.api.routers.files`.
+"""
 import os
 from flask import request, jsonify, send_file, Blueprint, send_from_directory
 from werkzeug.utils import secure_filename

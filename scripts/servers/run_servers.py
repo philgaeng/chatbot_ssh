@@ -316,37 +316,31 @@ def init_database():
         return False
 
 def start_file_server(port=5001):
-    """Start the file server for handling uploads"""
-    file_server_logger.info(f"Starting file server on port {port}...")
+    """Start the FastAPI backend (uploads, /task-status, grievance routes, Socket.IO) on the given port."""
+    file_server_logger.info(f"Starting backend (FastAPI) on port {port}...")
     
     try:
-        # First, ensure actions_server is imported and initialized
-        from actions_server import db_manager
-        
-        # Import file server app
-        from backend.api.app import app as file_server_app
-        
-        # Create uploads directory if it doesn't exist
         uploads_dir = os.path.join(project_root, 'uploads')
         if not os.path.exists(uploads_dir):
             os.makedirs(uploads_dir)
             file_server_logger.info(f"Created uploads directory: {uploads_dir}")
-        
-        # Set up logging for Flask app
-        import logging as flask_logging
-        flask_app_logger = flask_logging.getLogger('werkzeug')
-        flask_app_logger.setLevel(flask_logging.INFO)
-        flask_app_logger.addHandler(file_server_file_handler)
-        
-        # Start the file server in a separate process
+
+        if file_server_file_handler:
+            import logging as uvicorn_logging
+            for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+                lg = uvicorn_logging.getLogger(name)
+                lg.setLevel(uvicorn_logging.INFO)
+                lg.addHandler(file_server_file_handler)
+
         cmd = [
             sys.executable,
-            "-c",
-            f"""
-import sys
-from backend.api.app import app
-app.run(host='0.0.0.0', port={port}, use_reloader=False, debug=False)
-            """
+            "-m",
+            "uvicorn",
+            "backend.api.fastapi_app:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            str(port),
         ]
         
         process = subprocess.Popen(
