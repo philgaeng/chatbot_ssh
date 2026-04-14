@@ -72,6 +72,7 @@ Thumbs.db
 *.tar
 
 # Project-specific
+docs/deployment_environment_urls.local.yaml
 aws/            # AWS related files
 deployment/aws/ # AWS deployment files
 **/dist/        # Distribution files
