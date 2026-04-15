@@ -13,6 +13,7 @@ __pycache__/
 # Environment and dependency folders
 create_env.sh
 env.local
+env.local.example
 .env
 venv/
 .venv/
