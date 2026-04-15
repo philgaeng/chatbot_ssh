@@ -4,6 +4,27 @@ Stack: **Nginx** → **orchestrator** (8000) + **backend** (5001) + **Celery** (
 
 No Rasa server — matches the REST orchestrator architecture in `docs/BACKEND.md`.
 
+## Docker-only on this machine (recommended long-term)
+
+Run the app **only** via Compose. Do **not** run a second system Nginx on the same ports.
+
+1. **Free port 80** for the Compose `nginx` service (`80:80` in [`docker-compose.yml`](../../docker-compose.yml)):
+   ```bash
+   sudo systemctl stop nginx
+   sudo systemctl disable nginx   # optional: do not start at boot
+   ```
+2. **Confirm** nothing else is bound to `:80`:
+   ```bash
+   sudo ss -tlnp | grep ':80'
+   ```
+   You should see **`docker-proxy`** (or similar) after `docker compose up -d`, not a host **`/usr/sbin/nginx`** process.
+3. **Bring the stack up** (from repo root):
+   ```bash
+   docker compose up -d --build
+   ```
+
+If you **must** keep system Nginx for other sites, do **not** share port 80: change the Compose `nginx` service to e.g. `"8888:80"` and use `http://localhost:8888/` — but that is a mixed setup, not “everything through Docker” on `:80`.
+
 ## Prerequisites
 
 - Docker Desktop (Windows + WSL integration) or Docker Engine on Linux.
@@ -37,11 +58,11 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-Health checks:
+Health checks (must hit **Compose** Nginx, not host Nginx — see “Docker-only” above):
 
 ```bash
-curl -s http://localhost/health
-curl -s http://localhost/rest-webchat/ | head
+curl -4 -s http://127.0.0.1/health
+curl -4 -s http://127.0.0.1/rest-webchat/ | head
 ```
 
 ## Troubleshooting
@@ -52,6 +73,7 @@ curl -s http://localhost/rest-webchat/ | head
 | `relation "…" does not exist` | Run `db_init` (see above). |
 | `No module named 'flask'` | Temporary: Flask is listed in `requirements.txt` until `file_server_core.py` is migrated off Flask. |
 | Backend / Celery restarting | `docker compose logs --tail=100 backend celery_default` |
+| **404** on `/health`, footer **`nginx/… (Ubuntu)`** | Host **system Nginx** still owns `:80`. Stop/disable it (see “Docker-only”) or change Compose to another host port. |
 
 ## Files
 
