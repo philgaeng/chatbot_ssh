@@ -19,6 +19,14 @@ Compose includes `nginx` mappings for both `80:80` and `443:443`, plus persisten
 
 After certificate issuance and with renewal in place, you do **not** need to redo TLS for normal `docker compose down/up` cycles.
 
+To install renewal automation on a server, use:
+
+```bash
+scripts/ops/install_tls_renew_cron.sh /home/ubuntu/nepal_chatbot
+```
+
+This writes `/etc/cron.d/nepal-chatbot-cert-renew` and reloads nginx after successful renewals.
+
 ## Docker-only on this machine (recommended long-term)
 
 Run the app **only** via Compose. Do **not** run a second system Nginx on the same ports.
