@@ -3,7 +3,7 @@
 # No Rasa NLU / TensorFlow server – only Rasa SDK actions.
 # Use with: pip install -r requirements.txt
 #
-# Stack: orchestrator (FastAPI) + backend (FastAPI, replacing Flask) + rasa_chatbot.actions (via rasa-sdk)
+# Stack: backend.orchestrator (FastAPI) + backend.api (FastAPI) + backend.actions (via rasa-sdk)
 # Deployed behind nginx on AWS (e.g. t4g.small / t4g.medium EC2), frontends are static (no Python deps).
 
 # --- Orchestrator ---
@@ -40,10 +40,6 @@ openai==1.70.0
 # --- HTTP clients ---
 requests>=2.32.3
 httpx==0.28.1
-
-# --- Data (backend shared_functions, gsheet_query_manager) ---
-pandas==2.2.3
-numpy==1.26.4
 
 # --- Utilities ---
 python-dotenv==1.1.1
