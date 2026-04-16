@@ -4,6 +4,21 @@ Stack: **Nginx** → **orchestrator** (8000) + **backend** (5001) + **Celery** (
 
 No Rasa server — matches the REST orchestrator architecture in `docs/BACKEND.md`.
 
+## HTTPS / TLS (Let's Encrypt)
+
+Compose includes `nginx` mappings for both `80:80` and `443:443`, plus persistent cert mounts:
+
+- `./deployment/certbot/www` → `/var/www/certbot`
+- `./deployment/certbot/conf` → `/etc/letsencrypt`
+
+`deployment/nginx/webchat_rest_docker.conf` is pre-wired for:
+
+- ACME challenge path (`/.well-known/acme-challenge/`)
+- HTTP→HTTPS redirect
+- TLS cert files under `/etc/letsencrypt/live/<your-domain>/...`
+
+After certificate issuance and with renewal in place, you do **not** need to redo TLS for normal `docker compose down/up` cycles.
+
 ## Docker-only on this machine (recommended long-term)
 
 Run the app **only** via Compose. Do **not** run a second system Nginx on the same ports.
