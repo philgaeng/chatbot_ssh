@@ -4,7 +4,7 @@ Verify form loop: simulate form turn with /submit_details.
 Task 3.4: slot_updates and messages match expected.
 
 Run from project root with Rasa env activated:
-  python orchestrator/scripts/verify_form_loop.py
+  python backend/orchestrator/scripts/verify_form_loop.py
 """
 
 import asyncio
@@ -17,14 +17,14 @@ from unittest.mock import AsyncMock, patch
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.orchestrator.paths import DOMAIN_YAML_PATH
 from backend.orchestrator.form_loop import run_form_turn
 from backend.actions.forms.form_grievance import ValidateFormGrievance
 
 
 def load_domain() -> dict:
     """Load Rasa domain from YAML."""
-    path = PROJECT_ROOT / "rasa_chatbot" / "domain.yml"
-    with open(path) as f:
+    with open(DOMAIN_YAML_PATH) as f:
         return yaml.safe_load(f) or {}
 
 

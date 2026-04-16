@@ -1,4 +1,4 @@
-from orchestrator import session_store
+from backend.orchestrator import session_store
 
 
 def test_create_session_defaults():

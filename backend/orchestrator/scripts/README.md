@@ -1,20 +1,23 @@
-# Orchestrator Scripts
+# Orchestrator scripts
 
 ## extract_config.py
 
-Extracts orchestrator config from Rasa YAMLs into our format.
+Extracts orchestrator config from Rasa-format YAMLs into our format.
 
-**Input**:
-- `rasa_chatbot/domain.yml`
-- `rasa_chatbot/data/stories/stories.yml`
+**Input**
 
-**Output**:
-- `orchestrator/config/flow.yaml`
-- `orchestrator/config/slots.yaml`
+- `backend/orchestrator/config/domain.yml`
+- `backend/orchestrator/config/source/stories/stories.yml`
 
-**Run** (from project root):
+**Output**
+
+- `backend/orchestrator/config/flow.yaml`
+- `backend/orchestrator/config/slots.yaml`
+
+**Run** (from repository root, with `PYTHONPATH` including the repo root):
+
 ```bash
-python orchestrator/scripts/extract_config.py
+python backend/orchestrator/scripts/extract_config.py
 ```
 
-Requires: PyYAML (or use system Python with `pip install pyyaml`).
+Requires: PyYAML.

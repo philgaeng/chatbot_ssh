@@ -17,17 +17,16 @@ import yaml
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-_RASA_DIR = _REPO_ROOT / "rasa_chatbot"
+
+from backend.orchestrator.paths import DOMAIN_YAML_PATH
 from backend.orchestrator.session_store import get_session, save_session, create_session
 from backend.orchestrator.state_machine import run_flow_turn
 from backend.orchestrator.config_loader import load_config
-if str(_RASA_DIR) not in sys.path:
-    sys.path.insert(0, str(_RASA_DIR))
 
 
 def _load_domain() -> Dict[str, Any]:
     """Load Rasa domain.yml as dict (mirrors orchestrator.main._load_domain)."""
-    path = _REPO_ROOT / "rasa_chatbot" / "domain.yml"
+    path = DOMAIN_YAML_PATH
     if not path.exists():
         return {"slots": {}}
     with open(path) as f:

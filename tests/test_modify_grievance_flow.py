@@ -12,17 +12,18 @@ from pathlib import Path
 import pytest
 import yaml
 
-# Project root and path setup
-_PROJECT_ROOT = Path(__file__).resolve().parents[0]
+# Project root and path setup (tests/ -> repo root)
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in __import__("sys").path:
     __import__("sys").path.insert(0, str(_PROJECT_ROOT))
 
+from backend.orchestrator.paths import DOMAIN_YAML_PATH
 from backend.orchestrator.session_store import create_session
 from backend.orchestrator.state_machine import run_flow_turn
 
 
 def _load_domain() -> dict:
-    path = _PROJECT_ROOT / "rasa_chatbot" / "domain.yml"
+    path = DOMAIN_YAML_PATH
     if not path.exists():
         return {"slots": {}}
     with path.open() as f:

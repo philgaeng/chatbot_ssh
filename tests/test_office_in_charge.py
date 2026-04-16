@@ -100,7 +100,7 @@ def check_data_file():
     print("=" * 80)
     
     try:
-        import pandas as pd
+        import csv
         validator = ContactLocationValidator()
         
         # Check if file exists
@@ -110,30 +110,23 @@ def check_data_file():
         
         print(f"✅ File found: {validator.json_path_office_in_charge}")
         
-        # Load and examine the data
-        office_in_charge = pd.read_csv(validator.json_path_office_in_charge)
-        print(f"📊 Data shape: {office_in_charge.shape}")
-        print(f"📋 Columns: {list(office_in_charge.columns)}")
-        
-        # Show first few rows
+        with open(validator.json_path_office_in_charge, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        print(f"📊 Data rows: {len(rows)}")
+        print(f"📋 Columns: {list(rows[0].keys()) if rows else []}")
         print("\n📄 First 5 rows:")
-        print(office_in_charge.head())
-        
-        # Check for Birtamod specifically
+        for row in rows[:5]:
+            print(row)
         print("\n🔍 Searching for Birtamod:")
-        birtamod_data = office_in_charge[office_in_charge['municipality'].str.contains('birtamod', case=False, na=False)]
-        if not birtamod_data.empty:
-            print("✅ Found Birtamod data:")
-            print(birtamod_data)
+        birtamod = [r for r in rows if "birtamod" in (r.get("Municipality") or r.get("municipality") or "").lower()]
+        if birtamod:
+            print("✅ Found Birtamod data:", birtamod)
         else:
             print("❌ No Birtamod data found")
-            
-        # Check for Jhapa specifically
         print("\n🔍 Searching for Jhapa:")
-        jhapa_data = office_in_charge[office_in_charge['district'].str.contains('jhapa', case=False, na=False)]
-        if not jhapa_data.empty:
-            print("✅ Found Jhapa data:")
-            print(jhapa_data)
+        jhapa = [r for r in rows if "jhapa" in (r.get("District") or r.get("district") or "").lower()]
+        if jhapa:
+            print("✅ Found Jhapa data:", jhapa[:3])
         else:
             print("❌ No Jhapa data found")
         

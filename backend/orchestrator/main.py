@@ -12,7 +12,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Configure logging early so application logs are visible and third-party noise is reduced.
-# Without this, botocore/boto3 DEBUG floods the log and buries orchestrator/rasa_chatbot logs.
+# Without this, botocore/boto3 DEBUG floods the log and buries orchestrator logs.
 def _configure_orchestrator_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -25,7 +25,7 @@ def _configure_orchestrator_logging() -> None:
     # Application loggers: keep DEBUG for form flow and actions (set via LOG_LEVEL if desired)
     log_level = os.environ.get("ORCHESTRATOR_LOG_LEVEL", "DEBUG").upper()
     level = getattr(logging, log_level, logging.INFO)
-    for name in ("rasa_chatbot", "orchestrator", "backend"):
+    for name in ("backend.orchestrator", "backend.actions", "backend"):
         logging.getLogger(name).setLevel(level)
 
 
@@ -40,9 +40,6 @@ if _env_local.exists():
         load_dotenv(_env_local)
     except ImportError:
         pass
-_RASA_DIR = _REPO_ROOT / "rasa_chatbot"
-if str(_RASA_DIR) not in sys.path:
-    sys.path.insert(0, str(_RASA_DIR))
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -52,6 +49,7 @@ from typing import Any, Dict, List, Optional
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
+from backend.orchestrator.paths import DOMAIN_YAML_PATH
 from backend.orchestrator.session_store import get_session, save_session, create_session
 from backend.orchestrator.state_machine import run_flow_turn
 from backend.orchestrator.config_loader import load_config
@@ -66,7 +64,7 @@ _DOMAIN: Dict[str, Any] = {}
 
 def _load_domain() -> Dict[str, Any]:
     """Load Rasa domain.yml as dict."""
-    path = _REPO_ROOT / "rasa_chatbot" / "domain.yml"
+    path = DOMAIN_YAML_PATH
     if not path.exists():
         return {"slots": {}}
     with open(path) as f:

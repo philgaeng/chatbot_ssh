@@ -6,16 +6,6 @@ states:
   description: Menu; run action_main_menu
 - id: form_grievance
   description: Collect grievance_new_detail via form loop
-- id: contact_form
-  description: Collect complainant contact and location details
-- id: otp_form
-  description: Collect phone and verify one-time password (OTP)
-- id: submit_grievance
-  description: Finalize grievance submission and prepare review data
-- id: grievance_review
-  description: Optional post-submission grievance classification review
-- id: status_check_form
-  description: Status check via grievance ID or phone
 - id: done
   description: Form complete; flow ends
 transitions:
@@ -31,28 +21,8 @@ transitions:
   intent: new_grievance
   to: form_grievance
   action: action_start_grievance_process
-- from: main_menu
-  intent: start_status_check
-  to: status_check_form
-  action: action_start_status_check
 - from: form_grievance
   condition: form_complete
-  to: contact_form
-  action: null
-- from: contact_form
-  condition: form_complete
-  to: otp_form
-  action: null
-- from: otp_form
-  condition: form_complete
-  to: submit_grievance
-  action: null
-- from: submit_grievance
-  condition: submit_complete
-  to: grievance_review
-  action: null
-- from: grievance_review
-  condition: review_complete
   to: done
   action: null
 forms:
@@ -62,30 +32,3 @@ forms:
     ask_action: action_ask_grievance_new_detail
     required_slots:
     - grievance_new_detail
-  form_status_check_1:
-    name: form_status_check_1
-    validation_action: validate_form_status_check_1
-  form_contact:
-    name: form_contact
-    validation_action: validate_form_contact
-    required_slots:
-    - complainant_location_consent
-    - complainant_full_name
-    - complainant_email_temp
-  form_otp:
-    name: form_otp
-    validation_action: validate_form_otp
-    required_slots:
-    - complainant_phone
-    - otp_consent
-    - otp_input
-    - otp_status
-  form_grievance_complainant_review:
-    name: form_grievance_complainant_review
-    validation_action: validate_form_grievance_complainant_review
-    required_slots:
-    - grievance_classification_consent
-    - grievance_categories_status
-    - grievance_cat_modify
-    - grievance_summary_status
-    - grievance_summary_temp

@@ -2,23 +2,30 @@
 """
 Extract orchestrator config (flow.yaml, slots.yaml) from Rasa YAMLs.
 
-Input: rasa_chatbot/domain.yml, rasa_chatbot/data/stories/stories.yml
-Output: orchestrator/config/flow.yaml, orchestrator/config/slots.yaml
+Input: backend/orchestrator/config/domain.yml, config/source/stories/stories.yml
+Output: backend/orchestrator/config/flow.yaml, slots.yaml
 
 Run from project root:
-  python orchestrator/scripts/extract_config.py
+  python backend/orchestrator/scripts/extract_config.py
 """
 
-import yaml
 import sys
+import yaml
 from pathlib import Path
 
-# Project root: parent of orchestrator/
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DOMAIN_PATH = PROJECT_ROOT / "rasa_chatbot" / "domain.yml"
-STORIES_PATH = PROJECT_ROOT / "rasa_chatbot" / "data" / "stories" / "stories.yml"
-RULES_PATH = PROJECT_ROOT / "rasa_chatbot" / "data" / "rules" / "rules.yml"
-OUTPUT_CONFIG_DIR = PROJECT_ROOT / "orchestrator" / "config"
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from backend.orchestrator.paths import (  # noqa: E402
+    DOMAIN_YAML_PATH,
+    ORCHESTRATOR_CONFIG_DIR,
+    STORIES_YAML_PATH,
+)
+
+DOMAIN_PATH = DOMAIN_YAML_PATH
+STORIES_PATH = STORIES_YAML_PATH
+OUTPUT_CONFIG_DIR = ORCHESTRATOR_CONFIG_DIR
 
 # Slots needed for form_grievance flow (from 04_flow_logic initial session)
 FORM_GRIEVANCE_SLOT_NAMES = [

@@ -35,7 +35,7 @@ This document assumes the **current product architecture** documented in [`../BA
 | **Local dev (WSL)** | **`env.local`** (or equivalent local-only env files already ignored by git). Developers copy from any checked-in `.env.example` pattern your project uses. |
 | **Stage / prod** | **Environment variables** set on the host or container at start. Values sourced from **AWS** where appropriate, e.g. **Systems Manager Parameter Store** (non-secret config, hierarchical names like `/app/prod/DATABASE_URL`) and **Secrets Manager** (DB passwords, API keys, signing keys). IAM roles on EC2 or ECS task roles grant read access—no long-lived keys in the repo. |
 
-**Migration away from committed defaults:** Replace hard-coded credentials in files such as [`rasa_chatbot/endpoints.yml`](../../rasa_chatbot/endpoints.yml) (if still referenced) with env-driven configuration in the path your runtime actually uses, or document deprecation.
+**Migration away from committed defaults:** Replace hard-coded credentials in archived Rasa runner files (see `backend/orchestrator/config/source/legacy_rasa_config/endpoints.yml`) with env-driven configuration in the path your runtime actually uses, or document deprecation.
 
 **Operational checklist:**
 

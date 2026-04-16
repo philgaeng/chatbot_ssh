@@ -1,48 +1,155 @@
 # actions/helpers.py
 
-import logging  # For logging errors 
-from rasa_sdk import Tracker
+import csv
+import logging
 from datetime import datetime
-import json  # For loading JSON files
+import json
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from rapidfuzz import process
-from typing import Optional, Dict, Any, Tuple, List
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple
 
-# Direct access to constants
-from backend.config.constants import (    
-        LOCATION_FOLDER_PATH,
+from backend.config.constants import (
     CUT_OFF_FUZZY_MATCH_LOCATION,
+    DB_CONFIG,
+    DEFAULT_VALUES,
     DIC_LOCATION_WORDS,
-    DEFAULT_VALUES
+    LOCATION_FOLDER_PATH,
 )
-DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 
+DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
+
+
+def _norm_municipality(name: Optional[str]) -> str:
+    if not name:
+        return ""
+    return str(name).title().replace(" Municipality", "").strip()
+
+
+def _norm_district(name: Optional[str]) -> str:
+    if not name:
+        return ""
+    return str(name).title().replace(" District", "").strip()
 
 
 class ContactLocationValidator:
     """
     Validate and normalize location names using fuzzy matching.
-    Use the cleaned json file for validation located in the resources/location_dataset folder.
-    The json file should be named as <language_code>_cleaned.json
+    Uses cleaned JSON under dev-resources (location_dataset_*_cleaned.json) and
+    municipality / GRM office rows from Postgres when seeded, else CSV fallbacks.
     """
-    def __init__(self, 
-                 json_path=LOCATION_FOLDER_PATH):
-    
-        json_path_en = f"{json_path}_en_cleaned.json"
-        json_path_ne = f"{json_path}_ne_cleaned.json"
-        json_path_municipality_villages = f"{json_path}_municipality_villages.csv"
-        self.json_path_office_in_charge = f"{json_path}_GRM_list_office_in_charge.csv"
+
+    def __init__(self, json_path: Optional[str] = None) -> None:
+        json_path = json_path or LOCATION_FOLDER_PATH
+        self._json_base = str(json_path).rstrip("/\\")
+        json_path_en = f"{self._json_base}_en_cleaned.json"
+        json_path_ne = f"{self._json_base}_ne_cleaned.json"
+        self.json_path_office_in_charge = f"{self._json_base}_GRM_list_office_in_charge.csv"
         self.logger = logging.getLogger(__name__)
-        self.locations_both_language = dict()
-        with open(json_path_en, "r") as file:
+        self.locations_both_language: Dict[str, Any] = {}
+        with open(json_path_en, "r", encoding="utf-8") as file:
             self.locations_both_language["en"] = self._normalize_locations(json.load(file))
-        with open(json_path_ne, "r") as file:
+        with open(json_path_ne, "r", encoding="utf-8") as file:
             self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
-        
-        self.municipality_villages = pd.read_csv(json_path_municipality_villages)
-        #update the columns name to lowercase
-        self.municipality_villages.columns = self.municipality_villages.columns.str.lower()
-        self.municipality_villages['municipality'] = self.municipality_villages['municipality'].str.title().str.replace(' Municipality', '').str.strip()
+
+        self.municipality_villages: List[Dict[str, str]] = self._load_municipality_villages()
+        self._office_rows: List[Dict[str, Any]] = self._load_office_rows()
+
+    def _load_municipality_villages(self) -> List[Dict[str, str]]:
+        try:
+            conn = psycopg2.connect(
+                host=DB_CONFIG["host"],
+                database=DB_CONFIG["database"],
+                user=DB_CONFIG["user"],
+                password=DB_CONFIG["password"],
+                port=DB_CONFIG["port"],
+            )
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        "SELECT municipality, ward, village FROM reference_municipality_villages"
+                    )
+                    rows = cur.fetchall()
+            finally:
+                conn.close()
+            if rows:
+                return [
+                    {
+                        "municipality": _norm_municipality(r.get("municipality")),
+                        "ward": str(r.get("ward", "")),
+                        "village": (r.get("village") or "").strip(),
+                    }
+                    for r in rows
+                ]
+        except Exception as e:
+            self.logger.warning("reference_municipality_villages unavailable (%s); using CSV", e)
+
+        csv_path = f"{self._json_base}_municipality_villages.csv"
+        out: List[Dict[str, str]] = []
+        try:
+            with open(csv_path, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    key_m = "Municipality" if "Municipality" in row else "municipality"
+                    key_w = "Ward" if "Ward" in row else "ward"
+                    key_v = "Village" if "Village" in row else "village"
+                    out.append(
+                        {
+                            "municipality": _norm_municipality(row.get(key_m)),
+                            "ward": str(row.get(key_w, "")).strip(),
+                            "village": (row.get(key_v) or "").strip(),
+                        }
+                    )
+        except FileNotFoundError:
+            self.logger.error("Municipality/village CSV not found: %s", csv_path)
+        return out
+
+    def _load_office_rows(self) -> List[Dict[str, Any]]:
+        try:
+            conn = psycopg2.connect(
+                host=DB_CONFIG["host"],
+                database=DB_CONFIG["database"],
+                user=DB_CONFIG["user"],
+                password=DB_CONFIG["password"],
+                port=DB_CONFIG["port"],
+            )
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        SELECT office_id, office_name, office_address, office_email, office_pic_name,
+                               office_phone, district, municipality
+                        FROM reference_grm_office_in_charge
+                        """
+                    )
+                    rows = cur.fetchall()
+            finally:
+                conn.close()
+            if rows:
+                normalized: List[Dict[str, Any]] = []
+                for r in rows:
+                    d = {k: (v if v is not None else "") for k, v in dict(r).items()}
+                    d["municipality"] = _norm_municipality(d.get("municipality"))
+                    d["district"] = _norm_district(d.get("district"))
+                    normalized.append(d)
+                return normalized
+        except Exception as e:
+            self.logger.warning("reference_grm_office_in_charge unavailable (%s); using CSV", e)
+
+        path = self.json_path_office_in_charge
+        rows: List[Dict[str, Any]] = []
+        try:
+            with open(path, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for raw in reader:
+                    row = {k.lower().strip(): (v or "") for k, v in raw.items()}
+                    row["municipality"] = _norm_municipality(row.get("municipality"))
+                    row["district"] = _norm_district(row.get("district"))
+                    rows.append(row)
+        except FileNotFoundError:
+            self.logger.error("GRM office CSV not found: %s", path)
+        return rows
 
     def _validate_location(self, location_string, qr_province=None, qr_district=None):
         """Validate location from a single string input and QR defaults."""
@@ -330,75 +437,48 @@ class ContactLocationValidator:
 
 
     def validate_village_input(
-            self,
-            input_text: str,
-            qr_municipality: str,
-        ) -> tuple[str, str]:
-            """Validate new village input.
-            Used the dataframe self.municipality_villages to match the village name with the municipality name using fuzzy matching. Return the tuple of village name and ward number if found, otherwise return None, None."""
+        self,
+        input_text: str,
+        qr_municipality: str,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Match village + ward for a municipality using fuzzy matching on seeded rows."""
+        qr_municipality = _norm_municipality(qr_municipality)
 
-            #standardize the municipality name
-            qr_municipality = qr_municipality.title().replace('Municipality', '').strip()
-            
-            # Get the municipality data
-            municipality_data = self.municipality_villages[self.municipality_villages["municipality"] == qr_municipality]
-            
-            # Get the village names
-            village_names = municipality_data["village"].tolist()
+        mun_rows = [r for r in self.municipality_villages if r["municipality"] == qr_municipality]
+        village_names = [r["village"] for r in mun_rows if r.get("village")]
 
-            # Try to match the village name with the municipality name using fuzzy matching
-            matched_village = self._find_best_match(input_text, village_names)
-            print(f"######## LocationValidator: Matched village: {matched_village}")
-            if matched_village:
-                ward_number = municipality_data[municipality_data["village"] == matched_village]["ward"].values[0]
-                return matched_village, str(ward_number)
-            
-            return None, None
+        matched_village = self._find_best_match(input_text, village_names)
+        print(f"######## LocationValidator: Matched village: {matched_village}")
+        if matched_village:
+            for r in mun_rows:
+                if r["village"] == matched_village:
+                    return matched_village, str(r["ward"])
+        return None, None
 
-    def get_office_in_charge_info(self, municipality, district = None, province = None):
-        """Get the office in charge info from the municipality data."""
-        # Return None early if we don't have minimum required information
+    def get_office_in_charge_info(
+        self, municipality: Optional[str] = None, district: Optional[str] = None, province: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Return first matching GRM office row (dict with lowercase keys), or None."""
         if not district and not municipality:
             return None
-            
-        office_in_charge = pd.read_csv(self.json_path_office_in_charge)
-        office_in_charge.columns = office_in_charge.columns.str.lower()
-        
-        # Check if municipality column exists, if not, work with district only
-        if "municipality" in office_in_charge.columns:
-            office_in_charge["municipality"] = office_in_charge["municipality"].str.title().str.replace('Municipality', '').str.strip()
-            if municipality:
-                municipality = municipality.title().replace('Municipality', '').strip()
-        else:
-            # If no municipality column, we'll match by district only
-            municipality = None
-            
-        office_in_charge["district"] = office_in_charge["district"].str.title().str.replace('District', '').str.strip()
-        if province in office_in_charge.columns:
-            office_in_charge["province"] = office_in_charge["province"].str.title().str.replace('Province', '').str.strip()
-        
-        if district:
-            district = district.title().replace('District', '').strip()
-        if province:
-            province = province.title().replace('Province', '').strip()
 
-        # Filter by district first, then by municipality if available
-        if municipality and district:
-            office_in_charge_info = office_in_charge[(office_in_charge["municipality"] == municipality) & (office_in_charge["district"] == district)]
-        elif district:
-            # If no municipality provided, just filter by district
-            office_in_charge_info = office_in_charge[office_in_charge["district"] == district]
-        elif municipality:
-            # If no district but have municipality (edge case)
-            office_in_charge_info = office_in_charge[office_in_charge["municipality"] == municipality]
-        else:
-            # No valid filtering criteria
+        rows = self._office_rows
+        if not rows:
             return None
 
-        if office_in_charge_info.empty:
-            return None
+        mun_key = _norm_municipality(municipality) if municipality else None
+        dist_key = _norm_district(district) if district else None
+
+        candidates: List[Dict[str, Any]]
+        if mun_key and dist_key:
+            candidates = [r for r in rows if r.get("municipality") == mun_key and r.get("district") == dist_key]
+        elif dist_key:
+            candidates = [r for r in rows if r.get("district") == dist_key]
+        elif mun_key:
+            candidates = [r for r in rows if r.get("municipality") == mun_key]
         else:
-            return office_in_charge_info.iloc[0].to_dict()
-        
-            
-            
+            return None
+
+        if not candidates:
+            return None
+        return dict(candidates[0])

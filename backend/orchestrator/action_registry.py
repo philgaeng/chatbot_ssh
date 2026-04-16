@@ -11,9 +11,6 @@ from typing import Any, Dict, List
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-_RASA_DIR = os.path.join(_REPO_ROOT, "rasa_chatbot")
-if _RASA_DIR not in sys.path:
-    sys.path.insert(0, _RASA_DIR)
 
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 

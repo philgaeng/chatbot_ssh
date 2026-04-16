@@ -1,3 +1,5 @@
+from typing import Any
+
 from rasa.core.policies.rule_policy import RulePolicy
 from rasa.engine.recipes.default_recipe import DefaultV1Recipe
 from rasa.shared.core.trackers import DialogueStateTracker
@@ -6,7 +8,6 @@ from rasa.shared.core.events import SlotSet, UserUttered, ActionExecuted
 from rasa.engine.storage.resource import Resource
 from rasa.engine.storage.storage import ModelStorage
 from rasa.engine.graph import ExecutionContext
-import numpy as np
 
 @DefaultV1Recipe.register("PreviousStatePolicy", is_trainable=False)
 class PreviousStatePolicy(RulePolicy):
@@ -24,7 +25,7 @@ class PreviousStatePolicy(RulePolicy):
         self,
         tracker: DialogueStateTracker,
         domain: Domain,
-    ) -> np.ndarray:
+    ) -> Any:
         # Call the parent RulePolicy to get the action probabilities
         probabilities = super().predict_action_probabilities(tracker, domain)
 

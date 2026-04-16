@@ -2,12 +2,10 @@
 Load orchestrator config from flow.yaml and slots.yaml.
 """
 
-import os
 import yaml
-from pathlib import Path
 from typing import Any, Dict
 
-_CONFIG_DIR = Path(__file__).resolve().parent / "config"
+from backend.orchestrator.paths import ORCHESTRATOR_CONFIG_DIR as _CONFIG_DIR
 
 
 def load_config() -> Dict[str, Any]:

@@ -50,7 +50,7 @@ Then the REST webchat continues to call Orchestrator only for conversation; any 
 
 ### Flask vs FastAPI
 
-- **Orchestrator** is already **FastAPI** (`orchestrator/main.py`). The messaging service (`backend/services/messaging.py`) is a **Python class**, not tied to a framework; it is used by both Flask and by Rasa SDK actions run inside the orchestrator.
+- **Orchestrator** is already **FastAPI** (`backend/orchestrator/main.py`). The messaging service (`backend/services/messaging.py`) is a **Python class**, not tied to a framework; it is used by both Flask and by Rasa SDK actions run inside the orchestrator.
 - **Current state:** The **backend** has been migrated to FastAPI; keep **Flask** only for reference (deprecated for production). The live backend is FastAPI; run with: uvicorn backend.api.fastapi_app:app --port 5001..
 
 #### Can FastAPI do everything Flask does here?

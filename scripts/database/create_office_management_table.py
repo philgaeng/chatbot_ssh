@@ -60,7 +60,7 @@ def create_office_management_table():
                 logger.info("Created office_municipality_ward table successfully")
                 
                 # Read office management CSV data
-                office_csv_path = project_root / "backend" / "resources" / "location_dataset_GRM_list_office_in_charge.csv"
+                office_csv_path = project_root / "backend" / "dev-resources" / "location_dataset_GRM_list_office_in_charge.csv"
                 office_df = pd.read_csv(office_csv_path)
                 
                 # Clean and prepare office data
@@ -95,7 +95,7 @@ def create_office_management_table():
                 logger.info(f"Inserted/updated {len(office_df)} office records")
         
                 # Read office-municipality mapping CSV data
-                office_municipality_csv_path = project_root / "backend" / "resources" / "location_dataset_office_municipality_ward.csv"
+                office_municipality_csv_path = project_root / "backend" / "dev-resources" / "location_dataset_office_municipality_ward.csv"
                 office_municipality_df = pd.read_csv(office_municipality_csv_path)
                 
                 # Clean and prepare office-municipality data

@@ -19,8 +19,8 @@ sys.path.insert(0, PROJECT_ROOT)
 # Set PYTHONPATH to include the project root
 os.environ['PYTHONPATH'] = PROJECT_ROOT
 
-# Import the db_manager from the new modular structure
-from backend.services.database_services import db_manager
+# Postgres singleton with init_database() / schema helpers (see postgres_services.py)
+from backend.services.database_services.postgres_services import db_manager
 
 # Load configuration
 def load_config():
@@ -96,7 +96,7 @@ def enable_pgcrypto_extension() -> bool:
     """Enable pgcrypto extension for encryption support"""
     try:
         logger.info("Enabling pgcrypto extension for encryption...")
-        with db_manager.base.get_connection() as conn:
+        with db_manager.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
                 conn.commit()
@@ -114,7 +114,7 @@ def check_database_connection(max_retries: int, retry_delay: int) -> bool:
     for attempt in range(max_retries):
         try:
             # Test connection by executing a simple query
-            with db_manager.base.get_connection() as conn:
+            with db_manager.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
                     cur.fetchone()
@@ -138,7 +138,8 @@ def init_database_with_retry(max_retries: int, retry_delay: int) -> bool:
     for attempt in range(max_retries):
         try:
             logger.info(f"Starting database initialization (attempt {attempt + 1}/{max_retries})...")
-            db_manager.init_db()
+            if not db_manager.init_database():
+                raise RuntimeError("init_database() returned False")
             logger.info("Database initialization completed successfully")
             return True
         except Exception as e:
@@ -164,7 +165,7 @@ def verify_database_setup() -> bool:
         ]
         
         for table in required_tables:
-            if not db_manager.table_exists(table):
+            if not db_manager.table.table_exists(table):
                 logger.error(f"Required table '{table}' not found")
                 return False
         

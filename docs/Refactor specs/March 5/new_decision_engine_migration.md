@@ -18,7 +18,7 @@ Rasa can be removed entirely later, but the first target is: **same behavior, le
 - Collected fields / slot keys
 - Validation rules (where possible)
 - Action names and their semantics (e.g., `action_create_complaint`, `action_check_status`, etc.)
-- use oof rasa_chatbot/actions/utils/utterance_mapping_rasa.py as a reference for all the utterances
+- use `backend/actions/utils/utterance_mapping_rasa.py` as a reference for all the utterances
 
 ---
 

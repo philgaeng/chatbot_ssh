@@ -4,7 +4,6 @@ from backend.config.constants import DEFAULT_VALUES, EMAIL_PROVIDERS_NEPAL_LIST
 from rapidfuzz import process, fuzz
 from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
-import pandas as pd
 import re
 
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]

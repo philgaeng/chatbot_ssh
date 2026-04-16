@@ -48,7 +48,7 @@ If the task touches **Phase 2** storage or crawlers, also read [`../internal_den
 
 - Do not add **Caddy** or **Caddyfile** unless the human explicitly requests it.
 - Do not commit **`deployment_environment_urls.local.yaml`** (it should stay local; the example lives in the markdown doc).
-- Do not embed **production secrets** in repo files, including `rasa_chatbot/endpoints.yml` — migrate toward env-driven config.
+- Do not embed **production secrets** in repo files, including archived Rasa runner YAML under `backend/orchestrator/config/source/legacy_rasa_config/` — migrate toward env-driven config.
 
 ---
 

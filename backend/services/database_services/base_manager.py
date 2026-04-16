@@ -1116,6 +1116,65 @@ class TableDbManager(BaseDatabaseManager):
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
 
+        # Reference CSV data (seed via dev-scripts/seed_reference_data.py)
+        self.migrations_logger.info("Creating reference_municipality_villages table...")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reference_municipality_villages (
+                id SERIAL PRIMARY KEY,
+                municipality TEXT NOT NULL,
+                ward TEXT NOT NULL,
+                village TEXT NOT NULL,
+                CONSTRAINT uq_ref_mv UNIQUE (municipality, ward, village)
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ref_mv_municipality ON reference_municipality_villages (municipality)"
+        )
+
+        self.migrations_logger.info("Creating reference_grm_office_in_charge table...")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reference_grm_office_in_charge (
+                id SERIAL PRIMARY KEY,
+                office_id TEXT,
+                office_name TEXT,
+                office_address TEXT,
+                office_email TEXT,
+                office_pic_name TEXT,
+                office_phone TEXT,
+                district TEXT,
+                municipality TEXT
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ref_grm_dist_mun ON reference_grm_office_in_charge (district, municipality)"
+        )
+
+        self.migrations_logger.info("Creating grievance_classification_taxonomy table...")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS grievance_classification_taxonomy (
+                category_key TEXT PRIMARY KEY,
+                generic_grievance_name TEXT,
+                generic_grievance_name_ne TEXT,
+                short_description TEXT,
+                short_description_ne TEXT,
+                classification TEXT,
+                classification_ne TEXT,
+                description TEXT,
+                description_ne TEXT,
+                follow_up_question_description TEXT,
+                follow_up_question_description_ne TEXT,
+                follow_up_question_quantification TEXT,
+                follow_up_question_quantification_ne TEXT,
+                high_priority BOOLEAN DEFAULT FALSE
+            )
+            """
+        )
+
         # Office management table
         self.migrations_logger.info("Creating/recreating office_management table...")
         cur.execute("""

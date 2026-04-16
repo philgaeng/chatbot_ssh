@@ -6,7 +6,8 @@ LOG_DIR="$BASE_DIR/logs"
 VENV_DIR="/home/philg/projects/nepal_chatbot/rasa-env-21"
 UPLOAD_DIR="$BASE_DIR/uploads"
 BACKEND_DIR="$BASE_DIR/backend"
-RASA_DIR="$BASE_DIR/rasa_chatbot"
+# Rasa CLI project root (domain + config; REST stack uses backend.orchestrator instead of rasa run)
+RASA_DIR="$BASE_DIR/backend/orchestrator/config"
 
 # Export Redis and Celery environment variables globally
 export REDIS_HOST=localhost

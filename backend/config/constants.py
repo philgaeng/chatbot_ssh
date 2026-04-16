@@ -1,9 +1,12 @@
 import os
 import csv
-from typing import List
+from typing import Any, Dict, List, Tuple
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -82,9 +85,10 @@ SMS_ENABLED = False  # Set to True to enable SMS
 
 # Dynamic file paths based on project root
 PROJECT_ROOT = Path(__file__).parent.parent
-LOOKUP_FILE_PATH = str(PROJECT_ROOT / "resources/lookup_tables/list_category.txt")
-DEFAULT_CSV_PATH = str(PROJECT_ROOT / "resources/grievances_categorization_v1.1.csv")
-LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "resources/location_dataset/")
+LOOKUP_FILE_PATH = str(PROJECT_ROOT / "dev-resources" / "lookup_tables" / "list_category.txt")
+DEFAULT_CSV_PATH = str(PROJECT_ROOT / "dev-resources" / "grievances_categorization_v1.1.csv")
+# Prefix for location_dataset_* files and location_dataset/ JSON (see ContactLocationValidator)
+LOCATION_FOLDER_PATH = str(PROJECT_ROOT / "dev-resources" / "location_dataset")
 
 ############################
 # EMAIL CONFIGURATION
@@ -542,49 +546,125 @@ def load_categories_from_lookup():
         logger.error(f"⚠ Error loading categories from lookup table: {e}")
         return []  # Return empty list on failure
 
+def _classification_row_to_entry(row: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    """Build category_key and payload dict from DB row or CSV row."""
+    classification_data = {
+        "generic_grievance_name": row.get("generic_grievance_name") or "",
+        "generic_grievance_name_ne": row.get("generic_grievance_name_ne") or "",
+        "short_description": row.get("short_description") or "",
+        "short_description_ne": row.get("short_description_ne") or "",
+        "classification": row.get("classification") or "",
+        "classification_ne": row.get("classification_ne") or "",
+        "description": row.get("description") or "",
+        "description_ne": row.get("description_ne") or "",
+        "follow_up_question_description": row.get("follow_up_question_description") or "",
+        "follow_up_question_description_ne": row.get("follow_up_question_description_ne") or "",
+        "follow_up_question_quantification": row.get("follow_up_question_quantification") or "",
+        "follow_up_question_quantification_ne": row.get("follow_up_question_quantification_ne") or "",
+        "high_priority": bool(row.get("high_priority")),
+    }
+    ck = row.get("category_key")
+    if not ck:
+        ck = (
+            f"{classification_data['classification'].replace('-', ' ').title()} - "
+            f"{classification_data['generic_grievance_name'].replace('-', ' ').title()}"
+        )
+    return ck, classification_data
+
+
+def _load_classification_from_database() -> Tuple[Dict[str, Any], List[str]]:
+    """Load taxonomy from grievance_classification_taxonomy when seeded."""
+    classification_data: Dict[str, Any] = {}
+    try:
+        with psycopg2.connect(
+            host=DB_CONFIG["host"],
+            database=DB_CONFIG["database"],
+            user=DB_CONFIG["user"],
+            password=DB_CONFIG["password"],
+            port=DB_CONFIG["port"],
+        ) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT category_key, generic_grievance_name, generic_grievance_name_ne,
+                           short_description, short_description_ne, classification, classification_ne,
+                           description, description_ne, follow_up_question_description,
+                           follow_up_question_description_ne, follow_up_question_quantification,
+                           follow_up_question_quantification_ne, high_priority
+                    FROM grievance_classification_taxonomy
+                    """
+                )
+                rows = cur.fetchall()
+        if not rows:
+            return {}, []
+        for row in rows:
+            rd = dict(row)
+            hp = rd.get("high_priority")
+            if isinstance(hp, str):
+                rd["high_priority"] = hp.lower() == "true"
+            else:
+                rd["high_priority"] = bool(hp)
+            key, payload = _classification_row_to_entry(rd)
+            classification_data[key] = payload
+        unique_categories = sorted(classification_data.keys())
+        logger.info("Loaded grievance classification from database (%s categories)", len(unique_categories))
+        return classification_data, unique_categories
+    except Exception as e:
+        logger.debug("Classification DB load skipped or failed: %s", e)
+        return {}, []
+
+
 def load_classification_data(csv_path=DEFAULT_CSV_PATH):
     """
-    Loads grievance classification data from a CSV file and returns a JSON structure
-    where keys are category names and values contain all grievance data.
+    Load grievance classification: Postgres (grievance_classification_taxonomy) when seeded,
+    else CSV under dev-resources. Returns (dict keyed by category display name, sorted keys).
     """
-    classification_data = {}
+    db_data, db_cats = _load_classification_from_database()
+    if db_data:
+        return db_data, db_cats
+
+    classification_data: Dict[str, Any] = {}
 
     try:
         with open(csv_path, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                # Create category key as "Classification - Grievance Name"
-                category_key = f"{row['classification'].replace('-', ' ').title()} - {row['generic_grievance_name'].replace('-', ' ').title()}"
-                
-                # Create the data structure for this category
+                category_key = (
+                    f"{row['classification'].replace('-', ' ').title()} - "
+                    f"{row['generic_grievance_name'].replace('-', ' ').title()}"
+                )
                 classification_data[category_key] = {
-                    'generic_grievance_name': row['generic_grievance_name'],
-                    'generic_grievance_name_ne': row['generic_grievance_name_ne'],
-                    'short_description': row['short_description'],
-                    'short_description_ne': row['short_description_ne'],
-                    'classification': row['classification'],
-                    'classification_ne': row['classification_ne'],
-                    'description': row['description'],
-                    'description_ne': row['description_ne'],
-                    'follow_up_question_description': row['follow_up_question_description'],
-                    'follow_up_question_description_ne': row['follow_up_question_description_ne'],
-                    'follow_up_question_quantification': row['follow_up_question_quantification'],
-                    'follow_up_question_quantification_ne': row['follow_up_question_quantification_ne'],
-                    'high_priority': row['high_priority'].lower() == 'true' if row.get('high_priority') else False
+                    "generic_grievance_name": row["generic_grievance_name"],
+                    "generic_grievance_name_ne": row["generic_grievance_name_ne"],
+                    "short_description": row["short_description"],
+                    "short_description_ne": row["short_description_ne"],
+                    "classification": row["classification"],
+                    "classification_ne": row["classification_ne"],
+                    "description": row["description"],
+                    "description_ne": row["description_ne"],
+                    "follow_up_question_description": row["follow_up_question_description"],
+                    "follow_up_question_description_ne": row["follow_up_question_description_ne"],
+                    "follow_up_question_quantification": row["follow_up_question_quantification"],
+                    "follow_up_question_quantification_ne": row["follow_up_question_quantification_ne"],
+                    "high_priority": row["high_priority"].lower() == "true" if row.get("high_priority") else False,
                 }
 
-        # Update lookup table with category names
         unique_categories = sorted(classification_data.keys())
-        update_lookup_table(unique_categories)
+        if ENV_SOURCE == "env.local" or os.getenv("WRITE_LOOKUP_FROM_CLASSIFICATION", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            update_lookup_table(unique_categories)
 
         return classification_data, unique_categories
 
     except FileNotFoundError:
-        logger.error(f"⚠ Classification CSV file not found: {csv_path}")
-        return {}
+        logger.error("⚠ Classification CSV file not found: %s", csv_path)
+        return {}, []
     except Exception as e:
-        logger.error(f"⚠ Error loading classification data: {e}")
-        return {}
+        logger.error("⚠ Error loading classification data: %s", e)
+        return {}, []
 
 def update_lookup_table(categories):
     """Writes the latest category list to the lookup table file (list_category.txt)."""
@@ -597,11 +677,19 @@ def update_lookup_table(categories):
         logger.error(f"⚠ Error updating lookup table: {e}")
 
 ############################
-# LOAD CLASSIFICATION DATA
+# LOAD CLASSIFICATION DATA (lazy; prefer DB after seed — see dev-scripts/seed_reference_data.py)
 ############################
 
-# Load classification data and categories as constants
-CLASSIFICATION_DATA, LIST_OF_CATEGORIES = load_classification_data()
+_CLASSIFICATION_CACHE: Tuple[Dict[str, Any], List[str]] | None = None
+
+
+def __getattr__(name: str) -> Any:
+    if name not in ("CLASSIFICATION_DATA", "LIST_OF_CATEGORIES"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    global _CLASSIFICATION_CACHE
+    if _CLASSIFICATION_CACHE is None:
+        _CLASSIFICATION_CACHE = load_classification_data()
+    return _CLASSIFICATION_CACHE[0] if name == "CLASSIFICATION_DATA" else _CLASSIFICATION_CACHE[1]
 
 
 ############################

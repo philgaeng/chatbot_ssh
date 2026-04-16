@@ -7,14 +7,12 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-# Ensure project root and rasa_chatbot are on path
+# Ensure project root is on path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-RASA_DIR = PROJECT_ROOT / "rasa_chatbot"
-if str(RASA_DIR) not in sys.path:
-    sys.path.insert(0, str(RASA_DIR))
 
+from backend.orchestrator.paths import DOMAIN_YAML_PATH
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker  # noqa: E402
 from backend.orchestrator.session_store import create_session  # noqa: E402
 from backend.orchestrator.main import app  # noqa: E402
@@ -26,9 +24,9 @@ def project_root() -> Path:
 
 
 @pytest.fixture(scope="session")
-def domain(project_root: Path) -> Dict[str, Any]:
+def domain() -> Dict[str, Any]:
     """Load Rasa domain.yml once for all tests."""
-    path = project_root / "rasa_chatbot" / "domain.yml"
+    path = DOMAIN_YAML_PATH
     if not path.exists():
         return {"slots": {}}
     with path.open() as f:
