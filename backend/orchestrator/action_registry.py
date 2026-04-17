@@ -37,6 +37,17 @@ def _get_action(action_name: str) -> Any:
             ActionAskSensitiveIssuesNewDetail,
             ActionAskSensitiveIssuesNickname,
             ActionAskFormSensitiveIssuesComplainantPhone,
+            ActionAskFormSensitiveIssuesSeahVictimSurvivorRole,
+            ActionAskFormSensitiveIssuesSeahProjectIdentification,
+            ActionAskFormSensitiveIssuesSeahContactConsentChannel,
+            ActionAskFormSensitiveIssuesSeahFocalFullName,
+            ActionAskFormSensitiveIssuesSeahFocalOtpInput,
+            ActionAskFormSensitiveIssuesSeahFocalSurvivorRisks,
+            ActionAskFormSensitiveIssuesSeahFocalMitigationMeasures,
+            ActionAskFormSensitiveIssuesSeahFocalOtherAtRiskParties,
+            ActionAskFormSensitiveIssuesSeahFocalProjectRisk,
+            ActionAskFormSensitiveIssuesSeahFocalReputationalRisk,
+            ActionAskFormSensitiveIssuesSeahFocalLearnedWhen,
             ActionOutroSensitiveIssues,
         )
         from backend.actions.forms.form_modify_grievance import (
@@ -77,6 +88,7 @@ def _get_action(action_name: str) -> Any:
         )
         from backend.actions.action_submit_grievance import (
             ActionSubmitGrievance,
+            ActionSubmitSeah,
             ActionGrievanceOutro,
         )
         from backend.actions.action_ask_commons import (
@@ -111,12 +123,24 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_start_grievance_process"] = ActionStartGrievanceProcess()
         _ACTIONS["action_ask_grievance_new_detail"] = ActionAskGrievanceNewDetail()
         _ACTIONS["action_submit_grievance"] = ActionSubmitGrievance()
+        _ACTIONS["action_submit_seah"] = ActionSubmitSeah()
 
         # Sensitive issues form
         _ACTIONS["action_ask_sensitive_issues_follow_up"] = ActionAskSensitiveIssuesFollowUp()
         _ACTIONS["action_ask_sensitive_issues_new_detail"] = ActionAskSensitiveIssuesNewDetail()
         _ACTIONS["action_ask_sensitive_issues_nickname"] = ActionAskSensitiveIssuesNickname()
         _ACTIONS["action_ask_form_sensitive_issues_complainant_phone"] = ActionAskFormSensitiveIssuesComplainantPhone()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_victim_survivor_role"] = ActionAskFormSensitiveIssuesSeahVictimSurvivorRole()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_project_identification"] = ActionAskFormSensitiveIssuesSeahProjectIdentification()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_contact_consent_channel"] = ActionAskFormSensitiveIssuesSeahContactConsentChannel()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_full_name"] = ActionAskFormSensitiveIssuesSeahFocalFullName()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_otp_input"] = ActionAskFormSensitiveIssuesSeahFocalOtpInput()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_survivor_risks"] = ActionAskFormSensitiveIssuesSeahFocalSurvivorRisks()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_mitigation_measures"] = ActionAskFormSensitiveIssuesSeahFocalMitigationMeasures()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_other_at_risk_parties"] = ActionAskFormSensitiveIssuesSeahFocalOtherAtRiskParties()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_project_risk"] = ActionAskFormSensitiveIssuesSeahFocalProjectRisk()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_reputational_risk"] = ActionAskFormSensitiveIssuesSeahFocalReputationalRisk()
+        _ACTIONS["action_ask_form_sensitive_issues_seah_focal_learned_when"] = ActionAskFormSensitiveIssuesSeahFocalLearnedWhen()
         _ACTIONS["action_outro_sensitive_issues"] = ActionOutroSensitiveIssues()
 
         # Status check

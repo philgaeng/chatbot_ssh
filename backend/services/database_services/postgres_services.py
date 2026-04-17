@@ -2,6 +2,8 @@
 
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 import traceback
+import random
+from datetime import datetime
 
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG, DEFAULT_VALUES
@@ -209,6 +211,114 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+
+    def _ensure_seah_tables(self) -> None:
+        """Create SEAH tables when they do not exist."""
+        create_complainants_seah = """
+            CREATE TABLE IF NOT EXISTS complainants_seah (
+                complainant_id TEXT PRIMARY KEY,
+                complainant_full_name TEXT,
+                complainant_phone TEXT,
+                complainant_email TEXT,
+                complainant_province TEXT,
+                complainant_district TEXT,
+                complainant_municipality TEXT,
+                complainant_ward TEXT,
+                complainant_village TEXT,
+                complainant_address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+        create_grievances_seah = """
+            CREATE TABLE IF NOT EXISTS grievances_seah (
+                seah_case_id TEXT PRIMARY KEY,
+                seah_public_ref TEXT UNIQUE NOT NULL,
+                complainant_id TEXT NOT NULL,
+                grievance_description TEXT,
+                grievance_summary TEXT,
+                grievance_categories TEXT,
+                grievance_sensitive_issue BOOLEAN DEFAULT TRUE,
+                grievance_status TEXT,
+                grievance_timeline TEXT,
+                language_code TEXT DEFAULT 'en',
+                submission_type TEXT DEFAULT 'seah_intake',
+                seah_payload JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (complainant_id) REFERENCES complainants_seah(complainant_id)
+            );
+        """
+        self.execute_query(create_complainants_seah, (), "create_complainants_seah")
+        self.execute_query(create_grievances_seah, (), "create_grievances_seah")
+
+    def _generate_seah_case_id(self) -> str:
+        year = datetime.now().strftime("%Y")
+        suffix = random.randint(100000, 999999)
+        return f"SEAH-{year}-{suffix}"
+
+    def _generate_seah_public_ref(self) -> str:
+        year = datetime.now().strftime("%Y")
+        suffix = random.randint(100000, 999999)
+        return f"SEAH-REF-{year}-{suffix}"
+
+    def submit_seah_to_db(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist SEAH intake data in dedicated SEAH tables only."""
+        try:
+            self._ensure_seah_tables()
+
+            complainant_id = data.get("complainant_id") or self.generate_complainant_id(data)
+            seah_case_id = data.get("seah_case_id") or self._generate_seah_case_id()
+            seah_public_ref = data.get("seah_public_ref") or self._generate_seah_public_ref()
+
+            complainant_payload = {
+                "complainant_id": complainant_id,
+                "complainant_full_name": data.get("complainant_full_name"),
+                "complainant_phone": data.get("complainant_phone"),
+                "complainant_email": data.get("complainant_email"),
+                "complainant_province": data.get("complainant_province"),
+                "complainant_district": data.get("complainant_district"),
+                "complainant_municipality": data.get("complainant_municipality"),
+                "complainant_ward": data.get("complainant_ward"),
+                "complainant_village": data.get("complainant_village"),
+                "complainant_address": data.get("complainant_address"),
+            }
+            self.execute_insert(
+                table_name="complainants_seah",
+                input_data=complainant_payload,
+                allowed_fields=list(complainant_payload.keys()),
+            )
+
+            grievance_payload = {
+                "seah_case_id": seah_case_id,
+                "seah_public_ref": seah_public_ref,
+                "complainant_id": complainant_id,
+                "grievance_description": data.get("grievance_description"),
+                "grievance_summary": data.get("grievance_summary"),
+                "grievance_categories": str(data.get("grievance_categories") or ""),
+                "grievance_sensitive_issue": True,
+                "grievance_status": data.get("grievance_status"),
+                "grievance_timeline": str(data.get("grievance_timeline") or ""),
+                "language_code": data.get("language_code", "en"),
+                "submission_type": "seah_intake",
+                "seah_payload": data,
+            }
+            self.execute_insert(
+                table_name="grievances_seah",
+                input_data=grievance_payload,
+                allowed_fields=list(grievance_payload.keys()),
+            )
+
+            return {
+                "ok": True,
+                "complainant_id": complainant_id,
+                "seah_case_id": seah_case_id,
+                "seah_public_ref": seah_public_ref,
+            }
+        except Exception as e:
+            self.logger.error(f"Error submitting SEAH grievance to db: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return {"ok": False, "error": str(e)}
             
     def create_grievance(self, data: Dict[str, Any]) -> str:
         """Create a new grievance"""

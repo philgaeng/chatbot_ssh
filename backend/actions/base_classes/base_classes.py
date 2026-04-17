@@ -137,6 +137,10 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
         
         if intent == "skip":
             return True, False, "skip"
+
+        # Button payload fallback: some channels may not map "/skip" to intent "skip".
+        if input_text in ("/skip", "/affirm_skip"):
+            return True, False, "skip"
         
         if input_text:
             try:
@@ -174,7 +178,7 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
         intent = latest_message.get("intent", {}).get("name", "")
         original_text = tracker.get_slot("skipped_detected_text")
         
-        if text == "/affirm_skip" or intent == "skip":
+        if text in ("/skip", "/affirm_skip") or intent == "skip":
             skip_value = self._define_skip_value(slot_name, domain)
             return {
                 slot_name: skip_value,
@@ -209,7 +213,8 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
             message_text = latest_message.get("text", "")
             intent = latest_message.get("intent", {}).get("name", "")
 
-            if intent == "skip":
+            # Handle explicit skip intent and raw skip payloads consistently.
+            if intent == "skip" or message_text in ("/skip", "/affirm_skip"):
                 return {slot_name: self.SKIP_VALUE}
 
             if message_text.startswith("/"):

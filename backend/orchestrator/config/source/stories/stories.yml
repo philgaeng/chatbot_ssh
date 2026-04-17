@@ -233,3 +233,14 @@ stories:
       - action: action_next_action
       - action: action_update_grievance_categorization
       - action: action_grievance_outro
+
+  - story: User starts dedicated SEAH intake from main menu
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_english
+      - action: action_set_english
+      - action: action_main_menu
+      - intent: seah_intake
+      - action: form_sensitive_issues
+      - active_loop: form_sensitive_issues

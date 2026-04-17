@@ -241,6 +241,58 @@ BUTTONS_CHECK_STATUS = {
     ]
 }
 
+BUTTONS_SEAH_IDENTITY_MODE = {
+    "en": [
+        {"title": "Identified", "payload": "/identified"},
+        {"title": "Anonymous", "payload": "/anonymous"},
+    ],
+    "ne": [
+        {"title": "पहिचान सहित", "payload": "/identified"},
+        {"title": "गुमनाम", "payload": "/anonymous"},
+    ],
+}
+
+BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE = {
+    "en": [
+        {"title": "Yes, I am the victim/survivor", "payload": "/victim_survivor"},
+        {"title": "No", "payload": "/not_victim_survivor"},
+        {"title": "I am the SEAH focal point", "payload": "/focal_point"},
+    ],
+    "ne": [
+        {"title": "हो, म पीडित/उत्तरजीवी हुँ", "payload": "/victim_survivor"},
+        {"title": "होइन", "payload": "/not_victim_survivor"},
+        {"title": "म SEAH फोकल पोइन्ट हुँ", "payload": "/focal_point"},
+    ],
+}
+
+BUTTONS_SEAH_PROJECT_IDENTIFICATION = {
+    "en": [
+        {"title": "Cannot specify", "payload": "/cannot_specify"},
+        {"title": "Not an ADB project", "payload": "/not_adb_project"},
+        {"title": "Skip", "payload": BUTTON_SKIP},
+    ],
+    "ne": [
+        {"title": "उल्लेख गर्न सक्दिन", "payload": "/cannot_specify"},
+        {"title": "यो ADB आयोजना होइन", "payload": "/not_adb_project"},
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+    ],
+}
+
+BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL = {
+    "en": [
+        {"title": "Phone only", "payload": "/phone"},
+        {"title": "Email only", "payload": "/email"},
+        {"title": "Both phone and email", "payload": "/both"},
+        {"title": "No follow-up contact", "payload": "/none"},
+    ],
+    "ne": [
+        {"title": "फोन मात्र", "payload": "/phone"},
+        {"title": "इमेल मात्र", "payload": "/email"},
+        {"title": "फोन र इमेल दुवै", "payload": "/both"},
+        {"title": "फलो-अप सम्पर्क नगर्नुहोस्", "payload": "/none"},
+    ],
+}
+
 
 VALIDATION_SKIP = {"utterance":{
     "en" : "Did you want to skip this field? I matched '{matched_word}'",

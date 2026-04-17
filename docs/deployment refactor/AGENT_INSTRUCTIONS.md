@@ -8,10 +8,11 @@ Use this file when an automated agent (or a new chat session) is asked to **chan
 
 | Order | Document | Why |
 |-------|----------|-----|
-| 1 | [`deployment_and_data_architecture.md`](deployment_and_data_architecture.md) | Phase 1/2 scope, secrets policy, what is in/out of deploy |
-| 2 | [`../deployment_environment_urls.md`](../deployment_environment_urls.md) | Per-environment URLs, `server_name`, host paths, upstream ports for Nginx |
-| 3 | [`../BACKEND.md`](../BACKEND.md) | Orchestrator vs Backend API, ports, Rasa SDK (no Rasa server) |
-| 4 | [`../../deployment/nginx/webchat_rest_aws.conf`](../../deployment/nginx/webchat_rest_aws.conf) | Current production-shaped Nginx routing |
+| 1 | [`../COMMIT_STRATEGY.md`](../COMMIT_STRATEGY.md) | Mandatory branch/commit flow and Docker validation before merge to `main` |
+| 2 | [`deployment_and_data_architecture.md`](deployment_and_data_architecture.md) | Phase 1/2 scope, secrets policy, what is in/out of deploy |
+| 3 | [`../deployment_environment_urls.md`](../deployment_environment_urls.md) | Per-environment URLs, `server_name`, host paths, upstream ports for Nginx |
+| 4 | [`../BACKEND.md`](../BACKEND.md) | Orchestrator vs Backend API, ports, Rasa SDK (no Rasa server) |
+| 5 | [`../../deployment/nginx/webchat_rest_aws.conf`](../../deployment/nginx/webchat_rest_aws.conf) | Current production-shaped Nginx routing |
 
 If the task touches **Phase 2** storage or crawlers, also read [`../internal_dental_system_strategy.md`](../internal_dental_system_strategy.md) when relevant.
 

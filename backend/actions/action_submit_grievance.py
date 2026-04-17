@@ -275,6 +275,64 @@ class ActionSubmitGrievance(BaseActionSubmit):
         return await super().execute_action(dispatcher, tracker, domain, review = False)
 
 
+class ActionSubmitSeah(BaseActionSubmit):
+    def name(self) -> Text:
+        return "action_submit_seah"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        try:
+            grievance_data = self.collect_grievance_data(tracker, review=False)
+            grievance_data["language_code"] = tracker.get_slot("language_code") or "en"
+            grievance_data["seah_not_adb_project"] = tracker.get_slot("seah_not_adb_project")
+            grievance_data["seah_contact_consent_channel"] = tracker.get_slot("seah_contact_consent_channel")
+
+            seah_fields = [
+                "sensitive_issues_follow_up",
+                "seah_victim_survivor_role",
+                "seah_project_identification",
+                "sensitive_issues_new_detail",
+                "seah_focal_survivor_risks",
+                "seah_focal_mitigation_measures",
+                "seah_focal_other_at_risk_parties",
+                "seah_focal_project_risk",
+                "seah_focal_reputational_risk",
+                "seah_focal_learned_when",
+                "seah_focal_full_name",
+                "seah_focal_lookup_status",
+                "seah_focal_verification_status",
+            ]
+            for field in seah_fields:
+                grievance_data[field] = tracker.get_slot(field)
+
+            result = self.db_manager.submit_seah_to_db(grievance_data)
+            if not result.get("ok"):
+                raise Exception(result.get("error", "SEAH submission failed"))
+
+            language_code = tracker.get_slot("language_code") or "en"
+            public_ref = result.get("seah_public_ref")
+            if language_code == "ne":
+                dispatcher.utter_message(
+                    text=f"तपाईंको गोप्य SEAH रिपोर्ट दर्ता गरिएको छ। तपाईंको सन्दर्भ नम्बर: **{public_ref}**"
+                )
+            else:
+                dispatcher.utter_message(
+                    text=f"Your confidential SEAH report has been submitted. Your reference number is **{public_ref}**."
+                )
+
+            return [
+                SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"]),
+                SlotSet("seah_case_id", result.get("seah_case_id")),
+                SlotSet("seah_public_ref", public_ref),
+            ]
+        except Exception as e:
+            self.logger.error(f"❌ Error submitting SEAH report: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            dispatcher.utter_message(
+                text="We could not submit your SEAH report right now. Please try again."
+            )
+            return []
+
+
 class ActionGrievanceOutro(BaseActionSubmit):
     def name(self) -> Text:
         return "action_grievance_outro"

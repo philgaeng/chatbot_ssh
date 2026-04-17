@@ -7,6 +7,7 @@ from rasa_sdk.types import DomainDict
 from .base_classes.base_classes  import BaseAction
 from backend.config.database_constants import TASK_STATUS
 import json
+import os
 
 
 TASK_SLOTS_TO_UPDATE_MAP = {
@@ -140,6 +141,9 @@ class ActionMainMenu(BaseAction):
         else:
             message = self.get_utterance(1)
         buttons = self.get_buttons(1)
+        seah_enabled = os.environ.get("ENABLE_SEAH_DEDICATED_FLOW", "true").strip().lower() in ("1", "true", "yes")
+        if not seah_enabled:
+            buttons = [b for b in buttons if b.get("payload") != "/seah_intake"]
         dispatcher.utter_message(text=message, buttons=buttons)
 
 

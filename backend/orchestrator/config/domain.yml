@@ -69,6 +69,7 @@ intents:
   - set_nepali
   - skip
   - new_grievance
+  - seah_intake
   - start_status_check
   - test_tracker_access
   - test_disconnection
@@ -119,6 +120,7 @@ slots:
     values:
       - status_check
       - new_grievance
+      - seah_intake
       - new_complainant
       - modify_grievance
       - modify_contact
@@ -492,7 +494,114 @@ slots:
     mappings:
       - type: custom
   sensitive_issues_follow_up:
+    type: categorical
+    values:
+      - identified
+      - anonymous
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_victim_survivor_role:
+    type: categorical
+    values:
+      - victim_survivor
+      - not_victim_survivor
+      - focal_point
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_project_identification:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_not_adb_project:
     type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_contact_consent_channel:
+    type: categorical
+    values:
+      - phone
+      - email
+      - both
+      - none
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_survivor_risks:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_mitigation_measures:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_other_at_risk_parties:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_project_risk:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_reputational_risk:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_learned_when:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_full_name:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_lookup_status:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_lookup_attempts:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_otp_input:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_otp_number:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_otp_attempts:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_verification_status:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_case_id:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_public_ref:
+    type: text
     influence_conversation: false
     mappings:
       - type: custom
@@ -668,6 +777,17 @@ actions:
   - action_ask_sensitive_issues_nickname
   - action_ask_sensitive_issues_new_detail
   - action_ask_form_sensitive_issues_complainant_phone
+  - action_ask_form_sensitive_issues_seah_victim_survivor_role
+  - action_ask_form_sensitive_issues_seah_project_identification
+  - action_ask_form_sensitive_issues_seah_contact_consent_channel
+  - action_ask_form_sensitive_issues_seah_focal_survivor_risks
+  - action_ask_form_sensitive_issues_seah_focal_full_name
+  - action_ask_form_sensitive_issues_seah_focal_otp_input
+  - action_ask_form_sensitive_issues_seah_focal_mitigation_measures
+  - action_ask_form_sensitive_issues_seah_focal_other_at_risk_parties
+  - action_ask_form_sensitive_issues_seah_focal_project_risk
+  - action_ask_form_sensitive_issues_seah_focal_reputational_risk
+  - action_ask_form_sensitive_issues_seah_focal_learned_when
   - action_ask_form_story_main_language_code
   - action_ask_form_story_main_story_main
   - action_ask_complainant_phone
@@ -731,6 +851,7 @@ actions:
   - action_skip_status_check_outro
   - action_start_grievance_process
   - action_submit_grievance
+  - action_submit_seah
   - action_submit_grievance_as_is
   - action_test_disconnection_log
   - action_test_disconnection

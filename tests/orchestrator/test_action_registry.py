@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action, events_to_slot_updates
@@ -97,4 +98,61 @@ def test_invoke_action_ask_status_check_method_sends_buttons(domain):
     last = dispatcher.messages[-1]
     assert "text" in last
     assert "buttons" in last and len(last["buttons"]) > 0
+
+
+def test_invoke_action_submit_seah_uses_dedicated_path(domain, monkeypatch):
+    from backend.services.database_services.postgres_services import DatabaseManager
+    from backend.services.messaging import Messaging
+
+    def _mock_submit_seah_to_db(data):
+        return {
+            "ok": True,
+            "seah_case_id": "SEAH-2026-123456",
+            "seah_public_ref": "SEAH-REF-2026-654321",
+            "complainant_id": data.get("complainant_id", "CM-TEST"),
+        }
+
+    def _mock_submit_grievance_to_db(data):
+        raise AssertionError("General grievance submit path should not be used for SEAH")
+
+    monkeypatch.setattr(DatabaseManager, "submit_seah_to_db", lambda self, data: _mock_submit_seah_to_db(data))
+    monkeypatch.setattr(DatabaseManager, "submit_grievance_to_db", lambda self, data: _mock_submit_grievance_to_db(data))
+    monkeypatch.setattr(Messaging, "send_sms", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("SEAH flow must not send SMS")))
+
+    slots = {
+        "language_code": "en",
+        "story_main": "seah_intake",
+        "grievance_sensitive_issue": True,
+        "complainant_id": "CM-TEST",
+        "complainant_phone": "skipped",
+        "complainant_email": "skipped",
+        "complainant_full_name": "skipped",
+        "complainant_province": "Koshi",
+        "complainant_district": "Jhapa",
+        "complainant_municipality": "Biratnagar",
+        "complainant_village": "skipped",
+        "complainant_address": "skipped",
+        "grievance_id": "GR-DUMMY",
+        "grievance_description": "SEAH incident summary",
+        "otp_verified": False,
+    }
+    dispatcher = CollectingDispatcher()
+    tracker = SessionTracker(slots=slots, sender_id="user-seah-1")
+
+    events = _run(invoke_action("action_submit_seah", dispatcher, tracker, domain))
+    slot_updates = events_to_slot_updates(events)
+    assert slot_updates.get("seah_case_id") == "SEAH-2026-123456"
+    assert slot_updates.get("seah_public_ref") == "SEAH-REF-2026-654321"
+    assert any("SEAH-REF-2026-654321" in m.get("text", "") for m in dispatcher.messages)
+
+
+def test_submit_seah_case_reference_format():
+    from backend.services.database_services.postgres_services import DatabaseManager
+
+    db = DatabaseManager()
+    case_id = db._generate_seah_case_id()
+    public_ref = db._generate_seah_public_ref()
+
+    assert re.match(r"^SEAH-\d{4}-\d{6}$", case_id)
+    assert re.match(r"^SEAH-REF-\d{4}-\d{6}$", public_ref)
 

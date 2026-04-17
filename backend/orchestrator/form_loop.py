@@ -55,6 +55,17 @@ _ASK_ACTIONS_BY_SLOT = {
     "sensitive_issues_follow_up": "action_ask_sensitive_issues_follow_up",
     "sensitive_issues_new_detail": "action_ask_sensitive_issues_new_detail",
     "sensitive_issues_nickname": "action_ask_sensitive_issues_nickname",
+    "seah_victim_survivor_role": "action_ask_form_sensitive_issues_seah_victim_survivor_role",
+    "seah_project_identification": "action_ask_form_sensitive_issues_seah_project_identification",
+    "seah_contact_consent_channel": "action_ask_form_sensitive_issues_seah_contact_consent_channel",
+    "seah_focal_full_name": "action_ask_form_sensitive_issues_seah_focal_full_name",
+    "seah_focal_otp_input": "action_ask_form_sensitive_issues_seah_focal_otp_input",
+    "seah_focal_survivor_risks": "action_ask_form_sensitive_issues_seah_focal_survivor_risks",
+    "seah_focal_mitigation_measures": "action_ask_form_sensitive_issues_seah_focal_mitigation_measures",
+    "seah_focal_other_at_risk_parties": "action_ask_form_sensitive_issues_seah_focal_other_at_risk_parties",
+    "seah_focal_project_risk": "action_ask_form_sensitive_issues_seah_focal_project_risk",
+    "seah_focal_reputational_risk": "action_ask_form_sensitive_issues_seah_focal_reputational_risk",
+    "seah_focal_learned_when": "action_ask_form_sensitive_issues_seah_focal_learned_when",
 }
 
 # Form-specific overrides for shared slots (check active_loop + slot first)

@@ -49,11 +49,12 @@ class ValidateMenuForm(BaseFormValidationAction):
         self.logger.info(f"validate_story_main: {value}")
         if value not in ["new_grievance",
                         "check_status",
+                        "seah_intake",
                         "goodbye"]:
             dispatcher.utter_message(text="Invalid choice - use the buttons/ अवैध छानुहोस् - बटनहरू प्रयोग गर्नुहोस्")
             return {"story_main": None}
         
-        slots = self.reset_slots(tracker, value) if value in ["new_grievance", "check_status"] else {}
+        slots = self.reset_slots(tracker, value) if value in ["new_grievance", "check_status", "seah_intake"] else {}
         slots['story_step'] = None #reset the story step if going to lose the memory of the current step
         slots.update({"story_main": value})
         return slots

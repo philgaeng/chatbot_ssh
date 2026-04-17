@@ -95,6 +95,10 @@ def _get_status_form_skip() -> Any:
 _SENSITIVE_ISSUES_FORM = None
 
 
+def _is_seah_enabled() -> bool:
+    return os.environ.get("ENABLE_SEAH_DEDICATED_FLOW", "true").strip().lower() in ("1", "true", "yes")
+
+
 def _get_sensitive_issues_form() -> Any:
     global _SENSITIVE_ISSUES_FORM
     if _SENSITIVE_ISSUES_FORM is None:
@@ -130,6 +134,7 @@ PAYLOAD_TO_INTENT = {
     "set_english": "set_english",
     "set_nepali": "set_nepali",
     "new_grievance": "new_grievance",
+    "seah_intake": "start_seah_intake",
     "check_status": "start_status_check",
     "start_status_check": "start_status_check",
     "route_status_check_phone": "route_status_check_phone",
@@ -278,6 +283,28 @@ async def run_flow_turn(
                 next_state = "contact_form"
                 session["active_loop"] = "form_contact"
                 session["requested_slot"] = None
+        elif intent == "start_seah_intake" and _is_seah_enabled():
+            slot_updates["story_main"] = "seah_intake"
+            slot_updates["grievance_sensitive_issue"] = True
+            session["slots"].update(slot_updates)
+            session["active_loop"] = "form_sensitive_issues"
+            session["requested_slot"] = None
+            next_state = "form_sensitive_issues"
+            session_copy = dict(session)
+            session_copy["slots"] = dict(session["slots"])
+            sensitive_form = _get_sensitive_issues_form()
+            msgs, form_updates, completed = await run_form_turn(
+                sensitive_form, session_copy, None, domain
+            )
+            dispatcher.messages.extend(msgs)
+            slot_updates.update(form_updates)
+            if completed:
+                next_state = "contact_form"
+                session["active_loop"] = "form_contact"
+                session["requested_slot"] = None
+        elif intent == "start_seah_intake" and not _is_seah_enabled():
+            # Feature-flag off: keep legacy behavior and do not enter dedicated SEAH flow.
+            next_state = "main_menu"
         elif intent == "start_status_check":
             ask_dispatcher = CollectingDispatcher()
             events = await invoke_action(
@@ -354,25 +381,21 @@ async def run_flow_turn(
             contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
             slot_preview = {k: session["slots"].get(k) for k in contact_slots}
             _log.info("form_sensitive_issues completed -> contact_form | contact slot preview: %s", slot_preview)
-            # After form completes (including /exit, /add_more_details, /anonymous_with_phone and their ask actions),
-            # show sensitive-issues outro before contact form
-            follow_up = session.get("slots", {}).get("sensitive_issues_follow_up")
-            if follow_up in ("anonymous_no_phone", "anonymous_with_phone", "more_details"):
-                outro_tracker = SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop="form_contact",
-                    requested_slot=None,
-                )
-                outro_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_outro_sensitive_issues",
-                    outro_dispatcher,
-                    outro_tracker,
-                    domain,
-                )
-                dispatcher.messages.extend(outro_dispatcher.messages)
+            outro_tracker = SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop="form_contact",
+                requested_slot=None,
+            )
+            outro_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_outro_sensitive_issues",
+                outro_dispatcher,
+                outro_tracker,
+                domain,
+            )
+            dispatcher.messages.extend(outro_dispatcher.messages)
             contact_form = _get_contact_form()
             msgs2, form_updates2, _ = await run_form_turn(
                 contact_form, session, None, domain
@@ -396,7 +419,7 @@ async def run_flow_turn(
             # If the user refused to share any contact information in the grievance flow,
             # skip the OTP form entirely and move directly to grievance submission +
             # review (same path as otp_form completed for new_grievance).
-            if story_main in ("new_grievance", "grievance_submission") and complainant_consent is False:
+            if story_main in ("new_grievance", "grievance_submission", "seah_intake") and complainant_consent is False:
                 session["active_loop"] = None
                 session["requested_slot"] = None
 
@@ -408,8 +431,9 @@ async def run_flow_turn(
                     active_loop=None,
                     requested_slot=None,
                 )
+                submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
                 events = await invoke_action(
-                    "action_submit_grievance",
+                    submit_action,
                     ask_dispatcher,
                     tracker_submit,
                     domain,
@@ -486,8 +510,9 @@ async def run_flow_turn(
                     active_loop=None,
                     requested_slot=None,
                 )
+                submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
                 events = await invoke_action(
-                    "action_submit_grievance",
+                    submit_action,
                     ask_dispatcher,
                     tracker_submit,
                     domain,
@@ -526,8 +551,9 @@ async def run_flow_turn(
 
     elif state == "submit_grievance":
         ask_dispatcher = CollectingDispatcher()
+        submit_action = "action_submit_seah" if session.get("slots", {}).get("story_main") == "seah_intake" else "action_submit_grievance"
         events = await invoke_action(
-            "action_submit_grievance",
+            submit_action,
             ask_dispatcher,
             tracker,
             domain,
@@ -1046,7 +1072,6 @@ async def run_flow_turn(
                             update_data["complainant_phone_verified"] = True
                         db_manager.update_complainant(complainant_id, update_data)
                 except Exception as e:
-                    import logging
                     logging.getLogger(__name__).error(
                         f"Failed to persist complainant_phone after OTP: {e}"
                     )

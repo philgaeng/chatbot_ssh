@@ -125,3 +125,48 @@ def test_sensitive_content_flow_goes_to_form_sensitive_issues(client: TestClient
         f"Expected form_sensitive_issues, got {body5['next_state']}"
     )
 
+
+def test_seah_intake_entry_from_main_menu(client: TestClient):
+    user_id = "orchestrator-seah-entry-1"
+
+    client.post("/message", json={"user_id": user_id, "text": ""})
+    client.post("/message", json={"user_id": user_id, "payload": "/set_english"})
+
+    response = client.post(
+        "/message",
+        json={"user_id": user_id, "payload": "/seah_intake"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_state"] == "form_sensitive_issues"
+    assert isinstance(body["messages"], list)
+
+
+def test_seah_intake_entry_from_main_menu_nepali(client: TestClient):
+    user_id = "orchestrator-seah-entry-ne-1"
+
+    client.post("/message", json={"user_id": user_id, "text": ""})
+    client.post("/message", json={"user_id": user_id, "payload": "/set_nepali"})
+
+    response = client.post(
+        "/message",
+        json={"user_id": user_id, "payload": "/seah_intake"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_state"] == "form_sensitive_issues"
+    assert isinstance(body["messages"], list)
+
+
+def test_seah_intake_flag_disabled_keeps_legacy_menu_flow(client: TestClient, monkeypatch):
+    monkeypatch.setenv("ENABLE_SEAH_DEDICATED_FLOW", "false")
+    user_id = "orchestrator-seah-flag-off-1"
+
+    client.post("/message", json={"user_id": user_id, "text": ""})
+    client.post("/message", json={"user_id": user_id, "payload": "/set_english"})
+    response = client.post("/message", json={"user_id": user_id, "payload": "/seah_intake"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_state"] == "main_menu"
+
