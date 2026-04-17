@@ -50,6 +50,7 @@ docker-compose.override.yml
 .dockerignore
 *.tar
 docker_images/
+deployment/certbot/
 
 # IDE-specific files
 .idea/
@@ -85,6 +86,7 @@ github_connection_setup.txt  # Contains sensitive setup information
 /task_queue/logs/   # Ignore entire logs directory
 /models/            # Ignore entire models directory
 logs/               # Ignore entire logs directory
+logs/metrics.json
 task_queue/logs/    # Ignore entire logs directory
 models/             # Ignore entire models directory
 uploads/
