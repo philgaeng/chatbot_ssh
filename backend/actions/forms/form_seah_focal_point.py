@@ -39,9 +39,10 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
                 "seah_focal_reputational_risk",
                 "seah_focal_learned_when",
                 "sensitive_issues_new_detail",
-                "seah_contact_consent_channel",
             ]
         )
+        if tracker.get_slot("sensitive_issues_follow_up") != "anonymous":
+            required.append("seah_contact_consent_channel")
         return required
 
     async def extract_seah_project_identification(
@@ -209,8 +210,33 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
+        expected_values = {"restart", "add_more_details", "submit_details"}
+        if isinstance(slot_value, str):
+            slot_value = slot_value.strip()
+            slot_value = slot_value.lstrip("/")
+
+        if slot_value == "restart":
+            return {
+                "sensitive_issues_new_detail": None,
+                "grievance_description": None,
+                "grievance_description_status": "restart",
+            }
+
+        if slot_value == "add_more_details":
+            return {
+                "sensitive_issues_new_detail": None,
+                "grievance_description_status": "add_more_details",
+            }
+
+        if slot_value == "submit_details":
+            return {
+                "sensitive_issues_new_detail": "completed",
+                "grievance_description": tracker.get_slot("grievance_description"),
+                "grievance_description_status": "completed",
+            }
+
         slots = {"sensitive_issues_new_detail": self.SKIP_VALUE}
-        if slot_value not in [self.SKIP_VALUE, None] and len(slot_value.strip()) > 3:
+        if slot_value not in [self.SKIP_VALUE, None] and slot_value not in expected_values and len(slot_value.strip()) > 3:
             existing_description = tracker.get_slot("grievance_description")
             base_text = (
                 existing_description.strip()
@@ -218,9 +244,9 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
                 else ""
             )
             new_text = slot_value.strip()
-            slots["sensitive_issues_new_detail"] = slot_value
+            slots["sensitive_issues_new_detail"] = None
             slots["grievance_description"] = f"{base_text}\n{new_text}" if base_text else new_text
-            slots["grievance_description_status"] = "completed"
+            slots["grievance_description_status"] = "show_options"
         return slots
 
     async def extract_seah_contact_consent_channel(
@@ -471,7 +497,15 @@ class ActionAskFormSeahFocalPointSensitiveIssuesNewDetail(BaseAction):
         return "action_ask_form_seah_focal_point_sensitive_issues_new_detail"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        description_status = tracker.get_slot("grievance_description_status")
+        if description_status in ("show_options", "add_more_details"):
+            grievance_description = tracker.get_slot("grievance_description") or ""
+            dispatcher.utter_message(
+                text=self.get_utterance(2).format(grievance_description=grievance_description),
+                buttons=self.get_buttons(2),
+            )
+        else:
+            dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 

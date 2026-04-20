@@ -187,16 +187,7 @@ UTTERANCE_MAPPING = {
                 }
             },
             'buttons': {
-                1: {
-                    'en': [
-                        {"title": "Identified", "payload": "/identified"},
-                        {"title": "Anonymous", "payload": "/anonymous"},
-                    ],
-                    'ne': [
-                        {"title": "पहिचान सहित", "payload": "/identified"},
-                        {"title": "गुमनाम", "payload": "/anonymous"},
-                    ],
-                }
+                1: BUTTONS_SKIP
             }
         },
         'action_ask_complainant_municipality_confirmed': {
@@ -1004,9 +995,15 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्न सक्नुहुन्छ।"
                 },
                 2: {
-                    'en': "Please share at least a short incident summary or type 'skipped'.",
-                    'ne': "कृपया छोटो घटना विवरण दिनुहोस् वा 'skipped' लेख्नुहोस्।"
+                    'en': """Thank you for your entry: "{grievance_description}".
+Do you want to add more details before submission?""",
+                    'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
+के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
                 }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP,
+                2: BUTTONS_GRIEVANCE_SUBMISSION
             }
         },
         'action_ask_form_seah_2_seah_project_identification': {
@@ -1050,7 +1047,17 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please provide a brief summary of the incident. You may write 'skipped' if you do not want to share details here.",
                     'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्नुहोस्।"
+                },
+                2: {
+                    'en': """Thank you for your entry: "{grievance_description}".
+Do you want to add more details before submission?""",
+                    'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
+के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
                 }
+            },
+            'buttons': {
+                1: BUTTONS_SKIP,
+                2: BUTTONS_GRIEVANCE_SUBMISSION
             }
         },
         'action_ask_form_seah_focal_point_seah_contact_consent_channel': {

@@ -172,7 +172,7 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
 
         # 1b) Sensitive-issue grievance intake reuses this form only for phone handling.
         # Do not request OTP consent/input/status in this flow.
-        if story_main in ("new_grievance", "grievance_submission") and grievance_sensitive_issue is True:
+        if story_main in ("new_grievance", "grievance_submission", "seah_intake") and grievance_sensitive_issue is True:
             self.logger.debug(
                 f"{self.name()} - Sensitive issue flow detected; requiring phone only and skipping OTP slots"
             )

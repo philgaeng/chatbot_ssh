@@ -679,6 +679,8 @@ class ValidateFormContact(ContactFormValidationAction):
         For status_check flow, use form_otp directly instead of form_contact.
         """
         self._initialize_language_and_helpers(tracker)
+        story_main = tracker.get_slot("story_main")
+        sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
         
         required_slots_location = ["complainant_location_consent", 
                       "complainant_province",
@@ -693,5 +695,10 @@ class ValidateFormContact(ContactFormValidationAction):
                       "complainant_address"
                       ]
         required_slots_contact = ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
+
+        # In anonymous dedicated SEAH intake, do not ask identity/contact questions.
+        if story_main == "seah_intake" and sensitive_issues_follow_up == "anonymous":
+            return required_slots_location
+
         return required_slots_location + required_slots_contact
 

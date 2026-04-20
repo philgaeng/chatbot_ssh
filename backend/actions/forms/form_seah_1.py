@@ -5,6 +5,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
+from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE
 
 
 class ValidateFormSeah1(BaseFormValidationAction):
@@ -58,7 +59,16 @@ class ValidateFormSeah1(BaseFormValidationAction):
 
         updates: Dict[Text, Any] = {"sensitive_issues_follow_up": cmd}
         if cmd == "anonymous":
-            updates["complainant_full_name"] = self.SKIP_VALUE
+            updates.update(
+                {
+                    "complainant_full_name": self.SKIP_VALUE,
+                    "complainant_phone": self.SKIP_VALUE,
+                    "otp_consent": self.SKIP_VALUE,
+                    "otp_status": self.SKIP_VALUE,
+                    "otp_input": self.SKIP_VALUE,
+                    "otp_resend_count": 0,
+                }
+            )
         return updates
 
     async def extract_seah_victim_survivor_role(
@@ -84,7 +94,11 @@ class ValidateFormSeah1(BaseFormValidationAction):
         value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
         if isinstance(value, str):
             value = value.lstrip("/")
-        allowed = {"victim_survivor", "not_victim_survivor", "focal_point"}
+        sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
+        if sensitive_issues_follow_up == "anonymous":
+            allowed = {"victim_survivor", "not_victim_survivor"}
+        else:
+            allowed = {"victim_survivor", "not_victim_survivor", "focal_point"}
         if value in allowed:
             return {"seah_victim_survivor_role": value}
         return {"seah_victim_survivor_role": None}
@@ -114,5 +128,12 @@ class ActionAskFormSeah1SeahVictimSurvivorRole(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        language_code = tracker.get_slot("language_code") or "en"
+        identity_mode = tracker.get_slot("sensitive_issues_follow_up")
+        buttons = BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE.get(
+            language_code, BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE["en"]
+        )
+        if identity_mode == "anonymous":
+            buttons = [b for b in buttons if b.get("payload") != "/focal_point"]
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []

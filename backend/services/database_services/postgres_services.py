@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 import traceback
 import random
+import json
 from datetime import datetime
 
 # Import database configuration from constants.py (single source of truth)
@@ -249,8 +250,9 @@ class DatabaseManager(BaseDatabaseManager):
                 FOREIGN KEY (complainant_id) REFERENCES complainants_seah(complainant_id)
             );
         """
-        self.execute_query(create_complainants_seah, (), "create_complainants_seah")
-        self.execute_query(create_grievances_seah, (), "create_grievances_seah")
+        # DDL statements do not return rows; use execute_update to avoid fetchall() errors.
+        self.execute_update(create_complainants_seah, ())
+        self.execute_update(create_grievances_seah, ())
 
     def _generate_seah_case_id(self) -> str:
         year = datetime.now().strftime("%Y")
@@ -267,9 +269,19 @@ class DatabaseManager(BaseDatabaseManager):
         try:
             self._ensure_seah_tables()
 
-            complainant_id = data.get("complainant_id") or self.generate_complainant_id(data)
-            seah_case_id = data.get("seah_case_id") or self._generate_seah_case_id()
-            seah_public_ref = data.get("seah_public_ref") or self._generate_seah_public_ref()
+            not_provided = DEFAULT_VALUES.get("NOT_PROVIDED", "Not provided")
+
+            complainant_id = data.get("complainant_id")
+            if complainant_id in (None, "", not_provided):
+                complainant_id = self.generate_complainant_id(data)
+
+            seah_case_id = data.get("seah_case_id")
+            if seah_case_id in (None, "", not_provided):
+                seah_case_id = self._generate_seah_case_id()
+
+            seah_public_ref = data.get("seah_public_ref")
+            if seah_public_ref in (None, "", not_provided):
+                seah_public_ref = self._generate_seah_public_ref()
 
             complainant_payload = {
                 "complainant_id": complainant_id,
@@ -301,7 +313,7 @@ class DatabaseManager(BaseDatabaseManager):
                 "grievance_timeline": str(data.get("grievance_timeline") or ""),
                 "language_code": data.get("language_code", "en"),
                 "submission_type": "seah_intake",
-                "seah_payload": data,
+                "seah_payload": json.dumps(data, ensure_ascii=False, default=str),
             }
             self.execute_insert(
                 table_name="grievances_seah",

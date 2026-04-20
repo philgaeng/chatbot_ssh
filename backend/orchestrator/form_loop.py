@@ -51,9 +51,7 @@ _ASK_ACTIONS_BY_SLOT = {
     # Modify grievance (add more info)
     "modify_follow_up_answer": "action_ask_modify_follow_up_answer",
     "modify_grievance_new_detail": "action_ask_modify_grievance_new_detail",
-    # SEAH forms (default fallback; form-specific overrides are defined below)
-    "sensitive_issues_follow_up": "action_ask_form_seah_1_sensitive_issues_follow_up",
-    "seah_victim_survivor_role": "action_ask_form_seah_1_seah_victim_survivor_role",
+    # SEAH forms
     "seah_project_identification": "action_ask_form_seah_2_seah_project_identification",
     "sensitive_issues_new_detail": "action_ask_form_seah_2_sensitive_issues_new_detail",
     "seah_contact_consent_channel": "action_ask_form_seah_2_seah_contact_consent_channel",
@@ -69,6 +67,8 @@ _ASK_ACTIONS_BY_SLOT = {
 
 # Form-specific overrides for shared slots (check active_loop + slot first)
 _ASK_ACTIONS_BY_FORM_SLOT = {
+    ("form_seah_1", "sensitive_issues_follow_up"): "action_ask_form_seah_1_sensitive_issues_follow_up",
+    ("form_seah_1", "seah_victim_survivor_role"): "action_ask_form_seah_1_seah_victim_survivor_role",
     ("form_status_check_skip", "valid_province_and_district"): "action_ask_form_status_check_skip_valid_province_and_district",
     ("form_status_check_skip", "complainant_district"): "action_ask_form_status_check_skip_complainant_district",
     ("form_status_check_skip", "complainant_municipality_temp"): "action_ask_form_status_check_skip_complainant_municipality_temp",

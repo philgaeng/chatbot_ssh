@@ -6,12 +6,12 @@ No Rasa server — matches the REST orchestrator architecture in `docs/BACKEND.m
 
 ## HTTPS / TLS (Let's Encrypt)
 
-Compose includes `nginx` mappings for both `80:80` and `443:443`, plus persistent cert mounts:
+AWS override includes `nginx` mappings for both `80:80` and `443:443`, plus persistent cert mounts:
 
 - `./deployment/certbot/www` → `/var/www/certbot`
 - `./deployment/certbot/conf` → `/etc/letsencrypt`
 
-`deployment/nginx/webchat_rest_docker.conf` is pre-wired for:
+`deployment/nginx/webchat_rest_compose_aws.conf` is pre-wired for:
 
 - ACME challenge path (`/.well-known/acme-challenge/`)
 - HTTP→HTTPS redirect
@@ -41,10 +41,16 @@ Run the app **only** via Compose. Do **not** run a second system Nginx on the sa
    sudo ss -tlnp | grep ':80'
    ```
    You should see **`docker-proxy`** (or similar) after `docker compose up -d`, not a host **`/usr/sbin/nginx`** process.
-3. **Bring the stack up** (from repo root):
+3. **Bring the local WSL stack up** (from repo root):
    ```bash
    docker compose up -d --build
    ```
+
+For AWS TLS compose deployment, use:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d --build
+```
 
 If you **must** keep system Nginx for other sites, do **not** share port 80: change the Compose `nginx` service to e.g. `"8888:80"` and use `http://localhost:8888/` — but that is a mixed setup, not “everything through Docker” on `:80`.
 
@@ -101,5 +107,6 @@ curl -4 -s http://127.0.0.1/rest-webchat/ | head
 ## Files
 
 - [`../docker-compose.yml`](../../docker-compose.yml) — service definitions
-- [`../nginx/webchat_rest_docker.conf`](../nginx/webchat_rest_docker.conf) — Nginx routes to container hostnames
+- [`../nginx/webchat_rest_compose_wsl.conf`](../nginx/webchat_rest_compose_wsl.conf) — local WSL compose nginx
+- [`../nginx/webchat_rest_compose_aws.conf`](../nginx/webchat_rest_compose_aws.conf) — AWS TLS compose nginx
 - [`../../scripts/docker/init_db.sh`](../../scripts/docker/init_db.sh) — sources `scripts/database/config.sh`, runs `scripts/database/init.py`

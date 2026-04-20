@@ -281,8 +281,9 @@ class ActionSubmitSeah(BaseActionSubmit):
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         try:
+            language_code = tracker.get_slot("language_code") or "en"
             grievance_data = self.collect_grievance_data(tracker, review=False)
-            grievance_data["language_code"] = tracker.get_slot("language_code") or "en"
+            grievance_data["language_code"] = language_code
             grievance_data["seah_not_adb_project"] = tracker.get_slot("seah_not_adb_project")
             grievance_data["seah_contact_consent_channel"] = tracker.get_slot("seah_contact_consent_channel")
 
@@ -308,7 +309,6 @@ class ActionSubmitSeah(BaseActionSubmit):
             if not result.get("ok"):
                 raise Exception(result.get("error", "SEAH submission failed"))
 
-            language_code = tracker.get_slot("language_code") or "en"
             public_ref = result.get("seah_public_ref")
             if language_code == "ne":
                 dispatcher.utter_message(

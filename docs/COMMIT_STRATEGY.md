@@ -54,10 +54,10 @@ If this project has script wrappers (for example `make test`, `just test`, or np
 
 When testing the webchat locally, use the dev-only nginx override so `http://localhost` works without browser TLS/certificate issues.
 
-1. Ensure local override files exist:
-   - `docker-compose.override.yml`
-   - `deployment/nginx/webchat_rest_local.conf`
-2. Start/restart nginx with compose (override is auto-applied locally):
+1. Ensure local compose uses:
+   - `docker-compose.yml`
+   - `deployment/nginx/webchat_rest_compose_wsl.conf`
+2. Start/restart nginx with compose:
    - `docker compose up -d nginx`
 3. Verify the webchat endpoint is served on HTTP and not redirected:
    - `curl -I http://localhost/rest-webchat/`
@@ -66,8 +66,8 @@ When testing the webchat locally, use the dev-only nginx override so `http://loc
    - `http://localhost/rest-webchat/`
 
 Notes:
-- Keep production TLS config in `deployment/nginx/webchat_rest_docker.conf` unchanged.
-- Do not rely on local override files in production deploy workflows.
+- Keep AWS TLS compose config in `deployment/nginx/webchat_rest_compose_aws.conf` and `docker-compose.aws.yml`.
+- Do not use AWS TLS override files for local WSL testing.
 
 ## Commit Guidelines
 
