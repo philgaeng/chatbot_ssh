@@ -7,3 +7,4 @@ pydantic-settings>=2.0        # ticketing/config/settings.py
 alembic>=1.13                 # ticketing/migrations/
 openpyxl>=3.1                 # quarterly XLSX reports (no pandas)
 python-jose[cryptography]>=3.3 # Cognito JWT token validation
+httpx>=0.27                   # async-capable HTTP client for outbound API calls
