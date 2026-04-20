@@ -560,6 +560,43 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  seah_focal_reporter_consent_to_report:
+    type: categorical
+    values:
+      - yes
+      - no
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_referred_to_support:
+    type: categorical
+    values:
+      - yes
+      - no
+      - slot_skipped
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_stage:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_phone:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_city:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_village:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
   seah_focal_full_name:
     type: text
     influence_conversation: false
@@ -778,17 +815,19 @@ actions:
   - action_ask_form_seah_2_seah_project_identification
   - action_ask_form_seah_2_sensitive_issues_new_detail
   - action_ask_form_seah_2_seah_contact_consent_channel
-  - action_ask_form_seah_focal_point_seah_project_identification
-  - action_ask_form_seah_focal_point_seah_focal_full_name
-  - action_ask_form_seah_focal_point_seah_focal_otp_input
-  - action_ask_form_seah_focal_point_seah_focal_survivor_risks
-  - action_ask_form_seah_focal_point_seah_focal_mitigation_measures
-  - action_ask_form_seah_focal_point_seah_focal_other_at_risk_parties
-  - action_ask_form_seah_focal_point_seah_focal_project_risk
-  - action_ask_form_seah_focal_point_seah_focal_reputational_risk
-  - action_ask_form_seah_focal_point_seah_focal_learned_when
-  - action_ask_form_seah_focal_point_sensitive_issues_new_detail
-  - action_ask_form_seah_focal_point_seah_contact_consent_channel
+  - action_prepare_seah_focal_complainant_capture
+  - action_ask_form_seah_focal_point_1_seah_focal_learned_when
+  - action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report
+  - action_ask_form_seah_focal_point_1_sensitive_issues_follow_up
+  - action_ask_form_seah_focal_point_2_seah_project_identification
+  - action_ask_form_seah_focal_point_2_seah_focal_survivor_risks
+  - action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures
+  - action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties
+  - action_ask_form_seah_focal_point_2_seah_focal_project_risk
+  - action_ask_form_seah_focal_point_2_seah_focal_reputational_risk
+  - action_ask_form_seah_focal_point_2_sensitive_issues_new_detail
+  - action_ask_form_seah_focal_point_2_seah_contact_consent_channel
+  - action_ask_form_seah_focal_point_2_seah_focal_referred_to_support
   - action_ask_form_story_main_language_code
   - action_ask_form_story_main_story_main
   - action_ask_complainant_phone
@@ -874,7 +913,8 @@ actions:
   - validate_form_status_check_2
   - validate_form_seah_1
   - validate_form_seah_2
-  - validate_form_seah_focal_point
+  - validate_form_seah_focal_point_1
+  - validate_form_seah_focal_point_2
   - validate_form_status_check_skip
   - validate_form_status_check_modify
   - validate_form_contact_modify
@@ -921,7 +961,11 @@ forms:
     required_slots:
       - seah_project_identification
     ignored_intents: *common-ignore-intents
-  form_seah_focal_point:
+  form_seah_focal_point_1:
+    required_slots:
+      - seah_focal_learned_when
+    ignored_intents: *common-ignore-intents
+  form_seah_focal_point_2:
     required_slots:
       - seah_project_identification
     ignored_intents: *common-ignore-intents

@@ -94,7 +94,8 @@ def _get_status_form_skip() -> Any:
 
 _SEAH_1_FORM = None
 _SEAH_2_FORM = None
-_SEAH_FOCAL_FORM = None
+_SEAH_FOCAL_FORM_1 = None
+_SEAH_FOCAL_FORM_2 = None
 
 
 def _is_seah_enabled() -> bool:
@@ -117,12 +118,20 @@ def _get_form_seah_2() -> Any:
     return _SEAH_2_FORM
 
 
-def _get_form_seah_focal_point() -> Any:
-    global _SEAH_FOCAL_FORM
-    if _SEAH_FOCAL_FORM is None:
-        from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint
-        _SEAH_FOCAL_FORM = ValidateFormSeahFocalPoint()
-    return _SEAH_FOCAL_FORM
+def _get_form_seah_focal_point_1() -> Any:
+    global _SEAH_FOCAL_FORM_1
+    if _SEAH_FOCAL_FORM_1 is None:
+        from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint1
+        _SEAH_FOCAL_FORM_1 = ValidateFormSeahFocalPoint1()
+    return _SEAH_FOCAL_FORM_1
+
+
+def _get_form_seah_focal_point_2() -> Any:
+    global _SEAH_FOCAL_FORM_2
+    if _SEAH_FOCAL_FORM_2 is None:
+        from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint2
+        _SEAH_FOCAL_FORM_2 = ValidateFormSeahFocalPoint2()
+    return _SEAH_FOCAL_FORM_2
 
 
 _FORM_MODIFY_GRIEVANCE = None
@@ -168,6 +177,19 @@ PAYLOAD_TO_INTENT = {
     "add_more_details": "add_more_details",
     "restart": "restart",
     "skip": "skip",
+    "identified": "identified",
+    "anonymous": "anonymous",
+    "victim_survivor": "victim_survivor",
+    "not_victim_survivor": "not_victim_survivor",
+    "focal_point": "focal_point",
+    "yes": "affirm",
+    "no": "deny",
+    "not_adb_project": "not_adb_project",
+    "cannot_specify": "cannot_specify",
+    "phone": "phone",
+    "email": "email",
+    "both": "both",
+    "none": "none",
     "affirm_skip": "affirm",
     "deny_skip": "deny",
     "not_sensitive_content": "not_sensitive_content",
@@ -393,6 +415,7 @@ async def run_flow_turn(
         if completed:
             story_main = session.get("slots", {}).get("story_main")
             identity_mode = session.get("slots", {}).get("sensitive_issues_follow_up")
+            seah_role = session.get("slots", {}).get("seah_victim_survivor_role")
             next_state = "contact_form"
             session["active_loop"] = "form_contact"
             session["requested_slot"] = None
@@ -401,8 +424,21 @@ async def run_flow_turn(
             contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
             slot_preview = {k: session["slots"].get(k) for k in contact_slots}
             _log.info("form_seah_1 completed -> contact_form | contact slot preview: %s", slot_preview)
+            # Focal-point branch first bootstraps reporter phone/name/location using shared OTP/contact forms.
+            if story_main == "seah_intake" and seah_role == "focal_point":
+                next_state = "otp_form"
+                session["active_loop"] = "form_otp"
+                session["requested_slot"] = None
+                slot_updates["seah_focal_stage"] = "bootstrap_reporter_otp"
+                session["slots"]["seah_focal_stage"] = "bootstrap_reporter_otp"
+                otp_form = _get_otp_form()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    otp_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
             # In dedicated SEAH intake, identified users should be asked for phone first.
-            if story_main == "seah_intake" and identity_mode == "identified":
+            elif story_main == "seah_intake" and identity_mode == "identified":
                 next_state = "otp_form"
                 session["active_loop"] = "form_otp"
                 session["requested_slot"] = None
@@ -433,14 +469,45 @@ async def run_flow_turn(
             story_main = session.get("slots", {}).get("story_main")
             complainant_consent = session.get("slots", {}).get("complainant_consent")
             seah_victim_survivor_role = session.get("slots", {}).get("seah_victim_survivor_role")
+            seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
 
             # Dedicated SEAH intake must always collect SEAH incident details
             # in form_seah_2 / form_seah_focal_point before submission.
             if story_main == "seah_intake":
-                if seah_victim_survivor_role == "focal_point":
-                    next_state = "form_seah_focal_point"
-                    session["active_loop"] = "form_seah_focal_point"
-                    seah_form = _get_form_seah_focal_point()
+                if seah_victim_survivor_role == "focal_point" and seah_focal_stage == "bootstrap_reporter_contact":
+                    prep_dispatcher = CollectingDispatcher()
+                    prep_events = await invoke_action(
+                        "action_prepare_seah_focal_complainant_capture",
+                        prep_dispatcher,
+                        SessionTracker(
+                            slots=session["slots"],
+                            sender_id=session.get("user_id", "default"),
+                            latest_message=latest_message,
+                            active_loop=None,
+                            requested_slot=None,
+                        ),
+                        domain,
+                    )
+                    prep_updates = events_to_slot_updates(prep_events)
+                    slot_updates.update(prep_updates)
+                    session["slots"].update(prep_updates)
+                    next_state = "form_seah_focal_point_1"
+                    session["active_loop"] = "form_seah_focal_point_1"
+                    slot_updates["seah_focal_stage"] = "focal_point_1"
+                    session["slots"]["seah_focal_stage"] = "focal_point_1"
+                    seah_form = _get_form_seah_focal_point_1()
+                elif seah_victim_survivor_role == "focal_point" and seah_focal_stage == "complainant_contact":
+                    next_state = "form_seah_focal_point_2"
+                    session["active_loop"] = "form_seah_focal_point_2"
+                    slot_updates["seah_focal_stage"] = "focal_point_2"
+                    session["slots"]["seah_focal_stage"] = "focal_point_2"
+                    seah_form = _get_form_seah_focal_point_2()
+                elif seah_victim_survivor_role == "focal_point":
+                    next_state = "form_seah_focal_point_2"
+                    session["active_loop"] = "form_seah_focal_point_2"
+                    slot_updates["seah_focal_stage"] = "focal_point_2"
+                    session["slots"]["seah_focal_stage"] = "focal_point_2"
+                    seah_form = _get_form_seah_focal_point_2()
                 else:
                     next_state = "form_seah_2"
                     session["active_loop"] = "form_seah_2"
@@ -552,9 +619,50 @@ async def run_flow_turn(
             dispatcher.messages.extend(ask_dispatcher.messages)
             next_state = "done"
 
-    elif state == "form_seah_focal_point":
+    elif state == "form_seah_focal_point_1":
         user_input = latest_message if (text or payload) else None
-        form = _get_form_seah_focal_point()
+        form = _get_form_seah_focal_point_1()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session, user_input, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            session["slots"].update(slot_updates)
+            consent_to_report = session.get("slots", {}).get("seah_focal_reporter_consent_to_report")
+            if consent_to_report == "no":
+                next_state = "form_seah_focal_point_2"
+                session["active_loop"] = "form_seah_focal_point_2"
+                session["requested_slot"] = None
+                slot_updates["seah_focal_stage"] = "focal_point_2"
+                session["slots"]["seah_focal_stage"] = "focal_point_2"
+                slot_updates["sensitive_issues_follow_up"] = session.get("slots", {}).get("sensitive_issues_follow_up") or "anonymous"
+                slot_updates["complainant_phone"] = slot_updates.get("complainant_phone", "slot_skipped")
+                slot_updates["complainant_full_name"] = slot_updates.get("complainant_full_name", "slot_skipped")
+                slot_updates["complainant_email"] = slot_updates.get("complainant_email", "slot_skipped")
+                slot_updates["seah_contact_consent_channel"] = "slot_skipped"
+                seah_form = _get_form_seah_focal_point_2()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    seah_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+            else:
+                next_state = "otp_form"
+                session["active_loop"] = "form_otp"
+                session["requested_slot"] = None
+                slot_updates["seah_focal_stage"] = "complainant_otp"
+                session["slots"]["seah_focal_stage"] = "complainant_otp"
+                otp_form = _get_otp_form()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    otp_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+
+    elif state == "form_seah_focal_point_2":
+        user_input = latest_message if (text or payload) else None
+        form = _get_form_seah_focal_point_2()
         msgs, form_updates, completed = await run_form_turn(
             form, session, user_input, domain
         )
@@ -593,6 +701,7 @@ async def run_flow_turn(
         slot_updates.update(form_updates)
         if completed:
             story_main = session.get("slots", {}).get("story_main")
+            seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
             if story_main == "status_check":
                 next_state = "status_check_form"
                 session["active_loop"] = "form_status_check_2"
@@ -601,6 +710,26 @@ async def run_flow_turn(
                 next_state = "contact_form"
                 session["active_loop"] = "form_contact"
                 session["requested_slot"] = None
+                if seah_focal_stage == "bootstrap_reporter_otp":
+                    slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
+                    slot_updates.update(
+                        {
+                            "complainant_province": "slot_skipped",
+                            "complainant_district": "slot_skipped",
+                            "complainant_municipality_temp": "slot_skipped",
+                            "complainant_municipality": "slot_skipped",
+                            "complainant_municipality_confirmed": False,
+                            "complainant_village_temp": "slot_skipped",
+                            "complainant_village": "slot_skipped",
+                            "complainant_village_confirmed": False,
+                            "complainant_ward": "slot_skipped",
+                            "complainant_address_temp": "slot_skipped",
+                            "complainant_address": "slot_skipped",
+                            "complainant_address_confirmed": False,
+                        }
+                    )
+                elif seah_focal_stage == "complainant_otp":
+                    slot_updates["seah_focal_stage"] = "complainant_contact"
                 session["slots"].update(slot_updates)
                 contact_form = _get_contact_form()
                 msgs2, form_updates2, _ = await run_form_turn(
@@ -1348,7 +1477,7 @@ async def run_flow_turn(
 
     expected = "buttons" if next_state in ("intro", "main_menu") else "text"
     form_states = (
-        "form_grievance", "form_seah_1", "form_seah_2", "form_seah_focal_point",
+        "form_grievance", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
         "contact_form", "otp_form", "grievance_review",
         "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
     )

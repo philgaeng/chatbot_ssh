@@ -55,14 +55,12 @@ _ASK_ACTIONS_BY_SLOT = {
     "seah_project_identification": "action_ask_form_seah_2_seah_project_identification",
     "sensitive_issues_new_detail": "action_ask_form_seah_2_sensitive_issues_new_detail",
     "seah_contact_consent_channel": "action_ask_form_seah_2_seah_contact_consent_channel",
-    "seah_focal_full_name": "action_ask_form_seah_focal_point_seah_focal_full_name",
-    "seah_focal_otp_input": "action_ask_form_seah_focal_point_seah_focal_otp_input",
-    "seah_focal_survivor_risks": "action_ask_form_seah_focal_point_seah_focal_survivor_risks",
-    "seah_focal_mitigation_measures": "action_ask_form_seah_focal_point_seah_focal_mitigation_measures",
-    "seah_focal_other_at_risk_parties": "action_ask_form_seah_focal_point_seah_focal_other_at_risk_parties",
-    "seah_focal_project_risk": "action_ask_form_seah_focal_point_seah_focal_project_risk",
-    "seah_focal_reputational_risk": "action_ask_form_seah_focal_point_seah_focal_reputational_risk",
-    "seah_focal_learned_when": "action_ask_form_seah_focal_point_seah_focal_learned_when",
+    "seah_focal_survivor_risks": "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks",
+    "seah_focal_mitigation_measures": "action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures",
+    "seah_focal_other_at_risk_parties": "action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties",
+    "seah_focal_project_risk": "action_ask_form_seah_focal_point_2_seah_focal_project_risk",
+    "seah_focal_reputational_risk": "action_ask_form_seah_focal_point_2_seah_focal_reputational_risk",
+    "seah_focal_learned_when": "action_ask_form_seah_focal_point_1_seah_focal_learned_when",
 }
 
 # Form-specific overrides for shared slots (check active_loop + slot first)
@@ -77,17 +75,18 @@ _ASK_ACTIONS_BY_FORM_SLOT = {
     ("form_seah_2", "seah_project_identification"): "action_ask_form_seah_2_seah_project_identification",
     ("form_seah_2", "sensitive_issues_new_detail"): "action_ask_form_seah_2_sensitive_issues_new_detail",
     ("form_seah_2", "seah_contact_consent_channel"): "action_ask_form_seah_2_seah_contact_consent_channel",
-    ("form_seah_focal_point", "seah_project_identification"): "action_ask_form_seah_focal_point_seah_project_identification",
-    ("form_seah_focal_point", "seah_focal_full_name"): "action_ask_form_seah_focal_point_seah_focal_full_name",
-    ("form_seah_focal_point", "seah_focal_otp_input"): "action_ask_form_seah_focal_point_seah_focal_otp_input",
-    ("form_seah_focal_point", "seah_focal_survivor_risks"): "action_ask_form_seah_focal_point_seah_focal_survivor_risks",
-    ("form_seah_focal_point", "seah_focal_mitigation_measures"): "action_ask_form_seah_focal_point_seah_focal_mitigation_measures",
-    ("form_seah_focal_point", "seah_focal_other_at_risk_parties"): "action_ask_form_seah_focal_point_seah_focal_other_at_risk_parties",
-    ("form_seah_focal_point", "seah_focal_project_risk"): "action_ask_form_seah_focal_point_seah_focal_project_risk",
-    ("form_seah_focal_point", "seah_focal_reputational_risk"): "action_ask_form_seah_focal_point_seah_focal_reputational_risk",
-    ("form_seah_focal_point", "seah_focal_learned_when"): "action_ask_form_seah_focal_point_seah_focal_learned_when",
-    ("form_seah_focal_point", "sensitive_issues_new_detail"): "action_ask_form_seah_focal_point_sensitive_issues_new_detail",
-    ("form_seah_focal_point", "seah_contact_consent_channel"): "action_ask_form_seah_focal_point_seah_contact_consent_channel",
+    ("form_seah_focal_point_1", "seah_focal_learned_when"): "action_ask_form_seah_focal_point_1_seah_focal_learned_when",
+    ("form_seah_focal_point_1", "seah_focal_reporter_consent_to_report"): "action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report",
+    ("form_seah_focal_point_1", "sensitive_issues_follow_up"): "action_ask_form_seah_focal_point_1_sensitive_issues_follow_up",
+    ("form_seah_focal_point_2", "seah_project_identification"): "action_ask_form_seah_focal_point_2_seah_project_identification",
+    ("form_seah_focal_point_2", "seah_focal_survivor_risks"): "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks",
+    ("form_seah_focal_point_2", "seah_focal_mitigation_measures"): "action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures",
+    ("form_seah_focal_point_2", "seah_focal_other_at_risk_parties"): "action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties",
+    ("form_seah_focal_point_2", "seah_focal_project_risk"): "action_ask_form_seah_focal_point_2_seah_focal_project_risk",
+    ("form_seah_focal_point_2", "seah_focal_reputational_risk"): "action_ask_form_seah_focal_point_2_seah_focal_reputational_risk",
+    ("form_seah_focal_point_2", "sensitive_issues_new_detail"): "action_ask_form_seah_focal_point_2_sensitive_issues_new_detail",
+    ("form_seah_focal_point_2", "seah_contact_consent_channel"): "action_ask_form_seah_focal_point_2_seah_contact_consent_channel",
+    ("form_seah_focal_point_2", "seah_focal_referred_to_support"): "action_ask_form_seah_focal_point_2_seah_focal_referred_to_support",
     # form_modify_contact: phone has its own ask action for context-specific wording
     ("form_modify_contact", "complainant_phone"): "action_ask_form_modify_contact_complainant_phone",
     ("form_modify_contact", "complainant_full_name"): "action_ask_modify_missing_field",
@@ -306,9 +305,12 @@ def get_form(active_loop: str) -> Any:
         elif active_loop == "form_seah_2":
             from backend.actions.forms.form_seah_2 import ValidateFormSeah2
             _FORMS[active_loop] = ValidateFormSeah2()
-        elif active_loop == "form_seah_focal_point":
-            from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint
-            _FORMS[active_loop] = ValidateFormSeahFocalPoint()
+        elif active_loop == "form_seah_focal_point_1":
+            from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint1
+            _FORMS[active_loop] = ValidateFormSeahFocalPoint1()
+        elif active_loop == "form_seah_focal_point_2":
+            from backend.actions.forms.form_seah_focal_point import ValidateFormSeahFocalPoint2
+            _FORMS[active_loop] = ValidateFormSeahFocalPoint2()
         elif active_loop == "form_modify_grievance_details":
             from backend.actions.forms.form_modify_grievance import ValidateFormModifyGrievanceDetails
             _FORMS[active_loop] = ValidateFormModifyGrievanceDetails()

@@ -1,4 +1,3 @@
-from random import randint
 from typing import Any, Dict, List, Text
 
 from rasa_sdk import Tracker
@@ -8,9 +7,9 @@ from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
 
 
-class ValidateFormSeahFocalPoint(BaseFormValidationAction):
+class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
     def name(self) -> Text:
-        return "validate_form_seah_focal_point"
+        return "validate_form_seah_focal_point_1"
 
     async def required_slots(
         self,
@@ -24,25 +23,141 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
         if tracker.get_slot("seah_victim_survivor_role") != "focal_point":
             return []
 
-        required = [
-            "seah_project_identification",
-            "seah_focal_full_name",
+        return [
+            "seah_focal_learned_when",
+            "seah_focal_reporter_consent_to_report",
+            "sensitive_issues_follow_up",
         ]
-        if tracker.get_slot("seah_focal_lookup_status") == "found":
-            required.append("seah_focal_otp_input")
-        required.extend(
-            [
-                "seah_focal_survivor_risks",
-                "seah_focal_mitigation_measures",
-                "seah_focal_other_at_risk_parties",
-                "seah_focal_project_risk",
-                "seah_focal_reputational_risk",
-                "seah_focal_learned_when",
-                "sensitive_issues_new_detail",
-            ]
+
+    async def extract_seah_focal_learned_when(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "seah_focal_learned_when",
+            tracker,
+            dispatcher,
+            domain,
         )
-        if tracker.get_slot("sensitive_issues_follow_up") != "anonymous":
-            required.append("seah_contact_consent_channel")
+
+    async def validate_seah_focal_learned_when(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        return self._validate_text_or_skip(slot_value, "seah_focal_learned_when")
+
+    async def extract_seah_focal_reporter_consent_to_report(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "seah_focal_reporter_consent_to_report",
+            tracker,
+            dispatcher,
+            domain,
+        )
+
+    async def validate_seah_focal_reporter_consent_to_report(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value in {"yes", "no"}:
+            updates: Dict[Text, Any] = {"seah_focal_reporter_consent_to_report": value}
+            if value == "no":
+                updates.update(
+                    {
+                        "sensitive_issues_follow_up": self.SKIP_VALUE,
+                        "complainant_phone": self.SKIP_VALUE,
+                        "complainant_full_name": self.SKIP_VALUE,
+                        "complainant_email": self.SKIP_VALUE,
+                        "seah_contact_consent_channel": self.SKIP_VALUE,
+                    }
+                )
+            return updates
+        return {"seah_focal_reporter_consent_to_report": None}
+
+    async def extract_sensitive_issues_follow_up(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "sensitive_issues_follow_up",
+            tracker,
+            dispatcher,
+            domain,
+        )
+
+    async def validate_sensitive_issues_follow_up(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value == self.SKIP_VALUE:
+            value = "anonymous"
+        if value in {"identified", "anonymous"}:
+            return {"sensitive_issues_follow_up": value}
+        return {"sensitive_issues_follow_up": None}
+
+    def _validate_text_or_skip(self, slot_value: Any, slot_name: Text) -> Dict[Text, Any]:
+        if slot_value is None or slot_value == self.SKIP_VALUE:
+            return {slot_name: self.SKIP_VALUE}
+        if isinstance(slot_value, str) and len(slot_value.strip()) >= 2:
+            return {slot_name: slot_value.strip()}
+        return {slot_name: None}
+
+
+class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
+    def name(self) -> Text:
+        return "validate_form_seah_focal_point_2"
+
+    async def required_slots(
+        self,
+        domain_slots: List[Text],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Text]:
+        if tracker.get_slot("grievance_sensitive_issue") is False:
+            return []
+        required = ["seah_project_identification", "sensitive_issues_new_detail"]
+        if tracker.get_slot("seah_project_identification") != "not_adb_project":
+            required.extend(
+                [
+                    "seah_focal_survivor_risks",
+                    "seah_focal_mitigation_measures",
+                    "seah_focal_other_at_risk_parties",
+                    "seah_focal_project_risk",
+                    "seah_focal_reputational_risk",
+                ]
+            )
+            consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
+            has_any_contact = (
+                tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
+                or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
+            )
+            if consent_to_report != "no" and has_any_contact:
+                required.append("seah_contact_consent_channel")
+        required.append("seah_focal_referred_to_support")
         return required
 
     async def extract_seah_project_identification(
@@ -51,6 +166,9 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
+        latest_text = (tracker.latest_message or {}).get("text")
+        if isinstance(latest_text, str) and latest_text.strip().startswith("/"):
+            return {"seah_project_identification": latest_text.strip().lstrip("/")}
         return await self._handle_slot_extraction(
             "seah_project_identification",
             tracker,
@@ -80,115 +198,6 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
         if isinstance(value, str) and len(value) >= 2:
             return {"seah_project_identification": value, "seah_not_adb_project": False}
         return {"seah_project_identification": None}
-
-    async def extract_seah_focal_full_name(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> Dict[Text, Any]:
-        return await self._handle_slot_extraction(
-            "seah_focal_full_name",
-            tracker,
-            dispatcher,
-            domain,
-        )
-
-    async def validate_seah_focal_full_name(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        if not slot_value or not isinstance(slot_value, str) or len(slot_value.strip()) < 3:
-            return {"seah_focal_full_name": None}
-
-        focal_name = slot_value.strip()
-        roster = {"john focal", "sita focal", "ram focal"}
-        attempts = tracker.get_slot("seah_focal_lookup_attempts") or 0
-        normalized = focal_name.lower()
-
-        if normalized in roster:
-            return {
-                "seah_focal_full_name": focal_name,
-                "seah_focal_lookup_status": "found",
-                "seah_focal_lookup_attempts": attempts,
-            }
-
-        if attempts < 1:
-            dispatcher.utter_message(
-                text="We could not verify that focal point name. Please try again once, or continue and we will mark for offline verification."
-            )
-            return {
-                "seah_focal_full_name": None,
-                "seah_focal_lookup_status": "retry_required",
-                "seah_focal_lookup_attempts": attempts + 1,
-            }
-
-        dispatcher.utter_message(
-            text="We could not verify this focal point in our roster. We will continue and tag this report for offline verification."
-        )
-        return {
-            "seah_focal_full_name": focal_name,
-            "seah_focal_lookup_status": "not_found",
-            "seah_focal_verification_status": "unverified_focal_point",
-            "seah_focal_otp_input": self.SKIP_VALUE,
-        }
-
-    async def extract_seah_focal_otp_input(
-        self,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: Dict[Text, Any],
-    ) -> Dict[Text, Any]:
-        return await self._handle_slot_extraction(
-            "seah_focal_otp_input",
-            tracker,
-            dispatcher,
-            domain,
-        )
-
-    async def validate_seah_focal_otp_input(
-        self,
-        slot_value: Any,
-        dispatcher: CollectingDispatcher,
-        tracker: Tracker,
-        domain: DomainDict,
-    ) -> Dict[Text, Any]:
-        if slot_value == self.SKIP_VALUE:
-            return {
-                "seah_focal_otp_input": self.SKIP_VALUE,
-                "seah_focal_verification_status": "unverified_focal_point",
-            }
-
-        otp_input = (slot_value or "").strip()
-        expected = tracker.get_slot("seah_focal_otp_number")
-        attempts = tracker.get_slot("seah_focal_otp_attempts") or 0
-
-        if otp_input and expected and otp_input == expected:
-            return {
-                "seah_focal_otp_input": otp_input,
-                "seah_focal_verification_status": "verified_focal_point",
-                "seah_focal_otp_attempts": 0,
-            }
-
-        if attempts < 2:
-            dispatcher.utter_message(text="Invalid OTP. Please try again.")
-            return {
-                "seah_focal_otp_input": None,
-                "seah_focal_otp_attempts": attempts + 1,
-                "seah_focal_verification_status": "otp_retry_required",
-            }
-
-        dispatcher.utter_message(
-            text="OTP verification failed. We will continue and mark this report as unverified focal point."
-        )
-        return {
-            "seah_focal_otp_input": self.SKIP_VALUE,
-            "seah_focal_verification_status": "unverified_focal_point",
-            "seah_focal_otp_attempts": 0,
-        }
 
     async def extract_sensitive_issues_new_detail(
         self,
@@ -316,13 +325,13 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         return await self._handle_slot_extraction("seah_focal_reputational_risk", tracker, dispatcher, domain)
 
-    async def extract_seah_focal_learned_when(
+    async def extract_seah_focal_referred_to_support(
         self,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
-        return await self._handle_slot_extraction("seah_focal_learned_when", tracker, dispatcher, domain)
+        return await self._handle_slot_extraction("seah_focal_referred_to_support", tracker, dispatcher, domain)
 
     async def validate_seah_focal_survivor_risks(
         self,
@@ -369,14 +378,21 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
     ) -> Dict[Text, Any]:
         return self._validate_text_or_skip(slot_value, "seah_focal_reputational_risk")
 
-    async def validate_seah_focal_learned_when(
+    async def validate_seah_focal_referred_to_support(
         self,
         slot_value: Any,
         dispatcher: CollectingDispatcher,
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return self._validate_text_or_skip(slot_value, "seah_focal_learned_when")
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value in {"yes", "no"}:
+            return {"seah_focal_referred_to_support": value}
+        if value == self.SKIP_VALUE:
+            return {"seah_focal_referred_to_support": self.SKIP_VALUE}
+        return {"seah_focal_referred_to_support": None}
 
     def _validate_text_or_skip(self, slot_value: Any, slot_name: Text) -> Dict[Text, Any]:
         if slot_value is None or slot_value == self.SKIP_VALUE:
@@ -386,115 +402,113 @@ class ValidateFormSeahFocalPoint(BaseFormValidationAction):
         return {slot_name: None}
 
 
-class ActionAskFormSeahFocalPointSeahProjectIdentification(BaseAction):
+class ActionPrepareSeahFocalComplainantCapture(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_project_identification"
+        return "action_prepare_seah_focal_complainant_capture"
+
+    async def execute_action(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
+    ) -> List[Dict[Text, Any]]:
+        return [
+            {"event": "slot", "name": "seah_focal_phone", "value": tracker.get_slot("complainant_phone")},
+            {"event": "slot", "name": "seah_focal_full_name", "value": tracker.get_slot("complainant_full_name")},
+            {"event": "slot", "name": "seah_focal_city", "value": tracker.get_slot("complainant_municipality")},
+            {"event": "slot", "name": "seah_focal_village", "value": tracker.get_slot("complainant_village")},
+            {"event": "slot", "name": "complainant_phone", "value": None},
+            {"event": "slot", "name": "complainant_full_name", "value": None},
+            {"event": "slot", "name": "complainant_email", "value": None},
+            {"event": "slot", "name": "complainant_email_temp", "value": None},
+            {"event": "slot", "name": "complainant_email_confirmed", "value": None},
+            {"event": "slot", "name": "complainant_consent", "value": None},
+            {"event": "slot", "name": "complainant_municipality", "value": None},
+            {"event": "slot", "name": "complainant_village", "value": None},
+        ]
+
+
+class ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_focal_point_1_seah_focal_learned_when"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1))
+        return []
+
+
+class ActionAskFormSeahFocalPoint1SeahFocalReporterConsentToReport(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalFullName(BaseAction):
+class ActionAskFormSeahFocalPoint1SensitiveIssuesFollowUp(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_full_name"
+        return "action_ask_form_seah_focal_point_1_sensitive_issues_follow_up"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        return []
+
+
+class ActionAskFormSeahFocalPoint2SeahProjectIdentification(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_focal_point_2_seah_project_identification"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        return []
+
+
+class ActionAskFormSeahFocalPoint2SeahFocalSurvivorRisks(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalOtpInput(BaseAction):
+class ActionAskFormSeahFocalPoint2SeahFocalMitigationMeasures(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_otp_input"
-
-    def _generate_otp(self) -> str:
-        return "".join(str(randint(0, 9)) for _ in range(6))
-
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        phone_number = tracker.get_slot("complainant_phone")
-        if not phone_number or phone_number == self.SKIP_VALUE:
-            dispatcher.utter_message(
-                text="No phone number available for OTP. We will continue with offline focal-point verification."
-            )
-            return [
-                {"event": "slot", "name": "seah_focal_verification_status", "value": "unverified_focal_point"},
-                {"event": "slot", "name": "seah_focal_otp_input", "value": self.SKIP_VALUE},
-            ]
-
-        otp_number = self._generate_otp()
-        try:
-            self.messaging.send_sms(phone_number, f"Your SEAH focal point verification code is {otp_number}")
-        except Exception:
-            dispatcher.utter_message(
-                text="We could not send OTP right now. We will continue with offline focal-point verification."
-            )
-            return [
-                {"event": "slot", "name": "seah_focal_verification_status", "value": "unverified_focal_point"},
-                {"event": "slot", "name": "seah_focal_otp_input", "value": self.SKIP_VALUE},
-            ]
-
-        dispatcher.utter_message(text=self.get_utterance(1).format(phone_number=phone_number))
-        return [{"event": "slot", "name": "seah_focal_otp_number", "value": otp_number}]
-
-
-class ActionAskFormSeahFocalPointSeahFocalSurvivorRisks(BaseAction):
-    def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_survivor_risks"
+        return "action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalMitigationMeasures(BaseAction):
+class ActionAskFormSeahFocalPoint2SeahFocalOtherAtRiskParties(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_mitigation_measures"
+        return "action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalOtherAtRiskParties(BaseAction):
+class ActionAskFormSeahFocalPoint2SeahFocalProjectRisk(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_other_at_risk_parties"
+        return "action_ask_form_seah_focal_point_2_seah_focal_project_risk"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalProjectRisk(BaseAction):
+class ActionAskFormSeahFocalPoint2SeahFocalReputationalRisk(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_project_risk"
+        return "action_ask_form_seah_focal_point_2_seah_focal_reputational_risk"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1))
         return []
 
 
-class ActionAskFormSeahFocalPointSeahFocalReputationalRisk(BaseAction):
+class ActionAskFormSeahFocalPoint2SensitiveIssuesNewDetail(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_reputational_risk"
-
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
-        return []
-
-
-class ActionAskFormSeahFocalPointSeahFocalLearnedWhen(BaseAction):
-    def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_focal_learned_when"
-
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
-        return []
-
-
-class ActionAskFormSeahFocalPointSensitiveIssuesNewDetail(BaseAction):
-    def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_sensitive_issues_new_detail"
+        return "action_ask_form_seah_focal_point_2_sensitive_issues_new_detail"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         description_status = tracker.get_slot("grievance_description_status")
@@ -509,9 +523,18 @@ class ActionAskFormSeahFocalPointSensitiveIssuesNewDetail(BaseAction):
         return []
 
 
-class ActionAskFormSeahFocalPointSeahContactConsentChannel(BaseAction):
+class ActionAskFormSeahFocalPoint2SeahContactConsentChannel(BaseAction):
     def name(self) -> Text:
-        return "action_ask_form_seah_focal_point_seah_contact_consent_channel"
+        return "action_ask_form_seah_focal_point_2_seah_contact_consent_channel"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        return []
+
+
+class ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_focal_point_2_seah_focal_referred_to_support"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))

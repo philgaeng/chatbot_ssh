@@ -573,9 +573,9 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                 return "form_contact"
             if form_name == "form_contact" and (grievance_sensitive_issue is True or story_main == "seah_intake"):
                 if seah_victim_survivor_role == "focal_point":
-                    return "form_seah_focal_point"
+                    return "form_seah_focal_point_1"
                 return "form_seah_2"
-            if form_name in ("form_seah_2", "form_seah_focal_point"):
+            if form_name in ("form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2"):
                 return "action_submit_grievance"
         
         #nested dictionary for the status check next action as it is used in multiple places
@@ -597,7 +597,8 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                 "form_otp": "form_contact",
                 "form_contact": "form_seah_2",
                 "form_seah_2": "action_submit_grievance",
-                "form_seah_focal_point": "action_submit_grievance",
+                "form_seah_focal_point_1": "form_seah_focal_point_2",
+                "form_seah_focal_point_2": "action_submit_grievance",
                 "None": "action_next_action",
             },
             "status_check": {

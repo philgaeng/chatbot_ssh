@@ -42,17 +42,19 @@ def _get_action(action_name: str) -> Any:
             ActionAskFormSeah2SeahContactConsentChannel,
         )
         from backend.actions.forms.form_seah_focal_point import (
-            ActionAskFormSeahFocalPointSeahProjectIdentification,
-            ActionAskFormSeahFocalPointSeahFocalFullName,
-            ActionAskFormSeahFocalPointSeahFocalOtpInput,
-            ActionAskFormSeahFocalPointSeahFocalSurvivorRisks,
-            ActionAskFormSeahFocalPointSeahFocalMitigationMeasures,
-            ActionAskFormSeahFocalPointSeahFocalOtherAtRiskParties,
-            ActionAskFormSeahFocalPointSeahFocalProjectRisk,
-            ActionAskFormSeahFocalPointSeahFocalReputationalRisk,
-            ActionAskFormSeahFocalPointSeahFocalLearnedWhen,
-            ActionAskFormSeahFocalPointSensitiveIssuesNewDetail,
-            ActionAskFormSeahFocalPointSeahContactConsentChannel,
+            ActionPrepareSeahFocalComplainantCapture,
+            ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen,
+            ActionAskFormSeahFocalPoint1SeahFocalReporterConsentToReport,
+            ActionAskFormSeahFocalPoint1SensitiveIssuesFollowUp,
+            ActionAskFormSeahFocalPoint2SeahProjectIdentification,
+            ActionAskFormSeahFocalPoint2SeahFocalSurvivorRisks,
+            ActionAskFormSeahFocalPoint2SeahFocalMitigationMeasures,
+            ActionAskFormSeahFocalPoint2SeahFocalOtherAtRiskParties,
+            ActionAskFormSeahFocalPoint2SeahFocalProjectRisk,
+            ActionAskFormSeahFocalPoint2SeahFocalReputationalRisk,
+            ActionAskFormSeahFocalPoint2SensitiveIssuesNewDetail,
+            ActionAskFormSeahFocalPoint2SeahContactConsentChannel,
+            ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport,
             ActionOutroSensitiveIssues,
         )
         from backend.actions.forms.form_modify_grievance import (
@@ -136,17 +138,19 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_form_seah_2_seah_project_identification"] = ActionAskFormSeah2SeahProjectIdentification()
         _ACTIONS["action_ask_form_seah_2_sensitive_issues_new_detail"] = ActionAskFormSeah2SensitiveIssuesNewDetail()
         _ACTIONS["action_ask_form_seah_2_seah_contact_consent_channel"] = ActionAskFormSeah2SeahContactConsentChannel()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_project_identification"] = ActionAskFormSeahFocalPointSeahProjectIdentification()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_full_name"] = ActionAskFormSeahFocalPointSeahFocalFullName()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_otp_input"] = ActionAskFormSeahFocalPointSeahFocalOtpInput()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_survivor_risks"] = ActionAskFormSeahFocalPointSeahFocalSurvivorRisks()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_mitigation_measures"] = ActionAskFormSeahFocalPointSeahFocalMitigationMeasures()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_other_at_risk_parties"] = ActionAskFormSeahFocalPointSeahFocalOtherAtRiskParties()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_project_risk"] = ActionAskFormSeahFocalPointSeahFocalProjectRisk()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_reputational_risk"] = ActionAskFormSeahFocalPointSeahFocalReputationalRisk()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_focal_learned_when"] = ActionAskFormSeahFocalPointSeahFocalLearnedWhen()
-        _ACTIONS["action_ask_form_seah_focal_point_sensitive_issues_new_detail"] = ActionAskFormSeahFocalPointSensitiveIssuesNewDetail()
-        _ACTIONS["action_ask_form_seah_focal_point_seah_contact_consent_channel"] = ActionAskFormSeahFocalPointSeahContactConsentChannel()
+        _ACTIONS["action_prepare_seah_focal_complainant_capture"] = ActionPrepareSeahFocalComplainantCapture()
+        _ACTIONS["action_ask_form_seah_focal_point_1_seah_focal_learned_when"] = ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen()
+        _ACTIONS["action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report"] = ActionAskFormSeahFocalPoint1SeahFocalReporterConsentToReport()
+        _ACTIONS["action_ask_form_seah_focal_point_1_sensitive_issues_follow_up"] = ActionAskFormSeahFocalPoint1SensitiveIssuesFollowUp()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_project_identification"] = ActionAskFormSeahFocalPoint2SeahProjectIdentification()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_survivor_risks"] = ActionAskFormSeahFocalPoint2SeahFocalSurvivorRisks()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures"] = ActionAskFormSeahFocalPoint2SeahFocalMitigationMeasures()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties"] = ActionAskFormSeahFocalPoint2SeahFocalOtherAtRiskParties()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_project_risk"] = ActionAskFormSeahFocalPoint2SeahFocalProjectRisk()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_reputational_risk"] = ActionAskFormSeahFocalPoint2SeahFocalReputationalRisk()
+        _ACTIONS["action_ask_form_seah_focal_point_2_sensitive_issues_new_detail"] = ActionAskFormSeahFocalPoint2SensitiveIssuesNewDetail()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_contact_consent_channel"] = ActionAskFormSeahFocalPoint2SeahContactConsentChannel()
+        _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_referred_to_support"] = ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport()
         _ACTIONS["action_outro_sensitive_issues"] = ActionOutroSensitiveIssues()
 
         # Status check

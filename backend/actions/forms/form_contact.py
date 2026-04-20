@@ -681,6 +681,7 @@ class ValidateFormContact(ContactFormValidationAction):
         self._initialize_language_and_helpers(tracker)
         story_main = tracker.get_slot("story_main")
         sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
+        seah_focal_stage = tracker.get_slot("seah_focal_stage")
         
         required_slots_location = ["complainant_location_consent", 
                       "complainant_province",
@@ -695,6 +696,12 @@ class ValidateFormContact(ContactFormValidationAction):
                       "complainant_address"
                       ]
         required_slots_contact = ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
+
+        if story_main == "seah_intake" and seah_focal_stage == "bootstrap_reporter_contact":
+            return required_slots_location + ["complainant_consent", "complainant_full_name"]
+
+        if story_main == "seah_intake" and seah_focal_stage == "complainant_contact":
+            return ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
 
         # In anonymous dedicated SEAH intake, do not ask identity/contact questions.
         if story_main == "seah_intake" and sensitive_issues_follow_up == "anonymous":

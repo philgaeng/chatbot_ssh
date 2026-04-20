@@ -297,8 +297,12 @@ stories:
       - active_loop: form_contact
       - active_loop: null
       - action: action_next_action
-      - action: form_seah_focal_point
-      - active_loop: form_seah_focal_point
+      - action: form_seah_focal_point_1
+      - active_loop: form_seah_focal_point_1
+      - active_loop: null
+      - action: action_next_action
+      - action: form_seah_focal_point_2
+      - active_loop: form_seah_focal_point_2
       - active_loop: null
       - action: action_next_action
       - action: action_submit_grievance

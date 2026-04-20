@@ -293,6 +293,17 @@ BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL = {
     ],
 }
 
+BUTTONS_SEAH_YES_NO = {
+    "en": [
+        {"title": "Yes", "payload": "/yes"},
+        {"title": "No", "payload": "/no"},
+    ],
+    "ne": [
+        {"title": "हो", "payload": "/yes"},
+        {"title": "होइन", "payload": "/no"},
+    ],
+}
+
 
 VALIDATION_SKIP = {"utterance":{
     "en" : "Did you want to skip this field? I matched '{matched_word}'",
