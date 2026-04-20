@@ -8,9 +8,11 @@ Officer UI (JWT auth — stub for proto):
   GET    /api/v1/tickets                      — list tickets (filtered)
   GET    /api/v1/tickets/{ticket_id}          — ticket detail + event history
   PATCH  /api/v1/tickets/{ticket_id}          — assign / change priority
-  POST   /api/v1/tickets/{ticket_id}/actions  — acknowledge / escalate / resolve / note
+  POST   /api/v1/tickets/{ticket_id}/actions  — acknowledge / escalate / resolve / close /
+                                               note / grc_convene / grc_decide
   POST   /api/v1/tickets/{ticket_id}/reply    — send message to complainant
   POST   /api/v1/tickets/{ticket_id}/seen     — mark unseen events as read (badge)
+  GET    /api/v1/tickets/{ticket_id}/sla      — SLA status for UI countdown
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ from ticketing.api.schemas.ticket import (
     TicketActionRequest,
     TicketActionResponse,
     TicketCreate,
+    TicketDetail,
     TicketCreateResponse,
     TicketDetail,
     TicketListItem,
@@ -37,6 +40,8 @@ from ticketing.api.schemas.ticket import (
     TicketReplyResponse,
 )
 from ticketing.clients.orchestrator import send_message_to_complainant
+from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
+from ticketing.engine.workflow_engine import get_current_step, sla_status
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
@@ -403,12 +408,25 @@ def patch_ticket(
 
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
 
-VALID_ACTIONS = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE"}
+VALID_ACTIONS = {
+    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE",
+    "GRC_CONVENE", "GRC_DECIDE",
+}
 
 @router.post(
     "/tickets/{ticket_id}/actions",
     response_model=TicketActionResponse,
     summary="Perform an officer action on a ticket",
+    description=(
+        "**action_type** values:\n"
+        "- `ACKNOWLEDGE` — officer takes ownership, starts SLA clock\n"
+        "- `ESCALATE` — manual escalation to next workflow step\n"
+        "- `RESOLVE` — mark ticket resolved\n"
+        "- `CLOSE` — close without resolution\n"
+        "- `NOTE` — add internal officer note (invisible to complainant)\n"
+        "- `GRC_CONVENE` — GRC chair schedules hearing, notifies all GRC members\n"
+        "- `GRC_DECIDE` — GRC chair records decision (`payload.decision`: RESOLVED | ESCALATE_TO_LEGAL)\n"
+    ),
 )
 def perform_action(
     ticket_id: str,
@@ -420,7 +438,7 @@ def perform_action(
     if action not in VALID_ACTIONS:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid action_type={action}. Valid: {VALID_ACTIONS}",
+            detail=f"Invalid action_type={action!r}. Valid: {sorted(VALID_ACTIONS)}",
         )
 
     ticket = db.get(Ticket, ticket_id)
@@ -447,32 +465,19 @@ def perform_action(
         )
 
     elif action == "ESCALATE":
-        # Lookup next step
-        current_step = db.get(WorkflowStep, ticket.current_step_id) if ticket.current_step_id else None
-        current_order = current_step.step_order if current_step else 0
-        next_step = _next_step(db, ticket.current_workflow_id, current_order)
-
-        if not next_step:
+        # Delegate to engine — single code path for manual + auto escalation
+        result = escalate_ticket(
+            ticket, db,
+            triggered_by="MANUAL",
+            note=payload.note,
+            created_by_user_id=current_user.user_id,
+        )
+        if result is None:
             raise HTTPException(
                 status_code=422,
                 detail="No next step available — ticket is already at the final escalation level",
             )
-
-        ticket.current_step_id = next_step.step_id
-        ticket.status_code = "ESCALATED"
-        ticket.step_started_at = _now()
-        ticket.sla_breached = False  # reset SLA clock at new level
-        ticket.updated_by_user_id = current_user.user_id
-        event = _add_event(
-            db, ticket, "ESCALATED",
-            old_status=old_status, new_status="ESCALATED",
-            step_id=next_step.step_id,
-            note=payload.note,
-            payload={"escalated_by": current_user.user_id, "manual": True},
-            created_by=current_user.user_id,
-            seen=False,
-            notify_user_id=ticket.assigned_to_user_id,
-        )
+        event = result
 
     elif action == "RESOLVE":
         ticket.status_code = "RESOLVED"
@@ -509,6 +514,26 @@ def perform_action(
             payload={"internal": True},
             created_by=current_user.user_id,
             seen=True,
+        )
+
+    elif action == "GRC_CONVENE":
+        # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
+        hearing_date = (payload.grc_hearing_date if hasattr(payload, "grc_hearing_date") else None)
+        events = convene_grc(
+            ticket, db,
+            note=payload.note,
+            convened_by_user_id=current_user.user_id,
+            hearing_date=hearing_date,
+        )
+        event = events[0]  # first event is the CONVENED event
+
+    elif action == "GRC_DECIDE":
+        decision = getattr(payload, "grc_decision", None) or "RESOLVED"
+        event = grc_decide(
+            ticket, db,
+            decision=decision.upper(),
+            note=payload.note,
+            decided_by_user_id=current_user.user_id,
         )
 
     db.commit()
@@ -578,6 +603,37 @@ def reply_to_complainant(
         delivered=delivered,
         detail=detail,
     )
+
+
+# ─── POST /tickets/{ticket_id}/seen — clear notification badge ───────────────
+
+# ─── GET /tickets/{ticket_id}/sla — SLA countdown for UI ──────────────────────
+
+@router.get(
+    "/tickets/{ticket_id}/sla",
+    summary="SLA status for ticket (deadline, remaining hours, urgency level)",
+)
+def get_sla(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    step = get_current_step(ticket, db)
+    info = sla_status(ticket, step)
+    return {
+        "ticket_id": ticket_id,
+        "step_key": step.step_key if step else None,
+        "step_display_name": step.display_name if step else None,
+        "resolution_time_days": step.resolution_time_days if step else None,
+        "step_started_at": ticket.step_started_at,
+        **info,
+    }
 
 
 # ─── POST /tickets/{ticket_id}/seen — clear notification badge ───────────────

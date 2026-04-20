@@ -143,11 +143,17 @@ class TicketDetail(BaseModel):
 class TicketActionRequest(BaseModel):
     """
     POST /api/v1/tickets/{ticket_id}/actions
-    action_type: ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE
+    action_type: ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE | GRC_CONVENE | GRC_DECIDE
     """
-    action_type: str = Field(..., description="ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE")
+    action_type: str = Field(
+        ...,
+        description="ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE | GRC_CONVENE | GRC_DECIDE",
+    )
     note: Optional[str] = None
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
+    # GRC-specific fields
+    grc_hearing_date: Optional[str] = Field(None, description="ISO date string e.g. 2026-05-03")
+    grc_decision: Optional[str] = Field(None, description="RESOLVED | ESCALATE_TO_LEGAL")
 
 
 class TicketActionResponse(BaseModel):
