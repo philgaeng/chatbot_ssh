@@ -555,8 +555,28 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
         story_main = tracker.get_slot("story_main")
         story_route = tracker.get_slot("story_route")  # e.g., "grievance_id" or "complainant_phone"
         story_step = tracker.get_slot("story_step")    # e.g., "request_follow_up"
+        grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
+        seah_victim_survivor_role = tracker.get_slot("seah_victim_survivor_role")
         
         self.logger.debug(f"get_next_action_for_form - story: {story_main}, form: {form_name}, route: {story_route}, step: {story_step}")
+
+        # Dedicated SEAH / sensitive-intake transitions.
+        # This keeps SEAH routing explicit while preserving default grievance/status paths.
+        if story_main in ("new_grievance", "seah_intake"):
+            if form_name == "form_grievance" and grievance_sensitive_issue is True:
+                return "form_seah_1"
+            if form_name == "form_seah_1":
+                if grievance_sensitive_issue is False:
+                    return "form_grievance" if story_main == "new_grievance" else "action_outro_sensitive_issues"
+                return "form_otp"
+            if form_name == "form_otp" and (grievance_sensitive_issue is True or story_main == "seah_intake"):
+                return "form_contact"
+            if form_name == "form_contact" and (grievance_sensitive_issue is True or story_main == "seah_intake"):
+                if seah_victim_survivor_role == "focal_point":
+                    return "form_seah_focal_point"
+                return "form_seah_2"
+            if form_name in ("form_seah_2", "form_seah_focal_point"):
+                return "action_submit_grievance"
         
         #nested dictionary for the status check next action as it is used in multiple places
         dic_status_check_next_action = {    
@@ -571,6 +591,14 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                 "form_contact": "form_otp",
                 "form_otp": "action_submit_grievance",
                 "None": "action_next_action"
+            },
+            "seah_intake": {
+                "form_seah_1": "form_otp",
+                "form_otp": "form_contact",
+                "form_contact": "form_seah_2",
+                "form_seah_2": "action_submit_grievance",
+                "form_seah_focal_point": "action_submit_grievance",
+                "None": "action_next_action",
             },
             "status_check": {
                 "form_status_check_1": {

@@ -162,12 +162,21 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         story_main = tracker.get_slot("story_main")
         complainant_consent = tracker.get_slot("complainant_consent")
         otp_consent = tracker.get_slot("otp_consent")
+        grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
 
         # 1) Grievance flow: if the user refused to share any contact information,
         # skip OTP entirely (no phone, no OTP prompt).
         if story_main in ("new_grievance", "grievance_submission") and complainant_consent is False:
             self.logger.debug(f"{self.name()} - Skipping OTP form because complainant_consent is False")
             return []
+
+        # 1b) Sensitive-issue grievance intake reuses this form only for phone handling.
+        # Do not request OTP consent/input/status in this flow.
+        if story_main in ("new_grievance", "grievance_submission") and grievance_sensitive_issue is True:
+            self.logger.debug(
+                f"{self.name()} - Sensitive issue flow detected; requiring phone only and skipping OTP slots"
+            )
+            return ["complainant_phone"]
 
         # 2) If the user has declined OTP verification, only ensure we have phone + consent.
         # We do NOT require otp_input, so action_ask_otp_input is never called.

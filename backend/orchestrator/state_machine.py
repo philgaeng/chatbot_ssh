@@ -92,19 +92,19 @@ def _get_status_form_skip() -> Any:
     return _STATUS_FORM_SKIP
 
 
-_SENSITIVE_ISSUES_FORM = None
+_SEAH_1_FORM = None
 
 
 def _is_seah_enabled() -> bool:
     return os.environ.get("ENABLE_SEAH_DEDICATED_FLOW", "true").strip().lower() in ("1", "true", "yes")
 
 
-def _get_sensitive_issues_form() -> Any:
-    global _SENSITIVE_ISSUES_FORM
-    if _SENSITIVE_ISSUES_FORM is None:
-        from backend.actions.forms.form_sensitive_issues import ValidateFormSensitiveIssues
-        _SENSITIVE_ISSUES_FORM = ValidateFormSensitiveIssues()
-    return _SENSITIVE_ISSUES_FORM
+def _get_form_seah_1() -> Any:
+    global _SEAH_1_FORM
+    if _SEAH_1_FORM is None:
+        from backend.actions.forms.form_seah_1 import ValidateFormSeah1
+        _SEAH_1_FORM = ValidateFormSeah1()
+    return _SEAH_1_FORM
 
 
 _FORM_MODIFY_GRIEVANCE = None
@@ -287,12 +287,12 @@ async def run_flow_turn(
             slot_updates["story_main"] = "seah_intake"
             slot_updates["grievance_sensitive_issue"] = True
             session["slots"].update(slot_updates)
-            session["active_loop"] = "form_sensitive_issues"
+            session["active_loop"] = "form_seah_1"
             session["requested_slot"] = None
-            next_state = "form_sensitive_issues"
+            next_state = "form_seah_1"
             session_copy = dict(session)
             session_copy["slots"] = dict(session["slots"])
-            sensitive_form = _get_sensitive_issues_form()
+            sensitive_form = _get_form_seah_1()
             msgs, form_updates, completed = await run_form_turn(
                 sensitive_form, session_copy, None, domain
             )
@@ -344,10 +344,10 @@ async def run_flow_turn(
         if completed:
             session["slots"].update(slot_updates)
             if session.get("slots", {}).get("grievance_sensitive_issue"):
-                next_state = "form_sensitive_issues"
-                session["active_loop"] = "form_sensitive_issues"
+                next_state = "form_seah_1"
+                session["active_loop"] = "form_seah_1"
                 session["requested_slot"] = None
-                sensitive_form = _get_sensitive_issues_form()
+                sensitive_form = _get_form_seah_1()
                 msgs2, form_updates2, _ = await run_form_turn(
                     sensitive_form, session, None, domain
                 )
@@ -364,9 +364,9 @@ async def run_flow_turn(
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)
 
-    elif state == "form_sensitive_issues":
+    elif state == "form_seah_1":
         user_input = latest_message if (text or payload) else None
-        form = _get_sensitive_issues_form()
+        form = _get_form_seah_1()
         msgs, form_updates, completed = await run_form_turn(
             form, session, user_input, domain
         )
@@ -380,7 +380,7 @@ async def run_flow_turn(
             _log = logging.getLogger("orchestrator.state_machine")
             contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
             slot_preview = {k: session["slots"].get(k) for k in contact_slots}
-            _log.info("form_sensitive_issues completed -> contact_form | contact slot preview: %s", slot_preview)
+            _log.info("form_seah_1 completed -> contact_form | contact slot preview: %s", slot_preview)
             outro_tracker = SessionTracker(
                 slots=session["slots"],
                 sender_id=session.get("user_id", "default"),
@@ -1238,7 +1238,7 @@ async def run_flow_turn(
 
     expected = "buttons" if next_state in ("intro", "main_menu") else "text"
     form_states = (
-        "form_grievance", "form_sensitive_issues", "contact_form", "otp_form", "grievance_review",
+        "form_grievance", "form_seah_1", "contact_form", "otp_form", "grievance_review",
         "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
     )
     if next_state in form_states and session.get("requested_slot"):
