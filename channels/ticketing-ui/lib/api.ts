@@ -209,3 +209,37 @@ export function getBadge(): Promise<BadgeResponse> {
 export function listWorkflows(): Promise<{ items: WorkflowDefinition[]; total: number }> {
   return apiFetch("/api/v1/workflows");
 }
+
+// ── Grievance PII (fetched from backend API, NOT ticketing API) ───────────────
+// PII is never stored in ticketing.* — always fetched fresh from backend.
+
+export interface GrievancePii {
+  grievance_id: string;
+  complainant_name?: string;
+  phone_number?: string;
+  email?: string;
+  address?: string;
+  [key: string]: unknown;
+}
+
+const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_API_URL ?? "http://localhost:5001";
+
+export async function getGrievancePii(grievanceId: string): Promise<GrievancePii> {
+  const resp = await fetch(`${BACKEND_BASE}/api/grievance/${grievanceId}`);
+  if (!resp.ok) throw new Error(`Grievance API ${resp.status}`);
+  return resp.json();
+}
+
+// ── Reports ───────────────────────────────────────────────────────────────────
+
+export function exportReport(params: {
+  date_from?: string;
+  date_to?: string;
+  organization_id?: string;
+}): string {
+  const p = new URLSearchParams();
+  if (params.date_from) p.set("date_from", params.date_from);
+  if (params.date_to) p.set("date_to", params.date_to);
+  if (params.organization_id) p.set("organization_id", params.organization_id);
+  return `${BASE}/api/v1/reports/export?${p}`;
+}

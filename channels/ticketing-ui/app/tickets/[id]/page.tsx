@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  getTicket, getSla, markSeen, performAction, replyToComplainant,
-  type TicketDetail, type SlaStatus,
+  getTicket, getSla, markSeen, performAction, replyToComplainant, getGrievancePii,
+  type TicketDetail, type SlaStatus, type GrievancePii,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
@@ -248,6 +248,82 @@ function ActionPanel({ ticket, roleKeys, onRefresh }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// ── Complainant PII card ──────────────────────────────────────────────────────
+
+function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
+  const [pii, setPii] = useState<GrievancePii | null>(null);
+  const [piiLoading, setPiiLoading] = useState(false);
+  const [piiError, setPiiError] = useState<string | null>(null);
+  const [phoneRevealed, setPhoneRevealed] = useState(false);
+
+  // Fetch name automatically (non-sensitive)
+  useEffect(() => {
+    if (!ticket.grievance_id) return;
+    setPiiLoading(true);
+    getGrievancePii(ticket.grievance_id)
+      .then(setPii)
+      .catch(() => setPiiError("Could not load complainant details"))
+      .finally(() => setPiiLoading(false));
+  }, [ticket.grievance_id]);
+
+  function handleReveal() {
+    setPhoneRevealed(true);
+    // INTEGRATION POINT: log reveal action via POST /api/v1/tickets/{id}/actions
+    // action_type: "REVEAL_CONTACT" — so audit trail records who viewed PII and when
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Complainant</h2>
+      {piiLoading ? (
+        <div className="text-xs text-gray-400">Loading…</div>
+      ) : piiError ? (
+        <div className="text-xs space-y-1 text-gray-600">
+          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+          <div className="text-xs text-gray-400 italic">{piiError}</div>
+          <div><span className="text-gray-400">Session:</span> {ticket.session_id ? "✅ Active" : "❌ Expired"}</div>
+        </div>
+      ) : (
+        <div className="text-xs space-y-1.5 text-gray-700">
+          {pii?.complainant_name && (
+            <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>
+          )}
+          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-400">Phone:</span>
+            {phoneRevealed && pii?.phone_number ? (
+              <span className="font-mono">{pii.phone_number}</span>
+            ) : (
+              <>
+                <span className="text-gray-300 font-mono">••••••••</span>
+                <button
+                  onClick={handleReveal}
+                  className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5"
+                >
+                  Reveal
+                </button>
+              </>
+            )}
+          </div>
+          {pii?.email && (
+            <div><span className="text-gray-400">Email:</span> {pii.email}</div>
+          )}
+          <div>
+            <span className="text-gray-400">Session:</span>{" "}
+            {ticket.session_id ? (
+              <span className="text-green-600">✅ Active</span>
+            ) : (
+              <span className="text-red-500">❌ Expired — SMS fallback</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -366,18 +442,7 @@ export default function TicketDetailPage() {
         <div className="space-y-4">
 
           {/* Complainant info card */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Complainant</h2>
-            <div className="text-xs space-y-1 text-gray-600">
-              <div><span className="text-gray-400">ID:</span> {ticket.complainant_id ?? "—"}</div>
-              <div>
-                <span className="text-gray-400">Phone:</span>{" "}
-                <span className="text-gray-300">••••••••</span>{" "}
-                <button className="text-blue-500 hover:underline text-xs ml-1">Reveal</button>
-              </div>
-              <div><span className="text-gray-400">Session:</span> {ticket.session_id ? "✅ Active" : "❌ Expired"}</div>
-            </div>
-          </div>
+          <ComplainantCard ticket={ticket} />
 
           {/* Assignment card */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
