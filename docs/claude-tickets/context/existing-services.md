@@ -254,3 +254,90 @@ COGNITO_GRM_USER_POOL_ID=
 COGNITO_GRM_CLIENT_ID=
 COGNITO_GRM_REGION=
 ```
+
+---
+
+## SECTION H — New Questions from Session 0 Codebase Analysis
+
+*Added: 2026-04-20. Resolve before or during Session 1.*
+
+### H.1 Which Postgres user creates the `ticketing` schema?
+
+`POSTGRES_USER` defaults to `nepal_grievance_admin`. Alembic needs `CREATE SCHEMA`
+privilege. Recommended: add this guard to `ticketing/migrations/env.py` inside
+`run_migrations_online()` before `context.run_migrations()`:
+
+```python
+with connection.begin():
+    connection.execute(text("CREATE SCHEMA IF NOT EXISTS ticketing"))
+```
+
+If `nepal_grievance_admin` lacks this privilege, run once as superuser:
+```sql
+CREATE SCHEMA IF NOT EXISTS ticketing AUTHORIZATION nepal_grievance_admin;
+```
+
+**Decision needed:** Does `nepal_grievance_admin` have CREATE SCHEMA privilege on `grievance_db`?
+
+---
+
+### H.2 Missing packages — add to `requirements.grm.txt`
+
+```
+pydantic-settings>=2.0        # ticketing/config/settings.py
+alembic>=1.13                 # ticketing/migrations/
+openpyxl>=3.1                 # quarterly XLSX reports
+python-jose[cryptography]>=3.3 # Cognito JWT token validation
+```
+
+`httpx`, `SQLAlchemy`, `celery` already in `requirements.txt`.
+
+---
+
+### H.3 Celery Beat — separate Docker service?
+
+SLA watchdog runs every 15 min via Celery Beat. Separate `grm_celery_beat` service
+in `docker-compose.override.yml` is recommended (running Beat inside a worker is
+deprecated for production). **Confirm.**
+
+---
+
+### H.4 Redis DB index for GRM Celery
+
+Current allocation: DB0=SocketIO, DB1=Celery broker, DB2=Celery results.
+GRM Celery reuses same `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` env vars —
+queue isolation is by name (`grm_default`, `grm_escalation`). No DB conflict.
+**Confirm this is acceptable, or assign GRM its own DBs (3 and 4).**
+
+---
+
+### H.5 Cognito GRM pool — already created?
+
+`COGNITO_GRM_USER_POOL_ID/CLIENT_ID/REGION` needed. Auth can be stubbed in Sessions
+1–2 and wired in Session 3. **Confirm pool exists or confirm stub-first approach.**
+
+---
+
+### H.6 Officer notifications — `seen` flag vs separate table
+
+Badge count = unread tickets. Two options:
+
+- **Option A (recommended for proto):** Add `seen BOOLEAN DEFAULT FALSE` to
+  `ticketing.ticket_events`. Badge = `COUNT(*) WHERE assigned_to = user AND seen = FALSE`.
+- **Option B (post-proto):** Separate `ticketing.notifications` table for SSE upgrade.
+
+**Confirm Option A.**
+
+---
+
+### H.7 Additional columns needed in `ticketing.tickets` (missing from schema spec)
+
+Will be added in Session 1 Alembic migration:
+
+| Column | Type | Reason |
+|---|---|---|
+| `session_id` | `VARCHAR(255)` | Complainant notification via orchestrator |
+| `grievance_summary` | `TEXT` | Cached non-PII at creation (CLAUDE.md rule 4) |
+| `grievance_categories` | `TEXT` | Cached non-PII at creation |
+| `grievance_location` | `TEXT` | Cached non-PII at creation |
+| `is_seah` | `BOOLEAN DEFAULT FALSE` | DB-level SEAH visibility filtering |
