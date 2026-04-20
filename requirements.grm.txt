@@ -1,0 +1,9 @@
+# GRM Ticketing System — additional Python dependencies
+# Install inside chatbot-rest conda env:
+#   pip install -r requirements.grm.txt
+# Do NOT add to requirements.txt (reserved for existing chatbot stack)
+
+pydantic-settings>=2.0        # ticketing/config/settings.py
+alembic>=1.13                 # ticketing/migrations/
+openpyxl>=3.1                 # quarterly XLSX reports (no pandas)
+python-jose[cryptography]>=3.3 # Cognito JWT token validation
