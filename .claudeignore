@@ -1,0 +1,65 @@
+# .claudeignore
+# Claude Code must not read or modify any file listed here.
+
+# ── Existing orchestrator and actions ─────────────────────────────
+backend/actions/
+backend/orchestrator/
+
+# ── Existing backend API ───────────────────────────────────────────
+backend/api/
+
+# ── Existing services ──────────────────────────────────────────────
+backend/services/
+backend/task_queue/
+backend/shared_functions/
+backend/config/
+
+# ── Existing frontends (ALL — ticketing-ui is new, lives in channels/ticketing-ui/) ──
+channels/accessible/
+channels/webchat/
+channels/REST_webchat/
+channels/monitoring-gsheet/
+
+# ── Legacy Rasa (archived) ─────────────────────────────────────────
+rasa_chatbot/
+
+# ── Infrastructure ─────────────────────────────────────────────────
+deployment/
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+nginx/
+scripts/
+
+# ── Existing DB scripts (ticketing has its own migrations) ────────
+scripts/database/
+backend/dev-resources/
+dev-scripts/
+
+# ── Dependencies ───────────────────────────────────────────────────
+requirements.txt
+
+# ── Secrets ────────────────────────────────────────────────────────
+.env
+env.local
+.env.*
+*.pem
+*.key
+*.cert
+secrets/
+
+# ── Python artifacts ───────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.rasa/
+
+# ── Node artifacts ─────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
