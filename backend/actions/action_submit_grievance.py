@@ -9,6 +9,7 @@ import traceback
 from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
+from backend.actions.utils.seah_outro_logic import compute_seah_contact_provided
 
 
 
@@ -310,6 +311,19 @@ class ActionSubmitSeah(BaseActionSubmit):
             for field in seah_fields:
                 grievance_data[field] = tracker.get_slot(field)
 
+            slot_map = dict(tracker.current_slot_values())
+            cp = tracker.get_slot("seah_contact_provided")
+            if cp is None:
+                cp = compute_seah_contact_provided(slot_map)
+            grievance_data["seah_contact_provided"] = cp
+            ar = tracker.get_slot("seah_anonymous_route")
+            if ar is None:
+                ar = tracker.get_slot("sensitive_issues_follow_up") == "anonymous"
+            grievance_data["seah_anonymous_route"] = ar
+            grievance_data["project_uuid"] = tracker.get_slot("project_uuid")
+            grievance_data["seah_contact_point_id"] = tracker.get_slot("seah_contact_point_id")
+            grievance_data["complainant_consent"] = tracker.get_slot("complainant_consent")
+
             result = self.db_manager.submit_seah_to_db(grievance_data)
             if not result.get("ok"):
                 raise Exception(result.get("error", "SEAH submission failed"))
@@ -332,9 +346,21 @@ class ActionSubmitSeah(BaseActionSubmit):
         except Exception as e:
             self.logger.error(f"❌ Error submitting SEAH report: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
-            dispatcher.utter_message(
-                text="We could not submit your SEAH report right now. Please try again."
-            )
+            lc = tracker.get_slot("language_code") or "en"
+            if lc == "ne":
+                dispatcher.utter_message(
+                    text=(
+                        "हामीले अहिले तपाईंको SEAH रिपोर्ट पेस गर्न सकेनौं। कृपया पछि फेरि प्रयास गर्नुहोस्।\n\n"
+                        "तत्काल सहयोग चाहिएमा नजिकको SEAH सहयोग सेवा वा आपतकालीन सेवामा सम्पर्क गर्न सक्नुहुन्छ।"
+                    )
+                )
+            else:
+                dispatcher.utter_message(
+                    text=(
+                        "We could not submit your SEAH report right now. Please try again.\n\n"
+                        "If you need immediate help, you can reach a local SEAH support service or emergency services."
+                    )
+                )
             return []
 
 

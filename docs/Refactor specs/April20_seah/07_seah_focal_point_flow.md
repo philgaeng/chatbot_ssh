@@ -20,14 +20,17 @@ The current focal-point form implementation includes fields that are not present
 
 ## Source of truth for this spec
 
-- `docs/Refactor specs/April20_seah/NEP-chatbot-v2.pdf` (updated flow)
-- `docs/Refactor specs/April20_seah/00_seah_sensitive_flow_spec.md` (prior decisions)
-- `backend/actions/forms/form_seah_focal_point.py` (current implementation to refactor)
+- **`backend/orchestrator/state_machine.py`** — focal sequencing and `seah_focal_stage` transitions (authoritative with `01`).
+- **`backend/actions/forms/form_seah_focal_point.py`** — validators, `required_slots`, `action_prepare_seah_focal_complainant_capture`.
+- `docs/Refactor specs/April20_seah/01_seah_route_and_slots.md` (victim vs focal entry from `form_seah_1`).
+- `docs/Refactor specs/April20_seah/00_seah_sensitive_flow_spec.md` (policy).
+- `docs/Refactor specs/April20_seah/NEP-chatbot-v2.pdf` (product wording intent).
 
 When these conflict, prioritize:
-1. PDF flow for question order and required field coverage.
-2. `00` decisions for policy behaviors (OTP, skip semantics, etc.).
-3. Existing code only where it does not conflict with 1 and 2.
+
+1. **Implemented orchestration** (`state_machine.py`) for what actually runs.
+2. **Validators** in `form_seah_focal_point.py` for conditional slots.
+3. PDF / `00` for copy and policy gaps to close later.
 
 ---
 
@@ -97,110 +100,52 @@ This applies only when user selects:
 
 ---
 
-## Implementation scope for this spec
+## Implemented focal flow (orchestrator + forms)
 
-In scope:
-- Split focal-point intake into four forms with explicit handoff order.
-- Reuse existing regular SEAH complainant slots where possible.
-- Derive focal-point phone via OTP-style collection flow (copy/adapt from `form_otp` logic) to avoid extra manual questions.
-- Add focal-point-specific utterances/buttons and `action_ask_*` conditions.
-- Ensure slot values normalize to project canonical skip semantics (`skipped`) while preserving user option meanings.
+Focal is selected in **`form_seah_1`** (`seah_victim_survivor_role: focal_point`). **`seah_focal_stage`** tracks sub-stages across reused forms.
+
+### High-level sequence
+
+| Order | Active loop / step | What happens |
+|------|---------------------|--------------|
+| 1 | `form_seah_1` | Same as victim path until role = `focal_point`. |
+| 2 | `form_otp` | `seah_focal_stage = bootstrap_reporter_otp`. For `seah_intake` + sensitive, **`complainant_phone` only** (see `04`). |
+| 3 | `form_contact` | `seah_focal_stage = bootstrap_reporter_contact`. `ValidateFormContact.required_slots` returns **location + `complainant_consent` + `complainant_full_name` only** (no email in this stage). |
+| 4 | `action_prepare_seah_focal_complainant_capture` | Copies reporter data into **`seah_focal_phone`**, **`seah_focal_full_name`**, **`seah_focal_city`** (`complainant_municipality`), **`seah_focal_village`**; clears shared complainant slots for complainant capture. |
+| 5 | `form_seah_focal_point_1` | `seah_focal_stage = focal_point_1`. Slots: `seah_focal_learned_when`, `seah_focal_reporter_consent_to_report`, `sensitive_issues_follow_up` (complainant identity mode). |
+| 6a | If consent **no** | Jump to **`form_seah_focal_point_2`** immediately with defaults (skipped complainant contact, `seah_contact_consent_channel` skipped). |
+| 6b | If consent **yes** | `form_otp` with `seah_focal_stage = complainant_otp` (still **phone-only** for sensitive `seah_intake`), then `form_contact` with `seah_focal_stage = complainant_contact` (consent + name + email only), then **`form_seah_focal_point_2`**. |
+| 7 | `form_seah_focal_point_2` | Project, narrative loop, focal risk fields (skipped when `seah_project_identification == not_adb_project`), conditional **`seah_contact_consent_channel`**, **`seah_focal_referred_to_support`**. |
+| 8 | Submit | `action_submit_seah` → `done`. |
+
+### `form_seah_focal_point_2` slots (validator-driven)
+
+Aligned with **`ValidateFormSeahFocalPoint2.required_slots`**:
+
+- Always: `seah_project_identification`, `sensitive_issues_new_detail`, `seah_focal_referred_to_support`.
+- Unless `not_adb_project`: `seah_focal_survivor_risks`, `seah_focal_mitigation_measures`, `seah_focal_other_at_risk_parties`, `seah_focal_project_risk`, `seah_focal_reputational_risk`.
+- **`seah_contact_consent_channel`**: only if consent to report ≠ `no` **and** complainant has phone or email (not skipped).
+
+Project values match victim form: **`cannot_specify`**, **`not_adb_project`**, free text (see `form_seah_2` parity).
+
+### `action_prepare_seah_focal_complainant_capture`
+
+Defined in **`form_seah_focal_point.py`**: copies **`complainant_phone` → `seah_focal_phone`**, **`complainant_full_name` → `seah_focal_full_name`**, **`complainant_municipality` → `seah_focal_city`**, **`complainant_village` → `seah_focal_village`**, then clears the listed complainant slots so the **complainant** pass can refill them.
+
+---
+
+## Implementation scope (maintenance)
+
+In scope for future edits to this path:
+
+- Conditional copy in **`utterance_mapping_rasa.py`** / buttons in **`mapping_buttons.py`**.
+- Policy gaps in **`04`** (focal OTP / roster) and **`00`**.
+- Tests in **`05`**.
 
 Out of scope:
-- Ticketing-system ownership, assignment, and back-office workflows.
-- Final legal copy authoring for intro/ack messages.
-- Non-focal SEAH branch redesign.
 
----
-
-## Proposed form decomposition (draft)
-
-### Step 1: reuse `form_otp` + `form_contact` for focal-point reporter bootstrap
-
-Purpose:
-- Reuse existing validated collection paths instead of creating `form_seah_focal_point_contact`.
-- Capture focal-point reporter details with minimal new logic.
-
-Bootstrap collection strategy:
-- Use `form_otp` for phone capture/validation only.
-- Use `form_contact` for name/location capture.
-- In this bootstrap step, these shared slots represent the focal-point reporter (temporarily), not the complainant.
-- Immediately before activating each reused form, pre-fill non-required slots with `SKIP_VALUE` so only intended questions are asked.
-
-Bootstrap slot mapping to focal-point slots (copy before reset):
-- `complainant_phone` -> `seah_focal_phone`
-- `complainant_full_name` -> `seah_focal_full_name`
-- `grievance_city` -> `seah_focal_city` (or mapped city slot used in project)
-- `grievance_village` -> `seah_focal_village` (or mapped village/locality slot used in project)
-
-Reset step (required):
-- After copy, reset temporary shared slots (`complainant_*` and location slots used in bootstrap) to `None` so they can be reused for actual complainant capture later.
-- Before launching `form_contact` for actual complainant capture, pre-fill non-target contact slots with `SKIP_VALUE` again to constrain asked questions to this spec.
-
-### Form 2: `form_seah_focal_point_1`
-
-Purpose:
-- Collect focal-point-only first block.
-
-Slots:
-- `seah_focal_learned_when` (ISO date string)
-- `seah_focal_reporter_consent_to_report` (`yes`/`no`)
-- `sensitive_issues_follow_up` (`identified`/`anonymous`) for complainant identity mode
-
-### Form 3: reuse `form_otp` then `form_contact`
-
-Purpose:
-- Reuse standard complainant/contact capture for the actual complainant after bootstrap slots were copied and reset.
-
-Complainant phone collection:
-- Use `form_otp` again to collect/validate `complainant_phone`.
-- Before activating this `form_otp` run, pre-fill OTP auth slots (`otp_consent`, `otp_status`, `otp_input`, `otp_number`, `otp_resend_count`) with `SKIP_VALUE`/safe defaults so OTP authentication is not triggered.
-
-Reused slots for `form_contact`:
-- `complainant_full_name` (text or `skipped`)
-- `complainant_email` (email or `skipped`)
-
-Implementation note:
-- Prefer adding focal-point-specific utterance keys and conditional `action_ask_*` behavior over introducing a new mixin refactor in this phase.
-- In this codebase, this should be done in `backend/actions/utils/utterance_mapping_rasa.py` which is server-side API messaging.
-- Keep `form_contact` slot collection shared; route persistence to `seah_complainant`/SEAH tables at submission time.
-- Add a pre-launch action that sets irrelevant `form_contact` slots to `SKIP_VALUE` before activating the form, then keeps only the target slots as `None`.
-
-### Form 4: reuse `form_seah_2` pattern for focal-point final block
-
-Purpose:
-- Collect the remainder of focal-point assessment and SEAH incident intake.
-- Reuse the same iterative detail flow behavior already implemented in `backend/actions/forms/form_seah_2.py`.
-
-Slots:
-- `seah_project_identification` (`text`/`not_sure`/`not_adb_project`)
-- 'sensitive_issues_new_detail` (reuse `form_seah_2` restart/add-more/submit detail loop behavior)
-- `seah_focal_survivor_risks` (multi-select or free text, supports `none`)
-- `seah_focal_mitigation_measures` (multi-select or free text, supports `none`)
-- `seah_focal_other_at_risk_parties` (multi-select or free text, supports `none`)
-- `seah_focal_project_risk` (`project_delay`/text/`none`)
-- `seah_focal_reputational_risk` (`yes`/`none`)
-- `seah_contact_consent_channel` (`phone`/`email`/`both`/`none`)
-- `seah_focal_referred_to_support`
-- `
-
-Reporter type is derived from the existing role slot (`seah_victim_survivor_role = focal_point`), so we should not duplicate that with additional reporter-role slots.
-
-Note: Focal-point reporter identification (name, phone, city, village) is intentionally retained even though the latest PDF under-specifies it. OTP roster-specific focal slots are not needed when reusing the main `form_otp` flow.
-
----
-
-## Recommended implementation pattern
-
-Recommendation for this phase:
-- Use **form split + shared slots + conditional utterances/action asks**.
-- Do **not** introduce mixin extraction yet.
-
-Why:
-- Existing `form_seah_1.py` and `form_seah_2.py` already use the same pattern and can be extended quickly.
-- Lower risk for current branch timeline and easier regression coverage.
-- Mixin extraction can be a follow-up refactor once behavior is stable.
-
+- Ticketing back-office (`xx`).
+- Non-focal victim path (see **`01`**).
 
 ---
 
@@ -222,10 +167,10 @@ Suggested answer format:
 
 ### Already decided (captured in this spec)
 
-1. Focal-point roster OTP verification path is not used; phone handling reuses main `form_otp`.
-2. If consent-to-report is `No`, jump directly to `seah_focal_referred_to_support`, then acknowledgment.
-3. Legacy risk fields are in scope via reuse of `form_seah_2` final-block behavior.
-4. `sensitive_issues_new_detail` remains in use (same loop semantics as `form_seah_2`).
+1. **Phone handling** reuses **`form_otp`** + shared complainant slots; for `seah_intake` + `grievance_sensitive_issue`, OTP verification slots are **not** required (**phone-only** — see `04`). **Roster-based focal OTP** remains a future policy item if required by `00`.
+2. If consent-to-report is **`no`**, the orchestrator opens **`form_seah_focal_point_2`** directly (skips complainant phone/email capture and skips `seah_contact_consent_channel` via validator rules); user still completes **project / narrative / referred-to-support** (and minimal fields when `not_adb_project`).
+3. Focal assessment fields live in **`form_seah_focal_point_2`** (parallel to victim **`form_seah_2`** narrative pattern, not the same active loop).
+4. `sensitive_issues_new_detail` loop semantics match **`form_seah_2`** (restart / add more / submit).
 
 ### Open questions (still need answers)
 
@@ -273,8 +218,7 @@ Suggested answer format:
 ### Final decisions captured from review
 
 1. **Exception policy is explicit**
-   - `consent_to_report = No` is an intentional exception to the "ask all mandatory steps" rule.
-   - In this branch, flow short-circuits to `seah_focal_referred_to_support` then acknowledgment.
+   - `consent_to_report = No` skips complainant contact capture and **skips** `seah_contact_consent_channel`, but the user still completes **`form_seah_focal_point_2`** (project, narrative, referred-to-support, etc., subject to `not_adb_project` trimming in `required_slots`).
 
 2. **Free-text date accepted**
    - `seah_focal_learned_when` remains free text.
@@ -288,10 +232,10 @@ Suggested answer format:
    - If contact-consent channel is not asked, store canonical `SKIP_VALUE`.
 
 5. **OTP skip behavior required**
-   - When `complainant_phone` is skipped in reused `form_otp`, OTP-related slots must remain non-triggering.
+   - When `complainant_phone` is skipped in `form_otp`, related OTP slots are set skipped so the form can complete (`form_otp.py`).
 
 6. **Not-ADB branch behavior**
-   - If `seah_project_identification = not_adb_project`, short-circuit to referral/ack path.
+   - When `seah_project_identification == not_adb_project`, **`ValidateFormSeahFocalPoint2`** omits the long focal-risk block; user still completes narrative / referred-to-support as required. Dedicated **referral-only terminal** (no DB write) is **not** implemented—submission still runs **`action_submit_seah`** unless product adds an early exit in `state_machine.py`.
 
 7. **Localization ownership clarified**
    - This spec remains the functional source of truth for wording intent.
@@ -305,3 +249,9 @@ Suggested answer format:
 
 10. **Test gate scope**
    - Full additional branch-level integration gate is not mandatory for this phase.
+
+---
+
+## Changelog
+
+- **2026-04-21:** Replaced draft “four form” decomposition with **implemented** `state_machine` sequence, `seah_focal_stage`, `action_prepare_seah_focal_complainant_capture` mapping (`municipality`/`village` → focal city/village), `form_seah_focal_point_2` conditional slots; fixed broken markdown; aligned “already decided” and devil’s advocate items with code and `04`; noted `not_adb_project` still submits via `action_submit_seah`.

@@ -112,6 +112,15 @@ function handleSessionConfirm(sessionState) {
   sessionState.confirmed = true;
   console.log("Session confirmed with ID:", window.socket?.id);
 
+  if (window.suppressAutoIntroduceOnce) {
+    window.suppressAutoIntroduceOnce = false;
+    sessionState.started = true;
+    if (window.sessionState) {
+      window.sessionState.started = true;
+    }
+    return;
+  }
+
   setTimeout(() => {
     sessionState.started = true;
     // Also update the global session state
@@ -149,6 +158,20 @@ function handleBotResponse(response, sessionState) {
     console.log("Setting grievance ID from event:", response.grievance_id);
     uiActions.setGrievanceId(response.grievance_id);
     return; // Don't display custom events to user
+  }
+
+  if (response.custom?.clear_window || response.clear_window) {
+    if (typeof window.handleClearSessionCommand === "function") {
+      window.handleClearSessionCommand();
+    }
+    return;
+  }
+
+  if (response.custom?.close_browser_tab || response.close_browser_tab) {
+    if (typeof window.handleCloseWindowCommand === "function") {
+      window.handleCloseWindowCommand();
+    }
+    return;
   }
 
   // Handle task status updates

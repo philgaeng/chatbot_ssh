@@ -103,6 +103,7 @@ curl -4 -s http://127.0.0.1/rest-webchat/ | head
 | `No module named 'flask'` | Temporary: Flask is listed in `requirements.txt` until `file_server_core.py` is migrated off Flask. |
 | Backend / Celery restarting | `docker compose logs --tail=100 backend celery_default` |
 | **404** on `/health`, footer **`nginx/… (Ubuntu)`** | Host **system Nginx** still owns `:80`. Stop/disable it (see “Docker-only”) or change Compose to another host port. |
+| **502** on `/health` or `/message`, footer **`nginx/1.x`** (Compose image) | Usually means Nginx could not reach `orchestrator`/`backend`. After `docker compose up --build`, app containers get new IPs; Compose Nginx configs use Docker’s **`127.0.0.11` resolver + variable `proxy_pass`** so names re-resolve. If you still see 502, run `docker compose up -d --force-recreate nginx` and check `docker compose logs orchestrator backend`. |
 
 ## Files
 

@@ -26,6 +26,46 @@ from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action, events_to_slot_updates
 from backend.orchestrator.form_loop import run_form_turn
 
+_log_sm = logging.getLogger(__name__)
+
+
+async def _append_seah_outro_after_submit_if_applicable(
+    dispatcher: CollectingDispatcher,
+    session: Dict[str, Any],
+    latest_message: Dict[str, Any],
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+) -> None:
+    """After successful action_submit_seah, append variant outro + referral (spec 08)."""
+    slots = session.get("slots", {})
+    if slots.get("story_main") != "seah_intake":
+        return
+    if not slots.get("seah_public_ref"):
+        return
+    outro_dispatcher = CollectingDispatcher()
+    tracker = SessionTracker(
+        slots=dict(slots),
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    try:
+        events = await invoke_action(
+            "action_seah_outro",
+            outro_dispatcher,
+            tracker,
+            domain,
+        )
+        if events:
+            ou = events_to_slot_updates(events)
+            slot_updates.update(ou)
+            session["slots"].update(ou)
+        dispatcher.messages.extend(outro_dispatcher.messages)
+    except Exception as e:
+        _log_sm.warning("action_seah_outro failed after submit: %s", e, exc_info=True)
+
+
 # Lazy form instances
 _FORM = None
 _STATUS_FORM_1 = None
@@ -617,6 +657,9 @@ async def run_flow_turn(
             slot_updates.update(submit_updates)
             session["slots"].update(submit_updates)
             dispatcher.messages.extend(ask_dispatcher.messages)
+            await _append_seah_outro_after_submit_if_applicable(
+                dispatcher, session, latest_message, domain, slot_updates
+            )
             next_state = "done"
 
     elif state == "form_seah_focal_point_1":
@@ -689,6 +732,9 @@ async def run_flow_turn(
             slot_updates.update(submit_updates)
             session["slots"].update(submit_updates)
             dispatcher.messages.extend(ask_dispatcher.messages)
+            await _append_seah_outro_after_submit_if_applicable(
+                dispatcher, session, latest_message, domain, slot_updates
+            )
             next_state = "done"
 
     elif state == "otp_form":
@@ -803,6 +849,9 @@ async def run_flow_turn(
         session["active_loop"] = "form_grievance_complainant_review"
         session["requested_slot"] = None
         session["slots"].update(slot_updates)
+        await _append_seah_outro_after_submit_if_applicable(
+            dispatcher, session, latest_message, domain, slot_updates
+        )
         retrieve_dispatcher = CollectingDispatcher()
         retrieve_tracker = SessionTracker(
             slots=session["slots"],

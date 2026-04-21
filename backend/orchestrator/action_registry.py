@@ -57,6 +57,7 @@ def _get_action(action_name: str) -> Any:
             ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport,
             ActionOutroSensitiveIssues,
         )
+        from backend.actions.action_seah_outro import ActionSeahOutro
         from backend.actions.forms.form_modify_grievance import (
             ActionAskModifyFollowUpAnswer,
             ActionAskModifyGrievanceNewDetail,
@@ -152,6 +153,7 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_form_seah_focal_point_2_seah_contact_consent_channel"] = ActionAskFormSeahFocalPoint2SeahContactConsentChannel()
         _ACTIONS["action_ask_form_seah_focal_point_2_seah_focal_referred_to_support"] = ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport()
         _ACTIONS["action_outro_sensitive_issues"] = ActionOutroSensitiveIssues()
+        _ACTIONS["action_seah_outro"] = ActionSeahOutro()
 
         # Status check
         _ACTIONS["action_start_status_check"] = ActionStartStatusCheck()

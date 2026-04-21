@@ -6,6 +6,7 @@ from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE
+from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
 
 
 class ValidateFormSeah1(BaseFormValidationAction):
@@ -57,7 +58,14 @@ class ValidateFormSeah1(BaseFormValidationAction):
             dispatcher.utter_message(text=self.get_utterance(2))
             return {"sensitive_issues_follow_up": None}
 
-        updates: Dict[Text, Any] = {"sensitive_issues_follow_up": cmd}
+        updates: Dict[Text, Any] = {
+            "sensitive_issues_follow_up": cmd,
+            "seah_anonymous_route": cmd == "anonymous",
+        }
+        if cmd == "identified":
+            # Identified path already carries contact via OTP/phone collection,
+            # so prefill consent to avoid asking the same question again later.
+            updates["complainant_consent"] = True
         if cmd == "anonymous":
             updates.update(
                 {
@@ -69,6 +77,13 @@ class ValidateFormSeah1(BaseFormValidationAction):
                     "otp_resend_count": 0,
                 }
             )
+        updates.update(
+            seah_contact_provided_update(
+                tracker.get_slot("story_main"),
+                dict(tracker.current_slot_values()),
+                updates,
+            )
+        )
         return updates
 
     async def extract_seah_victim_survivor_role(

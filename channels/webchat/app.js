@@ -277,6 +277,9 @@ function setupEventListeners() {
     chatWidget.style.display = "flex";
     chatLauncher.style.display = "none";
     messageInput.focus();
+    if (!window.introductionSent) {
+      window.sendIntroduceMessage();
+    }
   });
 
   closeButton.addEventListener("click", () => {
@@ -305,6 +308,77 @@ function setupEventListeners() {
       "px";
   });
 }
+
+function resetFrontendState() {
+  window.grievanceId = null;
+  window.hasReceivedResponse = false;
+  window.introductionSent = false;
+  window.sessionInitialized = false;
+  window.lastBotMessageText = "";
+  window.lastBotQuickReplies = null;
+  window.suppressAutoIntroduceOnce = true;
+
+  if (window.sessionState) {
+    window.sessionState.confirmed = false;
+    window.sessionState.started = false;
+    window.sessionState.retryCount = 0;
+  }
+
+  if (window.currentRetryTimer) {
+    clearTimeout(window.currentRetryTimer);
+    window.currentRetryTimer = null;
+  }
+  if (window.introductionWindowTimer) {
+    clearTimeout(window.introductionWindowTimer);
+    window.introductionWindowTimer = null;
+  }
+
+  selectedFiles = [];
+  if (fileInput) fileInput.value = "";
+  if (messageInput) {
+    messageInput.value = "";
+    messageInput.style.height = "44px";
+  }
+
+  uiActions.setGrievanceId(null);
+  uiActions.clearMessages();
+}
+
+window.handleClearSessionCommand = function () {
+  resetFrontendState();
+
+  chatWidget.style.display = "none";
+  chatLauncher.style.display = "flex";
+
+  const storage = localStorage;
+  storage.removeItem(SESSION_CONFIG.STORAGE_KEY);
+
+  if (socket) {
+    try {
+      socket.disconnect();
+    } catch (error) {
+      console.warn("Socket disconnect during clear session failed:", error);
+    }
+  }
+
+  initializeWebSocket();
+};
+
+window.handleCloseWindowCommand = function () {
+  // Browser may block closing tabs not opened by script.
+  window.close();
+
+  setTimeout(() => {
+    if (!window.closed) {
+      chatWidget.style.display = "none";
+      chatLauncher.style.display = "flex";
+      uiActions.appendMessage(
+        "For security reasons, your browser may block automatic tab closing. Please close this tab manually.",
+        "received"
+      );
+    }
+  }, 100);
+};
 
 // Handle message submission
 function handleMessageSubmit(e) {

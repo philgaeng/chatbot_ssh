@@ -501,6 +501,26 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  seah_anonymous_route:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_contact_provided:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  project_uuid:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_contact_point_id:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
   seah_victim_survivor_role:
     type: categorical
     values:
@@ -892,6 +912,7 @@ actions:
   - action_start_grievance_process
   - action_submit_grievance
   - action_submit_seah
+  - action_seah_outro
   - action_submit_grievance_as_is
   - action_test_disconnection_log
   - action_test_disconnection

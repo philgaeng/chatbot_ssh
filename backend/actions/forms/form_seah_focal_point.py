@@ -5,6 +5,11 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
+from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
+from backend.actions.utils.seah_project_catalog import (
+    build_seah_project_identification_buttons,
+    validate_seah_project_identification_value,
+)
 
 
 class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
@@ -84,8 +89,17 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
                         "complainant_full_name": self.SKIP_VALUE,
                         "complainant_email": self.SKIP_VALUE,
                         "seah_contact_consent_channel": self.SKIP_VALUE,
+                        "seah_anonymous_route": True,
+                        "seah_contact_provided": False,
                     }
                 )
+            updates.update(
+                seah_contact_provided_update(
+                    tracker.get_slot("story_main"),
+                    dict(tracker.current_slot_values()),
+                    updates,
+                )
+            )
             return updates
         return {"seah_focal_reporter_consent_to_report": None}
 
@@ -115,7 +129,18 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
         if value == self.SKIP_VALUE:
             value = "anonymous"
         if value in {"identified", "anonymous"}:
-            return {"sensitive_issues_follow_up": value}
+            merged = {
+                "sensitive_issues_follow_up": value,
+                "seah_anonymous_route": value == "anonymous",
+            }
+            merged.update(
+                seah_contact_provided_update(
+                    tracker.get_slot("story_main"),
+                    dict(tracker.current_slot_values()),
+                    merged,
+                )
+            )
+            return merged
         return {"sensitive_issues_follow_up": None}
 
     def _validate_text_or_skip(self, slot_value: Any, slot_name: Text) -> Dict[Text, Any]:
@@ -183,21 +208,10 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        if slot_value is None:
-            return {"seah_project_identification": None}
-        value = slot_value.strip() if isinstance(slot_value, str) else slot_value
-        if isinstance(value, str):
-            value = value.lstrip("/")
-        if value == self.SKIP_VALUE:
-            value = "cannot_specify"
-        if value in ("cannot_specify", "not_adb_project"):
-            return {
-                "seah_project_identification": value,
-                "seah_not_adb_project": value == "not_adb_project",
-            }
-        if isinstance(value, str) and len(value) >= 2:
-            return {"seah_project_identification": value, "seah_not_adb_project": False}
-        return {"seah_project_identification": None}
+        lang = getattr(self, "language_code", None) or tracker.get_slot("language_code") or "en"
+        return validate_seah_project_identification_value(
+            slot_value, self.SKIP_VALUE, self.db_manager, lang
+        )
 
     async def extract_sensitive_issues_new_detail(
         self,
@@ -457,7 +471,12 @@ class ActionAskFormSeahFocalPoint2SeahProjectIdentification(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_project_identification"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        self._initialize_language_and_helpers(tracker)
+        lang = self.language_code or "en"
+        buttons = build_seah_project_identification_buttons(
+            tracker, self.db_manager, lang, max_projects=12
+        )
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []
 
 
@@ -551,6 +570,10 @@ class ActionOutroSensitiveIssues(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
+        if tracker.get_slot("story_main") == "seah_intake":
+            from backend.actions.action_seah_outro import ActionSeahOutro
+
+            return await ActionSeahOutro().execute_action(dispatcher, tracker, domain)
         message = self.get_utterance(2) if tracker.get_slot("seah_not_adb_project") else self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)

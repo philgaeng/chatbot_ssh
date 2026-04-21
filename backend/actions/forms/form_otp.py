@@ -6,6 +6,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
+from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
 from random import randint
 
 class BaseOtpAction(BaseAction):
@@ -229,6 +230,13 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
                 }
             )
 
+        result.update(
+            seah_contact_provided_update(
+                tracker.get_slot("story_main"),
+                dict(tracker.current_slot_values()),
+                result,
+            )
+        )
         return result
     
     async def extract_otp_consent(

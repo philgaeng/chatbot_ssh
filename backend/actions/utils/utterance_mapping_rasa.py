@@ -546,6 +546,35 @@ UTTERANCE_MAPPING = {
             }
         }
     },
+    'action_seah_outro': {
+        'action_seah_outro': {
+            'utterances': {
+                1: {
+                    'en': "Thank you. Your SEAH focal-point report is logged. A handler may contact you only through channels you confirmed.",
+                    'ne': "धन्यवाद। तपाईंको SEAH फोकल-पोइन्ट रिपोर्ट दर्ता भयो। तपाईंले पुष्टि गर्नुभएको माध्यमबाट मात्र सम्पर्क हुन सक्छ।",
+                },
+                2: {
+                    'en': "Thank you. Your report is confidential. For safety, consider contacting a SEAH support point (details below). We may have limited ways to reach you.",
+                    'ne': "धन्यवाद। तपाईंको रिपोर्ट गोप्य छ। सुरक्षाका लागि नजिकको SEAH सहयोग बिन्दुमा सम्पर्क गर्न सक्नुहुन्छ (विवरण तल)।",
+                },
+                3: {
+                    'en': "Thank you. We may contact you using the phone number you provided, if needed for follow-up.",
+                    'ne': "धन्यवाद। आवश्यक परेमा तपाईंले दिनुभएको फोन नम्बरमार्फत सम्पर्क गर्न सकिन्छ।",
+                },
+                4: {
+                    'en': "Thank you. Your report is confidential. If you did not share contact details, please reach a SEAH support point (below) if you need help.",
+                    'ne': "धन्यवाद। तपाईंले सम्पर्क विवरण नदिएमा, सहयोग चाहिएमा तलको SEAH बिन्दुमा सम्पर्क गर्नुहोस्।",
+                },
+                5: {
+                    'en': "Thank you. Your report is confidential. We may use the contact details you provided as agreed.",
+                    'ne': "धन्यवाद। तपाईंले सहमति अनुसार दिनुभएको सम्पर्क विवरण प्रयोग गर्न सकिन्छ।",
+                },
+            },
+            'buttons': {
+                1: BUTTONS_CLEAN_WINDOW_OPTIONS,
+            },
+        },
+    },
     'form_grievance_complainant_review': {
         'validate_form_grievance_complainant_review': {
             'utterances': {

@@ -5,6 +5,10 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
+from backend.actions.utils.seah_project_catalog import (
+    build_seah_project_identification_buttons,
+    validate_seah_project_identification_value,
+)
 
 
 class ValidateFormSeah2(BaseFormValidationAction):
@@ -35,6 +39,9 @@ class ValidateFormSeah2(BaseFormValidationAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> Dict[Text, Any]:
+        latest_text = (tracker.latest_message or {}).get("text")
+        if isinstance(latest_text, str) and latest_text.strip().startswith("/"):
+            return {"seah_project_identification": latest_text.strip().lstrip("/")}
         return await self._handle_slot_extraction(
             "seah_project_identification",
             tracker,
@@ -49,26 +56,10 @@ class ValidateFormSeah2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        if slot_value is None:
-            return {"seah_project_identification": None}
-
-        value = slot_value.strip() if isinstance(slot_value, str) else slot_value
-        if isinstance(value, str):
-            value = value.lstrip("/")
-
-        if value == self.SKIP_VALUE:
-            value = "cannot_specify"
-
-        if value in ("cannot_specify", "not_adb_project"):
-            return {
-                "seah_project_identification": value,
-                "seah_not_adb_project": value == "not_adb_project",
-            }
-
-        if isinstance(value, str) and len(value) >= 2:
-            return {"seah_project_identification": value, "seah_not_adb_project": False}
-
-        return {"seah_project_identification": None}
+        lang = getattr(self, "language_code", None) or tracker.get_slot("language_code") or "en"
+        return validate_seah_project_identification_value(
+            slot_value, self.SKIP_VALUE, self.db_manager, lang
+        )
 
     async def extract_sensitive_issues_new_detail(
         self,
@@ -167,7 +158,12 @@ class ActionAskFormSeah2SeahProjectIdentification(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        self._initialize_language_and_helpers(tracker)
+        lang = self.language_code or "en"
+        buttons = build_seah_project_identification_buttons(
+            tracker, self.db_manager, lang, max_projects=12
+        )
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []
 
 
