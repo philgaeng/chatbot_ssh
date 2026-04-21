@@ -23,6 +23,7 @@ celery_app = Celery(
         "ticketing.tasks.escalation",
         "ticketing.tasks.notifications",
         "ticketing.tasks.reports",
+        "ticketing.tasks.grievance_sync",
     ],
 )
 
@@ -38,9 +39,16 @@ celery_app.conf.update(
         "ticketing.tasks.escalation.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.notifications.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.reports.*": {"queue": "grm_ticketing"},
+        "ticketing.tasks.grievance_sync.*": {"queue": "grm_ticketing"},
     },
     # ── Beat schedule ──────────────────────────────────────────────────────────
     beat_schedule={
+        # Grievance sync: polls public.grievances for new submissions every 2 minutes
+        # Creates ticketing.tickets automatically — no chatbot code change needed
+        "grm-grievance-sync": {
+            "task": "ticketing.tasks.grievance_sync.sync_grievances",
+            "schedule": 120,  # 2 minutes
+        },
         # SLA watchdog: runs every 15 minutes
         "grm-sla-watchdog": {
             "task": "ticketing.tasks.escalation.check_sla_watchdog",
