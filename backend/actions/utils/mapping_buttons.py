@@ -243,12 +243,14 @@ BUTTONS_CHECK_STATUS = {
 
 BUTTONS_SEAH_IDENTITY_MODE = {
     "en": [
-        {"title": "Identified", "payload": "/identified"},
-        {"title": "Anonymous", "payload": "/anonymous"},
+        {"title": "SEAH focal point", "payload": "/focal_point"},
+        {"title": "Anonymous grievance", "payload": "/anonymous"},
+        {"title": "Grievance with contact details", "payload": "/identified"},
     ],
     "ne": [
-        {"title": "पहिचान सहित", "payload": "/identified"},
-        {"title": "गुमनाम", "payload": "/anonymous"},
+        {"title": "SEAH फोकल पोइन्ट", "payload": "/focal_point"},
+        {"title": "गुमनाम उजुरी", "payload": "/anonymous"},
+        {"title": "सम्पर्क विवरण सहित उजुरी", "payload": "/identified"},
     ],
 }
 
@@ -256,12 +258,10 @@ BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE = {
     "en": [
         {"title": "Yes, I am the victim/survivor", "payload": "/victim_survivor"},
         {"title": "No", "payload": "/not_victim_survivor"},
-        {"title": "I am the SEAH focal point", "payload": "/focal_point"},
     ],
     "ne": [
         {"title": "हो, म पीडित/उत्तरजीवी हुँ", "payload": "/victim_survivor"},
         {"title": "होइन", "payload": "/not_victim_survivor"},
-        {"title": "म SEAH फोकल पोइन्ट हुँ", "payload": "/focal_point"},
     ],
 }
 
@@ -301,6 +301,60 @@ BUTTONS_SEAH_YES_NO = {
     "ne": [
         {"title": "हो", "payload": "/yes"},
         {"title": "होइन", "payload": "/no"},
+    ],
+}
+
+BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS = {
+    "en": [
+        {"title": "Retaliation, intimidation, or threat to job security", "payload": "/retaliation_threat"},
+        {"title": "Personal safety", "payload": "/personal_safety"},
+        {"title": "Trauma", "payload": "/trauma"},
+        {"title": "Skip", "payload": BUTTON_SKIP},
+    ],
+    "ne": [
+        {"title": "प्रतिशोध, धम्की वा रोजगारी सुरक्षामा खतरा", "payload": "/retaliation_threat"},
+        {"title": "व्यक्तिगत सुरक्षा", "payload": "/personal_safety"},
+        {"title": "आघात", "payload": "/trauma"},
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+    ],
+}
+
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES = {
+    "en": [
+        {"title": "Witnesses", "payload": "/witnesses"},
+        {"title": "Other family members", "payload": "/other_family_members"},
+        {"title": "Other project workers", "payload": "/other_project_workers"},
+        {"title": "Other members of the community", "payload": "/other_community_members"},
+        {"title": "Skip", "payload": BUTTON_SKIP},
+    ],
+    "ne": [
+        {"title": "प्रत्यक्षदर्शीहरू", "payload": "/witnesses"},
+        {"title": "अन्य परिवारका सदस्यहरू", "payload": "/other_family_members"},
+        {"title": "अन्य परियोजना कामदारहरू", "payload": "/other_project_workers"},
+        {"title": "समुदायका अन्य सदस्यहरू", "payload": "/other_community_members"},
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+    ],
+}
+
+BUTTONS_SEAH_FOCAL_PROJECT_RISK = {
+    "en": [
+        {"title": "Project delay", "payload": "/project_delay"},
+        {"title": "Skip", "payload": BUTTON_SKIP},
+    ],
+    "ne": [
+        {"title": "परियोजना ढिलाइ", "payload": "/project_delay"},
+        {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP},
+    ],
+}
+
+BUTTONS_SEAH_FOCAL_MITIGATION_MEASURES = {
+    "en": [
+        {"title": "Referral to support services", "payload": "/referral_support_services"},
+        {"title": "Provided information on police and/or legal services", "payload": "/police_legal_information"},
+    ],
+    "ne": [
+        {"title": "सहायता सेवामा सन्दर्भ गरिएको", "payload": "/referral_support_services"},
+        {"title": "प्रहरी वा कानुनी सेवाबारे जानकारी दिइयो", "payload": "/police_legal_information"},
     ],
 }
 

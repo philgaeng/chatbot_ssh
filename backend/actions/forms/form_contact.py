@@ -39,9 +39,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
     def _merge_seah_contact_provided_from_partial(
         self, tracker: Tracker, partial: Dict[str, Any]
     ) -> Dict[str, Any]:
-        from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
-
-        return seah_contact_provided_update(
+        return self.seah_contact_provided_update(
             tracker.get_slot("story_main"),
             dict(tracker.current_slot_values()),
             partial,

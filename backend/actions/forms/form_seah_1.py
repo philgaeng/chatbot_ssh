@@ -6,7 +6,6 @@ from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE
-from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
 
 
 class ValidateFormSeah1(BaseFormValidationAction):
@@ -23,6 +22,9 @@ class ValidateFormSeah1(BaseFormValidationAction):
         # If user confirms content is not sensitive, stop this flow immediately.
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []
+        # Focal-point path now starts from the first SEAH question.
+        if tracker.get_slot("sensitive_issues_follow_up") == "focal_point":
+            return ["sensitive_issues_follow_up"]
         return ["sensitive_issues_follow_up", "seah_victim_survivor_role"]
 
     async def extract_sensitive_issues_follow_up(
@@ -54,7 +56,7 @@ class ValidateFormSeah1(BaseFormValidationAction):
         if cmd == self.SKIP_VALUE:
             cmd = "anonymous"
 
-        if cmd not in {"identified", "anonymous"}:
+        if cmd not in {"identified", "anonymous", "focal_point"}:
             dispatcher.utter_message(text=self.get_utterance(2))
             return {"sensitive_issues_follow_up": None}
 
@@ -66,19 +68,23 @@ class ValidateFormSeah1(BaseFormValidationAction):
             # Identified path already carries contact via OTP/phone collection,
             # so prefill consent to avoid asking the same question again later.
             updates["complainant_consent"] = True
+        if cmd == "focal_point":
+            updates["seah_victim_survivor_role"] = "focal_point"
         if cmd == "anonymous":
             updates.update(
                 {
                     "complainant_full_name": self.SKIP_VALUE,
                     "complainant_phone": self.SKIP_VALUE,
                     "otp_consent": self.SKIP_VALUE,
+                    "otp_number": self.SKIP_VALUE,
                     "otp_status": self.SKIP_VALUE,
+                    "otp_verified": False,
                     "otp_input": self.SKIP_VALUE,
                     "otp_resend_count": 0,
                 }
             )
         updates.update(
-            seah_contact_provided_update(
+            self.seah_contact_provided_update(
                 tracker.get_slot("story_main"),
                 dict(tracker.current_slot_values()),
                 updates,
@@ -144,11 +150,8 @@ class ActionAskFormSeah1SeahVictimSurvivorRole(BaseAction):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
         language_code = tracker.get_slot("language_code") or "en"
-        identity_mode = tracker.get_slot("sensitive_issues_follow_up")
         buttons = BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE.get(
             language_code, BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE["en"]
         )
-        if identity_mode == "anonymous":
-            buttons = [b for b in buttons if b.get("payload") != "/focal_point"]
         dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []

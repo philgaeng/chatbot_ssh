@@ -9,7 +9,6 @@ import traceback
 from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
-from backend.actions.utils.seah_outro_logic import compute_seah_contact_provided
 
 
 
@@ -314,7 +313,7 @@ class ActionSubmitSeah(BaseActionSubmit):
             slot_map = dict(tracker.current_slot_values())
             cp = tracker.get_slot("seah_contact_provided")
             if cp is None:
-                cp = compute_seah_contact_provided(slot_map)
+                cp = self.compute_seah_contact_provided(slot_map)
             grievance_data["seah_contact_provided"] = cp
             ar = tracker.get_slot("seah_anonymous_route")
             if ar is None:

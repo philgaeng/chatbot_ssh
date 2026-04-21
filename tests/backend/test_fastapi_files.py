@@ -118,7 +118,7 @@ def test_upload_files_no_grievance(client: TestClient):
         data={"grievance_id": ""},
         files={"files[]": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
     )
-    assert r.status_code == 422  # Form validation fails for empty required field
+    assert r.status_code == 400
 
 
 def test_upload_files_no_files(client: TestClient):

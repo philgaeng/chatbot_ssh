@@ -5,10 +5,6 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
-from backend.actions.utils.seah_project_catalog import (
-    build_seah_project_identification_buttons,
-    validate_seah_project_identification_value,
-)
 
 
 class ValidateFormSeah2(BaseFormValidationAction):
@@ -57,8 +53,9 @@ class ValidateFormSeah2(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         lang = getattr(self, "language_code", None) or tracker.get_slot("language_code") or "en"
-        return validate_seah_project_identification_value(
-            slot_value, self.SKIP_VALUE, self.db_manager, lang
+        return self.validate_seah_project_identification_value(
+            slot_value,
+            language_code=lang,
         )
 
     async def extract_sensitive_issues_new_detail(
@@ -140,12 +137,7 @@ class ValidateFormSeah2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
-        if isinstance(value, str):
-            value = value.lstrip("/")
-        if value in {"phone", "email", "both", "none"}:
-            return {"seah_contact_consent_channel": value}
-        return {"seah_contact_consent_channel": None}
+        return self.validate_seah_contact_channel_selection(slot_value, tracker)
 
 
 class ActionAskFormSeah2SeahProjectIdentification(BaseAction):
@@ -158,10 +150,8 @@ class ActionAskFormSeah2SeahProjectIdentification(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        self._initialize_language_and_helpers(tracker)
-        lang = self.language_code or "en"
-        buttons = build_seah_project_identification_buttons(
-            tracker, self.db_manager, lang, max_projects=12
+        buttons = self.build_seah_project_identification_buttons(
+            tracker, max_projects=12
         )
         dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []
@@ -199,5 +189,11 @@ class ActionAskFormSeah2SeahContactConsentChannel(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        buttons = self.build_seah_contact_channel_buttons(
+            buttons=self.get_buttons(1),
+            phone_value=tracker.get_slot("complainant_phone"),
+            email_value=tracker.get_slot("complainant_email"),
+            skip_value=self.SKIP_VALUE,
+        )
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []

@@ -7,10 +7,6 @@ from rasa_sdk.events import SlotSet
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
-from backend.actions.utils.seah_outro_logic import (
-    format_contact_point_block,
-    resolve_seah_outro_variant,
-)
 
 
 class ActionSeahOutro(BaseAction):
@@ -25,25 +21,15 @@ class ActionSeahOutro(BaseAction):
     ) -> List[Dict[Text, Any]]:
         self._initialize_language_and_helpers(tracker)
         slots = dict(tracker.current_slot_values())
-        variant = resolve_seah_outro_variant(slots)
+        variant = self.resolve_seah_outro_variant(slots)
         language_code = tracker.get_slot("language_code") or "en"
 
-        row = None
-        try:
-            row = self.db_manager.find_seah_contact_point(
-                province=tracker.get_slot("complainant_province"),
-                district=tracker.get_slot("complainant_district"),
-                municipality=tracker.get_slot("complainant_municipality"),
-                ward=str(tracker.get_slot("complainant_ward") or ""),
-                project_uuid=tracker.get_slot("project_uuid"),
-            )
-        except Exception as e:
-            self.logger.warning(f"action_seah_outro: contact point lookup failed: {e}")
+        row = self.find_seah_contact_point(tracker)
 
         contact_block = ""
         events: List[Dict[Text, Any]] = []
         if row:
-            contact_block = "\n\n" + format_contact_point_block(row, language_code)
+            contact_block = "\n\n" + self.format_seah_contact_point_block(row, language_code)
             cid = row.get("seah_contact_point_id")
             if cid:
                 events.append(SlotSet("seah_contact_point_id", cid))

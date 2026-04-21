@@ -999,12 +999,12 @@ UTTERANCE_MAPPING = {
         'action_ask_form_seah_1_sensitive_issues_follow_up': {
             'utterances': {
                 1: {
-                    'en': "REPLACE_ME: You are entering the confidential SEAH/SEIA intake channel. You may proceed as identified or anonymous. This chatbot does not send SEAH updates by SMS.",
-                    'ne': "REPLACE_ME: तपाईं गोप्य SEAH/SEIA दर्ता च्यानलमा प्रवेश गर्दै हुनुहुन्छ। तपाईं पहिचान सहित वा गुमनाम रूपमा अघि बढ्न सक्नुहुन्छ। यस च्याटबटले SEAH अद्यावधिक SMS बाट पठाउँदैन।"
+                    'en': "REPLACE_ME: You are entering the confidential SEAH/SEIA intake channel. Choose one path to continue. This chatbot does not send SEAH updates by SMS.",
+                    'ne': "REPLACE_ME: तपाईं गोप्य SEAH/SEIA दर्ता च्यानलमा प्रवेश गर्दै हुनुहुन्छ। अगाडि बढ्न एउटा बाटो छान्नुहोस्। यस च्याटबटले SEAH अद्यावधिक SMS बाट पठाउँदैन।"
                 },
                 2: {
-                    'en': "Please choose identified or anonymous.",
-                    'ne': "कृपया पहिचान सहित वा गुमनाम विकल्प छान्नुहोस्।"
+                    'en': "Please choose SEAH focal point, anonymous grievance, or grievance with contact details.",
+                    'ne': "कृपया SEAH फोकल पोइन्ट, गुमनाम उजुरी, वा सम्पर्क विवरण सहित उजुरीमध्ये छान्नुहोस्।"
                 }
             },
             'buttons': {
@@ -1060,10 +1060,22 @@ Do you want to add more details before submission?""",
             'utterances': {1: {'en': "Please provide the name of the ADB project, or choose an option.", 'ne': "कृपया ADB आयोजनाको नाम दिनुहोस्, वा विकल्प छान्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_PROJECT_IDENTIFICATION}
         },
-        'action_ask_form_seah_focal_point_2_seah_focal_survivor_risks': {'utterances': {1: {'en': "What additional risks to health, safety, or wellbeing are present?", 'ne': "स्वास्थ्य, सुरक्षा वा कल्याणमा के थप जोखिमहरू छन्?"}}},
-        'action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures': {'utterances': {1: {'en': "In what way have you mitigated these risks?", 'ne': "यी जोखिमहरूलाई तपाईंले कसरी न्यूनीकरण गर्नुभयो?"}}},
-        'action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties': {'utterances': {1: {'en': "Aside from the survivor, who else is at risk?", 'ne': "पीडित बाहेक, अरू को जोखिममा छन्?"}}},
-        'action_ask_form_seah_focal_point_2_seah_focal_project_risk': {'utterances': {1: {'en': "Is there a risk to the ADB project?", 'ne': "के ADB आयोजनामा जोखिम छ?"}}},
+        'action_ask_form_seah_focal_point_2_seah_focal_survivor_risks': {
+            'utterances': {1: {'en': "What additional risks to health, safety, or wellbeing are present? Choose an option below, or type your own response.", 'ne': "स्वास्थ्य, सुरक्षा वा कल्याणमा के थप जोखिमहरू छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS}
+        },
+        'action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures': {
+            'utterances': {1: {'en': "In what way have you mitigated these risks? Choose an option below, or type your own response.", 'ne': "यी जोखिमहरूलाई तपाईंले कसरी न्यूनीकरण गर्नुभयो? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_MITIGATION_MEASURES}
+        },
+        'action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties': {
+            'utterances': {1: {'en': "Aside from the survivor, who else is at risk? Choose an option below, or type your own response.", 'ne': "पीडित बाहेक, अरू को जोखिममा छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES}
+        },
+        'action_ask_form_seah_focal_point_2_seah_focal_project_risk': {
+            'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के ADB आयोजनामा जोखिम छ? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_PROJECT_RISK}
+        },
         'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}}},
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {

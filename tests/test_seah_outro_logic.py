@@ -1,15 +1,26 @@
 import pytest
 
-from backend.actions.utils.seah_outro_logic import (
-    compute_seah_contact_provided,
-    resolve_seah_outro_variant,
-    seah_contact_provided_update,
-)
+from backend.actions.base_classes.base_classes import BaseAction
+
+
+class _SeahLogicHarness(BaseAction):
+    def name(self):
+        return "test_seah_logic_harness"
+
+    async def execute_action(self, dispatcher, tracker, domain):
+        return []
+
+
+def _logic() -> _SeahLogicHarness:
+    h = _SeahLogicHarness()
+    h.language_code = "en"
+    return h
 
 
 def test_resolve_focal_default():
+    logic = _logic()
     assert (
-        resolve_seah_outro_variant(
+        logic.resolve_seah_outro_variant(
             {"seah_victim_survivor_role": "focal_point"},
         )
         == "focal_default"
@@ -76,14 +87,17 @@ def test_resolve_focal_default():
     ],
 )
 def test_resolve_seah_matrix(slots, expected):
-    assert resolve_seah_outro_variant(slots) == expected
+    logic = _logic()
+    assert logic.resolve_seah_outro_variant(slots) == expected
 
 
 def test_compute_seah_contact_provided_valid_phone():
-    assert compute_seah_contact_provided({"complainant_phone": "9841234567"})
+    logic = _logic()
+    assert logic.compute_seah_contact_provided({"complainant_phone": "9841234567"})
 
 
 def test_seah_contact_provided_update_only_seah_intake():
+    logic = _logic()
     cur = {"complainant_phone": "9841234567", "complainant_email": None}
-    assert seah_contact_provided_update("new_grievance", cur, {}) == {}
-    assert seah_contact_provided_update("seah_intake", cur, {})["seah_contact_provided"] is True
+    assert logic.seah_contact_provided_update("new_grievance", cur, {}) == {}
+    assert logic.seah_contact_provided_update("seah_intake", cur, {})["seah_contact_provided"] is True

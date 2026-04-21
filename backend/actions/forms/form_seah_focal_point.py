@@ -5,11 +5,6 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
-from backend.actions.utils.seah_outro_logic import seah_contact_provided_update
-from backend.actions.utils.seah_project_catalog import (
-    build_seah_project_identification_buttons,
-    validate_seah_project_identification_value,
-)
 
 
 class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
@@ -94,7 +89,7 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
                     }
                 )
             updates.update(
-                seah_contact_provided_update(
+                self.seah_contact_provided_update(
                     tracker.get_slot("story_main"),
                     dict(tracker.current_slot_values()),
                     updates,
@@ -134,7 +129,7 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
                 "seah_anonymous_route": value == "anonymous",
             }
             merged.update(
-                seah_contact_provided_update(
+                self.seah_contact_provided_update(
                     tracker.get_slot("story_main"),
                     dict(tracker.current_slot_values()),
                     merged,
@@ -146,8 +141,10 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
     def _validate_text_or_skip(self, slot_value: Any, slot_name: Text) -> Dict[Text, Any]:
         if slot_value is None or slot_value == self.SKIP_VALUE:
             return {slot_name: self.SKIP_VALUE}
-        if isinstance(slot_value, str) and len(slot_value.strip()) >= 2:
-            return {slot_name: slot_value.strip()}
+        if isinstance(slot_value, str):
+            cleaned = slot_value.strip().lstrip("/")
+            if len(cleaned) >= 2:
+                return {slot_name: cleaned}
         return {slot_name: None}
 
 
@@ -209,8 +206,9 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         domain: DomainDict,
     ) -> Dict[Text, Any]:
         lang = getattr(self, "language_code", None) or tracker.get_slot("language_code") or "en"
-        return validate_seah_project_identification_value(
-            slot_value, self.SKIP_VALUE, self.db_manager, lang
+        return self.validate_seah_project_identification_value(
+            slot_value,
+            language_code=lang,
         )
 
     async def extract_sensitive_issues_new_detail(
@@ -292,12 +290,7 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
-        if isinstance(value, str):
-            value = value.lstrip("/")
-        if value in {"phone", "email", "both", "none"}:
-            return {"seah_contact_consent_channel": value}
-        return {"seah_contact_consent_channel": None}
+        return self.validate_seah_contact_channel_selection(slot_value, tracker)
 
     async def extract_seah_focal_survivor_risks(
         self,
@@ -471,10 +464,8 @@ class ActionAskFormSeahFocalPoint2SeahProjectIdentification(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_project_identification"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        self._initialize_language_and_helpers(tracker)
-        lang = self.language_code or "en"
-        buttons = build_seah_project_identification_buttons(
-            tracker, self.db_manager, lang, max_projects=12
+        buttons = self.build_seah_project_identification_buttons(
+            tracker, max_projects=12
         )
         dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []
@@ -547,7 +538,13 @@ class ActionAskFormSeahFocalPoint2SeahContactConsentChannel(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_contact_consent_channel"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        buttons = self.build_seah_contact_channel_buttons(
+            buttons=self.get_buttons(1),
+            phone_value=tracker.get_slot("complainant_phone"),
+            email_value=tracker.get_slot("complainant_email"),
+            skip_value=self.SKIP_VALUE,
+        )
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []
 
 
