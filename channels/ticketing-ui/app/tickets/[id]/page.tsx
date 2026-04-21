@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   getTicket, getSla, markSeen, performAction, replyToComplainant, getGrievancePii,
-  type TicketDetail, type SlaStatus, type GrievancePii,
+  listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
+  type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile, type OfficerBrief,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
@@ -92,6 +93,114 @@ function EventTimeline({ events }: { events: TicketDetail["events"] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── File attachments panel ───────────────────────────────────────────────────
+
+function FilesPanel({ ticketId }: { ticketId: string }) {
+  const [files, setFiles] = useState<TicketFile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listTicketFiles(ticketId)
+      .then(setFiles)
+      .catch(() => setFiles([]))
+      .finally(() => setLoading(false));
+  }, [ticketId]);
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  const fileIcon = (type: string) =>
+    type === "image" ? "🖼️" : type === "pdf" ? "📄" : "📎";
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">
+        Attachments
+      </h2>
+      {loading ? (
+        <div className="text-xs text-gray-400">Loading…</div>
+      ) : files.length === 0 ? (
+        <div className="text-xs text-gray-400">No files uploaded by complainant.</div>
+      ) : (
+        <div className="space-y-2">
+          {files.map((f) => (
+            <a
+              key={f.file_id}
+              href={getFileDownloadUrl(f.file_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group"
+            >
+              <span>{fileIcon(f.file_type)}</span>
+              <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
+              <span className="text-gray-400 shrink-0">{formatSize(f.file_size)}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Assign to officer panel ───────────────────────────────────────────────────
+
+function AssignPanel({ ticket, onRefresh }: { ticket: TicketDetail; onRefresh: () => void }) {
+  const [officers, setOfficers] = useState<OfficerBrief[]>([]);
+  const [selected, setSelected] = useState(ticket.assigned_to_user_id ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    listOfficers().then(setOfficers).catch(() => {});
+  }, []);
+
+  async function handleAssign() {
+    if (!selected || selected === ticket.assigned_to_user_id) return;
+    setSaving(true);
+    try {
+      await patchTicket(ticket.ticket_id, { assign_to_user_id: selected });
+      onRefresh();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">
+        Assignment
+      </h2>
+      <div className="space-y-2">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          <option value="">— Unassigned —</option>
+          {officers.map((o) => (
+            <option key={o.user_id} value={o.user_id}>
+              {o.user_id}{o.role_keys.length > 0 ? ` (${o.role_keys[0].replace(/_/g, " ")})` : ""}
+            </option>
+          ))}
+        </select>
+        {selected !== (ticket.assigned_to_user_id ?? "") && (
+          <button
+            onClick={handleAssign}
+            disabled={saving}
+            className="w-full text-xs bg-blue-600 text-white rounded px-2 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {saving ? "Saving…" : "Save assignment"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -444,13 +553,11 @@ export default function TicketDetailPage() {
           {/* Complainant info card */}
           <ComplainantCard ticket={ticket} />
 
-          {/* Assignment card */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Assignment</h2>
-            <div className="text-xs text-gray-600">
-              {ticket.assigned_to_user_id ?? <span className="text-gray-400">Unassigned</span>}
-            </div>
-          </div>
+          {/* File attachments */}
+          <FilesPanel ticketId={ticket.ticket_id} />
+
+          {/* Assignment */}
+          <AssignPanel ticket={ticket} onRefresh={load} />
 
           {/* Action panel */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">

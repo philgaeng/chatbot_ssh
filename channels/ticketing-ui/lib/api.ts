@@ -230,6 +230,38 @@ export async function getGrievancePii(grievanceId: string): Promise<GrievancePii
   return resp.json();
 }
 
+// ── Officers (for assign dropdown) ───────────────────────────────────────────
+
+export interface OfficerBrief {
+  user_id: string;
+  role_keys: string[];
+  organization_id: string | null;
+  location_code: string | null;
+}
+
+export function listOfficers(): Promise<OfficerBrief[]> {
+  return apiFetch<OfficerBrief[]>("/api/v1/users/officers");
+}
+
+// ── File attachments ──────────────────────────────────────────────────────────
+
+export interface TicketFile {
+  file_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  upload_timestamp: string;
+}
+
+export function listTicketFiles(ticketId: string): Promise<TicketFile[]> {
+  return apiFetch<TicketFile[]>(`/api/v1/tickets/${ticketId}/files`);
+}
+
+export function getFileDownloadUrl(fileId: string): string {
+  return `${BASE}/api/v1/files/${fileId}`;
+}
+
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 export function exportReport(params: {

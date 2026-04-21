@@ -5,6 +5,7 @@ INTEGRATION POINT: full Cognito invite flow (create user → Cognito invite → 
 is deferred to post-proto. For proto, role assignments are managed via seed data.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -100,6 +101,50 @@ def remove_role(
         raise HTTPException(status_code=404, detail="Role assignment not found")
     db.delete(user_role)
     db.commit()
+
+
+# ── Officers list (for assign dropdown) ──────────────────────────────────────
+
+class OfficerBrief(BaseModel):
+    user_id: str
+    role_keys: list[str]
+    organization_id: str | None = None
+    location_code: str | None = None
+
+
+@router.get(
+    "/users/officers",
+    response_model=list[OfficerBrief],
+    summary="List all officers with roles (for assign dropdown)",
+)
+def list_officers(
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+) -> list[OfficerBrief]:
+    """
+    Returns distinct user_ids from ticketing.user_roles with their role keys.
+    Used to populate the assign-to-officer dropdown in the ticket detail UI.
+    """
+    rows = db.execute(
+        select(UserRole.user_id, Role.role_key, UserRole.organization_id, UserRole.location_code)
+        .join(Role, Role.role_id == UserRole.role_id)
+        .order_by(UserRole.user_id, Role.role_key)
+    ).all()
+
+    # Group by user_id
+    by_user: dict[str, OfficerBrief] = {}
+    for user_id, role_key, org_id, loc_code in rows:
+        if user_id not in by_user:
+            by_user[user_id] = OfficerBrief(
+                user_id=user_id,
+                role_keys=[role_key],
+                organization_id=org_id,
+                location_code=loc_code,
+            )
+        else:
+            by_user[user_id].role_keys.append(role_key)
+
+    return list(by_user.values())
 
 
 # ── Notification badge ────────────────────────────────────────────────────────

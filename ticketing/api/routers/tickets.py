@@ -21,8 +21,11 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi.responses import FileResponse
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, verify_api_key
@@ -662,3 +665,77 @@ def mark_events_seen(
         .values(seen=True)
     )
     db.commit()
+
+
+# ─── GET /tickets/{id}/files — list chatbot-uploaded attachments ──────────────
+
+@router.get(
+    "/tickets/{ticket_id}/files",
+    summary="List file attachments uploaded by complainant via chatbot",
+)
+def list_ticket_files(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
+    """
+    Reads public.file_attachments for the grievance linked to this ticket.
+    Read-only — no join, separate query per architecture rules.
+    """
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    rows = db.execute(
+        text(
+            """
+            SELECT file_id::text, file_name, file_path, file_type, file_size, upload_timestamp
+            FROM public.file_attachments
+            WHERE grievance_id = :grievance_id
+            ORDER BY upload_timestamp
+            """
+        ),
+        {"grievance_id": ticket.grievance_id},
+    ).mappings().all()
+
+    return [dict(r) for r in rows]
+
+
+# ─── GET /files/{file_id} — stream attachment from disk ───────────────────────
+
+@router.get(
+    "/files/{file_id}",
+    summary="Download a file attachment by file_id",
+)
+def download_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+) -> FileResponse:
+    """
+    Streams a file from disk using the path stored in public.file_attachments.
+    """
+    row = db.execute(
+        text(
+            "SELECT file_name, file_path, file_type "
+            "FROM public.file_attachments WHERE file_id = :fid"
+        ),
+        {"fid": file_id},
+    ).mappings().one_or_none()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = row["file_path"]
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File not on disk")
+
+    media_type = (
+        "image/jpeg" if file_path.lower().endswith((".jpg", ".jpeg")) else
+        "image/png"  if file_path.lower().endswith(".png") else
+        "application/pdf" if file_path.lower().endswith(".pdf") else
+        "application/octet-stream"
+    )
+    return FileResponse(path=file_path, filename=row["file_name"], media_type=media_type)

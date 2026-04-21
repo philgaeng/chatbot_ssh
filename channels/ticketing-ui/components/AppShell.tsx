@@ -1,32 +1,53 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
 
 const NAV = [
-  { href: "/queue",   label: "My Queue",   icon: "🎫", badge: "action"   },
-  { href: "/tickets", label: "All Tickets", icon: "📋", badge: null       },
-  { href: "/escalated", label: "Escalated", icon: "🔺", badge: "escalated" },
+  { href: "/queue",     label: "My Queue",    icon: "🎫", badge: "action"   },
+  { href: "/tickets",   label: "All Tickets", icon: "📋", badge: null       },
+  { href: "/escalated", label: "Escalated",   icon: "🔺", badge: "escalated" },
   null, // divider
-  { href: "/reports", label: "Reports",    icon: "📊", badge: null       },
+  { href: "/reports",  label: "Reports",     icon: "📊", badge: null       },
   null,
-  { href: "/settings", label: "Settings",  icon: "⚙️",  badge: null, adminOnly: true },
-  { href: "/help",    label: "Help",       icon: "❓", badge: null       },
+  { href: "/settings", label: "Settings",    icon: "⚙️",  badge: null, adminOnly: true },
+  { href: "/help",     label: "Help",        icon: "❓", badge: null       },
 ] as const;
+
+// Routes that don't require authentication
+const PUBLIC_ROUTES = ["/login", "/auth/callback"];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, isAuthenticated, signOut, canSeeSeah } = useAuth();
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin } = useAuth();
   const [unseenCount, setUnseenCount] = useState(0);
+
+  // Route guard — redirect to /login if not authenticated
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated && !PUBLIC_ROUTES.includes(pathname)) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, pathname, router]);
 
   // Poll badge count on each navigation
   useEffect(() => {
     if (!isAuthenticated) return;
     getBadge().then((b) => setUnseenCount(b.unseen_count)).catch(() => {});
   }, [pathname, isAuthenticated]);
+
+  // Public routes and loading state — render without shell
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-sm text-gray-400">Loading…</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) return <>{children}</>;
 
@@ -44,13 +65,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV.map((item, i) => {
             if (item === null) return <div key={i} className="my-2 border-t border-slate-700" />;
-            if ("adminOnly" in item && item.adminOnly) {
-              // Only show settings if admin — for proto we always show it
-            }
+            // Hide admin-only items from non-admins
+            if ("adminOnly" in item && item.adminOnly && !isAdmin) return null;
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            const badgeCount =
-              item.badge === "action" ? unseenCount :
-              item.badge === "escalated" ? 0 : 0;
+            const badgeCount = item.badge === "action" ? unseenCount : 0;
 
             return (
               <Link
@@ -95,7 +113,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {/* Notification bell */}
             <button className="relative text-gray-400 hover:text-gray-600">
               🔔
               {unseenCount > 0 && (
