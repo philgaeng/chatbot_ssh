@@ -12,23 +12,45 @@ import { SlaCountdown } from "@/components/ui/SlaCountdown";
 type Tab = "my_queue" | "all" | "escalated" | "resolved";
 
 const TABS: { id: Tab; label: string; redBadge: boolean }[] = [
-  { id: "my_queue",  label: "My Queue",  redBadge: true  },
+  { id: "my_queue",  label: "My Queue",    redBadge: true  },
   { id: "all",       label: "All Tickets", redBadge: false },
-  { id: "escalated", label: "Escalated", redBadge: true  },
-  { id: "resolved",  label: "Resolved",  redBadge: false },
+  { id: "escalated", label: "Escalated",   redBadge: true  },
+  { id: "resolved",  label: "Resolved",    redBadge: false },
 ];
 
 // ── Summary tile ──────────────────────────────────────────────────────────────
 
 function SummaryTile({
-  label, count, sub, urgent = false, onClick,
-}: { label: string; count: number; sub?: string; urgent?: boolean; onClick?: () => void }) {
+  label, count, sub, urgent = false, warning = false, onClick,
+}: {
+  label: string;
+  count: number;
+  sub?: string;
+  urgent?: boolean;
+  warning?: boolean;
+  onClick?: () => void;
+}) {
+  const isRed    = urgent  && count > 0;
+  const isYellow = warning && count > 0;
+
+  const borderCls = isRed
+    ? "border-red-300 bg-red-50"
+    : isYellow
+    ? "border-yellow-300 bg-yellow-50"
+    : "border-gray-200 bg-white";
+
+  const countCls = isRed
+    ? "text-red-700 font-bold"
+    : isYellow
+    ? "text-yellow-800 font-bold"
+    : "text-gray-800 font-bold";
+
   return (
     <button
       onClick={onClick}
-      className={`bg-white rounded-lg border p-4 text-left hover:shadow-sm transition w-full ${urgent && count > 0 ? "border-red-300" : "border-gray-200"}`}
+      className={`rounded-lg border p-4 text-left hover:shadow-sm transition w-full ${borderCls}`}
     >
-      <div className={`text-2xl font-bold ${urgent && count > 0 ? "text-red-600" : "text-gray-800"}`}>{count}</div>
+      <div className={`text-2xl ${countCls}`}>{count}</div>
       <div className="text-sm font-medium text-gray-700 mt-0.5">{label}</div>
       {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
     </button>
@@ -94,6 +116,42 @@ export default function QueuePage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // ── My Queue tiles — fetched independently so they always reflect
+  //    the officer's own plate regardless of which tab is active. ──────────────
+  const [myQueueTickets, setMyQueueTickets] = useState<TicketListItem[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    listTickets({ my_queue: true, page_size: 50 })
+      .then((r) => setMyQueueTickets(r.items))
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  // Tile counts always come from My Queue, never from the current tab.
+  const actionNeeded = useMemo(
+    () => myQueueTickets.filter((t) => t.status_code === "OPEN" || t.unseen_event_count > 0).length,
+    [myQueueTickets],
+  );
+  const dueToday = useMemo(
+    () => myQueueTickets.filter((t) => !t.sla_breached && t.step_started_at !== null).length,
+    [myQueueTickets],
+  );
+  const overdue = useMemo(
+    () => myQueueTickets.filter((t) => t.sla_breached).length,
+    [myQueueTickets],
+  );
+
+  // ── Independent escalated count for the tab badge ─────────────────────────
+  const [escalatedTotal, setEscalatedTotal] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    listTickets({ status_code: "ESCALATED", page_size: 1 })
+      .then((r) => setEscalatedTotal(r.total))
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  // ── Tab ticket list ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
@@ -105,50 +163,44 @@ export default function QueuePage() {
       {};
 
     listTickets({ ...filters, page_size: 50 })
-      .then((r) => { setTickets(r.items); setTotal(r.total); })
+      .then((r) => {
+        setTickets(r.items);
+        setTotal(r.total);
+        // Sync escalated count when we land on that tab
+        if (activeTab === "escalated") setEscalatedTotal(r.total);
+        // Sync my queue tiles when we land on My Queue tab
+        if (activeTab === "my_queue") setMyQueueTickets(r.items);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activeTab, isAuthenticated]);
 
-  // Summary tile counts (derived from loaded tickets)
-  const actionNeeded = useMemo(
-    () => tickets.filter((t) => t.status_code === "OPEN" || t.unseen_event_count > 0).length,
-    [tickets],
-  );
-  const dueToday = useMemo(
-    () => tickets.filter((t) => {
-      // crude: step_started_at + small window — real check uses /sla
-      return !t.sla_breached && t.step_started_at !== null;
-    }).length,
-    [tickets],
-  );
-  const overdue = useMemo(() => tickets.filter((t) => t.sla_breached).length, [tickets]);
-
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-800">Officer Queue</h1>
         <p className="text-sm text-gray-500 mt-0.5">{total} ticket{total !== 1 ? "s" : ""}</p>
       </div>
 
-      {/* Summary tiles — My Queue only */}
-      {activeTab === "my_queue" && (
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <SummaryTile label="Action Needed" count={actionNeeded} sub="OPEN or unread" />
-          <SummaryTile label="Due Today" count={dueToday} sub="SLA < 24 h" />
-          <SummaryTile label="Overdue" count={overdue} sub="SLA breached" urgent />
-        </div>
-      )}
+      {/* Summary tiles — shown on all tabs */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <SummaryTile label="Action Needed" count={actionNeeded} sub="OPEN or unread" />
+        <SummaryTile label="Due Today"     count={dueToday}     sub="SLA &lt; 24 h" warning />
+        <SummaryTile label="Overdue"       count={overdue}      sub="SLA breached"   urgent />
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200 mb-4">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
-          const tabCount =
+          // Use the independent escalatedTotal for the Escalated tab badge
+          // so it shows the correct count regardless of which tab is active.
+          const tabBadgeCount =
+            tab.id === "escalated" ? escalatedTotal :
             tab.id === "my_queue"  ? total :
-            tab.id === "escalated" ? tickets.filter((t) => t.status_code === "ESCALATED").length :
             total;
+
           return (
             <button
               key={tab.id}
@@ -160,8 +212,8 @@ export default function QueuePage() {
               }`}
             >
               {tab.label}
-              {isActive && total > 0 && (
-                <CountBubble count={total} red={tab.redBadge} />
+              {tabBadgeCount > 0 && (
+                <CountBubble count={tabBadgeCount} red={tab.redBadge} />
               )}
             </button>
           );

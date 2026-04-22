@@ -5,7 +5,7 @@ ticketing.workflow_definitions, ticketing.workflow_steps, ticketing.workflow_ass
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -29,6 +29,12 @@ class WorkflowDefinition(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # "standard" or "seah"
     workflow_type: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
+    # "draft" | "published" | "archived"
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="published")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    template_source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    updated_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
@@ -69,6 +75,7 @@ class WorkflowStep(Base):
     resolution_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stakeholders: Mapped[list | None] = mapped_column(JSON, nullable=True)
     expected_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

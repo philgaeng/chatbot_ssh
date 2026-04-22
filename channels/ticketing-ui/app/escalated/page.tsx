@@ -58,7 +58,7 @@ export default function EscalatedPage() {
   }, [isAuthenticated]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
           🔺 Escalated Tickets

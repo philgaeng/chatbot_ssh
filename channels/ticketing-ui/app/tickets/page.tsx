@@ -67,7 +67,7 @@ export default function AllTicketsPage() {
     : tickets;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">All Tickets</h1>

@@ -31,7 +31,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-800">Reports</h1>
         <p className="text-sm text-gray-500 mt-0.5">

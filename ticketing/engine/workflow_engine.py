@@ -6,6 +6,7 @@ Responsibilities:
   - SLA deadline computation
   - SLA breach detection
   - Step display helpers for UI
+  - Officer auto-assignment (least-loaded within scope)
 
 This module is pure business logic — no side effects, no DB writes.
 All mutations happen in escalation.py (which calls these helpers).
@@ -215,3 +216,95 @@ def get_grc_member_user_ids(
 
     rows = db.execute(q).all()
     return [row[0] for row in rows]
+
+
+# ── Officer auto-assignment ───────────────────────────────────────────────────
+
+def auto_assign_officer(
+    role_key: str,
+    organization_id: str,
+    location_code: Optional[str],
+    project_code: Optional[str],
+    db: Session,
+) -> Optional[str]:
+    """
+    Find the best officer to assign a ticket to.
+
+    Selection:
+      1. Match on (role_key, org, location, project) — exact scope
+      2. Fallback: (role_key, org, location, None)
+      3. Fallback: (role_key, org, None, None)
+    Among candidates, pick the one with the fewest active (non-resolved) tickets.
+
+    Returns user_id or None if no officer is configured for this scope.
+    """
+    from sqlalchemy import func as sqlfunc
+    from ticketing.models.officer_scope import OfficerScope
+
+    for loc in ([location_code, None] if location_code else [None]):
+        for proj in ([project_code, None] if project_code else [None]):
+            candidates = db.execute(
+                select(OfficerScope.user_id).where(
+                    OfficerScope.role_key == role_key,
+                    OfficerScope.organization_id == organization_id,
+                    OfficerScope.location_code == loc,
+                    OfficerScope.project_code == proj,
+                )
+            ).scalars().all()
+
+            if not candidates:
+                continue
+
+            # Count active tickets per candidate
+            active_counts: dict[str, int] = dict(
+                db.execute(
+                    select(Ticket.assigned_to_user_id, sqlfunc.count(Ticket.ticket_id))
+                    .where(
+                        Ticket.assigned_to_user_id.in_(candidates),
+                        Ticket.status_code.notin_(["RESOLVED", "CLOSED"]),
+                        Ticket.is_deleted.is_(False),
+                    )
+                    .group_by(Ticket.assigned_to_user_id)
+                ).all()
+            )
+
+            # Pick least-loaded (0 active tickets wins if never seen)
+            return min(candidates, key=lambda uid: active_counts.get(uid, 0))
+
+    return None
+
+
+def get_teammates(
+    role_key: str,
+    organization_id: str,
+    location_code: Optional[str],
+    project_code: Optional[str],
+    exclude_user_id: Optional[str],
+    db: Session,
+) -> list[str]:
+    """
+    Return all officers with the same role + scope as the given ticket.
+    Used to populate the reassign dropdown. Excludes the currently assigned officer.
+    Falls back through scope hierarchy same as auto_assign_officer.
+    """
+    from ticketing.models.officer_scope import OfficerScope
+
+    seen: set[str] = set()
+    result: list[str] = []
+
+    for loc in ([location_code, None] if location_code else [None]):
+        for proj in ([project_code, None] if project_code else [None]):
+            rows = db.execute(
+                select(OfficerScope.user_id).where(
+                    OfficerScope.role_key == role_key,
+                    OfficerScope.organization_id == organization_id,
+                    OfficerScope.location_code == loc,
+                    OfficerScope.project_code == proj,
+                )
+            ).scalars().all()
+            for uid in rows:
+                if uid not in seen and uid != exclude_user_id:
+                    seen.add(uid)
+                    result.append(uid)
+
+    return result

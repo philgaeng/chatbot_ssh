@@ -105,6 +105,19 @@ export interface WorkflowStep {
   resolution_time_days: number | null;
   stakeholders: string[] | null;
   expected_actions: string[] | null;
+  is_deleted?: boolean;
+  workflow_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WorkflowAssignmentItem {
+  assignment_id: string;
+  workflow_id: string;
+  organization_id: string;
+  location_code: string | null;
+  project_code: string | null;
+  priority: string | null;
 }
 
 export interface WorkflowDefinition {
@@ -113,7 +126,14 @@ export interface WorkflowDefinition {
   display_name: string;
   description: string | null;
   workflow_type: string;
+  status: string;
+  version: number;
+  is_template: boolean;
+  template_source_id: string | null;
   steps: WorkflowStep[];
+  assignments: WorkflowAssignmentItem[];
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Fetch wrapper ─────────────────────────────────────────────────────────────
@@ -206,8 +226,85 @@ export function getBadge(): Promise<BadgeResponse> {
   return apiFetch<BadgeResponse>("/api/v1/users/me/badge");
 }
 
-export function listWorkflows(): Promise<{ items: WorkflowDefinition[]; total: number }> {
-  return apiFetch("/api/v1/workflows");
+export function listWorkflows(filters?: {
+  workflow_type?: string;
+  status?: string;
+  is_template?: boolean;
+}): Promise<{ items: WorkflowDefinition[]; total: number }> {
+  const p = new URLSearchParams();
+  if (filters?.workflow_type) p.set("workflow_type", filters.workflow_type);
+  if (filters?.status) p.set("status", filters.status);
+  if (filters?.is_template !== undefined) p.set("is_template", String(filters.is_template));
+  const qs = p.toString();
+  return apiFetch(`/api/v1/workflows${qs ? `?${qs}` : ""}`);
+}
+
+export function listTemplates(): Promise<{ items: WorkflowDefinition[]; total: number }> {
+  return apiFetch("/api/v1/workflows/templates");
+}
+
+export interface WorkflowCreatePayload {
+  display_name: string;
+  workflow_type: string;
+  description?: string;
+  clone_from_id?: string;
+}
+
+export function createWorkflow(payload: WorkflowCreatePayload): Promise<WorkflowDefinition> {
+  return apiFetch("/api/v1/workflows", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateWorkflow(id: string, payload: { display_name?: string; description?: string; workflow_key?: string }): Promise<WorkflowDefinition> {
+  return apiFetch(`/api/v1/workflows/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function publishWorkflow(id: string): Promise<WorkflowDefinition> {
+  return apiFetch(`/api/v1/workflows/${id}/publish`, { method: "POST" });
+}
+
+export function archiveWorkflow(id: string): Promise<WorkflowDefinition> {
+  return apiFetch(`/api/v1/workflows/${id}/archive`, { method: "POST" });
+}
+
+export interface StepPayload {
+  display_name: string;
+  assigned_role_key: string;
+  step_key?: string;
+  response_time_hours?: number | null;
+  resolution_time_days?: number | null;
+  stakeholders?: string[] | null;
+  expected_actions?: string[] | null;
+}
+
+export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/steps`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateStep(workflowId: string, stepId: string, payload: Partial<StepPayload>): Promise<WorkflowStep> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/steps/${stepId}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function deleteStep(workflowId: string, stepId: string): Promise<void> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/steps/${stepId}`, { method: "DELETE" });
+}
+
+export function reorderSteps(workflowId: string, stepIds: string[]): Promise<WorkflowStep[]> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/steps/reorder`, { method: "POST", body: JSON.stringify({ step_ids: stepIds }) });
+}
+
+export interface AssignmentPayload {
+  organization_id: string;
+  location_code?: string | null;
+  project_code?: string | null;
+  priority?: string | null;
+}
+
+export function addAssignment(workflowId: string, payload: AssignmentPayload): Promise<WorkflowAssignmentItem> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/assignments`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function removeAssignment(workflowId: string, assignmentId: string): Promise<void> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/assignments/${assignmentId}`, { method: "DELETE" });
 }
 
 // ── Grievance PII (fetched from backend API, NOT ticketing API) ───────────────
@@ -262,6 +359,46 @@ export function getFileDownloadUrl(fileId: string): string {
   return `${BASE}/api/v1/files/${fileId}`;
 }
 
+// ── Officer file attachments ──────────────────────────────────────────────────
+
+export interface OfficerAttachment {
+  file_id: string;
+  file_name: string;
+  file_type: string | null;
+  file_size: number;
+  caption: string | null;
+  uploaded_by_user_id: string | null;
+  uploaded_at: string;
+}
+
+export function listOfficerAttachments(ticketId: string): Promise<OfficerAttachment[]> {
+  return apiFetch<OfficerAttachment[]>(`/api/v1/tickets/${ticketId}/attachments`);
+}
+
+export function getOfficerAttachmentUrl(fileId: string): string {
+  return `${BASE}/api/v1/attachments/${fileId}`;
+}
+
+export async function uploadOfficerAttachment(
+  ticketId: string,
+  file: File,
+  caption: string,
+): Promise<OfficerAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("caption", caption);
+  // Do NOT set Content-Type — browser sets multipart boundary automatically
+  const resp = await fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    body: form,
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Upload failed ${resp.status}: ${body}`);
+  }
+  return resp.json();
+}
+
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 export function exportReport(params: {
@@ -274,4 +411,52 @@ export function exportReport(params: {
   if (params.date_to) p.set("date_to", params.date_to);
   if (params.organization_id) p.set("organization_id", params.organization_id);
   return `${BASE}/api/v1/reports/export?${p}`;
+}
+
+// ── Officer jurisdiction scopes ───────────────────────────────────────────────
+
+export interface OfficerScope {
+  scope_id: string;
+  user_id: string;
+  role_key: string;
+  organization_id: string;
+  location_code: string | null;
+  project_code: string | null;
+  created_at: string;
+}
+
+export interface ScopeCreate {
+  role_key: string;
+  organization_id: string;
+  location_code?: string | null;
+  project_code?: string | null;
+}
+
+export function listScopes(userId: string): Promise<OfficerScope[]> {
+  return apiFetch<OfficerScope[]>(`/api/v1/users/${userId}/scopes`);
+}
+
+export function addScope(userId: string, payload: ScopeCreate): Promise<OfficerScope> {
+  return apiFetch<OfficerScope>(`/api/v1/users/${userId}/scopes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteScope(userId: string, scopeId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/users/${userId}/scopes/${scopeId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Teammates (for reassign dropdown) ────────────────────────────────────────
+
+export interface TeammatesResponse {
+  ticket_id: string;
+  teammates: string[]; // user_ids
+}
+
+export function getTeammates(ticketId: string): Promise<TeammatesResponse> {
+  return apiFetch<TeammatesResponse>(`/api/v1/tickets/${ticketId}/teammates`);
 }

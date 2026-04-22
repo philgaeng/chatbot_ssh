@@ -4,6 +4,9 @@ Officer user management endpoints.
 INTEGRATION POINT: full Cognito invite flow (create user → Cognito invite → set password)
 is deferred to post-proto. For proto, role assignments are managed via seed data.
 """
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -16,6 +19,7 @@ from ticketing.api.schemas.user import (
     UserRoleCreate,
     UserRoleResponse,
 )
+from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import TicketEvent
 from ticketing.models.user import Role, UserRole
 
@@ -145,6 +149,111 @@ def list_officers(
             by_user[user_id].role_keys.append(role_key)
 
     return list(by_user.values())
+
+
+# ── Officer jurisdiction scopes ───────────────────────────────────────────────
+
+class ScopeCreate(BaseModel):
+    role_key: str
+    organization_id: str
+    location_code: Optional[str] = None
+    project_code: Optional[str] = None
+
+
+class ScopeResponse(BaseModel):
+    scope_id: str
+    user_id: str
+    role_key: str
+    organization_id: str
+    location_code: Optional[str]
+    project_code: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get(
+    "/users/{user_id}/scopes",
+    response_model=list[ScopeResponse],
+    summary="List jurisdiction scopes for an officer",
+)
+def get_user_scopes(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[OfficerScope]:
+    # Officers can view their own scopes; admins can view any
+    if user_id != current_user.user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return db.execute(
+        select(OfficerScope)
+        .where(OfficerScope.user_id == user_id)
+        .order_by(OfficerScope.created_at)
+    ).scalars().all()
+
+
+@router.post(
+    "/users/{user_id}/scopes",
+    response_model=ScopeResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a jurisdiction scope to an officer (local_admin or super_admin only)",
+)
+def add_user_scope(
+    user_id: str,
+    payload: ScopeCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerScope:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Prevent duplicate entries for the same (user, role, org, location, project)
+    existing = db.execute(
+        select(OfficerScope).where(
+            OfficerScope.user_id == user_id,
+            OfficerScope.role_key == payload.role_key,
+            OfficerScope.organization_id == payload.organization_id,
+            OfficerScope.location_code == payload.location_code,
+            OfficerScope.project_code == payload.project_code,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Scope already exists for this officer / role / jurisdiction combination",
+        )
+
+    scope = OfficerScope(
+        user_id=user_id,
+        role_key=payload.role_key,
+        organization_id=payload.organization_id,
+        location_code=payload.location_code,
+        project_code=payload.project_code,
+    )
+    db.add(scope)
+    db.commit()
+    db.refresh(scope)
+    return scope
+
+
+@router.delete(
+    "/users/{user_id}/scopes/{scope_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a jurisdiction scope from an officer (admin only)",
+)
+def remove_user_scope(
+    user_id: str,
+    scope_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    scope = db.get(OfficerScope, scope_id)
+    if not scope or scope.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Scope not found")
+    db.delete(scope)
+    db.commit()
 
 
 # ── Notification badge ────────────────────────────────────────────────────────

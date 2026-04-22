@@ -5,7 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import {
   getTicket, getSla, markSeen, performAction, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
-  type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile, type OfficerBrief,
+  listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
+  getTeammates,
+  type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
+  type OfficerBrief, type OfficerAttachment,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
@@ -99,16 +102,43 @@ function EventTimeline({ events }: { events: TicketDetail["events"] }) {
 
 // ── File attachments panel ───────────────────────────────────────────────────
 
-function FilesPanel({ ticketId }: { ticketId: string }) {
-  const [files, setFiles] = useState<TicketFile[]>([]);
+function FilesPanel({
+  ticketId,
+  onBeforeDownload,
+  isAssigned,
+  onUpload,
+}: {
+  ticketId: string;
+  onBeforeDownload: () => Promise<void>;
+  isAssigned: boolean;
+  onUpload: () => void; // refresh parent timeline after upload
+}) {
+  // Complainant files (read-only, from public.file_attachments)
+  const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
+  // Officer-uploaded files (from ticketing.ticket_files)
+  const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    listTicketFiles(ticketId)
-      .then(setFiles)
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
-  }, [ticketId]);
+  // Upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function loadFiles() {
+    try {
+      const [cf, of_] = await Promise.all([
+        listTicketFiles(ticketId).catch(() => [] as TicketFile[]),
+        listOfficerAttachments(ticketId).catch(() => [] as OfficerAttachment[]),
+      ]);
+      setComplainantFiles(cf);
+      setOfficerFiles(of_);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadFiles(); }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -116,33 +146,114 @@ function FilesPanel({ ticketId }: { ticketId: string }) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  const fileIcon = (type: string) =>
+  const fileIcon = (type: string | null) =>
     type === "image" ? "🖼️" : type === "pdf" ? "📄" : "📎";
 
+  async function handleComplainantDownload(fileId: string) {
+    await onBeforeDownload();
+    window.open(getFileDownloadUrl(fileId), "_blank", "noopener,noreferrer");
+  }
+
+  async function handleUpload() {
+    if (!selectedFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await onBeforeDownload(); // auto-acknowledge if OPEN/ESCALATED
+      await uploadOfficerAttachment(ticketId, selectedFile, caption);
+      setSelectedFile(null);
+      setCaption("");
+      await loadFiles();
+      onUpload(); // refresh timeline in parent
+    } catch (e) {
+      setUploadError(String(e));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
+      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
         Attachments
       </h2>
-      {loading ? (
-        <div className="text-xs text-gray-400">Loading…</div>
-      ) : files.length === 0 ? (
-        <div className="text-xs text-gray-400">No files uploaded by complainant.</div>
-      ) : (
-        <div className="space-y-2">
-          {files.map((f) => (
-            <a
-              key={f.file_id}
-              href={getFileDownloadUrl(f.file_id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group"
-            >
-              <span>{fileIcon(f.file_type)}</span>
-              <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
-              <span className="text-gray-400 shrink-0">{formatSize(f.file_size)}</span>
-            </a>
-          ))}
+
+      {/* Complainant files */}
+      <div>
+        <div className="text-xs font-medium text-gray-400 mb-1.5">From complainant</div>
+        {loading ? (
+          <div className="text-xs text-gray-400">Loading…</div>
+        ) : complainantFiles.length === 0 ? (
+          <div className="text-xs text-gray-400 italic">No files uploaded by complainant.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {complainantFiles.map((f) => (
+              <button
+                key={f.file_id}
+                onClick={() => handleComplainantDownload(f.file_id)}
+                className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group w-full text-left"
+              >
+                <span>{fileIcon(f.file_type)}</span>
+                <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
+                <span className="text-gray-400 shrink-0">{formatSize(f.file_size)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Officer-uploaded files */}
+      <div>
+        <div className="text-xs font-medium text-gray-400 mb-1.5">Officer attachments</div>
+        {officerFiles.length === 0 ? (
+          <div className="text-xs text-gray-400 italic">No officer files attached yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {officerFiles.map((f) => (
+              <div key={f.file_id} className="flex items-start gap-2">
+                <button
+                  onClick={() => window.open(getOfficerAttachmentUrl(f.file_id), "_blank", "noopener,noreferrer")}
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 group shrink-0"
+                >
+                  <span>{fileIcon(f.file_type)}</span>
+                  <span className="group-hover:underline max-w-[120px] truncate">{f.file_name}</span>
+                  <span className="text-gray-400">{formatSize(f.file_size)}</span>
+                </button>
+                {f.caption && (
+                  <span className="text-xs text-gray-500 italic flex-1 min-w-0 truncate">{f.caption}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Upload form — assigned officer only */}
+      {isAssigned && (
+        <div className="border-t border-gray-100 pt-3 space-y-2">
+          <div className="text-xs font-medium text-gray-500">Attach a document</div>
+          <input
+            type="file"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+            className="text-xs text-gray-600 w-full"
+          />
+          <input
+            type="text"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            placeholder="Caption (optional)…"
+            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+          {uploadError && (
+            <div className="text-xs text-red-500">{uploadError}</div>
+          )}
+          <button
+            onClick={handleUpload}
+            disabled={!selectedFile || uploading}
+            className="w-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded px-2 py-1.5 disabled:opacity-50 transition font-medium"
+          >
+            {uploading ? "Uploading…" : "📎 Upload"}
+          </button>
         </div>
       )}
     </div>
@@ -205,12 +316,80 @@ function AssignPanel({ ticket, onRefresh }: { ticket: TicketDetail; onRefresh: (
   );
 }
 
+// ── Reassign to teammate panel ─────────────────────────────────────────────────
+
+function ReassignPanel({ ticket, onRefresh }: { ticket: TicketDetail; onRefresh: () => void }) {
+  const [teammates, setTeammates] = useState<string[]>([]);
+  const [selected, setSelected] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    getTeammates(ticket.ticket_id)
+      .then((r) => setTeammates(r.teammates))
+      .catch(() => setTeammates([]));
+  }, [ticket.ticket_id]);
+
+  if (teammates.length === 0) return null;
+
+  async function handleReassign() {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await patchTicket(ticket.ticket_id, { assign_to_user_id: selected });
+      setDone(true);
+      setSelected("");
+      onRefresh();
+      setTimeout(() => setDone(false), 2000);
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">
+        Reassign to Teammate
+      </h2>
+      <div className="space-y-2">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          <option value="">— Select colleague —</option>
+          {teammates.map((uid) => (
+            <option key={uid} value={uid}>{uid}</option>
+          ))}
+        </select>
+        {selected && (
+          <button
+            onClick={handleReassign}
+            disabled={saving}
+            className="w-full text-xs bg-slate-600 text-white rounded px-2 py-1.5 hover:bg-slate-700 disabled:opacity-50 transition"
+          >
+            {saving ? "Reassigning…" : done ? "✓ Reassigned" : "Reassign ticket"}
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">
+        Only officers with the same role in this jurisdiction are shown.
+      </p>
+    </div>
+  );
+}
+
+
 // ── Action panel ──────────────────────────────────────────────────────────────
 
-function ActionPanel({ ticket, roleKeys, onRefresh }: {
+function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssigned }: {
   ticket: TicketDetail;
   roleKeys: string[];
   onRefresh: () => void;
+  ensureAcknowledged: () => Promise<void>;
+  isAssigned: boolean;
 }) {
   const [note, setNote] = useState("");
   const [replyText, setReplyText] = useState("");
@@ -225,6 +404,8 @@ function ActionPanel({ ticket, roleKeys, onRefresh }: {
   async function act(action_type: string, extra?: Record<string, string>) {
     setLoading(true);
     try {
+      // Auto-acknowledge before any action when ticket is still OPEN
+      if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
       await performAction(ticket.ticket_id, { action_type, note: note || undefined, ...extra });
       setNote("");
       onRefresh();
@@ -239,6 +420,7 @@ function ActionPanel({ ticket, roleKeys, onRefresh }: {
     if (!replyText.trim()) return;
     setLoading(true);
     try {
+      await ensureAcknowledged();
       await replyToComplainant(ticket.ticket_id, replyText);
       setReplyText("");
       onRefresh();
@@ -251,70 +433,87 @@ function ActionPanel({ ticket, roleKeys, onRefresh }: {
 
   const btnBase = "px-3 py-1.5 rounded text-sm font-medium transition disabled:opacity-50";
 
+  // Statuses where no further status-changes make sense
+  const isClosed = ["RESOLVED", "CLOSED"].includes(status);
+  // Escalated = awaiting the next-level officer's acknowledgement
+  const isEscalated = status === "ESCALATED";
+
   return (
     <div className="space-y-4">
-      {/* Primary actions */}
-      <div className="flex flex-wrap gap-2">
-        {status === "OPEN" && (
-          <button onClick={() => act("ACKNOWLEDGE")} disabled={loading}
-            className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
-            ✅ Acknowledge
-          </button>
-        )}
-        {!["RESOLVED", "CLOSED"].includes(status) && (
-          <button onClick={() => act("ESCALATE")} disabled={loading}
-            className={`${btnBase} bg-orange-500 text-white hover:bg-orange-600`}>
-            🔺 Escalate
-          </button>
-        )}
-        {!["RESOLVED", "CLOSED"].includes(status) && (
-          <button onClick={() => act("RESOLVE")} disabled={loading}
-            className={`${btnBase} bg-green-600 text-white hover:bg-green-700`}>
-            🏁 Resolve
-          </button>
-        )}
-        {!["RESOLVED", "CLOSED"].includes(status) && (
-          <button onClick={() => act("CLOSE")} disabled={loading}
-            className={`${btnBase} bg-gray-400 text-white hover:bg-gray-500`}>
-            Close
-          </button>
-        )}
 
-        {/* GRC Convene */}
-        {isGrcChair && stepKey === "LEVEL_3_GRC" && status !== "GRC_HEARING_SCHEDULED" && (
-          <div className="flex gap-2 items-center w-full mt-1">
-            <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1.5" />
-            <button
-              onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })}
-              disabled={loading}
-              className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700`}
-            >
-              🏛️ Convene GRC
+      {/* Non-assigned officer banner */}
+      {!isAssigned && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          This ticket is assigned to another officer. You can add notes but cannot change its status.
+        </div>
+      )}
+
+      {/* Primary actions — only for the assigned officer */}
+      {isAssigned && (
+        <div className="flex flex-wrap gap-2">
+          {/* Acknowledge — shown for OPEN or ESCALATED (L2 pickup) */}
+          {(status === "OPEN" || isEscalated) && (
+            <button onClick={() => act("ACKNOWLEDGE")} disabled={loading}
+              className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
+              ✅ Acknowledge
             </button>
-          </div>
-        )}
-
-        {/* GRC Decide */}
-        {isGrcChair && status === "GRC_HEARING_SCHEDULED" && (
-          <div className="flex gap-2 items-center w-full mt-1">
-            <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
-              className="text-sm border border-gray-300 rounded px-2 py-1.5">
-              <option value="RESOLVED">Decision: Resolved</option>
-              <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
-            </select>
-            <button
-              onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })}
-              disabled={loading}
-              className={`${btnBase} bg-purple-700 text-white hover:bg-purple-800`}
-            >
-              ⚖️ Record Decision
+          )}
+          {/* Escalate / Resolve / Close — not available while ESCALATED (must acknowledge first) */}
+          {!isClosed && !isEscalated && (
+            <button onClick={() => act("ESCALATE")} disabled={loading}
+              className={`${btnBase} bg-orange-500 text-white hover:bg-orange-600`}>
+              🔺 Escalate
             </button>
-          </div>
-        )}
-      </div>
+          )}
+          {!isClosed && !isEscalated && (
+            <button onClick={() => act("RESOLVE")} disabled={loading}
+              className={`${btnBase} bg-green-600 text-white hover:bg-green-700`}>
+              🏁 Resolve
+            </button>
+          )}
+          {!isClosed && !isEscalated && (
+            <button onClick={() => act("CLOSE")} disabled={loading}
+              className={`${btnBase} bg-gray-400 text-white hover:bg-gray-500`}>
+              Close
+            </button>
+          )}
 
-      {/* Internal note */}
+          {/* GRC Convene — only once acknowledged (not while ESCALATED) */}
+          {isGrcChair && stepKey === "LEVEL_3_GRC" && !isEscalated && status !== "GRC_HEARING_SCHEDULED" && (
+            <div className="flex gap-2 items-center w-full mt-1">
+              <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
+                className="text-sm border border-gray-300 rounded px-2 py-1.5" />
+              <button
+                onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })}
+                disabled={loading}
+                className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700`}
+              >
+                🏛️ Convene GRC
+              </button>
+            </div>
+          )}
+
+          {/* GRC Decide */}
+          {isGrcChair && status === "GRC_HEARING_SCHEDULED" && (
+            <div className="flex gap-2 items-center w-full mt-1">
+              <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
+                className="text-sm border border-gray-300 rounded px-2 py-1.5">
+                <option value="RESOLVED">Decision: Resolved</option>
+                <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
+              </select>
+              <button
+                onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })}
+                disabled={loading}
+                className={`${btnBase} bg-purple-700 text-white hover:bg-purple-800`}
+              >
+                ⚖️ Record Decision
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Internal note — available to all officers */}
       <div>
         <label className="text-xs font-medium text-gray-500 block mb-1">Internal Note 🔒</label>
         <textarea
@@ -333,24 +532,26 @@ function ActionPanel({ ticket, roleKeys, onRefresh }: {
         </button>
       </div>
 
-      {/* Reply to complainant */}
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Reply to Complainant 💬</label>
-        <textarea
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          rows={3}
-          placeholder="Message sent via chatbot (SMS fallback if session expired)…"
-          className="w-full text-sm border border-gray-200 rounded px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
-        />
-        <button
-          onClick={sendReply}
-          disabled={!replyText.trim() || loading}
-          className={`mt-1 ${btnBase} bg-blue-50 text-blue-700 hover:bg-blue-100`}
-        >
-          Send Reply
-        </button>
-      </div>
+      {/* Reply to complainant — only for the assigned officer */}
+      {isAssigned && (
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Reply to Complainant 💬</label>
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            rows={3}
+            placeholder="Message sent via chatbot (SMS fallback if session expired)…"
+            className="w-full text-sm border border-gray-200 rounded px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+          <button
+            onClick={sendReply}
+            disabled={!replyText.trim() || loading}
+            className={`mt-1 ${btnBase} bg-blue-50 text-blue-700 hover:bg-blue-100`}
+          >
+            Send Reply
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -436,7 +637,7 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { roleKeys, canSeeSeah } = useAuth();
+  const { user, roleKeys, canSeeSeah, isAdmin } = useAuth();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [sla, setSla] = useState<SlaStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -456,6 +657,24 @@ export default function TicketDetailPage() {
     }
   }
 
+  // True when the current user is the assigned officer (or an admin).
+  // Non-assigned officers can view and add notes but cannot change ticket status.
+  const isAssigned =
+    isAdmin ||
+    !ticket?.assigned_to_user_id ||
+    ticket?.assigned_to_user_id === user?.sub;
+
+  // Silently acknowledge before any officer action.
+  // Fires for both OPEN (L1) and ESCALATED (L2 picking up the ticket).
+  // Escalation resets step_started_at to null — the SLA clock restarts on acknowledge.
+  // Only fires for the assigned officer — non-assigned officers cannot acknowledge.
+  async function ensureAcknowledged() {
+    if (!ticket || !["OPEN", "ESCALATED"].includes(ticket.status_code)) return;
+    if (!isAssigned) return;
+    await performAction(id, { action_type: "ACKNOWLEDGE" });
+    await load();
+  }
+
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="p-8 text-gray-400 text-sm">Loading…</div>;
@@ -468,7 +687,7 @@ export default function TicketDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       {/* Back */}
       <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1">
         ← Back to queue
@@ -554,15 +773,23 @@ export default function TicketDetailPage() {
           <ComplainantCard ticket={ticket} />
 
           {/* File attachments */}
-          <FilesPanel ticketId={ticket.ticket_id} />
+          <FilesPanel
+            ticketId={ticket.ticket_id}
+            onBeforeDownload={ensureAcknowledged}
+            isAssigned={isAssigned}
+            onUpload={load}
+          />
 
           {/* Assignment */}
           <AssignPanel ticket={ticket} onRefresh={load} />
 
+          {/* Reassign to teammate (shown when there are colleagues in same scope) */}
+          <ReassignPanel ticket={ticket} onRefresh={load} />
+
           {/* Action panel */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Actions</h2>
-            <ActionPanel ticket={ticket} roleKeys={roleKeys} onRefresh={load} />
+            <ActionPanel ticket={ticket} roleKeys={roleKeys} onRefresh={load} ensureAcknowledged={ensureAcknowledged} isAssigned={isAssigned} />
           </div>
         </div>
       </div>

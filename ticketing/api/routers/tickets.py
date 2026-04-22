@@ -22,10 +22,12 @@ from typing import Optional
 import uuid
 
 import os
+import shutil
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, verify_api_key
@@ -44,8 +46,10 @@ from ticketing.api.schemas.ticket import (
 )
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
-from ticketing.engine.workflow_engine import get_current_step, sla_status
+from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
+from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
+from ticketing.models.ticket_file import TicketFile
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
@@ -201,6 +205,17 @@ def create_ticket(
     )
     first_step = _first_step(db, workflow.workflow_id)
 
+    # Auto-assign to least-loaded officer for the first workflow step
+    auto_assigned_id: Optional[str] = None
+    if first_step:
+        auto_assigned_id = auto_assign_officer(
+            role_key=first_step.assigned_role_key,
+            organization_id=payload.organization_id,
+            location_code=payload.location_code,
+            project_code=payload.project_code,
+            db=db,
+        )
+
     ticket = Ticket(
         ticket_id=_new_id(),
         grievance_id=payload.grievance_id,
@@ -217,6 +232,7 @@ def create_ticket(
         status_code="OPEN",
         current_workflow_id=workflow.workflow_id,
         current_step_id=first_step.step_id if first_step else None,
+        assigned_to_user_id=auto_assigned_id,
         priority=payload.priority,
         is_seah=payload.is_seah,
         is_deleted=False,
@@ -268,6 +284,27 @@ def list_tickets(
         q = q.where(Ticket.is_seah.is_(False))
     elif is_seah is not None:
         q = q.where(Ticket.is_seah.is_(is_seah))
+
+    # ── Scope filter: non-admins only see tickets in their jurisdictions ──
+    # Admins (super_admin, local_admin) and observers see all; field officers are scoped.
+    if not current_user.is_admin:
+        scopes = db.execute(
+            select(OfficerScope).where(OfficerScope.user_id == current_user.user_id)
+        ).scalars().all()
+
+        if not scopes:
+            # No scope rows at all → officer only sees tickets explicitly assigned to them
+            q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
+        else:
+            scope_conditions = []
+            for scope in scopes:
+                parts: list = [Ticket.organization_id == scope.organization_id]
+                if scope.location_code:
+                    parts.append(Ticket.location_code == scope.location_code)
+                if scope.project_code:
+                    parts.append(Ticket.project_code == scope.project_code)
+                scope_conditions.append(and_(*parts))
+            q = q.where(or_(*scope_conditions))
 
     if my_queue:
         q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
@@ -450,6 +487,31 @@ def perform_action(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Assignment guard — only the assigned officer (or admin) may change ticket status.
+    # NOTE is always allowed so any officer can add internal notes.
+    ASSIGNMENT_REQUIRED = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "GRC_CONVENE", "GRC_DECIDE"}
+    if action in ASSIGNMENT_REQUIRED and not current_user.is_admin:
+        if ticket.assigned_to_user_id and ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Only the assigned officer ({ticket.assigned_to_user_id}) "
+                    "can change the status of this ticket. You can still add notes."
+                ),
+            )
+
+    # Status guard — once ESCALATED only ACKNOWLEDGE or NOTE are allowed until
+    # the next-level officer acknowledges and takes ownership.
+    ESCALATED_BLOCKED = {"ESCALATE", "RESOLVE", "CLOSE", "GRC_CONVENE", "GRC_DECIDE"}
+    if ticket.status_code == "ESCALATED" and action in ESCALATED_BLOCKED:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Cannot perform {action!r} on an ESCALATED ticket. "
+                "Acknowledge the ticket first to take ownership at the new level."
+            ),
+        )
+
     old_status = ticket.status_code
     event_step_id = ticket.current_step_id
     event = None
@@ -570,6 +632,14 @@ def reply_to_complainant(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Only the assigned officer (or admin) may reply to the complainant.
+    if not current_user.is_admin:
+        if ticket.assigned_to_user_id and ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the assigned officer can reply to the complainant.",
+            )
+
     delivered = False
     detail = None
 
@@ -637,6 +707,43 @@ def get_sla(
         "step_started_at": ticket.step_started_at,
         **info,
     }
+
+
+# ─── GET /tickets/{ticket_id}/teammates — reassign dropdown ──────────────────
+
+@router.get(
+    "/tickets/{ticket_id}/teammates",
+    summary="List officers that can be reassigned this ticket (same role + scope)",
+)
+def get_ticket_teammates(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Returns user_ids of officers in the same role + jurisdiction as the ticket's
+    current step, excluding the currently assigned officer.
+    Used to populate the Reassign To dropdown in the case view.
+    """
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    step = get_current_step(ticket, db)
+    if not step:
+        return {"ticket_id": ticket_id, "teammates": []}
+
+    teammates = get_teammates(
+        role_key=step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        exclude_user_id=ticket.assigned_to_user_id,
+        db=db,
+    )
+    return {"ticket_id": ticket_id, "teammates": teammates}
 
 
 # ─── POST /tickets/{ticket_id}/seen — clear notification badge ───────────────
@@ -739,3 +846,148 @@ def download_file(
         "application/octet-stream"
     )
     return FileResponse(path=file_path, filename=row["file_name"], media_type=media_type)
+
+
+# ─── POST /tickets/{ticket_id}/attachments — officer file upload ──────────────
+
+@router.post(
+    "/tickets/{ticket_id}/attachments",
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a file attachment as an officer (with optional caption)",
+)
+async def upload_officer_attachment(
+    ticket_id: str,
+    file: UploadFile = File(...),
+    caption: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Save file to uploads/ticketing/{ticket_id}/
+    upload_dir = Path("uploads") / "ticketing" / ticket_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    file_id = _new_id()
+    original_name = file.filename or "upload"
+    suffix = Path(original_name).suffix or ""
+    dest = upload_dir / f"{file_id}{suffix}"
+
+    with dest.open("wb") as buf:
+        shutil.copyfileobj(file.file, buf)
+
+    file_size = dest.stat().st_size
+    # Derive a simple file_type category from MIME or extension
+    mime = file.content_type or ""
+    if mime.startswith("image/"):
+        file_type = "image"
+    elif mime == "application/pdf" or suffix.lower() == ".pdf":
+        file_type = "pdf"
+    else:
+        file_type = "document"
+
+    tf = TicketFile(
+        file_id=file_id,
+        ticket_id=ticket_id,
+        file_name=original_name,
+        file_path=str(dest),
+        file_type=file_type,
+        file_size=file_size,
+        caption=caption.strip() or None,
+        uploaded_by_user_id=current_user.user_id,
+    )
+    db.add(tf)
+
+    # Add an internal note event so the upload appears in the case timeline
+    note_text = f"📎 Attached: {original_name}"
+    if caption.strip():
+        note_text += f" — {caption.strip()}"
+    _add_event(
+        db, ticket, "NOTE_ADDED",
+        step_id=ticket.current_step_id,
+        note=note_text,
+        payload={"file_id": file_id, "internal": True},
+        created_by=current_user.user_id,
+        seen=True,
+    )
+
+    db.commit()
+    db.refresh(tf)
+
+    return {
+        "file_id": tf.file_id,
+        "ticket_id": tf.ticket_id,
+        "file_name": tf.file_name,
+        "file_type": tf.file_type,
+        "file_size": tf.file_size,
+        "caption": tf.caption,
+        "uploaded_by_user_id": tf.uploaded_by_user_id,
+        "uploaded_at": tf.uploaded_at,
+    }
+
+
+# ─── GET /tickets/{ticket_id}/attachments — list officer uploads ──────────────
+
+@router.get(
+    "/tickets/{ticket_id}/attachments",
+    summary="List officer-uploaded attachments for a ticket",
+)
+def list_officer_attachments(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    files = db.execute(
+        select(TicketFile)
+        .where(TicketFile.ticket_id == ticket_id)
+        .order_by(TicketFile.uploaded_at)
+    ).scalars().all()
+
+    return [
+        {
+            "file_id": f.file_id,
+            "file_name": f.file_name,
+            "file_type": f.file_type,
+            "file_size": f.file_size,
+            "caption": f.caption,
+            "uploaded_by_user_id": f.uploaded_by_user_id,
+            "uploaded_at": f.uploaded_at,
+        }
+        for f in files
+    ]
+
+
+# ─── GET /attachments/{file_id} — download officer upload ─────────────────────
+
+@router.get(
+    "/attachments/{file_id}",
+    summary="Download an officer-uploaded attachment",
+)
+def download_officer_attachment(
+    file_id: str,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+) -> FileResponse:
+    tf = db.get(TicketFile, file_id)
+    if not tf:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if not os.path.isfile(tf.file_path):
+        raise HTTPException(status_code=404, detail="File not on disk")
+
+    media_type = (
+        "image/jpeg" if tf.file_path.lower().endswith((".jpg", ".jpeg")) else
+        "image/png"  if tf.file_path.lower().endswith(".png") else
+        "application/pdf" if tf.file_path.lower().endswith(".pdf") else
+        "application/octet-stream"
+    )
+    return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
