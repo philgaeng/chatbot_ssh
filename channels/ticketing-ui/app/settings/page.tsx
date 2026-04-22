@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
   listWorkflows,
@@ -444,8 +444,8 @@ function OfficersTab() {
               const rowId = `mock-${i}`;
               const isOpen = expandedId === rowId;
               return (
-                <>
-                  <tr key={rowId} className="border-t border-gray-100 hover:bg-gray-50">
+                <React.Fragment key={rowId}>
+                  <tr className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-2 py-2.5 text-center">
                       <button
                         onClick={() => setExpandedId(isOpen ? null : rowId)}
@@ -481,7 +481,7 @@ function OfficersTab() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
