@@ -368,6 +368,28 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
 
         return result
 
+    def validate_seah_contact_channel_selection(
+        self,
+        slot_value: Any,
+        tracker: Tracker,
+    ) -> Dict[Text, Any]:
+        """
+        Validate follow-up contact channel against available phone/email details.
+        Shared across SEAH forms to keep behavior consistent across paths.
+        """
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        allowed_channels = set(
+            self.get_available_seah_contact_channels(
+                phone_value=tracker.get_slot("complainant_phone"),
+                email_value=tracker.get_slot("complainant_email"),
+            )
+        )
+        if value in allowed_channels:
+            return {"seah_contact_consent_channel": value}
+        return {"seah_contact_consent_channel": None}
+
     async def extract_complainant_phone(
         self,
         dispatcher: CollectingDispatcher,

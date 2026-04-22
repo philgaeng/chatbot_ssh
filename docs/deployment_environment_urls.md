@@ -28,6 +28,23 @@ This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/
 
 If you run the stack in Compose, set `upstreams` to **service names** (e.g. `http://backend:5001`) instead of `localhost`. The manifest should document both “host-run” and “compose” variants in `notes` or duplicate blocks if you maintain two layouts.
 
+### Compose nginx naming + defaults
+
+To avoid local TLS breakage and make intent explicit, Compose nginx configs are now split by environment:
+
+- `deployment/nginx/webchat_rest_compose_wsl.conf` — **WSL/local compose** (HTTP only, no certs, upstreams by service name)
+- `deployment/nginx/webchat_rest_compose_aws.conf` — **AWS compose** (HTTP->HTTPS redirect + certbot mounts + TLS cert paths)
+
+Compose files:
+
+- `docker-compose.yml` defaults to **WSL/local** behavior and maps only `80:80`.
+- `docker-compose.aws.yml` is an override for AWS TLS deployment.
+
+Run commands:
+
+- Local WSL: `docker compose up -d --build`
+- AWS/TLS compose: `docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d --build`
+
 ## Related
 
 - Deployment and data architecture (Phase 1 → 2): [`deployment refactor/deployment_and_data_architecture.md`](deployment%20refactor/deployment_and_data_architecture.md)

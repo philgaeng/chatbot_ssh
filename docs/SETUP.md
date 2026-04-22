@@ -2,6 +2,8 @@
 
 Complete installation and deployment guide for the Nepal Chatbot system.
 
+> Note: the current runtime path is Docker Compose. For deployment details use `deployment/docker/README.md`; for schema changes use `docs/MIGRATIONS_POLICY.md` (Alembic-first).
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -193,69 +195,40 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ```bash
 # Run database initialization
-python scripts/database/init.py
+docker compose --profile init run --rm db_init
 
 # Verify tables created
 psql -U nepal_grievance_admin -d grievance_db -c "\dt"
 ```
 
-### 8. Train Rasa Model
+### 8. Runtime Model Notes
 
 ```bash
-cd rasa_chatbot
-rasa train
-cd ..
+# No standalone Rasa runtime/model-training step in the Docker path.
+# Conversation flow runs through orchestrator + in-process Rasa SDK actions.
+docker compose ps
 ```
 
-This will create a trained model in `rasa_chatbot/models/`.
+Use historical `rasa_chatbot` training commands only for legacy experiments, not current deploy flow.
 
-### 9. Start Services
-
-**Option A: Use Launch Script (Recommended)**
+### 9. Start Services (Docker-only)
 
 ```bash
-# Make script executable
-chmod +x scripts/local/launch_servers.sh
-
-# Start all services
-./scripts/local/launch_servers.sh
-```
-
-**Option B: Start Manually**
-
-```bash
-# Terminal 1: Start Redis
-redis-server
-
-# Terminal 2: Start Rasa server
-cd rasa_chatbot
-rasa run --enable-api --cors "*" --port 5005
-
-# Terminal 3: Start Action server
-cd rasa_chatbot
-rasa run actions --port 5055
-
-# Terminal 4: Start Flask server
-python backend/app.py
-
-# Terminal 5: Start Celery worker (LLM queue)
-celery -A task_queue worker -Q llm_queue --loglevel=INFO
-
-# Terminal 6: Start Celery worker (default queue)
-celery -A task_queue worker --loglevel=INFO
+# Build and start the stack
+docker compose up -d --build
 ```
 
 ### 10. Verify Installation
 
 ```bash
-# Check Rasa server
-curl http://localhost:5005/
+# Check compose services
+docker compose ps
 
-# Check Action server
-curl http://localhost:5055/health
-
-# Check Flask server
+# Check backend API
 curl http://localhost:5001/health
+
+# Check orchestrator
+curl http://localhost:8000/health
 
 # Check Redis
 redis-cli ping
@@ -682,35 +655,12 @@ sudo journalctl -u nepal-flask -f
 sudo journalctl -u nepal-celery-llm -f
 ```
 
-### Using run_servers.py (Development)
+### Using Docker Compose
 
 ```bash
-# Kill all processes
-pkill -f run_servers.py
-
-# Start all servers
-python run_servers.py --all
-
-# Start specific servers
-python run_servers.py --rasa-server-only
-python run_servers.py --rasa-action-only
-python run_servers.py --file-server-only
-
-# Use custom ports
-python run_servers.py --all --rasa-server-port 5010
-
-# Skip database initialization
-python run_servers.py --all --skip-db-init
-```
-
-### Using Launch Scripts
-
-```bash
-# Local development
-./scripts/local/launch_servers.sh
-
-# Production (with environment)
-./scripts/prod/launch_servers.sh
+docker compose up -d --build
+docker compose ps
+docker compose logs -f backend
 ```
 
 ## Production Deployment
@@ -791,7 +741,9 @@ source rasa-env/bin/activate
 pip install -r requirements.txt --upgrade
 
 # Run database migrations (if any)
-python scripts/database/migrate.py
+cd ticketing/migrations
+alembic upgrade head
+cd ../..
 
 # Retrain Rasa model (if NLU data changed)
 cd rasa_chatbot
@@ -821,8 +773,8 @@ sudo lsof -i :5005
 # Kill process
 sudo kill -9 <PID>
 
-# Or kill all Python processes
-pkill -f run_servers.py
+# Or stop the compose stack cleanly
+docker compose down
 ```
 
 #### 2. Database Connection Error

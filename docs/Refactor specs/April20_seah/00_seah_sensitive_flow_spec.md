@@ -11,96 +11,91 @@ Define the end-to-end SEAH/SEIA complaint workflow so it:
 - aligns with the SEAH one-pager form structure (`NEP-chatbot-SEAH-10Apr.pdf`),
 - and separates SEAH handling from the general grievance mechanism in routing, storage, and notifications.
 
-This spec is the source of truth for the refactor of:
-- `backend/actions/forms/form_sensitive_issues.py`
-- `backend/actions/utils/utterance_mapping_rasa.py`
-- `backend/actions/utils/mapping_buttons.py`
-- the state transitions around sensitive flow
-- data persistence and notification behavior for SEAH/SEIA complaints.
+This spec is the parent policy document for SEAH/SEIA intake. **Authoritative routing and slot contracts** for the implemented bot are documented in child specs and code:
+
+- `backend/actions/forms/form_seah_1.py`, `form_seah_2.py`, `form_seah_focal_point.py`
+- `backend/actions/forms/form_contact.py`, `backend/actions/forms/form_otp.py`
+- `backend/orchestrator/state_machine.py` (form sequencing)
+- `backend/actions/utils/utterance_mapping_rasa.py`, `mapping_buttons.py`
+- `backend/actions/action_submit_grievance.py` (`ActionSubmitSeah`), `backend/services/database_services/postgres_services.py` (`submit_seah_to_db`)
 
 ## Spec Index
 
-- `docs/Refactor specs/April20_seah/01_seah_route_and_slots.md`
+- `docs/Refactor specs/April20_seah/01_seah_route_and_slots.md` (victim path + slots; runtime source of truth)
+- `docs/Refactor specs/April20_seah/07_seah_focal_point_flow.md` (focal-point path + staging)
 - `docs/Refactor specs/April20_seah/02_seah_utterances_and_buttons.md`
 - `docs/Refactor specs/April20_seah/03_seah_submission_and_storage.md`
 - `docs/Refactor specs/April20_seah/04_seah_otp_and_validation.md`
+- `docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md` (post-submit outro variants + project picker / DB catalog)
 - `docs/Refactor specs/April20_seah/05_seah_tests_and_regression.md`
 - `docs/Refactor specs/April20_seah/06_seah_rollout_and_feature_flags.md`
 - `docs/Refactor specs/April20_seah/xx-ticketing-sytem-seah.md` (ticketing-system scope)
 
 ---
 
-## Current State Review (What exists now)
+## Implementation status (aligned with `01`, `07`, and codebase)
 
-## `form_sensitive_issues.py` behavior
+The following are **implemented** in the current branch:
 
-The current sensitive form is a short follow-up form with slots:
-- `sensitive_issues_follow_up`
-- `complainant_phone`
-- `sensitive_issues_nickname` (conditional)
-- `sensitive_issues_new_detail` (conditional)
+- Dedicated menu route `start_seah_intake` / `story_main: seah_intake` when SEAH is enabled (`state_machine.py`).
+- **Victim / non–focal-point path:** `form_seah_1` → (`form_otp` phone-only if identified) → `form_contact` → `form_seah_2` → `action_submit_seah` (see `01`).
+- **Focal-point path:** `form_seah_1` → staged `form_otp` / `form_contact` / `form_seah_focal_point_1` / `form_seah_focal_point_2` with `seah_focal_stage` and `action_prepare_seah_focal_complainant_capture` (see `07`).
+- Sensitive follow-up from **general grievance** still merges into `form_seah_1` when `grievance_sensitive_issue` is set after `form_grievance`.
+- **Submission:** `ActionSubmitSeah` → `submit_seah_to_db` → tables `complainants_seah`, `grievances_seah` (not general grievance insert for final SEAH submit).
+- **Complainant-facing SMS recap:** not invoked on `ActionSubmitSeah` (on-screen confirmation with `seah_public_ref` only).
+- **OTP behavior for `seah_intake` + sensitive:** `ValidateFormOtp.required_slots` collects **`complainant_phone` only** (no OTP verification step on that branch); see `04` and `01`.
 
-It supports command-style pathways:
-- `/exit` -> anonymous without phone
-- `/anonymous_with_phone` -> anonymous with one phone number
-- `/add_more_details` -> collect one more detail message
-- `/not_sensitive_content` -> clear sensitive flags and revert to non-sensitive path
-
-The form pre-fills many contact/location slots to skip the normal contact form in anonymous branches.
-
-## Orchestration behavior
-
-When `grievance_sensitive_issue = True`, state transitions from grievance form into `form_sensitive_issues`, then continues into `form_contact`.
-
-After sensitive form completion, `action_outro_sensitive_issues` is sent for specific follow-up values and then the regular contact flow begins.
-
-## Submission/notification behavior
-
-`action_submit_grievance` currently:
-- submits to the general grievance DB path (`submit_grievance_to_db`)
-- generates regular confirmation text including grievance ID and timeline
-- may send SMS confirmation when OTP is verified
-
-This behavior is not compliant for SEAH/SEIA under the new requirements.
+Product PDF order may differ slightly from question order in code (e.g. project vs narrative order in `form_seah_2`); child spec `01` reflects **code order**.
 
 ---
 
-## Target Workflow (To-Be)
+## Current state review
+
+### Legacy (pre–dedicated-SEAH) behavior
+
+Older builds used `form_sensitive_issues.py` as a short post–grievance-detection follow-up. That module is **not** the dedicated SEAH route anymore; sensitive **grievance** detection still feeds `form_seah_1` from `form_grievance` when the user flags a sensitive issue there.
+
+### Implemented orchestration (now)
+
+- **Dedicated SEAH:** `state_machine.py` sets `story_main` / `grievance_sensitive_issue` and drives `form_seah_*`, `form_contact`, `form_otp` per `01` and `07`.
+- **Training YAML:** `domain.yml` lists minimal `required_slots` per form; **runtime** slot lists come from each `ValidateForm*.required_slots()` implementation.
+
+### Submission / notification (now)
+
+- **`action_submit_grievance`** remains for non-SEAH grievances (may still use SMS recap where configured).
+- **`action_submit_seah`** persists via `submit_seah_to_db` and shows a **public reference** string; it does **not** send the standard grievance confirmation SMS path used after generic submit.
+
+---
+
+## Target workflow (product) vs implemented order
 
 ## Entry and route separation
 
 1. User selects SEAH/SEIA route directly from main menu/intake entry.
 2. SEAH route remains confidential and independent from general safeguards grievance route.
-3. SEAH records are never inserted into general grievance tracker tables/views used by broad backend users.
+3. SEAH finalization uses **`submit_seah_to_db`** / dedicated tables (see `03`); payloads are not written through the **general** grievance create path for SEAH submit.
 
-## Intake sequence (confirmed order)
+## Intake sequence — victim path (implemented; see `01`)
 
-Required sequence for SEAH route:
-1. Intro/consent text for SEAH channel (ADB SEAH team-provided content)
-2. Identity choice:
-   - identified name (free text), or
-   - anonymous
-3. `Are you the victim/survivor?`
-   - Yes
-   - No
-   - No, I am the SEAH focal point
-4. Contact number (optional to provide; allowed values include none)
-5. Contact email (optional to provide; allowed values include none)
-6. ADB project name/site (free text; `Cannot specify`; `Not an ADB project`)
-7. Incident summary (free text)
-8. SEAH focal point branch (only if user is focal point):
-   - additional survivor/at-risk-party risks
-   - mitigation measures already in place
-   - other at-risk parties
-   - risk to ADB project
-   - reputational risk to ADB
-   - **new:** when did focal point learn about incident?
-9. Informed consent for follow-up contact:
-   - yes via phone only
-   - yes via email only
-   - yes via both
-   - no
-10. End-screen acknowledgment and referral/services text (ADB SEAH team-provided)
+Order in **code** (may differ from one-pager line order; align copy in `02` as needed):
+
+1. **SEAH intro + identity mode** (`form_seah_1`: `sensitive_issues_follow_up` — identified / anonymous).
+2. **Victim/survivor role** (`form_seah_1`: `seah_victim_survivor_role` — includes focal-point option when not anonymous).
+3. **Phone (identified only)** via **`form_otp`** — **phone slot only** for `seah_intake` + sensitive (no OTP verification step); anonymous skips this form.
+4. **Location (+ contact for identified)** via **`form_contact`** with SEAH overrides (anonymous: location only; identified: location + consent + name + email).
+5. **Project, incident narrative, informed contact channel** via **`form_seah_2`** (channel omitted when anonymous; project supports `cannot_specify` / `not_adb_project` + free text).
+6. **Submit** → `action_submit_seah` → on-screen reference (`seah_public_ref`).
+
+## Intake sequence — focal-point branch (implemented; see `07`)
+
+After role `focal_point`, the bot stages **reporter** capture (`form_otp` / `form_contact` with `seah_focal_stage`), then **`form_seah_focal_point_1`** (learned when, consent to report, complainant identified/anonymous), optional second phone pass, **`form_seah_focal_point_2`** (project, narrative, focal risk fields, contact consent when applicable, referred-to-support), then **`action_submit_seah`**.
+
+Focal-only assessment fields (risks, mitigation, etc.) live in **`form_seah_focal_point_2`**, not in victim `form_seah_2`.
+
+## Product-facing items still driven by content (`02`)
+
+- Intro / referral / not-ADB messaging: utterance keys (some `REPLACE_ME` placeholders).
+- End-screen acknowledgment and referral/services text (ADB SEAH team or placeholders).
 
 ## Survivor-centered constraints
 
@@ -174,105 +169,96 @@ General rules:
 
 ## Notifications and Communications Policy
 
-## Disallowed for SEAH route
+## Disallowed for SEAH route (policy — refine with stakeholder matrix **F**)
 
-- No SMS notifications.
-- No grievance/case number via SMS.
-- No standard chatbot status notification channel behavior for SEAH submissions.
+- No **complainant-facing** grievance recap SMS or case reference via SMS on **SEAH submit** (`ActionSubmitSeah` — see `03`).
+- No standard **end-user** status notification channel behavior for SEAH submissions (stakeholder **H**).
 - No user-initiated follow-up/modify flow in chatbot for SEAH.
+
+**Implementation note:** Sensitive **`seah_intake`** phone collection uses **`form_otp`** with **phone-only** `required_slots`, so **OTP SMS** is not triggered on that branch (`04`). Other SMS use (internal ops) is out of chatbot submit path unless explicitly added.
 
 ## Required for SEAH route
 
-- On-screen submission confirmation only.
-- Include referral/service information in confirmation screen.
-- Follow-up contact is investigator-managed based on consent captured in intake.
+- On-screen submission confirmation (includes **`seah_public_ref`** today; extended referral copy may still be `REPLACE_ME` — `02` / `03`).
+- Follow-up contact is investigator-managed based on consent captured in intake (`seah_contact_consent_channel` when collected).
 
 ---
 
-## Gap Analysis: Current vs Required
+## Gap analysis (historical → status)
 
-1. **Flow scope mismatch**
-   - Current `form_sensitive_issues` is a short post-detection follow-up, not a full SEAH intake form.
-   - Required: dedicated full SEAH intake route with ordered mandatory steps and focal-point branch.
+1. **Flow scope**
+   - **Was:** short `form_sensitive_issues` only.
+   - **Now:** dedicated `seah_intake` + `form_seah_1` / `form_seah_2` + shared `form_contact` / `form_otp`; focal `form_seah_focal_point_*` (`01`, `07`).
 
-2. **Data segregation missing**
-   - Current submission path uses general grievance submission/storage pipeline.
-   - Required: SEAH-specific tables and role-restricted access path.
+2. **Data segregation**
+   - **Was:** general grievance pipeline only.
+   - **Now:** `submit_seah_to_db` → `complainants_seah` / `grievances_seah` + JSON `seah_payload` (`03`). Role-restricted APIs / ticketing remain per `xx` spec.
 
-3. **Notification non-compliance**
-   - Current code supports SMS confirmation (`_send_grievance_recap_sms`).
-   - Required: no SMS for SEAH under any condition.
+3. **Complainant-facing SMS on submit**
+   - **Was:** generic submit could send recap SMS.
+   - **Now:** `ActionSubmitSeah` does not use grievance recap SMS; internal SMS policy remains per stakeholder decisions in **F** below.
 
-4. **Follow-up/modify policy mismatch**
-   - Existing architecture supports status checks/modifications for general grievances.
-   - Required: SEAH route excludes user follow-up/modify flow.
+4. **Follow-up / modify**
+   - **Policy:** no end-user SEAH status-check/modify in chatbot (stakeholder **H**).
+   - **Code:** keep SEAH terminal separate from general status-check flow (`01`).
 
-5. **Focal point verification missing**
-   - No dedicated focal point lookup/validation/OTP branch in current sensitive form.
-   - Required: controlled focal point validation process.
+5. **Focal-point “roster OTP” verification**
+   - **Policy (`00` C):** roster match + SMS OTP for focal verification with `unverified_focal_point` fallback.
+   - **Code today:** reporter/complainant phones are collected via shared **`form_otp`** with **phone-only** `required_slots` whenever `story_main == seah_intake` and `grievance_sensitive_issue` is true (`04`). **Roster lookup / focal OTP verification** is not fully implemented as originally written; slots such as `seah_focal_lookup_status` exist for future wiring—track in `04` / `07`.
 
-6. **Project triage branch incomplete**
-   - Current flow has no explicit `Not an ADB project` referral branch in sensitive route.
-   - Required: referral messaging and distinct handling.
+6. **`Not an ADB project`**
+   - **Now:** `seah_project_identification` + `seah_not_adb_project`; referral copy can be added/updated under `02` (utterances); submission still completes via `action_submit_seah` unless product adds an early terminal.
 
 ---
 
-## Refactor Requirements (Implementation Checklist)
+## Refactor requirements (implementation checklist — status)
 
 ## A. Conversational flow and slots
 
-- Replace/expand `form_sensitive_issues` into full SEAH intake form sequence.
-- Add explicit slots for:
-  - identity mode (identified/anonymous)
-  - victim-survivor role response
-  - project identification with `cannot_specify` and `not_adb_project`
-  - incident summary
-  - follow-up consent channel
-  - focal-point fields including `focal_point_learned_when`
-- Keep non-disclosing options for every required step.
-- Remove command-centric sensitive shortcuts as primary behavior for SEAH route.
+- [x] SEAH intake forms: `form_seah_1`, `form_seah_2`, `form_seah_focal_point_1` / `form_seah_focal_point_2` with explicit slots (identity, role, project, narrative, consent channel, focal fields).
+- [x] Non-disclosure / skip semantics aligned with project `skipped` / `slot_skipped` patterns.
+- [ ] Finalize copy (`REPLACE_ME` in `02`) and any product-only shortcuts (e.g. `not_sensitive_content` → main menu) in `state_machine` if required.
 
 ## B. Routing/state machine
 
-- Add dedicated `seah_intake` route from main menu.
-- Keep separate from general sensitive-content-detection branch.
-- Ensure SEAH submission terminal state does not transition to general grievance status-check flow.
+- [x] Dedicated `seah_intake` from main menu; `_is_seah_enabled()` gate.
+- [x] Sensitive grievance path can merge into `form_seah_1`.
+- [x] SEAH submit ends in dedicated terminal (`action_submit_seah`), not general grievance review loop.
 
 ## C. Persistence layer
 
-- Add SEAH-specific repository/service methods for create/update.
-- Implement dedicated DB tables and migrations for SEAH entities.
-- Ensure `action_submit_grievance` is not used for SEAH finalization; create `action_submit_seah` (or equivalent).
+- [x] `submit_seah_to_db` + `complainants_seah` / `grievances_seah` (DDL in service when tables missing).
+- [x] `ActionSubmitSeah` (not `action_submit_grievance`) for SEAH finalization.
 
 ## D. Notification layer
 
-- Add explicit guardrail in SEAH submission path disabling SMS/email templates from standard grievance path unless SEAH policy allows specific controlled email.
-- Provide dedicated on-screen confirmation utterance for SEAH.
+- [x] No grievance recap SMS from `ActionSubmitSeah`.
+- [ ] Internal / ops notifications per ticketing spec (`xx`).
 
 ## E. Access control and auth
 
-- Introduce role-scoped SEAH retrieval endpoints/queries.
-- Enforce 2FA requirement for SEAH admin/reviewer interfaces (phase 1 OTP acceptable).
+- [ ] Role-scoped SEAH retrieval APIs and back-office 2FA per `xx` / infra (out of chatbot repo scope may apply).
 
 ## F. Content placeholders (external dependencies)
 
-Await final text from SEAH team for:
-- intro consent text,
-- `Not an ADB project` referral text,
-- end-of-flow acknowledgment/referral content.
+Still applicable for final ADB SEAH-approved strings:
+
+- intro consent text (`form_seah_1` utterances),
+- `Not an ADB project` / referral blocks,
+- end-of-flow acknowledgment (and optional 30s close UX on **frontend** per stakeholder decisions).
 
 ---
 
-## Acceptance Criteria
+## Acceptance criteria
 
-1. A SEAH complaint can be completed end-to-end without entering general grievance tracker storage.
-2. No SMS is sent for SEAH complaints.
-3. Submission confirmation appears on-screen with referral/support content.
-4. Intake asks all mandatory SEAH fields in required order with non-disclosure options.
-5. Focal point branch appears only when focal point role selected.
-6. Focal point validation does not disclose roster and supports OTP-based verification path.
-7. SEAH records are visible only to authorized SEAH roles.
-8. SEAH complaints cannot be retrieved/modified through standard status-check flow.
+1. A SEAH complaint can be completed end-to-end without using the **general grievance** insert path for finalization (`submit_seah_to_db`).
+2. **Complainant-facing** submit path does not send the standard grievance recap SMS from `ActionSubmitSeah` (aligns with stakeholder **F** “no complainant SMS” decision).
+3. Submission confirmation appears **on-screen** with a **public reference** (`seah_public_ref`); richer referral/support copy may still use `REPLACE_ME` until finalized (`02`).
+4. Intake collects mandatory SEAH fields with non-disclosure options per `01` / validators.
+5. Focal-point-only forms appear only when `seah_victim_survivor_role == focal_point` (`07`).
+6. **Focal roster + OTP verification** as originally specified (lookup, `unverified_focal_point`) is **not fully implemented** in code; phone collection reuses `form_otp` with **sensitive SEAH phone-only** behavior—see `04` / `07` for current vs target gap.
+7. SEAH DB visibility to authorized roles is an **ops/DB** concern; schema exists in `postgres_services.py`.
+8. SEAH complaints are not exposed through the **standard end-user** status-check chatbot flow (policy in **H**).
 
 ---
 
@@ -491,9 +477,13 @@ The work should still be split into numbered specs, but development should remai
    - Dedicated submit action and storage path separation from general grievance flow.
 4. `04_seah_otp_and_validation.md`
    - Focal-point lookup + OTP verification behavior and fallback tagging (`unverified_focal_point`).
-5. `05_seah_tests_and_regression.md`
+5. `07_seah_focal_point_flow.md`
+   - Focal-point staging, `seah_focal_stage`, focal forms vs victim path.
+6. `08_seah_outro_and_project_catalog.md`
+   - Post-submit outro variants; DB-backed project catalog / picker.
+7. `05_seah_tests_and_regression.md`
    - Unit, integration, and regression coverage, including no-SMS assertions.
-6. `06_seah_rollout_and_feature_flags.md`
+8. `06_seah_rollout_and_feature_flags.md`
    - Branch rollout strategy, feature flags, and cutover checklist.
 
 ### Parallel execution plan (agent assignment)
@@ -518,3 +508,10 @@ The work should still be split into numbered specs, but development should remai
 1. Prefer small, frequent commits on `feat/seah-sensitive-intake`.
 2. If optional test branch is used, merge it back before final regression run.
 3. Merge `feat/seah-sensitive-intake` to `main` after final checks and approvals.
+
+---
+
+## Changelog
+
+- **2026-04-21:** Aligned parent spec with implemented routing (`01`), focal staging (`07`), and codebase: replaced legacy `form_sensitive_issues` narrative, added implementation status, victim vs focal sequences, gap-analysis status, checklist checkboxes, and acceptance criteria notes (SEAH submit path, SMS, focal OTP gap).
+- **2026-04-22:** Added spec index + proposed-spec list entry for **`08_seah_outro_and_project_catalog.md`** (outro variants + project catalog).

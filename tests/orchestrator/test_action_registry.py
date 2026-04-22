@@ -146,6 +146,32 @@ def test_invoke_action_submit_seah_uses_dedicated_path(domain, monkeypatch):
     assert any("SEAH-REF-2026-654321" in m.get("text", "") for m in dispatcher.messages)
 
 
+def test_invoke_action_seah_outro_registered(domain, monkeypatch):
+    from backend.services.database_services.postgres_services import DatabaseManager
+
+    monkeypatch.setattr(
+        DatabaseManager,
+        "find_seah_contact_point",
+        lambda *args, **kwargs: None,
+    )
+
+    slots = {
+        "language_code": "en",
+        "story_main": "seah_intake",
+        "seah_victim_survivor_role": "focal_point",
+        "sensitive_issues_follow_up": "anonymous",
+        "seah_contact_consent_channel": "none",
+        "complainant_consent": False,
+    }
+    dispatcher = CollectingDispatcher()
+    tracker = SessionTracker(slots=slots, sender_id="user-seah-outro")
+
+    _run(invoke_action("action_seah_outro", dispatcher, tracker, domain))
+
+    assert dispatcher.messages, "Expected outro message"
+    assert any("focal-point" in m.get("text", "").lower() for m in dispatcher.messages)
+
+
 def test_submit_seah_case_reference_format():
     from backend.services.database_services.postgres_services import DatabaseManager
 

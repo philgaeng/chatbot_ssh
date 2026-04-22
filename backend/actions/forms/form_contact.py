@@ -35,7 +35,16 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
     - ValidateFormStatusCheckSkip
     - Any future forms that need location data
     """
-    
+
+    def _merge_seah_contact_provided_from_partial(
+        self, tracker: Tracker, partial: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return self.seah_contact_provided_update(
+            tracker.get_slot("story_main"),
+            dict(tracker.current_slot_values()),
+            partial,
+        )
+
     # ========== Province ==========
     async def extract_complainant_province(
         self,
@@ -508,13 +517,16 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
                     "complainant_email_confirmed": self.SKIP_VALUE
                     }
 
-        if slot_value == True:
+        elif slot_value == True:
             result = {"complainant_consent": True,
                     "complainant_full_name": None,
                     "complainant_email_temp": None,
                     "complainant_email_confirmed": None
                     }
+        else:
+            return {}
         self.logger.debug(f"Validate complainant_consent: {result['complainant_consent']}")
+        result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
         return result
         
 
@@ -569,6 +581,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
                     "complainant_email": self.SKIP_VALUE
                     }
             self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+            result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
             return result
         
         
@@ -578,6 +591,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
             dispatcher.utter_message(text=message)
             result = {"complainant_email_temp": None}
             self.logger.debug(f"Validate complainant_email_temp: {result['complainant_email_temp']}")
+            result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
             return result
         
         # Use consistent validation methods
@@ -586,6 +600,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
             dispatcher.utter_message(text=message)
             result = {"complainant_email_temp": None}
             self.logger.debug(f"Validate complainant_email_temp: invalid format")
+            result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
             return result
 
         # Check for Nepali email domain (includes Gmail, Yahoo, Outlook - commonly used in Nepal)
@@ -603,6 +618,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
                     "complainant_email_confirmed": True,
                     "complainant_email": extracted_email}
         self.logger.debug(f"Validate complainant_email_temp: {result.get('complainant_email_temp')}")
+        result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
         return result
     
     async def extract_complainant_email_confirmed(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
@@ -640,6 +656,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
             result = {}
         if result:
             self.logger.debug(f"Validate complainant_email_confirmed: {result.get('complainant_email_confirmed')}")
+            result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
         return result
     
 class ValidateFormContact(ContactFormValidationAction):
@@ -679,6 +696,9 @@ class ValidateFormContact(ContactFormValidationAction):
         For status_check flow, use form_otp directly instead of form_contact.
         """
         self._initialize_language_and_helpers(tracker)
+        story_main = tracker.get_slot("story_main")
+        sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
+        seah_focal_stage = tracker.get_slot("seah_focal_stage")
         
         required_slots_location = ["complainant_location_consent", 
                       "complainant_province",
@@ -693,5 +713,16 @@ class ValidateFormContact(ContactFormValidationAction):
                       "complainant_address"
                       ]
         required_slots_contact = ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
+
+        if story_main == "seah_intake" and seah_focal_stage == "bootstrap_reporter_contact":
+            return required_slots_location + ["complainant_consent", "complainant_full_name"]
+
+        if story_main == "seah_intake" and seah_focal_stage == "complainant_contact":
+            return ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
+
+        # In anonymous dedicated SEAH intake, do not ask identity/contact questions.
+        if story_main == "seah_intake" and sensitive_issues_follow_up == "anonymous":
+            return required_slots_location
+
         return required_slots_location + required_slots_contact
 

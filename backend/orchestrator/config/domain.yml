@@ -501,6 +501,26 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  seah_anonymous_route:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_contact_provided:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
+  project_uuid:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_contact_point_id:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
   seah_victim_survivor_role:
     type: categorical
     values:
@@ -556,6 +576,43 @@ slots:
     mappings:
       - type: custom
   seah_focal_learned_when:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_reporter_consent_to_report:
+    type: categorical
+    values:
+      - yes
+      - no
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_referred_to_support:
+    type: categorical
+    values:
+      - yes
+      - no
+      - slot_skipped
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_stage:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_phone:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_city:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_focal_village:
     type: text
     influence_conversation: false
     mappings:
@@ -773,21 +830,24 @@ actions:
   - action_ask_complainant_village_temp
   - action_ask_complainant_ward
   - action_ask_grievance_new_detail
-  - action_ask_sensitive_issues_follow_up
-  - action_ask_sensitive_issues_nickname
-  - action_ask_sensitive_issues_new_detail
-  - action_ask_form_sensitive_issues_complainant_phone
-  - action_ask_form_sensitive_issues_seah_victim_survivor_role
-  - action_ask_form_sensitive_issues_seah_project_identification
-  - action_ask_form_sensitive_issues_seah_contact_consent_channel
-  - action_ask_form_sensitive_issues_seah_focal_survivor_risks
-  - action_ask_form_sensitive_issues_seah_focal_full_name
-  - action_ask_form_sensitive_issues_seah_focal_otp_input
-  - action_ask_form_sensitive_issues_seah_focal_mitigation_measures
-  - action_ask_form_sensitive_issues_seah_focal_other_at_risk_parties
-  - action_ask_form_sensitive_issues_seah_focal_project_risk
-  - action_ask_form_sensitive_issues_seah_focal_reputational_risk
-  - action_ask_form_sensitive_issues_seah_focal_learned_when
+  - action_ask_form_seah_1_sensitive_issues_follow_up
+  - action_ask_form_seah_1_seah_victim_survivor_role
+  - action_ask_form_seah_2_seah_project_identification
+  - action_ask_form_seah_2_sensitive_issues_new_detail
+  - action_ask_form_seah_2_seah_contact_consent_channel
+  - action_prepare_seah_focal_complainant_capture
+  - action_ask_form_seah_focal_point_1_seah_focal_learned_when
+  - action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report
+  - action_ask_form_seah_focal_point_1_sensitive_issues_follow_up
+  - action_ask_form_seah_focal_point_2_seah_project_identification
+  - action_ask_form_seah_focal_point_2_seah_focal_survivor_risks
+  - action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures
+  - action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties
+  - action_ask_form_seah_focal_point_2_seah_focal_project_risk
+  - action_ask_form_seah_focal_point_2_seah_focal_reputational_risk
+  - action_ask_form_seah_focal_point_2_sensitive_issues_new_detail
+  - action_ask_form_seah_focal_point_2_seah_contact_consent_channel
+  - action_ask_form_seah_focal_point_2_seah_focal_referred_to_support
   - action_ask_form_story_main_language_code
   - action_ask_form_story_main_story_main
   - action_ask_complainant_phone
@@ -852,6 +912,7 @@ actions:
   - action_start_grievance_process
   - action_submit_grievance
   - action_submit_seah
+  - action_seah_outro
   - action_submit_grievance_as_is
   - action_test_disconnection_log
   - action_test_disconnection
@@ -871,7 +932,10 @@ actions:
   - validate_form_status_check
   - validate_form_status_check_1
   - validate_form_status_check_2
-  - validate_form_sensitive_issues
+  - validate_form_seah_1
+  - validate_form_seah_2
+  - validate_form_seah_focal_point_1
+  - validate_form_seah_focal_point_2
   - validate_form_status_check_skip
   - validate_form_status_check_modify
   - validate_form_contact_modify
@@ -910,9 +974,21 @@ forms:
     required_slots:
       - grievance_cat_modify
     ignored_intents: *common-ignore-intents
-  form_sensitive_issues:
+  form_seah_1:
     required_slots:
       - sensitive_issues_follow_up
+    ignored_intents: *common-ignore-intents
+  form_seah_2:
+    required_slots:
+      - seah_project_identification
+    ignored_intents: *common-ignore-intents
+  form_seah_focal_point_1:
+    required_slots:
+      - seah_focal_learned_when
+    ignored_intents: *common-ignore-intents
+  form_seah_focal_point_2:
+    required_slots:
+      - seah_project_identification
     ignored_intents: *common-ignore-intents
 
   # === Status check & existing grievance flows ===

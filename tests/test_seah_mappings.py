@@ -8,28 +8,29 @@ from backend.actions.utils.utterance_mapping_rasa import get_buttons_base, get_u
 
 
 def test_seah_utterance_keys_exist_in_both_languages():
-    form_name = "form_sensitive_issues"
-    action_names = [
-        "action_ask_sensitive_issues_follow_up",
-        "action_ask_form_sensitive_issues_seah_victim_survivor_role",
-        "action_ask_form_sensitive_issues_complainant_phone",
-        "action_ask_form_sensitive_issues_seah_project_identification",
-        "action_ask_sensitive_issues_new_detail",
-        "action_ask_form_sensitive_issues_seah_contact_consent_channel",
-        "action_ask_form_sensitive_issues_seah_focal_full_name",
-        "action_ask_form_sensitive_issues_seah_focal_otp_input",
-        "action_ask_form_sensitive_issues_seah_focal_survivor_risks",
-        "action_ask_form_sensitive_issues_seah_focal_mitigation_measures",
-        "action_ask_form_sensitive_issues_seah_focal_other_at_risk_parties",
-        "action_ask_form_sensitive_issues_seah_focal_project_risk",
-        "action_ask_form_sensitive_issues_seah_focal_reputational_risk",
-        "action_ask_form_sensitive_issues_seah_focal_learned_when",
-        "action_outro_sensitive_issues",
-    ]
+    form_actions = {
+        "form_seah_1": [
+            "action_ask_form_seah_1_sensitive_issues_follow_up",
+            "action_ask_form_seah_1_seah_victim_survivor_role",
+        ],
+        "form_seah_2": [
+            "action_ask_form_seah_2_seah_project_identification",
+            "action_ask_form_seah_2_sensitive_issues_new_detail",
+            "action_ask_form_seah_2_seah_contact_consent_channel",
+        ],
+        "form_seah_focal_point": [
+            "action_ask_form_seah_focal_point_1_seah_focal_learned_when",
+            "action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report",
+            "action_ask_form_seah_focal_point_1_sensitive_issues_follow_up",
+            "action_ask_form_seah_focal_point_2_seah_project_identification",
+            "action_ask_form_seah_focal_point_2_seah_contact_consent_channel",
+        ],
+    }
 
-    for action_name in action_names:
-        assert get_utterance_base(form_name, action_name, 1, "en")
-        assert get_utterance_base(form_name, action_name, 1, "ne")
+    for form_name, action_names in form_actions.items():
+        for action_name in action_names:
+            assert get_utterance_base(form_name, action_name, 1, "en")
+            assert get_utterance_base(form_name, action_name, 1, "ne")
 
 
 def test_seah_button_groups_have_payloads_for_both_languages():
@@ -47,13 +48,15 @@ def test_seah_button_groups_have_payloads_for_both_languages():
 
 
 def test_seah_action_button_mappings_resolve():
-    form_name = "form_sensitive_issues"
-    action_names = [
-        "action_ask_sensitive_issues_follow_up",
-        "action_ask_form_sensitive_issues_seah_victim_survivor_role",
-        "action_ask_form_sensitive_issues_seah_project_identification",
-        "action_ask_form_sensitive_issues_seah_contact_consent_channel",
+    form_actions = [
+        ("form_seah_1", "action_ask_form_seah_1_sensitive_issues_follow_up"),
+        ("form_seah_1", "action_ask_form_seah_1_seah_victim_survivor_role"),
+        ("form_seah_2", "action_ask_form_seah_2_seah_project_identification"),
+        ("form_seah_2", "action_ask_form_seah_2_seah_contact_consent_channel"),
+        ("form_seah_focal_point", "action_ask_form_seah_focal_point_1_sensitive_issues_follow_up"),
+        ("form_seah_focal_point", "action_ask_form_seah_focal_point_2_seah_project_identification"),
+        ("form_seah_focal_point", "action_ask_form_seah_focal_point_2_seah_contact_consent_channel"),
     ]
-    for action_name in action_names:
+    for form_name, action_name in form_actions:
         assert get_buttons_base(form_name, action_name, 1, "en")
         assert get_buttons_base(form_name, action_name, 1, "ne")

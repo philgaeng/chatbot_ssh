@@ -131,6 +131,35 @@ def include_object(object, name, type_, reflected, compare_to):
 # Does NOT touch: grievances, complainants, or any existing public.* table
 ```
 
+### Worktree + DB operating model (LOCKED)
+
+For parallel development across chatbot and ticketing worktrees:
+
+1. **Keep worktrees separate**
+   - `feature/seah` (chatbot-focused work)
+   - `feature/grm-ticketing` (ticketing/admin work)
+   - integration worktree/branch for merge validation before promoting to `main`
+
+2. **Use isolated local DB instances per worktree**
+   - One Postgres container/volume per worktree (different host ports)
+   - Never share one mutable local DB across active feature worktrees
+   - Purpose: avoid migration collisions and branch-state contamination
+
+3. **Schema ownership must be explicit**
+   - `ticketing.*` schema is owned by ticketing migrations (`ticketing/migrations/alembic.ini`)
+   - Existing chatbot/public schema remains owned by chatbot/backend migration path
+   - Do not let two migration streams own DDL for the same table
+
+4. **Shared admin domain rule (projects/locations/settings)**
+   - Ticketing is the admin UI/backend, but shared entities must have a single schema owner
+   - Ticketing should integrate via stable service/API boundaries for chatbot-consumed data
+   - Avoid direct cross-domain schema edits without ownership agreement
+
+5. **Integration branch requirements**
+   - Merge feature branches in integration worktree first
+   - Run migrations in deterministic order and verify both chatbot + ticketing paths
+   - Promote to `main` only after integration DB + smoke tests pass
+
 ---
 
 ## WORKFLOW ARCHITECTURE (LOCKED)

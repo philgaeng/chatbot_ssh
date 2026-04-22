@@ -25,6 +25,7 @@ services:
       - env.local
     environment:
       TICKETING_PORT: "5002"
+      REDIS_PASSWORD: ""
       # Override to use the Docker db service (user/password/app_db)
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -64,6 +65,7 @@ services:
     env_file:
       - env.local
     environment:
+      REDIS_PASSWORD: ""
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: user
@@ -92,6 +94,7 @@ services:
     env_file:
       - env.local
     environment:
+      REDIS_PASSWORD: ""
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: user

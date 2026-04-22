@@ -89,6 +89,10 @@ function getUrlParams() {
 const tempSessionId =
   "temp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
 
+function generateSessionId() {
+  return "temp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+}
+
 // Make getSessionId available globally
 window.getSessionId = function () {
   const storage = localStorage;
@@ -345,6 +349,9 @@ function setupEventListeners() {
     chatWidget.style.display = "flex";
     chatLauncher.style.display = "none";
     messageInput.focus();
+    if (!window.introductionSent) {
+      sendIntroduceMessage();
+    }
   });
 
   closeButton.addEventListener("click", () => {
@@ -386,6 +393,61 @@ function setupEventListeners() {
       "px";
   });
 }
+
+function resetFrontendState() {
+  window.grievanceId = null;
+  window.hasReceivedResponse = false;
+  window.introductionSent = false;
+  window.sessionInitialized = false;
+  window.lastBotMessageText = "";
+  window.lastBotQuickReplies = null;
+
+  if (window.currentRetryTimer) {
+    clearTimeout(window.currentRetryTimer);
+    window.currentRetryTimer = null;
+  }
+  if (window.introductionWindowTimer) {
+    clearTimeout(window.introductionWindowTimer);
+    window.introductionWindowTimer = null;
+  }
+
+  selectedFiles = [];
+  if (fileInput) fileInput.value = "";
+  if (messageInput) {
+    messageInput.value = "";
+    messageInput.style.height = "44px";
+  }
+
+  uiActions.setGrievanceId(null);
+  uiActions.setGrievanceCreatedInDb(false);
+  uiActions.clearMessages();
+}
+
+window.handleClearSessionCommand = function () {
+  resetFrontendState();
+  chatWidget.style.display = "none";
+  chatLauncher.style.display = "flex";
+
+  const storage = localStorage;
+  const storageKey = SESSION_CONFIG.STORAGE_KEY;
+  storage.setItem(storageKey, generateSessionId());
+};
+
+window.handleCloseWindowCommand = function () {
+  // Browser may block closing tabs not opened by script.
+  window.close();
+
+  setTimeout(() => {
+    if (!window.closed) {
+      chatWidget.style.display = "none";
+      chatLauncher.style.display = "flex";
+      uiActions.appendMessage(
+        "For security reasons, your browser may block automatic tab closing. Please close this tab manually.",
+        "received"
+      );
+    }
+  }, 100);
+};
 
 // Handle message submission
 async function handleMessageSubmit(e) {
