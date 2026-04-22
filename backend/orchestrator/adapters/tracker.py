@@ -34,6 +34,10 @@ class SessionTracker:
             return self._requested_slot
         return self._slots.get(key)
 
+    def current_slot_values(self) -> Dict[str, Any]:
+        """Rasa-compatible snapshot of all slots (copy)."""
+        return dict(self._slots)
+
     @property
     def sender_id(self) -> str:
         return self._sender_id

@@ -1,0 +1,16 @@
+seah_contact_point_id,province,district,municipality,ward,project_uuid,seah_center_name,address,phone,opening_days,opening_hours,is_active,sort_order
+jhapa-mechinagar-seah,Koshi,Jhapa,Mechinagar,6,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Mechinagar SEAH Support Desk,"Ward 6, Mechinagar, Jhapa, Koshi, Nepal",+977-9800000001,Sunday to Friday,09:00-17:30,true,1
+jhapa-buddhashanti-seah,Koshi,Jhapa,Buddhashanti,3,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Buddhashanti SEAH Support Desk,"Ward 3, Buddhashanti, Jhapa, Koshi, Nepal",+977-9800000002,Sunday to Friday,09:00-17:30,true,2
+jhapa-arjundhara-seah,Koshi,Jhapa,Arjundhara,5,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Arjundhara SEAH Support Desk,"Ward 5, Arjundhara, Jhapa, Koshi, Nepal",+977-9800000003,Sunday to Friday,09:00-17:30,true,3
+jhapa-kankai-seah,Koshi,Jhapa,Kankai,2,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Kankai SEAH Support Desk,"Ward 2, Kankai, Jhapa, Koshi, Nepal",+977-9800000004,Sunday to Friday,09:00-17:30,true,4
+jhapa-bhadrapur-seah,Koshi,Jhapa,Bhadrapur,8,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Bhadrapur SEAH Support Desk,"Ward 8, Bhadrapur, Jhapa, Koshi, Nepal",+977-9800000005,Sunday to Friday,09:00-17:30,true,5
+jhapa-birtamod-seah,Koshi,Jhapa,Birtamod,1,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Birtamod SEAH Support Desk,"Ward 1, Birtamod, Jhapa, Koshi, Nepal",+977-9800000006,Sunday to Friday,09:00-17:30,true,6
+jhapa-kamal-seah,Koshi,Jhapa,Kamal,4,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Kamal SEAH Support Desk,"Ward 4, Kamal, Jhapa, Koshi, Nepal",+977-9800000007,Sunday to Friday,09:00-17:30,true,7
+jhapa-gauradaha-seah,Koshi,Jhapa,Gauradaha,5,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Gauradaha SEAH Support Desk,"Ward 5, Gauradaha, Jhapa, Koshi, Nepal",+977-9800000008,Sunday to Friday,09:00-17:30,true,8
+jhapa-shivasatakshi-seah,Koshi,Jhapa,Shivasatakshi,7,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Shivasatakshi SEAH Support Desk,"Ward 7, Shivasatakshi, Jhapa, Koshi, Nepal",+977-9800000009,Sunday to Friday,09:00-17:30,true,9
+jhapa-kachankawal-seah,Koshi,Jhapa,Kachankawal,2,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Kachankawal SEAH Support Desk,"Ward 2, Kachankawal, Jhapa, Koshi, Nepal",+977-9800000010,Sunday to Friday,09:00-17:30,true,10
+jhapa-haldibari-seah,Koshi,Jhapa,Haldibari,1,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Haldibari SEAH Support Desk,"Ward 1, Haldibari, Jhapa, Koshi, Nepal",+977-9800000011,Sunday to Friday,09:00-17:30,true,11
+jhapa-barhadashi-seah,Koshi,Jhapa,Barhadashi,4,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Barhadashi SEAH Support Desk,"Ward 4, Barhadashi, Jhapa, Koshi, Nepal",+977-9800000012,Sunday to Friday,09:00-17:30,true,12
+jhapa-jhapa-seah,Koshi,Jhapa,Jhapa,6,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Jhapa SEAH Support Desk,"Ward 6, Jhapa, Jhapa, Koshi, Nepal",+977-9800000013,Sunday to Friday,09:00-17:30,true,13
+jhapa-gauriganj-seah,Koshi,Jhapa,Gauriganj,3,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Gauriganj SEAH Support Desk,"Ward 3, Gauriganj, Jhapa, Koshi, Nepal",+977-9800000014,Sunday to Friday,09:00-17:30,true,14
+jhapa-damak-seah,Koshi,Jhapa,Damak,9,7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d,Damak SEAH Support Desk,"Ward 9, Damak, Jhapa, Koshi, Nepal",+977-9800000015,Sunday to Friday,09:00-17:30,true,15

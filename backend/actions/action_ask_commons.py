@@ -10,6 +10,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import FollowupAction
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseAction
+from backend.actions.utils.mapping_buttons import BUTTONS_SKIP
 
 
 #-----------------------------------------------------------------------------
@@ -141,7 +142,9 @@ class ActionAskComplainantMunicipalityTemp(BaseAction):
         province = tracker.get_slot("complainant_province")
         district = tracker.get_slot("complainant_district")
         message = self.get_utterance(1).format(district=district, province=province)
-        buttons = self.get_buttons(1)
+        # Force skip-only buttons for municipality prompt to avoid cross-form button leakage.
+        language_code = tracker.get_slot("language_code") or "en"
+        buttons = BUTTONS_SKIP.get(language_code, BUTTONS_SKIP["en"])
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 

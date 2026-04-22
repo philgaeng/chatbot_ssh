@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 import traceback
 import random
+import json
 from datetime import datetime
 
 # Import database configuration from constants.py (single source of truth)
@@ -249,8 +250,126 @@ class DatabaseManager(BaseDatabaseManager):
                 FOREIGN KEY (complainant_id) REFERENCES complainants_seah(complainant_id)
             );
         """
-        self.execute_query(create_complainants_seah, (), "create_complainants_seah")
-        self.execute_query(create_grievances_seah, (), "create_grievances_seah")
+        # DDL statements do not return rows; use execute_update to avoid fetchall() errors.
+        self.execute_update(create_complainants_seah, ())
+        self.execute_update(create_grievances_seah, ())
+        self._ensure_seah_contact_points_table()
+
+    def _ensure_seah_contact_points_table(self) -> None:
+        """Reference rows for SEAH center / referral text (spec 08)."""
+        ddl = """
+            CREATE TABLE IF NOT EXISTS seah_contact_points (
+                seah_contact_point_id TEXT PRIMARY KEY,
+                province TEXT,
+                district TEXT,
+                municipality TEXT,
+                ward TEXT,
+                project_uuid TEXT,
+                seah_center_name TEXT NOT NULL,
+                address TEXT,
+                phone TEXT,
+                opening_days TEXT,
+                opening_hours TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                sort_order INTEGER DEFAULT 0
+            );
+        """
+        self.execute_update(ddl, ())
+        seed = """
+            INSERT INTO seah_contact_points (
+                seah_contact_point_id, province, district, municipality, ward, project_uuid,
+                seah_center_name, address, phone, opening_days, opening_hours, is_active, sort_order
+            ) VALUES (
+                'default-national-seah',
+                NULL, NULL, NULL, NULL, NULL,
+                'SEAH Information Desk',
+                'Contact your nearest ADB SEAH focal point or national support line.',
+                '',
+                'Monday to Friday',
+                '09:00–17:00 (placeholder)',
+                TRUE,
+                0
+            ) ON CONFLICT (seah_contact_point_id) DO NOTHING;
+        """
+        try:
+            self.execute_update(seed, ())
+        except Exception as e:
+            self.logger.warning(f"seah_contact_points seed skipped: {e}")
+
+    def find_seah_contact_point(
+        self,
+        province: Optional[str],
+        district: Optional[str] = None,
+        municipality: Optional[str] = None,
+        ward: Optional[str] = None,
+        project_uuid: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Best-effort lookup for outro referral block (spec 08)."""
+        self._ensure_seah_contact_points_table()
+        p = (province or "").strip().lower()
+        rows: List[Dict[str, Any]] = []
+        try:
+            if p:
+                rows = self.execute_query(
+                    """
+                    SELECT * FROM seah_contact_points
+                    WHERE is_active = TRUE
+                      AND (
+                        province IS NULL
+                        OR LOWER(TRIM(province)) = %s
+                      )
+                    ORDER BY CASE WHEN province IS NULL THEN 1 ELSE 0 END,
+                             sort_order NULLS LAST, seah_contact_point_id
+                    """,
+                    (p,),
+                )
+            else:
+                rows = self.execute_query(
+                    """
+                    SELECT * FROM seah_contact_points
+                    WHERE is_active = TRUE AND province IS NULL
+                    ORDER BY sort_order NULLS LAST, seah_contact_point_id
+                    """,
+                    (),
+                )
+        except Exception as e:
+            self.logger.error(f"find_seah_contact_point: {e}")
+            return None
+
+        if not rows and p:
+            try:
+                rows = self.execute_query(
+                    """
+                    SELECT * FROM seah_contact_points
+                    WHERE is_active = TRUE AND province IS NULL
+                    ORDER BY sort_order NULLS LAST, seah_contact_point_id
+                    """,
+                    (),
+                )
+            except Exception:
+                return None
+
+        if not rows:
+            return None
+
+        def score(r: Dict[str, Any]) -> int:
+            s = 0
+            if project_uuid and r.get("project_uuid") and str(r["project_uuid"]).strip() == str(project_uuid).strip():
+                s += 100
+            if ward and r.get("ward") and str(r["ward"]).strip() == str(ward).strip():
+                s += 40
+            if municipality and r.get("municipality") and str(r["municipality"]).lower() == str(municipality).lower():
+                s += 30
+            if district and r.get("district") and str(r["district"]).lower() == str(district).lower():
+                s += 20
+            if p and r.get("province") and str(r["province"]).lower() == p:
+                s += 10
+            if r.get("province") is None:
+                s += 1
+            return s
+
+        best = max(rows, key=lambda r: (score(r), -(r.get("sort_order") or 0)))
+        return best
 
     def _generate_seah_case_id(self) -> str:
         year = datetime.now().strftime("%Y")
@@ -267,9 +386,19 @@ class DatabaseManager(BaseDatabaseManager):
         try:
             self._ensure_seah_tables()
 
-            complainant_id = data.get("complainant_id") or self.generate_complainant_id(data)
-            seah_case_id = data.get("seah_case_id") or self._generate_seah_case_id()
-            seah_public_ref = data.get("seah_public_ref") or self._generate_seah_public_ref()
+            not_provided = DEFAULT_VALUES.get("NOT_PROVIDED", "Not provided")
+
+            complainant_id = data.get("complainant_id")
+            if complainant_id in (None, "", not_provided):
+                complainant_id = self.generate_complainant_id(data)
+
+            seah_case_id = data.get("seah_case_id")
+            if seah_case_id in (None, "", not_provided):
+                seah_case_id = self._generate_seah_case_id()
+
+            seah_public_ref = data.get("seah_public_ref")
+            if seah_public_ref in (None, "", not_provided):
+                seah_public_ref = self._generate_seah_public_ref()
 
             complainant_payload = {
                 "complainant_id": complainant_id,
@@ -301,7 +430,7 @@ class DatabaseManager(BaseDatabaseManager):
                 "grievance_timeline": str(data.get("grievance_timeline") or ""),
                 "language_code": data.get("language_code", "en"),
                 "submission_type": "seah_intake",
-                "seah_payload": data,
+                "seah_payload": json.dumps(data, ensure_ascii=False, default=str),
             }
             self.execute_insert(
                 table_name="grievances_seah",

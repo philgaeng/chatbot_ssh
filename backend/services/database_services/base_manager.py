@@ -1539,6 +1539,246 @@ class TableDbManager(BaseDatabaseManager):
             self.logger.error(f"Error getting field names: {str(e)}")
             return []
 
+    def ensure_projects_table(self) -> bool:
+        """Create projects catalog table for SEAH/project picker flows."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS projects (
+                            project_uuid TEXT PRIMARY KEY,
+                            country TEXT NOT NULL DEFAULT 'Nepal',
+                            administrative_layer_level_1 TEXT,
+                            administrative_layer_level_2 TEXT,
+                            administrative_layer_level_3 TEXT,
+                            name_en TEXT NOT NULL,
+                            name_local TEXT,
+                            project_short_denomination TEXT,
+                            adb BOOLEAN DEFAULT TRUE,
+                            inactive_at TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
+                    )
+                    cur.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_short_denomination
+                        ON projects(project_short_denomination)
+                        """
+                    )
+                    cur.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_projects_geo_active
+                        ON projects(country, administrative_layer_level_1, administrative_layer_level_2, inactive_at)
+                        """
+                    )
+                    conn.commit()
+            self.logger.info("projects table ensured")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to ensure projects table: {e}")
+            return False
+
+    def seed_demo_project_kl_road(self) -> bool:
+        """Seed demo project row for today's SEAH demo."""
+        try:
+            if not self.ensure_projects_table():
+                return False
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO projects (
+                            project_uuid,
+                            country,
+                            administrative_layer_level_1,
+                            administrative_layer_level_2,
+                            name_en,
+                            name_local,
+                            project_short_denomination,
+                            adb,
+                            inactive_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (project_uuid)
+                        DO UPDATE SET
+                            country = EXCLUDED.country,
+                            administrative_layer_level_1 = EXCLUDED.administrative_layer_level_1,
+                            administrative_layer_level_2 = EXCLUDED.administrative_layer_level_2,
+                            name_en = EXCLUDED.name_en,
+                            name_local = EXCLUDED.name_local,
+                            project_short_denomination = EXCLUDED.project_short_denomination,
+                            adb = EXCLUDED.adb,
+                            inactive_at = EXCLUDED.inactive_at,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (
+                            "7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d",
+                            "Nepal",
+                            "Koshi",
+                            "Jhapa",
+                            "KL ROAD",
+                            "KL ROAD",
+                            "KL_ROAD",
+                            True,
+                            None,
+                        ),
+                    )
+                    conn.commit()
+            self.logger.info("Demo project KL ROAD seeded/updated")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to seed demo project: {e}")
+            return False
+
+    def list_active_projects_for_geo(
+        self,
+        *,
+        province: Optional[str] = None,
+        district: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Active rows from projects for SEAH picker (e.g. Jhapa / Koshi demo seed).
+
+        When province/district are empty, defaults to DEFAULT_PROVINCE / DEFAULT_DISTRICT
+        so the demo catalog still appears after location skip.
+        """
+        try:
+            if not self.ensure_projects_table():
+                return []
+            prov = (province or "").strip() or str(DEFAULT_VALUES.get("DEFAULT_PROVINCE") or "")
+            dist = (district or "").strip() or str(DEFAULT_VALUES.get("DEFAULT_DISTRICT") or "")
+            query = """
+                SELECT project_uuid, name_en, name_local, adb,
+                       administrative_layer_level_1, administrative_layer_level_2
+                FROM projects
+                WHERE inactive_at IS NULL
+                  AND TRIM(COALESCE(administrative_layer_level_1, '')) ILIKE TRIM(%s)
+                  AND TRIM(COALESCE(administrative_layer_level_2, '')) ILIKE TRIM(%s)
+                ORDER BY name_en NULLS LAST
+                LIMIT %s
+            """
+            return self.execute_query(
+                query,
+                (prov, dist, int(limit)),
+                operation="list_active_projects_for_geo",
+            )
+        except Exception as e:
+            self.logger.error(f"list_active_projects_for_geo failed: {e}")
+            return []
+
+    def get_active_project_by_uuid(self, project_uuid: str) -> Optional[Dict[str, Any]]:
+        """Single active project row by UUID, or None."""
+        try:
+            if not project_uuid or not self.ensure_projects_table():
+                return None
+            rows = self.execute_query(
+                """
+                SELECT project_uuid, name_en, name_local, adb
+                FROM projects
+                WHERE project_uuid = %s AND inactive_at IS NULL
+                LIMIT 1
+                """,
+                (str(project_uuid).strip(),),
+                operation="get_active_project_by_uuid",
+            )
+            return rows[0] if rows else None
+        except Exception as e:
+            self.logger.error(f"get_active_project_by_uuid failed: {e}")
+            return None
+
+    def seed_demo_jhapa_contact_points(self) -> bool:
+        """Seed mock SEAH contact points for all Jhapa municipalities."""
+        municipality_rows = [
+            {"name": "Mechinagar", "ward": "6", "phone": "+977-9800000001"},
+            {"name": "Buddhashanti", "ward": "3", "phone": "+977-9800000002"},
+            {"name": "Arjundhara", "ward": "5", "phone": "+977-9800000003"},
+            {"name": "Kankai", "ward": "2", "phone": "+977-9800000004"},
+            {"name": "Bhadrapur", "ward": "8", "phone": "+977-9800000005"},
+            {"name": "Birtamod", "ward": "1", "phone": "+977-9800000006"},
+            {"name": "Kamal", "ward": "4", "phone": "+977-9800000007"},
+            {"name": "Gauradaha", "ward": "5", "phone": "+977-9800000008"},
+            {"name": "Shivasatakshi", "ward": "7", "phone": "+977-9800000009"},
+            {"name": "Kachankawal", "ward": "2", "phone": "+977-9800000010"},
+            {"name": "Haldibari", "ward": "1", "phone": "+977-9800000011"},
+            {"name": "Barhadashi", "ward": "4", "phone": "+977-9800000012"},
+            {"name": "Jhapa", "ward": "6", "phone": "+977-9800000013"},
+            {"name": "Gauriganj", "ward": "3", "phone": "+977-9800000014"},
+            {"name": "Damak", "ward": "9", "phone": "+977-9800000015"},
+        ]
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS seah_contact_points (
+                            seah_contact_point_id TEXT PRIMARY KEY,
+                            province TEXT,
+                            district TEXT,
+                            municipality TEXT,
+                            ward TEXT,
+                            project_uuid TEXT,
+                            seah_center_name TEXT NOT NULL,
+                            address TEXT,
+                            phone TEXT,
+                            opening_days TEXT,
+                            opening_hours TEXT,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            sort_order INTEGER DEFAULT 0
+                        )
+                        """
+                    )
+                    for i, row in enumerate(municipality_rows, start=1):
+                        municipality = row["name"]
+                        ward = row["ward"]
+                        phone = row["phone"]
+                        seah_contact_point_id = f"jhapa-{municipality.lower()}-seah"
+                        cur.execute(
+                            """
+                            INSERT INTO seah_contact_points (
+                                seah_contact_point_id, province, district, municipality, ward, project_uuid,
+                                seah_center_name, address, phone, opening_days, opening_hours, is_active, sort_order
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (seah_contact_point_id)
+                            DO UPDATE SET
+                                province = EXCLUDED.province,
+                                district = EXCLUDED.district,
+                                municipality = EXCLUDED.municipality,
+                                ward = EXCLUDED.ward,
+                                project_uuid = EXCLUDED.project_uuid,
+                                seah_center_name = EXCLUDED.seah_center_name,
+                                address = EXCLUDED.address,
+                                phone = EXCLUDED.phone,
+                                opening_days = EXCLUDED.opening_days,
+                                opening_hours = EXCLUDED.opening_hours,
+                                is_active = EXCLUDED.is_active,
+                                sort_order = EXCLUDED.sort_order
+                            """,
+                            (
+                                seah_contact_point_id,
+                                "Koshi",
+                                "Jhapa",
+                                municipality,
+                                ward,
+                                "7b0c4f10-0fd6-4fc0-9f2d-1b070d2f2d3d",
+                                f"{municipality} SEAH Support Desk",
+                                f"Ward {ward}, {municipality}, Jhapa, Koshi, Nepal",
+                                phone,
+                                "Sunday to Friday",
+                                "09:00-17:30",
+                                True,
+                                i,
+                            ),
+                        )
+                    conn.commit()
+            self.logger.info("Demo Jhapa SEAH contact points seeded/updated")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to seed Jhapa contact points: {e}")
+            return False
+
     def migrate_grievance_timeline_column(self) -> bool:
         """Add grievance_timeline column if it doesn't exist and populate it with calculated values"""
         try:

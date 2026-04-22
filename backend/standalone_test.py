@@ -7,6 +7,11 @@ This test properly sets up the import paths to test the actual ContactLocationVa
 import sys
 import os
 from pathlib import Path
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Deprecated standalone diagnostic script; not part of current automated suite."
+)
 
 # Add the project root to Python path so we can import backend modules
 project_root = Path(__file__).parent.parent

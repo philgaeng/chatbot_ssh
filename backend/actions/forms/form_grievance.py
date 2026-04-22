@@ -254,9 +254,9 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
     ) -> List[Text]:
         self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed" - form completes
-        # (sensitive-issues subflow is handled by form_sensitive_issues, not here)
+        # (SEAH subflow is handled by form_seah_1 and follow-on forms, not here)
         if tracker.get_slot("grievance_new_detail") == "completed":
-            return []  # Form complete; state machine will transition to form_sensitive_issues if sensitive
+            return []  # Form complete; router/state machine transitions to SEAH forms when sensitive
 
         # Otherwise, keep asking for grievance_new_detail
         return ["grievance_new_detail"]
