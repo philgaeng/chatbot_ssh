@@ -542,7 +542,6 @@ class ActionAskFormSeahFocalPoint2SeahContactConsentChannel(BaseAction):
             buttons=self.get_buttons(1),
             phone_value=tracker.get_slot("complainant_phone"),
             email_value=tracker.get_slot("complainant_email"),
-            skip_value=self.SKIP_VALUE,
         )
         dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
         return []

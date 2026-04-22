@@ -313,28 +313,21 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
             buttons=buttons
         )
 
-    def _has_contact_value(self, value: Any, skip_value: str) -> bool:
-        """Return True only for meaningful user-provided contact values."""
-        if value is None:
-            return False
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if not normalized:
-                return False
-            if normalized in {skip_value.lower(), self.SKIP_VALUE.lower(), self.NOT_PROVIDED.lower()}:
-                return False
-        return True
-
     def get_available_seah_contact_channels(
         self,
         phone_value: Any,
         email_value: Any,
-        skip_value: Optional[str] = None,
     ) -> List[str]:
-        """Return channel choices that are valid for current available contacts."""
-        effective_skip = skip_value or self.SKIP_VALUE
-        has_phone = self._has_contact_value(phone_value, effective_skip)
-        has_email = self._has_contact_value(email_value, effective_skip)
+        """Return channel choices that are valid for current available contacts.
+
+        Phone uses ``self.helpers.is_valid_phone`` (same check as ``base_validate_phone`` /
+        OTP intake). Email uses ``self.helpers.email_is_valid_format`` (same as
+        ``validate_complainant_email_temp`` in ``form_contact``).
+        """
+        has_phone = isinstance(phone_value, str) and self.helpers.is_valid_phone(phone_value)
+        has_email = isinstance(email_value, str) and self.helpers.email_is_valid_format(
+            email_value.strip()
+        )
 
         channels: List[str] = []
         if has_phone:
@@ -351,7 +344,6 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
         buttons: List[Dict[str, str]],
         phone_value: Any,
         email_value: Any,
-        skip_value: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         """
         Keep channel options only when corresponding contact details exist.
@@ -361,7 +353,6 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
             self.get_available_seah_contact_channels(
                 phone_value=phone_value,
                 email_value=email_value,
-                skip_value=skip_value or self.SKIP_VALUE,
             )
         )
         payload_to_channel = {
@@ -563,14 +554,12 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
         return True
 
     def compute_seah_contact_provided(self, slots: Dict[Text, Any]) -> bool:
-        """True if complainant left a validated phone or email."""
-        phone = slots.get("complainant_phone")
-        if isinstance(phone, str) and self._slot_nonempty(phone) and self.helpers.is_valid_phone(phone):
-            return True
-        email = slots.get("complainant_email")
-        if isinstance(email, str) and self._slot_nonempty(email) and self.helpers.email_is_valid_format(email.strip()):
-            return True
-        return False
+        """True if complainant left a validated phone or email (same rules as SEAH channel availability)."""
+        channels = self.get_available_seah_contact_channels(
+            phone_value=slots.get("complainant_phone"),
+            email_value=slots.get("complainant_email"),
+        )
+        return bool(set(channels) & {"phone", "email", "both"})
 
     def seah_contact_provided_update(
         self,

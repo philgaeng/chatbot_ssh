@@ -96,6 +96,34 @@ def test_compute_seah_contact_provided_valid_phone():
     assert logic.compute_seah_contact_provided({"complainant_phone": "9841234567"})
 
 
+def test_get_available_seah_contact_channels_phone_only_db_placeholder_email():
+    """DB stores literal 'Not provided' for skipped email; channel list must stay phone-only."""
+    logic = _logic()
+    channels = logic.get_available_seah_contact_channels(
+        phone_value="9841234567",
+        email_value="Not provided",
+    )
+    assert channels == ["phone", "none"]
+
+
+def test_get_available_seah_contact_channels_non_string_email_ignored():
+    logic = _logic()
+    channels = logic.get_available_seah_contact_channels(
+        phone_value="9841234567",
+        email_value=False,
+    )
+    assert channels == ["phone", "none"]
+
+
+def test_get_available_seah_contact_channels_phone_and_email():
+    logic = _logic()
+    channels = logic.get_available_seah_contact_channels(
+        phone_value="9841234567",
+        email_value="user@example.com",
+    )
+    assert set(channels) == {"phone", "email", "both", "none"}
+
+
 def test_seah_contact_provided_update_only_seah_intake():
     logic = _logic()
     cur = {"complainant_phone": "9841234567", "complainant_email": None}

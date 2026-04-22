@@ -453,9 +453,12 @@ async def run_flow_turn(
         dispatcher.messages.extend(msgs)
         slot_updates.update(form_updates)
         if completed:
-            story_main = session.get("slots", {}).get("story_main")
-            identity_mode = session.get("slots", {}).get("sensitive_issues_follow_up")
-            seah_role = session.get("slots", {}).get("seah_victim_survivor_role")
+            # Merge this turn's form output so routing sees slots set in the same turn
+            # (e.g. seah_victim_survivor_role after the victim/survivor answer).
+            merged_slots = {**session.get("slots", {}), **form_updates}
+            story_main = merged_slots.get("story_main")
+            identity_mode = merged_slots.get("sensitive_issues_follow_up")
+            seah_role = merged_slots.get("seah_victim_survivor_role")
             next_state = "contact_form"
             session["active_loop"] = "form_contact"
             session["requested_slot"] = None
@@ -488,15 +491,13 @@ async def run_flow_turn(
                 )
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)
-            # In dedicated SEAH intake, anonymous route still passes through OTP form
-            # (with prefilled default OTP slots) before contact collection.
+            # Anonymous SEAH prefills complainant_phone to skip; ValidateFormOtp for sensitive
+            # intake only requires complainant_phone, so OTP would complete with zero utterances
+            # and the user would see a dead turn. Open contact/location collection directly.
             elif story_main == "seah_intake" and identity_mode == "anonymous":
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                otp_form = _get_otp_form()
+                contact_form = _get_contact_form()
                 msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
+                    contact_form, session, None, domain
                 )
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)

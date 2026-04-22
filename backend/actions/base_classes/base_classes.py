@@ -384,7 +384,6 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
             self.get_available_seah_contact_channels(
                 phone_value=tracker.get_slot("complainant_phone"),
                 email_value=tracker.get_slot("complainant_email"),
-                skip_value=self.SKIP_VALUE,
             )
         )
         if value in allowed_channels:
