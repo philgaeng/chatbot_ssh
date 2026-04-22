@@ -282,19 +282,13 @@ ngrok config add-authtoken YOUR_AUTH_TOKEN
 
 #### Step 3: Start ngrok Tunnel
 
+Use `ngrok` directly (legacy helper scripts were removed in Docker-only cleanup):
+
 ```bash
-# Make scripts executable
-chmod +x scripts/local/setup_ngrok.sh
-chmod +x scripts/local/check_ngrok.sh
-chmod +x scripts/local/stop_ngrok.sh
-
-# Start tunnel
-./scripts/local/setup_ngrok.sh
-
-# Output:
-# 🌍 Public URL: https://abc123.ngrok.io
-# 📝 Use this URL in your Google Sheets configuration
+ngrok http 5001
 ```
+
+Copy the generated HTTPS URL for your Google Sheets configuration.
 
 #### Step 4: Create Google Sheet
 
@@ -302,7 +296,7 @@ chmod +x scripts/local/stop_ngrok.sh
 2. Create new spreadsheet: "Nepal Chatbot - Local Monitoring"
 3. Go to **Extensions** → **Apps Script**
 4. Delete default code
-5. Paste contents from `scripts/local/google_sheets_local.js`
+5. Paste your Apps Script integration code from your secure source control or documentation
 6. Save script (Ctrl+S)
 
 #### Step 5: Configure Sheet
@@ -321,14 +315,11 @@ chmod +x scripts/local/stop_ngrok.sh
 ### Managing ngrok
 
 ```bash
-# Check status
-./scripts/local/check_ngrok.sh
+# Run
+ngrok http 5001
 
-# Stop tunnel
-./scripts/local/stop_ngrok.sh
-
-# Restart
-./scripts/local/setup_ngrok.sh restart
+# Stop
+# Press Ctrl+C in the ngrok terminal
 ```
 
 ### Office Authentication Setup
@@ -345,16 +336,8 @@ chmod +x scripts/local/stop_ngrok.sh
 
 #### Database Setup
 
-```bash
-cd /home/philg/projects/nepal_chatbot
-python scripts/database/create_office_management_table.py
-```
-
-This creates:
-
-- `office_management` table
-- `office_municipality_ward` junction table
-- User accounts in `office_user` table
+Office-auth setup should now be managed via SQL migrations/seed procedures (not ad-hoc scripts).
+Use your current migration workflow for any office-management schema changes.
 
 #### API Authentication
 
@@ -394,7 +377,7 @@ headers: {
 #### Connection Failed
 
 - Check Flask server: `curl http://localhost:5001/health`
-- Verify ngrok: `./scripts/local/check_ngrok.sh`
+- Verify ngrok is running and forwarding to `http://localhost:5001`
 - Check ngrok URL in Google Sheets
 
 #### Invalid Token

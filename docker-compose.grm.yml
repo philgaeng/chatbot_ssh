@@ -1,0 +1,127 @@
+# GRM Ticketing — Docker Compose overlay
+#
+# Run alongside the existing stack:
+#   docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d
+#
+# Or standalone (db + redis must already be running on host):
+#   docker compose -f docker-compose.grm.yml up -d
+#
+# One-shot migration (run from host, not Docker):
+#   python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+#
+# One-shot seed:
+#   python -m ticketing.seed.mock_tickets
+
+services:
+
+  # ── Ticketing API (FastAPI, port 5002) ────────────────────────────────────────
+  # network_mode: host → container shares host loopback → can reach localhost:5432 + localhost:6379
+  ticketing_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn ticketing.api.main:app --host 0.0.0.0 --port 5002
+    env_file:
+      - env.local
+    environment:
+      TICKETING_PORT: "5002"
+      REDIS_PASSWORD: ""
+      # Override to use the Docker db service (user/password/app_db)
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: app_db
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "5002:5002"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5002/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  # ── GRM Celery worker (SLA watchdog + grievance sync + notifications) ─────────
+  grm_celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      celery
+      -A ticketing.tasks.celery_app.celery_app
+      worker
+      -Q grm_ticketing
+      --loglevel=info
+      --concurrency=2
+      --without-gossip --without-mingle --without-heartbeat
+    env_file:
+      - env.local
+    environment:
+      REDIS_PASSWORD: ""
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: app_db
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── GRM Celery Beat (periodic task scheduler) ─────────────────────────────────
+  grm_celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      celery
+      -A ticketing.tasks.celery_app.celery_app
+      beat
+      --loglevel=info
+      --schedule /tmp/grm_celerybeat-schedule
+    env_file:
+      - env.local
+    environment:
+      REDIS_PASSWORD: ""
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: app_db
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - grm_celery
+    restart: unless-stopped
+
+  # ── GRM Ticketing UI (Next.js, port 3001) ─────────────────────────────────────
+  # Bridge network — browser calls NEXT_PUBLIC_API_URL which is localhost:5002
+  # (the ticketing_api container is on host network so port 5002 is the host port)
+  grm_ui:
+    build:
+      context: ./channels/ticketing-ui
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5002}
+        NEXT_PUBLIC_BACKEND_API_URL: ${NEXT_PUBLIC_BACKEND_API_URL:-http://localhost:5001}
+        NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
+        NEXT_PUBLIC_COGNITO_DOMAIN: ${NEXT_PUBLIC_COGNITO_DOMAIN:-}
+        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${NEXT_PUBLIC_COGNITO_CLIENT_ID:-}
+        NEXT_PUBLIC_COGNITO_REGION: ${NEXT_PUBLIC_COGNITO_REGION:-ap-southeast-1}
+        NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
+        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+    ports:
+      - "3001:3001"
+    restart: unless-stopped

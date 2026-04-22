@@ -87,29 +87,8 @@ run-remote:
 train-local:
 	bash /app/start_train.sh
 
-# Test the Rasa server locally
-run-local:
-	docker-compose up -d
-
 # Clean up temporary files locally
 clean:
 	rm -rf $(PROJECT_NAME).tar.gz
 
-kill_action_server:
-	pkill -f "rasa run actions"
-
-# Systemd service management commands
-systemd-start:
-	sudo systemctl start rasa.service rasa-actions.service nginx
-
-systemd-stop:
-	sudo systemctl stop rasa.service rasa-actions.service
-
-systemd-restart:
-	sudo systemctl restart rasa.service rasa-actions.service nginx
-
-systemd-status:
-	sudo systemctl status rasa.service rasa-actions.service nginx | cat
-
-systemd-logs:
-	sudo tail -n 50 /home/ubuntu/nepal_chatbot/rasa.log
+# Docker-only runtime: host-level process/systemd controls removed.

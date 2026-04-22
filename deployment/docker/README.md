@@ -58,6 +58,8 @@ If you **must** keep system Nginx for other sites, do **not** share port 80: cha
 
 - Docker Desktop (Windows + WSL integration) or Docker Engine on Linux.
 - **`env.local`** in the repo root (same as non-Docker dev). Compose references it via `env_file`; `environment:` blocks override hostnames for Docker (`POSTGRES_HOST=db`, `REDIS_HOST=redis`, etc.).
+- **`DB_ENCRYPTION_KEY`** must be present in `env.local` (or provided as a deployment secret) for sensitive-field encryption paths.
+- Docker runtime expects Redis without AUTH by default in this stack; compose files override `REDIS_PASSWORD` to empty string for app containers.
 
 ## First-time: create DB schema
 
@@ -111,3 +113,4 @@ curl -4 -s http://127.0.0.1/rest-webchat/ | head
 - [`../nginx/webchat_rest_compose_wsl.conf`](../nginx/webchat_rest_compose_wsl.conf) — local WSL compose nginx
 - [`../nginx/webchat_rest_compose_aws.conf`](../nginx/webchat_rest_compose_aws.conf) — AWS TLS compose nginx
 - [`../../scripts/docker/init_db.sh`](../../scripts/docker/init_db.sh) — sources `scripts/database/config.sh`, runs `scripts/database/init.py`
+- [`../../docs/MIGRATIONS_POLICY.md`](../../docs/MIGRATIONS_POLICY.md) — Alembic-first migration policy

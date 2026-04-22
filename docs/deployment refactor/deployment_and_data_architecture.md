@@ -82,10 +82,10 @@ Nginx may run **on the host** (current samples) or in a container with published
 
 ### Concrete steps (outline)
 
-1. **`docker-compose.yml`** (future implementation): services for orchestrator image, backend image, Celery (possibly multiple services or one worker with multiple queues—see [`scripts/rest_api/launch_servers_celery.sh`](../../scripts/rest_api/launch_servers_celery.sh)), `redis:7`, `postgres:15`, volumes for Postgres data.
+1. **`docker-compose.yml`**: services for orchestrator image, backend image, Celery (possibly multiple services or one worker with multiple queues), `redis:7`, `postgres:15`, volumes for Postgres data.
 2. **Nginx:** Extend existing repo configs; do not introduce alternate edge proxies.
 3. **Deploy flow:** `git push` → on server `docker compose up -d --build` (or CI-driven).
-4. **Migrations:** Prefer **Alembic** when schema migrations are introduced; there is **no** `alembic.ini` in the repo today—treat `alembic upgrade head` as a **future** operational step once migrations exist. Until then, follow whatever SQL/process you use today.
+4. **Migrations:** Prefer **Alembic** and follow [`../MIGRATIONS_POLICY.md`](../MIGRATIONS_POLICY.md) for operational commands and guardrails.
 5. **Backups (mandatory):** `pg_dump` (compressed), schedule with **cron** or a Celery beat job; in Phase 1 store on disk or sync to S3 when Phase 2 bucket exists.
 
 ### Phase 1 limitations

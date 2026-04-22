@@ -23,7 +23,7 @@ If the task touches **Phase 2** storage or crawlers, also read [`../internal_den
 1. **No Rasa server in production** — Conversation is **Orchestrator** (FastAPI) + **Rasa SDK** actions in-process. Do **not** add `rasa run`, a separate Rasa container, or a “classic” action server container unless the human explicitly changes product direction.
 2. **Two HTTP services (typical):** Orchestrator (often **`~8000`**) and Backend API (**`~5001`**). Nginx must route to the **same** upstream names/ports the human has in their manifest.
 3. **Edge proxy:** **Nginx only** — extend existing `deployment/nginx/*.conf`. Do **not** introduce Caddy, Traefik, or other edge proxies unless the human explicitly asks.
-4. **Celery:** App module is **`backend.task_queue.celery_app`**. Workers use **named queues** (`-Q <queue>`). See [`../../scripts/rest_api/launch_servers_celery.sh`](../../scripts/rest_api/launch_servers_celery.sh) for patterns.
+4. **Celery:** App module is **`backend.task_queue.celery_app`**. Workers use **named queues** (`-Q <queue>`). Use Docker Compose service commands/patterns in the current compose files instead of removed legacy launch scripts.
 5. **Secrets:** Never commit passwords, API keys, or production URLs with embedded credentials. **Local dev:** `env.local` / local-only files. **Stage/prod:** environment variables + **AWS** (Parameter Store, Secrets Manager) as described in `deployment_and_data_architecture.md`
 
 ---
@@ -41,7 +41,7 @@ If the task touches **Phase 2** storage or crawlers, also read [`../internal_den
 
 1. Do **not** copy generic tutorials that use `uvicorn main:app` from `./backend` — this repo uses **`uvicorn backend.api.fastapi_app:app`** and **`uvicorn orchestrator.main:app`** (or ASGI variant per `BACKEND.md` / launch scripts).
 2. Prefer **one** `docker-compose.yml` (or a documented base + override) aligned with `deployment_and_data_architecture.md`.
-3. **Migrations:** There is **no** committed `alembic.ini` today — do not assume `alembic upgrade head` works until the project adds Alembic; document manual steps if needed.
+3. **Migrations:** Follow Alembic-first workflow documented in [`../MIGRATIONS_POLICY.md`](../MIGRATIONS_POLICY.md) (`ticketing/migrations/alembic.ini`).
 
 ---
 

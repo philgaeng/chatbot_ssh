@@ -2,6 +2,8 @@
 
 Complete operations guide covering monitoring, troubleshooting, maintenance, and common procedures.
 
+> Note: current operations are Docker-first. Prefer `docker compose` service health/log checks and Alembic-based migrations per `docs/MIGRATIONS_POLICY.md`.
+
 ## Table of Contents
 
 - [Monitoring](#monitoring)
@@ -299,7 +301,7 @@ FROM file_attachments;
 #### Email Alerts
 
 ```python
-# scripts/monitoring/alerts.py
+# Example alert helper (inline)
 
 import smtplib
 from email.mime.text import MIMEText
@@ -357,8 +359,8 @@ fi
 ```bash
 crontab -e
 
-# Add line:
-*/5 * * * * /home/ubuntu/nepal_chatbot/scripts/monitoring/monitor.sh
+# Add line (inline health/log snapshot every 5 minutes):
+*/5 * * * * cd /home/ubuntu/nepal_chatbot && docker compose ps >> /var/log/nepal_chatbot_monitor.log 2>&1
 ```
 
 ## Log Management
@@ -551,8 +553,8 @@ echo "$(date): Database backup completed: $BACKUP_FILE" >> /var/log/nepal_chatbo
 ```bash
 crontab -e
 
-# Daily at 2 AM
-0 2 * * * /home/ubuntu/nepal_chatbot/scripts/backup/backup_database.sh
+# Daily at 2 AM (inline backup command)
+0 2 * * * pg_dump -U nepal_grievance_admin -d grievance_db -F c -f /home/ubuntu/backups/database/grievance_db_$(date +\%Y\%m\%d_\%H\%M\%S).dump
 ```
 
 #### Restore Database
@@ -910,15 +912,14 @@ sudo systemctl restart postgresql
 
 ```bash
 # Check all services
-./scripts/monitoring/health_check.sh
+docker compose ps
 
-# Test Rasa
-rasa shell --debug
+# Tail backend/orchestrator logs
+docker compose logs -f backend orchestrator
 
-# Test API
-curl -X POST http://localhost:5005/webhooks/rest/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"sender": "test", "message": "hello"}'
+# Test API health
+curl http://localhost:5001/health
+curl http://localhost:8000/health
 
 # Check database
 psql -U nepal_grievance_admin -d grievance_db
@@ -936,15 +937,14 @@ celery -A task_queue events
 
 ```bash
 # Restart all services
-sudo systemctl restart nepal-rasa nepal-actions nepal-flask nepal-celery-llm
+docker compose restart
 
 # Restart individually
-sudo systemctl restart nepal-rasa
-sudo systemctl restart nepal-actions
-sudo systemctl restart nepal-flask
+docker compose restart backend
+docker compose restart orchestrator
 
 # Check status
-sudo systemctl status nepal-rasa nepal-actions nepal-flask
+docker compose ps
 ```
 
 ### Deploy Updates
@@ -954,7 +954,7 @@ sudo systemctl status nepal-rasa nepal-actions nepal-flask
 # deploy_update.sh
 
 # Stop services
-sudo systemctl stop nepal-rasa nepal-actions nepal-flask nepal-celery-llm
+docker compose down
 
 # Backup
 pg_dump -U nepal_grievance_admin -d grievance_db -F c -f backup_pre_update.dump
@@ -962,24 +962,15 @@ pg_dump -U nepal_grievance_admin -d grievance_db -F c -f backup_pre_update.dump
 # Pull updates
 git pull origin main
 
-# Update dependencies
-source rasa-env/bin/activate
-pip install -r requirements.txt --upgrade
-
 # Run migrations
-python scripts/database/migrate.py
-
-# Retrain Rasa (if needed)
-cd rasa_chatbot
-rasa train
-cd ..
+python -m alembic -c ticketing/migrations/alembic.ini upgrade head
 
 # Start services
-sudo systemctl start nepal-rasa nepal-actions nepal-flask nepal-celery-llm
+docker compose up -d --build
 
 # Verify
 sleep 10
-./scripts/monitoring/health_check.sh
+docker compose ps
 ```
 
 ### Clear Cache
@@ -1006,10 +997,10 @@ sudo -u postgres psql -c "DROP DATABASE grievance_db;"
 sudo -u postgres psql -c "CREATE DATABASE grievance_db;"
 
 # Initialize schema
-python scripts/database/init.py
+docker compose --profile init run --rm db_init
 
 # Restart services
-sudo systemctl restart nepal-rasa nepal-actions nepal-flask
+docker compose up -d --build
 ```
 
 ## Security Operations
