@@ -55,10 +55,10 @@ Required environment variables:
 - `REDIS_HOST`, `REDIS_PASSWORD` - Redis configuration
 - `DB_ENCRYPTION_KEY` - For encrypting sensitive data
 
-### 3. Initialize Database
+### 3. Initialize Database (Docker)
 
 ```bash
-python scripts/database/init.py
+docker compose --profile init run --rm db_init
 ```
 
 ### 4. Train Rasa Model
@@ -72,11 +72,7 @@ cd ..
 ### 5. Start Services
 
 ```bash
-# Start all servers (Rasa, Actions, Flask, Celery)
-./scripts/local/launch_servers.sh
-
-# Or start individually
-python run_servers.py --all
+docker compose up -d --build
 ```
 
 ### 6. Access the System
@@ -96,6 +92,7 @@ Complete documentation is available in the `docs/` directory:
 - **[Rasa Guide](docs/RASA.md)** - Conversation flows, forms, and NLU training
 - **[Integrations](docs/INTEGRATIONS.md)** - GRM, Google Sheets, and OAuth setup
 - **[Operations](docs/OPERATIONS.md)** - Monitoring, troubleshooting, and maintenance
+- **[Migrations Policy](docs/MIGRATIONS_POLICY.md)** - Alembic-first schema change policy
 
 ## 🏗️ System Architecture
 
@@ -181,11 +178,8 @@ rasa train
 ### Restarting Services
 
 ```bash
-# Kill all processes
-pkill -f run_servers.py
-
-# Restart
-./scripts/local/launch_servers.sh
+docker compose down
+docker compose up -d --build
 ```
 
 ### Viewing Logs
