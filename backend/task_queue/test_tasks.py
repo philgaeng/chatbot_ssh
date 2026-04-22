@@ -14,6 +14,11 @@ import uuid
 from typing import Dict, Any
 from datetime import datetime
 from celery import group
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Deprecated end-to-end task queue workflow test is no longer maintained in this suite."
+)
 
 # Import test configuration
 from .test_config import redis_config

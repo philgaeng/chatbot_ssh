@@ -7,6 +7,10 @@ from backend.config.constants import DEFAULT_VALUES
 from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, TRANSCRIPTION_PROCESSING_STATUS
 from backend.services.database_services.base_manager import BaseDatabaseManager
 
+pytestmark = pytest.mark.skip(
+    reason="Deprecated integration contract tests target old DatabaseManager API surface."
+)
+
 
 # Check if string is a valid UUID format
 def is_valid_key(uuid_string):

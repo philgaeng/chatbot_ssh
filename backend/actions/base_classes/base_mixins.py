@@ -12,7 +12,7 @@ import json
 import inspect
 import logging
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
-from backend.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
+from backend.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY, BUTTONS_SEAH_PROJECT_IDENTIFICATION
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.services.messaging import Messaging
 from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, USER_FIELDS, GRIEVANCE_FIELDS, CLASSIFICATION_DATA, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, ADMIN_EMAILS
@@ -313,6 +313,304 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
             buttons=buttons
         )
 
+    def get_available_seah_contact_channels(
+        self,
+        phone_value: Any,
+        email_value: Any,
+    ) -> List[str]:
+        """Return channel choices that are valid for current available contacts.
+
+        Phone uses ``self.helpers.is_valid_phone`` (same check as ``base_validate_phone`` /
+        OTP intake). Email uses ``self.helpers.email_is_valid_format`` (same as
+        ``validate_complainant_email_temp`` in ``form_contact``).
+        """
+        has_phone = isinstance(phone_value, str) and self.helpers.is_valid_phone(phone_value)
+        has_email = isinstance(email_value, str) and self.helpers.email_is_valid_format(
+            email_value.strip()
+        )
+
+        channels: List[str] = []
+        if has_phone:
+            channels.append("phone")
+        if has_email:
+            channels.append("email")
+        if has_phone and has_email:
+            channels.append("both")
+        channels.append("none")
+        return channels
+
+    def build_seah_contact_channel_buttons(
+        self,
+        buttons: List[Dict[str, str]],
+        phone_value: Any,
+        email_value: Any,
+    ) -> List[Dict[str, str]]:
+        """
+        Keep channel options only when corresponding contact details exist.
+        Always keep "none" as an opt-out fallback.
+        """
+        allowed_channels = set(
+            self.get_available_seah_contact_channels(
+                phone_value=phone_value,
+                email_value=email_value,
+            )
+        )
+        payload_to_channel = {
+            "/phone": "phone",
+            "/email": "email",
+            "/both": "both",
+            "/none": "none",
+        }
+
+        filtered_buttons: List[Dict[str, str]] = []
+        for button in buttons:
+            payload = button.get("payload")
+            channel = payload_to_channel.get(payload)
+            if channel and channel not in allowed_channels:
+                continue
+            filtered_buttons.append(button)
+        return filtered_buttons
+
+    def parse_project_pick_uuid(self, slot_value: Any) -> Optional[str]:
+        """If slot text is /project_pick{...} or project_pick{...}, return project UUID."""
+        if not isinstance(slot_value, str):
+            return None
+        raw = slot_value.strip().lstrip("/")
+        match = re.match(r"^project_pick\s*(\{.*\})\s*$", raw, re.DOTALL)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return None
+        pid = data.get("id") or data.get("project_uuid")
+        if isinstance(pid, str) and len(pid.strip()) >= 8:
+            return pid.strip()
+        return None
+
+    def _project_button_title(self, row: Dict[str, Any], language_code: str) -> str:
+        if language_code == "ne" and row.get("name_local"):
+            title = str(row["name_local"]).strip()
+        else:
+            title = (str(row.get("name_en") or row.get("name_local") or "Project")).strip()
+        if len(title) > 40:
+            title = title[:37] + "..."
+        return title
+
+    def build_seah_project_identification_buttons(
+        self,
+        tracker: Tracker,
+        *,
+        max_projects: int = 12,
+    ) -> List[Dict[str, str]]:
+        """Quick-reply buttons: active projects for complainant geo + static fallbacks."""
+        language_code = tracker.get_slot("language_code") or "en"
+        lang = language_code if language_code in BUTTONS_SEAH_PROJECT_IDENTIFICATION else "en"
+        fallback = list(BUTTONS_SEAH_PROJECT_IDENTIFICATION.get(lang) or BUTTONS_SEAH_PROJECT_IDENTIFICATION["en"])
+
+        province = tracker.get_slot("complainant_province")
+        district = tracker.get_slot("complainant_district")
+        table_manager = getattr(self.db_manager, "table", self.db_manager)
+        try:
+            rows = table_manager.list_active_projects_for_geo(
+                province=province,
+                district=district,
+                limit=max_projects,
+            )
+        except Exception:
+            rows = []
+
+        if not rows:
+            try:
+                rows = table_manager.execute_query(
+                    """
+                    SELECT project_uuid, name_en, name_local, adb
+                    FROM projects
+                    WHERE inactive_at IS NULL
+                    ORDER BY name_en NULLS LAST
+                    LIMIT %s
+                    """,
+                    (int(max_projects),),
+                    operation="list_active_projects_global",
+                )
+            except Exception:
+                rows = []
+
+        project_buttons: List[Dict[str, str]] = []
+        for row in rows or []:
+            uuid = row.get("project_uuid")
+            if not uuid:
+                continue
+            title = self._project_button_title(row, lang)
+            project_buttons.append(
+                {"title": title, "payload": f'/project_pick{{"id":"{uuid}"}}'}
+            )
+        return project_buttons + fallback
+
+    def validate_seah_project_identification_value(
+        self,
+        slot_value: Any,
+        *,
+        language_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Validate slot input for seah_project_identification (free text or catalog pick)."""
+        if slot_value is None:
+            return {"seah_project_identification": None}
+
+        value = slot_value.strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+
+        if value in ("skip", self.SKIP_VALUE):
+            value = "cannot_specify"
+
+        if value in ("cannot_specify", "not_adb_project"):
+            return {
+                "seah_project_identification": value,
+                "seah_not_adb_project": value == "not_adb_project",
+                "project_uuid": None,
+            }
+
+        pick = self.parse_project_pick_uuid(str(slot_value)) if slot_value is not None else None
+        if pick:
+            table_manager = getattr(self.db_manager, "table", self.db_manager)
+            row = table_manager.get_active_project_by_uuid(pick)
+            if not row:
+                return {"seah_project_identification": None}
+            lang = language_code or self.language_code or "en"
+            if lang == "ne" and row.get("name_local"):
+                display = str(row["name_local"]).strip()
+            else:
+                display = (str(row.get("name_en") or row.get("name_local") or "")).strip() or pick
+            adb = row.get("adb")
+            if adb is None:
+                adb = True
+            return {
+                "seah_project_identification": display,
+                "project_uuid": pick,
+                "seah_not_adb_project": not bool(adb),
+            }
+
+        if isinstance(value, str) and len(value) >= 2:
+            return {
+                "seah_project_identification": value,
+                "seah_not_adb_project": False,
+                "project_uuid": None,
+            }
+
+        return {"seah_project_identification": None}
+
+    def find_seah_contact_point(self, tracker: Tracker) -> Optional[Dict[str, Any]]:
+        """Resolve best-matching SEAH contact centre from current complainant/project slots."""
+        try:
+            return self.db_manager.find_seah_contact_point(
+                province=tracker.get_slot("complainant_province"),
+                district=tracker.get_slot("complainant_district"),
+                municipality=tracker.get_slot("complainant_municipality"),
+                ward=str(tracker.get_slot("complainant_ward") or ""),
+                project_uuid=tracker.get_slot("project_uuid"),
+            )
+        except Exception as e:
+            self.logger.warning(f"{self.name()}: contact point lookup failed: {e}")
+            return None
+
+    def format_seah_contact_point_block(self, row: Dict[str, Any], language_code: str) -> str:
+        """Build user-visible block from seah_contact_points row."""
+        name = row.get("seah_center_name") or ""
+        addr = row.get("address") or ""
+        phone = row.get("phone") or ""
+        days = row.get("opening_days") or ""
+        hours = row.get("opening_hours") or ""
+        if language_code == "ne":
+            parts = [
+                f"**{name}**" if name else "",
+                f"ठेगाना: {addr}" if addr else "",
+                f"फोन: {phone}" if phone else "",
+                f"खुला दिन: {days}" if days else "",
+                f"समय: {hours}" if hours else "",
+            ]
+        else:
+            parts = [
+                f"**{name}**" if name else "",
+                f"Address: {addr}" if addr else "",
+                f"Phone: {phone}" if phone else "",
+                f"Opening days: {days}" if days else "",
+                f"Opening hours: {hours}" if hours else "",
+            ]
+        return "\n".join(p for p in parts if p)
+
+    def _slot_nonempty(self, value: Any) -> bool:
+        skip_values = {
+            None,
+            "",
+            self.DEFAULT_VALUES.get("SKIP_VALUE"),
+            "slot_skipped",
+            "skipped",
+        }
+        if value in skip_values:
+            return False
+        if isinstance(value, str) and not value.strip():
+            return False
+        return True
+
+    def compute_seah_contact_provided(self, slots: Dict[Text, Any]) -> bool:
+        """True if complainant left a validated phone or email (same rules as SEAH channel availability)."""
+        channels = self.get_available_seah_contact_channels(
+            phone_value=slots.get("complainant_phone"),
+            email_value=slots.get("complainant_email"),
+        )
+        return bool(set(channels) & {"phone", "email", "both"})
+
+    def seah_contact_provided_update(
+        self,
+        story_main: Any,
+        current_slots: Dict[str, Any],
+        updates: Dict[str, Any],
+    ) -> Dict[str, bool]:
+        """Slot fragment for dual-write of seah_contact_provided during SEAH intake."""
+        if story_main != "seah_intake":
+            return {}
+        merged = dict(current_slots)
+        merged.update(dict(updates))
+        return {"seah_contact_provided": self.compute_seah_contact_provided(merged)}
+
+    def resolve_seah_outro_variant(self, slots: Dict[Text, Any]) -> Text:
+        """Return utterance key suffix for action_seah_outro."""
+        role = slots.get("seah_victim_survivor_role")
+        if role == "focal_point":
+            return "focal_default"
+
+        anonymous_route = slots.get("seah_anonymous_route")
+        if anonymous_route is None:
+            anonymous_route = slots.get("sensitive_issues_follow_up") == "anonymous"
+        elif isinstance(anonymous_route, str):
+            anonymous_route = anonymous_route.lower() in ("true", "anonymous", "1", "yes")
+
+        contact_ok = slots.get("seah_contact_provided")
+        if contact_ok is None:
+            contact_ok = self.compute_seah_contact_provided(slots)
+        consent = slots.get("complainant_consent")
+        channel = slots.get("seah_contact_consent_channel")
+
+        if role == "victim_survivor":
+            if (
+                anonymous_route
+                or not contact_ok
+                or consent is False
+                or channel in (None, "none", "email")
+            ):
+                return "victim_limited_contact"
+            if contact_ok and consent is not False and channel in ("phone", "both"):
+                return "victim_contact_ok"
+            return "victim_limited_contact"
+
+        if role == "not_victim_survivor":
+            if anonymous_route:
+                return "not_victim_anonymous"
+            return "not_victim_identified"
+
+        return "victim_limited_contact"
+
 class ActionHelpersMixin(
                         LanguageHelpersMixin,
                         SensitiveContentHelpersMixin):
@@ -555,8 +853,28 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
         story_main = tracker.get_slot("story_main")
         story_route = tracker.get_slot("story_route")  # e.g., "grievance_id" or "complainant_phone"
         story_step = tracker.get_slot("story_step")    # e.g., "request_follow_up"
+        grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
+        seah_victim_survivor_role = tracker.get_slot("seah_victim_survivor_role")
         
         self.logger.debug(f"get_next_action_for_form - story: {story_main}, form: {form_name}, route: {story_route}, step: {story_step}")
+
+        # Dedicated SEAH / sensitive-intake transitions.
+        # This keeps SEAH routing explicit while preserving default grievance/status paths.
+        if story_main in ("new_grievance", "seah_intake"):
+            if form_name == "form_grievance" and grievance_sensitive_issue is True:
+                return "form_seah_1"
+            if form_name == "form_seah_1":
+                if grievance_sensitive_issue is False:
+                    return "form_grievance" if story_main == "new_grievance" else "action_outro_sensitive_issues"
+                return "form_otp"
+            if form_name == "form_otp" and (grievance_sensitive_issue is True or story_main == "seah_intake"):
+                return "form_contact"
+            if form_name == "form_contact" and (grievance_sensitive_issue is True or story_main == "seah_intake"):
+                if seah_victim_survivor_role == "focal_point":
+                    return "form_seah_focal_point_1"
+                return "form_seah_2"
+            if form_name in ("form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2"):
+                return "action_submit_grievance"
         
         #nested dictionary for the status check next action as it is used in multiple places
         dic_status_check_next_action = {    
@@ -571,6 +889,15 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                 "form_contact": "form_otp",
                 "form_otp": "action_submit_grievance",
                 "None": "action_next_action"
+            },
+            "seah_intake": {
+                "form_seah_1": "form_otp",
+                "form_otp": "form_contact",
+                "form_contact": "form_seah_2",
+                "form_seah_2": "action_submit_grievance",
+                "form_seah_focal_point_1": "form_seah_focal_point_2",
+                "form_seah_focal_point_2": "action_submit_grievance",
+                "None": "action_next_action",
             },
             "status_check": {
                 "form_status_check_1": {

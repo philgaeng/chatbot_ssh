@@ -64,6 +64,20 @@ export function handleCustomPayload(custom) {
       window.openFileUploadModal();
     }
   }
+
+  if (custom.clear_window || custom.custom?.clear_window) {
+    if (typeof window.handleClearSessionCommand === "function") {
+      window.handleClearSessionCommand();
+    }
+    return;
+  }
+
+  if (custom.close_browser_tab || custom.custom?.close_browser_tab) {
+    if (typeof window.handleCloseWindowCommand === "function") {
+      window.handleCloseWindowCommand();
+    }
+    return;
+  }
 }
 
 // Task status updates from HTTP APIs (if used)
@@ -131,6 +145,18 @@ const GO_BACK_PAYLOAD = "__go_back_to_chat__";
 
 // Quick reply handler (called from UI Actions). Returns true if handled locally (caller should not remove quick replies).
 export function handleQuickReplyClick(payload) {
+  if (payload === "/nav_clear") {
+    if (typeof window.handleClearSessionCommand === "function") {
+      window.handleClearSessionCommand();
+    }
+    return true;
+  }
+  if (payload === "/nav_close_browser_tab") {
+    if (typeof window.handleCloseWindowCommand === "function") {
+      window.handleCloseWindowCommand();
+    }
+    return true;
+  }
   if (payload === ADD_MORE_PAYLOAD) {
     if (typeof window.handleAddMoreFiles === "function") {
       window.handleAddMoreFiles();

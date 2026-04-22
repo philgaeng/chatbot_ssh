@@ -34,10 +34,12 @@ from .forms.form_contact import *
 from .forms.form_grievance import *
 from .forms.form_story_main_route_step import *
 from .forms.form_otp import *
+from .forms.form_seah_1 import *
+from .forms.form_seah_2 import *
+from .forms.form_seah_focal_point import *
 from .forms.form_status_check import *
 from .forms.form_status_check_skip import *
 from .forms.form_grievance_complainant_review import *
-from .forms.form_sensitive_issues import *
 from .test_routing import *
 
 

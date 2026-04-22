@@ -60,6 +60,11 @@ export function appendMessage(msg, type) {
   messages.scrollTop = messages.scrollHeight;
 }
 
+export function clearMessages() {
+  if (!messages) return;
+  messages.innerHTML = "";
+}
+
 export function appendQuickReplies(quickReplies) {
   const quickRepliesDiv = document.createElement("div");
   quickRepliesDiv.classList.add("quick-replies");

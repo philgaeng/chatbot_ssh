@@ -89,8 +89,8 @@ def test_status_check_entry_flow(client: TestClient):
         assert any("buttons" in m for m in body3["messages"])
 
 
-def test_sensitive_content_flow_goes_to_form_sensitive_issues(client: TestClient):
-    """When grievance text triggers sensitive content (keyword), Submit details -> form_sensitive_issues then contact_form."""
+def test_sensitive_content_flow_goes_to_form_seah_1(client: TestClient):
+    """When grievance text triggers sensitive content, Submit details enters dedicated SEAH intake step 1."""
     user_id = "orchestrator-sensitive-1"
 
     # 1) Intro
@@ -115,14 +115,14 @@ def test_sensitive_content_flow_goes_to_form_sensitive_issues(client: TestClient
     assert r4.status_code == 200
     assert r4.json()["next_state"] == "form_grievance"
 
-    # 5) Submit details -> should move to form_sensitive_issues (not contact_form)
+    # 5) Submit details -> should move to form_seah_1 (not contact_form)
     r5 = client.post(
         "/message", json={"user_id": user_id, "payload": "/submit_details"}
     )
     assert r5.status_code == 200
     body5 = r5.json()
-    assert body5["next_state"] == "form_sensitive_issues", (
-        f"Expected form_sensitive_issues, got {body5['next_state']}"
+    assert body5["next_state"] == "form_seah_1", (
+        f"Expected form_seah_1, got {body5['next_state']}"
     )
 
 
@@ -138,7 +138,7 @@ def test_seah_intake_entry_from_main_menu(client: TestClient):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["next_state"] == "form_sensitive_issues"
+    assert body["next_state"] == "form_seah_1"
     assert isinstance(body["messages"], list)
 
 
@@ -154,7 +154,7 @@ def test_seah_intake_entry_from_main_menu_nepali(client: TestClient):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["next_state"] == "form_sensitive_issues"
+    assert body["next_state"] == "form_seah_1"
     assert isinstance(body["messages"], list)
 
 

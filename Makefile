@@ -18,6 +18,29 @@ SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNIN
 # Docker Compose Command
 DOCKER_COMPOSE = docker compose
 
+# --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
+# Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
+.PHONY: compose_docker_wsl compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_seed_seah_catalog
+
+compose_docker_wsl:
+	$(DOCKER_COMPOSE) up -d --build
+
+# Seed projects + Jhapa SEAH contact points into Compose Postgres (app_db).
+# Compose overrides DATABASE_URL to db:5432/app_db — host-only seeds do not apply here.
+compose_seed_seah_catalog:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python scripts/database/migrate_seah_demo_catalog.py
+
+compose_docker_wsl_down:
+	$(DOCKER_COMPOSE) down
+
+# Recreate only nginx after editing deployment/nginx/webchat_rest_compose_wsl.conf
+compose_docker_wsl_nginx:
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
+
+# AWS / TLS: uses docker-compose.aws.yml override (443, cert mounts)
+compose_docker_aws:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml up -d --build
+
 # SSH into the training remote host
 ssh-training:
 	$(SSH_TRAINING)
@@ -64,29 +87,8 @@ run-remote:
 train-local:
 	bash /app/start_train.sh
 
-# Test the Rasa server locally
-run-local:
-	docker-compose up -d
-
 # Clean up temporary files locally
 clean:
 	rm -rf $(PROJECT_NAME).tar.gz
 
-kill_action_server:
-	pkill -f "rasa run actions"
-
-# Systemd service management commands
-systemd-start:
-	sudo systemctl start rasa.service rasa-actions.service nginx
-
-systemd-stop:
-	sudo systemctl stop rasa.service rasa-actions.service
-
-systemd-restart:
-	sudo systemctl restart rasa.service rasa-actions.service nginx
-
-systemd-status:
-	sudo systemctl status rasa.service rasa-actions.service nginx | cat
-
-systemd-logs:
-	sudo tail -n 50 /home/ubuntu/nepal_chatbot/rasa.log
+# Docker-only runtime: host-level process/systemd controls removed.
