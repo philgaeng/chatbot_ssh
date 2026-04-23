@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ticketing.api.routers import tickets, workflows, users
 from ticketing.api.routers import settings as settings_router
 from ticketing.api.routers import reports
+from ticketing.api.routers import locations as locations_router
 from ticketing.config.settings import get_settings
 from ticketing.models.base import ensure_ticketing_schema
 
@@ -62,11 +63,12 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(tickets.router,        prefix="/api/v1", tags=["Tickets"])
-app.include_router(workflows.router,      prefix="/api/v1", tags=["Workflows"])
-app.include_router(users.router,          prefix="/api/v1", tags=["Users & Roles"])
-app.include_router(settings_router.router, prefix="/api/v1", tags=["Settings"])
-app.include_router(reports.router,        prefix="/api/v1", tags=["Reports"])
+app.include_router(tickets.router,          prefix="/api/v1", tags=["Tickets"])
+app.include_router(workflows.router,        prefix="/api/v1", tags=["Workflows"])
+app.include_router(users.router,            prefix="/api/v1", tags=["Users & Roles"])
+app.include_router(settings_router.router,  prefix="/api/v1", tags=["Settings"])
+app.include_router(reports.router,          prefix="/api/v1", tags=["Reports"])
+app.include_router(locations_router.router, prefix="/api/v1", tags=["Locations & Projects"])
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

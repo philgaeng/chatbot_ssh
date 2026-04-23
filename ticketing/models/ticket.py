@@ -54,6 +54,13 @@ class Ticket(Base):
     country_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NP")
     organization_id: Mapped[str] = mapped_column(String(64), nullable=False)
     location_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # project_id replaces project_code — proper FK to ticketing.projects
+    project_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.projects.project_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # project_code kept for backwards compat during transition; deprecated — use project_id
     project_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # ── Status & workflow ──
