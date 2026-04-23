@@ -81,6 +81,52 @@ def test_seah_focal_complainant_profile_uses_affected_person_wording(domain):
     assert "affected person's grievance location details" in msg["text"]
 
 
+def test_seah_focal_complainant_ward_prompt_uses_his_her_wording(domain):
+    msg = _invoke(
+        "action_ask_complainant_ward",
+        {
+            "language_code": "en",
+            "story_main": "seah_intake",
+            "seah_victim_survivor_role": "focal_point",
+            "seah_focal_stage": "complainant_contact",
+        },
+        domain,
+    )
+    assert "his/her ward number" in msg["text"]
+
+
+def test_seah_focal_complainant_municipality_confirmed_uses_his_her_wording(domain):
+    msg = _invoke(
+        "action_ask_complainant_municipality_confirmed",
+        {
+            "language_code": "en",
+            "story_main": "seah_intake",
+            "seah_victim_survivor_role": "focal_point",
+            "seah_focal_stage": "complainant_contact",
+            "complainant_municipality_temp": "Birtamod Municipality",
+        },
+        domain,
+    )
+    assert "his/her correct municipality" in msg["text"]
+
+
+def test_seah_focal_complainant_address_confirmation_uses_his_her_wording(domain):
+    msg = _invoke(
+        "action_ask_complainant_address_confirmed",
+        {
+            "language_code": "en",
+            "story_main": "seah_intake",
+            "seah_victim_survivor_role": "focal_point",
+            "seah_focal_stage": "complainant_contact",
+            "complainant_municipality": "Birtamod Municipality",
+            "complainant_village": "Ulu",
+            "complainant_address_temp": "adad",
+        },
+        domain,
+    )
+    assert "his/her location details" in msg["text"]
+
+
 def test_unknown_seah_role_falls_back_to_generic_prompt(domain):
     msg = _invoke(
         "action_ask_complainant_phone",

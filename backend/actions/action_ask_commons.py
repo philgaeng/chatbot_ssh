@@ -195,60 +195,62 @@ class ActionAskComplainantMunicipalityTemp(BaseAction):
         return []
 
     
-class ActionAskComplainantMunicipalityConfirmed(BaseAction):
+class ActionAskComplainantMunicipalityConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_municipality_confirmed"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('complainant_municipality_temp')
-        message = self.get_utterance(1).format(validated_municipality=validated_municipality)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
+        message = message.format(validated_municipality=validated_municipality)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
        
-class ActionAskComplainantVillageTemp(BaseAction):
+class ActionAskComplainantVillageTemp(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_village_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
-class ActionAskComplainantVillageConfirmed(BaseAction):
+class ActionAskComplainantVillageConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_village_confirmed"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_village = tracker.get_slot('complainant_village_temp')
         validated_ward = tracker.get_slot('complainant_ward')
-        message = self.get_utterance(1).format(validated_village=validated_village, validated_ward=validated_ward)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
+        message = message.format(validated_village=validated_village, validated_ward=validated_ward)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
-class ActionAskComplainantWard(BaseAction):
+class ActionAskComplainantWard(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_ward"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantAddressTemp(BaseAction):
+class ActionAskComplainantAddressTemp(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_address_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantAddressConfirmed(BaseAction):
+class ActionAskComplainantAddressConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_address_confirmed"
     
@@ -261,7 +263,7 @@ class ActionAskComplainantAddressConfirmed(BaseAction):
         municipality = tracker.get_slot('complainant_municipality')
         village = tracker.get_slot('complainant_village')
         address = tracker.get_slot('complainant_address_temp')
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         message = message.format(municipality=municipality, village=village, address=address)
             

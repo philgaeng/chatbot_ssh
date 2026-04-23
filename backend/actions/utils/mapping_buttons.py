@@ -39,6 +39,7 @@ BUTTON_TRY_AGAIN = "/restart_story{\"restart_type\": \"story\"}"
 BUTTON_EXIT = "/exit"
 
 BUTTON_GOODBYE = "/nav_goodbye"
+BUTTON_SELECTION_DONE = "/selection_done"
 
 BUTTON_SKIP_EN = {"title": "Skip", "payload": BUTTON_SKIP}
 BUTTON_SKIP_NE = {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
@@ -114,6 +115,18 @@ BUTTONS_CLEAN_WINDOW_OPTIONS = {
         {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
         {"title": "सत्र खाली गर्नुहोस्", "payload": "/nav_clear"}
     ]
+}
+
+# SEAH outro + submit-failure UX: same as clean-window plus explicit end-chat control.
+BUTTONS_SEAH_OUTRO = {
+    "en": [
+        *BUTTONS_CLEAN_WINDOW_OPTIONS["en"],
+        {"title": "Close Session", "payload": BUTTON_GOODBYE},
+    ],
+    "ne": [
+        *BUTTONS_CLEAN_WINDOW_OPTIONS["ne"],
+        {"title": "सत्र बन्द गर्नुहोस्", "payload": BUTTON_GOODBYE},
+    ],
 }
 
 
@@ -301,6 +314,21 @@ BUTTONS_SEAH_YES_NO = {
     "ne": [
         {"title": "हो", "payload": "/yes"},
         {"title": "होइन", "payload": "/no"},
+    ],
+}
+
+BUTTONS_SEAH_FOCAL_LEARNED_WHEN = {
+    "en": [
+        {"title": "Within last 24h", "payload": "/learned_within_24h"},
+        {"title": "24-72h ago", "payload": "/learned_24_to_72h"},
+        {"title": "3-7 days ago", "payload": "/learned_3_to_7d"},
+        {"title": "More than 7 days", "payload": "/learned_over_7d"},
+    ],
+    "ne": [
+        {"title": "पछिल्लो २४ घण्टा", "payload": "/learned_within_24h"},
+        {"title": "२४-७२ घण्टा अघि", "payload": "/learned_24_to_72h"},
+        {"title": "३-७ दिन अघि", "payload": "/learned_3_to_7d"},
+        {"title": "७ दिनभन्दा बढी अघि", "payload": "/learned_over_7d"},
     ],
 }
 

@@ -263,6 +263,16 @@ UTTERANCE_MAPPING = {
                     'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_municipality} his/her correct municipality?",
+                            'ne': "के {validated_municipality} उहाँ/उनीको सही नगरपालिका हो?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
@@ -272,6 +282,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please provide your village name or Skip to skip",
                     'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her village name or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -285,6 +305,16 @@ UTTERANCE_MAPPING = {
                     'ne': "के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_village} in ward number {validated_ward} his/her correct village?",
+                            'ne': "के वड नं. {validated_ward} मा रहेको {validated_village} उहाँ/उनीको सही गाउँ हो?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
@@ -294,6 +324,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please provide your ward number (number between 1 and 20) or Skip to skip",
                     'ne': "कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her ward number (number between 1 and 20) or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको वड नम्बर प्रदान गर्नुहोस् (१ देखि २० बीचको) वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
                 }
             },
             'buttons': {    
@@ -307,6 +347,16 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her address or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -316,6 +366,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
                     'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Thank you for providing his/her location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
+                            'ne': "उहाँ/उनीको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -721,7 +781,7 @@ UTTERANCE_MAPPING = {
                 },
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS,
+                1: BUTTONS_SEAH_OUTRO,
             },
         },
     },
@@ -1196,7 +1256,8 @@ Do you want to add more details before submission?""",
     },
     'form_seah_focal_point': {
         'action_ask_form_seah_focal_point_1_seah_focal_learned_when': {
-            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}}
+            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_LEARNED_WHEN}
         },
         'action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report': {
             'utterances': {1: {'en': "Did the complainant consent to you reporting this here?", 'ne': "के उजुरीकर्ताले तपाईंलाई यहाँ रिपोर्ट गर्न सहमति दिनुभयो?"}},
@@ -1226,7 +1287,10 @@ Do you want to add more details before submission?""",
             'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के ADB आयोजनामा जोखिम छ? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_PROJECT_RISK}
         },
-        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}}},
+        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {
+            'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}},
+            'buttons': {1: BUTTONS_SEAH_YES_NO},
+        },
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {

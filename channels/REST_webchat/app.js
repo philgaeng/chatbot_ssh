@@ -198,8 +198,10 @@ function handleOrchestratorResponse(response) {
   // Optionally, use next_state / expected_input_type to adjust UI in the future
 }
 
-// Send introduction message
-function sendIntroduceMessage() {
+// Send introduction message (async: restSendMessage returns a Promise; must await
+// before setting introductionSent, otherwise refresh/reopen can skip retries while
+// the request is still in flight.)
+async function sendIntroduceMessage() {
   if (window.introductionSent) {
     console.log("Introduction already sent, skipping...");
     return;
@@ -214,35 +216,43 @@ function sendIntroduceMessage() {
 
   console.log("Preparing to send initial message:", initialMessage);
 
-  if (window.safeSendMessage(initialMessage, { province, district, flask_session_id: flaskSessionId })) {
-    console.log("Initial message sent successfully");
-    window.introductionSent = true;
+  const ok = await restSendMessage(initialMessage, {
+    province,
+    district,
+    flask_session_id: flaskSessionId,
+  });
 
-    if (!window.hasReceivedResponse) {
-      window.introductionWindowTimer = setTimeout(() => {
-        console.log("Introduction window closed - no more retries allowed");
-        if (window.currentRetryTimer) {
-          clearTimeout(window.currentRetryTimer);
-          window.currentRetryTimer = null;
-        }
-        if (messageRetryCount >= MAX_RETRIES) {
-          uiActions.showError(get("errors.connection"));
-        }
-      }, 3000);
+  if (!ok) {
+    return;
+  }
 
-      const retryTimer = setTimeout(() => {
-        if (messageRetryCount < MAX_RETRIES && !window.hasReceivedResponse) {
-          messageRetryCount++;
-          console.log(
-            `No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`
-          );
-          window.introductionSent = false;
-          sendIntroduceMessage();
-        }
-      }, RETRY_DELAY);
+  console.log("Initial message sent successfully");
+  window.introductionSent = true;
 
-      window.currentRetryTimer = retryTimer;
-    }
+  if (!window.hasReceivedResponse) {
+    window.introductionWindowTimer = setTimeout(() => {
+      console.log("Introduction window closed - no more retries allowed");
+      if (window.currentRetryTimer) {
+        clearTimeout(window.currentRetryTimer);
+        window.currentRetryTimer = null;
+      }
+      if (messageRetryCount >= MAX_RETRIES) {
+        uiActions.showError(get("errors.connection"));
+      }
+    }, 3000);
+
+    const retryTimer = setTimeout(() => {
+      if (messageRetryCount < MAX_RETRIES && !window.hasReceivedResponse) {
+        messageRetryCount++;
+        console.log(
+          `No response received, retrying (${messageRetryCount}/${MAX_RETRIES})...`
+        );
+        window.introductionSent = false;
+        void sendIntroduceMessage();
+      }
+    }, RETRY_DELAY);
+
+    window.currentRetryTimer = retryTimer;
   }
 }
 
@@ -311,7 +321,7 @@ function setupTaskStatusSocket() {
 }
 
 // Initialize the chat application
-function initializeChat() {
+async function initializeChat() {
   // Get DOM elements
   chatWidget = document.getElementById("chat-widget");
   chatLauncher = document.getElementById("chat-launcher");
@@ -337,7 +347,7 @@ function initializeChat() {
   setupTaskStatusSocket();
 
   // Send initial introduction message via REST
-  sendIntroduceMessage();
+  await sendIntroduceMessage();
 
   // Set up event listeners
   setupEventListeners();
@@ -350,7 +360,7 @@ function setupEventListeners() {
     chatLauncher.style.display = "none";
     messageInput.focus();
     if (!window.introductionSent) {
-      sendIntroduceMessage();
+      void sendIntroduceMessage();
     }
   });
 
@@ -922,4 +932,6 @@ window.handleAddMoreFiles = handleAddMoreFiles;
 window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 
 // Initialize when DOM is loaded
-document.addEventListener("DOMContentLoaded", initializeChat);
+document.addEventListener("DOMContentLoaded", () => {
+  void initializeChat();
+});

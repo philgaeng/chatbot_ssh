@@ -280,6 +280,11 @@ class DatabaseManager(BaseDatabaseManager):
         # DDL statements do not return rows; use execute_update to avoid fetchall() errors.
         self.execute_update(create_complainants_seah, ())
         self.execute_update(create_grievances_seah, ())
+        # Backward-compatible schema sync for environments created before new fields.
+        self.execute_update(
+            "ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS seah_reporter_category TEXT;",
+            (),
+        )
         self._ensure_seah_contact_points_table()
 
     def _ensure_seah_contact_points_table(self) -> None:
