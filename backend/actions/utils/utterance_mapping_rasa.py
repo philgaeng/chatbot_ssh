@@ -274,6 +274,16 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her village name or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -283,6 +293,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Is {validated_village} in ward number {validated_ward} your correct village?",
                     'ne': "के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_village} in ward number {validated_ward} his/her correct village?",
+                            'ne': "के वड नं. {validated_ward} मा रहेको {validated_village} उहाँ/उनीको सही गाउँ हो?"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -296,6 +316,16 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her ward number (number between 1 and 20) or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको वड नम्बर प्रदान गर्नुहोस् (१ देखि २० बीचको) वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
+                }
+            },
             'buttons': {    
                 1: BUTTONS_SKIP
             }
@@ -307,6 +337,16 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her address or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -316,6 +356,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
                     'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Thank you for providing his/her location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
+                            'ne': "उहाँ/उनीको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                        }
+                    }
                 }
             },
             'buttons': {
