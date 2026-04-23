@@ -218,6 +218,98 @@ def get_grc_member_user_ids(
     return [row[0] for row in rows]
 
 
+# ── Location ancestor helpers ─────────────────────────────────────────────────
+
+def _location_and_ancestors(location_code: str, db: Session) -> list[str]:
+    """
+    Return [location_code] + all ancestor location_codes (parent, grandparent, …).
+    Uses a recursive CTE on ticketing.locations.
+    Returns an empty list if location_code is not in the DB.
+    """
+    import sqlalchemy as sa
+    cte = sa.text("""
+        WITH RECURSIVE ancestors AS (
+            SELECT location_code, parent_location_code
+            FROM ticketing.locations
+            WHERE location_code = :lc
+            UNION ALL
+            SELECT l.location_code, l.parent_location_code
+            FROM ticketing.locations l
+            JOIN ancestors a ON l.location_code = a.parent_location_code
+        )
+        SELECT location_code FROM ancestors
+    """)
+    rows = db.execute(cte, {"lc": location_code}).scalars().all()
+    return list(rows)
+
+
+def _scope_candidates(
+    role_key: str,
+    organization_id: str,
+    location_code: Optional[str],
+    project_code: Optional[str],
+    db: Session,
+) -> list[str]:
+    """
+    Return all user_ids whose scopes cover the given (role, org, location, project).
+
+    Matching rules (union of all three):
+      A. Exact location match:
+         scope.location_code == location_code (or IS NULL for "all locations")
+         scope.project_code  == project_code  (or IS NULL for "all projects")
+
+      B. includes_children cascade:
+         scope.includes_children IS TRUE
+         scope.location_code IS an ancestor of location_code
+         scope.project_code  == project_code  (or IS NULL)
+
+    Both A and B require role_key + organization_id to match exactly.
+    """
+    from ticketing.models.officer_scope import OfficerScope
+
+    seen: set[str] = set()
+    result: list[str] = []
+
+    def _add(uids: list[str]) -> None:
+        for uid in uids:
+            if uid not in seen:
+                seen.add(uid)
+                result.append(uid)
+
+    # ── A. Exact / wildcard match ─────────────────────────────────────────────
+    for loc in ([location_code, None] if location_code else [None]):
+        for proj in ([project_code, None] if project_code else [None]):
+            rows = db.execute(
+                select(OfficerScope.user_id).where(
+                    OfficerScope.role_key        == role_key,
+                    OfficerScope.organization_id == organization_id,
+                    OfficerScope.location_code   == loc,
+                    OfficerScope.project_code    == proj,
+                )
+            ).scalars().all()
+            _add(rows)
+
+    # ── B. includes_children: scope covers an ancestor of this location ───────
+    if location_code:
+        ancestors = _location_and_ancestors(location_code, db)
+        # Exclude the exact location itself (already covered by A)
+        ancestor_only = [a for a in ancestors if a != location_code]
+        if ancestor_only:
+            for proj in ([project_code, None] if project_code else [None]):
+                rows = db.execute(
+                    select(OfficerScope.user_id).where(
+                        OfficerScope.role_key          == role_key,
+                        OfficerScope.organization_id   == organization_id,
+                        OfficerScope.location_code.in_(ancestor_only),
+                        OfficerScope.includes_children.is_(True),
+                        OfficerScope.project_code      == proj,
+                    )
+                ).scalars().all()
+                _add(rows)
+
+    return result
+
+
 # ── Officer auto-assignment ───────────────────────────────────────────────────
 
 def auto_assign_officer(
@@ -230,48 +322,34 @@ def auto_assign_officer(
     """
     Find the best officer to assign a ticket to.
 
-    Selection:
-      1. Match on (role_key, org, location, project) — exact scope
-      2. Fallback: (role_key, org, location, None)
-      3. Fallback: (role_key, org, None, None)
-    Among candidates, pick the one with the fewest active (non-resolved) tickets.
+    Candidate scope rules (see _scope_candidates):
+      - Exact match on (role, org, location, project)
+      - Wildcard: location=None covers all, project=None covers all
+      - includes_children: officer scoped to an ancestor location covers descendants
 
+    Among candidates, picks the least-loaded (fewest non-resolved assigned tickets).
     Returns user_id or None if no officer is configured for this scope.
     """
     from sqlalchemy import func as sqlfunc
-    from ticketing.models.officer_scope import OfficerScope
 
-    for loc in ([location_code, None] if location_code else [None]):
-        for proj in ([project_code, None] if project_code else [None]):
-            candidates = db.execute(
-                select(OfficerScope.user_id).where(
-                    OfficerScope.role_key == role_key,
-                    OfficerScope.organization_id == organization_id,
-                    OfficerScope.location_code == loc,
-                    OfficerScope.project_code == proj,
-                )
-            ).scalars().all()
+    candidates = _scope_candidates(role_key, organization_id, location_code, project_code, db)
+    if not candidates:
+        return None
 
-            if not candidates:
-                continue
-
-            # Count active tickets per candidate
-            active_counts: dict[str, int] = dict(
-                db.execute(
-                    select(Ticket.assigned_to_user_id, sqlfunc.count(Ticket.ticket_id))
-                    .where(
-                        Ticket.assigned_to_user_id.in_(candidates),
-                        Ticket.status_code.notin_(["RESOLVED", "CLOSED"]),
-                        Ticket.is_deleted.is_(False),
-                    )
-                    .group_by(Ticket.assigned_to_user_id)
-                ).all()
+    # Count active tickets per candidate
+    active_counts: dict[str, int] = dict(
+        db.execute(
+            select(Ticket.assigned_to_user_id, sqlfunc.count(Ticket.ticket_id))
+            .where(
+                Ticket.assigned_to_user_id.in_(candidates),
+                Ticket.status_code.notin_(["RESOLVED", "CLOSED"]),
+                Ticket.is_deleted.is_(False),
             )
+            .group_by(Ticket.assigned_to_user_id)
+        ).all()
+    )
 
-            # Pick least-loaded (0 active tickets wins if never seen)
-            return min(candidates, key=lambda uid: active_counts.get(uid, 0))
-
-    return None
+    return min(candidates, key=lambda uid: active_counts.get(uid, 0))
 
 
 def get_teammates(
@@ -285,26 +363,7 @@ def get_teammates(
     """
     Return all officers with the same role + scope as the given ticket.
     Used to populate the reassign dropdown. Excludes the currently assigned officer.
-    Falls back through scope hierarchy same as auto_assign_officer.
+    Respects includes_children cascade same as auto_assign_officer.
     """
-    from ticketing.models.officer_scope import OfficerScope
-
-    seen: set[str] = set()
-    result: list[str] = []
-
-    for loc in ([location_code, None] if location_code else [None]):
-        for proj in ([project_code, None] if project_code else [None]):
-            rows = db.execute(
-                select(OfficerScope.user_id).where(
-                    OfficerScope.role_key == role_key,
-                    OfficerScope.organization_id == organization_id,
-                    OfficerScope.location_code == loc,
-                    OfficerScope.project_code == proj,
-                )
-            ).scalars().all()
-            for uid in rows:
-                if uid not in seen and uid != exclude_user_id:
-                    seen.add(uid)
-                    result.append(uid)
-
-    return result
+    candidates = _scope_candidates(role_key, organization_id, location_code, project_code, db)
+    return [uid for uid in candidates if uid != exclude_user_id]
