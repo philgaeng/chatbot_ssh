@@ -721,7 +721,7 @@ UTTERANCE_MAPPING = {
                 },
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS,
+                1: BUTTONS_SEAH_OUTRO,
             },
         },
     },

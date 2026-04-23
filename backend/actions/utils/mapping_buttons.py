@@ -116,6 +116,18 @@ BUTTONS_CLEAN_WINDOW_OPTIONS = {
     ]
 }
 
+# SEAH outro + submit-failure UX: same as clean-window plus explicit end-chat control.
+BUTTONS_SEAH_OUTRO = {
+    "en": [
+        *BUTTONS_CLEAN_WINDOW_OPTIONS["en"],
+        {"title": "Close Session", "payload": BUTTON_GOODBYE},
+    ],
+    "ne": [
+        *BUTTONS_CLEAN_WINDOW_OPTIONS["ne"],
+        {"title": "सत्र बन्द गर्नुहोस्", "payload": BUTTON_GOODBYE},
+    ],
+}
+
 
 
 BUTTONS_CONTACT_CONSENT = {

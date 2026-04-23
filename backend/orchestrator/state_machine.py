@@ -25,6 +25,7 @@ if _REPO_ROOT not in sys.path:
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action, events_to_slot_updates
 from backend.orchestrator.form_loop import run_form_turn
+from backend.orchestrator.session_store import DEFAULT_SLOTS
 
 _log_sm = logging.getLogger(__name__)
 
@@ -1446,7 +1447,35 @@ async def run_flow_turn(
     elif state == "done":
         # Allow modify-grievance actions even if the session state was already marked as done
         grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-        if intent == "modify_grievance_add_pictures" and grievance_id:
+        msg_text = (latest_message.get("text") or "").strip()
+        payload_raw = (payload or "").strip()
+        introduce_restart = msg_text.lower().startswith(
+            "/introduce"
+        ) or payload_raw.lower().startswith("/introduce")
+        if introduce_restart:
+            # REST webchat sends /introduce on every page load; a persisted session can
+            # still be "done" from a prior flow, which previously hit `else: pass` and
+            # returned no messages (empty chat on refresh).
+            session["state"] = "intro"
+            session["active_loop"] = None
+            session["requested_slot"] = None
+            session["slots"] = DEFAULT_SLOTS.copy()
+            next_state = "intro"
+            intro_tracker = SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            )
+            events = await invoke_action(
+                "action_introduce",
+                dispatcher,
+                intro_tracker,
+                domain,
+            )
+            slot_updates.update(events_to_slot_updates(events))
+        elif intent == "modify_grievance_add_pictures" and grievance_id:
             dispatcher.utter_message(
                 json_message={
                     "data": {
