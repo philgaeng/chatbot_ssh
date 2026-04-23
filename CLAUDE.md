@@ -1,6 +1,9 @@
 # CLAUDE.md — Nepal Chatbot / GRM Ticketing System
+
 # Read this entire file before touching any code.
+
 # ALL decisions locked through Round 2. Ready for Session 0 codebase analysis.
+
 # DEMO DEADLINE: May 10, 2026
 
 ---
@@ -22,6 +25,7 @@ infrastructure projects (KL Road / Kakarbhitta-Laukahi Road, ADB Loan 52097-003)
 ## HARD BOUNDARIES — READ BEFORE WRITING ANY CODE
 
 ### NEVER modify these:
+
 ```
 backend/actions/           → DO NOT TOUCH
 backend/orchestrator/      → DO NOT TOUCH
@@ -41,6 +45,7 @@ requirements.txt           → DO NOT TOUCH (use requirements.grm.txt)
 ```
 
 ### New code lives ONLY in:
+
 ```
 ticketing/                 → all new backend code
 channels/ticketing-ui/     → all new frontend code (Next.js 16, Cursor handles)
@@ -48,6 +53,7 @@ requirements.grm.txt       → new Python dependencies only
 ```
 
 ### Integration points — leave comments, do NOT wire:
+
 ```python
 # INTEGRATION POINT: backend/api/routers/messaging.py
 # POST /api/messaging/send-sms  OR  POST /api/messaging/send-email
@@ -59,18 +65,19 @@ requirements.grm.txt       → new Python dependencies only
 
 ## EXISTING STACK
 
-| Service | Tech | Port | Module |
-|---------|------|------|--------|
-| Orchestrator | FastAPI | ~8000 | `uvicorn backend.orchestrator.main:app` |
-| Backend API | FastAPI | 5001 | `uvicorn backend.api.fastapi_app:app` |
-| Celery LLM | Celery | — | `backend.task_queue.celery_app` `-Q llm_queue` |
-| Celery default | Celery | — | `backend.task_queue.celery_app` `-Q default` |
-| Redis | Redis | 6379 | broker + result backend |
-| PostgreSQL | PG 13+ | 5432 | `grievance_db` |
+| Service        | Tech    | Port  | Module                                         |
+| -------------- | ------- | ----- | ---------------------------------------------- |
+| Orchestrator   | FastAPI | ~8000 | `uvicorn backend.orchestrator.main:app`        |
+| Backend API    | FastAPI | 5001  | `uvicorn backend.api.fastapi_app:app`          |
+| Celery LLM     | Celery  | —     | `backend.task_queue.celery_app` `-Q llm_queue` |
+| Celery default | Celery  | —     | `backend.task_queue.celery_app` `-Q default`   |
+| Redis          | Redis   | 6379  | broker + result backend                        |
+| PostgreSQL     | PG 13+  | 5432  | `grievance_db`                                 |
 
 ### APIs to call (never reimplement):
 
 **Grievance API** — primary data source, handles PII decryption:
+
 ```
 GET  /api/grievance/{grievance_id}
 POST /api/grievance/{grievance_id}/status
@@ -78,6 +85,7 @@ GET  /api/grievance/statuses
 ```
 
 **Messaging API** — for complainant SMS fallback + quarterly reports:
+
 ```
 POST /api/messaging/send-sms    → AWS SNS (works internationally)
 POST /api/messaging/send-email  → AWS SES
@@ -85,6 +93,7 @@ Auth: x-api-key header
 ```
 
 **Orchestrator** — for officer → complainant replies:
+
 ```
 POST /message  { user_id: session_id, text: str, channel: "ticketing" }
 ```
@@ -93,7 +102,7 @@ POST /message  { user_id: session_id, text: str, channel: "ticketing" }
 
 ## DATABASE ARCHITECTURE (LOCKED)
 
-### Proto: same Postgres instance (grievance_db), separate schema (ticketing.*)
+### Proto: same Postgres instance (grievance_db), separate schema (ticketing.\*)
 
 ```
 grievance_db
@@ -102,6 +111,7 @@ grievance_db
 ```
 
 ### Data rules (LOCKED):
+
 1. No SQL joins from `ticketing.*` into `public.*`
 2. No foreign keys from `ticketing.*` into `public.*`
 3. PII (name, phone, email, address) NEVER stored in `ticketing.*`
@@ -110,6 +120,7 @@ grievance_db
 6. Complainant name: shown by default. Phone: hidden, revealed via "Reveal contact" button (action logged, no OTP for proto)
 
 ### SQLAlchemy — ALL models must use:
+
 ```python
 __table_args__ = {"schema": "ticketing"}  # REQUIRED on every model
 # grievance_id = Column(String(64))    ← string ref, NO FK
@@ -117,6 +128,7 @@ __table_args__ = {"schema": "ticketing"}  # REQUIRED on every model
 ```
 
 ### Alembic — MUST be scoped to ticketing schema:
+
 ```python
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table":
@@ -126,10 +138,16 @@ def include_object(object, name, type_, reflected, compare_to):
 ```
 
 ### Each migration file must start with:
+
 ```python
 # Safe to run: only creates/modifies ticketing.* tables
 # Does NOT touch: grievances, complainants, or any existing public.* table
 ```
+
+### Migration traceability (two streams)
+
+- **Ticketing (`ticketing.*`):** all forward DDL goes through **Alembic** (`ticketing/migrations/alembic.ini`). Any worktree (including Claude-only work on ticketing) should use **only** this stream for ticketing tables so revisions stay linear and visible in git.
+- **Chatbot / public (`public.*`):** **not** migrated by the ticketing Alembic project (see headers and `include_object` above). Use the **second** Alembic project: `migrations/public/alembic.ini` (version table `alembic_version_public`). Some tables may still be **first-created** by app code; **structural changes** go in `migrations/public/versions/`. See **`docs/MIGRATIONS_POLICY.md`**.
 
 ### Worktree + DB operating model (LOCKED)
 
@@ -165,6 +183,7 @@ For parallel development across chatbot and ticketing worktrees:
 ## WORKFLOW ARCHITECTURE (LOCKED)
 
 ### Two workflows — NOT parallel instances:
+
 ```
 Standard GRM   → 4 levels, regular officers, visible to standard roles
 SEAH           → dedicated SEAH officers only, invisible to standard roles
@@ -174,10 +193,12 @@ One grievance = one ticket = one workflow (never both).
 SEAH tickets filtered at DB query level by role.
 
 ### Escalation — BOTH manual and auto:
+
 - **Auto:** Celery SLA watchdog every 15 min — escalates on SLA breach
 - **Manual:** Officer clicks "Escalate" button in case view at any time
 
 ### GRC (L3) — two-step:
+
 - GRC chair action 1: "Convene" (schedules hearing, notifies all GRC members)
 - GRC chair action 2: "Decide" (records resolution, advances workflow)
 - All GRC members entered in system for that project receive in-app notification on convening
@@ -206,24 +227,28 @@ adb_hq_exec               → read-only both (senior oversight)
 ## FRONTEND (LOCKED)
 
 ### Stack:
+
 Fresh Next.js 16 app in `channels/ticketing-ui/` inside chatbot_ssh.
 TypeScript, Tailwind CSS v4, AWS Cognito OIDC.
 
 ### Stratcon as reference (read only — never forked/merged):
-- **Live:** https://stratcon.facets-ai.com — login: philippe@stratcon.ph / 0bPwPstU9sJnYTBQr2f*
+
+- **Live:** https://stratcon.facets-ai.com — login: philippe@stratcon.ph / 0bPwPstU9sJnYTBQr2f\*
 - **Repo:** https://github.com/philgaeng/stratcon
 
 ### Patterns to copy from Stratcon into ticketing-ui:
-| Pattern | Copy as |
-|---------|---------|
-| Cognito OIDC auth middleware | Officer login + route guards |
-| Role-based route protection | GRM role checks |
-| Settings page shell | Admin settings |
-| User management + invite flow | Officer account management |
-| Sidebar layout | GRM navigation (see below) |
-| Help / docs page | GRM officer guide |
+
+| Pattern                       | Copy as                      |
+| ----------------------------- | ---------------------------- |
+| Cognito OIDC auth middleware  | Officer login + route guards |
+| Role-based route protection   | GRM role checks              |
+| Settings page shell           | Admin settings               |
+| User management + invite flow | Officer account management   |
+| Sidebar layout                | GRM navigation (see below)   |
+| Help / docs page              | GRM officer guide            |
 
 ### Sidebar navigation (role-gated):
+
 ```
 My Queue          ← landing, officer's assigned tickets + SLA countdowns
 All Tickets       ← filterable list (admin + senior roles)
@@ -238,6 +263,7 @@ Help              ← GRM officer guide
 ```
 
 ### New screens (build from scratch — no Stratcon equivalent):
+
 - Officer ticket queue (main landing)
 - Ticket detail + action panel (acknowledge / escalate / resolve)
 - Case timeline + audit log
@@ -246,12 +272,14 @@ Help              ← GRM officer guide
 - SEAH restricted view with 🔒 badge
 
 ### SEAH visual distinction:
+
 - Same queue page as standard (not a separate route)
 - Red `🔒 SEAH` badge on ticket row
 - Subtle red left border on ticket card
 - Access control ensures only SEAH officers see these tickets
 
 ### Target: grm.facets-ai.com → staging: grm.stage.facets-ai.com
+
 Same EC2 as chatbot, different Nginx location block.
 Run via Docker, deploy to staging EC2 first, then production.
 
@@ -260,11 +288,13 @@ Run via Docker, deploy to staging EC2 first, then production.
 ## NOTIFICATIONS (LOCKED)
 
 ### Officer notifications: in-app badge only (proto)
+
 - Badge count on queue page, refreshes on navigation
 - **Note for post-proto:** upgrade to Server-Sent Events (SSE) for real-time push
 - No email, no SMS to officers in proto
 
 ### Complainant notifications: chatbot-first, SMS fallback
+
 - **Primary:** `POST /message` to orchestrator using `session_id` stored on ticket
 - **Fallback** (session expired): `POST /api/messaging/send-sms` via Messaging API
   - AWS SNS works internationally — use for demo (PH numbers work)
@@ -274,6 +304,7 @@ Run via Docker, deploy to staging EC2 first, then production.
 ### GRC convening: all GRC members for that project, in-app notification
 
 ### Quarterly reports: email via Messaging API send-email, to roles:
+
 `adb_national_project_director`, `adb_hq_safeguards`, `mopit_rep`, `dor_rep`
 
 ---
@@ -322,9 +353,10 @@ Run via Docker, deploy to staging EC2 first, then production.
 
 ## DEMO SEED DATA (MAY 10)
 
-### Mock data seeded directly into ticketing.* tables (no chatbot DB connection needed)
+### Mock data seeded directly into ticketing.\* tables (no chatbot DB connection needed)
 
 ### Seed data required:
+
 - KL Road Standard workflow (4 levels) — YES
 - KL Road SEAH workflow (SEAH officers only) — YES
 - Organizations: DOR, ADB — YES
@@ -332,6 +364,7 @@ Run via Docker, deploy to staging EC2 first, then production.
 - Mock officers: one per role — YES
 
 ### Demo scenario 1 — Standard GRM:
+
 "Complainant files about dust in house along KL Road, children falling sick.
 → Site officer acknowledges (L1)
 → Unresolved after 2 days → auto-escalates to L2 (PD/PIU)
@@ -340,6 +373,7 @@ Run via Docker, deploy to staging EC2 first, then production.
 → Resolved, complainant notified via chatbot"
 
 ### Demo scenario 2 — SEAH:
+
 "Complainant reports harassment by construction worker.
 → SEAH officer investigates (invisible to standard officers)
 → Escalated to SEAH supervisor
@@ -347,6 +381,7 @@ Run via Docker, deploy to staging EC2 first, then production.
 → Case closed with referral"
 
 ### Demo environment:
+
 - Develop: Docker on WSL
 - Demo: staging EC2 (grm.stage.facets-ai.com)
 

@@ -18,6 +18,26 @@ from .base_manager import BaseDatabaseManager
 from backend.logger import logger
 
 
+def seah_reporter_category_from_victim_survivor_role(
+    seah_victim_survivor_role: Optional[str],
+) -> Optional[str]:
+    """
+    Map slot seah_victim_survivor_role to complainants_seah.seah_reporter_category (TEXT).
+
+    Canonical values today: victim/survivor | other
+    - other: anyone filing who is not the victim/survivor (third party, confidant, focal path, etc.)
+    Additional strings can be persisted later without a schema change.
+    """
+    if not seah_victim_survivor_role:
+        return None
+    r = str(seah_victim_survivor_role).strip()
+    if r == "victim_survivor":
+        return "victim/survivor"
+    if r in ("not_victim_survivor", "focal_point"):
+        return "other"
+    return None
+
+
 class DatabaseManager(BaseDatabaseManager):
     """
     High-level API interface for all database operations.
@@ -214,7 +234,13 @@ class DatabaseManager(BaseDatabaseManager):
             return False
 
     def _ensure_seah_tables(self) -> None:
-        """Create SEAH tables when they do not exist."""
+        """Create SEAH tables when they do not exist.
+
+        Canonical DDL for complainants_seah / grievances_seah also lives in
+        migrations/public/versions/pub001_seah_intake_public_tables.py — run
+        ``make migrate_public`` (or equivalent) so schema changes stay traceable;
+        this path remains as an idempotent fallback if migrations were not applied.
+        """
         create_complainants_seah = """
             CREATE TABLE IF NOT EXISTS complainants_seah (
                 complainant_id TEXT PRIMARY KEY,
@@ -227,6 +253,7 @@ class DatabaseManager(BaseDatabaseManager):
                 complainant_ward TEXT,
                 complainant_village TEXT,
                 complainant_address TEXT,
+                seah_reporter_category TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -411,6 +438,9 @@ class DatabaseManager(BaseDatabaseManager):
                 "complainant_ward": data.get("complainant_ward"),
                 "complainant_village": data.get("complainant_village"),
                 "complainant_address": data.get("complainant_address"),
+                "seah_reporter_category": seah_reporter_category_from_victim_survivor_role(
+                    data.get("seah_victim_survivor_role")
+                ),
             }
             self.execute_insert(
                 table_name="complainants_seah",
