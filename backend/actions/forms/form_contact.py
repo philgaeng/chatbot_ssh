@@ -714,11 +714,18 @@ class ValidateFormContact(ContactFormValidationAction):
                       ]
         required_slots_contact = ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
 
+        # Focal reporter bootstrap: name only; consent defaults True in state_machine;
+        # location is collected in complainant_contact (affected person).
         if story_main == "seah_intake" and seah_focal_stage == "bootstrap_reporter_contact":
-            return required_slots_location + ["complainant_consent", "complainant_full_name"]
+            return ["complainant_full_name"]
 
+        # Focal complainant capture: location + name/email; consent defaults True (already agreed to share).
         if story_main == "seah_intake" and seah_focal_stage == "complainant_contact":
-            return ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
+            return required_slots_location + [
+                "complainant_full_name",
+                "complainant_email_temp",
+                "complainant_email_confirmed",
+            ]
 
         # In anonymous dedicated SEAH intake, do not ask identity/contact questions.
         if story_main == "seah_intake" and sensitive_issues_follow_up == "anonymous":

@@ -24,8 +24,13 @@ class ValidateFormSeah2(BaseFormValidationAction):
             "seah_project_identification",
             "sensitive_issues_new_detail",
         ]
-        # Anonymous intake should not ask follow-up contact consent/channel.
-        if tracker.get_slot("sensitive_issues_follow_up") != "anonymous":
+        # Ask follow-up contact channel whenever at least one contact path exists.
+        # This now includes anonymous route when phone was collected through OTP.
+        phone = tracker.get_slot("complainant_phone")
+        email = tracker.get_slot("complainant_email")
+        has_phone = phone not in (None, self.SKIP_VALUE, "")
+        has_email = email not in (None, self.SKIP_VALUE, "")
+        if has_phone or has_email:
             required.append("seah_contact_consent_channel")
         return required
 

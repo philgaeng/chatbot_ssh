@@ -7,6 +7,7 @@ from rasa_sdk.executor import CollectingDispatcher
 import json
 import traceback
 from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
+from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 
@@ -346,19 +347,22 @@ class ActionSubmitSeah(BaseActionSubmit):
             self.logger.error(f"❌ Error submitting SEAH report: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             lc = tracker.get_slot("language_code") or "en"
+            outro_buttons = BUTTONS_SEAH_OUTRO.get(lc, BUTTONS_SEAH_OUTRO["en"])
             if lc == "ne":
                 dispatcher.utter_message(
                     text=(
                         "हामीले अहिले तपाईंको SEAH रिपोर्ट पेस गर्न सकेनौं। कृपया पछि फेरि प्रयास गर्नुहोस्।\n\n"
                         "तत्काल सहयोग चाहिएमा नजिकको SEAH सहयोग सेवा वा आपतकालीन सेवामा सम्पर्क गर्न सक्नुहुन्छ।"
-                    )
+                    ),
+                    buttons=outro_buttons,
                 )
             else:
                 dispatcher.utter_message(
                     text=(
                         "We could not submit your SEAH report right now. Please try again.\n\n"
                         "If you need immediate help, you can reach a local SEAH support service or emergency services."
-                    )
+                    ),
+                    buttons=outro_buttons,
                 )
             return []
 

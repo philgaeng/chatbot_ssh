@@ -7,6 +7,7 @@ from rasa_sdk.events import SlotSet
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
+from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 
 
 class ActionSeahOutro(BaseAction):
@@ -44,6 +45,7 @@ class ActionSeahOutro(BaseAction):
         idx = order.get(variant, 2)
         body = self.get_utterance(idx)
         full_text = body + contact_block
-        buttons = self.get_buttons(1)
+        # Always include Close Session (and clean-window actions) for every outro variant.
+        buttons = BUTTONS_SEAH_OUTRO.get(language_code, BUTTONS_SEAH_OUTRO["en"])
         dispatcher.utter_message(text=full_text, buttons=buttons)
         return events
