@@ -492,13 +492,15 @@ async def run_flow_turn(
                 )
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)
-            # Anonymous SEAH prefills complainant_phone to skip; ValidateFormOtp for sensitive
-            # intake only requires complainant_phone, so OTP would complete with zero utterances
-            # and the user would see a dead turn. Open contact/location collection directly.
+            # Anonymous SEAH now uses the same OTP hop as identified flow, so phone can
+            # still be requested/collected consistently for victim and other routes.
             elif story_main == "seah_intake" and identity_mode == "anonymous":
-                contact_form = _get_contact_form()
+                next_state = "otp_form"
+                session["active_loop"] = "form_otp"
+                session["requested_slot"] = None
+                otp_form = _get_otp_form()
                 msgs2, form_updates2, _ = await run_form_turn(
-                    contact_form, session, None, domain
+                    otp_form, session, None, domain
                 )
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)

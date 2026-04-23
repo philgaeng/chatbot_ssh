@@ -74,12 +74,15 @@ class ValidateFormSeah1(BaseFormValidationAction):
             updates.update(
                 {
                     "complainant_full_name": self.SKIP_VALUE,
-                    "complainant_phone": self.SKIP_VALUE,
-                    "otp_consent": self.SKIP_VALUE,
-                    "otp_number": self.SKIP_VALUE,
-                    "otp_status": self.SKIP_VALUE,
+                    # Do not prefill phone/OTP slots in anonymous route. We still ask
+                    # phone via OTP form (same hop as identified route) so users can
+                    # optionally provide contact while remaining anonymous.
+                    "complainant_phone": None,
+                    "otp_consent": None,
+                    "otp_number": None,
+                    "otp_status": None,
                     "otp_verified": False,
-                    "otp_input": self.SKIP_VALUE,
+                    "otp_input": None,
                     "otp_resend_count": 0,
                 }
             )

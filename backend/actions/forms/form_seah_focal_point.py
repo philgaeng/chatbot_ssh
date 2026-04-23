@@ -8,6 +8,14 @@ from backend.actions.base_classes.base_classes import BaseAction, BaseFormValida
 
 
 class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
+    LEARNED_WHEN_ALLOWED = {
+        "learned_within_24h",
+        "learned_24_to_72h",
+        "learned_3_to_7d",
+        "learned_over_7d",
+        "skipped",
+    }
+
     def name(self) -> Text:
         return "validate_form_seah_focal_point_1"
 
@@ -49,7 +57,12 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return self._validate_text_or_skip(slot_value, "seah_focal_learned_when")
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value in self.LEARNED_WHEN_ALLOWED:
+            return {"seah_focal_learned_when": value}
+        return {"seah_focal_learned_when": None}
 
     async def extract_seah_focal_reporter_consent_to_report(
         self,
@@ -149,6 +162,63 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
 
 
 class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
+    _MULTI_DONE_VALUE = "selection_done"
+
+    _MULTI_LABELS = {
+        "seah_focal_survivor_risks": {
+            "retaliation_threat": "Retaliation, intimidation, or threat to job security",
+            "personal_safety": "Personal safety",
+            "trauma": "Trauma",
+        },
+        "seah_focal_mitigation_measures": {
+            "referral_support_services": "Referral to support services",
+            "police_legal_information": "Provided information on police and/or legal services",
+        },
+        "seah_focal_other_at_risk_parties": {
+            "witnesses": "Witnesses",
+            "other_family_members": "Other family members",
+            "other_project_workers": "Other project workers",
+            "other_community_members": "Other members of the community",
+        },
+    }
+
+    def _accumulator_slot(self, slot_name: Text) -> Text:
+        return f"{slot_name}_selected"
+
+    def _validate_multiselect_or_skip(
+        self,
+        slot_name: Text,
+        slot_value: Any,
+        tracker: Tracker,
+    ) -> Dict[Text, Any]:
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+
+        selected_slot = self._accumulator_slot(slot_name)
+        selected = tracker.get_slot(selected_slot) or []
+        if not isinstance(selected, list):
+            selected = [str(selected)]
+
+        if value == self.SKIP_VALUE:
+            return {slot_name: self.SKIP_VALUE, selected_slot: None}
+
+        if value in {self._MULTI_DONE_VALUE, "slot_confirmed"}:
+            if selected:
+                return {slot_name: " | ".join(selected), selected_slot: None}
+            return {slot_name: None}
+
+        label_map = self._MULTI_LABELS.get(slot_name, {})
+        candidate = label_map.get(value) if isinstance(value, str) else None
+        if candidate is None and isinstance(value, str) and len(value.strip()) >= 2:
+            candidate = value.strip()
+        if not candidate:
+            return {slot_name: None}
+
+        if candidate not in selected:
+            selected.append(candidate)
+        # Keep collecting until the user presses Done.
+        return {slot_name: None, selected_slot: selected}
     def name(self) -> Text:
         return "validate_form_seah_focal_point_2"
 
@@ -347,7 +417,9 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return self._validate_text_or_skip(slot_value, "seah_focal_survivor_risks")
+        return self._validate_multiselect_or_skip(
+            "seah_focal_survivor_risks", slot_value, tracker
+        )
 
     async def validate_seah_focal_mitigation_measures(
         self,
@@ -356,7 +428,9 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return self._validate_text_or_skip(slot_value, "seah_focal_mitigation_measures")
+        return self._validate_multiselect_or_skip(
+            "seah_focal_mitigation_measures", slot_value, tracker
+        )
 
     async def validate_seah_focal_other_at_risk_parties(
         self,
@@ -365,7 +439,9 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        return self._validate_text_or_skip(slot_value, "seah_focal_other_at_risk_parties")
+        return self._validate_multiselect_or_skip(
+            "seah_focal_other_at_risk_parties", slot_value, tracker
+        )
 
     async def validate_seah_focal_project_risk(
         self,
@@ -437,7 +513,7 @@ class ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen(BaseAction):
         return "action_ask_form_seah_focal_point_1_seah_focal_learned_when"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -475,8 +551,18 @@ class ActionAskFormSeahFocalPoint2SeahFocalSurvivorRisks(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks"
 
+    def _build_multiselect_buttons(self, tracker: Tracker) -> List[Dict[Text, Any]]:
+        language_code = tracker.get_slot("language_code") or "en"
+        selected = tracker.get_slot("seah_focal_survivor_risks_selected") or []
+        if not isinstance(selected, list):
+            selected = [str(selected)]
+        buttons = [b for b in (self.get_buttons(1) or []) if b.get("title") not in selected]
+        done_title = "Done" if language_code == "en" else "सम्पन्न"
+        buttons.append({"title": done_title, "payload": "/selection_done"})
+        return buttons
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self._build_multiselect_buttons(tracker))
         return []
 
 
@@ -484,8 +570,18 @@ class ActionAskFormSeahFocalPoint2SeahFocalMitigationMeasures(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures"
 
+    def _build_multiselect_buttons(self, tracker: Tracker) -> List[Dict[Text, Any]]:
+        language_code = tracker.get_slot("language_code") or "en"
+        selected = tracker.get_slot("seah_focal_mitigation_measures_selected") or []
+        if not isinstance(selected, list):
+            selected = [str(selected)]
+        buttons = [b for b in (self.get_buttons(1) or []) if b.get("title") not in selected]
+        done_title = "Done" if language_code == "en" else "सम्पन्न"
+        buttons.append({"title": done_title, "payload": "/selection_done"})
+        return buttons
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self._build_multiselect_buttons(tracker))
         return []
 
 
@@ -493,8 +589,18 @@ class ActionAskFormSeahFocalPoint2SeahFocalOtherAtRiskParties(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties"
 
+    def _build_multiselect_buttons(self, tracker: Tracker) -> List[Dict[Text, Any]]:
+        language_code = tracker.get_slot("language_code") or "en"
+        selected = tracker.get_slot("seah_focal_other_at_risk_parties_selected") or []
+        if not isinstance(selected, list):
+            selected = [str(selected)]
+        buttons = [b for b in (self.get_buttons(1) or []) if b.get("title") not in selected]
+        done_title = "Done" if language_code == "en" else "सम्पन्न"
+        buttons.append({"title": done_title, "payload": "/selection_done"})
+        return buttons
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self._build_multiselect_buttons(tracker))
         return []
 
 

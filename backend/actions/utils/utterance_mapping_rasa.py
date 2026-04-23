@@ -1256,7 +1256,8 @@ Do you want to add more details before submission?""",
     },
     'form_seah_focal_point': {
         'action_ask_form_seah_focal_point_1_seah_focal_learned_when': {
-            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}}
+            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_LEARNED_WHEN}
         },
         'action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report': {
             'utterances': {1: {'en': "Did the complainant consent to you reporting this here?", 'ne': "के उजुरीकर्ताले तपाईंलाई यहाँ रिपोर्ट गर्न सहमति दिनुभयो?"}},
