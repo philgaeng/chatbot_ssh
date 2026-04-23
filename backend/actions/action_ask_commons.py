@@ -195,13 +195,14 @@ class ActionAskComplainantMunicipalityTemp(BaseAction):
         return []
 
     
-class ActionAskComplainantMunicipalityConfirmed(BaseAction):
+class ActionAskComplainantMunicipalityConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_municipality_confirmed"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('complainant_municipality_temp')
-        message = self.get_utterance(1).format(validated_municipality=validated_municipality)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
+        message = message.format(validated_municipality=validated_municipality)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []

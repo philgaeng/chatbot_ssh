@@ -263,6 +263,16 @@ UTTERANCE_MAPPING = {
                     'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_municipality} his/her correct municipality?",
+                            'ne': "के {validated_municipality} उहाँ/उनीको सही नगरपालिका हो?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
