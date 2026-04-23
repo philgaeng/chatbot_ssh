@@ -6,6 +6,10 @@ Endpoints:
     GET  /locations?country=NP&level=2&parent=NP_P1&q=bira   browse tree
     GET  /locations/{location_code}           single node + translations
 
+    GET  /locations/import/template.csv       download blank CSV template (super_admin)
+    GET  /locations/import/template.json      download blank JSON template (super_admin)
+    POST /locations/import                    upload CSV or JSON file (super_admin)
+
     GET  /projects                            list projects (filterable)
     POST /projects                            create project (admin)
     GET  /projects/{project_id}               project detail
@@ -21,11 +25,13 @@ Endpoints:
 """
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -133,6 +139,170 @@ def list_countries(db: Session = Depends(get_db)):
             ],
         })
     return result
+
+
+# ── Location import (super_admin only) ───────────────────────────────────────
+
+@router.get(
+    "/locations/import/template.csv",
+    response_class=PlainTextResponse,
+    summary="Download blank CSV template for location import (super_admin)",
+    tags=["Locations & Projects"],
+)
+def download_csv_template():
+    """
+    Returns a pre-formatted CSV template.
+    Fill in the rows and upload via POST /locations/import.
+
+    Columns:
+      - location_code        unique code, e.g. NP_P1 / NP_D001 / NP_M0001
+      - level_number         1=Province, 2=District, 3=Municipality
+      - parent_location_code code of the parent node (blank for level-1 nodes)
+      - source_id            optional original numeric ID from your dataset
+      - name_en              English name
+      - name_XX              additional language columns (e.g. name_ne for Nepali)
+    """
+    from ticketing.seed.location_import_core import CSV_TEMPLATE
+    return PlainTextResponse(
+        content=CSV_TEMPLATE,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="location_template.csv"'},
+    )
+
+
+@router.get(
+    "/locations/import/template.json",
+    summary="Download blank JSON template for location import (super_admin)",
+    tags=["Locations & Projects"],
+)
+def download_json_template():
+    """
+    Returns a nested province/district/municipality JSON template.
+    Matches the structure of en_cleaned.json.
+    Fill in the data and upload the English file (plus optional language files)
+    via POST /locations/import?format=json.
+    """
+    from ticketing.seed.location_import_core import JSON_TEMPLATE
+    return Response(
+        content=json.dumps(JSON_TEMPLATE, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="location_template.json"'},
+    )
+
+
+class ImportResult(BaseModel):
+    country: str
+    format: str
+    locations_upserted: int
+    translations_upserted: int
+    dry_run: bool
+
+
+@router.post(
+    "/locations/import",
+    response_model=ImportResult,
+    status_code=200,
+    summary="Upload a CSV or JSON file to import locations (super_admin only)",
+    tags=["Locations & Projects"],
+)
+async def import_locations(
+    file: UploadFile = File(..., description="CSV or JSON location file"),
+    country: str = Form("NP", description="Country code, e.g. NP"),
+    format: str = Form("auto", description="File format: 'csv', 'json', or 'auto' (detect from filename)"),
+    max_level: int = Form(3, description="Skip nodes deeper than this level (1–3)"),
+    dry_run: bool = Form(False, description="Parse only — do not write to DB"),
+    # CSV-specific column mapping (optional overrides)
+    lang_prefix: str = Form("name_", description="CSV language column prefix (default: name_)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a location file and upsert into ticketing.locations + location_translations.
+
+    **CSV format** — flat rows, one location per line:
+    ```
+    location_code,level_number,parent_location_code,source_id,name_en,name_ne
+    NP_P1,1,,1,Koshi Province,कोशी
+    NP_D004,2,NP_P1,4,Jhapa,झापा
+    ```
+    Download the template from `GET /locations/import/template.csv`.
+
+    **JSON format** — nested province → district → municipality (matches en_cleaned.json):
+    ```json
+    [{"id": 1, "name": "Province", "districts": [...]}]
+    ```
+    Download the template from `GET /locations/import/template.json`.
+
+    Both formats are **idempotent** (ON CONFLICT DO UPDATE).
+    Only `super_admin` may use this endpoint.
+    """
+    _require_admin()
+
+    # Validate country exists
+    from ticketing.models.country import Country
+    if not db.get(Country, country):
+        raise HTTPException(status_code=422, detail=f"Country '{country}' not found in ticketing.countries")
+
+    # Read uploaded file
+    raw_bytes = await file.read()
+    filename = file.filename or ""
+
+    # Determine format
+    fmt = format.lower()
+    if fmt == "auto":
+        if filename.endswith(".json"):
+            fmt = "json"
+        elif filename.endswith(".csv"):
+            fmt = "csv"
+        else:
+            # Try to detect by content
+            stripped = raw_bytes.lstrip()
+            fmt = "json" if stripped.startswith(b"[") or stripped.startswith(b"{") else "csv"
+
+    from ticketing.seed.location_import_core import parse_csv, parse_json, upsert_locations
+
+    try:
+        if fmt == "json":
+            en_data = json.loads(raw_bytes.decode("utf-8"))
+            if not isinstance(en_data, list):
+                raise ValueError("JSON must be a top-level array of province objects")
+            location_rows, trans_rows = parse_json(en_data, {}, country, max_level)
+        else:
+            content = raw_bytes.decode("utf-8-sig")
+            location_rows, trans_rows = parse_csv(
+                content,
+                country_default=country,
+                lang_prefix=lang_prefix,
+                max_level=max_level,
+            )
+    except (json.JSONDecodeError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=f"File parse error: {exc}")
+
+    if not location_rows:
+        raise HTTPException(status_code=422, detail="No valid location rows found in uploaded file")
+
+    if dry_run:
+        return ImportResult(
+            country=country,
+            format=fmt,
+            locations_upserted=len(location_rows),
+            translations_upserted=len(trans_rows),
+            dry_run=True,
+        )
+
+    try:
+        counts = upsert_locations(location_rows, trans_rows, db)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB write failed: {exc}") from exc
+
+    return ImportResult(
+        country=country,
+        format=fmt,
+        locations_upserted=counts["locations"],
+        translations_upserted=counts["translations"],
+        dry_run=False,
+    )
 
 
 # ── Locations ─────────────────────────────────────────────────────────────────

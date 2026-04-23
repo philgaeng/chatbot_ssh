@@ -9,13 +9,14 @@ Usage (from repo root, with ticketing DB env vars set):
         [--max-level 3]   # default 3: Province/District/Municipality (skip Wards)
         [--dry-run]
 
-Idempotent: uses ON CONFLICT DO NOTHING / DO UPDATE so safe to re-run.
+Idempotent: uses ON CONFLICT DO UPDATE so safe to re-run.
 
 Location code scheme (deterministic from source IDs):
     Province     → NP_P{province_id}           e.g. NP_P1
     District     → NP_D{district_id:03d}       e.g. NP_D001
     Municipality → NP_M{municipality_id:04d}   e.g. NP_M0001
 
+Core parsing/upsert logic lives in location_import_core.py.
 To add a new country: supply your own en/local JSON files and set --country XX.
 """
 from __future__ import annotations
@@ -24,121 +25,17 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+
+from ticketing.seed.location_import_core import parse_json, upsert_locations
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
-
-UTC = timezone.utc
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _loc_code(country: str, level: int, source_id: int) -> str:
-    if level == 1:
-        return f"{country}_P{source_id}"
-    if level == 2:
-        return f"{country}_D{source_id:03d}"
-    if level == 3:
-        return f"{country}_M{source_id:04d}"
-    return f"{country}_L{level}_{source_id:05d}"
 
 
 def load_json(path: str) -> list[dict]:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
-
-
-def build_translation_index(data: list[dict]) -> dict[tuple[int, int], str]:
-    """
-    Returns a dict keyed by (level, source_id) → name.
-    Walks province → district → municipality.
-    """
-    index: dict[tuple[int, int], str] = {}
-    for prov in data:
-        index[(1, prov["id"])] = prov["name"]
-        for dist in prov.get("districts", []):
-            index[(2, dist["id"])] = dist["name"]
-            for muni in dist.get("municipalities", []):
-                index[(3, muni["id"])] = muni["name"]
-    return index
-
-
-def collect_nodes(
-    en_data: list[dict],
-    translations: dict[str, dict[tuple[int, int], str]],
-    country: str,
-    max_level: int,
-) -> tuple[list[dict], list[dict]]:
-    """
-    Returns (location_rows, translation_rows).
-    """
-    locations: list[dict] = []
-    trans: list[dict] = []
-    now = _now()
-
-    for prov in en_data:
-        if max_level < 1:
-            break
-        p_code = _loc_code(country, 1, prov["id"])
-        locations.append({
-            "location_code": p_code,
-            "country_code": country,
-            "level_number": 1,
-            "parent_location_code": None,
-            "source_id": prov["id"],
-            "is_active": True,
-            "created_at": now,
-            "updated_at": now,
-        })
-        for lang, idx in translations.items():
-            name = idx.get((1, prov["id"]))
-            if name:
-                trans.append({"location_code": p_code, "lang_code": lang, "name": name.strip()})
-
-        if max_level < 2:
-            continue
-        for dist in prov.get("districts", []):
-            d_code = _loc_code(country, 2, dist["id"])
-            locations.append({
-                "location_code": d_code,
-                "country_code": country,
-                "level_number": 2,
-                "parent_location_code": p_code,
-                "source_id": dist["id"],
-                "is_active": True,
-                "created_at": now,
-                "updated_at": now,
-            })
-            for lang, idx in translations.items():
-                name = idx.get((2, dist["id"]))
-                if name:
-                    trans.append({"location_code": d_code, "lang_code": lang, "name": name.strip()})
-
-            if max_level < 3:
-                continue
-            for muni in dist.get("municipalities", []):
-                m_code = _loc_code(country, 3, muni["id"])
-                locations.append({
-                    "location_code": m_code,
-                    "country_code": country,
-                    "level_number": 3,
-                    "parent_location_code": d_code,
-                    "source_id": muni["id"],
-                    "is_active": True,
-                    "created_at": now,
-                    "updated_at": now,
-                })
-                for lang, idx in translations.items():
-                    name = idx.get((3, muni["id"]))
-                    if name:
-                        trans.append({"location_code": m_code, "lang_code": lang, "name": name.strip()})
-
-    return locations, trans
 
 
 def run(
@@ -151,14 +48,12 @@ def run(
     log.info("Loading EN data from %s", en_path)
     en_data = load_json(en_path)
 
-    translations: dict[str, dict[tuple[int, int], str]] = {
-        "en": build_translation_index(en_data)
-    }
+    extra_lang_data: dict[str, list[dict]] = {}
     for lang, path in extra_langs.items():
         log.info("Loading %s data from %s", lang, path)
-        translations[lang] = build_translation_index(load_json(path))
+        extra_lang_data[lang] = load_json(path)
 
-    location_rows, trans_rows = collect_nodes(en_data, translations, country, max_level)
+    location_rows, trans_rows = parse_json(en_data, extra_lang_data, country, max_level)
     log.info("Collected %d location nodes, %d translation rows", len(location_rows), len(trans_rows))
 
     if dry_run:
@@ -170,61 +65,21 @@ def run(
         return
 
     # DB write
-    import os
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from ticketing.models.base import SessionLocal
-    from ticketing.models.country import Country, Location, LocationTranslation
+    from ticketing.models.country import Country
 
     db = SessionLocal()
     try:
-        # Ensure country row exists
         if not db.get(Country, country):
             raise ValueError(
                 f"Country '{country}' not found in ticketing.countries. "
                 "Run migration f1a3e9c72b05 first, or insert the country manually."
             )
-
-        batch = 500
-        inserted_locs = upserted_trans = 0
-
-        # Locations (upsert: insert ignore on conflict, update source_id/level/parent)
-        for i in range(0, len(location_rows), batch):
-            chunk = location_rows[i : i + batch]
-            db.execute(
-                __import__("sqlalchemy").text("""
-                    INSERT INTO ticketing.locations
-                        (location_code, country_code, level_number, parent_location_code,
-                         source_id, is_active, created_at, updated_at)
-                    VALUES
-                        (:location_code, :country_code, :level_number, :parent_location_code,
-                         :source_id, :is_active, :created_at, :updated_at)
-                    ON CONFLICT (location_code) DO UPDATE SET
-                        level_number         = EXCLUDED.level_number,
-                        parent_location_code = EXCLUDED.parent_location_code,
-                        source_id            = EXCLUDED.source_id,
-                        is_active            = EXCLUDED.is_active,
-                        updated_at           = EXCLUDED.updated_at
-                """),
-                chunk,
-            )
-            inserted_locs += len(chunk)
-            db.commit()
-
-        # Translations (upsert: update name on conflict)
-        for i in range(0, len(trans_rows), batch):
-            chunk = trans_rows[i : i + batch]
-            db.execute(
-                __import__("sqlalchemy").text("""
-                    INSERT INTO ticketing.location_translations (location_code, lang_code, name)
-                    VALUES (:location_code, :lang_code, :name)
-                    ON CONFLICT (location_code, lang_code) DO UPDATE SET name = EXCLUDED.name
-                """),
-                chunk,
-            )
-            upserted_trans += len(chunk)
-            db.commit()
-
-        log.info("Done — %d locations upserted, %d translations upserted", inserted_locs, upserted_trans)
+        counts = upsert_locations(location_rows, trans_rows, db)
+        db.commit()
+        log.info("Done — %d locations upserted, %d translations upserted",
+                 counts["locations"], counts["translations"])
     except Exception:
         db.rollback()
         raise
