@@ -476,7 +476,7 @@ class ActionAskFormSeahFocalPoint2SeahFocalSurvivorRisks(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -485,7 +485,7 @@ class ActionAskFormSeahFocalPoint2SeahFocalMitigationMeasures(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -494,7 +494,7 @@ class ActionAskFormSeahFocalPoint2SeahFocalOtherAtRiskParties(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -503,7 +503,7 @@ class ActionAskFormSeahFocalPoint2SeahFocalProjectRisk(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_focal_project_risk"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -512,7 +512,7 @@ class ActionAskFormSeahFocalPoint2SeahFocalReputationalRisk(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_focal_reputational_risk"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        dispatcher.utter_message(text=self.get_utterance(1))
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 

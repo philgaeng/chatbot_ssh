@@ -780,24 +780,12 @@ async def run_flow_turn(
                 session["requested_slot"] = None
                 if seah_focal_stage == "bootstrap_reporter_otp":
                     slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
-                    slot_updates.update(
-                        {
-                            "complainant_province": "slot_skipped",
-                            "complainant_district": "slot_skipped",
-                            "complainant_municipality_temp": "slot_skipped",
-                            "complainant_municipality": "slot_skipped",
-                            "complainant_municipality_confirmed": False,
-                            "complainant_village_temp": "slot_skipped",
-                            "complainant_village": "slot_skipped",
-                            "complainant_village_confirmed": False,
-                            "complainant_ward": "slot_skipped",
-                            "complainant_address_temp": "slot_skipped",
-                            "complainant_address": "slot_skipped",
-                            "complainant_address_confirmed": False,
-                        }
-                    )
+                    # Default yes: reporter agrees to share contact for follow-up; user can still skip name/email fields.
+                    slot_updates["complainant_consent"] = True
                 elif seah_focal_stage == "complainant_otp":
                     slot_updates["seah_focal_stage"] = "complainant_contact"
+                    # Consent already captured earlier; collect affected-person location/contact without re-asking.
+                    slot_updates["complainant_consent"] = True
                 session["slots"].update(slot_updates)
                 contact_form = _get_contact_form()
                 msgs2, form_updates2, _ = await run_form_turn(

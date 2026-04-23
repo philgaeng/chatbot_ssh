@@ -1226,7 +1226,10 @@ Do you want to add more details before submission?""",
             'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के ADB आयोजनामा जोखिम छ? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_PROJECT_RISK}
         },
-        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}}},
+        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {
+            'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}},
+            'buttons': {1: BUTTONS_SEAH_YES_NO},
+        },
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {
