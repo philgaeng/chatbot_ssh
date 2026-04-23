@@ -121,17 +121,7 @@ def upgrade() -> None:
     op.create_index("idx_locations_parent", "locations",
                     ["parent_location_code"], schema="ticketing")
 
-    # ── 5. Alter ticketing.organizations: make country_code nullable + add FK ──
-    op.alter_column("organizations", "country_code", nullable=True, schema="ticketing")
-    op.create_foreign_key(
-        "organizations_country_code_fkey",
-        "organizations", "countries",
-        ["country_code"], ["country_code"],
-        source_schema="ticketing", referent_schema="ticketing",
-        ondelete="SET NULL",
-    )
-
-    # ── 6. Seed data ─────────────────────────────────────────────────────────
+    # ── 5. Seed countries + level defs FIRST (FKs below reference these rows) ──
 
     # Nepal country
     op.execute("""
@@ -151,7 +141,19 @@ def upgrade() -> None:
         ON CONFLICT DO NOTHING;
     """)
 
-    # Add FK from locations to countries (data already has country_code = 'NP')
+    # ── 6. Add FKs that reference countries (data now exists) ────────────────
+
+    # organizations.country_code → countries (make nullable first)
+    op.alter_column("organizations", "country_code", nullable=True, schema="ticketing")
+    op.create_foreign_key(
+        "organizations_country_code_fkey",
+        "organizations", "countries",
+        ["country_code"], ["country_code"],
+        source_schema="ticketing", referent_schema="ticketing",
+        ondelete="SET NULL",
+    )
+
+    # locations.country_code → countries (data already has country_code = 'NP')
     op.create_foreign_key(
         "locations_country_code_fkey",
         "locations", "countries",
