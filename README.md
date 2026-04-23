@@ -92,7 +92,7 @@ Complete documentation is available in the `docs/` directory:
 - **[Rasa Guide](docs/RASA.md)** - Conversation flows, forms, and NLU training
 - **[Integrations](docs/INTEGRATIONS.md)** - GRM, Google Sheets, and OAuth setup
 - **[Operations](docs/OPERATIONS.md)** - Monitoring, troubleshooting, and maintenance
-- **[Migrations Policy](docs/MIGRATIONS_POLICY.md)** - Alembic-first schema change policy
+- **[Migrations Policy](docs/MIGRATIONS_POLICY.md)** - Two-stream DB policy: **Alembic for `ticketing.*` only**; `public.*` / chatbot rules and cross-worktree traceability
 
 ## 🏗️ System Architecture
 

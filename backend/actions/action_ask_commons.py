@@ -4,13 +4,14 @@ These are reusable action_ask methods that don't belong to a specific form.
 Uses generic naming (action_ask_slot_name) for better reusability across forms.
 """
 
-from typing import Any, Text, Dict, List
+from typing import Any, Text, Dict, List, Optional
 from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import FollowupAction
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.utils.mapping_buttons import BUTTONS_SKIP
+from backend.actions.utils.utterance_mapping_rasa import UTTERANCE_MAPPING
 
 
 #-----------------------------------------------------------------------------
@@ -105,7 +106,52 @@ class ActionAskStoryMain(BaseAction):
 # Contact/Location Generic Actions (Reusable across forms)
 #-----------------------------------------------------------------------------
 
-class ActionAskComplainantPhone(BaseAction):
+class ProfileAwareAskAction(BaseAction):
+    """Shared helpers for profile-aware ask prompts in action_ask_commons."""
+
+    ASK_COMMONS_MAPPING = UTTERANCE_MAPPING.get("action_ask_commons", {})
+    FOCAL_REPORTER_STAGES = {"bootstrap_reporter_otp", "bootstrap_reporter_contact", "focal_point_1"}
+    FOCAL_COMPLAINANT_STAGES = {"complainant_otp", "complainant_contact", "focal_point_2"}
+
+    def _get_ask_profile(self, tracker: Tracker) -> str:
+        story_main = tracker.get_slot("story_main")
+        seah_role = tracker.get_slot("seah_victim_survivor_role")
+
+        if story_main in ("new_grievance", "grievance_submission"):
+            return "grievance"
+        if story_main != "seah_intake":
+            return "grievance"
+        if seah_role == "victim_survivor":
+            return "seah-victim"
+        if seah_role == "not_victim_survivor":
+            return "seah-other"
+        if seah_role == "focal_point":
+            return "seah-focal"
+        return "grievance"
+
+    def _get_focal_prompt_phase(self, tracker: Tracker) -> str:
+        seah_focal_stage = tracker.get_slot("seah_focal_stage")
+        if seah_focal_stage in self.FOCAL_REPORTER_STAGES:
+            return "reporter"
+        if seah_focal_stage in self.FOCAL_COMPLAINANT_STAGES:
+            return "complainant"
+        return "complainant"
+
+    def _get_profile_utterance(self, tracker: Tracker, utterance_index: int = 1) -> Optional[str]:
+        action_mapping = self.ASK_COMMONS_MAPPING.get(self.name(), {})
+        profile_mapping = action_mapping.get("profile_utterances", {})
+        profile = self._get_ask_profile(tracker)
+        language_code = tracker.get_slot("language_code") or "en"
+        profile_values = profile_mapping.get(profile)
+        if not profile_values:
+            return None
+
+        if profile == "seah-focal":
+            phase_map = profile_values.get(self._get_focal_prompt_phase(tracker), {})
+            return phase_map.get(utterance_index, {}).get(language_code)
+        return profile_values.get(utterance_index, {}).get(language_code)
+
+class ActionAskComplainantPhone(ProfileAwareAskAction):
     def name(self) -> Text:
         return "action_ask_complainant_phone"
     
@@ -116,20 +162,20 @@ class ActionAskComplainantPhone(BaseAction):
         domain: DomainDict
     ) -> List[Dict[Text, Any]]:
         if tracker.get_slot("complainant_phone_valid") == False:
-            message = self.get_utterance(2)
+            message = self._get_profile_utterance(tracker, 2) or self.get_utterance(2)
             buttons = self.get_buttons(2)
         else:
-            message = self.get_utterance(1)
+            message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
             buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
-class ActionAskComplainantLocationConsent(BaseAction):
+class ActionAskComplainantLocationConsent(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_location_consent"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
@@ -149,60 +195,62 @@ class ActionAskComplainantMunicipalityTemp(BaseAction):
         return []
 
     
-class ActionAskComplainantMunicipalityConfirmed(BaseAction):
+class ActionAskComplainantMunicipalityConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_municipality_confirmed"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_municipality = tracker.get_slot('complainant_municipality_temp')
-        message = self.get_utterance(1).format(validated_municipality=validated_municipality)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
+        message = message.format(validated_municipality=validated_municipality)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
        
-class ActionAskComplainantVillageTemp(BaseAction):
+class ActionAskComplainantVillageTemp(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_village_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
-class ActionAskComplainantVillageConfirmed(BaseAction):
+class ActionAskComplainantVillageConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_village_confirmed"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
         validated_village = tracker.get_slot('complainant_village_temp')
         validated_ward = tracker.get_slot('complainant_ward')
-        message = self.get_utterance(1).format(validated_village=validated_village, validated_ward=validated_ward)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
+        message = message.format(validated_village=validated_village, validated_ward=validated_ward)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
-class ActionAskComplainantWard(BaseAction):
+class ActionAskComplainantWard(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_ward"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantAddressTemp(BaseAction):
+class ActionAskComplainantAddressTemp(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_address_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantAddressConfirmed(BaseAction):
+class ActionAskComplainantAddressConfirmed(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_address_confirmed"
     
@@ -215,7 +263,7 @@ class ActionAskComplainantAddressConfirmed(BaseAction):
         municipality = tracker.get_slot('complainant_municipality')
         village = tracker.get_slot('complainant_village')
         address = tracker.get_slot('complainant_address_temp')
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         message = message.format(municipality=municipality, village=village, address=address)
             
@@ -249,35 +297,35 @@ class ActionAskComplainantDistrict(BaseAction):
         return []
  
 
-class ActionAskComplainantConsent(BaseAction):
+class ActionAskComplainantConsent(ProfileAwareAskAction):
     def name(self) -> str:
         return "action_ask_complainant_consent"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantFullName(BaseAction):
+class ActionAskComplainantFullName(ProfileAwareAskAction):
     def name(self) -> Text:
         return "action_ask_complainant_full_name"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         if tracker.get_slot("grievance_sensitive_issue") ==self.SKIP_VALUE:
-            message = self.get_utterance(1)
+            message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         else:
-            message = self.get_utterance(2)
+            message = self._get_profile_utterance(tracker, 2) or self.get_utterance(2)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     
-class ActionAskComplainantEmailTemp(BaseAction):
+class ActionAskComplainantEmailTemp(ProfileAwareAskAction):
     def name(self) -> Text:
         return "action_ask_complainant_email_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        message = self.get_utterance(1)
+        message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=message, buttons=buttons)
         return []

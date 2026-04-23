@@ -157,7 +157,10 @@ class ScopeCreate(BaseModel):
     role_key: str
     organization_id: str
     location_code: Optional[str] = None
-    project_code: Optional[str] = None
+    # Use project_id (FK to ticketing.projects); project_code kept for legacy callers
+    project_id: Optional[str] = None
+    project_code: Optional[str] = None          # deprecated — ignored if project_id given
+    includes_children: bool = False             # True: scope cascades to child locations
 
 
 class ScopeResponse(BaseModel):
@@ -166,7 +169,9 @@ class ScopeResponse(BaseModel):
     role_key: str
     organization_id: str
     location_code: Optional[str]
+    project_id: Optional[str]
     project_code: Optional[str]
+    includes_children: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -207,6 +212,12 @@ def add_user_scope(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
+    # Validate project_id if supplied
+    if payload.project_id:
+        from ticketing.models.project import Project
+        if not db.get(Project, payload.project_id):
+            raise HTTPException(status_code=422, detail=f"Project '{payload.project_id}' not found")
+
     # Prevent duplicate entries for the same (user, role, org, location, project)
     existing = db.execute(
         select(OfficerScope).where(
@@ -214,7 +225,7 @@ def add_user_scope(
             OfficerScope.role_key == payload.role_key,
             OfficerScope.organization_id == payload.organization_id,
             OfficerScope.location_code == payload.location_code,
-            OfficerScope.project_code == payload.project_code,
+            OfficerScope.project_id == payload.project_id,
         )
     ).scalar_one_or_none()
     if existing:
@@ -228,7 +239,10 @@ def add_user_scope(
         role_key=payload.role_key,
         organization_id=payload.organization_id,
         location_code=payload.location_code,
-        project_code=payload.project_code,
+        project_id=payload.project_id,
+        # Keep project_code for backwards compat if caller used legacy field
+        project_code=payload.project_code if not payload.project_id else None,
+        includes_children=payload.includes_children,
     )
     db.add(scope)
     db.commit()

@@ -164,6 +164,50 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
                 },
                 },
+                'profile_utterances': {
+                    'seah-victim': {
+                        1: {
+                            'en': "Please enter your contact phone number so a confidential SEAH handler can follow up if needed. Nepali phone number starts with 9 and should be 10 digits long. You can skip this if you prefer not to share it.",
+                            'ne': "कृपया आवश्यक परे गोप्य SEAH फलो-अपका लागि आफ्नो सम्पर्क फोन नम्बर दिनुहोस्। नेपाली नम्बर 9 बाट सुरु भई 10 अंकको हुनुपर्छ। दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                        },
+                        2: {
+                            'en': "The phone number is not valid. Please enter a valid Nepali number starting with 9 and 10 digits long.",
+                            'ne': "फोन नम्बर मान्य छैन। कृपया 9 बाट सुरु हुने 10 अंकको वैध नेपाली नम्बर दिनुहोस्।"
+                        }
+                    },
+                    'seah-other': {
+                        1: {
+                            'en': "Please enter your phone number as the reporting person. Nepali phone number starts with 9 and should be 10 digits long. You can skip this if you prefer not to share it.",
+                            'ne': "रिपोर्ट गर्ने व्यक्तिको रूपमा आफ्नो फोन नम्बर दिनुहोस्। नेपाली नम्बर 9 बाट सुरु भई 10 अंकको हुनुपर्छ। दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                        },
+                        2: {
+                            'en': "The reporting person's phone number is not valid. Please provide a valid Nepali number starting with 9 and 10 digits long.",
+                            'ne': "रिपोर्ट गर्ने व्यक्तिको फोन नम्बर मान्य छैन। कृपया 9 बाट सुरु हुने 10 अंकको वैध नेपाली नम्बर दिनुहोस्।"
+                        }
+                    },
+                    'seah-focal': {
+                        'reporter': {
+                            1: {
+                                'en': "As a SEAH focal point, please enter your phone number for reporter contact. Nepali phone number starts with 9 and should be 10 digits long. You can skip if you do not want to share it.",
+                                'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टर सम्पर्कका लागि आफ्नो फोन नम्बर दिनुहोस्। नेपाली नम्बर 9 बाट सुरु भई 10 अंकको हुनुपर्छ। नचाहेमा छोड्न सक्नुहुन्छ।"
+                            },
+                            2: {
+                                'en': "The focal reporter phone number is not valid. Please provide a valid Nepali number starting with 9 and 10 digits long.",
+                                'ne': "फोकल रिपोर्टरको फोन नम्बर मान्य छैन। कृपया 9 बाट सुरु हुने 10 अंकको वैध नेपाली नम्बर दिनुहोस्।"
+                            }
+                        },
+                        'complainant': {
+                            1: {
+                                'en': "Please enter the affected person's phone number for follow-up if consented. Nepali phone number starts with 9 and should be 10 digits long. You can skip if it is unavailable.",
+                                'ne': "सहमति भएमा फलो-अपका लागि प्रभावित व्यक्तिको फोन नम्बर दिनुहोस्। नेपाली नम्बर 9 बाट सुरु भई 10 अंकको हुनुपर्छ। उपलब्ध नभए छोड्न सक्नुहुन्छ।"
+                            },
+                            2: {
+                                'en': "The affected person's phone number is not valid. Please provide a valid Nepali number starting with 9 and 10 digits long.",
+                                'ne': "प्रभावित व्यक्तिको फोन नम्बर मान्य छैन। कृपया 9 बाट सुरु हुने 10 अंकको वैध नेपाली नम्बर दिनुहोस्।"
+                            }
+                        }
+                    }
+                },
                 'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -173,6 +217,28 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Do you want to provide the location details for your grievance. This is optional, your grievance can be filed without it.",
                     'ne': "के तपाईं आफ्नो गुनासोको लागि स्थान विवरण प्रदान गर्न चाहनुहुन्छ? यो वैकल्पिक हो, तपाईंको गुनासो यस बिना पनि दर्ता गर्न सक्नुहुन्छ।"
+                }
+            },
+            'profile_utterances': {
+                'seah-other': {
+                    1: {
+                        'en': "Would you like to provide location details for the incident you are reporting? This is optional.",
+                        'ne': "तपाईंले रिपोर्ट गरिरहेको घटनाको स्थान विवरण दिन चाहनुहुन्छ? यो वैकल्पिक हो।"
+                    }
+                },
+                'seah-focal': {
+                    'reporter': {
+                        1: {
+                            'en': "Would you like to share your location as the reporting focal person? This is optional.",
+                            'ne': "रिपोर्ट गर्ने फोकल पर्सनको रूपमा आफ्नो स्थान दिन चाहनुहुन्छ? यो वैकल्पिक हो।"
+                        }
+                    },
+                    'complainant': {
+                        1: {
+                            'en': "Would you like to provide the affected person's grievance location details? This is optional.",
+                            'ne': "प्रभावित व्यक्तिको गुनासो सम्बन्धी स्थान विवरण दिन चाहनुहुन्छ? यो वैकल्पिक हो।"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -197,6 +263,16 @@ UTTERANCE_MAPPING = {
                     'ne': "के {validated_municipality} तपाईंको सही नगरपालिका हो?"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_municipality} his/her correct municipality?",
+                            'ne': "के {validated_municipality} उहाँ/उनीको सही नगरपालिका हो?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
@@ -206,6 +282,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please provide your village name or Skip to skip",
                     'ne': "कृपया आफ्नो गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her village name or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको गाउँको नाम प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -219,6 +305,16 @@ UTTERANCE_MAPPING = {
                     'ne': "के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Is {validated_village} in ward number {validated_ward} his/her correct village?",
+                            'ne': "के वड नं. {validated_ward} मा रहेको {validated_village} उहाँ/उनीको सही गाउँ हो?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
@@ -228,6 +324,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please provide your ward number (number between 1 and 20) or Skip to skip",
                     'ne': "कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her ward number (number between 1 and 20) or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको वड नम्बर प्रदान गर्नुहोस् (१ देखि २० बीचको) वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
                 }
             },
             'buttons': {    
@@ -241,6 +347,16 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
                 }
             },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Please provide his/her address or Skip to skip",
+                            'ne': "कृपया उहाँ/उनीको ठेगाना प्रदान गर्नुहोस् वा छोड्न स्किप गर्नुहोस्"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -250,6 +366,16 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Thank you for providing your location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
                     'ne': "तपाईंको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                }
+            },
+            'profile_utterances': {
+                'seah-focal': {
+                    'complainant': {
+                        1: {
+                            'en': "Thank you for providing his/her location details:\n- Municipality: {municipality}\n- Village: {village}\n- Address: {address}\nIs this correct?",
+                            'ne': "उहाँ/उनीको स्थान विवरण प्रदान गर्नुभएकोमा धन्यवाद:\n- नगरपालिका: {municipality}\n- गाउँ: {village}\n- ठेगाना: {address}\nके यो सही हो?"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -285,6 +411,34 @@ UTTERANCE_MAPPING = {
                     'ne': "के तपाईं आफ्नो सम्पर्क जानकारी प्रदान गर्न चाहनुहुन्छ? तपाईं गुमनाम रहन सक्नुहुन्छ तर हामी तपाईंलाई अनुवर्ती वा अपडेटको लागि सम्पर्क गर्न सक्नुहुनेछैनौं।"
                 }
             },
+            'profile_utterances': {
+                'seah-victim': {
+                    1: {
+                        'en': "Would you like to share your contact information for confidential SEAH follow-up? You can continue without sharing it.",
+                        'ne': "गोप्य SEAH फलो-अपका लागि आफ्नो सम्पर्क जानकारी दिन चाहनुहुन्छ? नदिई पनि अगाडि बढ्न सक्नुहुन्छ।"
+                    }
+                },
+                'seah-other': {
+                    1: {
+                        'en': "Would you like to share your contact information as the reporting person? This helps us reach you for follow-up updates.",
+                        'ne': "रिपोर्ट गर्ने व्यक्तिको रूपमा आफ्नो सम्पर्क जानकारी दिन चाहनुहुन्छ? यसले फलो-अप अपडेटका लागि तपाईंलाई सम्पर्क गर्न मद्दत गर्छ।"
+                    }
+                },
+                'seah-focal': {
+                    'reporter': {
+                        1: {
+                            'en': "As a SEAH focal point, would you like to share your contact details for reporter follow-up?",
+                            'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टर फलो-अपका लागि आफ्नो सम्पर्क विवरण दिन चाहनुहुन्छ?"
+                        }
+                    },
+                    'complainant': {
+                        1: {
+                            'en': "Would you like to share the affected person's contact details for confidential follow-up, if consented?",
+                            'ne': "सहमति भएमा गोप्य फलो-अपका लागि प्रभावित व्यक्तिको सम्पर्क विवरण दिन चाहनुहुन्छ?"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY
             }
@@ -300,6 +454,40 @@ UTTERANCE_MAPPING = {
                     'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
                 }
             },
+            'profile_utterances': {
+                'seah-other': {
+                    1: {
+                        'en': "Please enter your full name as the reporting person. You can skip this if you prefer not to share it.",
+                        'ne': "रिपोर्ट गर्ने व्यक्तिको रूपमा आफ्नो पूरा नाम दिनुहोस्। दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                    },
+                    2: {
+                        'en': "Please enter your full name as the reporting person. You can skip this if you prefer not to share it.",
+                        'ne': "रिपोर्ट गर्ने व्यक्तिको रूपमा आफ्नो पूरा नाम दिनुहोस्। दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                    }
+                },
+                'seah-focal': {
+                    'reporter': {
+                        1: {
+                            'en': "As a SEAH focal point, please enter your full name as the reporting person. You can skip this if needed.",
+                            'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टरको हैसियतले आफ्नो पूरा नाम दिनुहोस्। आवश्यक परे छोड्न सक्नुहुन्छ।"
+                        },
+                        2: {
+                            'en': "As a SEAH focal point, please enter your full name as the reporting person. You can skip this if needed.",
+                            'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टरको हैसियतले आफ्नो पूरा नाम दिनुहोस्। आवश्यक परे छोड्न सक्नुहुन्छ।"
+                        }
+                    },
+                    'complainant': {
+                        1: {
+                            'en': "Please enter the affected person's full name. You can skip this if they prefer anonymity.",
+                            'ne': "प्रभावित व्यक्तिको पूरा नाम दिनुहोस्। उनीहरूले गुमनाम रहन चाहेमा छोड्न सक्नुहुन्छ।"
+                        },
+                        2: {
+                            'en': "Please enter the affected person's full name. You can skip this if they prefer anonymity.",
+                            'ne': "प्रभावित व्यक्तिको पूरा नाम दिनुहोस्। उनीहरूले गुमनाम रहन चाहेमा छोड्न सक्नुहुन्छ।"
+                        }
+                    }
+                }
+            },
             'buttons': {
                 1: BUTTONS_SKIP
             }
@@ -309,6 +497,28 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
                     'ne': "कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                }
+            },
+            'profile_utterances': {
+                'seah-other': {
+                    1: {
+                        'en': "Please enter your contact email as the reporting person. You can skip this if you prefer not to share it.",
+                        'ne': "रिपोर्ट गर्ने व्यक्तिको रूपमा आफ्नो सम्पर्क इमेल दिनुहोस्। दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                    }
+                },
+                'seah-focal': {
+                    'reporter': {
+                        1: {
+                            'en': "Reporter email is optional in this focal stage. You can type skip and continue; affected person email is collected later when applicable.",
+                            'ne': "यो फोकल रिपोर्टर चरणमा इमेल वैकल्पिक हो। skip टाइप गरेर अगाडि बढ्न सक्नुहुन्छ; आवश्यक परे प्रभावित व्यक्तिको इमेल पछि लिइन्छ।"
+                        }
+                    },
+                    'complainant': {
+                        1: {
+                            'en': "Please enter the affected person's contact email. You can skip this if they prefer not to share it.",
+                            'ne': "प्रभावित व्यक्तिको सम्पर्क इमेल दिनुहोस्। उनीहरूले दिन नचाहेमा छोड्न सक्नुहुन्छ।"
+                        }
+                    }
                 }
             },
             'buttons': {
@@ -571,7 +781,7 @@ UTTERANCE_MAPPING = {
                 },
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS,
+                1: BUTTONS_SEAH_OUTRO,
             },
         },
     },
@@ -1046,7 +1256,8 @@ Do you want to add more details before submission?""",
     },
     'form_seah_focal_point': {
         'action_ask_form_seah_focal_point_1_seah_focal_learned_when': {
-            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}}
+            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}},
+            'buttons': {1: BUTTONS_SEAH_FOCAL_LEARNED_WHEN}
         },
         'action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report': {
             'utterances': {1: {'en': "Did the complainant consent to you reporting this here?", 'ne': "के उजुरीकर्ताले तपाईंलाई यहाँ रिपोर्ट गर्न सहमति दिनुभयो?"}},
@@ -1076,7 +1287,10 @@ Do you want to add more details before submission?""",
             'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के ADB आयोजनामा जोखिम छ? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_PROJECT_RISK}
         },
-        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}}},
+        'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {
+            'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}},
+            'buttons': {1: BUTTONS_SEAH_YES_NO},
+        },
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {

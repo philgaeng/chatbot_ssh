@@ -20,7 +20,17 @@ DOCKER_COMPOSE = docker compose
 
 # --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
 # Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
-.PHONY: compose_docker_wsl compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_seed_seah_catalog
+.PHONY: compose_docker_wsl compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_seed_seah_catalog \
+	migrate_ticketing migrate_public migrate_all
+
+# DB migrations (two Alembic streams — run from repo root; uses POSTGRES_* from env / env.local)
+migrate_ticketing:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+
+migrate_public:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+
+migrate_all: migrate_ticketing migrate_public
 
 compose_docker_wsl:
 	$(DOCKER_COMPOSE) up -d --build
