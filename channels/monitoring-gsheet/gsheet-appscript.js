@@ -110,6 +110,15 @@ function createManifest() {
 
 // Function to fetch and populate data
 function fetchAndPopulateData() {
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    "Google Sheets monitoring is deprecated. Use the standalone ticketing system.",
+    "Deprecated"
+  );
+  Logger.log(
+    "[DEPRECATED] fetchAndPopulateData skipped: monitoring-gsheet has been retired in favor of ticketing UI."
+  );
+  return;
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
   // Clear existing data except header
