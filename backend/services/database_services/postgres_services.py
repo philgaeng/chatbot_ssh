@@ -253,6 +253,22 @@ class DatabaseManager(BaseDatabaseManager):
                 complainant_ward TEXT,
                 complainant_village TEXT,
                 complainant_address TEXT,
+                contact_id TEXT,
+                country_code TEXT,
+                location_code TEXT,
+                location_resolution_status TEXT,
+                level_1_name TEXT,
+                level_2_name TEXT,
+                level_3_name TEXT,
+                level_4_name TEXT,
+                level_5_name TEXT,
+                level_6_name TEXT,
+                level_1_code TEXT,
+                level_2_code TEXT,
+                level_3_code TEXT,
+                level_4_code TEXT,
+                level_5_code TEXT,
+                level_6_code TEXT,
                 seah_reporter_category TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -285,6 +301,22 @@ class DatabaseManager(BaseDatabaseManager):
             "ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS seah_reporter_category TEXT;",
             (),
         )
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS contact_id TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS country_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS location_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS location_resolution_status TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_1_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_2_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_3_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_4_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_5_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_6_name TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_1_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_2_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_3_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_4_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_5_code TEXT;", ())
+        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_6_code TEXT;", ())
         self._ensure_seah_contact_points_table()
 
     def _ensure_seah_contact_points_table(self) -> None:
@@ -443,6 +475,22 @@ class DatabaseManager(BaseDatabaseManager):
                 "complainant_ward": data.get("complainant_ward"),
                 "complainant_village": data.get("complainant_village"),
                 "complainant_address": data.get("complainant_address"),
+                "contact_id": data.get("contact_id"),
+                "country_code": data.get("country_code"),
+                "location_code": data.get("location_code"),
+                "location_resolution_status": data.get("location_resolution_status"),
+                "level_1_name": data.get("level_1_name"),
+                "level_2_name": data.get("level_2_name"),
+                "level_3_name": data.get("level_3_name"),
+                "level_4_name": data.get("level_4_name"),
+                "level_5_name": data.get("level_5_name"),
+                "level_6_name": data.get("level_6_name"),
+                "level_1_code": data.get("level_1_code"),
+                "level_2_code": data.get("level_2_code"),
+                "level_3_code": data.get("level_3_code"),
+                "level_4_code": data.get("level_4_code"),
+                "level_5_code": data.get("level_5_code"),
+                "level_6_code": data.get("level_6_code"),
                 "seah_reporter_category": seah_reporter_category_from_victim_survivor_role(
                     data.get("seah_victim_survivor_role")
                 ),

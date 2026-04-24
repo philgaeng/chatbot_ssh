@@ -10,6 +10,7 @@ from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATI
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
+from backend.shared_functions.location_mapping import resolve_location_payload
 
 
 
@@ -86,6 +87,18 @@ class BaseActionSubmit(BaseAction):
         
         # collect the data from the tracker
         grievance_data={k : tracker.get_slot(k) for k in keys}
+        location_payload = resolve_location_payload(
+            db_manager=self.db_manager,
+            slots=grievance_data,
+            country_code=tracker.get_slot("country_code") or "NP",
+        )
+        grievance_data.update(location_payload)
+        self.logger.info(
+            "submission_location_resolution country_code=%s status=%s deepest_level=%s",
+            location_payload.get("country_code"),
+            location_payload.get("location_resolution_status"),
+            location_payload.get("location_deepest_mapped_level", 0),
+        )
         grievance_timestamp = self.helpers_repo.get_current_datetime()
         grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
         if review:
@@ -366,72 +379,3 @@ class ActionSubmitSeah(BaseActionSubmit):
                 )
             return []
 
-
-class ActionGrievanceOutro(BaseActionSubmit):
-    def name(self) -> Text:
-        return "action_grievance_outro"
-
-    def _prepare_grievance_outro_data(self, tracker: Tracker) -> Dict[str, Any]:
-        """Prepare the grievance outro data from the slots and updating the categories to the english ones"""
-        # Get original slot values for messaging (not encrypted database values)
-        grievance_data = self.collect_grievance_data(tracker, review = True)
-        
-        # Get categories from slots and convert to English if needed
-        grievance_categories_local = tracker.get_slot("grievance_categories_local")
-
-        
-        # Use the current slot values for categories (these are the user-confirmed values)
-        current_categories = tracker.get_slot("grievance_categories")
-
-        
-        # If we have local language categories, convert them to English
-        if grievance_categories_local and self.language_code != "en":
-            grievance_categories_en = self._get_categories_in_english(grievance_categories_local)
-            grievance_data["grievance_categories"] = grievance_categories_en
-        elif current_categories:
-            grievance_data["grievance_categories"] = current_categories
-
-        return grievance_data
-
-    
-    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Any]:
-        
-        self.grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
-        self.logger.info("send last utterance and buttons")
-        grievance_id = tracker.get_slot("grievance_id")
-        buttons = None
-        try:
-            if self.grievance_sensitive_issue:
-                    utterance = self.get_utterance(1) #we are numbering the utterances from 4 since all the utterances in the Class are in the same key in utterance_mapping_rasa.py
-                    buttons = self.get_buttons(1)
-                    
-            elif not self._get_attached_files_info(grievance_id)["has_files"]:
-                utterance = self.get_utterance(2)
-            else:
-                utterance = self.get_utterance(3)
-            self.logger.debug(f"action_grievance_outro - utterance: {utterance} - buttons: {buttons if buttons else 'None'}")
-            
-            if buttons:
-                dispatcher.utter_message(text=utterance, buttons=buttons)
-            else:
-                dispatcher.utter_message(text=utterance)
-            self.logger.debug(f"action_grievance_outro - outro sent")
-
-            #final saving to the database
-            grievance_data = self._prepare_grievance_outro_data(tracker)
-           
-            self.db_manager.submit_grievance_to_db(grievance_data)
-            self.logger.debug(f"action_grievance_outro - grievance data saved to the database: {grievance_data}")
-
-            #send email to admin
-            await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
-            
-            #send email to complainant
-            complainant_email = grievance_data.get('complainant_email')
-
-            if complainant_email and self.is_valid_email(complainant_email):
-                await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
-
-            return []
-        except Exception as e:
-            self.logger.error(f"Error in action_grievance_outro: {e}")

@@ -243,6 +243,46 @@
   height: 20px;
 }
 
+.send-button-wrap {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.send-invalid-tooltip {
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  background: #c0392b;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 7px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+}
+
+.send-invalid-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 14px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: #c0392b transparent transparent transparent;
+}
+
+.send-invalid-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .attachment-button svg {
   width: 20px;
   height: 20px;

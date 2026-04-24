@@ -71,3 +71,11 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
 - No new schema-changing script added under `scripts/database/` for ticketing.
 - If the PR changes **`public.*`** schema: include a new revision under `migrations/public/versions/` (or document why not, e.g. bootstrap-only with follow-up migration).
 - Upgrade path validated on both host DB and Docker DB targets where applicable.
+
+## May5 SEAH contact/location rollout (public stream)
+
+- Apply order:
+  1. `python -m alembic -c ticketing/migrations/alembic.ini upgrade head`
+  2. `python -m alembic -c migrations/public/alembic.ini upgrade head`
+- New public revision for this rollout: `pub002_contact_info_and_normalized_location`.
+- Rollback (public only): `python -m alembic -c migrations/public/alembic.ini downgrade pub001_seah_reporter_category`.

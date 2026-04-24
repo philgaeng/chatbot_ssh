@@ -973,6 +973,21 @@ sleep 10
 docker compose ps
 ```
 
+### Public + ticketing migration run order (May5 SEAH tranche)
+
+```bash
+# 1) ticketing schema changes first
+python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+
+# 2) public schema changes second
+python -m alembic -c migrations/public/alembic.ini upgrade head
+```
+
+Rollback notes:
+
+- Ticketing rollback uses ticketing revision IDs only.
+- Public rollback for the new contact/location work can return to `pub001_seah_reporter_category`.
+
 ### Clear Cache
 
 ```bash

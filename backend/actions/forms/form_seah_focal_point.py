@@ -673,7 +673,7 @@ class ActionOutroSensitiveIssues(BaseAction):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
         if tracker.get_slot("story_main") == "seah_intake":
-            from backend.actions.action_seah_outro import ActionSeahOutro
+            from backend.actions.action_outro import ActionSeahOutro
 
             return await ActionSeahOutro().execute_action(dispatcher, tracker, domain)
         message = self.get_utterance(2) if tracker.get_slot("seah_not_adb_project") else self.get_utterance(1)

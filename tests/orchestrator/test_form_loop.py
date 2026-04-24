@@ -188,6 +188,41 @@ def test_form_grievance_complainant_review_first_ask(domain):
     assert "requested_slot" in slot_updates
 
 
+def test_review_continue_without_categories_handles_missing_categories_slot(domain):
+    from backend.orchestrator.form_loop import get_form
+
+    form = get_form("form_grievance_complainant_review")
+    session = {
+        "user_id": "test",
+        "active_loop": "form_grievance_complainant_review",
+        "requested_slot": "grievance_categories_status",
+        "slots": {
+            "language_code": "en",
+            "grievance_id": "G-TEST-001",
+            "complainant_id": "C-TEST-001",
+            "grievance_classification_consent": True,
+            "grievance_classification_status": "LLM_generated",
+            "grievance_categories_local": [],
+            # grievance_categories intentionally omitted to simulate edge state from session/db sync.
+            "grievance_categories_status": None,
+            "grievance_cat_modify": None,
+            "grievance_summary_temp": "short summary",
+            "grievance_summary_status": None,
+        },
+    }
+    user_input = {"text": "/slot_confirmed", "intent": {"name": "intent_slot_neutral"}}
+
+    messages, slot_updates, completed = _run(
+        run_form_turn(form=form, session=session, user_input=user_input, domain=domain)
+    )
+
+    assert completed is False
+    assert slot_updates.get("requested_slot") == "grievance_summary_status"
+    texts = [m.get("text", "") for m in messages]
+    assert any("summary" in t.lower() for t in texts), "expected summary review prompt"
+    assert not any("Please provide the requested information." == t for t in texts)
+
+
 @pytest.mark.skip(reason="Deprecated: legacy form_sensitive_issues tests replaced by form_seah_* coverage")
 def test_legacy_sensitive_issues_form_coverage_deprecated():
     pass

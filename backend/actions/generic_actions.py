@@ -12,9 +12,16 @@ import os
 
 TASK_SLOTS_TO_UPDATE_MAP = {
     "process_file_upload_task": {"slot_name": "file_upload_status", "followup_action": None},
-    "classify_and_summarize_grievance_task": {"slot_name": "grievance_classification_status", },
+    "classify_and_summarize_grievance_task": {"slot_name": "grievance_classification_status"},
     "translate_grievance_to_english_task": {"slot_name": "translation_status", "followup_action": None},
-   }
+}
+
+
+def _deprecated_action_warning(logger, action_name: str) -> None:
+    logger.warning(
+        "[DEPRECATED_ACTION] %s is deprecated and kept only for backward compatibility.",
+        action_name,
+    )
 
 
 class ActionNextAction(BaseAction):
@@ -154,8 +161,7 @@ class ActionOutro(BaseAction):
         return "action_outro"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        message = self.get_utterance(1)
-        dispatcher.utter_message(text=message)
+        _deprecated_action_warning(self.logger, self.name())
         return []
 
 #helpers
@@ -164,11 +170,8 @@ class ActionSetCurrentProcess(BaseAction):
         return "action_set_current_process"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        story_current = "Filing a Complaint"  # Replace with dynamic logic if needed
-        message = self.get_utterance(1)
-        message = message.format(story_current=story_current)
-        dispatcher.utter_message(text=message)
-        return [SlotSet("current_process", story_current)]
+        _deprecated_action_warning(self.logger, self.name())
+        return []
 
 
 
@@ -180,9 +183,8 @@ class ActionGoBack(BaseAction):
         return "action_go_back"
 
     async def execute_action(self, dispatcher, tracker, domain):
-        message = self.get_utterance(1)
-        dispatcher.utter_message(text=message)
-        return [UserUtteranceReverted()]
+        _deprecated_action_warning(self.logger, self.name())
+        return []
 
 
     
@@ -211,15 +213,7 @@ class ActionShowCurrentStory(BaseAction):
         return "action_show_story_current"
 
     async def execute_action(self, dispatcher, tracker, domain):
-        story_current = tracker.get_slot("story_current")
-        
-        if story_current:
-            message = self.get_utterance(1)
-            message = message.format(story_current=story_current)
-        else:
-            message = self.get_utterance(2)
-            
-        dispatcher.utter_message(text=message)
+        _deprecated_action_warning(self.logger, self.name())
         return []
 
 #mood actions
@@ -267,17 +261,8 @@ class ActionHandleSkip(BaseAction):
         return "action_handle_skip"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        skip_count = tracker.get_slot("skip_count") or 0
-        skip_count += 1
-
-        if skip_count >= 2:
-            message = self.get_utterance(1)
-            dispatcher.utter_message(text=message)
-            return [SlotSet("skip_count", 0)]
-        else:
-            message = self.get_utterance(2)
-            dispatcher.utter_message(text=message)
-            return [SlotSet("skip_count", skip_count)]
+        _deprecated_action_warning(self.logger, self.name())
+        return []
 
 class ActionGoodbye(BaseAction):
     def name(self) -> Text:
@@ -350,9 +335,7 @@ class ActionCleanWindowOptions(BaseAction):
         return "action_clean_window_options"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        message = self.get_utterance(1)
-        buttons = self.get_buttons(1)
-        dispatcher.utter_message(text=message, buttons=buttons)
+        _deprecated_action_warning(self.logger, self.name())
         return []
 
 class ActionAttachFiles(BaseAction):
@@ -377,21 +360,7 @@ class ActionFileUploadStatus(BaseAction):
         return "action_file_upload_status"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        # You can pass these as slots or from tracker.latest_message
-        file_id = tracker.get_slot("file_id")
-        status = tracker.get_slot("file_status")
-        file_name = tracker.get_slot("file_name")
-        # Add any other info you want to send
-
-        dispatcher.utter_message(
-            json_message={
-                "event_type": "file_upload_status",
-                "file_id": file_id,
-                "status": status,
-                "file_name": file_name,
-                # ... any other fields
-            }
-        )
+        _deprecated_action_warning(self.logger, self.name())
         return []
 
 
