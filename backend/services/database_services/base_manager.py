@@ -980,7 +980,7 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-            # Drop tables in reverse order of dependency
+                # Drop tables in reverse order of dependency
                 self.migrations_logger.info("Dropping tables in reverse order...")
                 cur.execute("DROP TABLE IF EXISTS grievance_transcriptions CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievance_translations CASCADE")
