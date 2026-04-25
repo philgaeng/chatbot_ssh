@@ -47,6 +47,8 @@ window.introductionWindowTimer = null;
 window.sessionInitialized = false;
 window.lastBotMessageText = "";
 window.lastBotQuickReplies = null;
+/** Last POST /message `next_state` — used after file upload to offer exit controls when flow is finished (`done`). */
+window.lastOrchestratorNextState = null;
 
 // File type constants
 const FILE_TYPES = {
@@ -197,6 +199,8 @@ window.safeSendMessage = restSendMessage;
 
 function handleOrchestratorResponse(response) {
   const { messages = [], next_state, expected_input_type } = response || {};
+  window.lastOrchestratorNextState =
+    typeof next_state === "string" ? next_state : null;
 
   if (!Array.isArray(messages)) {
     return;
@@ -232,8 +236,6 @@ function handleOrchestratorResponse(response) {
       eventHandlers.handleCustomPayload(m.json_message);
     }
   });
-
-  // Optionally, use next_state / expected_input_type to adjust UI in the future
 }
 
 // Send introduction message (async: restSendMessage returns a Promise; must await
@@ -482,6 +484,7 @@ function resetFrontendState() {
   window.sessionInitialized = false;
   window.lastBotMessageText = "";
   window.lastBotQuickReplies = null;
+  window.lastOrchestratorNextState = null;
 
   if (window.currentRetryTimer) {
     clearTimeout(window.currentRetryTimer);
@@ -853,12 +856,42 @@ async function pollFileStatus(fileIds) {
   poll();
 }
 
-function showPostUploadMessageAndUnlock() {
-  uiActions.appendMessage(get("file_upload.post_upload"), "received");
-  uiActions.replaceQuickReplies([
+function buildPostUploadQuickReplies() {
+  const base = [
     { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
     { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ]);
+  ];
+  if (window.lastOrchestratorNextState !== "done") {
+    return base;
+  }
+  return [
+    ...base,
+    {
+      title: get("file_upload.buttons.close_browser"),
+      payload: "/nav_close_browser_tab",
+    },
+    {
+      title: get("file_upload.buttons.clear_session"),
+      payload: "/nav_clear",
+    },
+    {
+      title: get("file_upload.buttons.close_session"),
+      payload: "/nav_goodbye",
+    },
+  ];
+}
+
+function showPostUploadMessageAndUnlock() {
+  const atFlowEnd = window.lastOrchestratorNextState === "done";
+  uiActions.appendMessage(
+    get(
+      atFlowEnd
+        ? "file_upload.post_upload_at_flow_end"
+        : "file_upload.post_upload"
+    ),
+    "received"
+  );
+  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -882,11 +915,14 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
-  uiActions.appendMessage(get("file_upload.failure"), "received");
-  uiActions.replaceQuickReplies([
-    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
-    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ]);
+  const atFlowEnd = window.lastOrchestratorNextState === "done";
+  uiActions.appendMessage(
+    get(
+      atFlowEnd ? "file_upload.failure_at_flow_end" : "file_upload.failure"
+    ),
+    "received"
+  );
+  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
