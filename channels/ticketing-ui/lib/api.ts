@@ -734,7 +734,10 @@ export interface OfficerScope {
   role_key: string;
   organization_id: string;
   location_code: string | null;
+  project_id: string | null;
   project_code: string | null;
+  package_id: string | null;
+  includes_children: boolean;
   created_at: string;
 }
 
@@ -742,7 +745,10 @@ export interface ScopeCreate {
   role_key: string;
   organization_id: string;
   location_code?: string | null;
+  project_id?: string | null;
   project_code?: string | null;
+  package_id?: string | null;
+  includes_children?: boolean;
 }
 
 export function listScopes(userId: string): Promise<OfficerScope[]> {

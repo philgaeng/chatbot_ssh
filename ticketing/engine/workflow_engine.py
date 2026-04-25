@@ -254,18 +254,25 @@ def _scope_candidates(
     Return all user_ids whose scopes cover the given (role, org, location, project).
 
     Matching rules (union of all three):
-      A. Exact location match:
+      A. Exact / wildcard location match (non-package scopes only):
+         scope.package_id    IS NULL  (package-scoped officers handled by C)
          scope.location_code == location_code (or IS NULL for "all locations")
          scope.project_code  == project_code  (or IS NULL for "all projects")
 
-      B. includes_children cascade:
+      B. includes_children cascade (non-package scopes only):
+         scope.package_id    IS NULL
          scope.includes_children IS TRUE
          scope.location_code IS an ancestor of location_code
          scope.project_code  == project_code  (or IS NULL)
 
-    Both A and B require role_key + organization_id to match exactly.
+      C. Package-scoped officers:
+         Find packages whose PackageLocation rows cover location_code (or any ancestor).
+         Match officers whose scope.package_id is one of those packages.
+
+    Both A, B, and C require role_key + organization_id to match exactly.
     """
     from ticketing.models.officer_scope import OfficerScope
+    from ticketing.models.package import PackageLocation
 
     seen: set[str] = set()
     result: list[str] = []
@@ -276,7 +283,7 @@ def _scope_candidates(
                 seen.add(uid)
                 result.append(uid)
 
-    # ── A. Exact / wildcard match ─────────────────────────────────────────────
+    # ── A. Exact / wildcard match (non-package scopes only) ───────────────────
     for loc in ([location_code, None] if location_code else [None]):
         for proj in ([project_code, None] if project_code else [None]):
             rows = db.execute(
@@ -285,11 +292,12 @@ def _scope_candidates(
                     OfficerScope.organization_id == organization_id,
                     OfficerScope.location_code   == loc,
                     OfficerScope.project_code    == proj,
+                    OfficerScope.package_id.is_(None),   # exclude package-scoped officers
                 )
             ).scalars().all()
             _add(rows)
 
-    # ── B. includes_children: scope covers an ancestor of this location ───────
+    # ── B. includes_children: scope covers an ancestor (non-package scopes only)
     if location_code:
         ancestors = _location_and_ancestors(location_code, db)
         # Exclude the exact location itself (already covered by A)
@@ -303,9 +311,30 @@ def _scope_candidates(
                         OfficerScope.location_code.in_(ancestor_only),
                         OfficerScope.includes_children.is_(True),
                         OfficerScope.project_code      == proj,
+                        OfficerScope.package_id.is_(None),   # exclude package-scoped officers
                     )
                 ).scalars().all()
                 _add(rows)
+
+    # ── C. Package-scoped officers: match via PackageLocation coverage ─────────
+    # An officer scoped to package P covers any ticket whose location is in P's
+    # PackageLocation rows (or any ancestor of the ticket's location).
+    if location_code:
+        all_locs = _location_and_ancestors(location_code, db)
+        covering_pkg_ids = db.execute(
+            select(PackageLocation.package_id).where(
+                PackageLocation.location_code.in_(all_locs)
+            )
+        ).scalars().all()
+        if covering_pkg_ids:
+            rows = db.execute(
+                select(OfficerScope.user_id).where(
+                    OfficerScope.role_key        == role_key,
+                    OfficerScope.organization_id == organization_id,
+                    OfficerScope.package_id.in_(covering_pkg_ids),
+                )
+            ).scalars().all()
+            _add(rows)
 
     return result
 

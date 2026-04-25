@@ -417,36 +417,90 @@ const ROLES = [
 // ── OfficerScopePanel — expandable jurisdictions editor ──────────────────────
 
 function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: string }) {
-  const [scopes, setScopes] = useState<OfficerScope[]>([]);
+  const [scopes, setScopes]   = useState<OfficerScope[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [newOrg, setNewOrg] = useState("");
-  const [newLoc, setNewLoc] = useState("");
-  const [newProj, setNewProj] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding]   = useState(false);
 
+  // Reference data loaded once
+  const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [pkgMap, setPkgMap]     = useState<Record<string, PackageItem>>({});
+
+  // New scope form state
+  const [selOrg,      setSelOrg]      = useState("");
+  const [selProject,  setSelProject]  = useState("");
+  const [selLoc,      setSelLoc]      = useState<{ code: string; name: string } | null>(null);
+  const [selPkg,      setSelPkg]      = useState("");
+  const [inclChildren, setInclChildren] = useState(false);
+  const [pkgOptions,  setPkgOptions]  = useState<PackageItem[]>([]);
+
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  // Load scopes + reference data once
   useEffect(() => {
     setLoading(true);
-    listScopes(userId)
-      .then(setScopes)
-      .catch(() => setScopes([]))
+    Promise.all([listScopes(userId), listOrganizations(), listProjects()])
+      .then(([scopeData, orgData, projData]) => {
+        setScopes(scopeData);
+        setOrgs(orgData);
+        setProjects(projData);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [userId]);
 
+  // Build pkgMap for packages referenced by existing scopes (for display)
+  useEffect(() => {
+    const projIds = [...new Set(scopes.map((s) => s.project_id).filter(Boolean) as string[])];
+    if (projIds.length === 0) return;
+    Promise.all(projIds.map((pid) => listPackages(pid)))
+      .then((arrays) => {
+        const map: Record<string, PackageItem> = {};
+        arrays.flat().forEach((pkg) => { map[pkg.package_id] = pkg; });
+        setPkgMap(map);
+      })
+      .catch(() => {});
+  }, [scopes]);
+
+  // When selected org changes, reset project selection
+  useEffect(() => {
+    setSelProject(""); setPkgOptions([]); setSelPkg("");
+  }, [selOrg]);
+
+  // When selected project changes, load its packages
+  useEffect(() => {
+    if (!selProject) { setPkgOptions([]); setSelPkg(""); return; }
+    listPackages(selProject).then(setPkgOptions).catch(() => setPkgOptions([]));
+    setSelPkg("");
+  }, [selProject]);
+
+  const filteredProjects = selOrg
+    ? projects.filter((p) => p.organizations.some((o) => o.organization_id === selOrg))
+    : projects;
+
+  const orgMap = Object.fromEntries(orgs.map((o) => [o.organization_id, o.name]));
+
+  function resetForm() {
+    setSelOrg(""); setSelProject(""); setSelLoc(null);
+    setSelPkg(""); setInclChildren(false); setPkgOptions([]);
+  }
+
   async function handleAdd() {
-    if (!newOrg.trim()) return;
+    if (!selOrg) return;
     setSaving(true);
     setError(null);
     try {
       const created = await addScope(userId, {
-        role_key: roleKey,
-        organization_id: newOrg.trim(),
-        location_code: newLoc.trim() || null,
-        project_code: newProj.trim() || null,
+        role_key:         roleKey,
+        organization_id:  selOrg,
+        location_code:    selLoc?.code ?? null,
+        project_id:       selProject || null,
+        package_id:       selPkg || null,
+        includes_children: inclChildren,
       });
       setScopes((s) => [...s, created]);
-      setNewOrg(""); setNewLoc(""); setNewProj("");
+      resetForm();
       setAdding(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -486,68 +540,152 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
             <table className="w-full text-xs mb-2">
               <thead>
                 <tr className="text-left text-slate-400">
-                  <th className="pr-4 pb-1 font-medium">Organization</th>
-                  <th className="pr-4 pb-1 font-medium">Location</th>
-                  <th className="pr-4 pb-1 font-medium">Project</th>
+                  <th className="pr-3 pb-1 font-medium">Organization</th>
+                  <th className="pr-3 pb-1 font-medium">Location</th>
+                  <th className="pr-3 pb-1 font-medium">Project</th>
+                  <th className="pr-3 pb-1 font-medium">Package</th>
                   <th className="pb-1" />
                 </tr>
               </thead>
               <tbody>
-                {scopes.map((s) => (
-                  <tr key={s.scope_id} className="border-t border-gray-100">
-                    <td className="pr-4 py-1 text-gray-700">{s.organization_id}</td>
-                    <td className="pr-4 py-1 text-gray-500">{s.location_code ?? <span className="text-gray-300">all</span>}</td>
-                    <td className="pr-4 py-1 text-gray-500">{s.project_code ?? <span className="text-gray-300">all</span>}</td>
-                    <td className="py-1 text-right">
-                      <button
-                        onClick={() => handleDelete(s.scope_id)}
-                        className="text-red-400 hover:text-red-600 font-medium"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {scopes.map((s) => {
+                  const pkg = s.package_id ? pkgMap[s.package_id] : null;
+                  const proj = s.project_id ? projects.find((p) => p.project_id === s.project_id) : null;
+                  return (
+                    <tr key={s.scope_id} className="border-t border-gray-100">
+                      <td className="pr-3 py-1 text-gray-700">{orgMap[s.organization_id] ?? s.organization_id}</td>
+                      <td className="pr-3 py-1 text-gray-500">
+                        {s.location_code ? (
+                          <span className="inline-flex items-center gap-1">
+                            {s.location_code}
+                            {s.includes_children && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-1 rounded" title="Includes child locations">+sub</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">all</span>
+                        )}
+                      </td>
+                      <td className="pr-3 py-1 text-gray-500">
+                        {proj ? proj.short_code : s.project_id ? s.project_id : <span className="text-gray-300">all</span>}
+                      </td>
+                      <td className="pr-3 py-1">
+                        {pkg ? (
+                          <span
+                            className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-mono cursor-default"
+                            title={pkg.name}
+                          >
+                            {pkg.package_code}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-1 text-right">
+                        <button
+                          onClick={() => handleDelete(s.scope_id)}
+                          className="text-red-400 hover:text-red-600 font-medium"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
 
           {adding ? (
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="text"
-                placeholder="Org *"
-                value={newOrg}
-                onChange={(e) => setNewOrg(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <input
-                type="text"
-                placeholder="Location"
-                value={newLoc}
-                onChange={(e) => setNewLoc(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <input
-                type="text"
-                placeholder="Project"
-                value={newProj}
-                onChange={(e) => setNewProj(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <button
-                onClick={handleAdd}
-                disabled={saving || !newOrg.trim()}
-                className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Add"}
-              </button>
-              <button
-                onClick={() => { setAdding(false); setError(null); }}
-                className="text-gray-400 hover:text-gray-600 text-xs"
-              >
-                Cancel
-              </button>
+            <div className="mt-2 bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+
+              {/* Row 1: Org + Project */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={selOrg}
+                  onChange={(e) => setSelOrg(e.target.value)}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                >
+                  <option value="">— Organization * —</option>
+                  {orgs.map((o) => (
+                    <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={selProject}
+                  onChange={(e) => setSelProject(e.target.value)}
+                  disabled={filteredProjects.length === 0}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  <option value="">— Project (all) —</option>
+                  {filteredProjects.map((p) => (
+                    <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Row 2: Location search / selected pill */}
+              <div>
+                {selLoc ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs">
+                      {selLoc.name}
+                      <span className="font-mono text-blue-400 text-xs">{selLoc.code}</span>
+                      <button onClick={() => setSelLoc(null)} className="text-blue-300 hover:text-blue-600 ml-0.5 leading-none">×</button>
+                    </span>
+                    <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={inclChildren}
+                        onChange={(e) => setInclChildren(e.target.checked)}
+                        className="accent-purple-500"
+                      />
+                      include sub-locations
+                    </label>
+                  </div>
+                ) : (
+                  <LocationSearch
+                    placeholder="Location (leave blank = all)"
+                    onSelect={(code, name) => setSelLoc({ code, name })}
+                  />
+                )}
+              </div>
+
+              {/* Row 3: Package (only when project has packages) */}
+              {selProject && pkgOptions.length > 0 && (
+                <div>
+                  <select
+                    value={selPkg}
+                    onChange={(e) => setSelPkg(e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  >
+                    <option value="">— Package (all packages in project) —</option>
+                    {pkgOptions.map((pkg) => (
+                      <option key={pkg.package_id} value={pkg.package_id}>
+                        {pkg.package_code} — {pkg.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-0.5">L1 officers are typically scoped to a single package.</p>
+                </div>
+              )}
+
+              {/* Row 4: Actions */}
+              <div className="flex items-center gap-2 pt-0.5">
+                <button
+                  onClick={handleAdd}
+                  disabled={saving || !selOrg}
+                  className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Add scope"}
+                </button>
+                <button
+                  onClick={() => { setAdding(false); resetForm(); setError(null); }}
+                  className="text-gray-400 hover:text-gray-600 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <button
