@@ -30,7 +30,8 @@ class OfficerScope(Base):
             "idx_officer_scopes_lookup",
             "role_key", "organization_id", "location_code", "project_code",
         ),
-        Index("idx_officer_scopes_user", "user_id"),
+        Index("idx_officer_scopes_user",    "user_id"),
+        Index("idx_officer_scopes_package", "package_id"),
         {"schema": "ticketing"},
     )
 
@@ -47,6 +48,13 @@ class OfficerScope(Base):
     )
     # project_code kept for backwards compat; deprecated — use project_id
     project_code:      Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    # When set: scope is restricted to this specific civil-works package
+    # L1 officers for a contractor are scoped to their package only
+    package_id:        Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ticketing.project_packages.package_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # When True: scope covers this location AND all descendant nodes
     includes_children: Mapped[bool]       = mapped_column(Boolean, nullable=False, default=False)
     created_at:        Mapped[datetime]   = mapped_column(DateTime(timezone=True), nullable=False, default=_now)

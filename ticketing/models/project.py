@@ -54,7 +54,8 @@ class Project(Base):
 class ProjectOrganization(Base):
     """
     Many-to-many: multiple organizations can co-own a project.
-    e.g. KL Road → DOR + ADB
+    e.g. KL Road → DOR (implementing_agency) + ADB (donor)
+    org_role references the vocabulary stored in ticketing.settings key 'org_roles'.
     """
     __tablename__ = "project_organizations"
     __table_args__ = (
@@ -72,6 +73,9 @@ class ProjectOrganization(Base):
         ForeignKey("ticketing.organizations.organization_id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Role of this org in this project (e.g. "donor", "implementing_agency").
+    # Nullable: role may be assigned later or left blank.
+    org_role: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     project: Mapped["Project"] = relationship("Project", back_populates="organizations")
 

@@ -160,6 +160,8 @@ class ScopeCreate(BaseModel):
     # Use project_id (FK to ticketing.projects); project_code kept for legacy callers
     project_id: Optional[str] = None
     project_code: Optional[str] = None          # deprecated — ignored if project_id given
+    # When set: scope is restricted to this specific civil-works package
+    package_id: Optional[str] = None
     includes_children: bool = False             # True: scope cascades to child locations
 
 
@@ -171,6 +173,7 @@ class ScopeResponse(BaseModel):
     location_code: Optional[str]
     project_id: Optional[str]
     project_code: Optional[str]
+    package_id: Optional[str]
     includes_children: bool
     created_at: datetime
 
@@ -218,7 +221,13 @@ def add_user_scope(
         if not db.get(Project, payload.project_id):
             raise HTTPException(status_code=422, detail=f"Project '{payload.project_id}' not found")
 
-    # Prevent duplicate entries for the same (user, role, org, location, project)
+    # Validate package_id if supplied
+    if payload.package_id:
+        from ticketing.models.package import Package
+        if not db.get(Package, payload.package_id):
+            raise HTTPException(status_code=422, detail=f"Package '{payload.package_id}' not found")
+
+    # Prevent duplicate entries for the same (user, role, org, location, project, package)
     existing = db.execute(
         select(OfficerScope).where(
             OfficerScope.user_id == user_id,
@@ -226,6 +235,7 @@ def add_user_scope(
             OfficerScope.organization_id == payload.organization_id,
             OfficerScope.location_code == payload.location_code,
             OfficerScope.project_id == payload.project_id,
+            OfficerScope.package_id == payload.package_id,
         )
     ).scalar_one_or_none()
     if existing:
@@ -242,6 +252,7 @@ def add_user_scope(
         project_id=payload.project_id,
         # Keep project_code for backwards compat if caller used legacy field
         project_code=payload.project_code if not payload.project_id else None,
+        package_id=payload.package_id,
         includes_children=payload.includes_children,
     )
     db.add(scope)

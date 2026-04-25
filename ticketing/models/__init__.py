@@ -7,6 +7,7 @@ from .ticket import Ticket, TicketEvent
 from .ticket_file import TicketFile
 from .officer_scope import OfficerScope
 from .project import Project, ProjectOrganization, ProjectLocation
+from .package import ProjectPackage, PackageLocation
 from .settings import Settings
 
 __all__ = [
@@ -28,5 +29,7 @@ __all__ = [
     "Project",
     "ProjectOrganization",
     "ProjectLocation",
+    "ProjectPackage",
+    "PackageLocation",
     "Settings",
 ]
