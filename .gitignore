@@ -14,6 +14,8 @@ __pycache__/
 create_env.sh
 env.local
 env.local.example
+aws_local.local
+*.aws.local
 .env
 venv/
 .venv/
@@ -47,10 +49,12 @@ story_graph.dot  # Rasa story graph visualization
 
 # Docker-specific
 docker-compose.override.yml
-.dockerignore
 *.tar
 docker_images/
 deployment/certbot/
+
+# Cursor / agent scratch
+.cursor_tmp/
 
 # IDE-specific files
 .idea/
