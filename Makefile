@@ -1,19 +1,22 @@
 # Variables
 PROJECT_NAME = rasa_project
+PROJECT_DIRECTORY ?= nepal_chatbot
 
 # Training Server
 TRAIN_SERVER_USER = ubuntu
 REMOTE_HOST_TRAINING = 13.229.238.60
 REMOTE_DIR_TRAINING = /home/ubuntu/$(PROJECT_NAME)
-KEY_NAME_TRAINING = pg_rasa_train.pem
+KEY_NAME_TRAINING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_TRAINING = ssh -i $(KEY_NAME_TRAINING) $(TRAIN_SERVER_USER)@$(REMOTE_HOST_TRAINING)
 
 # Running Server
 RUN_SERVER_USER = ubuntu
-REMOTE_HOST_RUNNING = 13.228.123.45  # Replace with your running server IP
+# Replace with your running server IP
+REMOTE_HOST_RUNNING = 52.76.171.73
 REMOTE_DIR_RUNNING = /home/ubuntu/$(PROJECT_DIRECTORY)
-KEY_NAME_RUNNING = pg_rasa_train.pem
+KEY_NAME_RUNNING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING)
+SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
 
 # Docker Compose Command
 DOCKER_COMPOSE = docker compose
@@ -65,8 +68,18 @@ compose_docker_aws:
 
 # AWS / TLS full stack with ticketing overlay.
 compose_docker_aws_full:
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build
-	$(MAKE) check_grm_ports
+	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
+	$(SSH_RUNNING) 'set -e; \
+		cd $(REMOTE_DIR_RUNNING) && \
+		git fetch origin && \
+		git checkout main && \
+		git pull --ff-only origin main && \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build && \
+		ui_port="$$($(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port grm_ui 3001 2>/dev/null || true)" && \
+		api_port="$$($(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port ticketing_api 5002 2>/dev/null || true)" && \
+		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui is not published on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
+		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api is not published on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+		echo "GRM port check passed: grm_ui=$$ui_port ticketing_api=$$api_port"'
 
 # Validate GRM port mappings are exactly host 3001->3001 and 5002->5002.
 check_grm_ports:

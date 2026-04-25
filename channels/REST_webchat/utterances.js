@@ -3,7 +3,9 @@
  * Centralizes all frontend-only copy. Uses en/ne structure like utterance_mapping_rasa.py.
  * Chat is Nepali-only; English is for testing.
  */
-const DEFAULT_LANG = "ne";
+const DEFAULT_LANG = "en";
+const VALID_LANGS = new Set(["en", "ne"]);
+let currentLang = DEFAULT_LANG;
 
 export const U = {
   errors: {
@@ -155,7 +157,7 @@ export const U = {
 };
 
 /** Resolve nested key path like "file_upload.post_upload" or "errors.connection" */
-export function get(keyPath, lang = DEFAULT_LANG) {
+export function get(keyPath, lang = currentLang) {
   const keys = keyPath.split(".");
   let v = U;
   for (const k of keys) v = v?.[k];
@@ -163,6 +165,15 @@ export function get(keyPath, lang = DEFAULT_LANG) {
     return v[lang] ?? v.en ?? v.ne ?? "";
   }
   return typeof v === "string" ? v : "";
+}
+
+export function setLanguage(lang) {
+  if (!VALID_LANGS.has(lang)) return;
+  currentLang = lang;
+}
+
+export function getLanguage() {
+  return currentLang;
 }
 
 /** Format string with {placeholders} */

@@ -40,6 +40,7 @@ from .forms.form_seah_focal_point import *
 from .forms.form_status_check import *
 from .forms.form_status_check_skip import *
 from .forms.form_grievance_complainant_review import *
+from .action_outro import *
 from .test_routing import *
 
 

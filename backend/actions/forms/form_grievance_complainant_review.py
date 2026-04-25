@@ -192,9 +192,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         """
         Detects sensitive issues in the grievance list of categories
         """
-        
         categories = tracker.get_slot("grievance_categories")
-        grievance_sensitive_issue = any("sensitive" in category.lower() for category in categories)
+        if not categories:
+            return False
+        if isinstance(categories, str):
+            categories = [categories]
+        if not isinstance(categories, list):
+            return False
+        grievance_sensitive_issue = any("sensitive" in str(category).lower() for category in categories)
         #check if the string "sensitive" is in any of the categories in the list_of_cat
         return grievance_sensitive_issue
     
@@ -225,8 +230,12 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
 
     async def validate_grievance_classification_consent(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         if slot_value == True:
-            self.logger.debug(f"validate_grievance_classification_consent: User wants to review - returning consent only")
-            return {"grievance_classification_consent": slot_value}
+            self.logger.debug(f"validate_grievance_classification_consent: User wants to review")
+            result = {"grievance_classification_consent": slot_value}
+            # Keep review flow resilient when classification status is missing in session slots.
+            if tracker.get_slot("grievance_classification_status") is None:
+                result["grievance_classification_status"] = self.LLM_GENERATED
+            return result
         elif slot_value == False:
             grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
             self.logger.debug(f"validate_grievance_classification_consent: User doesn't want to review")
@@ -280,7 +289,7 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                                                    ) -> Dict[Text, Any]:
         self.logger.debug(f"validate_grievance_categories_status: {slot_value}")
         try:      
-            if self.SKIP_VALUE in slot_value:
+            if slot_value == self.SKIP_VALUE:
                 return {"grievance_categories_status": self.LLM_GENERATED,
                         "grievance_cat_modify": self.SKIP_VALUE}
                 
@@ -290,9 +299,9 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                 if self._detect_sensitive_issues_category(tracker):
                     return self._report_sensitive_issues_category(dispatcher, tracker)
                 else:
-                    return {"grievance_categories_status": slot_value,
+                    return {"grievance_categories_status": self.CM_COMFIRMED,
                             "grievance_classification_status": self.CM_COMFIRMED,
-                            "grievance_cat_modify": self.CM_COMFIRMED}
+                            "grievance_cat_modify": self.SKIP_VALUE}
                 
             elif 'slot_added' in slot_value:
                 #return the slot_value as selected by the user and move to category_modify slot
@@ -407,7 +416,7 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     return self._report_sensitive_issues_category(dispatcher, tracker)
                 #validate the slots
                 return {
-                    "grievance_categories_locaL": grievance_categories,
+                    "grievance_categories_local": grievance_categories,
                     "grievance_categories_alternative_local": alternative_categories,
                     "grievance_categories_status": None,
                     "grievance_cat_modify": "Done",
@@ -524,7 +533,10 @@ class ActionAskFormGrievanceComplainantReviewGrievanceCategoriesStatus(BaseActio
         grievance_categories = tracker.get_slot("grievance_categories_local")
         category_text = "|".join([v for v in grievance_categories]) if grievance_categories else "[]"
         
-        if tracker.get_slot("grievance_classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']:
+        grievance_classification_status = tracker.get_slot("grievance_classification_status")
+
+        # Default missing status to LLM_generated so the user still receives category review prompts.
+        if grievance_classification_status in (None, self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']):
             # Classification is complete, show results
             if grievance_categories:
                 utterance = self.get_utterance(1).format(category_text=category_text)
@@ -534,7 +546,7 @@ class ActionAskFormGrievanceComplainantReviewGrievanceCategoriesStatus(BaseActio
                 buttons = self.get_buttons(2)
 
 
-        elif tracker.get_slot("grievance_classification_status") == self.GRIEVANCE_CLASSIFICATION_STATUS['REVIEWING']:
+        elif grievance_classification_status == self.GRIEVANCE_CLASSIFICATION_STATUS['REVIEWING']:
             if grievance_categories:
                 utterance = self.get_utterance(3).format(category_text=category_text)
                 buttons = self.get_buttons(1)

@@ -304,21 +304,30 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         """
         try:
             expected_values = ["restart", "add_more_details", "submit_details"]
-            
+            normalized_slot_value = slot_value.strip() if isinstance(slot_value, str) else slot_value
             
             self.logger.debug(f"Validating grievance_new_detail: {slot_value}")
+
+            # Reject blank/whitespace input when asking for grievance details.
+            if isinstance(normalized_slot_value, str) and not normalized_slot_value:
+                current_description = tracker.get_slot("grievance_description")
+                return {
+                    "grievance_new_detail": None,
+                    "grievance_description_status": "add_more_details" if current_description else None,
+                }
+
             # Handle restart the process
-            if slot_value == "restart":
+            if normalized_slot_value == "restart":
                 return {"grievance_new_detail": None,
                         "grievance_description": None,
                         "grievance_description_status": "restart"}
 
-            if slot_value == "add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
+            if normalized_slot_value == "add_more_details": #reset the slot and set the status to add_more_details to call the right utterance
                 return {"grievance_new_detail": None,
                     "grievance_description_status": "add_more_details"}
             
             # Handle form completion
-            if slot_value == "submit_details":
+            if normalized_slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
                 grievance_description = tracker.get_slot("grievance_description")
                 session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
@@ -369,8 +378,11 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 return slots_to_set
             
             # Handle valid grievance text (free text addition)
-            if slot_value and slot_value not in expected_values:
-                updated_temp = self._update_grievance_text(tracker.get_slot("grievance_description"), slot_value)
+            if normalized_slot_value and normalized_slot_value not in expected_values:
+                updated_temp = self._update_grievance_text(
+                    tracker.get_slot("grievance_description"),
+                    normalized_slot_value,
+                )
                 # Ensure grievance exists in DB so Celery task can update grievance_sensitive_issue (same pattern as classification)
                 grievance_id = tracker.get_slot("grievance_id")
                 complainant_id = tracker.get_slot("complainant_id")

@@ -297,6 +297,34 @@ async def run_flow_turn(
 
     next_state = state
     slot_updates: Dict[str, Any] = {}
+    msg_text = (latest_message.get("text") or "").strip()
+    payload_raw = (payload or "").strip()
+
+    # REST webchat sends /introduce on page load. Treat it as a hard reset from
+    # any in-flight state so refresh always starts a clean session.
+    introduce_restart = msg_text.lower().startswith("/introduce") or payload_raw.lower().startswith("/introduce")
+    if introduce_restart and state != "intro":
+        session["state"] = "intro"
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        session["slots"] = DEFAULT_SLOTS.copy()
+        next_state = "intro"
+        intro_tracker = SessionTracker(
+            slots=session["slots"],
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        events = await invoke_action(
+            "action_introduce",
+            dispatcher,
+            intro_tracker,
+            domain,
+        )
+        slot_updates.update(events_to_slot_updates(events))
+        session["slots"].update(slot_updates)
+        return (dispatcher.messages, next_state, "buttons")
 
     if state == "intro":
         # First turn: show language selection intro. On subsequent turns, when the

@@ -19,6 +19,9 @@ class ValidateFormSeah1(BaseFormValidationAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Text]:
+        # Ensure language/helpers are initialized before any validator utterance
+        # path that may call self.get_utterance() in this form turn.
+        self._initialize_language_and_helpers(tracker)
         # If user confirms content is not sensitive, stop this flow immediately.
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []

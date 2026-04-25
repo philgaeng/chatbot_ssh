@@ -491,8 +491,20 @@ class BaseDatabaseManager:
 
     def get_complainant_and_grievance_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Get the complainant fields from the data"""
-        complainant_fields =  {k: v for k,v in data.items() if 'complainant_' in k}
-        grievance_fields = {k: v for k,v in data.items() if 'complainant_' not in k}
+        normalized_contact_fields = {
+            "contact_id",
+            "country_code",
+            "location_code",
+            "location_resolution_status",
+            "level_1_name", "level_2_name", "level_3_name", "level_4_name", "level_5_name", "level_6_name",
+            "level_1_code", "level_2_code", "level_3_code", "level_4_code", "level_5_code", "level_6_code",
+        }
+        complainant_fields = {
+            k: v for k, v in data.items() if ("complainant_" in k or k in normalized_contact_fields)
+        }
+        grievance_fields = {
+            k: v for k, v in data.items() if ('complainant_' not in k and k not in normalized_contact_fields)
+        }
         complainant_fields['source']=data.get('source', 'bot')
         grievance_fields['complainant_id']=data.get('complainant_id') 
         return {'complainant_fields':complainant_fields, 'grievance_fields':grievance_fields}
@@ -950,16 +962,16 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-            # Check if database is already initialized
-            cur.execute("SELECT to_regclass('grievances')")
-            if cur.fetchone()[0] is not None:
-                self.migrations_logger.info("Database already initialized")
+                # Check if database is already initialized
+                cur.execute("SELECT to_regclass('grievances')")
+                if cur.fetchone()[0] is not None:
+                    self.migrations_logger.info("Database already initialized")
+                    return True
+                self._create_tables(cur)
+                self._create_indexes(cur)
+                conn.commit()
+                self.migrations_logger.info("Database initialization completed")
                 return True
-            self._create_tables(cur)
-            self._create_indexes(cur)
-            conn.commit()
-            self.migrations_logger.info("Database initialization completed")
-            return True
         except Exception as e:
             self.migrations_logger.error(f"Database initialization error: {str(e)}")
             return False
@@ -968,7 +980,7 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-            # Drop tables in reverse order of dependency
+                # Drop tables in reverse order of dependency
                 self.migrations_logger.info("Dropping tables in reverse order...")
                 cur.execute("DROP TABLE IF EXISTS grievance_transcriptions CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievance_translations CASCADE")
@@ -1249,6 +1261,22 @@ class TableDbManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS contact_id TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS country_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_resolution_status TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_code TEXT")
 
         # Tasks table
         self.migrations_logger.info("Creating/recreating tasks table...")
@@ -1343,7 +1371,7 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 duration_seconds INTEGER,
                 file_size INTEGER,
-                processing_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']}' REFERENCES processing_statuses(status_code),
+                processing_status TEXT DEFAULT 'PROCESSING' REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -1360,7 +1388,7 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['FOR_VERIFICATION']}' REFERENCES processing_statuses(status_code),
+                verification_status TEXT DEFAULT 'FOR_VERIFICATION' REFERENCES processing_statuses(status_code),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -1455,6 +1483,8 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_complainant_email ON complainants(complainant_email);
             CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON complainants(complainant_unique_id);
             CREATE INDEX IF NOT EXISTS idx_complainant_phone_hash ON complainants(complainant_phone_hash);
+            CREATE INDEX IF NOT EXISTS idx_complainants_contact_id ON complainants(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_complainants_location_code ON complainants(location_code);
         """)
 
         # Grievances table indexes
