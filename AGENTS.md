@@ -6,6 +6,8 @@
 |------|----------|
 | `docs/claude-tickets/PROGRESS.md` | Current build status, demo DB state, deviations from spec, commit log, integration stubs |
 | `docs/claude-tickets/TODO.md` | Open gaps to fix, post-demo features, tech debt |
+| `docs/claude-tickets/DOCKER.md` | How to build, start, migrate, seed, and debug the containers |
 | `CLAUDE.md` | Locked architecture decisions, hard boundaries, full spec |
 
 Read `PROGRESS.md` first (what was *actually built*), then `TODO.md` (what's next), then `CLAUDE.md` (the rules).
+Consult `DOCKER.md` any time you need to build or restart containers.
