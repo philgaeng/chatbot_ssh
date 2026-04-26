@@ -6,15 +6,12 @@
 
 ## ⚡ READ THIS BEFORE ANY CODE DECISION
 
-**→ `docs/claude-tickets/PROGRESS.md`**
+| File | Read for |
+|------|----------|
+| **→ `docs/claude-tickets/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
+| **→ `docs/claude-tickets/TODO.md`** | Open gaps, next features, tech debt |
 
-That file is updated at every commit and tells you:
-- Current build state and next priorities (30-second recovery)
-- Demo DB state and re-seed command
-- Every deviation from this spec (with commit refs)
-- Open integration points still stubbed out
-
-This file (`CLAUDE.md`) has the locked architecture. `PROGRESS.md` has what was *actually built*.
+`PROGRESS.md` tells you what was *actually built*. `TODO.md` tells you what's next. This file has the locked architecture.
 
 ---
 

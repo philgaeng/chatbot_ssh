@@ -1,13 +1,11 @@
 # GRM Ticketing — Agent Instructions
 
-**Read `docs/claude-tickets/PROGRESS.md` before any code decision.**
+**Read these three files before any code decision:**
 
-That file contains:
-- Current build status (what's done, what's next)
-- Demo DB state and re-seed command
-- Every architectural deviation from the original CLAUDE.md spec
-- Full commit log for GRM work
-- Open integration points (things intentionally left as stubs)
-- Known issues
+| File | Contains |
+|------|----------|
+| `docs/claude-tickets/PROGRESS.md` | Current build status, demo DB state, deviations from spec, commit log, integration stubs |
+| `docs/claude-tickets/TODO.md` | Open gaps to fix, post-demo features, tech debt |
+| `CLAUDE.md` | Locked architecture decisions, hard boundaries, full spec |
 
-`CLAUDE.md` at the repo root has the locked architecture decisions, hard boundaries, and full spec. Read both before coding.
+Read `PROGRESS.md` first (what was *actually built*), then `TODO.md` (what's next), then `CLAUDE.md` (the rules).

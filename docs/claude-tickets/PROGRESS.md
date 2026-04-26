@@ -2,6 +2,7 @@
 
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
+> For open gaps and future features → **`docs/claude-tickets/TODO.md`**
 > Last updated: `c171ac4` — 2026-04-26
 
 ---
