@@ -24,7 +24,7 @@ DOCKER_COMPOSE = docker compose
 # --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
 # Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
 .PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot compose_docker_wsl_ticketing compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
-	migrate_ticketing migrate_public migrate_all
+	migrate_ticketing migrate_public migrate_all reset_public_dev
 
 # DB migrations (two Alembic streams — run from repo root; uses POSTGRES_* from env / env.local)
 migrate_ticketing:
@@ -34,6 +34,32 @@ migrate_public:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 
 migrate_all: migrate_ticketing migrate_public
+
+# Dev-only reset of chatbot public schema (dummy data) followed by both migration streams.
+# This is the canonical recovery path when public core tables are missing.
+reset_public_dev:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python - <<'PY'
+import os
+import psycopg2
+
+conn = psycopg2.connect(
+    host=os.environ["POSTGRES_HOST"],
+    port=os.environ["POSTGRES_PORT"],
+    dbname=os.environ["POSTGRES_DB"],
+    user=os.environ["POSTGRES_USER"],
+    password=os.environ["POSTGRES_PASSWORD"],
+)
+conn.autocommit = True
+with conn.cursor() as cur:
+    cur.execute("DROP SCHEMA IF EXISTS public CASCADE;")
+    cur.execute("CREATE SCHEMA public;")
+    cur.execute("GRANT ALL ON SCHEMA public TO public;")
+print("public schema recreated")
+conn.close()
+PY
+	$(MAKE) migrate_public
+	$(MAKE) migrate_ticketing
+	$(DOCKER_COMPOSE) up -d --build
 
 compose_docker_wsl:
 	$(DOCKER_COMPOSE) up -d --build

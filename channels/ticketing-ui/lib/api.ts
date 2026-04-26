@@ -413,6 +413,319 @@ export function exportReport(params: {
   return `${BASE}/api/v1/reports/export?${p}`;
 }
 
+// ── Organizations / Countries / Locations / Projects ─────────────────────────
+
+export interface OrganizationItem {
+  organization_id: string;
+  name: string;
+  country_code: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LevelDef {
+  level_number: number;
+  level_name_en: string;
+  level_name_local: string | null;
+}
+
+export interface CountryItem {
+  country_code: string;
+  name: string;
+  level_defs: LevelDef[];
+}
+
+export interface LocationTranslation {
+  lang_code: string;
+  name: string;
+}
+
+export interface LocationNode {
+  location_code: string;
+  country_code: string;
+  level_number: number;
+  parent_location_code: string | null;
+  source_id: number | null;
+  is_active: boolean;
+  translations: LocationTranslation[];
+}
+
+/** Role of an organization within a specific project. */
+export interface OrgRole {
+  key: string;
+  label: string;
+  description: string;
+}
+
+/** Organization linked to a project, with its role in that project. */
+export interface ProjectOrgItem {
+  organization_id: string;
+  org_role: string | null;
+}
+
+export interface ProjectItem {
+  project_id: string;
+  country_code: string;
+  short_code: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  /** Organizations linked to this project, each with an optional role. */
+  organizations: ProjectOrgItem[];
+  location_codes: string[];
+}
+
+export interface ProjectCreate {
+  country_code: string;
+  short_code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+}
+
+export interface ImportResult {
+  country: string;
+  format: string;
+  locations_upserted: number;
+  translations_upserted: number;
+  dry_run: boolean;
+}
+
+export interface OrganizationCreate {
+  organization_id: string;
+  name: string;
+  country_code?: string | null;
+  is_active?: boolean;
+}
+
+export interface OrganizationUpdate {
+  name?: string;
+  country_code?: string | null;
+  is_active?: boolean;
+}
+
+export function listOrganizations(country?: string): Promise<OrganizationItem[]> {
+  const qs = country ? `?country=${country}&active_only=false` : "?active_only=false";
+  return apiFetch<OrganizationItem[]>(`/api/v1/organizations${qs}`);
+}
+
+export function createOrganization(payload: OrganizationCreate): Promise<OrganizationItem> {
+  return apiFetch<OrganizationItem>("/api/v1/organizations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateOrganization(orgId: string, payload: OrganizationUpdate): Promise<OrganizationItem> {
+  return apiFetch<OrganizationItem>(`/api/v1/organizations/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** List all projects that include a given organization. */
+export function listProjectsForOrg(orgId: string): Promise<ProjectItem[]> {
+  // Filter client-side from the full project list (no dedicated endpoint needed yet)
+  return listProjects().then((all) =>
+    all.filter((p) => p.organizations.some((o) => o.organization_id === orgId))
+  );
+}
+
+export function listCountries(): Promise<CountryItem[]> {
+  return apiFetch<CountryItem[]>("/api/v1/countries");
+}
+
+export function listLocations(params: {
+  country?: string;
+  level?: number;
+  parent?: string;
+  q?: string;
+  active_only?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<LocationNode[]> {
+  const p = new URLSearchParams();
+  if (params.country) p.set("country", params.country);
+  if (params.level !== undefined) p.set("level", String(params.level));
+  if (params.parent) p.set("parent", params.parent);
+  if (params.q) p.set("q", params.q);
+  if (params.active_only !== undefined) p.set("active_only", String(params.active_only));
+  if (params.limit !== undefined) p.set("limit", String(params.limit));
+  if (params.offset !== undefined) p.set("offset", String(params.offset));
+  return apiFetch<LocationNode[]>(`/api/v1/locations?${p}`);
+}
+
+export function listProjects(country?: string): Promise<ProjectItem[]> {
+  const qs = country ? `?country=${country}` : "";
+  return apiFetch<ProjectItem[]>(`/api/v1/projects${qs}`);
+}
+
+export function createProject(payload: ProjectCreate): Promise<ProjectItem> {
+  return apiFetch<ProjectItem>("/api/v1/projects", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProject(projectId: string, payload: { name?: string; description?: string | null; is_active?: boolean }): Promise<ProjectItem> {
+  return apiFetch<ProjectItem>(`/api/v1/projects/${projectId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addProjectOrg(
+  projectId: string,
+  orgId: string,
+  orgRole?: string | null,
+): Promise<ProjectOrgItem> {
+  return apiFetch<ProjectOrgItem>(`/api/v1/projects/${projectId}/organizations/${orgId}`, {
+    method: "POST",
+    body: JSON.stringify({ org_role: orgRole ?? null }),
+  });
+}
+
+export function updateProjectOrgRole(
+  projectId: string,
+  orgId: string,
+  orgRole: string | null,
+): Promise<ProjectOrgItem> {
+  return apiFetch<ProjectOrgItem>(`/api/v1/projects/${projectId}/organizations/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ org_role: orgRole }),
+  });
+}
+
+/** Fetch the list of org-role definitions from settings. */
+export function getOrgRoles(): Promise<OrgRole[]> {
+  return apiFetch<{ key: string; value: OrgRole[] }>("/api/v1/settings/org_roles")
+    .then((r) => r.value);
+}
+
+/** Super-admin: overwrite org-role definitions. */
+export function setOrgRoles(roles: OrgRole[]): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/org_roles", {
+    method: "PUT",
+    body: JSON.stringify({ value: roles }),
+  });
+}
+
+export function removeProjectOrg(projectId: string, orgId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/organizations/${orgId}`, { method: "DELETE" });
+}
+
+export function addProjectLocation(projectId: string, locationCode: string): Promise<unknown> {
+  return apiFetch(`/api/v1/projects/${projectId}/locations/${locationCode}`, { method: "POST" });
+}
+
+export function removeProjectLocation(projectId: string, locationCode: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/locations/${locationCode}`, { method: "DELETE" });
+}
+
+// ── Packages ──────────────────────────────────────────────────────────────────
+
+export interface PackageItem {
+  package_id:        string;
+  project_id:        string;
+  package_code:      string;
+  name:              string;
+  description:       string | null;
+  contractor_org_id: string | null;
+  is_active:         boolean;
+  /** District/municipality codes this package covers. */
+  location_codes:    string[];
+  created_at:        string;
+  updated_at:        string;
+}
+
+export interface PackageCreate {
+  package_code:      string;
+  name:              string;
+  description?:      string | null;
+  contractor_org_id?: string | null;
+  is_active?:        boolean;
+}
+
+export interface PackageUpdate {
+  name?:              string;
+  description?:       string | null;
+  contractor_org_id?: string | null;
+  is_active?:         boolean;
+}
+
+export function listPackages(projectId: string): Promise<PackageItem[]> {
+  return apiFetch<PackageItem[]>(`/api/v1/projects/${projectId}/packages`);
+}
+
+export function createPackage(projectId: string, payload: PackageCreate): Promise<PackageItem> {
+  return apiFetch<PackageItem>(`/api/v1/projects/${projectId}/packages`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePackage(
+  projectId: string,
+  packageId: string,
+  payload: PackageUpdate,
+): Promise<PackageItem> {
+  return apiFetch<PackageItem>(`/api/v1/projects/${projectId}/packages/${packageId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addPackageLocation(
+  projectId: string,
+  packageId: string,
+  locationCode: string,
+): Promise<unknown> {
+  return apiFetch(
+    `/api/v1/projects/${projectId}/packages/${packageId}/locations/${locationCode}`,
+    { method: "POST" },
+  );
+}
+
+export function removePackageLocation(
+  projectId: string,
+  packageId: string,
+  locationCode: string,
+): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/projects/${projectId}/packages/${packageId}/locations/${locationCode}`,
+    { method: "DELETE" },
+  );
+}
+
+export function getLocationTemplateCsvUrl(): string {
+  return `${BASE}/api/v1/locations/import/template.csv`;
+}
+
+export function getLocationTemplateJsonUrl(): string {
+  return `${BASE}/api/v1/locations/import/template.json`;
+}
+
+export async function importLocations(
+  file: File,
+  opts: { country?: string; dry_run?: boolean; max_level?: number },
+): Promise<ImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("country", opts.country ?? "NP");
+  form.append("dry_run", String(opts.dry_run ?? false));
+  form.append("max_level", String(opts.max_level ?? 3));
+  form.append("format", "auto");
+  const resp = await fetch(`${BASE}/api/v1/locations/import`, { method: "POST", body: form });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Import failed ${resp.status}: ${body}`);
+  }
+  return resp.json();
+}
+
 // ── Officer jurisdiction scopes ───────────────────────────────────────────────
 
 export interface OfficerScope {
@@ -421,7 +734,10 @@ export interface OfficerScope {
   role_key: string;
   organization_id: string;
   location_code: string | null;
+  project_id: string | null;
   project_code: string | null;
+  package_id: string | null;
+  includes_children: boolean;
   created_at: string;
 }
 
@@ -429,7 +745,10 @@ export interface ScopeCreate {
   role_key: string;
   organization_id: string;
   location_code?: string | null;
+  project_id?: string | null;
   project_code?: string | null;
+  package_id?: string | null;
+  includes_children?: boolean;
 }
 
 export function listScopes(userId: string): Promise<OfficerScope[]> {

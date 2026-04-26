@@ -12,7 +12,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # Repo root on sys.path for backend.config
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,6 +66,43 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     connectable = create_engine(_database_url(), pool_pre_ping=True)
     with connectable.connect() as connection:
+        # Legacy revisions in this repo use IDs > 32 chars.
+        # Alembic's default version table uses VARCHAR(32), so widen to TEXT.
+        connection.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS alembic_version_public (
+                    version_num TEXT NOT NULL
+                );
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                ALTER TABLE alembic_version_public
+                ALTER COLUMN version_num TYPE TEXT;
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'alembic_version_public_pkc'
+                    ) THEN
+                        ALTER TABLE alembic_version_public
+                        ADD CONSTRAINT alembic_version_public_pkc PRIMARY KEY (version_num);
+                    END IF;
+                END
+                $$;
+                """
+            )
+        )
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

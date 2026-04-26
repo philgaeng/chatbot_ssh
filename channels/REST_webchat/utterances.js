@@ -27,6 +27,11 @@ export const U = {
       en: "Files uploaded. You can add more files or go back to the chat.",
       ne: "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
+    /** Shown after upload when orchestrator is already at end of flow (`done`), matching outro options. */
+    post_upload_at_flow_end: {
+      en: "Files uploaded. You can add more files, go back to the chat, or end your session using the buttons below.",
+      ne: "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गरी सत्र समाप्त गर्न सक्नुहुन्छ।",
+    },
     transition: {
       en: "Your files are uploaded. Here's where we left off.",
       ne: "तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।",
@@ -34,6 +39,10 @@ export const U = {
     failure: {
       en: "One or more files could not be saved. You can try adding files again or go back to the chat.",
       ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
+    },
+    failure_at_flow_end: {
+      en: "One or more files could not be saved. You can try again, go back to the chat, or end your session below.",
+      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
     },
     no_grievance: {
       en: 'To attach files, first start a grievance: click "Register a grievance" (गुनासो दर्ता गर्नुहोस्) above and complete the steps. Once your grievance is created, you can attach files here.',
@@ -103,6 +112,18 @@ export const U = {
       go_back: {
         en: "Go back to chat",
         ne: "च्याटमा फर्कनुहोस्",
+      },
+      close_browser: {
+        en: "Close Browser",
+        ne: "ब्राउजर बन्द गर्नुहोस्",
+      },
+      clear_session: {
+        en: "Clear Session",
+        ne: "सत्र खाली गर्नुहोस्",
+      },
+      close_session: {
+        en: "Close Session",
+        ne: "सत्र बन्द गर्नुहोस्",
       },
     },
     uploaded_processing: {
