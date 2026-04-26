@@ -215,11 +215,15 @@ def add_user_scope(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Validate project_id if supplied
+    # Validate project_id if supplied; backfill project_code from short_code so that
+    # _scope_candidates (which queries by project_code) keeps working for new scopes.
+    resolved_project_code: Optional[str] = payload.project_code
     if payload.project_id:
         from ticketing.models.project import Project
-        if not db.get(Project, payload.project_id):
+        project = db.get(Project, payload.project_id)
+        if not project:
             raise HTTPException(status_code=422, detail=f"Project '{payload.project_id}' not found")
+        resolved_project_code = project.short_code  # canonical key used by routing engine
 
     # Validate package_id if supplied
     if payload.package_id:
@@ -250,8 +254,10 @@ def add_user_scope(
         organization_id=payload.organization_id,
         location_code=payload.location_code,
         project_id=payload.project_id,
-        # Keep project_code for backwards compat if caller used legacy field
-        project_code=payload.project_code if not payload.project_id else None,
+        # Always populate project_code (routing engine queries by this field).
+        # When project_id provided: use project.short_code (resolved above).
+        # When only project_code provided (legacy callers): use that directly.
+        project_code=resolved_project_code,
         package_id=payload.package_id,
         includes_children=payload.includes_children,
     )
