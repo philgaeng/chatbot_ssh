@@ -1,10 +1,23 @@
 # CLAUDE.md — Nepal Chatbot / GRM Ticketing System
 
-# Read this entire file before touching any code.
-
-# ALL decisions locked through Round 2. Ready for Session 0 codebase analysis.
-
 # DEMO DEADLINE: May 10, 2026
+
+---
+
+## ⚡ READ THIS BEFORE ANY CODE DECISION
+
+| File | Read for |
+|------|----------|
+| **→ `docs/claude-tickets/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
+| **→ `docs/claude-tickets/TODO.md`** | Open gaps, next features, tech debt |
+
+`PROGRESS.md` tells you what was *actually built*. `TODO.md` tells you what's next. This file has the locked architecture.
+
+---
+
+# Read the rest of this file before touching any code.
+
+# ALL decisions locked through Round 2.
 
 ---
 
