@@ -63,11 +63,17 @@ export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
 export const SYSTEM_EVENT_TYPES = new Set([
   "CREATED", "ACKNOWLEDGED", "ESCALATED", "ASSIGNED", "PRIORITY_CHANGED",
   "RESOLVED", "CLOSED", "GRC_CONVENED", "GRC_DECIDED", "SLA_BREACH_FINAL_STEP",
-  "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED",
+  "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED", "VIEWER_ADDED", "VIEWER_REMOVED",
 ]);
 
 /** Events that render as a task card in-thread. */
 export const TASK_EVENT_TYPES = new Set(["TASK_ASSIGNED", "TASK_COMPLETED", "TASK_DISMISSED"]);
+
+/**
+ * Notification-only events: counted for unread badge but NOT rendered in the thread.
+ * (MENTION events are stored in ticket_events but are purely notification signals.)
+ */
+export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION"]);
 
 /** Human-readable labels for system event pills. */
 export function systemEventLabel(eventType: string, payload?: Record<string, unknown> | null): string {
@@ -84,6 +90,8 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "SLA_BREACH_FINAL_STEP": return "⚠️ SLA breached at final level — manual intervention required";
     case "REVEAL_ORIGINAL":       return `🔍 Original statement ${payload?.granted ? "viewed" : "access denied"}`;
     case "REVEAL_ORIGINAL_CLOSED":return "🔍 Reveal session closed";
+    case "VIEWER_ADDED":          return `👁 ${payload?.added_user_id ?? "Officer"} added as viewer`;
+    case "VIEWER_REMOVED":        return `👁 ${payload?.removed_user_id ?? "Officer"} removed from viewers`;
     default:                      return eventType.replace(/_/g, " ").toLowerCase();
   }
 }

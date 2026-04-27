@@ -15,11 +15,14 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, listTicketTasks, createTask, completeTask,
-  type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask, type TaskCreateRequest,
+  addViewer, removeViewer, listOfficers,
+  type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
+  type TaskCreateRequest, type TicketViewer, type OfficerBrief,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, TASK_TYPES, getRoleBubbleStyle,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES,
+  TASK_TYPES, getRoleBubbleStyle,
   systemEventLabel, urgencyDot, urgencyTextCls, type SlaUrgency,
 } from "@/lib/mobile-constants";
 
@@ -52,6 +55,20 @@ function SystemPill({ event }: { event: TicketEvent }) {
 
 // ── Note bubble ───────────────────────────────────────────────────────────────
 
+/** Render note text with @mention tokens highlighted in blue. */
+function NoteText({ text }: { text: string }) {
+  const parts = text.split(/(@[\w][\w.-]*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("@")
+          ? <span key={i} className="font-semibold text-blue-600">{part}</span>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
 function NoteBubble({ event, isMine }: { event: TicketEvent; isMine: boolean }) {
   const style = getRoleBubbleStyle(event.actor_role);
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -60,7 +77,7 @@ function NoteBubble({ event, isMine }: { event: TicketEvent; isMine: boolean }) 
     return (
       <div className="flex flex-col items-end px-4 my-1">
         <div className="max-w-[80%] bg-blue-500 text-white rounded-2xl rounded-br-sm px-4 py-2.5 text-sm">
-          {event.note}
+          <NoteText text={event.note ?? ""} />
         </div>
         <div className="text-[11px] text-gray-400 mt-0.5">You · {time}</div>
       </div>
@@ -70,7 +87,7 @@ function NoteBubble({ event, isMine }: { event: TicketEvent; isMine: boolean }) 
   return (
     <div className="flex flex-col items-start px-4 my-1">
       <div className={`max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-gray-800 ${style.bubbleCls || "bg-gray-100"}`}>
-        {event.note}
+        <NoteText text={event.note ?? ""} />
       </div>
       <RoleLabel actorRole={event.actor_role} userId={event.created_by_user_id} isMine={false} />
       <div className="text-[11px] text-gray-400">{time}</div>
@@ -375,6 +392,180 @@ function FilterChips({
   );
 }
 
+// ── Viewers bar ───────────────────────────────────────────────────────────────
+
+/**
+ * Compact horizontal strip showing viewer avatars / IDs.
+ * Shown below the filter chips in the sticky header.
+ * canManage = assigned officer, admin, or senior role.
+ */
+function ViewersBar({
+  viewers,
+  canManage,
+  ticketId,
+  onChanged,
+}: {
+  viewers: TicketViewer[];
+  canManage: boolean;
+  ticketId: string;
+  onChanged: () => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const handleRemove = async (userId: string) => {
+    setRemoving(userId);
+    try {
+      await removeViewer(ticketId, userId);
+      onChanged();
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  if (viewers.length === 0 && !canManage) return null;
+
+  return (
+    <>
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-50 border-b border-gray-100 overflow-x-auto scrollbar-none">
+        <span className="text-[11px] text-gray-400 shrink-0">👁 Viewers:</span>
+        {viewers.length === 0
+          ? <span className="text-[11px] text-gray-300 italic">None yet</span>
+          : viewers.map((v) => (
+            <div
+              key={v.viewer_id}
+              className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5 text-[11px] text-gray-600 shrink-0"
+            >
+              <span>@{v.user_id.split("-")[0]}</span>
+              {canManage && (
+                <button
+                  onClick={() => handleRemove(v.user_id)}
+                  disabled={removing === v.user_id}
+                  className="text-gray-300 hover:text-red-400 leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))
+        }
+        {canManage && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="shrink-0 flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 text-[11px] text-blue-600 font-medium"
+          >
+            + Add
+          </button>
+        )}
+      </div>
+
+      {showAdd && (
+        <AddViewerSheet
+          ticketId={ticketId}
+          onClose={() => setShowAdd(false)}
+          onAdded={() => { setShowAdd(false); onChanged(); }}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Add viewer bottom sheet ────────────────────────────────────────────────────
+
+function AddViewerSheet({
+  ticketId,
+  onClose,
+  onAdded,
+}: {
+  ticketId: string;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [userId, setUserId] = useState("");
+  const [officers, setOfficers] = useState<OfficerBrief[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    listOfficers().then(setOfficers).catch(() => {});
+  }, []);
+
+  const filtered = useMemo(
+    () => officers.filter((o) => userId
+      ? o.user_id.toLowerCase().includes(userId.toLowerCase())
+      : true
+    ).slice(0, 8),
+    [officers, userId],
+  );
+
+  const submit = async (uid: string) => {
+    const target = uid.trim();
+    if (!target) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      await addViewer(ticketId, target);
+      onAdded();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErr(msg.includes("409") ? "Already a viewer." : "Failed to add viewer.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
+      <div
+        className="bg-white rounded-t-2xl shadow-xl p-5 max-h-[70vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+        <h3 className="text-base font-semibold text-gray-900 mb-3">👁 Add viewer</h3>
+
+        <input
+          type="text"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          placeholder="Search officer user ID…"
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm mb-2 focus:outline-none focus:border-blue-500"
+          autoFocus
+        />
+
+        {err && <div className="text-xs text-red-500 mb-2">{err}</div>}
+
+        <div className="overflow-y-auto flex-1">
+          {filtered.map((o) => (
+            <button
+              key={o.user_id}
+              onClick={() => submit(o.user_id)}
+              disabled={submitting}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50 text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-600">
+                {o.user_id.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-800">{o.user_id}</div>
+                <div className="text-xs text-gray-400">{o.role_keys.join(", ")}</div>
+              </div>
+            </button>
+          ))}
+          {userId && !filtered.find((o) => o.user_id === userId) && (
+            <button
+              onClick={() => submit(userId)}
+              disabled={submitting}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 text-left mt-1"
+            >
+              <span className="text-sm text-blue-700">Add &ldquo;{userId}&rdquo; directly</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SLA sub-header pill ───────────────────────────────────────────────────────
 
 function SlaSubHeader({ ticket, sla }: { ticket: TicketDetail; sla: SlaStatus | null }) {
@@ -475,6 +666,10 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [showMore, setShowMore] = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
 
+  // @mention autocomplete
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null); // null = popup closed
+  const composeRef = useRef<HTMLTextAreaElement>(null);
+
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   // ── Data loading ────────────────────────────────────────────────────────────
@@ -537,6 +732,25 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     [tasks, currentUserId],
   );
 
+  // Can current user manage viewers?
+  const canManageViewers = useMemo(() => {
+    if (!ticket) return false;
+    return ticket.assigned_to_user_id === currentUserId;
+    // In full auth: also check senior role keys from user token
+  }, [ticket, currentUserId]);
+
+  // Participants for @mention: assigned officer + viewers (deduplicated)
+  const mentionParticipants = useMemo(() => {
+    if (!ticket) return [];
+    const ids = new Set<string>();
+    if (ticket.assigned_to_user_id) ids.add(ticket.assigned_to_user_id);
+    (ticket.viewers ?? []).forEach((v) => ids.add(v.user_id));
+    ids.delete(currentUserId); // don't suggest yourself
+    const list = Array.from(ids).map((id) => ({ user_id: id, label: `@${id}` }));
+    list.unshift({ user_id: "all", label: "@all" }); // @all always first
+    return list;
+  }, [ticket, currentUserId]);
+
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   const handleAction = useCallback(
@@ -554,6 +768,24 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     },
     [ticket, ticketId, loadTicket],
   );
+
+  const handleNoteChange = useCallback((value: string) => {
+    setNoteText(value);
+    // Detect @-trigger: find the last @ that hasn't been closed by a space
+    const match = value.match(/@([\w.-]*)$/);
+    if (match) {
+      setMentionQuery(match[1]); // empty string = show all participants
+    } else {
+      setMentionQuery(null);
+    }
+  }, []);
+
+  const insertMention = useCallback((userId: string) => {
+    // Replace the trailing @query with the full mention
+    setNoteText((prev) => prev.replace(/@[\w.-]*$/, `@${userId} `));
+    setMentionQuery(null);
+    composeRef.current?.focus();
+  }, []);
 
   const handleNote = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
@@ -648,6 +880,14 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           pendingTaskCount={pendingTaskCount}
           onChange={setActiveFilter}
         />
+
+        {/* Viewers bar */}
+        <ViewersBar
+          viewers={ticket.viewers ?? []}
+          canManage={canManageViewers}
+          ticketId={ticketId}
+          onChanged={loadTicket}
+        />
       </div>
 
       {/* ── Thread ────────────────────────────────────────────────────── */}
@@ -655,46 +895,72 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         {filteredEvents.length === 0 ? (
           <div className="flex justify-center py-8 text-xs text-gray-400">No messages in this view</div>
         ) : (
-          filteredEvents.map((event) => {
-            const isMine = event.created_by_user_id === currentUserId;
+          filteredEvents
+            .filter((e) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
+            .map((event) => {
+              const isMine = event.created_by_user_id === currentUserId;
 
-            if (SYSTEM_EVENT_TYPES.has(event.event_type)) {
-              return <SystemPill key={event.event_id} event={event} />;
-            }
+              if (SYSTEM_EVENT_TYPES.has(event.event_type)) {
+                return <SystemPill key={event.event_id} event={event} />;
+              }
 
-            if (TASK_EVENT_TYPES.has(event.event_type)) {
-              return (
-                <TaskCard
-                  key={event.event_id}
-                  event={event}
-                  tasks={tasks}
-                  currentUserId={currentUserId}
-                  ticketId={ticketId}
-                  onComplete={handleCompleteTask}
-                />
-              );
-            }
+              if (TASK_EVENT_TYPES.has(event.event_type)) {
+                return (
+                  <TaskCard
+                    key={event.event_id}
+                    event={event}
+                    tasks={tasks}
+                    currentUserId={currentUserId}
+                    ticketId={ticketId}
+                    onComplete={handleCompleteTask}
+                  />
+                );
+              }
 
-            return <NoteBubble key={event.event_id} event={event} isMine={isMine} />;
-          })
+              return <NoteBubble key={event.event_id} event={event} isMine={isMine} />;
+            })
         )}
         <div ref={threadEndRef} />
       </div>
 
       {/* ── Fixed bottom bar ──────────────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white border-t border-gray-200 pb-safe-bottom">
+        {/* @mention autocomplete popup */}
+        {mentionQuery !== null && (
+          <div className="mx-3 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+            {mentionParticipants
+              .filter((p) => !mentionQuery || p.user_id.toLowerCase().includes(mentionQuery.toLowerCase()))
+              .slice(0, 6)
+              .map((p) => (
+                <button
+                  key={p.user_id}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(p.user_id); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 active:bg-blue-100 border-b border-gray-100 last:border-0"
+                >
+                  <span className="font-medium text-blue-600">{p.label}</span>
+                </button>
+              ))
+            }
+            {mentionParticipants.filter((p) => !mentionQuery || p.user_id.toLowerCase().includes(mentionQuery.toLowerCase())).length === 0 && (
+              <div className="px-4 py-2.5 text-xs text-gray-400">No participants match</div>
+            )}
+          </div>
+        )}
+
         {/* Compose bar */}
         <div className="flex items-end gap-2 px-3 py-2">
           <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
             <textarea
+              ref={composeRef}
               value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Add a note…"
+              onChange={(e) => handleNoteChange(e.target.value)}
+              placeholder="Add a note… (type @ to mention)"
               rows={1}
               className="w-full bg-transparent text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none"
               style={{ maxHeight: "96px" }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Escape") { setMentionQuery(null); return; }
+                if (e.key === "Enter" && !e.shiftKey && mentionQuery === null) {
                   e.preventDefault();
                   handleNote();
                 }
