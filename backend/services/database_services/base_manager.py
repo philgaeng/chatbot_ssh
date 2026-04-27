@@ -629,7 +629,10 @@ class BaseDatabaseManager:
             'grievance_location': 'grievance_location',
             'language_code': 'language_code',
             'grievance_timeline': 'grievance_timeline',
-            'grievance_classification_status': 'grievance_classification_status'
+            'grievance_classification_status': 'grievance_classification_status',
+            'case_sensitivity': 'case_sensitivity',
+            'vault_payload_ref': 'vault_payload_ref',
+            'vault_last_updated_at': 'vault_last_updated_at',
         }
         expected_fields_db = [field_mapping[field] for field in expected_fields]
         return expected_fields_db
