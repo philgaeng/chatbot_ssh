@@ -53,6 +53,34 @@ When starting from a fresh or reset DB volume, use one deterministic order so ch
 Notes:
 - If `public` core tables are missing, run `docker compose --profile init run --rm db_init` once, then re-run step 3.
 - Prefer JSON location import in this repository; CSV import requires an explicit `--csv` path and may not exist in every deployment.
+- If running init/migration commands inside containers, do not use `localhost` as DB host in container env. Use the compose DB service host (typically `db`) so `db_init` and Alembic can connect.
+
+### Runtime context rule (host vs container)
+
+Use one context consistently for each bootstrap run:
+
+1. **Host/Python context** (commands run from your shell with local Python):
+   - DB host may be `localhost` when port-forwarded/exposed locally.
+2. **Container context** (`docker compose run/exec ...`):
+   - DB host must be compose service name (usually `db`), never `localhost`.
+
+Mixing contexts without switching DB host is a common cause of bootstrap failures.
+
+### Known migration recovery (public baseline mismatch)
+
+If public Alembic fails with errors similar to:
+
+- `column "status_name" of relation "task_statuses" does not exist`
+
+do this sequence:
+
+1. Confirm DB host matches runtime context (rule above).
+2. Run one-time bootstrap init:
+   - `docker compose --profile init run --rm db_init`
+3. Re-run migrations in order:
+   - `python -m alembic -c migrations/public/alembic.ini upgrade head`
+   - `python -m alembic -c ticketing/migrations/alembic.ini upgrade head`
+4. Continue with location seed + mock seed + compose up.
 
 ## Docker-First Validation
 
@@ -70,6 +98,12 @@ Typical commands (adapt to service names in `docker-compose.yml`):
   - `docker compose logs -f app`
 - Stop services after validation:
   - `docker compose down`
+
+Container DB connectivity check (before migration commands):
+
+- `docker compose exec db pg_isready -U <db_user> -d <db_name>`
+
+If this fails, fix DB/container networking first before running Alembic.
 
 If this project has script wrappers (for example `make test`, `just test`, or npm scripts), prefer those wrappers inside Docker.
 
