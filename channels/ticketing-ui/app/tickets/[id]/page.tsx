@@ -1038,13 +1038,13 @@ export default function TicketDetailPage() {
 
       {/* ── Translation panel (rightmost collapsible column) ── */}
       {panelOpen && ticket && (
-        <div className="sticky top-6 self-start ml-4 hidden xl:block">
+        <div className="sticky top-6 self-start ml-4 hidden lg:block">
           <TranslationPanel events={ticket.events} onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }} />
         </div>
       )}
-      {/* Mobile: translation panel as a fixed drawer on smaller screens */}
+      {/* Mobile / smaller screens: translation panel as a fixed right drawer */}
       {panelOpen && ticket && (
-        <div className="xl:hidden fixed inset-y-0 right-0 z-40 w-80 shadow-2xl flex flex-col">
+        <div className="lg:hidden fixed inset-y-0 right-0 z-40 w-80 shadow-2xl flex flex-col">
           <TranslationPanel events={ticket.events} onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }} />
         </div>
       )}
