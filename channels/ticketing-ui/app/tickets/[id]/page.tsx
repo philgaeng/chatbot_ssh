@@ -6,7 +6,7 @@ import {
   getTicket, getSla, markSeen, performAction, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  getTeammates,
+  getTeammates, generateFindings,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment,
 } from "@/lib/api";
@@ -65,37 +65,47 @@ const EVENT_ICON: Record<string, string> = {
 function EventTimeline({ events }: { events: TicketDetail["events"] }) {
   return (
     <div className="space-y-3">
-      {[...events].reverse().map((e) => (
-        <div key={e.event_id} className="flex gap-3">
-          <div className="shrink-0 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm">
-            {EVENT_ICON[e.event_type] ?? "•"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">
-                {e.event_type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
-              </span>
-              {e.new_status_code && (
-                <span className="text-xs text-gray-400">→ {e.new_status_code}</span>
-              )}
-              <span className="text-xs text-gray-400 ml-auto">
-                {new Date(e.created_at).toLocaleString()}
-              </span>
+      {[...events].reverse().map((e) => {
+        const translationEn = (e.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
+        return (
+          <div key={e.event_id} className="flex gap-3">
+            <div className="shrink-0 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm">
+              {EVENT_ICON[e.event_type] ?? "•"}
             </div>
-            {e.note && (
-              <div className={`mt-1 text-sm text-gray-600 ${e.event_type === "NOTE_ADDED" ? "italic" : ""}`}>
-                {e.event_type === "NOTE_ADDED" && (
-                  <span className="text-xs text-gray-400 mr-1">🔒 Internal:</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-700">
+                  {e.event_type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
+                </span>
+                {e.new_status_code && (
+                  <span className="text-xs text-gray-400">→ {e.new_status_code}</span>
                 )}
-                {e.note}
+                <span className="text-xs text-gray-400 ml-auto">
+                  {new Date(e.created_at).toLocaleString()}
+                </span>
               </div>
-            )}
-            {e.created_by_user_id && (
-              <div className="text-xs text-gray-400 mt-0.5">by {e.created_by_user_id}</div>
-            )}
+              {e.note && (
+                <div className={`mt-1 text-sm text-gray-600 ${e.event_type === "NOTE_ADDED" ? "italic" : ""}`}>
+                  {e.event_type === "NOTE_ADDED" && (
+                    <span className="text-xs text-gray-400 mr-1">🔒 Internal:</span>
+                  )}
+                  {e.note}
+                </div>
+              )}
+              {/* Translation chip — shown when note was translated to English (7a) */}
+              {e.event_type === "NOTE_ADDED" && translationEn && translationEn !== e.note && (
+                <div className="mt-1.5 bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
+                  <span className="text-xs text-blue-500 font-medium mr-1.5">🌐 Translated</span>
+                  <span className="text-sm text-blue-800 italic">{translationEn}</span>
+                </div>
+              )}
+              {e.created_by_user_id && (
+                <div className="text-xs text-gray-400 mt-0.5">by {e.created_by_user_id}</div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -381,6 +391,85 @@ function ReassignPanel({ ticket, onRefresh }: { ticket: TicketDetail; onRefresh:
   );
 }
 
+
+// ── Findings card (AI case summary — supervisor/GRC roles only) ──────────────
+
+const FINDINGS_ROLES = new Set([
+  "grc_chair", "adb_hq_safeguards", "adb_hq_project",
+  "adb_hq_exec", "adb_national_project_director",
+  "super_admin", "local_admin",
+]);
+
+function FindingsCard({
+  ticket,
+  roleKeys,
+  onRefresh,
+}: {
+  ticket: TicketDetail;
+  roleKeys: string[];
+  onRefresh: () => void;
+}) {
+  const canView = roleKeys.some((r) => FINDINGS_ROLES.has(r));
+  if (!canView) return null;
+
+  const [regenerating, setRegenerating] = useState(false);
+  const [queuedMsg, setQueuedMsg] = useState<string | null>(null);
+
+  async function handleRegenerate() {
+    setRegenerating(true);
+    setQueuedMsg(null);
+    try {
+      await generateFindings(ticket.ticket_id);
+      setQueuedMsg(
+        "Generation queued — this may take up to 30 s. Refresh the page to see the updated summary."
+      );
+    } catch (e) {
+      setQueuedMsg(`Error: ${String(e)}`);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-blue-200 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide">
+          🧠 Findings
+        </h2>
+        <button
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          title="Regenerate AI summary"
+          className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 underline"
+        >
+          {regenerating ? "Queuing…" : "↻ Regenerate"}
+        </button>
+      </div>
+
+      {queuedMsg && (
+        <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 mb-2">
+          {queuedMsg}
+        </div>
+      )}
+
+      {ticket.ai_summary_en ? (
+        <>
+          <p className="text-sm text-gray-700 leading-relaxed">{ticket.ai_summary_en}</p>
+          {ticket.ai_summary_updated_at && (
+            <p className="text-xs text-gray-400 mt-2">
+              Last generated {new Date(ticket.ai_summary_updated_at).toLocaleString()}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-gray-400 italic">
+          No summary yet. Click ↻ Regenerate to generate one, or resolve the ticket to trigger
+          automatic generation.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── Action panel ──────────────────────────────────────────────────────────────
 
@@ -771,6 +860,9 @@ export default function TicketDetailPage() {
 
           {/* Complainant info card */}
           <ComplainantCard ticket={ticket} />
+
+          {/* AI Findings — visible to GRC/supervisor roles only (7b) */}
+          <FindingsCard ticket={ticket} roleKeys={roleKeys} onRefresh={load} />
 
           {/* File attachments */}
           <FilesPanel

@@ -69,6 +69,9 @@ export interface TicketDetail extends TicketListItem {
   updated_by_user_id: string | null;
   current_step: WorkflowStepBrief | null;
   events: TicketEvent[];
+  /** AI-generated case findings (supervisor/GRC view only). Null until first generated. */
+  ai_summary_en: string | null;
+  ai_summary_updated_at: string | null;
 }
 
 export interface SlaStatus {
@@ -778,4 +781,11 @@ export interface TeammatesResponse {
 
 export function getTeammates(ticketId: string): Promise<TeammatesResponse> {
   return apiFetch<TeammatesResponse>(`/api/v1/tickets/${ticketId}/teammates`);
+}
+
+// ── LLM findings ──────────────────────────────────────────────────────────────
+
+/** Trigger (re)generation of the AI case-findings summary. Returns 202 immediately. */
+export function generateFindings(ticketId: string): Promise<{ ticket_id: string; status: string; message: string }> {
+  return apiFetch(`/api/v1/tickets/${ticketId}/findings`, { method: "POST" });
 }
