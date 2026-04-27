@@ -54,6 +54,12 @@ export interface TicketEvent {
   seen: boolean;
   created_at: string;
   created_by_user_id: string | null;
+  /** Role key snapshotted at write time — for audit trail role bubbles */
+  actor_role: string | null;
+  /** 'standard' | 'seah' — copied from ticket.is_seah at event creation */
+  case_sensitivity: string;
+  /** True when this event should trigger LLM summary regeneration */
+  summary_regen_required: boolean;
 }
 
 export interface TicketDetail extends TicketListItem {
