@@ -23,7 +23,8 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from ticketing.models.base import SessionLocal
-from ticketing.models.organization import Location, Organization
+from ticketing.models.country import Location
+from ticketing.models.organization import Organization
 from ticketing.models.settings import Settings
 from ticketing.models.user import Role
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
@@ -45,10 +46,11 @@ def _id() -> str:
 ORG_DOR_ID = "DOR"
 ORG_ADB_ID = "ADB"
 
-LOC_PROVINCE1_CODE = "PROVINCE_1"
-LOC_MORANG_CODE = "MORANG"
-LOC_SUNSARI_CODE = "SUNSARI"
-LOC_JHAPA_CODE = "JHAPA"
+# Real Nepal location codes matching the imported geodata (ticketing.locations)
+LOC_PROVINCE1_CODE = "NP_P1"    # Koshi Province (Province 1)
+LOC_MORANG_CODE    = "NP_D006"  # Morang District
+LOC_SUNSARI_CODE   = "NP_D011"  # Sunsari District
+LOC_JHAPA_CODE     = "NP_D004"  # Jhapa District
 
 WORKFLOW_STANDARD_ID = "00000000-0000-0000-0001-000000000001"
 
@@ -86,44 +88,21 @@ def seed_organizations(db: Session) -> None:
 
 
 def seed_locations(db: Session) -> None:
-    locations = [
-        Location(
-            location_code=LOC_PROVINCE1_CODE,
-            name="Province 1 (Koshi)",
-            country_code="NP",
-            organization_id=ORG_DOR_ID,
-            parent_location=None,
-        ),
-        Location(
-            location_code=LOC_MORANG_CODE,
-            name="Morang District",
-            country_code="NP",
-            organization_id=ORG_DOR_ID,
-            parent_location=LOC_PROVINCE1_CODE,
-        ),
-        Location(
-            location_code=LOC_SUNSARI_CODE,
-            name="Sunsari District",
-            country_code="NP",
-            organization_id=ORG_DOR_ID,
-            parent_location=LOC_PROVINCE1_CODE,
-        ),
-        Location(
-            location_code=LOC_JHAPA_CODE,
-            name="Jhapa District",
-            country_code="NP",
-            organization_id=ORG_DOR_ID,
-            parent_location=LOC_PROVINCE1_CODE,
-        ),
-    ]
-    for loc in locations:
-        existing = db.get(Location, loc.location_code)
-        if not existing:
-            db.add(loc)
-            logger.info("  + location: %s", loc.location_code)
+    """
+    Verify that the KL Road locations exist in ticketing.locations.
+    Locations are loaded from the Nepal geodata CSV/JSON import — this function
+    does NOT insert them (they have a different schema from the old placeholder model).
+    Missing codes indicate the import script hasn't been run.
+    """
+    required = [LOC_PROVINCE1_CODE, LOC_MORANG_CODE, LOC_SUNSARI_CODE, LOC_JHAPA_CODE]
+    for code in required:
+        existing = db.get(Location, code)
+        if existing:
+            logger.info("  = location OK: %s", code)
         else:
-            logger.info("  = location already exists: %s", loc.location_code)
-    db.flush()
+            logger.warning(
+                "  ! location NOT found: %s — run import_locations_csv.py first", code
+            )
 
 
 def seed_roles(db: Session) -> None:

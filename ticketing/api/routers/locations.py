@@ -1,7 +1,10 @@
 """
-Locations, Countries, and Projects — read + admin CRUD endpoints.
+Locations, Countries, Organizations, and Projects — read + admin CRUD endpoints.
 
 Endpoints:
+    GET    /organizations                      list organizations
+    POST   /organizations                      create organization (admin)
+    PATCH  /organizations/{id}                 update organization (admin)
     GET  /countries                           list countries
     GET  /locations?country=NP&level=2&parent=NP_P1&q=bira   browse tree
     GET  /locations/{location_code}           single node + translations
@@ -33,12 +36,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
+from ticketing.models.package import PackageLocation, ProjectPackage
 from ticketing.models.project import Project, ProjectLocation, ProjectOrganization
 
 router = APIRouter()
@@ -101,6 +105,14 @@ class ProjectUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class ProjectOrgItem(BaseModel):
+    """Organization linked to a project, with its role in that project."""
+    organization_id: str
+    org_role: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class ProjectResponse(BaseModel):
     project_id: str
     country_code: str
@@ -110,10 +122,96 @@ class ProjectResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    organization_ids: list[str] = []
+    organizations: list[ProjectOrgItem] = []
     location_codes: list[str] = []
 
     model_config = {"from_attributes": True}
+
+
+# ── Organizations ─────────────────────────────────────────────────────────────
+
+class OrganizationResponse(BaseModel):
+    organization_id: str
+    name: str
+    country_code: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OrganizationCreate(BaseModel):
+    organization_id: str = Field(..., max_length=64,
+                                  description="Short uppercase key, e.g. DOR, ABC_CONST")
+    name: str
+    country_code: str | None = None
+    is_active: bool = True
+
+
+class OrganizationUpdate(BaseModel):
+    name: str | None = None
+    country_code: str | None = None
+    is_active: bool | None = None
+
+
+@router.get("/organizations", response_model=list[OrganizationResponse])
+def list_organizations(
+    country: str | None = Query(None),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    """List all organizations."""
+    stmt = select(Organization).order_by(Organization.organization_id)
+    if country:
+        stmt = stmt.where(Organization.country_code == country)
+    if active_only:
+        stmt = stmt.where(Organization.is_active.is_(True))
+    return db.execute(stmt).scalars().all()
+
+
+@router.post("/organizations", response_model=OrganizationResponse, status_code=201,
+             summary="Create an organization (admin)")
+def create_organization(body: OrganizationCreate, db: Session = Depends(get_db)):
+    """Create a new organization. Admin only."""
+    _require_admin()
+    org_id = body.organization_id.strip().upper()
+    if db.get(Organization, org_id):
+        raise HTTPException(status_code=409, detail=f"Organization '{org_id}' already exists")
+    org = Organization(
+        organization_id=org_id,
+        name=body.name.strip(),
+        country_code=body.country_code or None,
+        is_active=body.is_active,
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+    return org
+
+
+@router.patch("/organizations/{organization_id}", response_model=OrganizationResponse,
+              summary="Update an organization (admin)")
+def update_organization(
+    organization_id: str,
+    body: OrganizationUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update organization name, country, or active status. Admin only."""
+    _require_admin()
+    org = db.get(Organization, organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if body.name is not None:
+        org.name = body.name.strip()
+    if body.country_code is not None:
+        org.country_code = body.country_code or None
+    if body.is_active is not None:
+        org.is_active = body.is_active
+    org.updated_at = _now()
+    db.commit()
+    db.refresh(org)
+    return org
 
 
 # ── Countries ─────────────────────────────────────────────────────────────────
@@ -336,13 +434,20 @@ def list_locations(
     if active_only:
         stmt = stmt.where(Location.is_active.is_(True))
     if q:
-        # Join translations to search English names
+        # Search English name OR location_code (outerjoin so code-only matches still work)
         stmt = (
             stmt
-            .join(LocationTranslation,
-                  (LocationTranslation.location_code == Location.location_code) &
-                  (LocationTranslation.lang_code == "en"))
-            .where(LocationTranslation.name.ilike(f"%{q}%"))
+            .outerjoin(
+                LocationTranslation,
+                (LocationTranslation.location_code == Location.location_code) &
+                (LocationTranslation.lang_code == "en"),
+            )
+            .where(
+                or_(
+                    LocationTranslation.name.ilike(f"%{q}%"),
+                    Location.location_code.ilike(f"%{q}%"),
+                )
+            )
         )
     stmt = stmt.offset(offset).limit(limit)
     rows = db.execute(stmt).scalars().all()
@@ -374,8 +479,11 @@ def _project_to_response(p: Project) -> dict:
         "is_active":     p.is_active,
         "created_at":    p.created_at,
         "updated_at":    p.updated_at,
-        "organization_ids": [po.organization_id for po in p.organizations],
-        "location_codes":   [pl.location_code  for pl in p.locations],
+        "organizations": [
+            {"organization_id": po.organization_id, "org_role": po.org_role}
+            for po in p.organizations
+        ],
+        "location_codes": [pl.location_code for pl in p.locations],
     }
 
 
@@ -483,21 +591,30 @@ def update_project(project_id: str, body: ProjectUpdate, db: Session = Depends(g
 
 # ── Project ↔ Organizations ───────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/organizations")
+@router.get("/projects/{project_id}/organizations", response_model=list[ProjectOrgItem])
 def list_project_organizations(project_id: str, db: Session = Depends(get_db)):
-    """List organizations linked to a project."""
-    p = db.get(Project, project_id)
-    if not p:
+    """List organizations linked to a project, with their roles."""
+    if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     rows = db.execute(
         select(ProjectOrganization).where(ProjectOrganization.project_id == project_id)
     ).scalars().all()
-    return [{"project_id": r.project_id, "organization_id": r.organization_id} for r in rows]
+    return [{"organization_id": r.organization_id, "org_role": r.org_role} for r in rows]
 
 
-@router.post("/projects/{project_id}/organizations/{organization_id}", status_code=201)
-def add_project_organization(project_id: str, organization_id: str, db: Session = Depends(get_db)):
-    """Link an organization to a project. Admin only."""
+class OrgRoleBody(BaseModel):
+    org_role: str | None = None
+
+
+@router.post("/projects/{project_id}/organizations/{organization_id}", status_code=201,
+             response_model=ProjectOrgItem)
+def add_project_organization(
+    project_id: str,
+    organization_id: str,
+    body: OrgRoleBody = OrgRoleBody(),
+    db: Session = Depends(get_db),
+):
+    """Link an organization to a project with an optional role. Admin only."""
     _require_admin()
 
     if not db.get(Project, project_id):
@@ -513,11 +630,44 @@ def add_project_organization(project_id: str, organization_id: str, db: Session 
         )
     ).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=409, detail="Organization already linked to this project")
+        # Allow updating the role on an existing link
+        existing.org_role = body.org_role
+        db.commit()
+        return {"organization_id": organization_id, "org_role": existing.org_role}
 
-    db.add(ProjectOrganization(project_id=project_id, organization_id=organization_id))
+    po = ProjectOrganization(
+        project_id=project_id,
+        organization_id=organization_id,
+        org_role=body.org_role,
+    )
+    db.add(po)
     db.commit()
-    return {"project_id": project_id, "organization_id": organization_id}
+    return {"organization_id": organization_id, "org_role": po.org_role}
+
+
+@router.patch("/projects/{project_id}/organizations/{organization_id}",
+              response_model=ProjectOrgItem)
+def update_project_organization_role(
+    project_id: str,
+    organization_id: str,
+    body: OrgRoleBody,
+    db: Session = Depends(get_db),
+):
+    """Update the role of an already-linked organization. Admin only."""
+    _require_admin()
+
+    row = db.execute(
+        select(ProjectOrganization)
+        .where(
+            ProjectOrganization.project_id == project_id,
+            ProjectOrganization.organization_id == organization_id,
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Organization not linked to this project")
+    row.org_role = body.org_role
+    db.commit()
+    return {"organization_id": organization_id, "org_role": row.org_role}
 
 
 @router.delete("/projects/{project_id}/organizations/{organization_id}", status_code=204)
@@ -606,5 +756,175 @@ def remove_project_location(project_id: str, location_code: str, db: Session = D
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Link not found")
+    db.delete(row)
+    db.commit()
+
+
+# ── Project packages ──────────────────────────────────────────────────────────
+
+class PackageResponse(BaseModel):
+    package_id:        str
+    project_id:        str
+    package_code:      str
+    name:              str
+    description:       str | None
+    contractor_org_id: str | None
+    is_active:         bool
+    location_codes:    list[str] = []
+    created_at:        datetime
+    updated_at:        datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PackageCreate(BaseModel):
+    package_code:      str = Field(..., max_length=128)
+    name:              str
+    description:       str | None = None
+    contractor_org_id: str | None = None
+    is_active:         bool = True
+
+
+class PackageUpdate(BaseModel):
+    name:              str | None = None
+    description:       str | None = None
+    contractor_org_id: str | None = None
+    is_active:         bool | None = None
+
+
+def _package_to_dict(pkg: ProjectPackage) -> dict:
+    return {
+        "package_id":        pkg.package_id,
+        "project_id":        pkg.project_id,
+        "package_code":      pkg.package_code,
+        "name":              pkg.name,
+        "description":       pkg.description,
+        "contractor_org_id": pkg.contractor_org_id,
+        "is_active":         pkg.is_active,
+        "location_codes":    [pl.location_code for pl in pkg.locations],
+        "created_at":        pkg.created_at,
+        "updated_at":        pkg.updated_at,
+    }
+
+
+@router.get("/projects/{project_id}/packages", response_model=list[PackageResponse])
+def list_packages(project_id: str, db: Session = Depends(get_db)):
+    """List all packages for a project, ordered by package_code."""
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    pkgs = db.execute(
+        select(ProjectPackage)
+        .options(selectinload(ProjectPackage.locations))
+        .where(ProjectPackage.project_id == project_id)
+        .order_by(ProjectPackage.package_code)
+    ).scalars().all()
+    return [_package_to_dict(p) for p in pkgs]
+
+
+@router.post("/projects/{project_id}/packages", response_model=PackageResponse, status_code=201)
+def create_package(project_id: str, body: PackageCreate, db: Session = Depends(get_db)):
+    """Create a package within a project. Admin only."""
+    _require_admin()
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    if body.contractor_org_id and not db.get(Organization, body.contractor_org_id):
+        raise HTTPException(status_code=404, detail=f"Organization '{body.contractor_org_id}' not found")
+
+    existing = db.execute(
+        select(ProjectPackage).where(
+            ProjectPackage.project_id == project_id,
+            ProjectPackage.package_code == body.package_code,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Package '{body.package_code}' already exists in this project")
+
+    pkg = ProjectPackage(
+        project_id=project_id,
+        package_code=body.package_code,
+        name=body.name,
+        description=body.description,
+        contractor_org_id=body.contractor_org_id,
+        is_active=body.is_active,
+    )
+    db.add(pkg)
+    db.flush()
+    db.refresh(pkg, ["locations"])
+    db.commit()
+    return _package_to_dict(pkg)
+
+
+@router.patch("/projects/{project_id}/packages/{package_id}", response_model=PackageResponse)
+def update_package(project_id: str, package_id: str, body: PackageUpdate,
+                   db: Session = Depends(get_db)):
+    """Update package metadata. Admin only."""
+    _require_admin()
+    pkg = db.execute(
+        select(ProjectPackage)
+        .options(selectinload(ProjectPackage.locations))
+        .where(ProjectPackage.package_id == package_id,
+               ProjectPackage.project_id == project_id)
+    ).scalar_one_or_none()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    if body.name              is not None: pkg.name              = body.name
+    if body.description       is not None: pkg.description       = body.description
+    if body.contractor_org_id is not None:
+        if body.contractor_org_id and not db.get(Organization, body.contractor_org_id):
+            raise HTTPException(status_code=404, detail=f"Organization '{body.contractor_org_id}' not found")
+        pkg.contractor_org_id = body.contractor_org_id
+    if body.is_active         is not None: pkg.is_active         = body.is_active
+    pkg.updated_at = _now()
+    db.commit()
+    db.refresh(pkg)
+    return _package_to_dict(pkg)
+
+
+@router.post("/projects/{project_id}/packages/{package_id}/locations/{location_code}",
+             status_code=201)
+def add_package_location(project_id: str, package_id: str, location_code: str,
+                         db: Session = Depends(get_db)):
+    """Link a district/location to a package. Admin only."""
+    _require_admin()
+    pkg = db.execute(
+        select(ProjectPackage).where(
+            ProjectPackage.package_id == package_id,
+            ProjectPackage.project_id == project_id,
+        )
+    ).scalar_one_or_none()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    if not db.get(Location, location_code):
+        raise HTTPException(status_code=404, detail=f"Location '{location_code}' not found")
+
+    existing = db.execute(
+        select(PackageLocation).where(
+            PackageLocation.package_id == package_id,
+            PackageLocation.location_code == location_code,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="Location already linked to this package")
+
+    db.add(PackageLocation(package_id=package_id, location_code=location_code))
+    db.commit()
+    return {"package_id": package_id, "location_code": location_code}
+
+
+@router.delete("/projects/{project_id}/packages/{package_id}/locations/{location_code}",
+               status_code=204)
+def remove_package_location(project_id: str, package_id: str, location_code: str,
+                             db: Session = Depends(get_db)):
+    """Unlink a location from a package. Admin only."""
+    _require_admin()
+    row = db.execute(
+        select(PackageLocation).where(
+            PackageLocation.package_id == package_id,
+            PackageLocation.location_code == location_code,
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Package location link not found")
     db.delete(row)
     db.commit()

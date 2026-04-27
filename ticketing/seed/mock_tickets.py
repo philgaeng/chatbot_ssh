@@ -220,7 +220,7 @@ def seed_mock_tickets(db: Session) -> None:
         workflow_id=WORKFLOW_STANDARD_ID,
         step_id=STEP_L3_ID,
         is_seah=False,
-        status_code="ESCALATED",
+        status_code="IN_PROGRESS",  # GRC chair has acknowledged (last event); ready for CONVENE
         priority="HIGH",
         location_code=LOC_MORANG_CODE,
         project_code="KL_ROAD",
@@ -416,13 +416,14 @@ def seed_all(reset: bool = False) -> None:
             db.execute(Ticket.__table__.delete())
             db.execute(UserRole.__table__.delete())
             from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
-            from ticketing.models.organization import Location, Organization
+            from ticketing.models.organization import Organization
             from ticketing.models.user import Role
             from ticketing.models.settings import Settings
             db.execute(WorkflowAssignment.__table__.delete())
             db.execute(WorkflowStep.__table__.delete())
             db.execute(WorkflowDefinition.__table__.delete())
-            db.execute(Location.__table__.delete())
+            # Locations live in ticketing.locations (imported geodata) — not reset here.
+            # Only reset org/role/settings that are seeded by mock_tickets.
             db.execute(Organization.__table__.delete())
             db.execute(Role.__table__.delete())
             db.execute(Settings.__table__.delete())
