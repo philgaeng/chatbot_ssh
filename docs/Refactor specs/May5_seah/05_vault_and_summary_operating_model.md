@@ -4,6 +4,11 @@
 
 This spec defines how grievance content, complainant PII, and officer-facing summaries should be stored and served for both standard and SEAH flows.
 
+This document explicitly splits implementation ownership between:
+
+- chatbot/public worktree (`public.*`)
+- ticketing worktree (`ticketing.*`)
+
 It complements:
 
 - `00_overview_and_scope.md`
@@ -32,6 +37,7 @@ Storage rules:
 - encrypted at rest
 - sensitivity key selection by `case_sensitivity`
 - no ticketing table stores raw vault narrative
+- owned by chatbot/public worktree in `public.*`
 
 ### B) Case metadata (operational)
 
@@ -46,6 +52,7 @@ Storage rules:
 
 - no direct PII fields
 - no raw free text complaint body
+- owned by ticketing worktree in `ticketing.*`
 
 ### C) Derived summaries (officer-facing)
 
@@ -60,16 +67,34 @@ Storage rules:
 
 - publish only after leakage checks pass
 - persist prior versions for auditability
+- owned by ticketing worktree in `ticketing.*`
+
+## Ownership matrix (implementation)
+
+| Capability | Owner | Storage/API owner |
+|---|---|---|
+| Intake of original grievance text and contact | Public/chatbot worktree | `public.*` + backend grievance API |
+| Vault encryption and key selection (`standard`/`seah`) | Public/chatbot worktree | `public.*` |
+| Officer workflow state (assignment/escalation/status) | Ticketing worktree | `ticketing.*` |
+| Metadata event log for ticket lifecycle | Ticketing worktree | `ticketing.*` |
+| Summary generation and anomaly detection for officer UI | Ticketing worktree | `ticketing.*` |
+| Reveal authorization decision | Public/chatbot worktree | backend grievance API policy gate |
+| Reveal request UX and session handling UI | Ticketing worktree | `channels/ticketing-ui/` + ticketing API proxy/orchestrator |
 
 ## Intake and update flow
 
 1. Intake receives grievance content and contact fields.
-2. Original content goes to vault payload.
-3. Metadata/event record is written for workflow.
+2. Public/chatbot writes original content to vault payload in `public.*`.
+3. Ticketing writes metadata/event record to `ticketing.*` for workflow.
 4. Async summary job runs:
    - redact -> summarize -> validate
 5. Derived summary is updated for officer use.
 6. Ticketing UI reads metadata + derived summary only by default.
+
+Cross-worktree contract:
+
+- Ticketing receives only allowed payloads from public/chatbot side (`grievance_id`, sensitivity, non-PII routing metadata, and policy-safe narrative input shape).
+- Ticketing must not fetch raw vault tables directly.
 
 ## Minimum event format for metadata updates
 
@@ -140,13 +165,20 @@ Ticketing must not consume:
 - raw vault narrative
 - raw complainant direct identifiers except through explicit reveal flow
 
+Public/chatbot side must expose:
+
+- stable grievance reference APIs
+- explicit reveal authorization APIs
+- optional policy-safe excerpt endpoint for summary regeneration where needed
+
 ## Migration steps (implementation)
 
-1. Add `case_sensitivity` consistently on case records.
-2. Add metadata event payload contract and append-only writes.
-3. Add async summary regeneration task per event with idempotency key.
-4. Add leakage/coverage validations as release gates.
-5. Move default UI rendering to summary-first mode.
+1. Public/chatbot worktree: standardize `case_sensitivity` and vault ownership in `public.*`.
+2. Ticketing worktree: add metadata event payload contract and append-only writes in `ticketing.*`.
+3. Ticketing worktree: add async summary regeneration task per event with idempotency key.
+4. Public/chatbot + ticketing: define API contracts for reveal/policy-safe excerpt exchange.
+5. Ticketing worktree: enforce leakage/coverage validation gates before publishing summaries.
+6. Ticketing worktree: move default UI rendering to summary-first mode.
 
 ## Test matrix (minimum)
 
