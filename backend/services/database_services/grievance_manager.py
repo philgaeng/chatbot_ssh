@@ -104,7 +104,10 @@ class GrievanceDbManager(BaseDatabaseManager):
         query = """
                 SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
                        c.complainant_province, c.complainant_district, c.complainant_municipality,
-                       c.complainant_ward, c.complainant_village, c.complainant_address
+                       c.complainant_ward, c.complainant_village, c.complainant_address,
+                       c.contact_id, c.country_code, c.location_code, c.location_resolution_status,
+                       c.level_1_name, c.level_2_name, c.level_3_name, c.level_4_name, c.level_5_name, c.level_6_name,
+                       c.level_1_code, c.level_2_code, c.level_3_code, c.level_4_code, c.level_5_code, c.level_6_code
                 FROM grievances g
                 LEFT JOIN complainants c ON g.complainant_id = c.complainant_id
                 WHERE g.grievance_id = %s
@@ -385,6 +388,11 @@ class GrievanceDbManager(BaseDatabaseManager):
                 g.grievance_categories,
                 c.complainant_full_name,
                 c.complainant_phone,
+                c.contact_id,
+                c.country_code,
+                c.location_code,
+                c.location_resolution_status,
+                COALESCE(c.level_3_name, c.complainant_municipality) AS complainant_municipality,
                 ls.grievance_status,
                 ls.grievance_status_update_date
             FROM complainants c

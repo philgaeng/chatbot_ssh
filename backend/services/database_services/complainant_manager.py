@@ -21,7 +21,13 @@ class ComplainantDbManager(BaseDatabaseManager):
         'complainant_municipality',
         'complainant_ward',
         'complainant_village',
-        'complainant_address'
+        'complainant_address',
+        'contact_id',
+        'country_code',
+        'location_code',
+        'location_resolution_status',
+        'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
+        'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
     }
     
     
@@ -84,6 +90,12 @@ class ComplainantDbManager(BaseDatabaseManager):
                    complainant_ward,
                    complainant_village,
                    complainant_address,
+                   contact_id,
+                   country_code,
+                   location_code,
+                   location_resolution_status,
+                   level_1_name, level_2_name, level_3_name, level_4_name, level_5_name, level_6_name,
+                   level_1_code, level_2_code, level_3_code, level_4_code, level_5_code, level_6_code,
                    complainant_phone_verified,
                    created_at
             FROM complainants
@@ -119,6 +131,12 @@ class ComplainantDbManager(BaseDatabaseManager):
                    complainant_ward,
                    complainant_village,
                    complainant_address,
+                   contact_id,
+                   country_code,
+                   location_code,
+                   location_resolution_status,
+                   level_1_name, level_2_name, level_3_name, level_4_name, level_5_name, level_6_name,
+                   level_1_code, level_2_code, level_3_code, level_4_code, level_5_code, level_6_code,
                    complainant_phone_verified,
                    created_at
             FROM complainants
@@ -141,7 +159,14 @@ class ComplainantDbManager(BaseDatabaseManager):
             data['complainant_id'] = complainant_id
             data['complainant_unique_id'] = complainant_id #complainant_unique_id is the same as complainant_id for now
             self.logger.info(f"create_complainant: Creating complainant with ID: {complainant_id}")
-            allowed_fields = ['complainant_id', 'complainant_unique_id', 'complainant_full_name', 'complainant_phone', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
+            allowed_fields = [
+                'complainant_id', 'complainant_unique_id', 'complainant_full_name', 'complainant_phone',
+                'complainant_email', 'complainant_province', 'complainant_district',
+                'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address',
+                'contact_id', 'country_code', 'location_code', 'location_resolution_status',
+                'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
+                'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
+            ]
 
             data = {k: v for k, v in data.items() if k in allowed_fields}
 
@@ -168,7 +193,14 @@ class ComplainantDbManager(BaseDatabaseManager):
         """Update an existing complainant record with encrypted sensitive fields"""
         try:
             self.logger.info(f"update_complainant: Updating complainant with ID: {complainant_id}")
-            allowed_fields = ['complainant_full_name', 'complainant_phone', 'complainant_phone_verified', 'complainant_email', 'complainant_province', 'complainant_district', 'complainant_municipality', 'complainant_ward', 'complainant_village', 'complainant_address']
+            allowed_fields = [
+                'complainant_full_name', 'complainant_phone', 'complainant_phone_verified', 'complainant_email',
+                'complainant_province', 'complainant_district', 'complainant_municipality',
+                'complainant_ward', 'complainant_village', 'complainant_address',
+                'contact_id', 'country_code', 'location_code', 'location_resolution_status',
+                'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
+                'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
+            ]
             # ensure the phone number is standardized
             if data.get('complainant_phone'):
                 data['complainant_phone'] = self._standardize_phone_number(data['complainant_phone'])
@@ -231,6 +263,21 @@ class ComplainantDbManager(BaseDatabaseManager):
             WHERE complainant_id = %s
         """
         try:
+            # Deterministic contact_id winner rule:
+            # the target complainant keeps canonical linkage for merged grievances.
+            self.execute_update(
+                """
+                UPDATE complainants source
+                SET contact_id = target.contact_id
+                FROM complainants target
+                WHERE source.complainant_id = %s
+                  AND target.complainant_id = %s
+                  AND source.contact_id IS NULL
+                  AND target.contact_id IS NOT NULL
+                """,
+                (complainant_id, target_complainant_id),
+                "merge_complainants_contact_id_propagation",
+            )
             self.execute_update(query, (target_complainant_id, complainant_id), "merge_complainants_with_same_phone_number")
             return True
         except Exception as e:

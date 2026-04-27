@@ -15,72 +15,13 @@ class GSheetDbManager(BaseDatabaseManager):
                                  start_date: Optional[str] = None, 
                                  end_date: Optional[str] = None,
                                  username: Optional[str] = None) -> List[Dict]:
-        """Get grievances for Google Sheets monitoring with optional filters and user-based access control"""
-        
-        # Get user's municipality access
-        municipality_filter = self._get_user_municipality_filter(username)
-        
-        query = """
-            WITH latest_status AS (
-                SELECT DISTINCT ON (grievance_id) 
-                    grievance_id,
-                    status_code as grievance_status,
-                    created_at as grievance_status_update_date,
-                    notes
-                FROM grievance_status_history
-                ORDER BY grievance_id, created_at DESC
-            )
-            SELECT 
-                g.grievance_id,
-                g.complainant_id,
-                c.complainant_full_name,
-                c.complainant_phone,
-                c.complainant_municipality,
-                c.complainant_village,
-                c.complainant_address,
-                g.grievance_description,
-                g.grievance_summary,
-                g.grievance_categories,
-                g.grievance_sensitive_issue,
-                g.grievance_high_priority,
-                g.grievance_creation_date,
-                g.grievance_timeline,
-                ls.grievance_status as status,
-                ls.grievance_status_update_date,
-                ls.notes
-            FROM complainants c
-            INNER JOIN grievances g ON c.complainant_id = g.complainant_id
-            LEFT JOIN latest_status ls ON g.grievance_id = ls.grievance_id
-            WHERE g.grievance_description IS NOT NULL
-        """
-        params = []
-
-        # Apply municipality filter based on user access
-        if municipality_filter:
-            validated_municipalities = self._validate_municipality_names(municipality_filter)
-            if validated_municipalities:
-                query += self._get_municipality_filter_clause(validated_municipalities)
-                # Add % wildcards for ILIKE matching
-                ilike_params = [f"%{municipality}%" for municipality in validated_municipalities]
-                params.extend(ilike_params)
-
-        if status:
-            query += " AND ls.grievance_status = %s"
-            params.append(status)
-        if start_date:
-            query += " AND g.grievance_creation_date >= %s"
-            params.append(start_date)
-        if end_date:
-            query += " AND g.grievance_creation_date <= %s"
-            params.append(end_date)
-
-        query += " ORDER BY g.grievance_creation_date DESC, ls.grievance_status_update_date DESC"
-
-        try:
-            return self._execute_query_with_selective_decryption(query, params)
-        except Exception as e:
-            self.logger.error(f"Error fetching grievances for GSheet: {str(e)}")
-            raise Exception(f"Failed to fetch grievances: {str(e)}")
+        """Deprecated: Google Sheets monitoring is retired in favor of ticketing UI."""
+        msg = (
+            "Google Sheets monitoring is deprecated. "
+            "Use the standalone ticketing system instead."
+        )
+        self.logger.warning(msg)
+        raise RuntimeError(msg)
     
     def _get_user_municipality_filter(self, username: Optional[str]) -> Optional[List[str]]:
         """Get municipality filter based on user access level"""
@@ -144,11 +85,11 @@ class GSheetDbManager(BaseDatabaseManager):
     def _get_municipality_filter_clause(self, validated_municipalities: List[str]) -> str:
         """Get municipality filter SQL clause using ILIKE for partial matching."""
         if len(validated_municipalities) == 1:
-            return " AND c.complainant_municipality ILIKE %s"
+            return " AND COALESCE(c.level_3_name, c.complainant_municipality) ILIKE %s"
         else:
             conditions = []
             for _ in validated_municipalities:
-                conditions.append("c.complainant_municipality ILIKE %s")
+                conditions.append("COALESCE(c.level_3_name, c.complainant_municipality) ILIKE %s")
             return f" AND ({' OR '.join(conditions)})"
 
 # --- End moved classes --- 

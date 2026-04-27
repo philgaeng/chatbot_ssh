@@ -491,8 +491,20 @@ class BaseDatabaseManager:
 
     def get_complainant_and_grievance_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Get the complainant fields from the data"""
-        complainant_fields =  {k: v for k,v in data.items() if 'complainant_' in k}
-        grievance_fields = {k: v for k,v in data.items() if 'complainant_' not in k}
+        normalized_contact_fields = {
+            "contact_id",
+            "country_code",
+            "location_code",
+            "location_resolution_status",
+            "level_1_name", "level_2_name", "level_3_name", "level_4_name", "level_5_name", "level_6_name",
+            "level_1_code", "level_2_code", "level_3_code", "level_4_code", "level_5_code", "level_6_code",
+        }
+        complainant_fields = {
+            k: v for k, v in data.items() if ("complainant_" in k or k in normalized_contact_fields)
+        }
+        grievance_fields = {
+            k: v for k, v in data.items() if ('complainant_' not in k and k not in normalized_contact_fields)
+        }
         complainant_fields['source']=data.get('source', 'bot')
         grievance_fields['complainant_id']=data.get('complainant_id') 
         return {'complainant_fields':complainant_fields, 'grievance_fields':grievance_fields}
@@ -728,14 +740,19 @@ class BaseDatabaseManager:
             bool: True if logged successfully, False otherwise
         """
         try:
-            # Validate change type (include 'creation' for initial submission)
-            valid_change_types = {'status_change', 'field_update', 'complainant_update', 'system_update', 'creation'}
+            # Backward compatibility: older call sites may use 'creation' for initial submit.
+            # The DB constraint only allows status_change/field_update/complainant_update/system_update.
+            if change_type == 'creation':
+                change_type = 'status_change'
+
+            # Validate change type against DB-supported values.
+            valid_change_types = {'status_change', 'field_update', 'complainant_update', 'system_update'}
             if change_type not in valid_change_types:
                 self.logger.error(f"Invalid change_type: {change_type}")
                 return False
             
             # Validate required fields based on change type
-            if change_type in {'status_change', 'creation'} and not status_code:
+            if change_type == 'status_change' and not status_code:
                 self.logger.error("status_code is required for status_change")
                 return False
             
@@ -950,16 +967,16 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-            # Check if database is already initialized
-            cur.execute("SELECT to_regclass('grievances')")
-            if cur.fetchone()[0] is not None:
-                self.migrations_logger.info("Database already initialized")
+                # Check if database is already initialized
+                cur.execute("SELECT to_regclass('grievances')")
+                if cur.fetchone()[0] is not None:
+                    self.migrations_logger.info("Database already initialized")
+                    return True
+                self._create_tables(cur)
+                self._create_indexes(cur)
+                conn.commit()
+                self.migrations_logger.info("Database initialization completed")
                 return True
-            self._create_tables(cur)
-            self._create_indexes(cur)
-            conn.commit()
-            self.migrations_logger.info("Database initialization completed")
-            return True
         except Exception as e:
             self.migrations_logger.error(f"Database initialization error: {str(e)}")
             return False
@@ -968,7 +985,7 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-            # Drop tables in reverse order of dependency
+                # Drop tables in reverse order of dependency
                 self.migrations_logger.info("Dropping tables in reverse order...")
                 cur.execute("DROP TABLE IF EXISTS grievance_transcriptions CASCADE")
                 cur.execute("DROP TABLE IF EXISTS grievance_translations CASCADE")
@@ -1249,6 +1266,22 @@ class TableDbManager(BaseDatabaseManager):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS contact_id TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS country_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_resolution_status TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_name TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_code TEXT")
 
         # Tasks table
         self.migrations_logger.info("Creating/recreating tasks table...")
@@ -1343,7 +1376,7 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 duration_seconds INTEGER,
                 file_size INTEGER,
-                processing_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['PROCESSING']}' REFERENCES processing_statuses(status_code),
+                processing_status TEXT DEFAULT 'PROCESSING' REFERENCES processing_statuses(status_code),
                 language_code TEXT,
                 language_code_detect TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -1360,7 +1393,7 @@ class TableDbManager(BaseDatabaseManager):
                 field_name TEXT NOT NULL,
                 automated_transcript TEXT,
                 verified_transcript TEXT,
-                verification_status TEXT DEFAULT '{TRANSCRIPTION_PROCESSING_STATUS['FOR_VERIFICATION']}' REFERENCES processing_statuses(status_code),
+                verification_status TEXT DEFAULT 'FOR_VERIFICATION' REFERENCES processing_statuses(status_code),
                 confidence_score FLOAT,
                 verification_notes TEXT,
                 verified_by TEXT,
@@ -1455,6 +1488,8 @@ class TableDbManager(BaseDatabaseManager):
             CREATE INDEX IF NOT EXISTS idx_complainant_email ON complainants(complainant_email);
             CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON complainants(complainant_unique_id);
             CREATE INDEX IF NOT EXISTS idx_complainant_phone_hash ON complainants(complainant_phone_hash);
+            CREATE INDEX IF NOT EXISTS idx_complainants_contact_id ON complainants(contact_id);
+            CREATE INDEX IF NOT EXISTS idx_complainants_location_code ON complainants(location_code);
         """)
 
         # Grievances table indexes
@@ -2156,27 +2191,35 @@ class TaskDbManager(BaseDatabaseManager):
         set_clauses = []
         values = []
         for field, value in update_data.items():
-            if field in ['task_name',
-                'status_code',
+            # Backward-compat: callers may still pass status_code; DB column is task_status_code.
+            normalized_field = "task_status_code" if field == "status_code" else field
+            if normalized_field in ['task_name',
+                'task_status_code',
                 'started_at',
                 'completed_at',
                 'error_message',
                 'retry_count',
                 'created_at',
-                'updated_at']:
-                set_clauses.append(f"{field} = %s")
+                'updated_at',
+                'result',
+                'metadata',
+                'retry_history']:
+                set_clauses.append(f"{normalized_field} = %s")
                 # Only JSON-serialize fields that should be JSON
-                if field in ['result', 'metadata'] and isinstance(value, dict):  # Add any other fields that should be JSON
+                if normalized_field in ['result', 'metadata', 'retry_history'] and isinstance(value, dict):
                     values.append(json.dumps(value))
                 else:
                     values.append(value)
+        if not set_clauses:
+            self.logger.warning(f"No valid fields to update for task {task_id}: {list(update_data.keys())}")
+            return False
         values.append(task_id)
 
         query = f"""
             UPDATE tasks
             SET {', '.join(set_clauses)},
                 updated_at = CURRENT_TIMESTAMP,
-                completed_at = CASE WHEN status_code IN ('SUCCESS', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
+                completed_at = CASE WHEN task_status_code IN ('SUCCESS', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
             WHERE task_id = %s
         """
         try:

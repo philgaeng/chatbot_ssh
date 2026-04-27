@@ -8,7 +8,14 @@ import {
 // Import modules
 import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
-import { get, format, ADD_MORE_PAYLOAD, GO_BACK_PAYLOAD } from "./utterances.js";
+import {
+  get,
+  format,
+  setLanguage,
+  getLanguage,
+  ADD_MORE_PAYLOAD,
+  GO_BACK_PAYLOAD,
+} from "./utterances.js";
 
 // Make FILE_UPLOAD_CONFIG globally available for the file upload function
 window.FILE_UPLOAD_CONFIG = FILE_UPLOAD_CONFIG;
@@ -22,6 +29,9 @@ let messageInput;
 let messages;
 let fileInput;
 let attachmentButton;
+let sendButton;
+let invalidSendTooltip;
+let invalidSendTooltipTimer = null;
 
 // Session and State Variables
 let messageRetryCount = 0;
@@ -37,6 +47,8 @@ window.introductionWindowTimer = null;
 window.sessionInitialized = false;
 window.lastBotMessageText = "";
 window.lastBotQuickReplies = null;
+/** Last POST /message `next_state` — used after file upload to offer exit controls when flow is finished (`done`). */
+window.lastOrchestratorNextState = null;
 
 // File type constants
 const FILE_TYPES = {
@@ -82,7 +94,30 @@ function getUrlParams() {
   return {
     province: params.get("province"),
     district: params.get("district"),
+    lang: params.get("lang"),
   };
+}
+
+const LANG_STORAGE_KEY = "rest_webchat_lang";
+
+function normalizeLang(lang) {
+  return lang === "en" || lang === "ne" ? lang : null;
+}
+
+function initializeLanguagePreference() {
+  const { lang } = getUrlParams();
+  const queryLang = normalizeLang(lang);
+  const storedLang = normalizeLang(localStorage.getItem(LANG_STORAGE_KEY));
+  const resolvedLang = queryLang || storedLang || "en";
+  setLanguage(resolvedLang);
+  localStorage.setItem(LANG_STORAGE_KEY, resolvedLang);
+}
+
+function persistLanguagePreference(lang) {
+  const normalized = normalizeLang(lang);
+  if (!normalized) return;
+  setLanguage(normalized);
+  localStorage.setItem(LANG_STORAGE_KEY, normalized);
 }
 
 // Create a temporary session ID
@@ -124,6 +159,11 @@ async function restSendMessage(message, additionalData = {}) {
 
   if (message && message.startsWith("/")) {
     payload.payload = message;
+    if (message.startsWith("/set_english")) {
+      persistLanguagePreference("en");
+    } else if (message.startsWith("/set_nepali")) {
+      persistLanguagePreference("ne");
+    }
   } else {
     payload.text = message || "";
   }
@@ -159,6 +199,8 @@ window.safeSendMessage = restSendMessage;
 
 function handleOrchestratorResponse(response) {
   const { messages = [], next_state, expected_input_type } = response || {};
+  window.lastOrchestratorNextState =
+    typeof next_state === "string" ? next_state : null;
 
   if (!Array.isArray(messages)) {
     return;
@@ -194,8 +236,6 @@ function handleOrchestratorResponse(response) {
       eventHandlers.handleCustomPayload(m.json_message);
     }
   });
-
-  // Optionally, use next_state / expected_input_type to adjust UI in the future
 }
 
 // Send introduction message (async: restSendMessage returns a Promise; must await
@@ -395,6 +435,7 @@ function setupEventListeners() {
 
   // Add auto-resize functionality to message input
   messageInput.addEventListener("input", function () {
+    hideInvalidSendTooltip();
     // Reset height to auto to get the correct scrollHeight
     this.style.height = "auto";
     // Set new height based on scrollHeight, but cap it at max-height via CSS
@@ -404,6 +445,38 @@ function setupEventListeners() {
   });
 }
 
+function ensureInvalidSendTooltip() {
+  if (!sendButton || invalidSendTooltip) return;
+  const wrapper = document.createElement("div");
+  wrapper.className = "send-button-wrap";
+  sendButton.parentNode.insertBefore(wrapper, sendButton);
+  wrapper.appendChild(sendButton);
+
+  invalidSendTooltip = document.createElement("div");
+  invalidSendTooltip.className = "send-invalid-tooltip";
+  invalidSendTooltip.textContent = "Type a message or attach a file first.";
+  wrapper.appendChild(invalidSendTooltip);
+}
+
+function showInvalidSendTooltip() {
+  ensureInvalidSendTooltip();
+  if (!invalidSendTooltip) return;
+  invalidSendTooltip.classList.add("is-visible");
+  if (invalidSendTooltipTimer) clearTimeout(invalidSendTooltipTimer);
+  invalidSendTooltipTimer = setTimeout(() => {
+    hideInvalidSendTooltip();
+  }, 2000);
+}
+
+function hideInvalidSendTooltip() {
+  if (!invalidSendTooltip) return;
+  invalidSendTooltip.classList.remove("is-visible");
+  if (invalidSendTooltipTimer) {
+    clearTimeout(invalidSendTooltipTimer);
+    invalidSendTooltipTimer = null;
+  }
+}
+
 function resetFrontendState() {
   window.grievanceId = null;
   window.hasReceivedResponse = false;
@@ -411,6 +484,7 @@ function resetFrontendState() {
   window.sessionInitialized = false;
   window.lastBotMessageText = "";
   window.lastBotQuickReplies = null;
+  window.lastOrchestratorNextState = null;
 
   if (window.currentRetryTimer) {
     clearTimeout(window.currentRetryTimer);
@@ -463,6 +537,14 @@ window.handleCloseWindowCommand = function () {
 async function handleMessageSubmit(e) {
   e.preventDefault();
   const message = messageInput.value.trim();
+  const hasFiles = selectedFiles.length > 0;
+
+  if (!message && !hasFiles) {
+    showInvalidSendTooltip();
+    return;
+  }
+
+  hideInvalidSendTooltip();
 
   if (message) {
     // Once the user has answered (by typing), clear any existing quick replies
@@ -496,6 +578,7 @@ async function handleMessageSubmit(e) {
 function handleFileSelection(e) {
   const files = Array.from(e.target.files);
   if (files.length > 0) {
+    hideInvalidSendTooltip();
     handleSelectedFiles(files);
   }
 }
@@ -773,12 +856,42 @@ async function pollFileStatus(fileIds) {
   poll();
 }
 
-function showPostUploadMessageAndUnlock() {
-  uiActions.appendMessage(get("file_upload.post_upload"), "received");
-  uiActions.replaceQuickReplies([
+function buildPostUploadQuickReplies() {
+  const base = [
     { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
     { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ]);
+  ];
+  if (window.lastOrchestratorNextState !== "done") {
+    return base;
+  }
+  return [
+    ...base,
+    {
+      title: get("file_upload.buttons.close_browser"),
+      payload: "/nav_close_browser_tab",
+    },
+    {
+      title: get("file_upload.buttons.clear_session"),
+      payload: "/nav_clear",
+    },
+    {
+      title: get("file_upload.buttons.close_session"),
+      payload: "/nav_goodbye",
+    },
+  ];
+}
+
+function showPostUploadMessageAndUnlock() {
+  const atFlowEnd = window.lastOrchestratorNextState === "done";
+  uiActions.appendMessage(
+    get(
+      atFlowEnd
+        ? "file_upload.post_upload_at_flow_end"
+        : "file_upload.post_upload"
+    ),
+    "received"
+  );
+  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -802,11 +915,14 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
-  uiActions.appendMessage(get("file_upload.failure"), "received");
-  uiActions.replaceQuickReplies([
-    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
-    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ]);
+  const atFlowEnd = window.lastOrchestratorNextState === "done";
+  uiActions.appendMessage(
+    get(
+      atFlowEnd ? "file_upload.failure_at_flow_end" : "file_upload.failure"
+    ),
+    "received"
+  );
+  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -933,5 +1049,8 @@ window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 
 // Initialize when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
+  initializeLanguagePreference();
+  console.log("REST_webchat language initialized:", getLanguage());
+  sendButton = document.querySelector("#form .send-button");
   void initializeChat();
 });

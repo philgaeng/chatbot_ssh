@@ -57,7 +57,10 @@ def _get_action(action_name: str) -> Any:
             ActionAskFormSeahFocalPoint2SeahFocalReferredToSupport,
             ActionOutroSensitiveIssues,
         )
-        from backend.actions.action_seah_outro import ActionSeahOutro
+        from backend.actions.action_outro import (
+            ActionSeahOutro,
+            ActionGrievanceOutro,
+        )
         from backend.actions.forms.form_modify_grievance import (
             ActionAskModifyFollowUpAnswer,
             ActionAskModifyGrievanceNewDetail,
@@ -97,7 +100,6 @@ def _get_action(action_name: str) -> Any:
         from backend.actions.action_submit_grievance import (
             ActionSubmitGrievance,
             ActionSubmitSeah,
-            ActionGrievanceOutro,
         )
         from backend.actions.action_ask_commons import (
             ActionAskStoryStep,

@@ -1,19 +1,22 @@
 # Variables
 PROJECT_NAME = rasa_project
+PROJECT_DIRECTORY ?= nepal_chatbot
 
 # Training Server
 TRAIN_SERVER_USER = ubuntu
 REMOTE_HOST_TRAINING = 13.229.238.60
 REMOTE_DIR_TRAINING = /home/ubuntu/$(PROJECT_NAME)
-KEY_NAME_TRAINING = pg_rasa_train.pem
+KEY_NAME_TRAINING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_TRAINING = ssh -i $(KEY_NAME_TRAINING) $(TRAIN_SERVER_USER)@$(REMOTE_HOST_TRAINING)
 
 # Running Server
 RUN_SERVER_USER = ubuntu
-REMOTE_HOST_RUNNING = 13.228.123.45  # Replace with your running server IP
+# Replace with your running server IP
+REMOTE_HOST_RUNNING = 52.76.171.73
 REMOTE_DIR_RUNNING = /home/ubuntu/$(PROJECT_DIRECTORY)
-KEY_NAME_RUNNING = pg_rasa_train.pem
+KEY_NAME_RUNNING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING)
+SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
 
 # Docker Compose Command
 DOCKER_COMPOSE = docker compose
@@ -21,7 +24,7 @@ DOCKER_COMPOSE = docker compose
 # --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
 # Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
 .PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot compose_docker_wsl_ticketing compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
-	migrate_ticketing migrate_public migrate_all
+	migrate_ticketing migrate_public migrate_all reset_public_dev
 
 # DB migrations (two Alembic streams — run from repo root; uses POSTGRES_* from env / env.local)
 migrate_ticketing:
@@ -31,6 +34,32 @@ migrate_public:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 
 migrate_all: migrate_ticketing migrate_public
+
+# Dev-only reset of chatbot public schema (dummy data) followed by both migration streams.
+# This is the canonical recovery path when public core tables are missing.
+reset_public_dev:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python - <<-'PY'
+	import os
+	import psycopg2
+	
+	conn = psycopg2.connect(
+	    host=os.environ["POSTGRES_HOST"],
+	    port=os.environ["POSTGRES_PORT"],
+	    dbname=os.environ["POSTGRES_DB"],
+	    user=os.environ["POSTGRES_USER"],
+	    password=os.environ["POSTGRES_PASSWORD"],
+	)
+	conn.autocommit = True
+	with conn.cursor() as cur:
+	    cur.execute("DROP SCHEMA IF EXISTS public CASCADE;")
+	    cur.execute("CREATE SCHEMA public;")
+	    cur.execute("GRANT ALL ON SCHEMA public TO public;")
+	print("public schema recreated")
+	conn.close()
+	PY
+	$(MAKE) migrate_public
+	$(MAKE) migrate_ticketing
+	$(DOCKER_COMPOSE) up -d --build
 
 compose_docker_wsl:
 	$(DOCKER_COMPOSE) up -d --build
@@ -65,8 +94,18 @@ compose_docker_aws:
 
 # AWS / TLS full stack with ticketing overlay.
 compose_docker_aws_full:
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build
-	$(MAKE) check_grm_ports
+	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
+	$(SSH_RUNNING) 'set -e; \
+		cd $(REMOTE_DIR_RUNNING) && \
+		git fetch origin && \
+		git checkout main && \
+		git pull --ff-only origin main && \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build && \
+		ui_port="$$($(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port grm_ui 3001 2>/dev/null || true)" && \
+		api_port="$$($(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port ticketing_api 5002 2>/dev/null || true)" && \
+		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui is not published on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
+		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api is not published on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+		echo "GRM port check passed: grm_ui=$$ui_port ticketing_api=$$api_port"'
 
 # Validate GRM port mappings are exactly host 3001->3001 and 5002->5002.
 check_grm_ports:

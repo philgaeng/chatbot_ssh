@@ -55,10 +55,20 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
      `python -m alembic -c migrations/public/alembic.ini stamp pub001_seah_reporter_category`  
      (revision id unchanged; migration file is `pub001_seah_intake_public_tables.py`.)
      (Use the revision id from `alembic history` / `heads`.)
+   - **Known brownfield mismatch (task_statuses):** Some older public schemas have `task_statuses.task_status_name` instead of the baseline migration's expected `status_name`. In that case, replaying `pub000_public_core_baseline` can fail during seed inserts. Treat this as a brownfield DB and follow the safe path:
+     1. Confirm `complainants_seah`/`grievances_seah` already exist.
+     2. `python -m alembic -c migrations/public/alembic.ini stamp pub001_seah_reporter_category`
+     3. `python -m alembic -c migrations/public/alembic.ini upgrade head` (applies `pub002_contact_info_and_normalized_location`)
+     4. Verify `SELECT version_num FROM alembic_version_public;` returns `pub002_contact_info_and_normalized_location`.
 
 5. **Integration / multiple worktrees**
    - After pulling a branch, run **both** streams when relevant: `make migrate_all`, or ticketing + public commands separately.
    - Use **isolated DB volumes per worktree** where possible (see `CLAUDE.md`) to avoid revision collisions.
+
+6. **Migration seed prerequisites must live in the same revision**
+   - If a migration inserts rows that reference FK parents (for example, linking projects to organizations), the migration must also ensure the required parent rows exist first.
+   - Use idempotent upserts (`INSERT ... ON CONFLICT DO NOTHING/UPDATE`) inside that revision so `upgrade head` works on fresh databases without manual pre-seeding.
+   - Do not rely on external/manual SQL steps for required reference rows.
 
 ---
 
@@ -70,4 +80,13 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
 - Public migration files include the standard header: only `public.*`, never `ticketing.*`.
 - No new schema-changing script added under `scripts/database/` for ticketing.
 - If the PR changes **`public.*`** schema: include a new revision under `migrations/public/versions/` (or document why not, e.g. bootstrap-only with follow-up migration).
+- Migrations that seed FK-linked rows are self-contained and idempotent (no manual pre-seed dependency).
 - Upgrade path validated on both host DB and Docker DB targets where applicable.
+
+## May5 SEAH contact/location rollout (public stream)
+
+- Apply order:
+  1. `python -m alembic -c ticketing/migrations/alembic.ini upgrade head`
+  2. `python -m alembic -c migrations/public/alembic.ini upgrade head`
+- New public revision for this rollout: `pub002_contact_info_and_normalized_location`.
+- Rollback (public only): `python -m alembic -c migrations/public/alembic.ini downgrade pub001_seah_reporter_category`.
