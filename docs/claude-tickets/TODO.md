@@ -92,26 +92,57 @@ UI to talk to the API from the browser.
 
 ## 🟡 POST-DEMO FEATURES (prioritised)
 
-### 4. LLM: Note translation + English summary for supervisor/viewer roles
-**Rationale:** Field officers in Nepal submit notes in Nepali (or mixed). Supervisors
-(ADB roles, GRC chair, senior observers) need to read case notes without a translator.  
-**Scope:**
-- On `NOTE_ADDED` event: trigger async Celery task → call LLM to produce English
-  translation. Store result in `TicketEvent.payload["translation_en"]`.
-- On ticket detail load for viewer/supervisor roles: if `translation_en` exists, show
-  it alongside (or instead of) the original note with a "translated" chip.
-- Aggregate summary: for `grc_chair`, `adb_hq_safeguards`, `adb_hq_exec` roles,
-  show a "Case summary" panel on the ticket detail — one LLM call over all notes
-  + events for that ticket, cached in `ticketing.tickets.ai_summary_en`. Refresh
-  button to regenerate.
-**Implementation notes:**
-- Use the existing `backend.task_queue.celery_app` LLM queue (DO NOT reimplement).
-  Wire via a new Celery task in `ticketing/tasks/llm.py`.
-- Language detection: use `langdetect` or pass raw note to LLM with prompt
-  "Translate to English if not already in English, else return as-is."
-- Store raw note unchanged — translation is additive, never replaces.
+### 7. LLM: Multilingual notes + "Findings" summary ⭐ BIG FEATURE
+**Rationale:** Field officers (L1/L2, DOR) write notes in Nepali or mixed Nepali-English.
+Supervisors and observers (GRC chair, ADB roles) read only English. Without translation
+the case timeline is opaque to half the audience. The "Findings" panel gives supervisors
+a one-glance digest of a case without reading every raw note.
 
-### 5. User language preference (per organisation)
+#### 7a — Per-note translation
+- When a `NOTE_ADDED` event is created, fire a Celery task `translate_note.delay(event_id)`.
+- Task calls LLM: *"Translate the following to English. If already in English, return as-is.
+  Preserve technical/legal terms. Output only the translated text."*
+- Store result in `TicketEvent.payload["translation_en"]`.
+- In the ticket detail timeline, if `translation_en` exists show it below the original
+  with a small `🌐 Translated` chip. Original is always preserved and visible.
+- Non-English users see only the original (toggle if needed post-demo).
+
+#### 7b — "Findings" summary panel
+- A dedicated **Findings** card on the ticket detail (right column, below complainant card).
+- Content: one LLM call over all `NOTE_ADDED` events + key status events (ESCALATED,
+  GRC_CONVENED, GRC_DECIDED, RESOLVED) for the ticket.
+- Prompt: *"You are a grievance officer. Summarise the following case notes into a brief
+  Findings report: key facts, actions taken, outstanding issues, and recommended next step.
+  Write in formal English. Max 150 words."*
+- Cached in `ticketing.tickets.ai_summary_en` (new column, Alembic migration needed).
+- Regenerate button visible to admin/supervisor roles — fires `generate_findings.delay(ticket_id)`.
+- Shown to: `grc_chair`, `adb_hq_safeguards`, `adb_hq_exec`, `adb_national_project_director`,
+  `super_admin`. Hidden from L1/L2 field officers (they write the notes, don't need the digest).
+
+#### Implementation plan
+- **Backend:** New file `ticketing/tasks/llm.py` with two Celery tasks:
+  `translate_note(event_id)` and `generate_findings(ticket_id)`.
+- **LLM client:** Use the existing `backend.task_queue.celery_app` LLM queue
+  (DO NOT reimplement). Wire via a new `ticketing/clients/llm_client.py` that calls
+  the same LLM endpoint the chatbot uses.
+- **DB migration:** Add `ai_summary_en TEXT` + `ai_summary_updated_at TIMESTAMPTZ`
+  to `ticketing.tickets`. Add `translation_en TEXT` to `ticketing.ticket_events.payload`
+  (no migration needed — payload is already JSONB).
+- **API:** Add `POST /api/v1/tickets/{id}/findings` (trigger regenerate, admin only).
+  `GET /api/v1/tickets/{id}` already returns `ai_summary_en` if the field is added to
+  the `TicketDetail` schema.
+- **Frontend:** Add `FindingsCard` component in ticket detail right column.
+  Show translated note inline in `EventTimeline` when `translation_en` is present.
+
+#### 7c — Hook: fire translation automatically on NOTE_ADDED
+- In `tickets.py` `perform_action()`, after commit for `NOTE` action:
+  `translate_note.delay(event.event_id)`
+- This is the same pattern as `notify_complainant.delay()` already wired for RESOLVE/ESCALATE.
+
+**Dependencies:** Requires LLM client endpoint URL in settings. Check what endpoint
+the chatbot uses — reuse, don't create a new one.
+
+### 8. User language preference (per organisation)  *(depends on #7)*
 **Rationale:** Required to correctly present translated content and future
 UI localisation. Officers from DOR likely prefer Nepali; ADB officers prefer English.  
 **Scope:**
@@ -125,7 +156,7 @@ UI localisation. Officers from DOR likely prefer Nepali; ADB officers prefer Eng
 **Alembic:** One migration — add column to `ticketing.organizations` + new
   `ticketing.user_preferences` table.
 
-### 6. Mobile-first ticket management UI (officer field app)
+### 9. Mobile-first ticket management UI (officer field app)
 **Rationale:** Field officers (L1 site focal persons, contractor officers) work primarily
 on phones. The full Next.js settings-heavy UI is not suitable for mobile field use.  
 **Scope — what's IN:**
@@ -151,7 +182,7 @@ on phones. The full Next.js settings-heavy UI is not suitable for mobile field u
 **Recommendation:** Start with Option A (PWA) — add `mobile:` Tailwind breakpoint
 overrides to the existing ticketing-ui, hide desktop-only nav items, add a
 `manifest.json` for PWA install. Revisit native if offline or camera is needed.
-**Dependencies:** Week 2 desktop UI is complete — this is now unblocked.
+**Dependencies:** Week 2 desktop UI complete ✅. Consider adding note translation (#7a) to the mobile UI once that feature lands.
 
 ---
 
