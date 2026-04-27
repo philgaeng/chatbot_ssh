@@ -32,8 +32,6 @@ Never put `public.*` DDL in ticketing migrations, or `ticketing.*` in public mig
 | `02_public_contact_info_and_party_links.md` | `contact_info`, links from `complainants`, `complainants_seah`, `users`, `resource_persons`; risk posture; FK to `country_code` / optional `location_code`.               |
 | `03_submission_mapping_and_fallback.md`     | Submit-time contract for `action_submit_grievance.py` / `action_submit_seah`: map codes first, always persist level free text, never block submission on missing mapping. |
 | `04_action_ask_commons_flow_profiles.md`    | Flow-aware ask prompt profiles for `grievance` / `seah-victim` / `seah-other` / `seah-focal` with explicit open questions.                                                |
-| `05_vault_and_summary_operating_model.md`   | Vault-first storage model for original grievance content + metadata events + validated summary pipeline for officer-facing workflows.                                        |
-| `06_vault_reveal_audit_and_ui_controls.md`  | Controlled reveal contract (reason codes, TTL tokens), immutable audit schema, UI containment controls, and SEAH-specific hardening rules.                                 |
 | `agents_instructions.md`                    | Agent split (roles, boundaries, handoffs) and mandatory docs/checklists per agent for execution.                                                                          |
 
 ## Execution note

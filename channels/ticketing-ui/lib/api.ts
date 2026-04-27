@@ -310,11 +310,12 @@ export function removeAssignment(workflowId: string, assignmentId: string): Prom
   return apiFetch(`/api/v1/workflows/${workflowId}/assignments/${assignmentId}`, { method: "DELETE" });
 }
 
-// ── Grievance PII (fetched from backend API, NOT ticketing API) ───────────────
-// PII is never stored in ticketing.* — always fetched fresh from backend.
+// ── Complainant PII (brokered through ticketing API — browser never calls backend directly) ──
+// Per PRIVACY.md: all sensitive reads go through the ticketing API (internal Docker network).
+// The old NEXT_PUBLIC_BACKEND_API_URL direct call is replaced by GET /tickets/{id}/pii.
 
 export interface GrievancePii {
-  grievance_id: string;
+  grievance_id?: string;
   complainant_name?: string;
   phone_number?: string;
   email?: string;
@@ -322,12 +323,9 @@ export interface GrievancePii {
   [key: string]: unknown;
 }
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_API_URL ?? "http://localhost:5001";
-
-export async function getGrievancePii(grievanceId: string): Promise<GrievancePii> {
-  const resp = await fetch(`${BACKEND_BASE}/api/grievance/${grievanceId}`);
-  if (!resp.ok) throw new Error(`Grievance API ${resp.status}`);
-  return resp.json();
+/** Fetch complainant name + contact via the ticketing API broker (not direct backend call). */
+export function getGrievancePii(ticketId: string): Promise<GrievancePii> {
+  return apiFetch<GrievancePii>(`/api/v1/tickets/${ticketId}/pii`);
 }
 
 // ── Officers (for assign dropdown) ───────────────────────────────────────────
@@ -788,6 +786,66 @@ export function getTeammates(ticketId: string): Promise<TeammatesResponse> {
 /** Trigger (re)generation of the AI case-findings summary. Returns 202 immediately. */
 export function generateFindings(ticketId: string): Promise<{ ticket_id: string; status: string; message: string }> {
   return apiFetch(`/api/v1/tickets/${ticketId}/findings`, { method: "POST" });
+}
+
+// ── Vault reveal ──────────────────────────────────────────────────────────────
+
+export const REVEAL_REASON_CODES = [
+  { code: "immediate_safeguarding_action", label: "Immediate safeguarding action required" },
+  { code: "investigation_required",        label: "Active investigation in progress" },
+  { code: "legal_referral",                label: "Preparing legal referral or police report" },
+  { code: "grc_hearing_preparation",       label: "Preparing for GRC hearing" },
+  { code: "audit_verification",            label: "Audit or compliance verification" },
+  { code: "supervisory_oversight",         label: "Supervisory review of case handling" },
+  { code: "other",                         label: "Other (please explain below)" },
+] as const;
+
+export type RevealReasonCode = (typeof REVEAL_REASON_CODES)[number]["code"];
+
+export interface RevealRequest {
+  reason_code: RevealReasonCode | string;
+  reason_text?: string;
+}
+
+/** Shape returned by POST /api/v1/tickets/{id}/reveal (proto + production). */
+export interface RevealSession {
+  granted: boolean;
+  reveal_session_id?: string;
+  /** ISO-8601 UTC — when this session token expires */
+  expires_at_utc?: string;
+  ttl_seconds?: number;
+  /** Proto only: full grievance detail dict from GET /api/grievance/{id} */
+  content?: {
+    grievance_description?: string;
+    complainant_name?: string;
+    phone_number?: string;
+    email?: string;
+    address?: string;
+    [key: string]: unknown;
+  };
+  watermark_text?: string;
+  deny_code?: string;
+  _proto_mode?: boolean;
+}
+
+/** Begin a vault reveal session — returns session with content for proto. */
+export function revealOriginal(ticketId: string, payload: RevealRequest): Promise<RevealSession> {
+  return apiFetch<RevealSession>(`/api/v1/tickets/${ticketId}/reveal`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Close a reveal session (sends audit close event). */
+export function closeReveal(
+  ticketId: string,
+  sessionId: string,
+  closeReason = "user_closed",
+): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/v1/tickets/${ticketId}/reveal/close`, {
+    method: "POST",
+    body: JSON.stringify({ reveal_session_id: sessionId, close_reason: closeReason }),
+  });
 }
 
 // ── Language preferences ──────────────────────────────────────────────────────
