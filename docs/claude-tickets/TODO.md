@@ -2,7 +2,20 @@
 
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
-> Last reviewed: 2026-04-26
+> Last reviewed: 2026-04-27
+
+---
+
+## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
+
+All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):
+- AppShell (sidebar, nav, badge count, SEAH indicator, Cognito + bypass auth)
+- Queue page (tabs, summary tiles, ticket rows, SLA countdown, SEAH red border/badge)
+- All Tickets page (list + search), Escalated page (focused list)
+- Ticket detail (grievance card, workflow stepper, SLA bar, event timeline, complainant PII + phone reveal)
+- File attachments (complainant read + officer upload), assign + reassign-to-teammate panels
+- Action panel (ACKNOWLEDGE / ESCALATE / RESOLVE / CLOSE / NOTE / GRC_CONVENE / GRC_DECIDE / REPLY)
+- Settings page (full admin panel), Badge + SlaCountdown components
 
 ---
 
@@ -47,6 +60,33 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
   `grievance_summary`, `session_id`.
 **Dependency:** User is currently rewriting `public.*` tables via Alembic migration.
   Do not test until that migration lands and DB is re-seeded.
+
+### 4. Wire OfficerScope seed rows so auto-assign works for live API tickets
+**File:** `ticketing/seed/mock_tickets.py`  
+**Problem:** Seed creates `UserRole` rows but no `OfficerScope` rows. `auto_assign_officer()`
+returns `None` for any ticket created via the live API (or chatbot webhook) — they arrive
+unassigned. Pre-seeded demo tickets have hardcoded `assigned_to` so demo is safe, but
+the chatbot → ticketing integration path will produce unassigned tickets.  
+**Fix:** Add `OfficerScope` rows for each mock officer in `mock_tickets.py`, matching
+their role, org, location, and project. Mirror the pattern in `kl_road_standard.py`.
+
+### 5. Visual test + polish pass
+**What to do:** Open `http://localhost:3001`, click through every screen, verify:
+- All 6 demo tickets show in queue with correct status/priority/SLA colours
+- Ticket detail for each demo ticket loads correctly
+- ACKNOWLEDGE → ESCALATE → RESOLVE flow works end-to-end
+- GRC CONVENE → DECIDE flow works (use GRV-2025-001)
+- SEAH ticket (GRV-2025-SEAH-001) shows 🔒 badge and red border
+- Reports page — currently a stub, decide if a placeholder is enough for demo
+
+### 6. Staging deploy to grm.stage.facets-ai.com
+**What:** Docker deploy to staging EC2, Nginx config, SSL.  
+**How:** Same EC2 as chatbot, add a new Nginx `location` block for port 3001 (UI)
+and 5002 (API). Run `docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d`
+on the EC2 after pulling the branch.  
+**NEXT_PUBLIC_API_URL** must be set to the public staging URL (not localhost) for the
+UI to talk to the API from the browser.  
+**Dependency:** Visual test (above) should pass first.
 
 ---
 
@@ -111,7 +151,7 @@ on phones. The full Next.js settings-heavy UI is not suitable for mobile field u
 **Recommendation:** Start with Option A (PWA) — add `mobile:` Tailwind breakpoint
 overrides to the existing ticketing-ui, hide desktop-only nav items, add a
 `manifest.json` for PWA install. Revisit native if offline or camera is needed.
-**Dependencies:** Requires Week 2 desktop UI to be complete first.
+**Dependencies:** Week 2 desktop UI is complete — this is now unblocked.
 
 ---
 
