@@ -103,6 +103,9 @@ def run_migrations_online() -> None:
                 """
             )
         )
+        # SQLAlchemy 2.x keeps implicit transactions open on raw Connection usage.
+        # Commit bootstrap DDL so alembic_version_public persists before migrations run.
+        connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
