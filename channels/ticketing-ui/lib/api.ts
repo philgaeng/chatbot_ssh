@@ -876,3 +876,48 @@ export function patchUserPreferences(preferred_language: "en" | "ne" | null): Pr
     body: JSON.stringify({ preferred_language }),
   });
 }
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+export interface TicketTask {
+  task_id: string;
+  ticket_id: string;
+  task_type: string;
+  assigned_to_user_id: string;
+  assigned_by_user_id: string;
+  description: string | null;
+  due_date: string | null;
+  status: "PENDING" | "DONE" | "DISMISSED";
+  completed_at: string | null;
+  completed_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface TaskCreateRequest {
+  task_type: string;
+  assigned_to_user_id: string;
+  description?: string;
+  due_date?: string;
+}
+
+export function listTicketTasks(ticketId: string): Promise<TicketTask[]> {
+  return apiFetch<TicketTask[]>(`/api/v1/tickets/${ticketId}/tasks`);
+}
+
+export function createTask(ticketId: string, body: TaskCreateRequest): Promise<TicketTask> {
+  return apiFetch<TicketTask>(`/api/v1/tickets/${ticketId}/tasks`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function completeTask(ticketId: string, taskId: string): Promise<TicketTask> {
+  return apiFetch<TicketTask>(`/api/v1/tickets/${ticketId}/tasks/${taskId}/complete`, {
+    method: "POST",
+  });
+}
+
+export function listMyTasks(): Promise<TicketTask[]> {
+  return apiFetch<TicketTask[]>("/api/v1/users/me/tasks");
+}
+
