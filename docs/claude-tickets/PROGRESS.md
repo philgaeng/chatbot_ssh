@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `d4e2f1a` — 2026-04-27
+> Last updated: `edfa942` — 2026-04-27
 
 ---
 
@@ -14,6 +14,7 @@
 - ✅ **Settings UI** — full admin panel: workflows, users (scopes), organisations, locations, projects, packages
 - ✅ **Demo DB seeded** — 6 tickets across both demo scenarios, all 12 roles, 2 workflows
 - ✅ **Escalation gaps closed** — auto-assign on escalation + automatic complainant notification on RESOLVE/ESCALATE
+- ✅ **LLM translation + findings** — per-note translation to English (gpt-4, Celery); AI case-findings card (role-gated); `POST /tickets/{id}/findings` endpoint; Alembic migration `c1d5f8a2e047`
 
 ### In progress / next
 - 🔲 **Week 2 frontend** — Cursor starts Apr 28: officer queue, ticket detail, action panel, SLA countdown
@@ -102,6 +103,7 @@ Replace with Cognito JWT for production.
 
 | Hash | Date | What changed |
 |------|------|-------------|
+| `edfa942` | 2026-04-27 | **feat(llm)** Note translation + case findings summary. `llm_client.py`, `tasks/llm.py`, migration `c1d5f8a2e047`, `FindingsCard` frontend component, translation chip in timeline |
 | `d4e2f1a` | 2026-04-27 | **fix(escalation)** Auto-assign officer on `escalate_ticket()`; automatic complainant notification on RESOLVE/ESCALATE via `notify_complainant.delay()` |
 | `c171ac4` | 2026-04-26 | **fix(seed)** Location codes → real Nepal codes (`NP_P1`/`NP_D004`/`NP_D006`/`NP_D011`); `project_code` backfill in `add_user_scope`; fix t_dust status `ESCALATED→IN_PROGRESS` |
 | `c724f5b` | 2026-04-26 | **feat** `package_id` + `includes_children` wired in `OfficerScope` API + frontend; `_scope_candidates` branch C for package routing via `PackageLocation` |

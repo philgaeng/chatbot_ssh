@@ -92,7 +92,7 @@ UI to talk to the API from the browser.
 
 ## 🟡 POST-DEMO FEATURES (prioritised)
 
-### 7. LLM: Multilingual notes + "Findings" summary ⭐ BIG FEATURE
+### ~~7. LLM: Multilingual notes + "Findings" summary~~ ✅ DONE (`edfa942`) ⭐ BIG FEATURE
 **Rationale:** Field officers (L1/L2, DOR) write notes in Nepali or mixed Nepali-English.
 Supervisors and observers (GRC chair, ADB roles) read only English. Without translation
 the case timeline is opaque to half the audience. The "Findings" panel gives supervisors
