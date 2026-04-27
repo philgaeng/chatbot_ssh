@@ -8,7 +8,7 @@
 
 ## 🔴 WEEK 3 — Must fix before demo (May 10)
 
-### 1. Auto-assign officer on escalation
+### ~~1. Auto-assign officer on escalation~~ ✅ DONE (`d4e2f1a`)
 **File:** `ticketing/engine/escalation.py` — `escalate_ticket()`  
 **Problem:** After escalation, `assigned_to_user_id` stays as the previous officer.
 The next-level officer is never assigned automatically — ticket sits in limbo until a
@@ -21,7 +21,7 @@ so the notification goes to the new officer, not the old one.
 **Demo impact:** Pre-seeded tickets have hardcoded `assigned_to` so demo is safe.
 New tickets created via live API or chatbot webhook will have no assigned officer.
 
-### 2. Automatic complainant notification on RESOLVE / ESCALATE
+### ~~2. Automatic complainant notification on RESOLVE / ESCALATE~~ ✅ DONE (`d4e2f1a`)
 **File:** `ticketing/api/routers/tickets.py` — `perform_action()`  
 **Problem:** Action handler commits and returns — no notification fires automatically.
 Demo scenario 1 ends with "complainant notified via chatbot" but that requires the

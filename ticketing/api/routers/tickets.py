@@ -46,6 +46,7 @@ from ticketing.api.schemas.ticket import (
 )
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
+from ticketing.tasks.notifications import notify_complainant
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -515,6 +516,7 @@ def perform_action(
     old_status = ticket.status_code
     event_step_id = ticket.current_step_id
     event = None
+    _notify_complainant_text: Optional[str] = None  # set below to trigger async notification
 
     if action == "ACKNOWLEDGE":
         ticket.status_code = "IN_PROGRESS"
@@ -543,6 +545,10 @@ def perform_action(
                 detail="No next step available — ticket is already at the final escalation level",
             )
         event = result
+        _notify_complainant_text = (
+            "Your grievance is being reviewed at the next level. "
+            "We will continue to keep you updated."
+        )
 
     elif action == "RESOLVE":
         ticket.status_code = "RESOLVED"
@@ -554,6 +560,10 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+        )
+        _notify_complainant_text = (
+            "Your grievance has been resolved. "
+            "Thank you for bringing this to our attention."
         )
 
     elif action == "CLOSE":
@@ -603,6 +613,14 @@ def perform_action(
 
     db.commit()
     db.refresh(ticket)
+
+    # Fire async complainant notification after commit so the task sees the updated ticket
+    if _notify_complainant_text:
+        notify_complainant.delay(
+            ticket.ticket_id,
+            _notify_complainant_text,
+            action,  # event_type label in the notification log
+        )
 
     return TicketActionResponse(
         ticket_id=ticket.ticket_id,
