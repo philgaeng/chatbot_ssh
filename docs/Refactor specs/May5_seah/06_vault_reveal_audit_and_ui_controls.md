@@ -6,6 +6,8 @@ Define the exact behavior for controlled access to original grievance content in
 
 This applies to both standard and SEAH grievances, with stricter controls for SEAH.
 
+This document splits reveal implementation across public/chatbot and ticketing worktrees.
+
 ## Policy baseline (LOCKED)
 
 - Officer default view is summary-first.
@@ -13,20 +15,31 @@ This applies to both standard and SEAH grievances, with stricter controls for SE
 - Reveal is never permanent and never default-open.
 - Every reveal action is audited end-to-end.
 
+Ownership:
+
+- public/chatbot side is authoritative for reveal authorization and vault content serving
+- ticketing side is authoritative for officer UX and workflow context
+
 ## Reveal workflow
 
 1. Officer clicks `Reveal original`.
 2. UI collects required reason code and policy acknowledgement.
-3. Backend evaluates policy:
+3. Ticketing API forwards reveal request to public/chatbot grievance API.
+4. Public/chatbot backend evaluates policy:
    - role
    - org/location/project scope
    - case sensitivity
    - rate limit and cooldown
-4. If granted, backend returns short-lived reveal session token.
-5. UI opens read-only reveal mode until token expiry.
-6. UI sends explicit close event or backend expires session.
+5. If granted, public/chatbot backend returns short-lived reveal session token.
+6. Ticketing UI opens read-only reveal mode until token expiry.
+7. UI sends explicit close event or backend expires session.
 
 ## API contract (proposed)
+
+Ownership note:
+
+- Endpoints below are owned by public/chatbot grievance API.
+- Ticketing may expose pass-through endpoints for UI convenience, but cannot replace policy decisions.
 
 ### POST `/api/grievance/{grievance_id}/reveal`
 
@@ -103,6 +116,12 @@ Every reveal attempt writes immutable events with this structure:
 - `reveal_session_id` (nullable for denied requests)
 - `duration_seconds` (for close/expiry events)
 
+Audit ownership split:
+
+- Public/chatbot audit (authoritative): `reveal_requested`, `reveal_granted`, `reveal_denied`, `reveal_closed`, `reveal_expired`.
+- Ticketing audit (operational): UI attempts, button clicks, and correlation metadata.
+- Correlate with `grievance_id`, `reveal_session_id`, and `request_id`.
+
 ## UI containment requirements
 
 During reveal mode:
@@ -135,12 +154,13 @@ For `case_sensitivity = seah`:
 
 ## Implementation checklist
 
-- [ ] Add reveal endpoints with reason code validation.
-- [ ] Add policy engine check for scope + sensitivity + quota.
-- [ ] Add signed short-lived content token issuance.
-- [ ] Add immutable audit events for full reveal lifecycle.
-- [ ] Add UI reveal mode with copy/selection deterrence and watermark.
-- [ ] Add alert rules and dashboards for SEAH reveal anomalies.
+- [ ] Public/chatbot worktree: add authoritative reveal endpoints with reason code validation.
+- [ ] Public/chatbot worktree: add policy engine check for scope + sensitivity + quota.
+- [ ] Public/chatbot worktree: add signed short-lived content token issuance.
+- [ ] Public/chatbot worktree: add immutable sensitive-access audit events.
+- [ ] Ticketing worktree: add UI reveal mode with copy/selection deterrence and watermark.
+- [ ] Ticketing worktree: pass correlation IDs and close events to public endpoints.
+- [ ] Ticketing + public: add alert rules and dashboards for SEAH reveal anomalies.
 
 ## Test checklist
 
