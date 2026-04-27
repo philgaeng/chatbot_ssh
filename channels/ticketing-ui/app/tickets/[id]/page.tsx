@@ -62,7 +62,18 @@ const EVENT_ICON: Record<string, string> = {
   COMPLAINANT_NOTIFIED: "📱", SLA_BREACH_FINAL_STEP: "⚠️",
 };
 
-function EventTimeline({ events }: { events: TicketDetail["events"] }) {
+function EventTimeline({
+  events,
+  showTranslations,
+  onTogglePanel,
+  panelOpen,
+}: {
+  events: TicketDetail["events"];
+  /** True for English-first users — show inline translation chips */
+  showTranslations: boolean;
+  onTogglePanel: () => void;
+  panelOpen: boolean;
+}) {
   return (
     <div className="space-y-3">
       {[...events].reverse().map((e) => {
@@ -92,8 +103,8 @@ function EventTimeline({ events }: { events: TicketDetail["events"] }) {
                   {e.note}
                 </div>
               )}
-              {/* Translation chip — shown when note was translated to English (7a) */}
-              {e.event_type === "NOTE_ADDED" && translationEn && translationEn !== e.note && (
+              {/* Inline translation chip — only shown for English-first users (showTranslations=true) */}
+              {showTranslations && e.event_type === "NOTE_ADDED" && translationEn && translationEn !== e.note && (
                 <div className="mt-1.5 bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
                   <span className="text-xs text-blue-500 font-medium mr-1.5">🌐 Translated</span>
                   <span className="text-sm text-blue-800 italic">{translationEn}</span>
@@ -106,6 +117,93 @@ function EventTimeline({ events }: { events: TicketDetail["events"] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Translation review panel (collapsible right column) ───────────────────────
+// Inspired by Arc sidebar / Cursor Explorer panel — toggled by a button in the
+// timeline card header, persisted via localStorage. Shows original + translation
+// side-by-side for bilingual officers to verify AI accuracy.
+
+function TranslationPanel({
+  events,
+  onClose,
+}: {
+  events: TicketDetail["events"];
+  onClose: () => void;
+}) {
+  const notes = [...events]
+    .filter((e) => e.event_type === "NOTE_ADDED" && e.note)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  return (
+    <div
+      className="w-80 shrink-0 flex flex-col border-l border-gray-200 bg-gray-50 overflow-y-auto"
+      style={{ minHeight: 0 }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
+        <span className="text-sm font-semibold text-blue-700">🌐 Translation Review</span>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+          title="Close panel (T)"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Notes */}
+      <div className="flex-1 p-3 space-y-4">
+        {notes.length === 0 ? (
+          <p className="text-xs text-gray-400 italic p-2">No notes in this case yet.</p>
+        ) : (
+          notes.map((e) => {
+            const payload = e.payload as Record<string, unknown> | null;
+            const translationEn = payload?.translation_en as string | undefined;
+            const isSameAsOriginal = translationEn === e.note;
+            const isPending = !translationEn;
+
+            return (
+              <div key={e.event_id} className="space-y-1.5">
+                {/* Meta */}
+                <div className="text-xs text-gray-400">
+                  {new Date(e.created_at).toLocaleDateString()} · {e.created_by_user_id ?? "—"}
+                </div>
+
+                {/* Original */}
+                <div className="rounded border border-gray-200 bg-white p-2">
+                  <div className="text-xs font-medium text-gray-400 mb-1">Original</div>
+                  <div className="text-sm text-gray-700 italic">{e.note}</div>
+                </div>
+
+                {/* Translation */}
+                <div className={`rounded border p-2 ${isPending ? "border-amber-200 bg-amber-50" : isSameAsOriginal ? "border-gray-200 bg-white" : "border-blue-100 bg-blue-50"}`}>
+                  <div className="text-xs font-medium text-gray-400 mb-1">English</div>
+                  {isPending ? (
+                    <div className="text-xs text-amber-600">⟳ Translation pending</div>
+                  ) : isSameAsOriginal ? (
+                    <div className="text-xs text-gray-500">= Same (already English)</div>
+                  ) : (
+                    <div className="text-sm text-blue-800">{translationEn}</div>
+                  )}
+                </div>
+
+                {/* Status chip */}
+                {!isPending && !isSameAsOriginal && (
+                  <div className="text-xs text-blue-500">✓ Translated by AI</div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Footer note */}
+      <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-400">
+        Translations are AI-generated. Bilingual officers may verify accuracy above.
+      </div>
     </div>
   );
 }
@@ -726,11 +824,41 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, roleKeys, canSeeSeah, isAdmin } = useAuth();
+  const { user, roleKeys, canSeeSeah, isAdmin, effectiveLang } = useAuth();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [sla, setSla] = useState<SlaStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Translation panel state — persisted to localStorage
+  const PANEL_KEY = "grm_translation_panel_open";
+  const [panelOpen, setPanelOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(PANEL_KEY) === "true";
+  });
+  function togglePanel() {
+    setPanelOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem(PANEL_KEY, String(next));
+      return next;
+    });
+  }
+
+  // Keyboard shortcut: T toggles translation panel (when not typing in an input)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "t" || e.key === "T") togglePanel();
+      if (e.key === "Escape" && panelOpen) setPanelOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Inline translation chips shown to English-first users; hidden for Nepali-first
+  // (null = still loading, default to showing to avoid flicker for English users)
+  const showTranslations = effectiveLang !== "ne";
 
   async function load() {
     try {
@@ -800,7 +928,11 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Outer wrapper: main grid + translation panel side by side */}
+      <div className="flex gap-0 items-start">
+
+      {/* ── Main grid (shrinks when panel is open) ── */}
+      <div className={`flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-3 gap-5 transition-all duration-200`}>
 
         {/* ── Left: case info ── */}
         <div className="lg:col-span-2 space-y-4">
@@ -850,8 +982,26 @@ export default function TicketDetailPage() {
 
           {/* Event timeline */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Case Timeline</h2>
-            <EventTimeline events={ticket.events} />
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Case Timeline</h2>
+              <button
+                onClick={togglePanel}
+                title={panelOpen ? "Close translation panel (T)" : "Open translation review panel (T)"}
+                className={`text-xs px-2 py-1 rounded border transition ${
+                  panelOpen
+                    ? "bg-blue-100 border-blue-300 text-blue-700"
+                    : "bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600"
+                }`}
+              >
+                🌐 {panelOpen ? "Hide translations" : "Review translations"}
+              </button>
+            </div>
+            <EventTimeline
+              events={ticket.events}
+              showTranslations={showTranslations}
+              onTogglePanel={togglePanel}
+              panelOpen={panelOpen}
+            />
           </div>
         </div>
 
@@ -884,7 +1034,22 @@ export default function TicketDetailPage() {
             <ActionPanel ticket={ticket} roleKeys={roleKeys} onRefresh={load} ensureAcknowledged={ensureAcknowledged} isAssigned={isAssigned} />
           </div>
         </div>
-      </div>
+      </div>{/* end main grid */}
+
+      {/* ── Translation panel (rightmost collapsible column) ── */}
+      {panelOpen && ticket && (
+        <div className="sticky top-6 self-start ml-4 hidden xl:block">
+          <TranslationPanel events={ticket.events} onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }} />
+        </div>
+      )}
+      {/* Mobile: translation panel as a fixed drawer on smaller screens */}
+      {panelOpen && ticket && (
+        <div className="xl:hidden fixed inset-y-0 right-0 z-40 w-80 shadow-2xl flex flex-col">
+          <TranslationPanel events={ticket.events} onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }} />
+        </div>
+      )}
+
+      </div>{/* end outer flex */}
     </div>
   );
 }

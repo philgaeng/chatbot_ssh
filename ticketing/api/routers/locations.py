@@ -135,6 +135,7 @@ class OrganizationResponse(BaseModel):
     name: str
     country_code: str | None
     is_active: bool
+    default_language: str = "ne"
     created_at: datetime
     updated_at: datetime
 
@@ -147,12 +148,14 @@ class OrganizationCreate(BaseModel):
     name: str
     country_code: str | None = None
     is_active: bool = True
+    default_language: str = "ne"
 
 
 class OrganizationUpdate(BaseModel):
     name: str | None = None
     country_code: str | None = None
     is_active: bool | None = None
+    default_language: str | None = None
 
 
 @router.get("/organizations", response_model=list[OrganizationResponse])
@@ -183,6 +186,7 @@ def create_organization(body: OrganizationCreate, db: Session = Depends(get_db))
         name=body.name.strip(),
         country_code=body.country_code or None,
         is_active=body.is_active,
+        default_language=body.default_language,
     )
     db.add(org)
     db.commit()
@@ -208,6 +212,8 @@ def update_organization(
         org.country_code = body.country_code or None
     if body.is_active is not None:
         org.is_active = body.is_active
+    if body.default_language is not None:
+        org.default_language = body.default_language
     org.updated_at = _now()
     db.commit()
     db.refresh(org)

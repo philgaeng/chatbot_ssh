@@ -88,6 +88,10 @@ class UserRole(Base):
     )
     organization_id: Mapped[str] = mapped_column(String(64), nullable=False)
     location_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Per-officer language override. NULL = use organisation default.
+    # 'en' = English-first (show translation chips inline),
+    # 'ne' = Nepali-first (hide inline chips; use translation panel for review).
+    preferred_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
