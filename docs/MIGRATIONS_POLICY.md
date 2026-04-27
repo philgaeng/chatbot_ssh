@@ -55,6 +55,11 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
      `python -m alembic -c migrations/public/alembic.ini stamp pub001_seah_reporter_category`  
      (revision id unchanged; migration file is `pub001_seah_intake_public_tables.py`.)
      (Use the revision id from `alembic history` / `heads`.)
+   - **Known brownfield mismatch (task_statuses):** Some older public schemas have `task_statuses.task_status_name` instead of the baseline migration's expected `status_name`. In that case, replaying `pub000_public_core_baseline` can fail during seed inserts. Treat this as a brownfield DB and follow the safe path:
+     1. Confirm `complainants_seah`/`grievances_seah` already exist.
+     2. `python -m alembic -c migrations/public/alembic.ini stamp pub001_seah_reporter_category`
+     3. `python -m alembic -c migrations/public/alembic.ini upgrade head` (applies `pub002_contact_info_and_normalized_location`)
+     4. Verify `SELECT version_num FROM alembic_version_public;` returns `pub002_contact_info_and_normalized_location`.
 
 5. **Integration / multiple worktrees**
    - After pulling a branch, run **both** streams when relevant: `make migrate_all`, or ticketing + public commands separately.
