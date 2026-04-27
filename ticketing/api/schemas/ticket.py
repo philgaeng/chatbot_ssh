@@ -61,6 +61,10 @@ class TicketEventOut(BaseModel):
     seen: bool
     created_at: datetime
     created_by_user_id: Optional[str]
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None
+    case_sensitivity: str = "standard"
+    summary_regen_required: bool = False
 
     class Config:
         from_attributes = True
@@ -106,6 +110,16 @@ class TicketListResponse(BaseModel):
     page_size: int
 
 
+class TicketViewerOut(BaseModel):
+    viewer_id: str
+    user_id: str
+    added_by_user_id: str
+    added_at: str  # ISO string injected by endpoint
+
+    class Config:
+        from_attributes = True
+
+
 class TicketDetail(BaseModel):
     ticket_id: str
     grievance_id: str
@@ -133,6 +147,7 @@ class TicketDetail(BaseModel):
     updated_by_user_id: Optional[str]
     current_step: Optional[WorkflowStepBrief]
     events: list[TicketEventOut] = []
+    viewers: list[TicketViewerOut] = []
     # LLM-generated findings (visible to grc_chair, adb_*, super_admin only)
     ai_summary_en: Optional[str] = None
     ai_summary_updated_at: Optional[datetime] = None

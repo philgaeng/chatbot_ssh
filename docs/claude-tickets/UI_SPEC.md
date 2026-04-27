@@ -17,6 +17,8 @@
    - 2.4 Per-user thread filtering
    - 2.5 In-thread task assignment
    - 2.6 Data model for tasks
+   - 2.7 Case viewers (watchers)
+   - 2.8 @mention — addressing case participants
 3. [Desktop layout](#3-desktop-layout)
    - 3.1 Three-zone layout
    - 3.2 Translation review panel
@@ -335,6 +337,104 @@ The task assignment creates a `TASK_ASSIGNED` event in `ticketing.ticket_events`
 with `payload = { task_id, task_type, assigned_to }`. The thread renders this event
 as a task card (not a note bubble) by checking `event_type === "TASK_ASSIGNED"`.
 `TASK_COMPLETED` similarly updates the card to the done state.
+
+---
+
+### 2.7 Case viewers (watchers)
+
+A PM or L2 officer typically copies in several colleagues to follow a case closely — just
+as they would in a WhatsApp group. These people are **viewers** (watchers) of the case.
+
+**Who can add viewers:**
+Any officer holding a senior role on the case — `pd_piu_safeguards_focal` (L2),
+`grc_chair`, `grc_member`, SEAH officers, ADB observers, or admins.
+The assigned officer at any level can also add viewers to their own case.
+
+**What viewers can do:**
+- Read all thread messages and case details ✓
+- Post notes/messages (appear as left-aligned gray bubbles in the thread) ✓
+- Use `@mention` to address specific participants or `@all` ✓
+
+**What viewers cannot do:**
+- Acknowledge / Escalate / Resolve / Close the ticket ✗
+- Assign formal tasks ✗
+- Add further viewers ✗ *(only the adding-eligible roles above)*
+
+**Thread appearance:** Viewer bubbles use the same role-colour vocabulary. A viewer
+with role `adb_hq_project` gets the teal bubble; a viewer with no special role gets a
+plain gray bubble. The role badge shows below their bubble so the team always knows
+who is speaking.
+
+**Viewer added event:** `VIEWER_ADDED` system pill appears in the thread when a viewer is
+added:  `─── @piu-assistant added as viewer ───`
+
+**Data model:**
+
+```sql
+CREATE TABLE ticketing.ticket_viewers (
+    viewer_id        VARCHAR(36) PRIMARY KEY,
+    ticket_id        VARCHAR(36) NOT NULL REFERENCES ticketing.tickets,
+    user_id          VARCHAR(128) NOT NULL,
+    added_by_user_id VARCHAR(128) NOT NULL,
+    added_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (ticket_id, user_id)
+);
+```
+
+**API:**
+- `POST   /api/v1/tickets/{id}/viewers`               — add a viewer (senior role / assigned officer)
+- `DELETE /api/v1/tickets/{id}/viewers/{user_id}`      — remove a viewer
+- `GET    /api/v1/tickets/{id}/viewers`               — list viewers (included in ticket detail)
+
+Viewers list is embedded in `GET /api/v1/tickets/{id}` response as `viewers: TicketViewer[]`.
+
+---
+
+### 2.8 @mention — addressing case participants
+
+Typing `@` in the compose bar opens an inline autocomplete listing everyone who has
+access to the case: the assigned officer + all viewers.
+
+```
+┌──────────────────────────────────────┐
+│  Add a note…                         │
+│  @pi                                 │  ← user typed @pi
+│  ─────────────────────────────────── │
+│  🟠  @piu-l2             L2 PIU      │  ← dropdown above compose bar
+│  👤  @piu-assistant      Viewer      │
+└──────────────────────────────────────┘
+```
+
+**Behaviour:**
+- `@` followed by characters → filter list of participants in real time
+- Tap/click a name → inserts `@user_id` into the text at cursor position
+- `@all` is always available at the top of the list — addresses all case participants
+- Pressing Escape or moving the cursor off the `@word` closes the dropdown
+- No API call on each keystroke — participants are already loaded in ticket detail
+
+**`@all` semantics:**
+- Notifies: assigned officer + all viewers of the case
+- Creates a `MENTION` notification event per recipient (`seen=False`, drives unread badge)
+- These events are **not rendered in the thread** — they only drive the badge counter
+
+**Rendering in thread:**
+```
+│  ┌──────────────────────────────────────┐
+│  │ @piu-l2 please review the attached  │  ← @mention rendered as
+│  │ photos before the GRC hearing       │     blue highlighted span
+│  └──────────────────────────────────────┘
+│  👤  @piu-assistant  ·  2:14pm
+```
+
+`@username` spans are highlighted with `text-blue-600 font-medium` inline.
+`@all` is rendered as `text-indigo-600 font-medium bg-indigo-50 rounded px-0.5`.
+
+**Implementation note:**
+Backend parses `@mentions` from NOTE text on save (simple regex). For each resolved
+mention, a `MENTION` event is written with `assigned_to_user_id = mentioned_user`,
+`seen = False`. The `@all` mention resolves to every viewer + the assigned officer.
+`MENTION` event_type is in `NOTIFICATION_ONLY_EVENT_TYPES` — the frontend skips it
+when rendering the thread but counts it for badges.
 
 ---
 

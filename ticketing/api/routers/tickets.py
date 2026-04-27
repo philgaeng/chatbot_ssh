@@ -17,6 +17,7 @@ Officer UI (JWT auth — stub for proto):
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
@@ -52,6 +53,7 @@ from ticketing.engine.workflow_engine import auto_assign_officer, get_current_st
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
+from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,34 @@ def _next_step(db: Session, workflow_id: str, current_order: int) -> Optional[Wo
     ).scalar_one_or_none()
 
 
+def _actor_role(current_user: CurrentUser) -> Optional[str]:
+    """Snapshot the first role key at write time for audit correlation."""
+    return current_user.role_keys[0] if getattr(current_user, "role_keys", None) else None
+
+
+def _extract_mentions(text: str) -> list[str]:
+    """Return list of @mention targets from note text (e.g. ['piu-l2', 'all'])."""
+    return re.findall(r"@([\w][\w.-]*)", text)
+
+
+def _is_viewer(db: "Session", ticket_id: str, user_id: str) -> bool:
+    """True if this user is a viewer of the ticket."""
+    return db.execute(
+        select(TicketViewer).where(
+            TicketViewer.ticket_id == ticket_id,
+            TicketViewer.user_id == user_id,
+        )
+    ).scalar_one_or_none() is not None
+
+
+def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
+    """Return list of all viewer user_ids for a ticket."""
+    viewers = db.execute(
+        select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
+    ).scalars().all()
+    return [v.user_id for v in viewers]
+
+
 def _add_event(
     db: Session,
     ticket: Ticket,
@@ -148,6 +178,10 @@ def _add_event(
     created_by: Optional[str] = None,
     seen: bool = False,
     notify_user_id: Optional[str] = None,
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None,
+    case_sensitivity: Optional[str] = None,   # derived from ticket when None
+    summary_regen_required: bool = False,
 ) -> TicketEvent:
     event = TicketEvent(
         event_id=_new_id(),
@@ -163,6 +197,9 @@ def _add_event(
         seen=seen,
         assigned_to_user_id=notify_user_id,
         created_by_user_id=created_by,
+        actor_role=actor_role,
+        case_sensitivity=case_sensitivity if case_sensitivity is not None else ("seah" if ticket.is_seah else "standard"),
+        summary_regen_required=summary_regen_required,
     )
     db.add(event)
     return event
@@ -248,6 +285,8 @@ def create_ticket(
         step_id=first_step.step_id if first_step else None,
         payload={"workflow_key": workflow.workflow_key},
         seen=True,  # creation event is not an unread notification
+        # No summary to regenerate at creation; actor is the inbound chatbot/API key
+        summary_regen_required=False,
     )
     db.commit()
     db.refresh(ticket)
@@ -289,14 +328,23 @@ def list_tickets(
 
     # ── Scope filter: non-admins only see tickets in their jurisdictions ──
     # Admins (super_admin, local_admin) and observers see all; field officers are scoped.
+    # Viewers also see their watched tickets regardless of scope.
     if not current_user.is_admin:
         scopes = db.execute(
             select(OfficerScope).where(OfficerScope.user_id == current_user.user_id)
         ).scalars().all()
 
+        # Tickets this user is a viewer of — always visible regardless of scope
+        viewed_ticket_ids = db.execute(
+            select(TicketViewer.ticket_id).where(TicketViewer.user_id == current_user.user_id)
+        ).scalars().all()
+
         if not scopes:
-            # No scope rows at all → officer only sees tickets explicitly assigned to them
-            q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
+            # No scope rows → only assigned tickets OR watched tickets
+            q = q.where(or_(
+                Ticket.assigned_to_user_id == current_user.user_id,
+                Ticket.ticket_id.in_(viewed_ticket_ids),
+            ))
         else:
             scope_conditions = []
             for scope in scopes:
@@ -306,6 +354,9 @@ def list_tickets(
                 if scope.project_code:
                     parts.append(Ticket.project_code == scope.project_code)
                 scope_conditions.append(and_(*parts))
+            # Also include viewed tickets outside the normal scope
+            if viewed_ticket_ids:
+                scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
             q = q.where(or_(*scope_conditions))
 
     if my_queue:
@@ -395,6 +446,40 @@ def get_ticket(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Viewer access — allow through even if not in normal scope
+    # (scope enforcement happens at list level; detail allows any authenticated viewer)
+    # Admins, assigned officer, and viewers all have access. Others with no scope
+    # record for this ticket are rejected.
+    if not current_user.is_admin:
+        if (
+            ticket.assigned_to_user_id != current_user.user_id
+            and not _is_viewer(db, ticket_id, current_user.user_id)
+        ):
+            # Fall back to scope check — if they have a scope that covers this ticket, allow
+            from ticketing.models.officer_scope import OfficerScope as _OfficerScope
+            scopes = db.execute(
+                select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
+            ).scalars().all()
+            in_scope = any(
+                s.organization_id == ticket.organization_id and
+                (s.location_code is None or s.location_code == ticket.location_code) and
+                (s.project_code is None or s.project_code == ticket.project_code)
+                for s in scopes
+            )
+            if not in_scope:
+                raise HTTPException(status_code=403, detail="Access denied")
+
+    # Attach viewer list (used by @mention autocomplete on the client)
+    viewers = db.execute(
+        select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
+        .order_by(TicketViewer.added_at)
+    ).scalars().all()
+    # Attach as a synthetic attribute so the Pydantic schema can pick it up
+    ticket.__dict__["viewers"] = [
+        {"viewer_id": v.viewer_id, "user_id": v.user_id, "added_by_user_id": v.added_by_user_id, "added_at": v.added_at.isoformat()}
+        for v in viewers
+    ]
+
     return ticket
 
 
@@ -431,6 +516,8 @@ def patch_ticket(
             created_by=current_user.user_id,
             seen=False,
             notify_user_id=payload.assign_to_user_id,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=False,
         )
 
     if payload.priority is not None:
@@ -441,6 +528,8 @@ def patch_ticket(
             payload={"new_priority": payload.priority},
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=False,
         )
 
     db.commit()
@@ -532,6 +621,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
 
     elif action == "ESCALATE":
@@ -541,6 +632,7 @@ def perform_action(
             triggered_by="MANUAL",
             note=payload.note,
             created_by_user_id=current_user.user_id,
+            actor_role=_actor_role(current_user),
         )
         if result is None:
             raise HTTPException(
@@ -563,6 +655,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
         _notify_complainant_text = (
             "Your grievance has been resolved. "
@@ -581,6 +675,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
 
     elif action == "NOTE":
@@ -594,9 +690,40 @@ def perform_action(
             payload={"internal": True},
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
         # Fire translation task after commit (7a — translate note to English for supervisors)
         _translate_note_event_id = event.event_id
+
+        # ── @mention notifications (UI_SPEC.md §2.8) ──────────────────────────
+        # Parse @mentions and create lightweight MENTION notification events.
+        # These events have seen=False (drive badge) but are NOT rendered in the thread.
+        mentions = _extract_mentions(payload.note)
+        if mentions:
+            viewer_ids = _get_viewer_ids(db, ticket_id)
+            assigned_id = ticket.assigned_to_user_id
+            all_participant_ids = list({*viewer_ids, *([assigned_id] if assigned_id else [])})
+
+            notify_set: set[str] = set()
+            for mention in mentions:
+                if mention.lower() == "all":
+                    notify_set.update(all_participant_ids)
+                elif mention != current_user.user_id:
+                    notify_set.add(mention)
+
+            for target_uid in notify_set:
+                _add_event(
+                    db, ticket, "MENTION",
+                    step_id=event_step_id,
+                    note=f"@mentioned by {current_user.user_id}",
+                    payload={"mentioned_by": current_user.user_id, "source_event_id": event.event_id},
+                    seen=False,
+                    notify_user_id=target_uid,
+                    created_by=current_user.user_id,
+                    actor_role=_actor_role(current_user),
+                    summary_regen_required=False,
+                )
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
@@ -606,6 +733,7 @@ def perform_action(
             note=payload.note,
             convened_by_user_id=current_user.user_id,
             hearing_date=hearing_date,
+            actor_role=_actor_role(current_user),
         )
         event = events[0]  # first event is the CONVENED event
 
@@ -616,6 +744,7 @@ def perform_action(
             decision=decision.upper(),
             note=payload.note,
             decided_by_user_id=current_user.user_id,
+            actor_role=_actor_role(current_user),
         )
 
     db.commit()
@@ -700,6 +829,8 @@ def reply_to_complainant(
         payload={"delivered_via_chatbot": delivered, "sent_by": current_user.user_id},
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
     )
     db.commit()
 
@@ -946,6 +1077,8 @@ async def upload_officer_attachment(
         payload={"file_id": file_id, "internal": True},
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=True,
     )
 
     db.commit()
@@ -1190,6 +1323,9 @@ def begin_reveal(
         },
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        case_sensitivity=case_sensitivity,
+        summary_regen_required=False,  # reveal access doesn't change case content
     )
     db.commit()
 
@@ -1239,6 +1375,8 @@ def close_reveal(
         },
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
     )
     db.commit()
 
