@@ -60,6 +60,7 @@ def _get_action(action_name: str) -> Any:
         from backend.actions.action_outro import (
             ActionSeahOutro,
             ActionGrievanceOutro,
+            ActionStatusCheckRequestFollowUp,
         )
         from backend.actions.forms.form_modify_grievance import (
             ActionAskModifyFollowUpAnswer,
@@ -76,7 +77,6 @@ def _get_action(action_name: str) -> Any:
             ActionAskStatusCheckRetrieveGrievances,
             ActionAskStatusCheckListGrievanceId,
             ActionAskStatusCheckComplainantFullName,
-            ActionStatusCheckRequestFollowUp,
             ActionStatusCheckModifyGrievance,
             ActionSkipStatusCheckOutro,
             ActionAskStatusCheckGrievanceIdSelected,
