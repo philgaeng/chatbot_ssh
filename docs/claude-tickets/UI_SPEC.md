@@ -7,199 +7,466 @@
 
 ---
 
-## Layout overview
+## Contents
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  AppShell                                                                │
-│  ┌──────────┐  ┌──────────────────────────────────────────────────────┐ │
-│  │ Sidebar  │  │ Page content                                         │ │
-│  │  (nav)   │  │                                                      │ │
-│  │          │  │  [Ticket detail — 3-zone layout, see below]         │ │
-│  └──────────┘  └──────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-The sidebar is the only persistent collapsible column at the app shell level
-(same collapse behaviour as the Stratcon reference app).
-
----
-
-## Ticket detail page — 3-zone layout
-
-```
-┌──────────────────────┬─────────────┬──────────────────────────────────┐
-│  Main (2/3)          │  Actions    │  Translation Panel               │
-│                      │  sidebar    │  (collapsible, rightmost)        │
-│  - Grievance card    │  (1/3)      │                                  │
-│  - Workflow stepper  │             │  Toggle: 🌐 button in timeline   │
-│  - Case timeline     │  - Complainant                                 │
-│                      │  - Findings │  When open: 320 px fixed width   │
-│                      │  - Files    │  When closed: hidden (zero width)│
-│                      │  - Assign   │                                  │
-│                      │  - Actions  │                                  │
-└──────────────────────┴─────────────┴──────────────────────────────────┘
-```
-
-The translation panel is the **third zone** — a collapsible right column, inspired
-by the Arc sidebar and Cursor's Explorer/Agents panels.
+1. [Design philosophy](#1-design-philosophy)
+2. [Mobile-first design](#2-mobile-first-design)
+   - 2.1 Queue screen
+   - 2.2 Thread screen — core mental model
+   - 2.3 Role-highlighted bubbles
+   - 2.4 Per-user thread filtering
+   - 2.5 In-thread task assignment
+   - 2.6 Data model for tasks
+3. [Desktop layout](#3-desktop-layout)
+   - 3.1 Three-zone layout
+   - 3.2 Translation review panel
+   - 3.3 Desktop improvements needed
+4. [Shared patterns](#4-shared-patterns)
+   - 4.1 User language preference
+   - 4.2 SLA urgency colours
+   - 4.3 SEAH visual treatment
+   - 4.4 Badge counts
+   - 4.5 Collapsible panels
 
 ---
 
-## Translation review panel
+## 1. Design philosophy
 
-### Purpose
+> "As simple as a chat in WhatsApp."
 
-Field officers (DOR/L1/L2) write notes in Nepali. Supervisors and ADB observers
-read English. The AI translation runs automatically but bilingual officers need a
-way to check its accuracy.
+Most GRM officers are **field officers working on phones**. The primary interaction
+is: open a case, read the history, add a note or complete a task, close the app.
+The UI must support this in under 30 seconds, one-handed, on a mid-range Android.
 
-The translation panel provides a **side-by-side original ↔ translation view** for
-every note in the case timeline. It is separate from the timeline so:
-- English-only users read the translated chip inline in the timeline (the default).
-- Bilingual users open the panel to see the full original alongside the translation
-  and can judge whether the AI rendering is accurate.
+**Core principles:**
 
-### Toggle behaviour
+| Principle | Rationale |
+|---|---|
+| Input bar always visible at the bottom | Officers never scroll to act |
+| Primary CTA is context-aware | New ticket → Acknowledge; In-progress → Resolve / Escalate |
+| Timeline IS the screen | No separate "notes" section — one thread like WhatsApp |
+| Role-highlighted messages | Supervisor instructions must stand out immediately |
+| Filter by person | In a busy case with many officers, find relevant messages fast |
+| Tasks in-thread | Coordination happens in the thread, not in a separate task manager |
+| Bottom sheet for destructive / secondary actions | Prevents accidental taps, keeps screen clean |
+| No sidebar on mobile | Bottom tab bar — one thumb, natural reach zone |
 
-- **Default state:** hidden (zero width, no impact on the main layout).
-- **Toggle button:** `🌐` icon in the Case Timeline card header (top-right corner).
-  Also accessible via keyboard shortcut `T` (when focus is on the page, not an input).
-- **Open state:** a 320 px panel appears flush to the right edge of the viewport,
-  pushing the main content area to the left. On screens < 1280 px it overlays instead
-  of pushing (same approach as Cursor on smaller screens).
-- **Persistence:** open/closed state stored in `localStorage` under key
-  `grm_translation_panel_open`. Survives page navigation within the same session.
-- **Close button:** `×` in the panel header. Also closes on Escape or second `T` press.
+**Relationship between mobile and desktop:**
+- Same thread metaphor, same bubble vocabulary, same colours
+- Desktop adds side panels (PII, findings, translations) and more detail
+- An officer switching devices sees the same case, the same way
 
-### Panel content
+---
+
+## 2. Mobile-first design
+
+### 2.1 Queue screen (chat list)
 
 ```
-┌─────────────────────────────────────────────────┐
-│  🌐 Translation Review               [×] close  │
-├─────────────────────────────────────────────────┤
-│  2026-04-26 · by mock-officer-site-l1           │
-│  ┌ Original (Nepali) ──────────────────────────┐│
-│  │ धुलो धेरै भएको छ, बच्चाहरू बिरामी ...       ││
-│  └─────────────────────────────────────────────┘│
-│  ┌ English (AI) ───────────────────────────────┐│
-│  │ There is excessive dust; the children are   ││
-│  │ getting sick…                               ││
-│  └─────────────────────────────────────────────┘│
-│  ✓ Translated                                   │
-├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
-│  2026-04-25 · by mock-officer-piu-l2           │
-│  ┌ Original ───────────────────────────────────┐│
-│  │ Site inspection completed.                  ││
-│  └─────────────────────────────────────────────┘│
-│  ⟳ Translation pending                         │
-├─────────────────────────────────────────────────┤
-│  No more notes.                                 │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────┐
+│  My Queue               🔔 3   │
+│  ─────────────────────────     │
+│  🔴 GRV-2025-003               │
+│     Road widening damaged…     │
+│     20h left  ·  L1  ·  Jhapa  │
+│  ─────────────────────────     │
+│  🟡 GRV-2025-001               │
+│     Dust — children sick…      │
+│     2d left  ·  L3 GRC         │
+│  ─────────────────────────     │
+│  🔒 GRV-2025-SEAH-001          │
+│     [SEAH — restricted]        │
+│     Active  ·  L1              │
+│  ─────────────────────────     │
+│                                │
+│                                │
+│  🏠 Queue   🔍 All   👤 Me     │  ← bottom tab bar
+└────────────────────────────────┘
 ```
 
 **Rules:**
-- Only shows `NOTE_ADDED` events (not status events — no translation needed there).
-- Notes are listed chronologically (oldest first — opposite of timeline, which is newest-first,
-  so the panel reads like a narrative from start to finish).
-- Each note shows: timestamp, author, original text, English translation if available.
-- Translation status chip:
-  - `✓ Translated` (blue) — `payload.translation_en` present and differs from `note`
-  - `= Same` (gray) — text already in English (`payload.translation_en` equals `note`)
-  - `⟳ Pending` (amber) — no `translation_en` yet (task queued or no API key configured)
-- If there are no notes at all: display "No notes in this case yet."
-
-### Relationship to inline translation chips
-
-The timeline and the panel serve complementary audiences:
-
-| User's effective language | Inline chip in timeline | Translation panel |
-|---------------------------|------------------------|-------------------|
-| `en` (English-first)      | Shown ✅               | Available (for curiosity / checking originals) |
-| `ne` (Nepali-first)       | Hidden ✗               | Available (to see what English speakers read)  |
-
-The panel is **always available** regardless of language preference — it is the
-primary accuracy-checking tool for bilingual officers.
+- Urgency dot (🔴 🟡 🟢) is the leftmost visual — seen before reading anything
+- Each row: ID + one-line summary + SLA remaining + level + location
+- SEAH cases show 🔒 and no summary text (content restricted)
+- Tap anywhere on a row to open the thread
+- No sidebar — bottom tab bar: **Queue | All Tickets | Profile**
+- Pull-to-refresh; no pagination (load more on scroll)
 
 ---
 
-## User language preference
+### 2.2 Thread screen — core mental model
 
-### Data model
+**A ticket is a conversation thread.**
 
+```
+┌────────────────────────────────────┐
+│  ←  GRV-2025-003          ⋮       │  ← header: back + overflow menu
+│  📍 L1 · Jhapa · 20h left 🔴      │  ← sticky sub-header: always visible
+│  ────────────────────────────────  │
+│  [ All ][@you][@piu-l2][Tasks][⚙️] │  ← filter chips (scroll horizontally)
+│  ────────────────────────────────  │
+│                                    │
+│        ─── Case opened ───         │  system pill
+│        ─── Assigned to you ───     │  system pill
+│                                    │
+│  ┌──────────────────────────────┐  │
+│  │ Road widening compensation   │  │  complainant summary card
+│  │ Birtamod · Property Damage   │  │  (collapsible after first read)
+│  └──────────────────────────────┘  │
+│                                    │
+│                                    │
+│  ────────────────────────────────  │
+│  ┌──────────────────────────┐  📎 │
+│  │  Add a note…             │  ↑  │  ← compose bar, always at bottom
+│  └──────────────────────────┘     │
+│  [ ✅  Acknowledge — tap to start ]│  ← primary CTA, full width, context-aware
+└────────────────────────────────────┘
+```
+
+**After acknowledged**, the CTA changes to:
+```
+│  [ 🏁 Resolve ]  [ 🔺 More actions ▾ ]  │
+```
+
+**"More actions" bottom sheet:**
+```
+│  ─────────────────────────  │
+│  🔺  Escalate to L2 PIU     │
+│  📋  Assign a task          │
+│  🔒  Close without resolve  │
+│  ─────────────────────────  │
+│           Cancel            │
+```
+
+**Thread message types (rendered differently):**
+
+| Type | Visual |
+|---|---|
+| System event (created, escalated…) | Centered pill, gray text, no bubble |
+| Your note | Right-aligned blue bubble |
+| Colleague note (same level) | Left-aligned gray bubble |
+| Supervisor note | Left-aligned, **role-colour left border** |
+| Task card | Full-width card with task type + assignee + complete button |
+| Complainant summary | Collapsible card at top of thread |
+
+---
+
+### 2.3 Role-highlighted messages
+
+Officers must immediately spot a supervisor instruction without reading every message.
+Bubbles are differentiated by the **writer's role**, not their name.
+
+```
+│        ─── Escalated to L2 ───        │  system pill
+
+│  ┌────────────────────────────────┐   │
+│  │ Please document road damage    │   │  ← L2 supervisor note
+│  │ at KM 12+500 with photos       │   │    amber left border (4px)
+│  │ before the GRC hearing.        │   │    role badge below
+│  └────────────────────────────────┘   │
+│  🟠 L2 · mock-piu-l2  ·  10:02am     │
+
+│                            ┌─────────────────────┐
+│                            │ Done. Photos in the │  ← your note (right, blue)
+│                            │ attachment below. ✓ │
+│                            └─────────────────────┘
+│                            You · 2:14pm
+
+│  ┌────────────────────────────────┐   │
+│  │ GRC convened for May 3rd.      │   │  ← GRC chair note
+│  │ Attend at district office HQ.  │   │    purple left border
+│  └────────────────────────────────┘   │
+│  🟣 GRC Chair · mock-grc-chair        │
+```
+
+**Colour vocabulary (consistent across mobile and desktop):**
+
+| Role | Left border colour | Label chip | Tailwind |
+|---|---|---|---|
+| You (current user) | — (right side) | "You" | `bg-blue-500` bubble |
+| Peer officer (same level) | None | name only | `bg-gray-100` bubble |
+| L2 supervisor / PIU | Amber | 🟠 L2 | `border-l-4 border-amber-400` |
+| L3 GRC chair | Purple | 🟣 GRC | `border-l-4 border-purple-400` |
+| ADB observer / HQ | Teal | 🔵 ADB | `border-l-4 border-teal-400` |
+| SEAH officer | Red | 🔴 SEAH | `border-l-4 border-red-400` |
+| System / automated | — (centered pill) | — | `text-gray-400 text-center` |
+
+**Role → colour mapping lives in a single constant** (`ROLE_BUBBLE_STYLE`) shared by
+mobile and desktop thread components. Changing it in one place changes both.
+
+---
+
+### 2.4 Per-user thread filtering
+
+Long cases accumulate many messages from many officers. Officers need to find
+"everything the supervisor told me" or "everything I've done" instantly.
+
+**Filter chips — always visible above the thread:**
+
+```
+[ All ] [ 👤 You ] [ 🟠 @piu-l2 ] [ 🟣 @grc ] [ 📋 Tasks ] [ ⚙️ System ]
+```
+
+- Chips are generated dynamically from unique authors in the thread
+- Active chip has a filled background; inactive is outlined
+- **Tasks** chip: shows only task cards (hides all notes and system events)
+- **System** chip: shows only auto-generated events (created, escalated, SLA breach)
+- Tap a message author's name in the thread → auto-activates their filter chip
+- Active filter shows `×` inside the chip to reset
+
+**Implementation note:** filtering is purely client-side — the full event list is
+already loaded. Filter chips do not trigger API calls.
+
+---
+
+### 2.5 In-thread task assignment
+
+The most important coordination feature. Supervisors and senior officers frequently
+need to delegate specific actions to field officers — just as they would in a
+WhatsApp group, but structured and trackable.
+
+**Who can assign tasks:** Any officer who can see the ticket (tasks are not restricted
+to admins — an L2 officer can assign a task to their L1 officer).
+
+**Assigning a task — bottom sheet:**
+
+```
+┌──────────────────────────────────────┐
+│  📋 Assign task                      │
+│  ──────────────────────────────────  │
+│  Type                                │
+│  ┌─────────┐ ┌──────────┐           │
+│  │🚶 Site  │ │📞 Follow-│           │
+│  │  Visit  │ │  up Call │           │
+│  └─────────┘ └──────────┘           │
+│  ┌─────────┐ ┌──────────┐           │
+│  │📝 System│ │📸 Document│          │
+│  │  Note   │ │ & Photo  │           │
+│  └─────────┘ └──────────┘           │
+│                                      │
+│  Assign to                           │
+│  [ mock-officer-site-l1 ▾ ]         │
+│                                      │
+│  Instructions (optional)             │
+│  ┌──────────────────────────────┐   │
+│  │ Document damage at KM 12+500 │   │
+│  │ with photos                  │   │
+│  └──────────────────────────────┘   │
+│                                      │
+│  Due date (optional)                 │
+│  [ Tomorrow ▾ ]                      │
+│                                      │
+│  [ Assign Task ]                     │
+└──────────────────────────────────────┘
+```
+
+**Task card in thread (pending state):**
+
+```
+┌──────────────────────────────────────┐
+│  📋  SITE VISIT                      │  ← task type, bold
+│  → @mock-officer-site-l1             │  ← assigned to
+│  "Document road damage at KM 12+500  │
+│   with photos before GRC hearing"    │
+│  Due: 28 Apr · Assigned by @piu-l2   │
+│                                      │
+│  [ ✓  Mark Complete ]                │  ← visible only to assigned officer
+└──────────────────────────────────────┘
+```
+
+**Task card — completed state:**
+
+```
+┌──────────────────────────────────────┐
+│  ✅  SITE VISIT — Done               │  ← green header
+│  @mock-officer-site-l1               │
+│  Completed 26 Apr · 2:14pm           │
+└──────────────────────────────────────┘
+```
+
+**Task types (pre-defined, admin-extensible later):**
+
+| Key | Label | Icon |
+|---|---|---|
+| `SITE_VISIT` | Site Visit | 🚶 |
+| `FOLLOW_UP_CALL` | Follow-up Call | 📞 |
+| `SYSTEM_NOTE` | Add System Note | 📝 |
+| `DOCUMENT_PHOTO` | Document & Photo | 📸 |
+
+**Rules:**
+- A task fires a `TASK_ASSIGNED` event (appears in thread at the right time)
+- Completing it fires a `TASK_COMPLETED` event
+- The assigned officer receives an unseen notification event (drives badge count)
+- The **Tasks** filter chip shows all pending + completed task cards
+- A pending task assigned to you also shows a small banner in the thread sub-header:
+  `📋 1 task assigned to you`
+
+---
+
+### 2.6 Data model for tasks
+
+New table `ticketing.ticket_tasks` (separate from events — allows querying
+"all pending tasks for officer X" without scanning the full event log):
+
+```sql
+CREATE TABLE ticketing.ticket_tasks (
+    task_id              VARCHAR(36) PRIMARY KEY,
+    ticket_id            VARCHAR(36) NOT NULL REFERENCES ticketing.tickets,
+    task_type            VARCHAR(32) NOT NULL,   -- SITE_VISIT | FOLLOW_UP_CALL | SYSTEM_NOTE | DOCUMENT_PHOTO
+    assigned_to_user_id  VARCHAR(128) NOT NULL,
+    assigned_by_user_id  VARCHAR(128) NOT NULL,
+    description          TEXT,
+    due_date             DATE,
+    status               VARCHAR(16) NOT NULL DEFAULT 'PENDING',  -- PENDING | DONE | DISMISSED
+    completed_at         TIMESTAMPTZ,
+    completed_by_user_id VARCHAR(128),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**API:**
+- `POST /api/v1/tickets/{id}/tasks` — assign a task (any officer)
+- `POST /api/v1/tickets/{id}/tasks/{task_id}/complete` — mark done (assigned officer or admin)
+- `GET  /api/v1/tickets/{id}/tasks` — list tasks for a ticket
+- `GET  /api/v1/users/me/tasks` — all pending tasks assigned to current officer (across tickets)
+
+**Timeline integration:**
+The task assignment creates a `TASK_ASSIGNED` event in `ticketing.ticket_events`
+with `payload = { task_id, task_type, assigned_to }`. The thread renders this event
+as a task card (not a note bubble) by checking `event_type === "TASK_ASSIGNED"`.
+`TASK_COMPLETED` similarly updates the card to the done state.
+
+---
+
+## 3. Desktop layout
+
+### 3.1 Three-zone layout
+
+Desktop is the **power view** — same thread vocabulary as mobile, richer side panels.
+
+```
+┌──────────────────────────┬──────────────┬─────────────────────┐
+│  Thread                  │  Context     │  Translation Panel  │
+│  (chat bubbles)          │  sidebar     │  (collapsible, 🌐)  │
+│                          │              │                     │
+│  Same bubble colours     │  Complainant │  320 px             │
+│  Same filter chips       │  Findings    │  Toggle: T key      │
+│  Same task cards         │  Attachments │  or button in       │
+│                          │  Assignment  │  timeline header    │
+│  [compose bar]           │              │                     │
+│  [Resolve][Escalate▾]    │  Actions     │                     │
+└──────────────────────────┴──────────────┴─────────────────────┘
+```
+
+**Key difference from current desktop implementation:**
+- Actions moved to the **top** of the context sidebar (currently at the bottom — too far to scroll)
+- Thread uses chat bubbles and filter chips (currently plain event list)
+- Task cards render inline in the thread (not yet built)
+
+**Right column order (top to bottom):**
+1. Actions (primary — always visible without scroll)
+2. Complainant (context for the action)
+3. Assignment (quick admin)
+4. Findings (supervisor/GRC only)
+5. Attachments (secondary)
+
+### 3.2 Translation review panel
+
+Collapsible third zone. See full spec in [Section 4.1](#41-user-language-preference).
+
+**Toggle:** `🌐 Review translations` button in timeline card header, or press `T`.
+**Breakpoint:** visible as inline column at `lg:` (1024px+); fixed overlay on smaller screens.
+**State:** persisted in `localStorage` key `grm_translation_panel_open`.
+
+### 3.3 Desktop improvements needed (TODO)
+
+These are known gaps from the current implementation, to fix before demo:
+
+- [ ] Move Actions card to top of right column
+- [ ] Make primary CTA full-width and context-aware (Acknowledge vs Resolve)
+- [ ] Thread: convert plain event list to chat bubbles with role colours
+- [ ] Thread: add filter chips
+- [ ] Thread: render task cards (after task feature is built)
+- [ ] Move "SEAH access" badge from page header to user profile area (top right)
+
+---
+
+## 4. Shared patterns
+
+### 4.1 User language preference
+
+**Data model:**
 ```
 ticketing.organizations.default_language  VARCHAR(8)  DEFAULT 'ne'
 ticketing.user_roles.preferred_language   VARCHAR(8)  DEFAULT NULL
 ```
 
-**Effective language resolution (server + client):**
-1. If `user_roles.preferred_language` is set → use it.
-2. Otherwise use `organizations.default_language` for the user's primary org.
-3. If organisation has no `default_language` set → fall back to `'en'`.
+**Effective language resolution:**
+1. `user_roles.preferred_language` (personal override, if set)
+2. `organizations.default_language` (org default)
+3. `'en'` (hard fallback)
 
-**Seeded defaults (CLAUDE.md orgs):**
-- `DOR` → `default_language = 'ne'`  (Nepali-first)
-- `ADB` → `default_language = 'en'`  (English-first)
+**Seeded defaults:** DOR → `'ne'` (Nepali-first), ADB → `'en'` (English-first).
 
-### API
+**API:**
+- `GET  /api/v1/users/me/preferences` → `{ effective_language, preferred_language, org_default_language }`
+- `PATCH /api/v1/users/me/preferences` → `{ preferred_language: "en" | "ne" | null }`
 
-- `GET /api/v1/users/me/preferences` → `{ user_id, effective_language, preferred_language, org_default_language }`
-- `PATCH /api/v1/users/me/preferences` → body `{ preferred_language: "en" | "ne" | null }`
-  (`null` = reset to org default)
+**UI effect:**
 
-### Settings UI
+| `effective_language` | Inline translation chip in thread | Translation panel |
+|---|---|---|
+| `en` | Shown | Available |
+| `ne` | Hidden (original IS their language) | Available for verification |
 
-**Settings → My Profile → Language:**
-```
-Preferred language: [ English ▼ ] (overrides DOR default: Nepali)
-                    [ Reset to organisation default ]
-```
+**Settings page:** Settings → My Profile → Language (dropdown + reset to org default).
 
-### Alembic migration
-
-Single migration (`down_revision: c1d5f8a2e047`):
-- `ALTER TABLE ticketing.organizations ADD COLUMN default_language VARCHAR(8) DEFAULT 'ne'`
-- `ALTER TABLE ticketing.user_roles ADD COLUMN preferred_language VARCHAR(8) DEFAULT NULL`
-- `UPDATE ticketing.organizations SET default_language = 'en' WHERE organization_id = 'ADB'`
+**Alembic migration:** `d2e8f4a1b093` — adds both columns, patches ADB → `'en'`.
 
 ---
 
-## Other UI patterns
+### 4.2 SLA urgency colours
 
-### Collapsible panels — general rule
+| Urgency | Condition | Tailwind classes |
+|---|---|---|
+| `overdue` | `sla_breached = true` | `bg-red-50 text-red-700` |
+| `critical` | < 24 h remaining | `bg-orange-50 text-orange-700` |
+| `warning` | < 3 d remaining | `bg-yellow-50 text-yellow-700` |
+| `ok` | > 3 d remaining | `bg-green-50 text-green-700` |
+| `none` | step has no SLA | *(no bar)* |
 
-Any panel that a role-subset rarely needs should be collapsible rather than
-conditionally rendered. Visible surface area scales with what the *current user*
-routinely needs, not the maximum possible information. Examples:
+Used in: queue row urgency dot, thread sub-header, workflow card SLA bar.
 
-| Panel               | Default state  | Who opens it              |
-|---------------------|---------------|---------------------------|
-| Translation Review  | Closed        | Bilingual officers        |
-| Findings card       | Always open   | GRC/supervisor roles      |
-| Attachments         | Always open   | All officers              |
+---
 
-### SLA urgency colours
+### 4.3 SEAH visual treatment
 
-| Urgency   | Class                   | Condition              |
-|-----------|-------------------------|------------------------|
-| `overdue` | `bg-red-50 text-red-700` | `sla_breached = true` |
-| `critical`| `bg-orange-50 text-orange-700` | `< 24 h remaining` |
-| `warning` | `bg-yellow-50 text-yellow-700` | `< 3 d remaining` |
-| `ok`      | `bg-green-50 text-green-700`   | `> 3 d remaining`  |
-| `none`    | *(no bar)*              | step has no SLA         |
+- **Queue row:** `border-l-4 border-red-500` + `🔒 SEAH` badge; no summary text shown
+- **Thread header:** `SeahBadge` component next to grievance ID
+- **Access control:** `canSeeSeah` from `AuthProvider`; server also enforces 403
 
-### Badge counts
+---
 
-- **My Queue tab** and **Escalated tab** show a red dot (not a number count) when there
-  are any unseen events assigned to the current user. Number shown inside the tab label.
-- **Watching** shows a plain grey count — informational, not action-required.
-- **Resolved** — no badge.
+### 4.4 Badge counts
 
-### SEAH visual treatment
+- **My Queue** and **Escalated** tabs: red filled dot with count when unseen events exist
+- **Watching:** plain grey count — informational only
+- **Resolved:** no badge
+- **Pending tasks assigned to you:** `📋 N` badge on the Tasks filter chip in the thread
 
-- Ticket rows: red `🔒 SEAH` badge + subtle red left border (`border-l-4 border-red-500`).
-- Ticket detail: `SeahBadge` component next to the grievance ID in the title row.
-- Access control: `canSeeSeah` from `AuthProvider` gates both the queue filter and the detail 403 guard.
+---
+
+### 4.5 Collapsible panels
+
+Any panel that a role-subset rarely needs should be collapsible, not hidden entirely.
+Visible surface area scales with what the *current user* routinely needs.
+
+| Panel | Default state | Who opens it |
+|---|---|---|
+| Translation Review | Closed | Bilingual officers checking AI accuracy |
+| Findings card | Open | GRC / supervisor roles (hidden from L1/L2) |
+| Attachments | Open | All officers |
+| Complainant summary card (mobile) | Expanded on first open, collapsed after | All |
 
 ---
 
