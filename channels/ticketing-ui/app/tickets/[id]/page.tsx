@@ -6,11 +6,12 @@ import {
   getTicket, getSla, markSeen, performAction, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  getTeammates, generateFindings,
+  getTeammates, generateFindings, revealOriginal,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
-  type OfficerBrief, type OfficerAttachment,
+  type OfficerBrief, type OfficerAttachment, type RevealSession,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
 
@@ -746,12 +747,23 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 // ── Complainant PII card ──────────────────────────────────────────────────────
+// Per PRIVACY.md: name shown by default; phone hidden behind audited "Reveal" (proto: no OTP).
+// "Reveal original statement" opens the full vault reveal flow (RevealModal → RevealOverlay).
 
-function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
+function ComplainantCard({
+  ticket,
+  onRevealOriginal,
+}: {
+  ticket: TicketDetail;
+  /** Called when officer clicks "Reveal original statement" — opens RevealModal in parent */
+  onRevealOriginal: () => void;
+}) {
   const [pii, setPii] = useState<GrievancePii | null>(null);
   const [piiLoading, setPiiLoading] = useState(false);
   const [piiError, setPiiError] = useState<string | null>(null);
+  // Phone reveal: simple reveal + REVEAL_CONTACT audit event (proto per PRIVACY.md)
   const [phoneRevealed, setPhoneRevealed] = useState(false);
+  const [phoneRevealing, setPhoneRevealing] = useState(false);
 
   // Fetch name automatically (non-sensitive)
   useEffect(() => {
@@ -763,10 +775,12 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
       .finally(() => setPiiLoading(false));
   }, [ticket.grievance_id]);
 
-  function handleReveal() {
+  async function handlePhoneReveal() {
+    setPhoneRevealing(true);
+    // Log reveal via REVEAL_CONTACT action — audited, no OTP for proto
+    await performAction(ticket.ticket_id, { action_type: "REVEAL_CONTACT" }).catch(() => {});
     setPhoneRevealed(true);
-    // INTEGRATION POINT: log reveal action via POST /api/v1/tickets/{id}/actions
-    // action_type: "REVEAL_CONTACT" — so audit trail records who viewed PII and when
+    setPhoneRevealing(false);
   }
 
   return (
@@ -786,6 +800,8 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
             <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>
           )}
           <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+
+          {/* Phone — hidden, audited reveal (proto: no OTP) */}
           <div className="flex items-center gap-1.5">
             <span className="text-gray-400">Phone:</span>
             {phoneRevealed && pii?.phone_number ? (
@@ -794,14 +810,16 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
               <>
                 <span className="text-gray-300 font-mono">••••••••</span>
                 <button
-                  onClick={handleReveal}
-                  className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5"
+                  onClick={handlePhoneReveal}
+                  disabled={phoneRevealing}
+                  className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
                 >
-                  Reveal
+                  {phoneRevealing ? "…" : "Reveal"}
                 </button>
               </>
             )}
           </div>
+
           {pii?.email && (
             <div><span className="text-gray-400">Email:</span> {pii.email}</div>
           )}
@@ -813,6 +831,19 @@ function ComplainantCard({ ticket }: { ticket: TicketDetail }) {
               <span className="text-red-500">❌ Expired — SMS fallback</span>
             )}
           </div>
+
+          {/* Vault reveal — original statement (full reveal flow per PRIVACY.md) */}
+          {ticket.grievance_id && (
+            <div className="border-t border-gray-100 pt-2 mt-1">
+              <button
+                onClick={onRevealOriginal}
+                className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
+                title="View original grievance statement — access is audited and time-limited"
+              >
+                📄 Reveal original statement
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -830,7 +861,20 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Translation panel state — persisted to localStorage
+  // ── Vault reveal state ──────────────────────────────────────────────────────
+  // revealModalOpen → RevealModal (reason form) → on grant → revealSession → RevealOverlay
+  const [revealModalOpen, setRevealModalOpen] = useState(false);
+  const [revealSession, setRevealSession] = useState<RevealSession | null>(null);
+
+  function openRevealModal() { setRevealModalOpen(true); }
+  function closeRevealModal() { setRevealModalOpen(false); }
+  function onRevealGranted(session: RevealSession) {
+    setRevealModalOpen(false);
+    setRevealSession(session);
+  }
+  function onRevealOverlayClosed() { setRevealSession(null); }
+
+  // ── Translation panel state — persisted to localStorage ──────────────────
   const PANEL_KEY = "grm_translation_panel_open";
   const [panelOpen, setPanelOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -1009,7 +1053,7 @@ export default function TicketDetailPage() {
         <div className="space-y-4">
 
           {/* Complainant info card */}
-          <ComplainantCard ticket={ticket} />
+          <ComplainantCard ticket={ticket} onRevealOriginal={openRevealModal} />
 
           {/* AI Findings — visible to GRC/supervisor roles only (7b) */}
           <FindingsCard ticket={ticket} roleKeys={roleKeys} onRefresh={load} />
@@ -1050,6 +1094,26 @@ export default function TicketDetailPage() {
       )}
 
       </div>{/* end outer flex */}
+
+      {/* ── Vault reveal — reason modal ── */}
+      {revealModalOpen && ticket && (
+        <RevealModal
+          ticketId={ticket.ticket_id}
+          isSeah={ticket.is_seah}
+          onClose={closeRevealModal}
+          onGranted={onRevealGranted}
+        />
+      )}
+
+      {/* ── Vault reveal — content overlay ── */}
+      {revealSession && ticket && (
+        <RevealOverlay
+          session={revealSession}
+          ticketId={ticket.ticket_id}
+          onClose={onRevealOverlayClosed}
+        />
+      )}
+
     </div>
   );
 }
