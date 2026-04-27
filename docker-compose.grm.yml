@@ -14,6 +14,19 @@
 
 services:
 
+  # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
+  # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
+  # The ticketing_api service also overrides BACKEND_GRIEVANCE_BASE_URL to use the
+  # Docker service name (http://backend:5001) rather than localhost.
+  backend:
+    ports:
+      - "5001:5001"
+
+  # ── Orchestrator port override (same pattern — expose 8000 for local testing) ──
+  orchestrator:
+    ports:
+      - "8000:8000"
+
   # ── Ticketing API (FastAPI, port 5002) ────────────────────────────────────────
   # network_mode: host → container shares host loopback → can reach localhost:5432 + localhost:6379
   ticketing_api:
@@ -26,6 +39,9 @@ services:
     environment:
       TICKETING_PORT: "5002"
       REDIS_PASSWORD: ""
+      # Use Docker service names for internal calls (not localhost)
+      BACKEND_GRIEVANCE_BASE_URL: http://backend:5001
+      ORCHESTRATOR_BASE_URL: http://orchestrator:8000
       # Override to use the Docker db service (user/password/app_db)
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"

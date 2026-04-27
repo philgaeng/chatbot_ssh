@@ -765,15 +765,14 @@ function ComplainantCard({
   const [phoneRevealed, setPhoneRevealed] = useState(false);
   const [phoneRevealing, setPhoneRevealing] = useState(false);
 
-  // Fetch name automatically (non-sensitive)
+  // Fetch name + contact via ticketing API broker (never direct to backend)
   useEffect(() => {
-    if (!ticket.grievance_id) return;
     setPiiLoading(true);
-    getGrievancePii(ticket.grievance_id)
+    getGrievancePii(ticket.ticket_id)
       .then(setPii)
       .catch(() => setPiiError("Could not load complainant details"))
       .finally(() => setPiiLoading(false));
-  }, [ticket.grievance_id]);
+  }, [ticket.ticket_id]);
 
   async function handlePhoneReveal() {
     setPhoneRevealing(true);

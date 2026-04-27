@@ -1026,6 +1026,46 @@ def download_officer_attachment(
     return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
 
 
+# ─── GET /tickets/{ticket_id}/pii — broker complainant PII from backend ──────────
+# Per PRIVACY.md: browser must never call backend directly — ticketing API brokers all
+# sensitive reads so they go through the internal Docker network (backend:5001).
+
+@router.get(
+    "/tickets/{ticket_id}/pii",
+    summary="Fetch complainant PII from the grievance backend (brokered — no direct browser call)",
+)
+def get_ticket_pii(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    from ticketing.clients.grievance_api import get_grievance_detail
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not ticket.grievance_id:
+        return {}
+
+    try:
+        detail = get_grievance_detail(ticket.grievance_id)
+    except Exception as exc:
+        logger.warning("get_ticket_pii: backend unavailable — %s", exc)
+        raise HTTPException(status_code=503, detail=f"Grievance backend unavailable: {exc}")
+
+    # Return only the safe PII subset (name + contact) — not the full grievance narrative,
+    # which requires a vault reveal session (POST /tickets/{id}/reveal).
+    return {
+        "grievance_id": ticket.grievance_id,
+        "complainant_name": detail.get("complainant_name"),
+        "phone_number": detail.get("phone_number"),
+        "email": detail.get("email"),
+        "address": detail.get("address"),
+    }
+
+
 # ─── POST /tickets/{ticket_id}/findings — regenerate AI findings ──────────────
 
 # Roles permitted to regenerate findings (supervisors + senior observers only)

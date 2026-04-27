@@ -310,11 +310,12 @@ export function removeAssignment(workflowId: string, assignmentId: string): Prom
   return apiFetch(`/api/v1/workflows/${workflowId}/assignments/${assignmentId}`, { method: "DELETE" });
 }
 
-// ── Grievance PII (fetched from backend API, NOT ticketing API) ───────────────
-// PII is never stored in ticketing.* — always fetched fresh from backend.
+// ── Complainant PII (brokered through ticketing API — browser never calls backend directly) ──
+// Per PRIVACY.md: all sensitive reads go through the ticketing API (internal Docker network).
+// The old NEXT_PUBLIC_BACKEND_API_URL direct call is replaced by GET /tickets/{id}/pii.
 
 export interface GrievancePii {
-  grievance_id: string;
+  grievance_id?: string;
   complainant_name?: string;
   phone_number?: string;
   email?: string;
@@ -322,12 +323,9 @@ export interface GrievancePii {
   [key: string]: unknown;
 }
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_API_URL ?? "http://localhost:5001";
-
-export async function getGrievancePii(grievanceId: string): Promise<GrievancePii> {
-  const resp = await fetch(`${BACKEND_BASE}/api/grievance/${grievanceId}`);
-  if (!resp.ok) throw new Error(`Grievance API ${resp.status}`);
-  return resp.json();
+/** Fetch complainant name + contact via the ticketing API broker (not direct backend call). */
+export function getGrievancePii(ticketId: string): Promise<GrievancePii> {
+  return apiFetch<GrievancePii>(`/api/v1/tickets/${ticketId}/pii`);
 }
 
 // ── Officers (for assign dropdown) ───────────────────────────────────────────
