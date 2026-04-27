@@ -789,3 +789,26 @@ export function getTeammates(ticketId: string): Promise<TeammatesResponse> {
 export function generateFindings(ticketId: string): Promise<{ ticket_id: string; status: string; message: string }> {
   return apiFetch(`/api/v1/tickets/${ticketId}/findings`, { method: "POST" });
 }
+
+// ── Language preferences ──────────────────────────────────────────────────────
+
+export interface UserPreferences {
+  user_id: string;
+  /** Personal override set by the officer. null = use org default. */
+  preferred_language: "en" | "ne" | null;
+  /** The organisation's default (DOR → 'ne', ADB → 'en'). */
+  org_default_language: string;
+  /** Resolved language: preferred_language ?? org_default_language ?? 'en' */
+  effective_language: "en" | "ne";
+}
+
+export function getUserPreferences(): Promise<UserPreferences> {
+  return apiFetch<UserPreferences>("/api/v1/users/me/preferences");
+}
+
+export function patchUserPreferences(preferred_language: "en" | "ne" | null): Promise<UserPreferences> {
+  return apiFetch<UserPreferences>("/api/v1/users/me/preferences", {
+    method: "PATCH",
+    body: JSON.stringify({ preferred_language }),
+  });
+}
