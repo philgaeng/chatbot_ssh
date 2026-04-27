@@ -1,7 +1,11 @@
 # GRM Ticketing — Docker Build & Run Reference
 
 > **All commands must be run from WSL (Ubuntu), never from Git Bash or a Windows terminal.**
-> UNC paths like `\\wsl.localhost\...` cause npm/acorn build failures inside containers.
+> Two reasons:
+> 1. UNC paths like `\\wsl.localhost\...` cause npm/acorn build failures inside containers.
+> 2. Running `docker compose` from a Windows terminal picks up the **wrong project directory** — containers get created as `nepal_chatbot-*` instead of `nepal_chatbot_claude-*`, meaning they use a stale image from a different repo copy and your code changes are silently ignored.
+>
+> Always use: `wsl -d Ubuntu -e bash -c "cd /home/philg/projects/nepal_chatbot_claude && docker compose ..."`
 
 ---
 
@@ -211,6 +215,8 @@ To change any of these for local dev, set them in `env.local` and rebuild `grm_u
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
 | `invalid file request node_modules/.bin/acorn` | Running docker compose from Git Bash / Windows path | Switch to WSL terminal |
+| Containers named `nepal_chatbot-*` instead of `nepal_chatbot_claude-*` | `docker compose` run from Windows terminal — wrong project directory, stale image, code changes silently ignored | Stop those containers, then always use the `wsl -d Ubuntu -e bash -c "cd /home/philg/projects/nepal_chatbot_claude && ..."` form |
+| Code change deployed but behaviour unchanged | Built/recreated from Windows terminal (wrong project dir) | Same as above — rebuild from WSL |
 | `ticketing_api` exits immediately | Alembic migration not run yet | Run `upgrade head` (step 5 above) |
 | `grm_ui` shows blank page / 500 | Next.js build failed (check build args) | `docker compose logs grm_ui` |
 | Celery tasks not running | `grm_celery_beat` not started | Ensure both `grm_celery` and `grm_celery_beat` are up |
