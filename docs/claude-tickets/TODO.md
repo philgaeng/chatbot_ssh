@@ -120,27 +120,32 @@ a one-glance digest of a case without reading every raw note.
   `super_admin`. Hidden from L1/L2 field officers (they write the notes, don't need the digest).
 
 #### Implementation plan
-- **Backend:** New file `ticketing/tasks/llm.py` with two Celery tasks:
-  `translate_note(event_id)` and `generate_findings(ticket_id)`.
-- **LLM client:** Use the existing `backend.task_queue.celery_app` LLM queue
-  (DO NOT reimplement). Wire via a new `ticketing/clients/llm_client.py` that calls
-  the same LLM endpoint the chatbot uses.
+- **LLM provider confirmed: OpenAI** (`gpt-4` for translation, `gpt-3.5-turbo` for
+  classification). Client lives in `backend/services/LLM_services.py`.
+  `translate_grievance_to_english_LLM()` already exists — we reuse the same pattern.
+  Init: `OpenAI(api_key=os.getenv("OPENAI_API_KEY"))`. Key is already in `env.local`.
+- **New file `ticketing/tasks/llm.py`** with two Celery tasks on `grm_ticketing` queue:
+  - `translate_note(event_id)` — fetches event note, calls OpenAI `gpt-4`, stores
+    result in `TicketEvent.payload["translation_en"]`
+  - `generate_findings(ticket_id)` — fetches all NOTE_ADDED + key status events,
+    calls OpenAI `gpt-4`, stores result in `Ticket.ai_summary_en`
+- **New file `ticketing/clients/llm_client.py`** — thin wrapper around `OpenAI` client
+  (same init pattern as `LLM_services.py`). Keeps ticketing independent of backend/
+  (DO NOT import from `backend/services/` — reuse the pattern, not the code).
 - **DB migration:** Add `ai_summary_en TEXT` + `ai_summary_updated_at TIMESTAMPTZ`
-  to `ticketing.tickets`. Add `translation_en TEXT` to `ticketing.ticket_events.payload`
-  (no migration needed — payload is already JSONB).
+  to `ticketing.tickets`. (`translation_en` goes into existing JSONB payload — no migration.)
 - **API:** Add `POST /api/v1/tickets/{id}/findings` (trigger regenerate, admin only).
-  `GET /api/v1/tickets/{id}` already returns `ai_summary_en` if the field is added to
-  the `TicketDetail` schema.
-- **Frontend:** Add `FindingsCard` component in ticket detail right column.
-  Show translated note inline in `EventTimeline` when `translation_en` is present.
+  `GET /api/v1/tickets/{id}` already returns `ai_summary_en` once added to `TicketDetail`.
+- **Frontend:** `FindingsCard` component in ticket detail right column. Translated note
+  shown inline in `EventTimeline` when `payload.translation_en` present.
 
 #### 7c — Hook: fire translation automatically on NOTE_ADDED
 - In `tickets.py` `perform_action()`, after commit for `NOTE` action:
   `translate_note.delay(event.event_id)`
-- This is the same pattern as `notify_complainant.delay()` already wired for RESOLVE/ESCALATE.
+- Same pattern as `notify_complainant.delay()` already wired for RESOLVE/ESCALATE.
 
-**Dependencies:** Requires LLM client endpoint URL in settings. Check what endpoint
-the chatbot uses — reuse, don't create a new one.
+**Dependencies:** `OPENAI_API_KEY` already in `env.local` (used by chatbot). No new
+credentials needed.
 
 ### 8. User language preference (per organisation)  *(depends on #7)*
 **Rationale:** Required to correctly present translated content and future
