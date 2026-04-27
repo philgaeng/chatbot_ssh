@@ -740,14 +740,19 @@ class BaseDatabaseManager:
             bool: True if logged successfully, False otherwise
         """
         try:
-            # Validate change type (include 'creation' for initial submission)
-            valid_change_types = {'status_change', 'field_update', 'complainant_update', 'system_update', 'creation'}
+            # Backward compatibility: older call sites may use 'creation' for initial submit.
+            # The DB constraint only allows status_change/field_update/complainant_update/system_update.
+            if change_type == 'creation':
+                change_type = 'status_change'
+
+            # Validate change type against DB-supported values.
+            valid_change_types = {'status_change', 'field_update', 'complainant_update', 'system_update'}
             if change_type not in valid_change_types:
                 self.logger.error(f"Invalid change_type: {change_type}")
                 return False
             
             # Validate required fields based on change type
-            if change_type in {'status_change', 'creation'} and not status_code:
+            if change_type == 'status_change' and not status_code:
                 self.logger.error("status_code is required for status_change")
                 return False
             
@@ -2186,27 +2191,35 @@ class TaskDbManager(BaseDatabaseManager):
         set_clauses = []
         values = []
         for field, value in update_data.items():
-            if field in ['task_name',
-                'status_code',
+            # Backward-compat: callers may still pass status_code; DB column is task_status_code.
+            normalized_field = "task_status_code" if field == "status_code" else field
+            if normalized_field in ['task_name',
+                'task_status_code',
                 'started_at',
                 'completed_at',
                 'error_message',
                 'retry_count',
                 'created_at',
-                'updated_at']:
-                set_clauses.append(f"{field} = %s")
+                'updated_at',
+                'result',
+                'metadata',
+                'retry_history']:
+                set_clauses.append(f"{normalized_field} = %s")
                 # Only JSON-serialize fields that should be JSON
-                if field in ['result', 'metadata'] and isinstance(value, dict):  # Add any other fields that should be JSON
+                if normalized_field in ['result', 'metadata', 'retry_history'] and isinstance(value, dict):
                     values.append(json.dumps(value))
                 else:
                     values.append(value)
+        if not set_clauses:
+            self.logger.warning(f"No valid fields to update for task {task_id}: {list(update_data.keys())}")
+            return False
         values.append(task_id)
 
         query = f"""
             UPDATE tasks
             SET {', '.join(set_clauses)},
                 updated_at = CURRENT_TIMESTAMP,
-                completed_at = CASE WHEN status_code IN ('SUCCESS', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
+                completed_at = CASE WHEN task_status_code IN ('SUCCESS', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_at END
             WHERE task_id = %s
         """
         try:

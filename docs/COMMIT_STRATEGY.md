@@ -31,6 +31,29 @@ Primary goals:
 7. Push branch and open PR to `main`.
 8. Merge only after review + CI is green.
 
+## Startup Bootstrap Workflow (Dev/Integration)
+
+When starting from a fresh or reset DB volume, use one deterministic order so chatbot + ticketing stay aligned.
+
+1. Ensure the target branch is checked out and up to date:
+   - `git checkout main`
+   - `git pull --ff-only origin main`
+2. Rebuild backend image before migrations (ensures newest Alembic files are in container):
+   - `docker compose build backend`
+3. Apply migrations:
+   - `python -m alembic -c migrations/public/alembic.ini upgrade head`
+   - `python -m alembic -c ticketing/migrations/alembic.ini upgrade head`
+4. Seed ticketing locations from JSON (repo-standard source):
+   - `python -m ticketing.seed.import_locations_json --country NP --en backend/dev-resources/location_dataset/en_cleaned.json --ne backend/dev-resources/location_dataset/ne_cleaned.json --max-level 3`
+5. Seed workflows/mock data:
+   - `python -m ticketing.seed.mock_tickets --reset`
+6. Start/restart stack:
+   - `docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build`
+
+Notes:
+- If `public` core tables are missing, run `docker compose --profile init run --rm db_init` once, then re-run step 3.
+- Prefer JSON location import in this repository; CSV import requires an explicit `--csv` path and may not exist in every deployment.
+
 ## Docker-First Validation
 
 Developers should validate in containerized environment before committing when possible.
