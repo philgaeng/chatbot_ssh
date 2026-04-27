@@ -19,6 +19,22 @@ This spec is implementation-facing and aligned with:
 4. Officer default experience is summary-first (redacted and policy-safe).
 5. Original vault reveal is permitted for officers, but controlled, audited, and time-bounded.
 
+## Worktree and schema ownership (LOCKED)
+
+To support parallel development in separate worktrees:
+
+| Ownership | Worktree/branch | Schema/tables | Responsibilities |
+|---|---|---|---|
+| Public/chatbot domain | chatbot/public worktree | `public.*` | intake, canonical grievance identity, vault storage, policy gate, reveal authorization, immutable security audit of sensitive reads |
+| Ticketing domain | ticketing worktree | `ticketing.*` | operational metadata/events, officer workflow state, derived summaries/anomaly signals, UI consumption, ticket-level interaction audit |
+
+Rules:
+
+1. `ticketing.*` never stores raw original grievance narrative or direct PII.
+2. `public.*` remains system of record for original grievance/vault content.
+3. Access to original content always goes through brokered API policy checks.
+4. No direct `ticketing.*` -> `public.*` joins; integrate through API/event contracts.
+
 ## Data domains
 
 ### 1) Vault domain (restricted)
@@ -48,6 +64,7 @@ Security requirements:
 
 - no vault plaintext duplication
 - strict schema and payload allowlist
+- stored in `ticketing.*` where possible for officer workflow and AI operations
 
 ### 3) Derived summary domain (consumable)
 
@@ -63,6 +80,7 @@ Security requirements:
 - generated only from controlled pipeline
 - post-generation PII leakage validation
 - blocked publication if leakage checks fail
+- persisted in `ticketing.*` as officer-facing operational artifacts
 
 ## Access policy model
 
@@ -121,6 +139,12 @@ Note: screenshots cannot be fully prevented on end-user devices. Mitigation is d
 - brokered endpoints for sensitive reads
 - deny-by-default for direct sensitive reads
 
+Ownership split for API contracts:
+
+- Public/chatbot API owns original-content reads/writes and reveal authorization.
+- Ticketing API owns metadata/event ingestion, summary status, and officer workflow actions.
+- Ticketing may proxy reveal requests to public API, but does not bypass policy checks.
+
 Minimum endpoint set:
 
 - `GET /api/grievance/{id}` -> metadata + safe summary
@@ -146,6 +170,12 @@ SEAH alerting baseline:
 - off-hours reveal bursts
 - repeated long-duration reveals
 
+Audit stream ownership:
+
+- Public/chatbot side (authoritative): sensitive content access audit (`reveal_*`, decrypt decisions).
+- Ticketing side: workflow/action audit and summary generation lifecycle audit.
+- Correlation key between streams: `grievance_id` + `reveal_session_id` + `request_id`.
+
 ## Retention and minimization
 
 - longer retention only where policy/legal basis exists
@@ -158,3 +188,4 @@ SEAH alerting baseline:
 - Ticketing-side implementation lives in `ticketing/` and `channels/ticketing-ui/`.
 - Public schema and chatbot data model changes follow `migrations/public/*` and existing backend migration ownership.
 - Do not implement direct cross-schema joins from `ticketing.*` into `public.*`.
+- Public and ticketing worktrees must each own their migration stream and expose integration through API contracts only.
