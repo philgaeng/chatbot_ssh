@@ -45,6 +45,37 @@ Integration with legacy PHP/MySQL Grievance Redress Mechanism (GRM) system for b
    - Field mapping
    - Batch operations
 
+### Dev Startup + Seed Baseline (Ticketing + Chatbot DB)
+
+For dev/integration environments, initialize schema + seed data in this order before validating GRM flows:
+
+```bash
+# 1) Pull target branch and rebuild backend image
+git checkout main
+git pull --ff-only origin main
+docker compose build backend
+
+# 2) Migrations (public chatbot + ticketing)
+docker compose run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+docker compose run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+
+# 3) Location + ticketing seed (JSON source of truth)
+docker compose run --rm --no-deps backend python -m ticketing.seed.import_locations_json \
+  --country NP \
+  --en backend/dev-resources/location_dataset/en_cleaned.json \
+  --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+  --max-level 3
+docker compose run --rm --no-deps backend python -m ticketing.seed.mock_tickets --reset
+
+# 4) Restart stack
+docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build
+```
+
+Validation checks:
+- `ticketing.seed.mock_tickets --reset` should log `location OK` for KL Road references.
+- `ticketing_api` health should return `200`.
+- chatbot runtime tables should exist (`complainants`, `grievances`, `file_attachments`).
+
 ### Installation
 
 ```bash

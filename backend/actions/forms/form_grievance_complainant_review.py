@@ -72,6 +72,7 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             grievance_categories = grievance_data.get('grievance_categories', [])
             grievance_categories_alternative = grievance_data.get('grievance_categories_alternative', [])
             follow_up_question = grievance_data.get('follow_up_question', '')
+            grievance_classification_status_db = grievance_data.get('grievance_classification_status')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
                 
@@ -107,19 +108,39 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                         SlotSet('grievance_complainant_review', True)
                         ]
             else :
-                self.logger.warning("Classification results not recorded in the database")
-                utterance = self.get_utterance(2)
-                dispatcher.utter_message(text=utterance)
-                return [SlotSet('grievance_summary_temp', 'N/A'),
-                        SlotSet('grievance_summary', 'N/A'), 
-                        SlotSet('grievance_categories', 'N/A'), 
-                        SlotSet('grievance_categories_alternative', 'N/A'),
-                        SlotSet('grievance_categories_local', 'N/A'),
-                        SlotSet('grievance_categories_alternative_local', 'N/A'),
-                        SlotSet('follow_up_question', 'N/A'),
-                        SlotSet('grievance_complainant_review', False),
-                        SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_failed']),
-                        SlotSet('grievance_complainant_review', False)
+                # Distinguish hard LLM failure from "not ready yet / empty output".
+                if grievance_classification_status_db in (
+                    self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_failed'],
+                    self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_error'],
+                ):
+                    self.logger.warning("Classification failed in database (LLM_failed/LLM_error)")
+                    utterance = self.get_utterance(2)
+                    dispatcher.utter_message(text=utterance)
+                    return [SlotSet('grievance_summary_temp', 'N/A'),
+                            SlotSet('grievance_summary', 'N/A'), 
+                            SlotSet('grievance_categories', 'N/A'), 
+                            SlotSet('grievance_categories_alternative', 'N/A'),
+                            SlotSet('grievance_categories_local', 'N/A'),
+                            SlotSet('grievance_categories_alternative_local', 'N/A'),
+                            SlotSet('follow_up_question', 'N/A'),
+                            SlotSet('grievance_complainant_review', False),
+                            SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_failed']),
+                            SlotSet('grievance_complainant_review', False)
+                            ]
+
+                # Pending/empty classification should still allow complainant manual review.
+                self.logger.warning(
+                    "Classification results not yet available; allowing manual review fallback "
+                    f"(db_status={grievance_classification_status_db})"
+                )
+                return [SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
+                        SlotSet('grievance_summary_temp', grievance_summary or ''),
+                        SlotSet('grievance_categories', grievance_categories or []),
+                        SlotSet('grievance_categories_alternative', grievance_categories_alternative or []),
+                        SlotSet('grievance_categories_local', self._get_categories_in_local_language(grievance_categories or [])),
+                        SlotSet('grievance_categories_alternative_local', self._get_categories_in_local_language(grievance_categories_alternative or [])),
+                        SlotSet('follow_up_question', follow_up_question or ''),
+                        SlotSet('grievance_complainant_review', True)
                         ]
                 
         except Exception as e:
@@ -344,7 +365,9 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                         selected_category = c
                 if not selected_category:
                     #select the category c in the list_of_cat that is the closest match to the temp_cat using rapidfuzz
-                    selected_category = process.extractOne(input_text, alternative_categories)
+                    best_match = process.extractOne(input_text, alternative_categories)
+                    if best_match:
+                        selected_category = best_match[0]
                     
         return selected_category
     
@@ -382,8 +405,8 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         
         if slot_value:
 
-            grievance_categories = tracker.get_slot("grievance_categories_local")
-            alternative_categories = tracker.get_slot("grievance_categories_alternative_local")
+            grievance_categories = tracker.get_slot("grievance_categories_local") or []
+            alternative_categories = tracker.get_slot("grievance_categories_alternative_local") or []
             self.logger.info(f"validate_grievance_cat_modify input: {slot_value}, grievance_categories: {grievance_categories}, alternative_categories: {alternative_categories}")
             #get the category to modify from the slot_value
             selected_category = self.get_category_to_modify(alternative_categories = alternative_categories + grievance_categories, input_text=slot_value) #we add the grievance_categories to the alternative_categories to get the complete list of categories that can be deleted
@@ -588,7 +611,15 @@ class ActionAskFormGrievanceComplainantReviewGrievanceCatModify(BaseAction):
                 dispatcher.utter_message(text=utterance, buttons=buttons)
                 
         if grievance_categories_status == "slot_added":
-            alternative_categories = tracker.get_slot("grievance_categories_alternative")
+            alternative_categories = (
+                tracker.get_slot("grievance_categories_alternative_local")
+                or tracker.get_slot("grievance_categories_alternative")
+                or []
+            )
+            # Fallback so add-category still works when alternative slots are not populated in session.
+            if not alternative_categories:
+                current_categories = tracker.get_slot("grievance_categories_local") or []
+                alternative_categories = [c for c in LIST_OF_CATEGORIES if c not in current_categories]
             self.logger.debug(f"action_ask_form_grievance_complainant_review_grievance_cat_modify - alternative_categories: {alternative_categories}")
             buttons = [
                 {"title": cat, "payload": f'/add_category{{"category": "{cat}"}}'} 

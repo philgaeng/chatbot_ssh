@@ -33,6 +33,9 @@ class TicketingSettings(BaseSettings):
     cognito_grm_client_id: str = ""
     cognito_grm_region: str = "ap-southeast-1"
 
+    # ── LLM (OpenAI — same key used by chatbot backend) ──
+    openai_api_key: str = ""
+
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
         env_file_encoding="utf-8",

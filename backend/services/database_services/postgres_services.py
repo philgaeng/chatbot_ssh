@@ -573,10 +573,12 @@ class DatabaseManager(BaseDatabaseManager):
             if self.grievance.get_grievance_by_id(grievance_id):
                 self.update_grievance(grievance_id, data)
             else:
-                self.create_grievance(data)
+                grievance_id = self.create_grievance(data)
+            return grievance_id
         except Exception as e:
             self.logger.error(f"Error creating or updating grievance: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return None
             
     
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:

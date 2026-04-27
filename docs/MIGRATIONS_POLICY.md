@@ -60,6 +60,11 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
    - After pulling a branch, run **both** streams when relevant: `make migrate_all`, or ticketing + public commands separately.
    - Use **isolated DB volumes per worktree** where possible (see `CLAUDE.md`) to avoid revision collisions.
 
+6. **Migration seed prerequisites must live in the same revision**
+   - If a migration inserts rows that reference FK parents (for example, linking projects to organizations), the migration must also ensure the required parent rows exist first.
+   - Use idempotent upserts (`INSERT ... ON CONFLICT DO NOTHING/UPDATE`) inside that revision so `upgrade head` works on fresh databases without manual pre-seeding.
+   - Do not rely on external/manual SQL steps for required reference rows.
+
 ---
 
 ## Review Checklist for PRs
@@ -70,6 +75,7 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
 - Public migration files include the standard header: only `public.*`, never `ticketing.*`.
 - No new schema-changing script added under `scripts/database/` for ticketing.
 - If the PR changes **`public.*`** schema: include a new revision under `migrations/public/versions/` (or document why not, e.g. bootstrap-only with follow-up migration).
+- Migrations that seed FK-linked rows are self-contained and idempotent (no manual pre-seed dependency).
 - Upgrade path validated on both host DB and Docker DB targets where applicable.
 
 ## May5 SEAH contact/location rollout (public stream)

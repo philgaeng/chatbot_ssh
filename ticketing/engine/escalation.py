@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ticketing.engine.workflow_engine import (
+    auto_assign_officer,
     get_current_step,
     get_grc_member_user_ids,
     get_next_step,
@@ -101,12 +102,34 @@ def escalate_ticket(
 
     old_status = ticket.status_code
     old_step_id = ticket.current_step_id
+    old_assigned = ticket.assigned_to_user_id
 
     ticket.current_step_id = next_step.step_id
     ticket.status_code = "ESCALATED"
     ticket.sla_breached = (triggered_by == "SLA_AUTO")
     ticket.step_started_at = None  # clock resets at new step; starts on ACKNOWLEDGE
     ticket.updated_by_user_id = created_by_user_id or "system"
+
+    # Auto-assign to the least-loaded officer at the next step's role
+    new_assigned = auto_assign_officer(
+        role_key=next_step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        db=db,
+    )
+    if new_assigned:
+        ticket.assigned_to_user_id = new_assigned
+        logger.info(
+            "Auto-assigned ticket_id=%s to %s at step %s",
+            ticket.ticket_id, new_assigned, next_step.step_key,
+        )
+    else:
+        logger.warning(
+            "No officer found for role=%s org=%s loc=%s proj=%s — ticket_id=%s unassigned at new step",
+            next_step.assigned_role_key, ticket.organization_id,
+            ticket.location_code, ticket.project_code, ticket.ticket_id,
+        )
 
     event_note = note or (
         f"Auto-escalated: SLA exceeded at previous step."
@@ -118,6 +141,8 @@ def escalate_ticket(
         db, ticket, "ESCALATED",
         old_status=old_status,
         new_status="ESCALATED",
+        old_assigned=old_assigned,
+        new_assigned=ticket.assigned_to_user_id,
         step_id=next_step.step_id,
         note=event_note,
         payload={
@@ -127,7 +152,7 @@ def escalate_ticket(
             "to_step_key": next_step.step_key,
         },
         seen=False,
-        notify_user_id=ticket.assigned_to_user_id,
+        notify_user_id=ticket.assigned_to_user_id,  # new officer, not the old one
         created_by=created_by_user_id or "system",
     )
 

@@ -2,13 +2,26 @@
 
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
-> Last reviewed: 2026-04-26
+> Last reviewed: 2026-04-27
+
+---
+
+## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
+
+All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):
+- AppShell (sidebar, nav, badge count, SEAH indicator, Cognito + bypass auth)
+- Queue page (tabs, summary tiles, ticket rows, SLA countdown, SEAH red border/badge)
+- All Tickets page (list + search), Escalated page (focused list)
+- Ticket detail (grievance card, workflow stepper, SLA bar, event timeline, complainant PII + phone reveal)
+- File attachments (complainant read + officer upload), assign + reassign-to-teammate panels
+- Action panel (ACKNOWLEDGE / ESCALATE / RESOLVE / CLOSE / NOTE / GRC_CONVENE / GRC_DECIDE / REPLY)
+- Settings page (full admin panel), Badge + SlaCountdown components
 
 ---
 
 ## 🔴 WEEK 3 — Must fix before demo (May 10)
 
-### 1. Auto-assign officer on escalation
+### ~~1. Auto-assign officer on escalation~~ ✅ DONE (`d4e2f1a`)
 **File:** `ticketing/engine/escalation.py` — `escalate_ticket()`  
 **Problem:** After escalation, `assigned_to_user_id` stays as the previous officer.
 The next-level officer is never assigned automatically — ticket sits in limbo until a
@@ -21,7 +34,7 @@ so the notification goes to the new officer, not the old one.
 **Demo impact:** Pre-seeded tickets have hardcoded `assigned_to` so demo is safe.
 New tickets created via live API or chatbot webhook will have no assigned officer.
 
-### 2. Automatic complainant notification on RESOLVE / ESCALATE
+### ~~2. Automatic complainant notification on RESOLVE / ESCALATE~~ ✅ DONE (`d4e2f1a`)
 **File:** `ticketing/api/routers/tickets.py` — `perform_action()`  
 **Problem:** Action handler commits and returns — no notification fires automatically.
 Demo scenario 1 ends with "complainant notified via chatbot" but that requires the
@@ -48,30 +61,93 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 **Dependency:** User is currently rewriting `public.*` tables via Alembic migration.
   Do not test until that migration lands and DB is re-seeded.
 
+### 4. Wire OfficerScope seed rows so auto-assign works for live API tickets
+**File:** `ticketing/seed/mock_tickets.py`  
+**Problem:** Seed creates `UserRole` rows but no `OfficerScope` rows. `auto_assign_officer()`
+returns `None` for any ticket created via the live API (or chatbot webhook) — they arrive
+unassigned. Pre-seeded demo tickets have hardcoded `assigned_to` so demo is safe, but
+the chatbot → ticketing integration path will produce unassigned tickets.  
+**Fix:** Add `OfficerScope` rows for each mock officer in `mock_tickets.py`, matching
+their role, org, location, and project. Mirror the pattern in `kl_road_standard.py`.
+
+### 5. Visual test + polish pass
+**What to do:** Open `http://localhost:3001`, click through every screen, verify:
+- All 6 demo tickets show in queue with correct status/priority/SLA colours
+- Ticket detail for each demo ticket loads correctly
+- ACKNOWLEDGE → ESCALATE → RESOLVE flow works end-to-end
+- GRC CONVENE → DECIDE flow works (use GRV-2025-001)
+- SEAH ticket (GRV-2025-SEAH-001) shows 🔒 badge and red border
+- Reports page — currently a stub, decide if a placeholder is enough for demo
+
+### 6. Staging deploy to grm.stage.facets-ai.com
+**What:** Docker deploy to staging EC2, Nginx config, SSL.  
+**How:** Same EC2 as chatbot, add a new Nginx `location` block for port 3001 (UI)
+and 5002 (API). Run `docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d`
+on the EC2 after pulling the branch.  
+**NEXT_PUBLIC_API_URL** must be set to the public staging URL (not localhost) for the
+UI to talk to the API from the browser.  
+**Dependency:** Visual test (above) should pass first.
+
 ---
 
 ## 🟡 POST-DEMO FEATURES (prioritised)
 
-### 4. LLM: Note translation + English summary for supervisor/viewer roles
-**Rationale:** Field officers in Nepal submit notes in Nepali (or mixed). Supervisors
-(ADB roles, GRC chair, senior observers) need to read case notes without a translator.  
-**Scope:**
-- On `NOTE_ADDED` event: trigger async Celery task → call LLM to produce English
-  translation. Store result in `TicketEvent.payload["translation_en"]`.
-- On ticket detail load for viewer/supervisor roles: if `translation_en` exists, show
-  it alongside (or instead of) the original note with a "translated" chip.
-- Aggregate summary: for `grc_chair`, `adb_hq_safeguards`, `adb_hq_exec` roles,
-  show a "Case summary" panel on the ticket detail — one LLM call over all notes
-  + events for that ticket, cached in `ticketing.tickets.ai_summary_en`. Refresh
-  button to regenerate.
-**Implementation notes:**
-- Use the existing `backend.task_queue.celery_app` LLM queue (DO NOT reimplement).
-  Wire via a new Celery task in `ticketing/tasks/llm.py`.
-- Language detection: use `langdetect` or pass raw note to LLM with prompt
-  "Translate to English if not already in English, else return as-is."
-- Store raw note unchanged — translation is additive, never replaces.
+### ~~7. LLM: Multilingual notes + "Findings" summary~~ ✅ DONE (`edfa942`) ⭐ BIG FEATURE
+**Rationale:** Field officers (L1/L2, DOR) write notes in Nepali or mixed Nepali-English.
+Supervisors and observers (GRC chair, ADB roles) read only English. Without translation
+the case timeline is opaque to half the audience. The "Findings" panel gives supervisors
+a one-glance digest of a case without reading every raw note.
 
-### 5. User language preference (per organisation)
+#### 7a — Per-note translation
+- When a `NOTE_ADDED` event is created, fire a Celery task `translate_note.delay(event_id)`.
+- Task calls LLM: *"Translate the following to English. If already in English, return as-is.
+  Preserve technical/legal terms. Output only the translated text."*
+- Store result in `TicketEvent.payload["translation_en"]`.
+- In the ticket detail timeline, if `translation_en` exists show it below the original
+  with a small `🌐 Translated` chip. Original is always preserved and visible.
+- Non-English users see only the original (toggle if needed post-demo).
+
+#### 7b — "Findings" summary panel
+- A dedicated **Findings** card on the ticket detail (right column, below complainant card).
+- Content: one LLM call over all `NOTE_ADDED` events + key status events (ESCALATED,
+  GRC_CONVENED, GRC_DECIDED, RESOLVED) for the ticket.
+- Prompt: *"You are a grievance officer. Summarise the following case notes into a brief
+  Findings report: key facts, actions taken, outstanding issues, and recommended next step.
+  Write in formal English. Max 150 words."*
+- Cached in `ticketing.tickets.ai_summary_en` (new column, Alembic migration needed).
+- Regenerate button visible to admin/supervisor roles — fires `generate_findings.delay(ticket_id)`.
+- Shown to: `grc_chair`, `adb_hq_safeguards`, `adb_hq_exec`, `adb_national_project_director`,
+  `super_admin`. Hidden from L1/L2 field officers (they write the notes, don't need the digest).
+
+#### Implementation plan
+- **LLM provider confirmed: OpenAI** (`gpt-4` for translation, `gpt-3.5-turbo` for
+  classification). Client lives in `backend/services/LLM_services.py`.
+  `translate_grievance_to_english_LLM()` already exists — we reuse the same pattern.
+  Init: `OpenAI(api_key=os.getenv("OPENAI_API_KEY"))`. Key is already in `env.local`.
+- **New file `ticketing/tasks/llm.py`** with two Celery tasks on `grm_ticketing` queue:
+  - `translate_note(event_id)` — fetches event note, calls OpenAI `gpt-4`, stores
+    result in `TicketEvent.payload["translation_en"]`
+  - `generate_findings(ticket_id)` — fetches all NOTE_ADDED + key status events,
+    calls OpenAI `gpt-4`, stores result in `Ticket.ai_summary_en`
+- **New file `ticketing/clients/llm_client.py`** — thin wrapper around `OpenAI` client
+  (same init pattern as `LLM_services.py`). Keeps ticketing independent of backend/
+  (DO NOT import from `backend/services/` — reuse the pattern, not the code).
+- **DB migration:** Add `ai_summary_en TEXT` + `ai_summary_updated_at TIMESTAMPTZ`
+  to `ticketing.tickets`. (`translation_en` goes into existing JSONB payload — no migration.)
+- **API:** Add `POST /api/v1/tickets/{id}/findings` (trigger regenerate, admin only).
+  `GET /api/v1/tickets/{id}` already returns `ai_summary_en` once added to `TicketDetail`.
+- **Frontend:** `FindingsCard` component in ticket detail right column. Translated note
+  shown inline in `EventTimeline` when `payload.translation_en` present.
+
+#### 7c — Hook: fire translation automatically on NOTE_ADDED
+- In `tickets.py` `perform_action()`, after commit for `NOTE` action:
+  `translate_note.delay(event.event_id)`
+- Same pattern as `notify_complainant.delay()` already wired for RESOLVE/ESCALATE.
+
+**Dependencies:** `OPENAI_API_KEY` already in `env.local` (used by chatbot). No new
+credentials needed.
+
+### 8. User language preference (per organisation)  *(depends on #7)*
 **Rationale:** Required to correctly present translated content and future
 UI localisation. Officers from DOR likely prefer Nepali; ADB officers prefer English.  
 **Scope:**
@@ -85,7 +161,7 @@ UI localisation. Officers from DOR likely prefer Nepali; ADB officers prefer Eng
 **Alembic:** One migration — add column to `ticketing.organizations` + new
   `ticketing.user_preferences` table.
 
-### 6. Mobile-first ticket management UI (officer field app)
+### 9. Mobile-first ticket management UI (officer field app)
 **Rationale:** Field officers (L1 site focal persons, contractor officers) work primarily
 on phones. The full Next.js settings-heavy UI is not suitable for mobile field use.  
 **Scope — what's IN:**
@@ -111,7 +187,7 @@ on phones. The full Next.js settings-heavy UI is not suitable for mobile field u
 **Recommendation:** Start with Option A (PWA) — add `mobile:` Tailwind breakpoint
 overrides to the existing ticketing-ui, hide desktop-only nav items, add a
 `manifest.json` for PWA install. Revisit native if offline or camera is needed.
-**Dependencies:** Requires Week 2 desktop UI to be complete first.
+**Dependencies:** Week 2 desktop UI complete ✅. Consider adding note translation (#7a) to the mobile UI once that feature lands.
 
 ---
 

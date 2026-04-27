@@ -973,6 +973,58 @@ sleep 10
 docker compose ps
 ```
 
+### Startup Runbook (Dev/SSH)
+
+Use this sequence when bringing up a dev/integration host from a fresh DB or after major schema merges.
+
+```bash
+cd /home/ubuntu/nepal_chatbot
+
+# 1) Sync code and ensure latest migration files are in the backend image
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+docker compose build backend
+
+# 2) Initialize baseline chatbot tables if needed (safe on empty/dev DB)
+docker compose --profile init run --rm db_init || true
+
+# 3) Apply migration streams
+docker compose run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+docker compose run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+
+# 4) Seed locations/workflows/tickets (JSON source)
+docker compose run --rm --no-deps backend python -m ticketing.seed.import_locations_json \
+  --country NP \
+  --en backend/dev-resources/location_dataset/en_cleaned.json \
+  --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+  --max-level 3
+docker compose run --rm --no-deps backend python -m ticketing.seed.mock_tickets --reset
+
+# 5) Restart full stack
+docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml ps
+```
+
+Post-start verification:
+
+```bash
+# Core chatbot/public runtime tables
+docker compose run --rm --no-deps backend python - <<'PY'
+import os
+from sqlalchemy import create_engine, text
+e = create_engine(os.environ["DATABASE_URL"])
+with e.connect() as c:
+    for t in ("public.complainants", "public.grievances", "public.file_attachments"):
+        print(t, "=>", c.execute(text(f"select to_regclass('{t}')")).scalar())
+PY
+```
+
+Expected:
+- All three `public.*` tables resolve (not `None`).
+- `mock_tickets --reset` logs `location OK` for KL Road location codes.
+- `ticketing_api` becomes healthy after startup.
+
 ### Public + ticketing migration run order (May5 SEAH tranche)
 
 ```bash
