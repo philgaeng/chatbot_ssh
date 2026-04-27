@@ -55,7 +55,6 @@ class DatabaseManager(BaseDatabaseManager):
             # Import managers directly to avoid circular imports
             super().__init__()
             from .base_manager import TableDbManager, TaskDbManager, FileDbManager
-            from .gsheet_query_manager import GSheetDbManager
             from .complainant_manager import ComplainantDbManager
             from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
             
@@ -63,7 +62,6 @@ class DatabaseManager(BaseDatabaseManager):
             self.table = TableDbManager()
             self.task = TaskDbManager()
             self.file = FileDbManager()
-            self.gsheet = GSheetDbManager()
             self.complainant = ComplainantDbManager()
             self.grievance = GrievanceDbManager()
             self.recording = RecordingDbManager()
@@ -209,6 +207,14 @@ class DatabaseManager(BaseDatabaseManager):
                 self.grievance.update_grievance(grievance_id, grievance_data)
                 self.logger.info(f"Grievance updated in db: {grievance_id}")
 
+            party_contacts = data.get("party_contacts")
+            if isinstance(party_contacts, dict) and party_contacts:
+                self._replace_grievance_parties_from_payloads(
+                    grievance_id=grievance_id,
+                    party_contacts=party_contacts,
+                    fallback_complainant_id=complainant_id,
+                )
+
             # Ensure canonical party linkage exists for standard submissions.
             self.execute_update(
                 """
@@ -253,6 +259,70 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+
+    def _replace_grievance_parties_from_payloads(
+        self,
+        grievance_id: str,
+        party_contacts: Dict[str, Any],
+        fallback_complainant_id: Optional[str] = None,
+    ) -> None:
+        ordered_roles = [
+            "victim_survivor",
+            "witness",
+            "relative",
+            "seah_focal_point",
+            "other_reporter",
+        ]
+        role_map = {
+            "victim_survivor": "victim_survivor",
+            "witness": "witness",
+            "relative": "relative_or_representative",
+            "seah_focal_point": "seah_focal_point",
+            "other_reporter": "other_reporter",
+        }
+        self.execute_update("DELETE FROM grievance_parties WHERE grievance_id = %s", (grievance_id,))
+        primary_assigned = False
+        for role in ordered_roles:
+            payload = party_contacts.get(role)
+            if not isinstance(payload, dict):
+                continue
+            has_identity = any(
+                payload.get(k) not in (None, "", DEFAULT_VALUES.get("NOT_PROVIDED", "Not provided"))
+                for k in ("complainant_full_name", "complainant_phone", "complainant_email")
+            )
+            complainant_id = payload.get("complainant_id")
+            if not complainant_id and has_identity:
+                complainant_id = self.generate_complainant_id(payload)
+            if complainant_id and has_identity:
+                complainant_payload = dict(payload)
+                complainant_payload["complainant_id"] = complainant_id
+                if self.complainant.get_complainant_by_id(complainant_id):
+                    self.complainant.update_complainant(complainant_id, complainant_payload)
+                else:
+                    self.complainant.create_complainant(complainant_payload)
+            if not complainant_id and role == "victim_survivor" and fallback_complainant_id:
+                complainant_id = fallback_complainant_id
+            if not complainant_id:
+                continue
+            is_primary = not primary_assigned
+            primary_assigned = True
+            self.execute_update(
+                """
+                INSERT INTO grievance_parties (
+                    party_id, grievance_id, complainant_id, party_role,
+                    is_primary_reporter, contact_allowed, notes_safe
+                )
+                VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                """,
+                (
+                    f"party-{uuid.uuid4()}",
+                    grievance_id,
+                    complainant_id,
+                    role_map[role],
+                    is_primary,
+                    f"party payload submit for role: {role}",
+                ),
+            )
 
     def _ensure_seah_contact_points_table(self) -> None:
         """Reference rows for SEAH center / referral text (spec 08)."""
@@ -440,42 +510,50 @@ class DatabaseManager(BaseDatabaseManager):
             else:
                 self.grievance.create_grievance(grievance_payload)
 
-            party_role = seah_party_role_from_victim_survivor_role(data.get("seah_victim_survivor_role"))
-            party_id = f"party-{uuid.uuid4()}"
-            self.execute_update(
-                """
-                DELETE FROM grievance_parties
-                WHERE grievance_id = %s
-                  AND is_primary_reporter = TRUE
-                """,
-                (grievance_id,),
-            )
-            self.execute_update(
-                """
-                INSERT INTO grievance_parties (
-                    party_id,
-                    grievance_id,
-                    complainant_id,
-                    party_role,
-                    is_primary_reporter,
-                    contact_allowed,
-                    contact_channel,
-                    consent_scope,
-                    notes_safe
+            party_contacts = data.get("party_contacts")
+            if isinstance(party_contacts, dict) and party_contacts:
+                self._replace_grievance_parties_from_payloads(
+                    grievance_id=grievance_id,
+                    party_contacts=party_contacts,
+                    fallback_complainant_id=complainant_id,
                 )
-                VALUES (%s, %s, %s, %s, TRUE, %s, %s::jsonb, %s::jsonb, %s)
-                """,
-                (
-                    party_id,
-                    grievance_id,
-                    complainant_id,
-                    party_role,
-                    False if anonymous_route else True,
-                    json.dumps({"channel": data.get("seah_contact_consent_channel")}),
-                    json.dumps({"complainant_consent": data.get("complainant_consent")}),
-                    "primary reporter from seah submit path",
-                ),
-            )
+            else:
+                party_role = seah_party_role_from_victim_survivor_role(data.get("seah_victim_survivor_role"))
+                party_id = f"party-{uuid.uuid4()}"
+                self.execute_update(
+                    """
+                    DELETE FROM grievance_parties
+                    WHERE grievance_id = %s
+                      AND is_primary_reporter = TRUE
+                    """,
+                    (grievance_id,),
+                )
+                self.execute_update(
+                    """
+                    INSERT INTO grievance_parties (
+                        party_id,
+                        grievance_id,
+                        complainant_id,
+                        party_role,
+                        is_primary_reporter,
+                        contact_allowed,
+                        contact_channel,
+                        consent_scope,
+                        notes_safe
+                    )
+                    VALUES (%s, %s, %s, %s, TRUE, %s, %s::jsonb, %s::jsonb, %s)
+                    """,
+                    (
+                        party_id,
+                        grievance_id,
+                        complainant_id,
+                        party_role,
+                        False if anonymous_route else True,
+                        json.dumps({"channel": data.get("seah_contact_consent_channel")}),
+                        json.dumps({"complainant_consent": data.get("complainant_consent")}),
+                        "primary reporter from seah submit path",
+                    ),
+                )
 
             grievance_description = data.get("grievance_description")
             if grievance_description not in (None, "", not_provided):

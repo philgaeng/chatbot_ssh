@@ -75,6 +75,13 @@ class BaseActionSubmit(BaseAction):
                  "grievance_id",
                  "grievance_description",
                  "otp_verified",
+                 "active_party_role",
+                 "party_contacts",
+                 "party_victim_survivor",
+                 "party_witness",
+                 "party_relative",
+                 "party_seah_focal_point",
+                 "party_other_reporter",
                  ]
 
         if review:
@@ -114,6 +121,8 @@ class BaseActionSubmit(BaseAction):
         grievance_data["grievance_timeline"] = grievance_timeline
         # change all the values of the slots_skipped or None to "NOT_PROVIDED"
         grievance_data = self._update_key_values_for_db_storage(grievance_data)
+        if grievance_data.get("party_contacts") == self.NOT_PROVIDED:
+            grievance_data["party_contacts"] = {}
         self.logger.info(f"Grievance data: {grievance_data}")
                 
         return grievance_data
@@ -223,7 +232,7 @@ class BaseActionSubmit(BaseAction):
                 #send sms
                 complainant_phone = grievance_data.get('complainant_phone')
                 if complainant_phone != self.NOT_PROVIDED:
-                    self.messaging.send_sms(phone_number=complainant_phone, message=confirmation_message)
+                    self.messaging.send_sms(phone_number=str(complainant_phone), message=confirmation_message)
                     #utter sms confirmation message
                     utterance = self.get_utterance(2)
                     utterance = utterance.format(complainant_phone=complainant_phone)
@@ -336,6 +345,13 @@ class ActionSubmitSeah(BaseActionSubmit):
             grievance_data["project_uuid"] = tracker.get_slot("project_uuid")
             grievance_data["seah_contact_point_id"] = tracker.get_slot("seah_contact_point_id")
             grievance_data["complainant_consent"] = tracker.get_slot("complainant_consent")
+            grievance_data["active_party_role"] = tracker.get_slot("active_party_role")
+            grievance_data["party_contacts"] = tracker.get_slot("party_contacts") or {}
+            grievance_data["party_victim_survivor"] = tracker.get_slot("party_victim_survivor")
+            grievance_data["party_witness"] = tracker.get_slot("party_witness")
+            grievance_data["party_relative"] = tracker.get_slot("party_relative")
+            grievance_data["party_seah_focal_point"] = tracker.get_slot("party_seah_focal_point")
+            grievance_data["party_other_reporter"] = tracker.get_slot("party_other_reporter")
 
             result = self.db_manager.submit_seah_to_db(grievance_data)
             if not result.get("ok"):
