@@ -114,7 +114,20 @@ def upgrade() -> None:
     )
     op.create_index("idx_tickets_project_id", "tickets", ["project_id"], schema="ticketing")
 
-    # ── 6. Seed KL_ROAD project ───────────────────────────────────────────────
+    # ── 6. Ensure required organizations exist, then seed KL_ROAD project ────
+    # Keep this migration self-contained for fresh environments where
+    # ticketing.organizations may exist but not yet contain DOR/ADB rows.
+    op.execute("""
+        INSERT INTO ticketing.organizations
+            (organization_id, name, country_code, is_active, created_at, updated_at)
+        VALUES
+            ('DOR', 'Department of Roads (DOR)', 'NP', true, NOW(), NOW()),
+            ('ADB', 'Asian Development Bank (ADB)', 'NP', true, NOW(), NOW())
+        ON CONFLICT (organization_id) DO UPDATE SET
+            name = EXCLUDED.name,
+            updated_at = NOW();
+    """)
+
     op.execute(f"""
         INSERT INTO ticketing.projects
             (project_id, country_code, short_code, name, description, is_active, created_at, updated_at)

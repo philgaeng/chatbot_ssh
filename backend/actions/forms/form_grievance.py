@@ -84,7 +84,12 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
     def name(self) -> Text:
         return "validate_form_grievance"
     
-    async def _trigger_async_classification(self, tracker: Tracker, dispatcher: CollectingDispatcher) -> Dict[str, Any]:
+    async def _trigger_async_classification(
+        self,
+        tracker: Tracker,
+        dispatcher: CollectingDispatcher,
+        grievance_description: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Trigger async classification when grievance details form is completed.
         
@@ -92,7 +97,7 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             Dict with slots to set for async classification tracking
         """
         grievance_id = tracker.get_slot("grievance_id")
-        grievance_description = tracker.get_slot("grievance_description")
+        grievance_description = grievance_description or tracker.get_slot("grievance_description")
         self._initialize_language_and_helpers(tracker)
         
         # If no grievance details or ID, skip classification
@@ -136,14 +141,29 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'grievance_description': grievance_description
                 }
             }
+            self.logger.info(
+                "classification_trigger_prepare grievance_id=%s session_id=%s has_description=%s description_len=%s",
+                grievance_id,
+                session_id,
+                bool(grievance_description),
+                len(grievance_description or ""),
+            )
 
             # Launch Celery task in a thread so we never block the request (e.g. if Redis is slow/down)
             def _fire():
                 try:
                     task_result = classify_and_summarize_grievance_task.delay(input_data)
-                    self.logger.info(f"Async classification triggered for grievance {grievance_id} with task ID: {task_result.id}")
+                    self.logger.info(
+                        "classification_trigger_enqueued grievance_id=%s task_id=%s",
+                        grievance_id,
+                        task_result.id,
+                    )
                 except Exception as e:
-                    self.logger.warning(f"Could not queue classification task for {grievance_id}: {e}")
+                    self.logger.warning(
+                        "classification_trigger_enqueue_failed grievance_id=%s error=%s",
+                        grievance_id,
+                        e,
+                    )
 
             t = threading.Thread(target=_fire, daemon=True)
             t.start()
@@ -330,6 +350,14 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             if normalized_slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
                 grievance_description = tracker.get_slot("grievance_description")
+                self.logger.info(
+                    "submit_details_received grievance_id=%s complainant_id=%s has_description=%s description_len=%s llm_classification=%s",
+                    tracker.get_slot("grievance_id"),
+                    tracker.get_slot("complainant_id"),
+                    bool(grievance_description),
+                    len(grievance_description or ""),
+                    self.LLM_CLASSIFICATION,
+                )
                 session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
                 grievance_id = tracker.get_slot("grievance_id")
                 sensitive_slots = await self._get_sensitive_issue_slots_on_submit(
@@ -372,8 +400,17 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
 
                 # Trigger async classification after create (runs in thread so request never blocks)
                 if self.LLM_CLASSIFICATION:
-                    classification_slots = await self._trigger_async_classification(tracker, dispatcher)
+                    classification_slots = await self._trigger_async_classification(
+                        tracker,
+                        dispatcher,
+                        grievance_description=grievance_description,
+                    )
                     slots_to_set.update(classification_slots)
+                else:
+                    self.logger.info(
+                        "classification_trigger_skipped grievance_id=%s reason=LLM_CLASSIFICATION_false",
+                        grievance_id,
+                    )
                 self.logger.debug(f"Slots to set: {slots_to_set}")
                 return slots_to_set
             

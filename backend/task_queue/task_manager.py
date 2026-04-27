@@ -94,6 +94,7 @@ MAP_TASK_TO_TYPE = {
     'extract_contact_info_task': TASK_TYPE_LLM,
     'translate_grievance_to_english_task': TASK_TYPE_LLM,
     'store_result_to_db_task': TASK_TYPE_DATABASE,
+    'grievance_task': TASK_TYPE_DEFAULT,
     'task_registry': TASK_TYPE_DEFAULT,
     'trigger_rasa_action': TASK_TYPE_DEFAULT,
     'operation_failed': TASK_TYPE_DEFAULT,
