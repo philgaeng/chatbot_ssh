@@ -568,8 +568,12 @@ class DatabaseManager(BaseDatabaseManager):
     def create_or_update_grievance(self, data: Dict[str, Any]):
         """Create or update a grievance"""
         try:
-            grievance_id = data.get('grievance_id')
-            self.logger.debug(f"create_or_update_grievance: for grievance_id: {grievance_id}")
+            grievance_id = data.get("grievance_id")
+            self.logger.debug(
+                "create_or_update_grievance: grievance_id=%s data_keys=%s",
+                grievance_id,
+                sorted(k for k in data.keys() if k is not None),
+            )
             if self.grievance.get_grievance_by_id(grievance_id):
                 self.update_grievance(grievance_id, data)
             else:

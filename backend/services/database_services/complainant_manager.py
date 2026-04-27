@@ -6,6 +6,11 @@ import traceback
 from icecream import ic
 from .base_manager import BaseDatabaseManager
 from rapidfuzz import process
+from backend.services.db_debug_log import (
+    complainant_row_summary,
+    dict_keys_sorted,
+    sql_params_shape,
+)
 
 
 class ComplainantDbManager(BaseDatabaseManager):
@@ -58,10 +63,16 @@ class ComplainantDbManager(BaseDatabaseManager):
             # Try to decode as utf-8, or use .hex() if it's binary
                 try:
                     encrypted_phone_number = encrypted_phone_number.tobytes().decode('utf-8')
-                    self.logger.debug(f"encrypted phone number as utf-8: {encrypted_phone_number}")
+                    self.logger.debug(
+                        "encrypt_phone: utf-8 path ciphertext_len=%s",
+                        len(str(encrypted_phone_number)),
+                    )
                 except UnicodeDecodeError:
                     encrypted_phone_number = encrypted_phone_number.tobytes().hex()
-                    self.logger.debug(f"encrypted phone number as hex: {encrypted_phone_number}")
+                    self.logger.debug(
+                        "encrypt_phone: hex path ciphertext_len=%s",
+                        len(str(encrypted_phone_number)),
+                    )
             return encrypted_phone_number
         else:
             self.logger.error("Encryption key not set")
@@ -70,13 +81,18 @@ class ComplainantDbManager(BaseDatabaseManager):
 
     def get_complainants_by_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         # Encrypt the phone number for search if encryption is enabled
-        self.logger.debug(f"original phone number: {phone_number}")
+        self.logger.debug(
+            "get_complainants_by_phone: input_chars=%d",
+            len(phone_number or ""),
+        )
         standardized_phone = self._standardize_phone_number(phone_number)
         search_phone = self._hash_value(standardized_phone) if self.encryption_key else standardized_phone
-        self.logger.debug(f"hashed phone number: {search_phone}")
-        
-        # Add debug logging to track the hash
-        self.logger.debug(f"Phone number '{standardized_phone}' hashed to '{search_phone}' in search")
+        self.logger.debug(
+            "get_complainants_by_phone: std_chars=%d token_chars=%d hashed=%s",
+            len(standardized_phone or ""),
+            len(search_phone or ""),
+            bool(self.encryption_key),
+        )
         
         query = """
             SELECT complainant_id,
@@ -103,16 +119,25 @@ class ComplainantDbManager(BaseDatabaseManager):
             ORDER BY created_at DESC
         """
         try:
-            self.logger.debug(f"search_phone at query time: {search_phone}")
+            self.logger.debug(
+                "get_complainants_by_phone: bind %s",
+                sql_params_shape((search_phone,)),
+            )
             results = self.execute_query(query, (search_phone,), "get_complainants_by_phone_number")
             # Decrypt sensitive fields in results
             decrypted_results = []
-            self.logger.debug(f"{len(results)} complainants found")
-            self.logger.debug(f"results: {results}")
+            self.logger.debug(
+                "get_complainants_by_phone: raw_rows=%d summaries=%s",
+                len(results),
+                [complainant_row_summary(r) for r in (results or [])[:8]],
+            )
             for complainant in results:
                 decrypted_results.append(self._decrypt_sensitive_data(complainant))
-            self.logger.debug(f"{len(decrypted_results)} complainants successfully decrypted")
-            self.logger.debug(f"decrypted results: {decrypted_results}")
+            self.logger.debug(
+                "get_complainants_by_phone: decrypted_rows=%d summaries=%s",
+                len(decrypted_results),
+                [complainant_row_summary(r) for r in decrypted_results[:8]],
+            )
             return decrypted_results
         except Exception as e:
             self.logger.error(f"Error retrieving complainants by phone number: {str(e)}")
@@ -208,7 +233,10 @@ class ComplainantDbManager(BaseDatabaseManager):
             input_data = self.select_query_data(data, allowed_fields)
             # Encrypt sensitive fields before storing
             encrypted_data = self._encrypt_and_hash_sensitive_data(input_data)
-            self.logger.debug(f"encrypted_data at update_complainant: {encrypted_data}")
+            self.logger.debug(
+                "update_complainant: encrypted payload %s",
+                dict_keys_sorted(encrypted_data),
+            )
             #prepare the query
             if encrypted_data:
                 set_clause = ', '.join([f'{k} = %s' for k in encrypted_data.keys()])

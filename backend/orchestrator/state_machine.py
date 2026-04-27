@@ -1450,8 +1450,10 @@ async def run_flow_turn(
                 session["active_loop"] = None
                 session["requested_slot"] = None
                 slots_after = dict(session.get("slots", {}))
+                # Flush on any form completion — not only "I'm done" (modify_missing_info_complete).
+                # Natural completion (last missing field filled) previously skipped persist entirely.
+                form_modify.persist_all_contact_fields_to_complainant(slots_after)
                 if session.get("slots", {}).get("modify_missing_info_complete"):
-                    form_modify.persist_all_contact_fields_to_complainant(slots_after)
                     next_state = "status_check_form"
                     ask_dispatcher = CollectingDispatcher()
                     await invoke_action(
@@ -1505,8 +1507,8 @@ async def run_flow_turn(
             session["active_loop"] = None
             session["requested_slot"] = None
             slots_after = dict(session.get("slots", {}))
+            form_modify.persist_all_contact_fields_to_complainant(slots_after)
             if session.get("slots", {}).get("modify_missing_info_complete"):
-                form_modify.persist_all_contact_fields_to_complainant(slots_after)
                 next_state = "status_check_form"
                 ask_dispatcher = CollectingDispatcher()
                 await invoke_action(

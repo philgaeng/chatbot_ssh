@@ -239,14 +239,21 @@ class BaseActionSubmit(BaseAction):
         self.grievance_id = tracker.get_slot("grievance_id")
         self.complainant_id = tracker.get_slot("complainant_id")
         
-        self.logger.debug(f"Submit grievance - All tracker slots: {tracker.slots}")
-        self.logger.debug(f"Submit grievance - grievance_id from tracker: {self.grievance_id}")
-        self.logger.debug(f"Submit grievance - complainant_id from tracker: {self.complainant_id}")
+        slot_keys = sorted(tracker.slots.keys()) if getattr(tracker, "slots", None) else []
+        self.logger.debug(
+            "Submit grievance - tracker slot_keys=%s grievance_id=%s complainant_id=%s",
+            slot_keys,
+            self.grievance_id,
+            self.complainant_id,
+        )
         
         try:
             # Collect grievance data
             grievance_data = self.collect_grievance_data(tracker, review)
-            self.logger.debug(f"Submit grievance - collected grievance data from tracker: {grievance_data}")
+            self.logger.debug(
+                "Submit grievance - collected data keys=%s",
+                sorted(grievance_data.keys()) if isinstance(grievance_data, dict) else type(grievance_data).__name__,
+            )
             # Update the existing grievance with complete data
             try:
                 self.db_manager.submit_grievance_to_db(data=grievance_data)
