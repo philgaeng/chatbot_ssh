@@ -287,6 +287,99 @@ def remove_user_scope(
     db.commit()
 
 
+# ── User language preferences ─────────────────────────────────────────────────
+
+class UserPreferencesResponse(BaseModel):
+    user_id: str
+    preferred_language: Optional[str]       # officer-level override (null = use org default)
+    org_default_language: str               # from ticketing.organizations.default_language
+    effective_language: str                 # resolved: preferred_language ?? org_default ?? 'en'
+
+
+class UserPreferencesPatch(BaseModel):
+    preferred_language: Optional[str] = None   # 'en', 'ne', or null to reset to org default
+
+
+@router.get(
+    "/users/me/preferences",
+    response_model=UserPreferencesResponse,
+    summary="Get current officer's language preferences",
+    description=(
+        "Returns the officer's effective language, their personal override (if any), "
+        "and their organisation's default. "
+        "effective_language drives inline translation chip visibility in the UI."
+    ),
+)
+def get_my_preferences(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    from ticketing.models.organization import Organization
+
+    # Look up any personal override on the first user_role row for this user
+    user_role = db.execute(
+        select(UserRole).where(UserRole.user_id == current_user.user_id).limit(1)
+    ).scalar_one_or_none()
+    preferred_language: Optional[str] = user_role.preferred_language if user_role else None
+
+    # Fetch org default
+    org = db.get(Organization, current_user.organization_id)
+    org_default = org.default_language if org else "en"
+
+    # Resolve: personal > org > hard fallback
+    effective = preferred_language or org_default or "en"
+
+    return UserPreferencesResponse(
+        user_id=current_user.user_id,
+        preferred_language=preferred_language,
+        org_default_language=org_default,
+        effective_language=effective,
+    )
+
+
+@router.patch(
+    "/users/me/preferences",
+    response_model=UserPreferencesResponse,
+    summary="Update current officer's language preference",
+    description=(
+        "Set preferred_language to 'en' or 'ne' to override the org default. "
+        "Set to null to reset to the org default."
+    ),
+)
+def patch_my_preferences(
+    body: UserPreferencesPatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    from ticketing.models.organization import Organization
+
+    if body.preferred_language not in (None, "en", "ne"):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=422,
+            detail="preferred_language must be 'en', 'ne', or null (reset to org default)",
+        )
+
+    # Update preferred_language on ALL user_role rows for this user (they share a preference)
+    rows = db.execute(
+        select(UserRole).where(UserRole.user_id == current_user.user_id)
+    ).scalars().all()
+    for row in rows:
+        row.preferred_language = body.preferred_language
+    db.commit()
+
+    org = db.get(Organization, current_user.organization_id)
+    org_default = org.default_language if org else "en"
+    effective = body.preferred_language or org_default or "en"
+
+    return UserPreferencesResponse(
+        user_id=current_user.user_id,
+        preferred_language=body.preferred_language,
+        org_default_language=org_default,
+        effective_language=effective,
+    )
+
+
 # ── Notification badge ────────────────────────────────────────────────────────
 
 @router.get(

@@ -1026,6 +1026,46 @@ def download_officer_attachment(
     return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
 
 
+# ─── GET /tickets/{ticket_id}/pii — broker complainant PII from backend ──────────
+# Per PRIVACY.md: browser must never call backend directly — ticketing API brokers all
+# sensitive reads so they go through the internal Docker network (backend:5001).
+
+@router.get(
+    "/tickets/{ticket_id}/pii",
+    summary="Fetch complainant PII from the grievance backend (brokered — no direct browser call)",
+)
+def get_ticket_pii(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    from ticketing.clients.grievance_api import get_grievance_detail
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not ticket.grievance_id:
+        return {}
+
+    try:
+        detail = get_grievance_detail(ticket.grievance_id)
+    except Exception as exc:
+        logger.warning("get_ticket_pii: backend unavailable — %s", exc)
+        raise HTTPException(status_code=503, detail=f"Grievance backend unavailable: {exc}")
+
+    # Return only the safe PII subset (name + contact) — not the full grievance narrative,
+    # which requires a vault reveal session (POST /tickets/{id}/reveal).
+    return {
+        "grievance_id": ticket.grievance_id,
+        "complainant_name": detail.get("complainant_name"),
+        "phone_number": detail.get("phone_number"),
+        "email": detail.get("email"),
+        "address": detail.get("address"),
+    }
+
+
 # ─── POST /tickets/{ticket_id}/findings — regenerate AI findings ──────────────
 
 # Roles permitted to regenerate findings (supervisors + senior observers only)
@@ -1081,3 +1121,125 @@ def trigger_findings(
         "status": "queued",
         "message": "Findings generation has been queued. Poll GET /tickets/{id} for the result.",
     }
+
+
+# ─── POST /tickets/{ticket_id}/reveal — open vault reveal session ─────────────
+
+from pydantic import BaseModel as _BaseModel
+
+
+class RevealRequest(_BaseModel):
+    reason_code: str
+    reason_text: str = ""
+
+
+class RevealCloseRequest(_BaseModel):
+    reveal_session_id: str
+    close_reason: str = "user_closed"
+
+
+@router.post(
+    "/tickets/{ticket_id}/reveal",
+    summary="Open a time-limited vault reveal session for the original grievance statement",
+    description=(
+        "Validates officer access, logs a REVEAL_ORIGINAL audit event, then calls the "
+        "grievance API to obtain a short-lived reveal session. "
+        "Standard TTL: 120 s. SEAH TTL: 60 s. "
+        "Every access attempt is logged regardless of outcome."
+    ),
+)
+def begin_reveal(
+    ticket_id: str,
+    body: RevealRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    from ticketing.clients.grievance_api import begin_reveal_session
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not ticket.grievance_id:
+        raise HTTPException(status_code=422, detail="Ticket has no linked grievance_id")
+
+    case_sensitivity = "seah" if ticket.is_seah else "standard"
+
+    # Call grievance API (proto: falls back to GET /api/grievance/{id})
+    session = begin_reveal_session(
+        grievance_id=ticket.grievance_id,
+        reason_code=body.reason_code,
+        reason_text=body.reason_text,
+        actor_id=current_user.user_id,
+        case_sensitivity=case_sensitivity,
+    )
+
+    # Log REVEAL_ORIGINAL audit event regardless of grant/deny
+    _add_event(
+        db, ticket, "REVEAL_ORIGINAL",
+        step_id=ticket.current_step_id,
+        note=f"Reveal requested: {body.reason_code}" + (f" — {body.reason_text}" if body.reason_text else ""),
+        payload={
+            "reason_code": body.reason_code,
+            "reason_text": body.reason_text,
+            "granted": session.get("granted", False),
+            "reveal_session_id": session.get("reveal_session_id"),
+            "case_sensitivity": case_sensitivity,
+            "deny_code": session.get("deny_code"),
+        },
+        created_by=current_user.user_id,
+        seen=True,
+    )
+    db.commit()
+
+    if not session.get("granted"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Reveal denied: {session.get('deny_code', 'policy_check_failed')}",
+        )
+
+    return session
+
+
+@router.post(
+    "/tickets/{ticket_id}/reveal/close",
+    summary="Close a vault reveal session and record duration",
+)
+def close_reveal(
+    ticket_id: str,
+    body: RevealCloseRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    from ticketing.clients.grievance_api import close_reveal_session
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not ticket.grievance_id:
+        raise HTTPException(status_code=422, detail="Ticket has no linked grievance_id")
+
+    result = close_reveal_session(
+        grievance_id=ticket.grievance_id,
+        reveal_session_id=body.reveal_session_id,
+        close_reason=body.close_reason,
+    )
+
+    # Log session closure for audit trail
+    _add_event(
+        db, ticket, "REVEAL_ORIGINAL_CLOSED",
+        step_id=ticket.current_step_id,
+        note=f"Reveal session closed: {body.close_reason}",
+        payload={
+            "reveal_session_id": body.reveal_session_id,
+            "close_reason": body.close_reason,
+        },
+        created_by=current_user.user_id,
+        seen=True,
+    )
+    db.commit()
+
+    return result

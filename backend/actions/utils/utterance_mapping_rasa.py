@@ -150,6 +150,14 @@ UTTERANCE_MAPPING = {
                         {"title": "अनुसंधान अनुसंधान गर्नुहोस्", "payload": "/status_check_request_follow_up"},
                         {"title": "गुनासो सम्पादन गर्नुहोस्", "payload": "/status_check_modify_grievance"},
                         {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}]
+                },
+                2: {
+                    'en': [
+                        {"title": "Request follow up", "payload": "/status_check_request_follow_up"}
+                    ],
+                    'ne': [
+                        {"title": "अनुसंधान अनुसंधान गर्नुहोस्", "payload": "/status_check_request_follow_up"}
+                    ]
                 }
             }
         },

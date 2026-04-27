@@ -343,9 +343,9 @@ class ActionAskStatusCheckComplainantFullName(BaseAction):
 
 
 
-class ActionStatusCheckRequestFollowUp(BaseAction):
+class LegacyActionStatusCheckRequestFollowUp(BaseAction):
     def name(self) -> Text:
-        return "action_status_check_request_follow_up"
+        return "action_status_check_request_follow_up_legacy"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         self._initialize_language_and_helpers(tracker)

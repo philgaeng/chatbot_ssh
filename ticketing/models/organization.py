@@ -30,6 +30,9 @@ class Organization(Base):
         nullable=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Language preference for this org's officers. 'ne' = Nepali-first (DOR), 'en' = English-first (ADB).
+    # Individual officers can override via ticketing.user_roles.preferred_language.
+    default_language: Mapped[str] = mapped_column(String(8), nullable=False, default="ne")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

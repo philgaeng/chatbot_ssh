@@ -1,4 +1,5 @@
 """Shared outro actions for grievance and SEAH flows."""
+import asyncio
 from typing import Any, Dict, List, Text
 
 from rasa_sdk import Tracker
@@ -115,3 +116,91 @@ class ActionGrievanceOutro(BaseActionSubmit):
         except Exception as e:
             self.logger.error(f"Error in action_grievance_outro: {e}")
             return []
+
+
+class ActionStatusCheckRequestFollowUp(BaseAction):
+    """Status-check follow-up outro with shared close-session buttons."""
+
+    def name(self) -> Text:
+        return "action_status_check_request_follow_up"
+
+    def _get_status_check_utterance(self, utterance_index: int) -> str:
+        return get_utterance_base(
+            "form_status_check", self.name(), utterance_index, self.language_code
+        )
+
+    async def execute_action(
+        self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]
+    ) -> List[Dict[Text, Any]]:
+        self._initialize_language_and_helpers(tracker)
+        language_code = tracker.get_slot("language_code") or "en"
+        buttons = BUTTONS_SEAH_OUTRO.get(language_code, BUTTONS_SEAH_OUTRO["en"])
+
+        complainant_phone = tracker.get_slot("complainant_phone")
+        grievance_id = tracker.get_slot("status_check_grievance_id_selected")
+
+        if tracker.get_slot("otp_status") != "verified":
+            dispatcher.utter_message(text=self._get_status_check_utterance(1))
+            issue = self.get_follow_up_phone_issue(tracker)
+            if issue == "no_phone":
+                dispatcher.utter_message(text=self._get_status_check_utterance(3))
+            else:
+                dispatcher.utter_message(text=self._get_status_check_utterance(4))
+            dispatcher.utter_message(buttons=buttons)
+        else:
+            # Show grievance details before confirmation for context.
+            if grievance_id:
+                grievance = self.collect_grievance_data_from_id(grievance_id, tracker, domain)
+                if grievance:
+                    grievance_text = self.prepare_grievance_text_for_display(
+                        grievance, display_only_short=False
+                    )
+                    dispatcher.utter_message(text=grievance_text)
+
+            utterance = self._get_status_check_utterance(2).format(
+                grievance_id=grievance_id, complainant_phone=complainant_phone
+            )
+            dispatcher.utter_message(text=utterance, buttons=buttons)
+            self.send_sms(
+                sms_data={"grievance_id": grievance_id, "complainant_phone": complainant_phone},
+                body_name="GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP",
+            )
+
+        # Send admin recap asynchronously so user-facing response remains fast.
+        email_data = self.collect_grievance_data_from_tracker(tracker)
+        if grievance_id:
+            grievance = self.db_manager.get_grievance_by_id(grievance_id)
+            if grievance:
+                email_data["grievance_id"] = grievance_id
+                email_data["grievance_timeline"] = (
+                    grievance.get("grievance_timeline") or self.NOT_PROVIDED
+                )
+                email_data["grievance_summary"] = (
+                    grievance.get("grievance_summary")
+                    or grievance.get("grievance_description")
+                    or self.NOT_PROVIDED
+                )
+                email_data["grievance_description"] = (
+                    email_data.get("grievance_description")
+                    or grievance.get("grievance_description")
+                    or self.NOT_PROVIDED
+                )
+                email_data["grievance_categories"] = (
+                    grievance.get("grievance_categories")
+                    or email_data.get("grievance_categories")
+                    or self.NOT_PROVIDED
+                )
+
+        def _log_email_done(task: asyncio.Task) -> None:
+            try:
+                task.result()
+            except Exception as e:
+                self.logger.error(f"Background admin recap email failed: {e}", exc_info=True)
+
+        task = asyncio.create_task(
+            self.send_recap_email_to_admin(
+                email_data, "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP", dispatcher
+            )
+        )
+        task.add_done_callback(_log_email_done)
+        return []

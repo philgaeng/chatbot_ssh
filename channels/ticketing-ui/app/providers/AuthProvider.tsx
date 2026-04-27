@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { CognitoAuthClient, type TokenPayload } from "@/lib/auth/cognito-auth";
+import { getUserPreferences } from "@/lib/api";
 
 // ── Mock user for proto (NEXT_PUBLIC_BYPASS_AUTH=true) ──────────────────────
 const MOCK_USER: TokenPayload = {
@@ -31,6 +32,13 @@ export interface AuthContextValue {
   signOut: () => void;
   /** Bearer token for API calls (null in mock mode) */
   accessToken: string | null;
+  /**
+   * Effective UI language for this officer.
+   * 'en' = English-first (inline translation chips shown)
+   * 'ne' = Nepali-first (inline chips hidden; translation panel for review)
+   * null = still loading from API
+   */
+  effectiveLang: "en" | "ne" | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,6 +72,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<TokenPayload | null>(bypass ? MOCK_USER : null);
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [effectiveLang, setEffectiveLang] = useState<"en" | "ne" | null>(null);
 
   const client = !bypass
     ? new CognitoAuthClient(
@@ -113,6 +122,14 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, [bypass, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch language preference once authenticated
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return;
+    getUserPreferences()
+      .then((prefs) => setEffectiveLang(prefs.effective_language as "en" | "ne"))
+      .catch(() => setEffectiveLang("en")); // safe fallback — show translations to everyone
+  }, [isAuthenticated, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const signIn = () => {
     if (bypass) {
       setIsAuthenticated(true);
@@ -137,7 +154,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, isLoading, user, error, roleKeys, canSeeSeah, isAdmin, signIn, signOut, accessToken }}
+      value={{ isAuthenticated, isLoading, user, error, roleKeys, canSeeSeah, isAdmin, signIn, signOut, accessToken, effectiveLang }}
     >
       {children}
     </AuthContext.Provider>

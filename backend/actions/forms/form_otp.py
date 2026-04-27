@@ -35,11 +35,17 @@ class ActionAskOtpConsent(BaseOtpAction):
         return "action_ask_otp_consent"
 
     def _is_status_check_retrieve_flow(self, tracker: Tracker) -> bool:
-        """True when OTP is mandatory: status check to retrieve grievances."""
-        return (
+        """True when OTP is mandatory in status-check or modify flows."""
+        is_status_check_retrieve = (
             tracker.get_slot("story_main") == "status_check"
             and not tracker.get_slot("status_check_grievance_id_selected")
         )
+        # In modify flow, a grievance is already selected and OTP gates edit access.
+        is_modify_flow = (
+            tracker.get_slot("story_main") == "status_check"
+            and tracker.get_slot("status_check_grievance_id_selected") is not None
+        )
+        return is_status_check_retrieve or is_modify_flow
 
     async def execute_action(
         self,

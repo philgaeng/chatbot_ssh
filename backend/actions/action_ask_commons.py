@@ -32,7 +32,12 @@ class ActionAskStoryStep(BaseAction):
                 grievance_data = self.collect_grievance_data_from_id(grievance_id, tracker, domain)
                 if grievance_data:
                     utterance = self.get_utterance(1)
-                    buttons = self.get_buttons(1)
+                    otp_verified = tracker.get_slot("otp_status") == "verified"
+                    # If OTP was skipped/unverified in phone route, do not offer modify.
+                    if story_route == "route_status_check_phone" and not otp_verified:
+                        buttons = self.get_buttons(2)
+                    else:
+                        buttons = self.get_buttons(1)
                     dispatcher.utter_message(text=utterance)
                     grievance_text = self.prepare_grievance_text_for_display(grievance_data, display_only_short=False)
                     dispatcher.utter_message(text=grievance_text, buttons=buttons)
