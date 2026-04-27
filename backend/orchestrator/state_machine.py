@@ -1115,11 +1115,33 @@ async def run_flow_turn(
                     session["requested_slot"] = None
                     session["slots"].update(slot_updates)
                     status_form_2 = _get_status_form_2()
-                    msgs2, form_updates2, _ = await run_form_turn(
+                    msgs2, form_updates2, completed_2 = await run_form_turn(
                         status_form_2, session, None, domain
                     )
                     dispatcher.messages.extend(msgs2)
                     slot_updates.update(form_updates2)
+                    # If form_status_check_2 completes immediately after OTP
+                    # (e.g., a single grievance is already selected), ensure
+                    # we still show grievance details/options in this turn.
+                    if completed_2 and not msgs2:
+                        session["active_loop"] = None
+                        session["requested_slot"] = None
+                        session["slots"].update(slot_updates)
+                        ask_dispatcher = CollectingDispatcher()
+                        await invoke_action(
+                            "action_ask_story_step",
+                            ask_dispatcher,
+                            SessionTracker(
+                                slots=session["slots"],
+                                sender_id=session.get("user_id", "default"),
+                                latest_message=latest_message,
+                                active_loop=None,
+                                requested_slot=None,
+                            ),
+                            domain,
+                        )
+                        dispatcher.messages.extend(ask_dispatcher.messages)
+                        next_state = "status_check_form"
                 elif active_loop == "form_status_check_2":
                     # After the second status-check form completes, show grievance
                     # details and offer follow-up/modify/skip choices.
@@ -1414,11 +1436,61 @@ async def run_flow_turn(
             session["active_loop"] = "form_modify_contact"
             session["requested_slot"] = None
             next_state = "add_missing_info_flow"
-            msgs_modify, form_updates_modify, _ = await run_form_turn(
+            msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
                 form_modify, session, None, domain
             )
             dispatcher.messages.extend(msgs_modify)
             slot_updates.update(form_updates_modify)
+            if completed_modify:
+                # If form_modify_contact already completes in the same turn
+                # (e.g., phone was the only missing field), emit the same
+                # completion messages as add_missing_info_flow to avoid a
+                # "silent" turn after OTP verification.
+                session["slots"].update(slot_updates)
+                session["active_loop"] = None
+                session["requested_slot"] = None
+                slots_after = dict(session.get("slots", {}))
+                if session.get("slots", {}).get("modify_missing_info_complete"):
+                    form_modify.persist_all_contact_fields_to_complainant(slots_after)
+                    next_state = "status_check_form"
+                    ask_dispatcher = CollectingDispatcher()
+                    await invoke_action(
+                        "action_ask_story_step",
+                        ask_dispatcher,
+                        SessionTracker(
+                            slots=slots_after,
+                            sender_id=session.get("user_id", "default"),
+                            latest_message=latest_message,
+                            active_loop=None,
+                            requested_slot=None,
+                        ),
+                        domain,
+                    )
+                    dispatcher.messages.extend(ask_dispatcher.messages)
+                else:
+                    lang = session.get("slots", {}).get("language_code") or "en"
+                    from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
+
+                    msg = get_utterance_base(
+                        "form_modify_contact", "utterance_all_contact_complete", 1, lang
+                    )
+                    dispatcher.utter_message(text=msg)
+                    next_state = "modify_grievance_menu"
+                    slots_after = dict(session.get("slots", {}))
+                    ask_dispatcher = CollectingDispatcher()
+                    await invoke_action(
+                        "action_status_check_modify_grievance",
+                        ask_dispatcher,
+                        SessionTracker(
+                            slots=slots_after,
+                            sender_id=session.get("user_id", "default"),
+                            latest_message=latest_message,
+                            active_loop=None,
+                            requested_slot=None,
+                        ),
+                        domain,
+                    )
+                    dispatcher.messages.extend(ask_dispatcher.messages)
 
     elif state == "add_missing_info_flow":
         user_input = latest_message if (text or payload) else None
