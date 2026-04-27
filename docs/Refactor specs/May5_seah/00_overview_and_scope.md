@@ -36,6 +36,10 @@ Never put `public.*` DDL in ticketing migrations, or `ticketing.*` in public mig
 | `06_vault_reveal_audit_and_ui_controls.md`  | Controlled reveal contract (reason codes, TTL tokens), immutable audit schema, UI containment controls, and SEAH-specific hardening rules.                                 |
 | `agents_instructions.md`                    | Agent split (roles, boundaries, handoffs) and mandatory docs/checklists per agent for execution.                                                                          |
 
+Related implementation handoff:
+
+- `docs/claude-tickets/seah-privacy-worktree-handoff.md` — worktree ownership split, cross-worktree API contracts, delivery sequence, and acceptance criteria for Claude-led ticketing implementation.
+
 ## Execution note
 
 Implement DDL and application wiring in a **dedicated agent / branch** after ticketing geography migrations exist (or in lockstep with an integration worktree). Update this folder if the ticketing physical model diverges from the spec during review.
