@@ -47,6 +47,7 @@ from ticketing.api.schemas.ticket import (
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
 from ticketing.tasks.notifications import notify_complainant
+from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -517,6 +518,8 @@ def perform_action(
     event_step_id = ticket.current_step_id
     event = None
     _notify_complainant_text: Optional[str] = None  # set below to trigger async notification
+    _translate_note_event_id: Optional[str] = None  # set for NOTE action → translate_note task
+    _generate_findings: bool = False                 # set for RESOLVE → generate_findings task
 
     if action == "ACKNOWLEDGE":
         ticket.status_code = "IN_PROGRESS"
@@ -565,6 +568,8 @@ def perform_action(
             "Your grievance has been resolved. "
             "Thank you for bringing this to our attention."
         )
+        # Fire findings generation after commit (7b — AI summary for supervisors/GRC)
+        _generate_findings = True
 
     elif action == "CLOSE":
         ticket.status_code = "CLOSED"
@@ -590,6 +595,8 @@ def perform_action(
             created_by=current_user.user_id,
             seen=True,
         )
+        # Fire translation task after commit (7a — translate note to English for supervisors)
+        _translate_note_event_id = event.event_id
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
@@ -621,6 +628,14 @@ def perform_action(
             _notify_complainant_text,
             action,  # event_type label in the notification log
         )
+
+    # Fire LLM translation task for NOTE events (7a — translate to English for supervisors)
+    if _translate_note_event_id:
+        translate_note.delay(_translate_note_event_id)
+
+    # Fire findings generation on RESOLVE (7b — AI summary for GRC/supervisors)
+    if _generate_findings:
+        generate_findings.delay(ticket.ticket_id)
 
     return TicketActionResponse(
         ticket_id=ticket.ticket_id,
@@ -1009,3 +1024,60 @@ def download_officer_attachment(
         "application/octet-stream"
     )
     return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
+
+
+# ─── POST /tickets/{ticket_id}/findings — regenerate AI findings ──────────────
+
+# Roles permitted to regenerate findings (supervisors + senior observers only)
+_FINDINGS_ROLES = {
+    "grc_chair", "adb_hq_safeguards", "adb_hq_project",
+    "adb_hq_exec", "adb_national_project_director",
+    "super_admin", "local_admin",
+}
+
+
+@router.post(
+    "/tickets/{ticket_id}/findings",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger (re)generation of the AI case-findings summary (admin/supervisor only)",
+    description=(
+        "Queues a Celery task that reads all key events for the ticket, "
+        "calls OpenAI gpt-4, and stores the result in `ai_summary_en`. "
+        "Returns 202 Accepted immediately; poll `GET /tickets/{id}` for the updated field. "
+        "Restricted to: grc_chair, adb_*, super_admin, local_admin."
+    ),
+)
+def trigger_findings(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Role gate — only supervisors and senior observers may trigger findings
+    has_findings_role = current_user.is_admin or bool(
+        set(current_user.role_keys) & _FINDINGS_ROLES
+    )
+    if not has_findings_role:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Findings generation is restricted to supervisors and senior observers. "
+                f"Your roles ({current_user.role_keys!r}) do not have permission."
+            ),
+        )
+
+    generate_findings.delay(ticket_id)
+    logger.info(
+        "Findings generation queued: ticket_id=%s requested_by=%s",
+        ticket_id, current_user.user_id,
+    )
+    return {
+        "ticket_id": ticket_id,
+        "status": "queued",
+        "message": "Findings generation has been queued. Poll GET /tickets/{id} for the result.",
+    }

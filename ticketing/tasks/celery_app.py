@@ -24,6 +24,7 @@ celery_app = Celery(
         "ticketing.tasks.notifications",
         "ticketing.tasks.reports",
         "ticketing.tasks.grievance_sync",
+        "ticketing.tasks.llm",
     ],
 )
 
@@ -40,6 +41,7 @@ celery_app.conf.update(
         "ticketing.tasks.notifications.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.reports.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.grievance_sync.*": {"queue": "grm_ticketing"},
+        "ticketing.tasks.llm.*": {"queue": "grm_ticketing"},
     },
     # ── Beat schedule ──────────────────────────────────────────────────────────
     beat_schedule={

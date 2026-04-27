@@ -133,6 +133,9 @@ class TicketDetail(BaseModel):
     updated_by_user_id: Optional[str]
     current_step: Optional[WorkflowStepBrief]
     events: list[TicketEventOut] = []
+    # LLM-generated findings (visible to grc_chair, adb_*, super_admin only)
+    ai_summary_en: Optional[str] = None
+    ai_summary_updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
