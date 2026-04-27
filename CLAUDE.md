@@ -6,19 +6,21 @@
 
 ## ⚡ READ THIS BEFORE ANY CODE DECISION
 
-| File | Read for |
-|------|----------|
+| File                                    | Read for                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------- |
 | **→ `docs/claude-tickets/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
-| **→ `docs/claude-tickets/TODO.md`** | Open gaps, next features, tech debt |
-| **→ `docs/claude-tickets/DOCKER.md`** | Build, start, migrate, seed, debug containers |
+| **→ `docs/claude-tickets/TODO.md`**     | Open gaps, next features, tech debt                                         |
+| **→ `docs/claude-tickets/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
 
-`PROGRESS.md` tells you what was *actually built*. `TODO.md` tells you what's next. `DOCKER.md` tells you how to run it. This file has the locked architecture.
+`PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `DOCKER.md` tells you how to run it. This file has the locked architecture.
 
 ---
 
 # Read the rest of this file before touching any code.
 
 # ALL decisions locked through Round 2.
+
+THIS FILE APPLIES ONLY TO THE WORKTREE projects/nepal_chatbot_claude
 
 ---
 

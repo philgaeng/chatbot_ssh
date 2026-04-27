@@ -652,16 +652,6 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
-  seah_case_id:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: custom
-  seah_public_ref:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: custom
   sensitive_issues_nickname:
     type: text
     influence_conversation: false

@@ -228,9 +228,11 @@ class ComplainantDbManager(BaseDatabaseManager):
     def get_complainant_from_grievance_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
             SELECT c.*
-            FROM complainants c
-            JOIN grievances g ON c.complainant_id = g.complainant_id
-            WHERE g.grievance_id = %s
+            FROM grievance_parties gp
+            JOIN complainants c ON c.complainant_id = gp.complainant_id
+            WHERE gp.grievance_id = %s
+              AND gp.is_primary_reporter = TRUE
+            LIMIT 1
         """
         try:
             results = self.execute_query(query, (grievance_id,), "get_complainant_from_grievance_id")
@@ -245,8 +247,10 @@ class ComplainantDbManager(BaseDatabaseManager):
     def get_complainant_id_from_grievance_id(self, grievance_id: str) -> Optional[str]:
         query = """
             SELECT complainant_id
-            FROM grievances
+            FROM grievance_parties
             WHERE grievance_id = %s
+              AND is_primary_reporter = TRUE
+            LIMIT 1
         """
         try:
             results = self.execute_query(query, (grievance_id,), "get_complainant_id_from_grievance_id")
@@ -258,7 +262,7 @@ class ComplainantDbManager(BaseDatabaseManager):
     #create a function to merge different complainants with same phone number
     def merge_complainants_with_same_phone_number(self, complainant_id: int, target_complainant_id: int) -> bool:
         query = """
-            UPDATE grievances
+            UPDATE grievance_parties
             SET complainant_id = %s
             WHERE complainant_id = %s
         """

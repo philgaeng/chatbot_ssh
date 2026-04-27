@@ -21,7 +21,10 @@ ALLOWED_UPDATE_FIELDS = [
         'is_temporary',
         'source',
         'language_code',
-        'grievance_classification_status'
+        'grievance_classification_status',
+        'case_sensitivity',
+        'vault_payload_ref',
+        'vault_last_updated_at',
     ]
 
 class GrievanceDbManager(BaseDatabaseManager):
@@ -70,7 +73,7 @@ class GrievanceDbManager(BaseDatabaseManager):
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
-            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_timeline', 'grievance_classification_status']
+            expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_timeline', 'grievance_classification_status', 'case_sensitivity', 'vault_payload_ref', 'vault_last_updated_at']
             update_fields, update_values = self.generate_update_query(data, expected_fields)
 
             if update_fields and update_values:
@@ -107,9 +110,11 @@ class GrievanceDbManager(BaseDatabaseManager):
                        c.complainant_ward, c.complainant_village, c.complainant_address,
                        c.contact_id, c.country_code, c.location_code, c.location_resolution_status,
                        c.level_1_name, c.level_2_name, c.level_3_name, c.level_4_name, c.level_5_name, c.level_6_name,
-                       c.level_1_code, c.level_2_code, c.level_3_code, c.level_4_code, c.level_5_code, c.level_6_code
+                       c.level_1_code, c.level_2_code, c.level_3_code, c.level_4_code, c.level_5_code, c.level_6_code,
+                       gp.party_role, gp.is_primary_reporter
                 FROM grievances g
-                LEFT JOIN complainants c ON g.complainant_id = c.complainant_id
+                LEFT JOIN grievance_parties gp ON g.grievance_id = gp.grievance_id AND gp.is_primary_reporter = TRUE
+                LEFT JOIN complainants c ON gp.complainant_id = c.complainant_id
                 WHERE g.grievance_id = %s
         """
         try:
@@ -283,7 +288,8 @@ class GrievanceDbManager(BaseDatabaseManager):
             allowed_fields = [
                 'grievance_description', 'grievance_summary', 'grievance_categories',
                 'grievance_categories_alternative', 'follow_up_question', 'grievance_location',
-                'grievance_claimed_amount', 'grievance_high_priority', 'grievance_sensitive_issue'
+                'grievance_claimed_amount', 'grievance_high_priority', 'grievance_sensitive_issue',
+                'case_sensitivity', 'vault_payload_ref', 'vault_last_updated_at'
             ]
             
             # Filter update data to only include allowed fields
@@ -392,13 +398,16 @@ class GrievanceDbManager(BaseDatabaseManager):
                 c.country_code,
                 c.location_code,
                 c.location_resolution_status,
+                gp.party_role,
                 COALESCE(c.level_3_name, c.complainant_municipality) AS complainant_municipality,
                 ls.grievance_status,
                 ls.grievance_status_update_date
             FROM complainants c
-            INNER JOIN grievances g ON c.complainant_id = g.complainant_id
+            INNER JOIN grievance_parties gp ON c.complainant_id = gp.complainant_id
+            INNER JOIN grievances g ON gp.grievance_id = g.grievance_id
             LEFT JOIN latest_status ls ON g.grievance_id = ls.grievance_id
             WHERE c.complainant_phone_hash = %s
+              AND gp.is_primary_reporter = TRUE
             ORDER BY g.grievance_creation_date DESC, ls.grievance_status_update_date DESC
         """
         try:

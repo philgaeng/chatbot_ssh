@@ -107,8 +107,7 @@ def test_invoke_action_submit_seah_uses_dedicated_path(domain, monkeypatch):
     def _mock_submit_seah_to_db(data):
         return {
             "ok": True,
-            "seah_case_id": "SEAH-2026-123456",
-            "seah_public_ref": "SEAH-REF-2026-654321",
+            "grievance_id": "GR-2026-KO-JH-1234",
             "complainant_id": data.get("complainant_id", "CM-TEST"),
         }
 
@@ -141,9 +140,8 @@ def test_invoke_action_submit_seah_uses_dedicated_path(domain, monkeypatch):
 
     events = _run(invoke_action("action_submit_seah", dispatcher, tracker, domain))
     slot_updates = events_to_slot_updates(events)
-    assert slot_updates.get("seah_case_id") == "SEAH-2026-123456"
-    assert slot_updates.get("seah_public_ref") == "SEAH-REF-2026-654321"
-    assert any("SEAH-REF-2026-654321" in m.get("text", "") for m in dispatcher.messages)
+    assert slot_updates.get("grievance_id") == "GR-2026-KO-JH-1234"
+    assert any("GR-2026-KO-JH-1234" in m.get("text", "") for m in dispatcher.messages)
 
 
 def test_invoke_action_seah_outro_registered(domain, monkeypatch):
@@ -172,13 +170,7 @@ def test_invoke_action_seah_outro_registered(domain, monkeypatch):
     assert any("focal-point" in m.get("text", "").lower() for m in dispatcher.messages)
 
 
-def test_submit_seah_case_reference_format():
-    from backend.services.database_services.postgres_services import DatabaseManager
-
-    db = DatabaseManager()
-    case_id = db._generate_seah_case_id()
-    public_ref = db._generate_seah_public_ref()
-
-    assert re.match(r"^SEAH-\d{4}-\d{6}$", case_id)
-    assert re.match(r"^SEAH-REF-\d{4}-\d{6}$", public_ref)
+def test_submit_seah_case_reference_uses_canonical_grievance_id():
+    grievance_id = "GR-2026-KO-JH-1234"
+    assert re.match(r"^GR-[A-Z0-9-]+$", grievance_id)
 

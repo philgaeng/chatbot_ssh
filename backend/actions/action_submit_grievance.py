@@ -341,20 +341,19 @@ class ActionSubmitSeah(BaseActionSubmit):
             if not result.get("ok"):
                 raise Exception(result.get("error", "SEAH submission failed"))
 
-            public_ref = result.get("seah_public_ref")
+            grievance_ref = result.get("grievance_id")
             if language_code == "ne":
                 dispatcher.utter_message(
-                    text=f"तपाईंको गोप्य SEAH रिपोर्ट दर्ता गरिएको छ। तपाईंको सन्दर्भ नम्बर: **{public_ref}**"
+                    text=f"तपाईंको गोप्य SEAH रिपोर्ट दर्ता गरिएको छ। तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
                 )
             else:
                 dispatcher.utter_message(
-                    text=f"Your confidential SEAH report has been submitted. Your reference number is **{public_ref}**."
+                    text=f"Your confidential SEAH report has been submitted. Your reference number is **{grievance_ref}**."
                 )
 
             return [
                 SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"]),
-                SlotSet("seah_case_id", result.get("seah_case_id")),
-                SlotSet("seah_public_ref", public_ref),
+                SlotSet("grievance_id", grievance_ref),
             ]
         except Exception as e:
             self.logger.error(f"❌ Error submitting SEAH report: {str(e)}")
