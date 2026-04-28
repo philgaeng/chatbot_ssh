@@ -23,6 +23,35 @@ The model below keeps one data safety posture while preserving operational simpl
 
 ## Target model (LOCKED)
 
+### Person and case-role modeling (LOCKED)
+
+To support a single canonical complainant table without losing SEAH role nuance:
+
+- `public.complainants` is identity/contact only (person-level data).
+- Case participation is modeled separately in a per-case role link table (recommended name: `public.grievance_parties`).
+
+This prevents duplicate complainant rows when one person appears in multiple grievances or with different roles.
+
+Recommended `grievance_parties` shape:
+
+- `party_id` (uuid/text primary key)
+- `grievance_id` (FK to canonical grievance table)
+- `complainant_id` (FK to `public.complainants`, nullable for strict-anonymous patterns)
+- `party_role` (`victim_survivor`, `witness`, `relative_or_representative`, `seah_focal_point`, `reporter_other`)
+- `is_primary_reporter` (bool)
+- `contact_allowed` (bool)
+- `contact_channel` (nullable text/json)
+- `consent_scope` (nullable text/json)
+- `notes_safe` (non-PII/non-sensitive operational note)
+- `created_at`, `updated_at`
+
+Rules:
+
+1. Person identity/contact never depends on case role.
+2. Case role always lives in `grievance_parties`, not on `complainants`.
+3. One grievance may have multiple parties with different roles.
+4. One complainant may participate across many grievances with different roles.
+
 ### A) Vault content (restricted)
 
 Includes:
@@ -84,12 +113,31 @@ Storage rules:
 ## Intake and update flow
 
 1. Intake receives grievance content and contact fields.
-2. Public/chatbot writes original content to vault payload in `public.*`.
-3. Ticketing writes metadata/event record to `ticketing.*` for workflow.
-4. Async summary job runs:
+2. Public/chatbot writes/updates person identity in `public.complainants`.
+3. Public/chatbot writes per-case role links in `public.grievance_parties`.
+4. Public/chatbot writes original content to vault payload in `public.*`.
+5. Ticketing writes metadata/event record to `ticketing.*` for workflow.
+6. Async summary job runs:
    - redact -> summarize -> validate
-5. Derived summary is updated for officer use.
-6. Ticketing UI reads metadata + derived summary only by default.
+7. Derived summary is updated for officer use.
+8. Ticketing UI reads metadata + derived summary only by default.
+
+SEAH role handling:
+
+- `victim_survivor` must be explicit when known.
+- `witness` and `relative_or_representative` remain distinct roles.
+- `seah_focal_point` is modeled as a separate party role (not mixed into victim fields).
+- Anonymous intake may keep `complainant_id` nullable on a party row when no direct identity is captured, while preserving role context.
+
+## Canonical table objective for phase 2
+
+Public domain end-state for this track:
+
+- one canonical grievance table
+- one canonical complainant table
+- one per-case role-link table (`grievance_parties`)
+
+SEAH-specific semantics move to role links and case sensitivity, not to separate grievance/complainant physical tables.
 
 Cross-worktree contract:
 

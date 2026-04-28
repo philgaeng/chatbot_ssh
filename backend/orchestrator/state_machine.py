@@ -41,7 +41,8 @@ async def _append_seah_outro_after_submit_if_applicable(
     slots = session.get("slots", {})
     if slots.get("story_main") != "seah_intake":
         return
-    if not slots.get("seah_public_ref"):
+    # Phase 2 canonical reference: grievance_id is the only case reference.
+    if not slots.get("grievance_id"):
         return
     outro_dispatcher = CollectingDispatcher()
     tracker = SessionTracker(

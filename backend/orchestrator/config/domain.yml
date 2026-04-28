@@ -247,6 +247,47 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  active_party_role:
+    type: categorical
+    influence_conversation: false
+    values:
+      - victim_survivor
+      - witness
+      - relative
+      - seah_focal_point
+      - other_reporter
+    mappings:
+      - type: custom
+  party_contacts:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
+  party_victim_survivor:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
+  party_witness:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
+  party_relative:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
+  party_seah_focal_point:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
+  party_other_reporter:
+    type: any
+    influence_conversation: false
+    mappings:
+      - type: custom
   complainant_email_temp:
     type: text
     influence_conversation: false
@@ -648,16 +689,6 @@ slots:
     mappings:
       - type: custom
   seah_focal_verification_status:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: custom
-  seah_case_id:
-    type: text
-    influence_conversation: false
-    mappings:
-      - type: custom
-  seah_public_ref:
     type: text
     influence_conversation: false
     mappings:

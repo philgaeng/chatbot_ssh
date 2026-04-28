@@ -39,11 +39,18 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
     def _merge_seah_contact_provided_from_partial(
         self, tracker: Tracker, partial: Dict[str, Any]
     ) -> Dict[str, Any]:
-        return self.seah_contact_provided_update(
+        merged = self.seah_contact_provided_update(
             tracker.get_slot("story_main"),
             dict(tracker.current_slot_values()),
             partial,
         )
+        merged.update(
+            self.upsert_active_party_payload(
+                dict(tracker.current_slot_values()),
+                partial,
+            )
+        )
+        return merged
 
     # ========== Province ==========
     async def extract_complainant_province(
@@ -452,6 +459,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
                 "complainant_address": address,
                 "complainant_address_confirmed": True
             }
+            result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
             return result
         
         return {}
@@ -554,6 +562,7 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
             result = {"complainant_full_name": slot_value}
             
         self.logger.debug(f"Validate complainant_full_name: {result['complainant_full_name']}")
+        result.update(self._merge_seah_contact_provided_from_partial(tracker, result))
         return result
     
     async def extract_complainant_email_temp(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:

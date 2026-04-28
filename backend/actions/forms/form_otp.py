@@ -242,6 +242,12 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
                 result,
             )
         )
+        result.update(
+            self.upsert_active_party_payload(
+                dict(tracker.current_slot_values()),
+                result,
+            )
+        )
         return result
     
     async def extract_otp_consent(
@@ -329,10 +335,17 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         if self._is_matching_otp(slot_value, expected_otp):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
-            return {"otp_input": slot_value,
-                    "otp_status" : "verified",
-                    "otp_verified" : True,
-                    "otp_resend_count" : 0}
+            result = {"otp_input": slot_value,
+                      "otp_status" : "verified",
+                      "otp_verified" : True,
+                      "otp_resend_count" : 0}
+            result.update(
+                self.upsert_active_party_payload(
+                    dict(tracker.current_slot_values()),
+                    result,
+                )
+            )
+            return result
         else:
             self.logger.info(f"{self.name()} - OTP verification failed")
             return {"otp_input": None,

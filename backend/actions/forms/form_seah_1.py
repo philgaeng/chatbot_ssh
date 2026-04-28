@@ -73,6 +73,11 @@ class ValidateFormSeah1(BaseFormValidationAction):
             updates["complainant_consent"] = True
         if cmd == "focal_point":
             updates["seah_victim_survivor_role"] = "focal_point"
+            updates["active_party_role"] = "seah_focal_point"
+        elif cmd == "identified":
+            updates["active_party_role"] = "victim_survivor"
+        elif cmd == "anonymous":
+            updates["active_party_role"] = "victim_survivor"
         if cmd == "anonymous":
             updates.update(
                 {
@@ -127,7 +132,10 @@ class ValidateFormSeah1(BaseFormValidationAction):
         else:
             allowed = {"victim_survivor", "not_victim_survivor", "focal_point"}
         if value in allowed:
-            return {"seah_victim_survivor_role": value}
+            return {
+                "seah_victim_survivor_role": value,
+                "active_party_role": self._normalize_party_role(value),
+            }
         return {"seah_victim_survivor_role": None}
 
 

@@ -285,6 +285,13 @@ class LanguageHelpersMixin(ActionCommonMixin):
 class SensitiveContentHelpersMixin(ActionCommonMixin):
     def __init__(self):
         super().__init__()
+        self.PARTY_SLOT_BY_ROLE = {
+            "victim_survivor": "party_victim_survivor",
+            "witness": "party_witness",
+            "relative": "party_relative",
+            "seah_focal_point": "party_seah_focal_point",
+            "other_reporter": "party_other_reporter",
+        }
 
     def detect_sensitive_content(self, dispatcher: CollectingDispatcher, slot_value: str) -> Dict[Text, Any]:
         """Check for sensitive content using keyword detection"""
@@ -611,6 +618,66 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
             return "not_victim_identified"
 
         return "victim_limited_contact"
+
+    def _normalize_party_role(self, role: Any) -> str:
+        if not isinstance(role, str):
+            return "victim_survivor"
+        value = role.strip().lstrip("/")
+        if value in self.PARTY_SLOT_BY_ROLE:
+            return value
+        if value == "focal_point":
+            return "seah_focal_point"
+        if value == "not_victim_survivor":
+            return "relative"
+        return "victim_survivor"
+
+    def derive_active_party_role(self, slots: Dict[Text, Any]) -> str:
+        explicit = slots.get("active_party_role")
+        if explicit:
+            return self._normalize_party_role(explicit)
+        return self._normalize_party_role(slots.get("seah_victim_survivor_role"))
+
+    def build_party_payload_from_slots(self, slots: Dict[Text, Any]) -> Dict[str, Any]:
+        keys = [
+            "complainant_full_name",
+            "complainant_phone",
+            "complainant_email",
+            "complainant_province",
+            "complainant_district",
+            "complainant_municipality",
+            "complainant_village",
+            "complainant_ward",
+            "complainant_address",
+            "complainant_consent",
+            "otp_verified",
+        ]
+        payload: Dict[str, Any] = {}
+        for key in keys:
+            value = slots.get(key)
+            if self._slot_nonempty(value):
+                payload[key] = value
+        return payload
+
+    def upsert_active_party_payload(
+        self,
+        current_slots: Dict[str, Any],
+        updates: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        merged = dict(current_slots)
+        merged.update(dict(updates))
+        role = self.derive_active_party_role(merged)
+        payload = self.build_party_payload_from_slots(merged)
+        if not payload:
+            return {"active_party_role": role}
+
+        role_slot = self.PARTY_SLOT_BY_ROLE[role]
+        party_contacts = dict(merged.get("party_contacts") or {})
+        party_contacts[role] = payload
+        return {
+            "active_party_role": role,
+            "party_contacts": party_contacts,
+            role_slot: payload,
+        }
 
 class ActionHelpersMixin(
                         LanguageHelpersMixin,

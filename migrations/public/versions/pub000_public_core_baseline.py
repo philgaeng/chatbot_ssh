@@ -196,14 +196,52 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        INSERT INTO task_statuses (task_status_code, status_name)
-        VALUES
-            ('PENDING', 'Pending'),
-            ('STARTED', 'Started'),
-            ('SUCCESS', 'Success'),
-            ('FAILURE', 'Failure'),
-            ('RETRY', 'Retry')
-        ON CONFLICT (task_status_code) DO NOTHING;
+        ALTER TABLE task_statuses
+        ADD COLUMN IF NOT EXISTS status_name TEXT;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'task_statuses'
+                  AND column_name = 'task_status_name'
+            ) THEN
+                INSERT INTO task_statuses (task_status_code, task_status_name)
+                VALUES
+                    ('PENDING', 'Pending'),
+                    ('STARTED', 'Started'),
+                    ('SUCCESS', 'Success'),
+                    ('FAILURE', 'Failure'),
+                    ('RETRY', 'Retry')
+                ON CONFLICT (task_status_code) DO NOTHING;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'task_statuses'
+                      AND column_name = 'status_name'
+                ) THEN
+                    UPDATE task_statuses
+                    SET status_name = COALESCE(status_name, task_status_name);
+                END IF;
+            ELSE
+                INSERT INTO task_statuses (task_status_code, status_name)
+                VALUES
+                    ('PENDING', 'Pending'),
+                    ('STARTED', 'Started'),
+                    ('SUCCESS', 'Success'),
+                    ('FAILURE', 'Failure'),
+                    ('RETRY', 'Retry')
+                ON CONFLICT (task_status_code) DO NOTHING;
+            END IF;
+        END
+        $$;
         """
     )
     op.execute(

@@ -5,8 +5,6 @@ from .base_manager import (
     TaskDbManager,
     FileDbManager
 )
-from .gsheet_query_manager import GSheetDbManager
-
 from .complainant_manager import ComplainantDbManager
 from .grievance_manager import (
     GrievanceDbManager,
@@ -72,10 +70,6 @@ class DatabaseManagers:
     def base(self):
         return self._get_manager('base', BaseDatabaseManager)
     
-    @property
-    def gsheet(self):
-        return self._get_manager('gsheet', GSheetDbManager)
-
 # Create a single instance of the unified manager
 db_manager = DatabaseManagers()
 
@@ -85,7 +79,6 @@ __all__ = [
     'TableDbManager',
     'TaskDbManager',
     'FileDbManager',
-    'GSheetDbManager',
     'ComplainantDbManager',
     'GrievanceDbManager',
     'RecordingDbManager',

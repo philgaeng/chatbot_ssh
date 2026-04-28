@@ -2,9 +2,9 @@
 
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 import traceback
-import random
 import json
 from datetime import datetime
+import uuid
 
 # Import database configuration from constants.py (single source of truth)
 from backend.config.constants import DB_CONFIG, DEFAULT_VALUES
@@ -18,24 +18,22 @@ from .base_manager import BaseDatabaseManager
 from backend.logger import logger
 
 
-def seah_reporter_category_from_victim_survivor_role(
+def seah_party_role_from_victim_survivor_role(
     seah_victim_survivor_role: Optional[str],
 ) -> Optional[str]:
     """
-    Map slot seah_victim_survivor_role to complainants_seah.seah_reporter_category (TEXT).
-
-    Canonical values today: victim/survivor | other
-    - other: anyone filing who is not the victim/survivor (third party, confidant, focal path, etc.)
-    Additional strings can be persisted later without a schema change.
+    Map slot seah_victim_survivor_role to grievance_parties.party_role.
     """
     if not seah_victim_survivor_role:
-        return None
+        return "victim_survivor"
     r = str(seah_victim_survivor_role).strip()
     if r == "victim_survivor":
-        return "victim/survivor"
-    if r in ("not_victim_survivor", "focal_point"):
-        return "other"
-    return None
+        return "victim_survivor"
+    if r == "not_victim_survivor":
+        return "relative_or_representative"
+    if r == "focal_point":
+        return "seah_focal_point"
+    return "victim_survivor"
 
 
 class DatabaseManager(BaseDatabaseManager):
@@ -57,7 +55,6 @@ class DatabaseManager(BaseDatabaseManager):
             # Import managers directly to avoid circular imports
             super().__init__()
             from .base_manager import TableDbManager, TaskDbManager, FileDbManager
-            from .gsheet_query_manager import GSheetDbManager
             from .complainant_manager import ComplainantDbManager
             from .grievance_manager import GrievanceDbManager, RecordingDbManager, TranscriptionDbManager, TranslationDbManager
             
@@ -65,7 +62,6 @@ class DatabaseManager(BaseDatabaseManager):
             self.table = TableDbManager()
             self.task = TaskDbManager()
             self.file = FileDbManager()
-            self.gsheet = GSheetDbManager()
             self.complainant = ComplainantDbManager()
             self.grievance = GrievanceDbManager()
             self.recording = RecordingDbManager()
@@ -211,6 +207,37 @@ class DatabaseManager(BaseDatabaseManager):
                 self.grievance.update_grievance(grievance_id, grievance_data)
                 self.logger.info(f"Grievance updated in db: {grievance_id}")
 
+            party_contacts = data.get("party_contacts")
+            if isinstance(party_contacts, dict) and party_contacts:
+                self._replace_grievance_parties_from_payloads(
+                    grievance_id=grievance_id,
+                    party_contacts=party_contacts,
+                    fallback_complainant_id=complainant_id,
+                )
+
+            # Ensure canonical party linkage exists for standard submissions.
+            self.execute_update(
+                """
+                INSERT INTO grievance_parties (
+                    party_id,
+                    grievance_id,
+                    complainant_id,
+                    party_role,
+                    is_primary_reporter,
+                    contact_allowed,
+                    notes_safe
+                )
+                SELECT %s, %s, %s, 'victim_survivor', TRUE, TRUE, 'default party from standard submit'
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM grievance_parties gp
+                    WHERE gp.grievance_id = %s
+                      AND gp.is_primary_reporter = TRUE
+                )
+                """,
+                (f"party-{uuid.uuid4()}", grievance_id, complainant_id, grievance_id),
+            )
+
             if grievance_data or complainant_data:
                 # Add initial creation entry for SUBMITTED status
                 status_update_success = self.grievance.log_grievance_change(
@@ -233,91 +260,69 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
-    def _ensure_seah_tables(self) -> None:
-        """Create SEAH tables when they do not exist.
-
-        Canonical DDL for complainants_seah / grievances_seah also lives in
-        migrations/public/versions/pub001_seah_intake_public_tables.py — run
-        ``make migrate_public`` (or equivalent) so schema changes stay traceable;
-        this path remains as an idempotent fallback if migrations were not applied.
-        """
-        create_complainants_seah = """
-            CREATE TABLE IF NOT EXISTS complainants_seah (
-                complainant_id TEXT PRIMARY KEY,
-                complainant_full_name TEXT,
-                complainant_phone TEXT,
-                complainant_email TEXT,
-                complainant_province TEXT,
-                complainant_district TEXT,
-                complainant_municipality TEXT,
-                complainant_ward TEXT,
-                complainant_village TEXT,
-                complainant_address TEXT,
-                contact_id TEXT,
-                country_code TEXT,
-                location_code TEXT,
-                location_resolution_status TEXT,
-                level_1_name TEXT,
-                level_2_name TEXT,
-                level_3_name TEXT,
-                level_4_name TEXT,
-                level_5_name TEXT,
-                level_6_name TEXT,
-                level_1_code TEXT,
-                level_2_code TEXT,
-                level_3_code TEXT,
-                level_4_code TEXT,
-                level_5_code TEXT,
-                level_6_code TEXT,
-                seah_reporter_category TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """
-        create_grievances_seah = """
-            CREATE TABLE IF NOT EXISTS grievances_seah (
-                seah_case_id TEXT PRIMARY KEY,
-                seah_public_ref TEXT UNIQUE NOT NULL,
-                complainant_id TEXT NOT NULL,
-                grievance_description TEXT,
-                grievance_summary TEXT,
-                grievance_categories TEXT,
-                grievance_sensitive_issue BOOLEAN DEFAULT TRUE,
-                grievance_status TEXT,
-                grievance_timeline TEXT,
-                language_code TEXT DEFAULT 'en',
-                submission_type TEXT DEFAULT 'seah_intake',
-                seah_payload JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (complainant_id) REFERENCES complainants_seah(complainant_id)
-            );
-        """
-        # DDL statements do not return rows; use execute_update to avoid fetchall() errors.
-        self.execute_update(create_complainants_seah, ())
-        self.execute_update(create_grievances_seah, ())
-        # Backward-compatible schema sync for environments created before new fields.
-        self.execute_update(
-            "ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS seah_reporter_category TEXT;",
-            (),
-        )
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS contact_id TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS country_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS location_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS location_resolution_status TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_1_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_2_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_3_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_4_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_5_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_6_name TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_1_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_2_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_3_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_4_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_5_code TEXT;", ())
-        self.execute_update("ALTER TABLE complainants_seah ADD COLUMN IF NOT EXISTS level_6_code TEXT;", ())
-        self._ensure_seah_contact_points_table()
+    def _replace_grievance_parties_from_payloads(
+        self,
+        grievance_id: str,
+        party_contacts: Dict[str, Any],
+        fallback_complainant_id: Optional[str] = None,
+    ) -> None:
+        ordered_roles = [
+            "victim_survivor",
+            "witness",
+            "relative",
+            "seah_focal_point",
+            "other_reporter",
+        ]
+        role_map = {
+            "victim_survivor": "victim_survivor",
+            "witness": "witness",
+            "relative": "relative_or_representative",
+            "seah_focal_point": "seah_focal_point",
+            "other_reporter": "other_reporter",
+        }
+        self.execute_update("DELETE FROM grievance_parties WHERE grievance_id = %s", (grievance_id,))
+        primary_assigned = False
+        for role in ordered_roles:
+            payload = party_contacts.get(role)
+            if not isinstance(payload, dict):
+                continue
+            has_identity = any(
+                payload.get(k) not in (None, "", DEFAULT_VALUES.get("NOT_PROVIDED", "Not provided"))
+                for k in ("complainant_full_name", "complainant_phone", "complainant_email")
+            )
+            complainant_id = payload.get("complainant_id")
+            if not complainant_id and has_identity:
+                complainant_id = self.generate_complainant_id(payload)
+            if complainant_id and has_identity:
+                complainant_payload = dict(payload)
+                complainant_payload["complainant_id"] = complainant_id
+                if self.complainant.get_complainant_by_id(complainant_id):
+                    self.complainant.update_complainant(complainant_id, complainant_payload)
+                else:
+                    self.complainant.create_complainant(complainant_payload)
+            if not complainant_id and role == "victim_survivor" and fallback_complainant_id:
+                complainant_id = fallback_complainant_id
+            if not complainant_id:
+                continue
+            is_primary = not primary_assigned
+            primary_assigned = True
+            self.execute_update(
+                """
+                INSERT INTO grievance_parties (
+                    party_id, grievance_id, complainant_id, party_role,
+                    is_primary_reporter, contact_allowed, notes_safe
+                )
+                VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                """,
+                (
+                    f"party-{uuid.uuid4()}",
+                    grievance_id,
+                    complainant_id,
+                    role_map[role],
+                    is_primary,
+                    f"party payload submit for role: {role}",
+                ),
+            )
 
     def _ensure_seah_contact_points_table(self) -> None:
         """Reference rows for SEAH center / referral text (spec 08)."""
@@ -435,97 +440,153 @@ class DatabaseManager(BaseDatabaseManager):
         best = max(rows, key=lambda r: (score(r), -(r.get("sort_order") or 0)))
         return best
 
-    def _generate_seah_case_id(self) -> str:
-        year = datetime.now().strftime("%Y")
-        suffix = random.randint(100000, 999999)
-        return f"SEAH-{year}-{suffix}"
-
-    def _generate_seah_public_ref(self) -> str:
-        year = datetime.now().strftime("%Y")
-        suffix = random.randint(100000, 999999)
-        return f"SEAH-REF-{year}-{suffix}"
-
     def submit_seah_to_db(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Persist SEAH intake data in dedicated SEAH tables only."""
+        """Persist SEAH intake in canonical public tables only."""
         try:
-            self._ensure_seah_tables()
-
             not_provided = DEFAULT_VALUES.get("NOT_PROVIDED", "Not provided")
+            grievance_id = data.get("grievance_id")
+            if grievance_id in (None, "", not_provided):
+                grievance_id = self.generate_grievance_id(data)
 
+            anonymous_route = bool(data.get("seah_anonymous_route"))
             complainant_id = data.get("complainant_id")
-            if complainant_id in (None, "", not_provided):
-                complainant_id = self.generate_complainant_id(data)
-
-            seah_case_id = data.get("seah_case_id")
-            if seah_case_id in (None, "", not_provided):
-                seah_case_id = self._generate_seah_case_id()
-
-            seah_public_ref = data.get("seah_public_ref")
-            if seah_public_ref in (None, "", not_provided):
-                seah_public_ref = self._generate_seah_public_ref()
-
-            complainant_payload = {
-                "complainant_id": complainant_id,
-                "complainant_full_name": data.get("complainant_full_name"),
-                "complainant_phone": data.get("complainant_phone"),
-                "complainant_email": data.get("complainant_email"),
-                "complainant_province": data.get("complainant_province"),
-                "complainant_district": data.get("complainant_district"),
-                "complainant_municipality": data.get("complainant_municipality"),
-                "complainant_ward": data.get("complainant_ward"),
-                "complainant_village": data.get("complainant_village"),
-                "complainant_address": data.get("complainant_address"),
-                "contact_id": data.get("contact_id"),
-                "country_code": data.get("country_code"),
-                "location_code": data.get("location_code"),
-                "location_resolution_status": data.get("location_resolution_status"),
-                "level_1_name": data.get("level_1_name"),
-                "level_2_name": data.get("level_2_name"),
-                "level_3_name": data.get("level_3_name"),
-                "level_4_name": data.get("level_4_name"),
-                "level_5_name": data.get("level_5_name"),
-                "level_6_name": data.get("level_6_name"),
-                "level_1_code": data.get("level_1_code"),
-                "level_2_code": data.get("level_2_code"),
-                "level_3_code": data.get("level_3_code"),
-                "level_4_code": data.get("level_4_code"),
-                "level_5_code": data.get("level_5_code"),
-                "level_6_code": data.get("level_6_code"),
-                "seah_reporter_category": seah_reporter_category_from_victim_survivor_role(
-                    data.get("seah_victim_survivor_role")
-                ),
-            }
-            self.execute_insert(
-                table_name="complainants_seah",
-                input_data=complainant_payload,
-                allowed_fields=list(complainant_payload.keys()),
+            has_identity = any(
+                data.get(k) not in (None, "", not_provided)
+                for k in ("complainant_full_name", "complainant_phone", "complainant_email")
             )
+            if complainant_id in (None, "", not_provided):
+                complainant_id = None if anonymous_route and not has_identity else self.generate_complainant_id(data)
+
+            if complainant_id:
+                complainant_payload = {
+                    "complainant_id": complainant_id,
+                    "complainant_full_name": data.get("complainant_full_name"),
+                    "complainant_phone": data.get("complainant_phone"),
+                    "complainant_email": data.get("complainant_email"),
+                    "complainant_province": data.get("complainant_province"),
+                    "complainant_district": data.get("complainant_district"),
+                    "complainant_municipality": data.get("complainant_municipality"),
+                    "complainant_ward": data.get("complainant_ward"),
+                    "complainant_village": data.get("complainant_village"),
+                    "complainant_address": data.get("complainant_address"),
+                    "contact_id": data.get("contact_id"),
+                    "country_code": data.get("country_code"),
+                    "location_code": data.get("location_code"),
+                    "location_resolution_status": data.get("location_resolution_status"),
+                    "level_1_name": data.get("level_1_name"),
+                    "level_2_name": data.get("level_2_name"),
+                    "level_3_name": data.get("level_3_name"),
+                    "level_4_name": data.get("level_4_name"),
+                    "level_5_name": data.get("level_5_name"),
+                    "level_6_name": data.get("level_6_name"),
+                    "level_1_code": data.get("level_1_code"),
+                    "level_2_code": data.get("level_2_code"),
+                    "level_3_code": data.get("level_3_code"),
+                    "level_4_code": data.get("level_4_code"),
+                    "level_5_code": data.get("level_5_code"),
+                    "level_6_code": data.get("level_6_code"),
+                }
+                if self.complainant.get_complainant_by_id(complainant_id):
+                    self.complainant.update_complainant(complainant_id, complainant_payload)
+                else:
+                    self.complainant.create_complainant(complainant_payload)
 
             grievance_payload = {
-                "seah_case_id": seah_case_id,
-                "seah_public_ref": seah_public_ref,
+                "grievance_id": grievance_id,
                 "complainant_id": complainant_id,
-                "grievance_description": data.get("grievance_description"),
                 "grievance_summary": data.get("grievance_summary"),
-                "grievance_categories": str(data.get("grievance_categories") or ""),
+                "grievance_categories": data.get("grievance_categories"),
                 "grievance_sensitive_issue": True,
-                "grievance_status": data.get("grievance_status"),
+                "grievance_description": None,
+                "grievance_location": data.get("grievance_location"),
                 "grievance_timeline": str(data.get("grievance_timeline") or ""),
+                "grievance_classification_status": data.get("grievance_status"),
+                "source": "seah_intake",
                 "language_code": data.get("language_code", "en"),
-                "submission_type": "seah_intake",
-                "seah_payload": json.dumps(data, ensure_ascii=False, default=str),
+                "case_sensitivity": "seah",
             }
-            self.execute_insert(
-                table_name="grievances_seah",
-                input_data=grievance_payload,
-                allowed_fields=list(grievance_payload.keys()),
-            )
+            if self.grievance.get_grievance_by_id(grievance_id):
+                self.grievance.update_grievance(grievance_id, grievance_payload)
+            else:
+                self.grievance.create_grievance(grievance_payload)
+
+            party_contacts = data.get("party_contacts")
+            if isinstance(party_contacts, dict) and party_contacts:
+                self._replace_grievance_parties_from_payloads(
+                    grievance_id=grievance_id,
+                    party_contacts=party_contacts,
+                    fallback_complainant_id=complainant_id,
+                )
+            else:
+                party_role = seah_party_role_from_victim_survivor_role(data.get("seah_victim_survivor_role"))
+                party_id = f"party-{uuid.uuid4()}"
+                self.execute_update(
+                    """
+                    DELETE FROM grievance_parties
+                    WHERE grievance_id = %s
+                      AND is_primary_reporter = TRUE
+                    """,
+                    (grievance_id,),
+                )
+                self.execute_update(
+                    """
+                    INSERT INTO grievance_parties (
+                        party_id,
+                        grievance_id,
+                        complainant_id,
+                        party_role,
+                        is_primary_reporter,
+                        contact_allowed,
+                        contact_channel,
+                        consent_scope,
+                        notes_safe
+                    )
+                    VALUES (%s, %s, %s, %s, TRUE, %s, %s::jsonb, %s::jsonb, %s)
+                    """,
+                    (
+                        party_id,
+                        grievance_id,
+                        complainant_id,
+                        party_role,
+                        False if anonymous_route else True,
+                        json.dumps({"channel": data.get("seah_contact_consent_channel")}),
+                        json.dumps({"complainant_consent": data.get("complainant_consent")}),
+                        "primary reporter from seah submit path",
+                    ),
+                )
+
+            grievance_description = data.get("grievance_description")
+            if grievance_description not in (None, "", not_provided):
+                vault_payload_id = f"vault-{uuid.uuid4()}"
+                self.execute_update(
+                    """
+                    INSERT INTO grievance_vault_payloads (
+                        vault_payload_id,
+                        grievance_id,
+                        case_sensitivity,
+                        payload_type,
+                        content_ciphertext,
+                        source_channel,
+                        source_language_code,
+                        created_by
+                    )
+                    VALUES (%s, %s, 'seah', 'original_grievance', %s, 'chatbot', %s, %s)
+                    """,
+                    (vault_payload_id, grievance_id, grievance_description, data.get("language_code", "en"), self.DEFAULT_USER),
+                )
+                self.grievance.update_grievance(
+                    grievance_id,
+                    {
+                        "vault_payload_ref": vault_payload_id,
+                        "vault_last_updated_at": datetime.now(),
+                        "case_sensitivity": "seah",
+                    },
+                )
 
             return {
                 "ok": True,
                 "complainant_id": complainant_id,
-                "seah_case_id": seah_case_id,
-                "seah_public_ref": seah_public_ref,
+                "grievance_id": grievance_id,
             }
         except Exception as e:
             self.logger.error(f"Error submitting SEAH grievance to db: {str(e)}")
