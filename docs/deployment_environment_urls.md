@@ -68,6 +68,8 @@ meta:
 nginx_location_prefixes:
   rest_webchat: /rest-webchat/
   shared_assets: /shared/
+  ticketing_ui: /ticketing/
+  ticketing_mobile_api: /ticketing-mobile/
   orchestrator_message: /message
   orchestrator_health: /health
   accessible_socketio: /accessible-socket.io
@@ -131,8 +133,11 @@ environments:
     upstreams:
       orchestrator: "http://127.0.0.1:8000"
       fastapi_backend: "http://127.0.0.1:5001"
+      ticketing_ui: "http://127.0.0.1:3001"
+      ticketing_mobile_api: "http://127.0.0.1:5001"
     notes:
       - "Docker Compose: use service names, e.g. http://orchestrator:8000"
+      - "Nginx aliases: /ticketing/ -> grm_ui:3001 and /ticketing-mobile/ -> backend:5001"
 
 # other_services:
 #   rasa: "http://127.0.0.1:5005"
