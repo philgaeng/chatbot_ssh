@@ -2162,7 +2162,32 @@ def get_buttons_base(form_name: str, action_name: str, button_index: int, langua
         list: List of button dictionaries with title and payload
     """
     try:
-        return UTTERANCE_MAPPING[form_name][action_name]['buttons'][button_index][language]
-    except KeyError as e:
+        button_sets = UTTERANCE_MAPPING[form_name][action_name]['buttons']
+
+        # API contract is 1-based; some mappings may still use 0-based keys.
+        if isinstance(button_sets, list):
+            zero_based = button_index - 1
+            if 0 <= zero_based < len(button_sets):
+                return button_sets[zero_based].get(language, [])
+            if 0 <= button_index < len(button_sets):
+                return button_sets[button_index].get(language, [])
+            raise IndexError(button_index)
+
+        if isinstance(button_sets, dict):
+            if button_index in button_sets:
+                return button_sets[button_index].get(language, [])
+            if str(button_index) in button_sets:
+                return button_sets[str(button_index)].get(language, [])
+
+            zero_based = button_index - 1
+            if zero_based in button_sets:
+                return button_sets[zero_based].get(language, [])
+            if str(zero_based) in button_sets:
+                return button_sets[str(zero_based)].get(language, [])
+
+            raise KeyError(button_index)
+
+        raise TypeError(type(button_sets))
+    except (KeyError, IndexError, TypeError) as e:
         print(f"Error getting buttons: {str(e)}")
         return []

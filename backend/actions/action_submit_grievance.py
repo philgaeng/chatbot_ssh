@@ -133,6 +133,30 @@ class BaseActionSubmit(BaseAction):
             if value == self.SKIP_VALUE or value is None:
                 grievance_data[key] = self.NOT_PROVIDED
         return grievance_data
+
+    def _merge_role_party_payloads(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize and merge role-specific party slots into party_contacts.
+        This guarantees submit sees every role payload collected in slots.
+        """
+        role_slot_map = {
+            "victim_survivor": "party_victim_survivor",
+            "witness": "party_witness",
+            "relative": "party_relative",
+            "seah_focal_point": "party_seah_focal_point",
+            "other_reporter": "party_other_reporter",
+        }
+
+        raw_party_contacts = grievance_data.get("party_contacts")
+        party_contacts: Dict[str, Any] = raw_party_contacts if isinstance(raw_party_contacts, dict) else {}
+
+        for role_key, slot_name in role_slot_map.items():
+            slot_payload = grievance_data.get(slot_name)
+            if isinstance(slot_payload, dict) and slot_payload:
+                party_contacts[role_key] = slot_payload
+
+        grievance_data["party_contacts"] = party_contacts
+        return grievance_data
     
     
 
@@ -359,6 +383,7 @@ class ActionSubmitSeah(BaseActionSubmit):
             grievance_data["party_relative"] = tracker.get_slot("party_relative")
             grievance_data["party_seah_focal_point"] = tracker.get_slot("party_seah_focal_point")
             grievance_data["party_other_reporter"] = tracker.get_slot("party_other_reporter")
+            grievance_data = self._merge_role_party_payloads(grievance_data)
 
             result = self.db_manager.submit_seah_to_db(grievance_data)
             if not result.get("ok"):

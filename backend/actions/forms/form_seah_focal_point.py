@@ -491,11 +491,25 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
     async def execute_action(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        return [
+        current_slots = dict(tracker.current_slot_values())
+        victim_party_updates = self.upsert_active_party_payload(
+            current_slots,
+            {"active_party_role": "victim_survivor"},
+        )
+
+        events: List[Dict[Text, Any]] = []
+        for slot_name in ("party_contacts", "party_victim_survivor"):
+            if slot_name in victim_party_updates:
+                events.append(
+                    {"event": "slot", "name": slot_name, "value": victim_party_updates[slot_name]}
+                )
+
+        events.extend([
             {"event": "slot", "name": "seah_focal_phone", "value": tracker.get_slot("complainant_phone")},
             {"event": "slot", "name": "seah_focal_full_name", "value": tracker.get_slot("complainant_full_name")},
             {"event": "slot", "name": "seah_focal_city", "value": tracker.get_slot("complainant_municipality")},
             {"event": "slot", "name": "seah_focal_village", "value": tracker.get_slot("complainant_village")},
+            {"event": "slot", "name": "active_party_role", "value": "seah_focal_point"},
             {"event": "slot", "name": "complainant_phone", "value": None},
             {"event": "slot", "name": "complainant_full_name", "value": None},
             {"event": "slot", "name": "complainant_email", "value": None},
@@ -504,7 +518,8 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
             {"event": "slot", "name": "complainant_consent", "value": None},
             {"event": "slot", "name": "complainant_municipality", "value": None},
             {"event": "slot", "name": "complainant_village", "value": None},
-        ]
+        ])
+        return events
 
 
 class ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen(BaseAction):
