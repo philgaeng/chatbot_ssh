@@ -96,6 +96,22 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
   }
 }
 
+// ── Workflow step short labels ────────────────────────────────────────────────
+
+const STEP_SHORT_LABEL: Record<string, string> = {
+  LEVEL_1_SITE:          "L1 Site",
+  LEVEL_2_PIU:           "L2 PIU",
+  LEVEL_3_GRC:           "L3 GRC",
+  LEVEL_4_LEGAL:         "L4 Legal",
+  SEAH_LEVEL_1_NATIONAL: "SEAH L1",
+  SEAH_LEVEL_2_HQ:       "SEAH L2",
+};
+
+/** Short human label derived from step_key. Falls back to a cleaned version of the key. */
+export function stepShortLabel(stepKey: string): string {
+  return STEP_SHORT_LABEL[stepKey] ?? stepKey.replace(/_/g, " ").replace(/LEVEL (\d)/, "L$1");
+}
+
 // ── SLA urgency helpers ───────────────────────────────────────────────────────
 
 export type SlaUrgency = "overdue" | "critical" | "warning" | "ok" | "none";
