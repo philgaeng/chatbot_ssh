@@ -443,6 +443,17 @@ class BaseContactForm(BaseAction):
         """Check if a contact field value is empty or skipped."""
         return val is None or val == "" or val == skip_value
 
+    def _has_meaningful_contact_persisted_value(self, val: Any) -> bool:
+        """
+        True if the DB/tracker value counts as "already collected" for modify-missing flow.
+        Treats placeholder strings like "Not provided" as empty so they can be replaced.
+        """
+        if self._is_contact_field_empty(val, self.SKIP_VALUE):
+            return False
+        if isinstance(val, str) and val.strip().lower() in ("not provided", "n/a", "none"):
+            return False
+        return True
+
     def get_missing_contact_fields(
         self, tracker: Tracker
     ) -> Tuple[Optional[Dict], List[Text]]:
@@ -465,8 +476,65 @@ class BaseContactForm(BaseAction):
 
         missing: List[Text] = []
         for field in self.CONTACT_FIELDS_ORDER:
+            # Wizard slots (*_temp / *_confirmed) are empty even when the row already has
+            # the canonical column filled — only ask when the persisted value is not meaningful.
+            if field == "complainant_municipality_temp":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_municipality")
+                ):
+                    continue
+                val = slots.get(field)
+                if self._is_contact_field_empty(val, self.SKIP_VALUE):
+                    missing.append(field)
+                continue
+            if field == "complainant_municipality_confirmed":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_municipality")
+                ):
+                    continue
+                val = slots.get(field)
+                if val is None:
+                    missing.append(field)
+                continue
+            if field == "complainant_village_temp":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_village")
+                ):
+                    continue
+                val = slots.get(field)
+                if self._is_contact_field_empty(val, self.SKIP_VALUE):
+                    missing.append(field)
+                continue
+            if field == "complainant_village_confirmed":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_village")
+                ):
+                    continue
+                val = slots.get(field)
+                if val is None:
+                    missing.append(field)
+                continue
+            if field == "complainant_address_temp":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_address")
+                ):
+                    continue
+                val = slots.get(field)
+                if self._is_contact_field_empty(val, self.SKIP_VALUE):
+                    missing.append(field)
+                continue
+            if field == "complainant_email_temp":
+                if self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_email")
+                ):
+                    continue
+                val = slots.get(field)
+                if self._is_contact_field_empty(val, self.SKIP_VALUE):
+                    missing.append(field)
+                continue
+
             val = slots.get(field)
-            if self._is_contact_field_empty(val, self.SKIP_VALUE):
+            if not self._has_meaningful_contact_persisted_value(val):
                 missing.append(field)
         return complainant, missing
 

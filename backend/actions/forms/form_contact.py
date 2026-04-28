@@ -374,13 +374,12 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
         if slot_value == self.SKIP_VALUE:
             result = {"complainant_ward": self.SKIP_VALUE}
         else:
-            # Ensure the ward is an integer
-            if not slot_value.isdigit():
+            raw = str(slot_value).strip()
+            if not raw.isdigit():
                 result = {"complainant_ward": None}
             else:
-                result = {"complainant_ward": int(slot_value)}
-            result = {"complainant_ward": slot_value}
-        
+                result = {"complainant_ward": raw}
+
         self.logger.debug(f"Validate complainant_ward: {result}")
         return result
     

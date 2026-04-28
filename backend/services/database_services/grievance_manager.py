@@ -3,6 +3,13 @@ import logging
 from typing import Dict, List, Optional, Any
 import traceback
 from .base_manager import BaseDatabaseManager
+from backend.services.db_debug_log import (
+    dict_keys_sorted,
+    grievance_join_row_summary,
+    grievance_row_summary,
+    mask_phone_for_log,
+    sql_params_shape,
+)
 # Database constants are now accessed through database_constants.py
 
 
@@ -27,6 +34,7 @@ ALLOWED_UPDATE_FIELDS = [
         'vault_last_updated_at',
     ]
 
+
 class GrievanceDbManager(BaseDatabaseManager):
     """Handles grievance CRUD and business logic"""
     
@@ -42,7 +50,7 @@ class GrievanceDbManager(BaseDatabaseManager):
                 - complainant_id: ID of the complainant (required)
         """
         try:
-            self.logger.info(f"create_grievance: Creating grievance with data: {data}")
+            self.logger.info("create_grievance: Creating grievance %s", dict_keys_sorted(data))
             grievance_id = data.get('grievance_id')
             complainant_id = data.get('complainant_id')
             if not data.get('source'):
@@ -122,7 +130,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             if results:
                 # Parse the result to convert JSON fields back to Python objects
                 parsed_result = self._parse_database_result(results[0])
-                self.logger.debug(f"get_grievance_by_id: grievance_id: {parsed_result}, results: {results}")
+                self.logger.debug("get_grievance_by_id: %s", grievance_row_summary(parsed_result))
                 return parsed_result
             return None
         except Exception as e:
@@ -359,22 +367,29 @@ class GrievanceDbManager(BaseDatabaseManager):
 
     def get_grievance_by_complainant_phone(self, phone_number: str) -> List[Dict[str, Any]]:
         self.logger.info(
-            "get_grievance_by_complainant_phone: entry | phone_number=%s",
-            phone_number[:20] + "..." if phone_number and len(phone_number) > 20 else phone_number,
+            "get_grievance_by_complainant_phone: entry phone_masked=%s",
+            mask_phone_for_log(phone_number),
         )
-        # Encrypt the phone number for search if encryption is enabled
-        self.logger.debug(f"original phone number: {phone_number}")
+        self.logger.debug(
+            "get_grievance_by_complainant_phone: input_phone_chars=%d",
+            len(phone_number or ""),
+        )
         try:
             standardized_phone = self._standardize_phone_number(phone_number)
         except Exception as e:
             self.logger.exception("get_grievance_by_complainant_phone: _standardize_phone_number failed: %s", e)
             raise
         search_phone = self._hash_value(standardized_phone) if self.encryption_key else standardized_phone
-        self.logger.debug(f"hashed phone number: {search_phone}")
+        self.logger.debug(
+            "get_grievance_by_complainant_phone: std_phone_chars=%d search_token_chars=%d uses_hash=%s",
+            len(standardized_phone or ""),
+            len(search_phone or ""),
+            bool(self.encryption_key),
+        )
 
         self.logger.info(
-            "get_grievance_by_complainant_phone: standardized_phone=%s, encryption_key=%s",
-            standardized_phone,
+            "get_grievance_by_complainant_phone: standardized_masked=%s encryption_on=%s",
+            mask_phone_for_log(standardized_phone),
             bool(self.encryption_key),
         )
 
@@ -411,7 +426,10 @@ class GrievanceDbManager(BaseDatabaseManager):
             ORDER BY g.grievance_creation_date DESC, ls.grievance_status_update_date DESC
         """
         try:
-            self.logger.debug(f"search_phone at query time: {search_phone}")
+            self.logger.debug(
+                "get_grievance_by_complainant_phone: query bind %s",
+                sql_params_shape((search_phone,)),
+            )
             results = self.execute_query(query, (search_phone,), "get_complainants_by_phone_number")
             self.logger.info(
                 "get_grievance_by_complainant_phone: query returned %s rows",
@@ -419,11 +437,16 @@ class GrievanceDbManager(BaseDatabaseManager):
             )
             # Decrypt sensitive fields in results
             decrypted_results = []
-            self.logger.debug(f"{len(results)} complainants found")
-            self.logger.debug(f"results: {results}")
+            self.logger.debug(
+                "get_grievance_by_complainant_phone: raw_row_summaries=%s",
+                [grievance_join_row_summary(r) for r in (results or [])[:8]],
+            )
             for complainant in results:
                 decrypted_results.append(self._decrypt_sensitive_data(complainant))
-            self.logger.debug(f"{len(decrypted_results)} complainants successfully decrypted")
+            self.logger.debug(
+                "get_grievance_by_complainant_phone: decrypted_row_summaries=%s",
+                [grievance_join_row_summary(r) for r in decrypted_results[:8]],
+            )
             self.logger.info(
                 "get_grievance_by_complainant_phone: returning %s grievances",
                 len(decrypted_results),
@@ -441,10 +464,12 @@ class GrievanceDbManager(BaseDatabaseManager):
         # Use wildcard to match any grievance_id that contains the pattern
         query = "SELECT grievance_id FROM grievances WHERE grievance_id LIKE %s"
         try:
-            self.logger.debug(f"get_grievance_id_by_last_6_characters: text_standardized: {text_standardized}")
+            self.logger.debug(
+                "get_grievance_id_by_last_6_characters: suffix_len=%d",
+                len(text_standardized or ""),
+            )
             # Add wildcard prefix to match IDs containing this pattern
             search_pattern = f'%{text_standardized}%'
-            self.logger.debug(f"get_grievance_id_by_last_6_characters: search_pattern: {search_pattern}")
             results = self.execute_query(query, (search_pattern,), "get_grievance_id_by_last_6_characters")
             
             # Filter to get exact matches: IDs ending with text_standardized or text_standardized-B/-A
@@ -453,9 +478,13 @@ class GrievanceDbManager(BaseDatabaseManager):
                               result['grievance_id'].endswith(text_standardized + '-B') or 
                               result['grievance_id'].endswith(text_standardized + '-A')]
             
-            self.logger.debug(f"get_grievance_id_by_last_6_characters: exact_matches: {exact_matches}")
+            self.logger.debug(
+                "get_grievance_id_by_last_6_characters: candidates=%d sample=%s chosen=%s",
+                len(exact_matches),
+                exact_matches[:5],
+                exact_matches[0] if exact_matches else None,
+            )
             result = exact_matches[0] if exact_matches else None
-            self.logger.debug(f"get_grievance_id_by_last_6_characters: result: {result}")
             return result
         except Exception as e:
             self.logger.error(f"Error retrieving grievance ID by last 6 characters: {str(e)}")
@@ -668,11 +697,18 @@ class TranslationDbManager(BaseDatabaseManager):
             values = self.generate_values_tuple(query_data)
             conflict_fields = ['grievance_summary_en', 'grievance_description_en', 'grievance_categories_en']
             query_values = f"INSERT INTO grievance_translations ({', '.join(query_data.keys())}) VALUES ({', '.join(['%s'] * len(values))})"
-            self.logger.debug(f"create_translation: Query values: {query_values}")
+            self.logger.debug(
+                "create_translation: insert_keys=%s values_shape=%s",
+                sorted(query_data.keys()),
+                sql_params_shape(values),
+            )
             query_conflict = f" ON CONFLICT (translation_id) DO UPDATE SET {', '.join([f'{key} = EXCLUDED.{key}' for key in conflict_fields if key in query_data.keys()])} RETURNING translation_id"
-            self.logger.debug(f"create_translation: Query conflict: {query_conflict}")
+            self.logger.debug(
+                "create_translation: query_skeleton_len=%d conflict_keys=%s",
+                len(query_values) + len(query_conflict),
+                [k for k in conflict_fields if k in query_data],
+            )
             query = query_values + query_conflict
-            self.logger.debug(f"create_translation: Query: {query}")
             result = self.execute_query(query, values, "create_translation")
             if result:
                 self.logger.info(f"create_translation: Successfully created translation with ID: {result[0]['translation_id']}")

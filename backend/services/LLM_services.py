@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
+from backend.services.db_debug_log import text_len_for_log
 # Set up logging
 logger = TaskLogger(service_name='llm_service').logger
 DEFAULT_PROVINCE = DEFAULT_VALUES["DEFAULT_PROVINCE"]
@@ -360,9 +361,9 @@ def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAG
     try:
         lang_label = "Nepali" if language_code == "ne" else "English"
         logger.debug(
-            "detect_sensitive_content_llm: calling LLM | language_code=%s, snippet=%r",
+            "detect_sensitive_content_llm: calling LLM | language_code=%s, %s",
             language_code,
-            text[:120],
+            text_len_for_log("input", text),
         )
         response = client.chat.completions.create(
             messages=[
@@ -392,10 +393,10 @@ Respond with a JSON object only: {{"detected": true or false, "level": "high" or
         if not isinstance(message, str):
             message = str(message)[:200]
         logger.info(
-            "detect_sensitive_content_llm: result | detected=%s, level=%s, message_snippet=%r",
+            "detect_sensitive_content_llm: result | detected=%s, level=%s, %s",
             detected,
             level,
-            (message or "")[:120],
+            text_len_for_log("message", message),
         )
         return {"detected": detected, "level": level, "message": message}
     except Exception as e:
