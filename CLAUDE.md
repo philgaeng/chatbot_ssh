@@ -38,6 +38,15 @@ infrastructure projects (KL Road / Kakarbhitta-Laukahi Road, ADB Loan 52097-003)
 
 ---
 
+## Git workflow (LOCKED)
+
+- **Never use `main` as a working branch.** Do not commit or push day-to-day implementation directly on `main` — that branch is only an integration target (merge or PR from feature branches).
+- Work on explicit branches such as `features/chatbot`, `feature/grm-ticketing`, `feat/seah-sensitive-intake`, or agreed integration branches.
+- Pulling or merging **`origin/main` into a feature branch** to stay current is fine; changing **`main` itself** only happens via deliberate promotion from those branches.
+- If commits accidentally landed on **`main`**, fix by moving them onto the correct feature branch (cherry-pick / branch-off before pulling others’ changes) and restoring **`main`** to match **`origin/main`** per `docs/COMMIT_STRATEGY.md`.
+
+---
+
 ## HARD BOUNDARIES — READ BEFORE WRITING ANY CODE
 
 ### NEVER modify these:

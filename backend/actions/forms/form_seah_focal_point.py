@@ -231,24 +231,23 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
     ) -> List[Text]:
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []
-        required = ["seah_project_identification", "sensitive_issues_new_detail"]
-        if tracker.get_slot("seah_project_identification") != "not_adb_project":
-            required.extend(
-                [
-                    "seah_focal_survivor_risks",
-                    "seah_focal_mitigation_measures",
-                    "seah_focal_other_at_risk_parties",
-                    "seah_focal_project_risk",
-                    "seah_focal_reputational_risk",
-                ]
-            )
-            consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
-            has_any_contact = (
-                tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
-                or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
-            )
-            if consent_to_report != "no" and has_any_contact:
-                required.append("seah_contact_consent_channel")
+        # Always collect risk / multiselect fields, including for not_adb_project.
+        required = [
+            "seah_project_identification",
+            "sensitive_issues_new_detail",
+            "seah_focal_survivor_risks",
+            "seah_focal_mitigation_measures",
+            "seah_focal_other_at_risk_parties",
+            "seah_focal_project_risk",
+            "seah_focal_reputational_risk",
+        ]
+        consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
+        has_any_contact = (
+            tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
+            or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
+        )
+        if consent_to_report != "no" and has_any_contact:
+            required.append("seah_contact_consent_channel")
         required.append("seah_focal_referred_to_support")
         return required
 
