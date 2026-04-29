@@ -13,7 +13,7 @@ import {
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES } from "@/lib/mobile-constants";
+import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
 import { SystemPill }                         from "@/components/thread/SystemPill";
@@ -182,13 +182,15 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
     switch (activeFilter) {
-      case "all":    return ticket.events;
-      case "mine":   return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
-      case "tasks":  return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
-      case "system": return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
-      default:       return ticket.events.filter((e) => e.created_by_user_id === activeFilter);
+      case "all":        return ticket.events;
+      case "mine":       return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
+      case "owner":      return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
+      case "supervisor": return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
+      case "observers":  return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
+      case "tasks":      return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
+      default:           return ticket.events;
     }
-  }, [ticket, activeFilter, currentUserId]);
+  }, [ticket, activeFilter, currentUserId, viewerIds]);
 
   const pendingTaskCount = useMemo(
     () => tasks.filter((t) => t.status === "PENDING").length,
@@ -329,6 +331,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <FilterChips
           events={ticket.events}
           currentUserId={currentUserId}
+          assignedToUserId={ticket.assigned_to_user_id ?? null}
+          viewerIds={viewerIds}
           active={activeFilter}
           pendingTaskCount={pendingTaskCount}
           onChange={setActiveFilter}

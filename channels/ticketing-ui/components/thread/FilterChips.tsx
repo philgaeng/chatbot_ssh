@@ -1,37 +1,57 @@
 "use client";
 
 import { useMemo } from "react";
-import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, getRoleBubbleStyle } from "@/lib/mobile-constants";
+import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
 import type { TicketEvent } from "@/lib/api";
 
-export type FilterChip = "all" | "mine" | "tasks" | "system" | string;
+export type FilterChip = "all" | "mine" | "owner" | "supervisor" | "observers" | "tasks";
 
 export function FilterChips({
   events,
   currentUserId,
+  assignedToUserId,
+  viewerIds,
   active,
   pendingTaskCount,
   onChange,
 }: {
   events: TicketEvent[];
   currentUserId: string;
+  assignedToUserId: string | null;
+  viewerIds: Set<string>;
   active: FilterChip;
   pendingTaskCount: number;
   onChange: (chip: FilterChip) => void;
 }) {
-  const authors = useMemo(() => {
-    const seen = new Set<string>();
-    const result: { userId: string; role: string | null }[] = [];
-    for (const e of events) {
-      if (SYSTEM_EVENT_TYPES.has(e.event_type)) continue;
-      if (TASK_EVENT_TYPES.has(e.event_type)) continue;
-      const uid = e.created_by_user_id;
-      if (!uid || uid === currentUserId || seen.has(uid)) continue;
-      seen.add(uid);
-      result.push({ userId: uid, role: e.actor_role });
-    }
-    return result;
-  }, [events, currentUserId]);
+  const noteEvents = useMemo(
+    () => events.filter((e) => !SYSTEM_EVENT_TYPES.has(e.event_type) && !TASK_EVENT_TYPES.has(e.event_type)),
+    [events],
+  );
+
+  const hasOwner = useMemo(
+    () => !!assignedToUserId && assignedToUserId !== currentUserId &&
+      noteEvents.some((e) => e.created_by_user_id === assignedToUserId),
+    [noteEvents, assignedToUserId, currentUserId],
+  );
+
+  const hasSupervisor = useMemo(
+    () => noteEvents.some(
+      (e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) &&
+        e.created_by_user_id !== currentUserId &&
+        e.created_by_user_id !== assignedToUserId,
+    ),
+    [noteEvents, currentUserId, assignedToUserId],
+  );
+
+  const hasObservers = useMemo(
+    () => noteEvents.some(
+      (e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id) &&
+        e.created_by_user_id !== currentUserId,
+    ),
+    [noteEvents, viewerIds, currentUserId],
+  );
+
+  const hasTasks = pendingTaskCount > 0 || events.some((e) => TASK_EVENT_TYPES.has(e.event_type));
 
   const chip = (id: FilterChip, label: string, badge?: number) => (
     <button
@@ -56,12 +76,10 @@ export function FilterChips({
     <div className="flex gap-2 overflow-x-auto px-4 py-2 scrollbar-none">
       {chip("all", "All")}
       {chip("mine", "👤 You")}
-      {authors.map(({ userId, role }) => {
-        const style = getRoleBubbleStyle(role);
-        return chip(userId, `${style.emoji || "@"}${style.label || userId.split("-")[0]}`);
-      })}
-      {chip("tasks", "📋 Tasks", pendingTaskCount)}
-      {chip("system", "⚙️ System")}
+      {hasOwner      && chip("owner",      "🔵 Case owner")}
+      {hasSupervisor && chip("supervisor", "🟠 Supervisor")}
+      {hasObservers  && chip("observers",  "👁 Observers")}
+      {hasTasks      && chip("tasks",      "📋 Tasks", pendingTaskCount)}
     </div>
   );
 }

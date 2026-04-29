@@ -46,6 +46,16 @@ export function getRoleBubbleStyle(actorRole: string | null | undefined): RoleBu
   return ROLE_BUBBLE_STYLE[actorRole] ?? DEFAULT_BUBBLE_STYLE;
 }
 
+// ── Authority roles (supervisors / higher authority) ─────────────────────────
+
+export const AUTHORITY_ROLES = new Set([
+  "pd_piu_safeguards_focal",
+  "grc_chair", "grc_member",
+  "adb_national_project_director", "adb_hq_safeguards", "adb_hq_project", "adb_hq_exec",
+  "seah_hq_officer",
+  "super_admin", "local_admin",
+]);
+
 // ── Task types ────────────────────────────────────────────────────────────────
 
 export const TASK_TYPES = [
