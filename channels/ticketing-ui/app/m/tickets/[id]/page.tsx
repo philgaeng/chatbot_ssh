@@ -179,6 +179,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   // ── Derived state ───────────────────────────────────────────────────────
 
+  const viewerIds = useMemo(
+    () => new Set((ticket?.viewers ?? []).map((v) => v.user_id)),
+    [ticket],
+  );
+
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
     switch (activeFilter) {
@@ -195,11 +200,6 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const pendingTaskCount = useMemo(
     () => tasks.filter((t) => t.status === "PENDING").length,
     [tasks],
-  );
-
-  const viewerIds = useMemo(
-    () => new Set((ticket?.viewers ?? []).map((v) => v.user_id)),
-    [ticket],
   );
 
   const myPendingTasks = useMemo(
