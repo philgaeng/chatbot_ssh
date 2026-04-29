@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
 import type { TicketEvent } from "@/lib/api";
 
-export type FilterChip = "all" | "mine" | "owner" | "supervisor" | "observers" | "tasks";
+export type FilterChip = "all" | "mine" | "owner" | "supervisor" | "observers" | "tasks" | "system";
 
 export function FilterChips({
   events,
