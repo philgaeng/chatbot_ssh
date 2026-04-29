@@ -14,6 +14,7 @@ from backend.config.constants import (
     AWS_REGION
 )
 from backend.logger.logger import TaskLogger
+from backend.services.db_debug_log import email_send_log_summary, mask_phone_for_log, text_len_for_log
 import os
 
 
@@ -133,10 +134,17 @@ class SMSClient:
             test_message = "This is a test message from your chatbot."
             result = self.send_sms(test_phone_number, test_message)
             
-            self.logger.info(f"Test SMS sent successfully to {test_phone_number}")
+            self.logger.info(
+                "Test SMS sent successfully to %s",
+                mask_phone_for_log(test_phone_number),
+            )
             return result
         except Exception as e:
-            self.logger.error(f"Test SMS to {test_phone_number} failed with error: {str(e)}")
+            self.logger.error(
+                "Test SMS to %s failed with error: %s",
+                mask_phone_for_log(test_phone_number),
+                str(e),
+            )
             return False
 
     def send_sms(self, phone_number: str, message: str):
@@ -153,10 +161,16 @@ class SMSClient:
             if SMS_ENABLED:
                 formatted_number = self._format_phone_number(phone_number)
                 if formatted_number not in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
-                    self.logger.warning(f"Phone number {formatted_number} not in whitelist. SMS not sent.")
+                    self.logger.warning(
+                        "Phone number %s not in whitelist. SMS not sent.",
+                        mask_phone_for_log(formatted_number),
+                    )
                     return False
                     
-                self.logger.info(f"Sending SMS via SNS to whitelisted number: {formatted_number}")
+                self.logger.info(
+                    "Sending SMS via SNS to whitelisted number: %s",
+                    mask_phone_for_log(formatted_number),
+                )
                 
                 response = self.sns_client.publish(
                     PhoneNumber=formatted_number,
@@ -227,7 +241,12 @@ class EmailClient:
 
     def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
         try:
-            self.logger.info(f"Attempting to send email to: {to_emails}")
+            self.logger.info(
+                "Attempting to send email: %s subject_chars=%s %s",
+                email_send_log_summary(to_emails),
+                len(subject or ""),
+                text_len_for_log("body", body),
+            )
             self.logger.info(f"Using sender email: {self.sender_email}")
             
             response = self.ses_client.send_email(
@@ -254,9 +273,9 @@ class EmailClient:
             
         except Exception as e:
             self.logger.error(f"Failed to send email: {str(e)}")
-            self.logger.error(f"To: {to_emails}")
-            self.logger.error(f"Subject: {subject}")
-            self.logger.error(f"Body: {body[:100]}...")  # Log first 100 chars of body
+            self.logger.error("Email failure: %s", email_send_log_summary(to_emails))
+            self.logger.error("%s", text_len_for_log("subject", subject))
+            self.logger.error("%s", text_len_for_log("body", body))
             return False
 
 

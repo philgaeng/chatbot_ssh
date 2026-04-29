@@ -18,11 +18,12 @@ from backend.services.messaging import Messaging
 from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, USER_FIELDS, GRIEVANCE_FIELDS, CLASSIFICATION_DATA, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, ADMIN_EMAILS
 from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT
 from backend.services.database_services.postgres_services import db_manager
+from backend.services.db_debug_log import grievance_row_summary
 
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
 SKIP_VALUE = DEFAULT_VALUES['SKIP_VALUE']
 
-    
+
 class ActionCommonMixin(Action, ABC):
     """Abstract base class for all actions.
     
@@ -781,7 +782,7 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
             key_mapping_language.update(key_mapping_language_long)
         
         utterance = []
-        self.logger.debug(f"prepare_grievance_text_for_display: {grievance}")
+        self.logger.debug("prepare_grievance_text_for_display: %s", grievance_row_summary(grievance))
         for k in key_mapping_language.keys():
             if k in grievance:
                 v = grievance[k]
@@ -790,16 +791,25 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
                     v = self.get_status_and_description_str_in_language(v)
                 if v:
                     utterance.append(f"{denomination}: {v}")
-        self.logger.debug(f"prepare_grievance_text_for_display: utterance_list: {utterance}")
+        self.logger.debug(
+            "prepare_grievance_text_for_display: utterance_lines=%d chars=%d",
+            len(utterance),
+            sum(len(line) for line in utterance),
+        )
         utterance = "\n".join(utterance)
         return utterance
 
     def collect_grievance_data_from_id(self, grievance_id: str, tracker: Tracker, domain: Dict[Text, Any]) -> Dict[Text, Any]:
         grievances = tracker.get_slot("list_grievance_id")
         if grievances: #access directly from the tracker to avoid extra call to db
-            grievance = [g for g in grievances if g.get("grievance_id") == grievance_id]
-            self.logger.debug(f"action_ask_status_check_grievance_selected_action: grievance_id: {grievance_id}, grievance: {grievance}")
-            grievance = grievance[0] if grievance else None
+            matches = [g for g in grievances if g.get("grievance_id") == grievance_id]
+            self.logger.debug(
+                "collect_grievance_data_from_id: grievance_id=%s tracker_list_matches=%d first=%s",
+                grievance_id,
+                len(matches),
+                grievance_row_summary(matches[0]) if matches else "none",
+            )
+            grievance = matches[0] if matches else None
         else:
             grievance = self.db_manager.get_grievance_by_id(grievance_id) #default case if the slot is not set - call to db
         return grievance if grievance else None

@@ -231,24 +231,23 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
     ) -> List[Text]:
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []
-        required = ["seah_project_identification", "sensitive_issues_new_detail"]
-        if tracker.get_slot("seah_project_identification") != "not_adb_project":
-            required.extend(
-                [
-                    "seah_focal_survivor_risks",
-                    "seah_focal_mitigation_measures",
-                    "seah_focal_other_at_risk_parties",
-                    "seah_focal_project_risk",
-                    "seah_focal_reputational_risk",
-                ]
-            )
-            consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
-            has_any_contact = (
-                tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
-                or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
-            )
-            if consent_to_report != "no" and has_any_contact:
-                required.append("seah_contact_consent_channel")
+        # Always collect risk / multiselect fields, including for not_adb_project.
+        required = [
+            "seah_project_identification",
+            "sensitive_issues_new_detail",
+            "seah_focal_survivor_risks",
+            "seah_focal_mitigation_measures",
+            "seah_focal_other_at_risk_parties",
+            "seah_focal_project_risk",
+            "seah_focal_reputational_risk",
+        ]
+        consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
+        has_any_contact = (
+            tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
+            or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
+        )
+        if consent_to_report != "no" and has_any_contact:
+            required.append("seah_contact_consent_channel")
         required.append("seah_focal_referred_to_support")
         return required
 
@@ -492,11 +491,25 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
     async def execute_action(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        return [
+        current_slots = dict(tracker.current_slot_values())
+        victim_party_updates = self.upsert_active_party_payload(
+            current_slots,
+            {"active_party_role": "victim_survivor"},
+        )
+
+        events: List[Dict[Text, Any]] = []
+        for slot_name in ("party_contacts", "party_victim_survivor"):
+            if slot_name in victim_party_updates:
+                events.append(
+                    {"event": "slot", "name": slot_name, "value": victim_party_updates[slot_name]}
+                )
+
+        events.extend([
             {"event": "slot", "name": "seah_focal_phone", "value": tracker.get_slot("complainant_phone")},
             {"event": "slot", "name": "seah_focal_full_name", "value": tracker.get_slot("complainant_full_name")},
             {"event": "slot", "name": "seah_focal_city", "value": tracker.get_slot("complainant_municipality")},
             {"event": "slot", "name": "seah_focal_village", "value": tracker.get_slot("complainant_village")},
+            {"event": "slot", "name": "active_party_role", "value": "seah_focal_point"},
             {"event": "slot", "name": "complainant_phone", "value": None},
             {"event": "slot", "name": "complainant_full_name", "value": None},
             {"event": "slot", "name": "complainant_email", "value": None},
@@ -505,7 +518,8 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
             {"event": "slot", "name": "complainant_consent", "value": None},
             {"event": "slot", "name": "complainant_municipality", "value": None},
             {"event": "slot", "name": "complainant_village", "value": None},
-        ]
+        ])
+        return events
 
 
 class ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen(BaseAction):

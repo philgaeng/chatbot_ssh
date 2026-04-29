@@ -16,6 +16,12 @@ from contextlib import contextmanager
 from backend.config.constants import DB_CONFIG
 from backend.logger.logger import TaskLogger
 from backend.config.constants import DEFAULT_VALUES
+from backend.services.db_debug_log import (
+    grievance_row_summary,
+    redact_db_params,
+    sql_first_row_shape,
+    sql_params_shape,
+)
 from backend.config.database_tables import (
     TABLE_CREATION_ORDER, TABLE_DEPENDENCIES, FIELD_NAMES, FIELD_DESCRIPTIONS,
     TASK_STATUS_SEED_DATA, GRIEVANCE_STATUS_SEED_DATA, 
@@ -24,6 +30,7 @@ from backend.config.database_tables import (
 # Database constants are now accessed through database_constants.py
 import hashlib
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
+
 
 # --- Error classes ---
 class DatabaseError(Exception):
@@ -45,7 +52,7 @@ class BaseDatabaseManager:
         self.logger.setLevel(logging.DEBUG)
         self.nepal_tz = timezone
         self.db_params = DB_CONFIG.copy()
-        self.logger.info(f"Database parameters: {self.db_params}")
+        self.logger.info("Database parameters: %s", redact_db_params(self.db_params))
         self.logger.info(f"Database manager initialized successfully")
         self.encryption_key = os.getenv('DB_ENCRYPTION_KEY')
         if not self.encryption_key:
@@ -165,8 +172,11 @@ class BaseDatabaseManager:
         """Execute an update query with logging"""
         start_time = datetime.now()
         try:
-            self.logger.debug(f"execute_update values: {values}")
-            self.logger.debug(f"execute_update query: {query}")
+            self.logger.debug(
+                "execute_update: query_prefix=%r values_shape=%s",
+                (query or "")[:240],
+                sql_params_shape(values),
+            )
             with self.transaction() as conn:
                 with conn.cursor() as cur:
                     self.logger.info(f"execute_update: Executing update query: {query[:100]}...")
@@ -259,8 +269,13 @@ class BaseDatabaseManager:
         for field in self.ENCRYPTED_FIELDS:
             if field in encrypted_data and encrypted_data[field]:
                 encrypted_data[field] = self._encrypt_field(encrypted_data[field])
-                if field == 'complainant_phone':
-                    self.logger.debug(f"encrypted phone number {data[field]} at encrypt_complainant_data: {encrypted_data[field]}")
+                if field == "complainant_phone":
+                    ct = encrypted_data.get(field)
+                    self.logger.debug(
+                        "encrypt_complainant_data: field=%s ciphertext_len=%s",
+                        field,
+                        len(str(ct)) if ct is not None else 0,
+                    )
         return encrypted_data
     
     def _decrypt_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -316,11 +331,14 @@ class BaseDatabaseManager:
                                 cur.execute(query, (grievance[field], self.encryption_key))
                                 result = cur.fetchone()
                                 if result:
-                                    old_value = grievance[field]
                                     grievance[field] = result[0]
                                     decryption_count += 1
                                     if i < 2:  # Log first 2 decryptions for debugging
-                                        self.logger.debug(f"Decrypted field '{field}' for grievance {i}: {old_value[:20]}... -> {grievance[field][:20]}...")
+                                        self.logger.debug(
+                                            "Batch decrypt: grievance_index=%s field=%r",
+                                            i,
+                                            field,
+                                        )
                                 else:
                                     if i < 2:  # Log first 2 failures for debugging
                                         self.logger.warning(f"Failed to decrypt field '{field}' for grievance {i}")
@@ -352,9 +370,13 @@ class BaseDatabaseManager:
             List of grievance dictionaries with appropriate decryption applied
         """
         try:
-            self.logger.debug(f"Executing query with decrypt_field='{decrypt_field}': {query[:10]}...")
-            self.logger.debug(f"Query params: {params}")
-            
+            self.logger.debug(
+                "Executing query with decrypt_field=%r query_prefix=%r",
+                decrypt_field,
+                (query or "")[:80],
+            )
+            self.logger.debug("Query params shape: %s", sql_params_shape(params))
+
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query, params)
@@ -363,7 +385,10 @@ class BaseDatabaseManager:
                     
                     self.logger.debug(f"Raw query results: {len(rows)} rows, columns: {columns}")
                     if rows:
-                        self.logger.debug(f"First row sample: {dict(zip(columns, rows[0]))}")
+                        self.logger.debug(
+                            "First row shape: %s",
+                            sql_first_row_shape(columns, rows[0]),
+                        )
                     
                     grievances = []
                     grievances_to_decrypt = []
@@ -411,7 +436,10 @@ class BaseDatabaseManager:
 
                     self.logger.debug(f"Final result: {len(grievances)} total grievances")
                     if grievances:
-                        self.logger.debug(f"First grievance sample: {grievances[0]}")
+                        self.logger.debug(
+                            "First grievance sample: %s",
+                            grievance_row_summary(grievances[0]),
+                        )
                     else:
                         self.logger.warning("No grievances returned from query!")
                     
@@ -440,7 +468,10 @@ class BaseDatabaseManager:
             hashed_data = self._hash_sensitive_data(data)
             for k, v in hashed_data.items():
                 encrypted_data[k] = v
-            self.logger.debug(f"encrypted and hashed data at encrypt_and_hash_sensitive_data: {encrypted_data}")
+            self.logger.debug(
+                "encrypt_and_hash_sensitive_data: output_keys=%s",
+                sorted(encrypted_data.keys()),
+            )
             return encrypted_data
         else:
             return data
@@ -476,8 +507,12 @@ class BaseDatabaseManager:
             if field in data.keys():
                 hashed_key = field + '_hash'
                 hashed_data[hashed_key] = self._hash_value(data[field])
-                if field == 'complainant_phone':
-                    self.logger.debug(f"phone number {data[field]} hashed to {hashed_data[hashed_key]} at hash_sensitive_data")
+                if field == "complainant_phone":
+                    self.logger.debug(
+                        "hash_sensitive_data: field=%s hash_len=%s",
+                        field,
+                        len(hashed_data.get(hashed_key, "") or ""),
+                    )
         return hashed_data
 
     def get_grievance_or_complainant_source(self, id: str) -> str:
