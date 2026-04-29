@@ -18,7 +18,7 @@ export interface RoleBubbleStyle {
 }
 
 export const ROLE_BUBBLE_STYLE: Record<string, RoleBubbleStyle> = {
-  site_safeguards_focal_person:  { bubbleCls: "bg-gray-100",                             labelCls: "text-gray-500",   emoji: "",   label: "L1 Officer" },
+  site_safeguards_focal_person:  { bubbleCls: "bg-green-50  border-l-4 border-green-400", labelCls: "text-green-700",  emoji: "🟢", label: "L1 Officer" },
   pd_piu_safeguards_focal:       { bubbleCls: "bg-amber-50  border-l-4 border-amber-400", labelCls: "text-amber-700",  emoji: "🟠", label: "L2 PIU" },
   grc_chair:                     { bubbleCls: "bg-purple-50 border-l-4 border-purple-400",labelCls: "text-purple-700", emoji: "🟣", label: "GRC Chair" },
   grc_member:                    { bubbleCls: "bg-purple-50 border-l-4 border-purple-300",labelCls: "text-purple-600", emoji: "🟣", label: "GRC" },
@@ -35,9 +35,9 @@ export const ROLE_BUBBLE_STYLE: Record<string, RoleBubbleStyle> = {
 
 /** Fallback for unknown roles */
 export const DEFAULT_BUBBLE_STYLE: RoleBubbleStyle = {
-  bubbleCls: "bg-gray-100",
-  labelCls: "text-gray-500",
-  emoji: "",
+  bubbleCls: "bg-gray-100 border-l-4 border-gray-400",
+  labelCls: "text-gray-600",
+  emoji: "👤",
   label: "Officer",
 };
 
@@ -45,6 +45,16 @@ export function getRoleBubbleStyle(actorRole: string | null | undefined): RoleBu
   if (!actorRole) return DEFAULT_BUBBLE_STYLE;
   return ROLE_BUBBLE_STYLE[actorRole] ?? DEFAULT_BUBBLE_STYLE;
 }
+
+// ── Authority roles (supervisors / higher authority) ─────────────────────────
+
+export const AUTHORITY_ROLES = new Set([
+  "pd_piu_safeguards_focal",
+  "grc_chair", "grc_member",
+  "adb_national_project_director", "adb_hq_safeguards", "adb_hq_project", "adb_hq_exec",
+  "seah_hq_officer",
+  "super_admin", "local_admin",
+]);
 
 // ── Task types ────────────────────────────────────────────────────────────────
 
@@ -63,11 +73,17 @@ export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
 export const SYSTEM_EVENT_TYPES = new Set([
   "CREATED", "ACKNOWLEDGED", "ESCALATED", "ASSIGNED", "PRIORITY_CHANGED",
   "RESOLVED", "CLOSED", "GRC_CONVENED", "GRC_DECIDED", "SLA_BREACH_FINAL_STEP",
-  "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED",
+  "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED", "VIEWER_ADDED", "VIEWER_REMOVED",
 ]);
 
 /** Events that render as a task card in-thread. */
 export const TASK_EVENT_TYPES = new Set(["TASK_ASSIGNED", "TASK_COMPLETED", "TASK_DISMISSED"]);
+
+/**
+ * Notification-only events: counted for unread badge but NOT rendered in the thread.
+ * (MENTION events are stored in ticket_events but are purely notification signals.)
+ */
+export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION"]);
 
 /** Human-readable labels for system event pills. */
 export function systemEventLabel(eventType: string, payload?: Record<string, unknown> | null): string {
@@ -84,8 +100,26 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "SLA_BREACH_FINAL_STEP": return "⚠️ SLA breached at final level — manual intervention required";
     case "REVEAL_ORIGINAL":       return `🔍 Original statement ${payload?.granted ? "viewed" : "access denied"}`;
     case "REVEAL_ORIGINAL_CLOSED":return "🔍 Reveal session closed";
+    case "VIEWER_ADDED":          return `👁 ${payload?.added_user_id ?? "Officer"} added as viewer`;
+    case "VIEWER_REMOVED":        return `👁 ${payload?.removed_user_id ?? "Officer"} removed from viewers`;
     default:                      return eventType.replace(/_/g, " ").toLowerCase();
   }
+}
+
+// ── Workflow step short labels ────────────────────────────────────────────────
+
+const STEP_SHORT_LABEL: Record<string, string> = {
+  LEVEL_1_SITE:          "L1 Site",
+  LEVEL_2_PIU:           "L2 PIU",
+  LEVEL_3_GRC:           "L3 GRC",
+  LEVEL_4_LEGAL:         "L4 Legal",
+  SEAH_LEVEL_1_NATIONAL: "SEAH L1",
+  SEAH_LEVEL_2_HQ:       "SEAH L2",
+};
+
+/** Short human label derived from step_key. Falls back to a cleaned version of the key. */
+export function stepShortLabel(stepKey: string): string {
+  return STEP_SHORT_LABEL[stepKey] ?? stepKey.replace(/_/g, " ").replace(/LEVEL (\d)/, "L$1");
 }
 
 // ── SLA urgency helpers ───────────────────────────────────────────────────────
