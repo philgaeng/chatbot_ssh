@@ -56,6 +56,7 @@ import {
   type OrgRole,
   type PackageItem,
   type PackageCreate,
+  inviteOfficer,
 } from "@/lib/api";
 
 // ── Role edit modal ───────────────────────────────────────────────────────────
@@ -703,11 +704,145 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
   );
 }
 
+// ── InviteOfficerModal ────────────────────────────────────────────────────────
+
+function InviteOfficerModal({ onClose, onSuccess }: {
+  onClose: () => void;
+  onSuccess: (email: string) => void;
+}) {
+  const [email, setEmail]         = useState("");
+  const [roleKey, setRoleKey]     = useState(ROLES[0].key);
+  const [orgId, setOrgId]         = useState("");
+  const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    listOrganizations().then(setOrgs).catch(() => {});
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !orgId) { setError("Email and organization are required."); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await inviteOfficer({ email: email.trim(), role_key: roleKey, organization_id: orgId });
+      onSuccess(email.trim());
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg.includes("409") ? `${email} already exists.` : msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
+          <div className="font-semibold">Invite Officer</div>
+          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Email address *</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="officer@example.com"
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Role *</label>
+            <select
+              value={roleKey}
+              onChange={(e) => setRoleKey(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              {ROLES.map((r) => (
+                <option key={r.key} value={r.key}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
+            <select
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              required
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="">Select organization…</option>
+              {orgs.map((o) => (
+                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            The officer will receive a temporary password and be required to change it on first login.
+            SMTP must be configured in Keycloak for email delivery; otherwise share the password manually.
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            >
+              {submitting ? "Inviting…" : "Send invite"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function OfficersTab() {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId]   = useState<string | null>(null);
+  const [showInvite, setShowInvite]   = useState(false);
+  const [successMsg, setSuccessMsg]   = useState<string | null>(null);
+
+  function handleInviteSuccess(email: string) {
+    setShowInvite(false);
+    setSuccessMsg(`Invite sent to ${email}. They will receive a temporary password.`);
+    setTimeout(() => setSuccessMsg(null), 6000);
+  }
 
   return (
     <div>
+      {showInvite && (
+        <InviteOfficerModal
+          onClose={() => setShowInvite(false)}
+          onSuccess={handleInviteSuccess}
+        />
+      )}
+
+      {successMsg && (
+        <div className="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+          ✓ {successMsg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <input
@@ -720,7 +855,10 @@ function OfficersTab() {
             {ROLES.map((r) => <option key={r.key}>{r.key}</option>)}
           </select>
         </div>
-        <button className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium">
+        <button
+          onClick={() => setShowInvite(true)}
+          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
+        >
           + Invite Officer
         </button>
       </div>
@@ -788,7 +926,7 @@ function OfficersTab() {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Full invite flow (Cognito email) — coming in Week 3. Jurisdictions managed via ▶ expand.
+        Jurisdictions managed via ▶ expand.
       </p>
     </div>
   );

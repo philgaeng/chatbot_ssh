@@ -61,6 +61,10 @@ class TicketEventOut(BaseModel):
     seen: bool
     created_at: datetime
     created_by_user_id: Optional[str]
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None
+    case_sensitivity: str = "standard"
+    summary_regen_required: bool = False
 
     class Config:
         from_attributes = True

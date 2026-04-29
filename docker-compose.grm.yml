@@ -14,6 +14,38 @@
 
 services:
 
+  # ── Keycloak (OIDC identity provider, replaces AWS Cognito) ──────────────────
+  # Uses existing db container — stores data in the 'keycloak' schema inside app_db.
+  # Admin UI: http://localhost:8080  (admin / ${KEYCLOAK_ADMIN_PASSWORD:-admin})
+  # After first start, run realm setup:
+  #   docker compose -f docker-compose.yml -f docker-compose.grm.yml exec ticketing_api \
+  #     python -m ticketing.auth.keycloak_setup
+  keycloak:
+    image: quay.io/keycloak/keycloak:26
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/app_db
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: user
+      KC_DB_PASSWORD: password
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
   # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
   # The ticketing_api service also overrides BACKEND_GRIEVANCE_BASE_URL to use the
@@ -50,6 +82,11 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # Keycloak (leave empty to keep dev bypass / mock-super-admin)
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
+      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
       - "5002:5002"
     depends_on:
@@ -133,9 +170,8 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5002}
         NEXT_PUBLIC_BACKEND_API_URL: ${NEXT_PUBLIC_BACKEND_API_URL:-http://localhost:5001}
         NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
-        NEXT_PUBLIC_COGNITO_DOMAIN: ${NEXT_PUBLIC_COGNITO_DOMAIN:-}
-        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${NEXT_PUBLIC_COGNITO_CLIENT_ID:-}
-        NEXT_PUBLIC_COGNITO_REGION: ${NEXT_PUBLIC_COGNITO_REGION:-ap-southeast-1}
+        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
         NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
         NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
     ports:

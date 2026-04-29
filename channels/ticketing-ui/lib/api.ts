@@ -54,6 +54,12 @@ export interface TicketEvent {
   seen: boolean;
   created_at: string;
   created_by_user_id: string | null;
+  /** Role key snapshotted at write time — for audit trail role bubbles */
+  actor_role: string | null;
+  /** 'standard' | 'seah' — copied from ticket.is_seah at event creation */
+  case_sensitivity: string;
+  /** True when this event should trigger LLM summary regeneration */
+  summary_regen_required: boolean;
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -845,6 +851,28 @@ export function closeReveal(
   return apiFetch<{ ok: boolean }>(`/api/v1/tickets/${ticketId}/reveal/close`, {
     method: "POST",
     body: JSON.stringify({ reveal_session_id: sessionId, close_reason: closeReason }),
+  });
+}
+
+// ── Officer invite ────────────────────────────────────────────────────────────
+
+export interface OfficerInvitePayload {
+  email: string;
+  role_key: string;
+  organization_id: string;
+  temp_password?: string;
+}
+
+export interface OfficerInviteResult {
+  ok: boolean;
+  email: string;
+  message: string;
+}
+
+export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInviteResult> {
+  return apiFetch<OfficerInviteResult>("/api/v1/users/invite", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

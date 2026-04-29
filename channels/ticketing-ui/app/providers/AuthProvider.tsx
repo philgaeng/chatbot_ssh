@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { CognitoAuthClient, type TokenPayload } from "@/lib/auth/cognito-auth";
+import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { getUserPreferences } from "@/lib/api";
 
 // ── Mock user for proto (NEXT_PUBLIC_BYPASS_AUTH=true) ──────────────────────
@@ -75,9 +75,9 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const [effectiveLang, setEffectiveLang] = useState<"en" | "ne" | null>(null);
 
   const client = !bypass
-    ? new CognitoAuthClient(
-        process.env.NEXT_PUBLIC_COGNITO_DOMAIN ?? "",
-        process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? "",
+    ? new OIDCAuthClient(
+        process.env.NEXT_PUBLIC_OIDC_ISSUER ?? "",
+        process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "",
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
           : (process.env.NEXT_PUBLIC_REDIRECT_SIGN_IN ?? ""),
@@ -130,12 +130,12 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       .catch(() => setEffectiveLang("en")); // safe fallback — show translations to everyone
   }, [isAuthenticated, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const signIn = () => {
+  const signIn = async () => {
     if (bypass) {
       setIsAuthenticated(true);
       window.location.href = "/queue";
     } else {
-      window.location.href = client!.getAuthorizationUrl();
+      window.location.href = await client!.getAuthorizationUrl();
     }
   };
 

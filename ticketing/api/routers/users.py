@@ -380,6 +380,88 @@ def patch_my_preferences(
     )
 
 
+# ── Officer invite (Keycloak Admin API) ──────────────────────────────────────
+
+class OfficerInviteRequest(BaseModel):
+    email: str
+    role_key: str
+    organization_id: str
+    temp_password: Optional[str] = None
+
+
+class OfficerInviteResponse(BaseModel):
+    ok: bool
+    email: str
+    message: str
+
+
+@router.post(
+    "/users/invite",
+    response_model=OfficerInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Invite a new officer (admin only) — creates user in Keycloak",
+)
+def invite_officer(
+    body: OfficerInviteRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerInviteResponse:
+    """
+    Creates the user in Keycloak with a temporary password and UPDATE_PASSWORD
+    required action. Keycloak sends the verification email if SMTP is configured.
+    For proto, the temp password is set to the value in the request (or a default).
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from ticketing.config.settings import get_settings
+    settings = get_settings()
+    if not settings.keycloak_admin_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Keycloak not configured — set KEYCLOAK_ADMIN_URL to enable officer invite",
+        )
+
+    try:
+        from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
+        from keycloak.exceptions import KeycloakPostError
+
+        conn = KeycloakOpenIDConnection(
+            server_url=settings.keycloak_admin_url.rstrip("/") + "/",
+            username="admin",
+            password=settings.keycloak_admin_password,
+            realm_name="grm",
+            user_realm_name="master",
+            verify=True,
+        )
+        admin = KeycloakAdmin(connection=conn)
+        admin.create_user({
+            "username": body.email,
+            "email": body.email,
+            "enabled": True,
+            "attributes": {
+                "grm_roles": body.role_key,
+                "organization_id": body.organization_id,
+            },
+            "credentials": [{
+                "type": "password",
+                "value": body.temp_password or "ChangeMe123!",
+                "temporary": True,
+            }],
+            "requiredActions": ["UPDATE_PASSWORD"],
+        })
+    except Exception as exc:
+        err = str(exc)
+        if "409" in err or "already exists" in err.lower():
+            raise HTTPException(status_code=409, detail=f"User {body.email!r} already exists in Keycloak")
+        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+
+    return OfficerInviteResponse(
+        ok=True,
+        email=body.email,
+        message="Officer created in Keycloak — they will receive a setup email if SMTP is configured.",
+    )
+
+
 # ── Notification badge ────────────────────────────────────────────────────────
 
 @router.get(

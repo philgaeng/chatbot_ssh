@@ -39,6 +39,10 @@ def _id() -> str:
     return str(uuid.uuid4())
 
 
+def _case_sensitivity(ticket: Ticket) -> str:
+    return "seah" if ticket.is_seah else "standard"
+
+
 def _add_event(
     db: Session,
     ticket: Ticket,
@@ -54,6 +58,10 @@ def _add_event(
     seen: bool = False,
     notify_user_id: Optional[str] = None,
     created_by: Optional[str] = None,
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None,
+    case_sensitivity: Optional[str] = None,   # derived from ticket when None
+    summary_regen_required: bool = False,
 ) -> TicketEvent:
     event = TicketEvent(
         event_id=_id(),
@@ -69,6 +77,9 @@ def _add_event(
         seen=seen,
         assigned_to_user_id=notify_user_id,
         created_by_user_id=created_by,
+        actor_role=actor_role,
+        case_sensitivity=case_sensitivity if case_sensitivity is not None else _case_sensitivity(ticket),
+        summary_regen_required=summary_regen_required,
     )
     db.add(event)
     return event
@@ -83,6 +94,7 @@ def escalate_ticket(
     triggered_by: str = "SLA_AUTO",
     note: Optional[str] = None,
     created_by_user_id: Optional[str] = None,
+    actor_role: Optional[str] = None,
 ) -> Optional[TicketEvent]:
     """
     Advance ticket to the next workflow step.
@@ -154,6 +166,8 @@ def escalate_ticket(
         seen=False,
         notify_user_id=ticket.assigned_to_user_id,  # new officer, not the old one
         created_by=created_by_user_id or "system",
+        actor_role=actor_role or ("system" if triggered_by == "SLA_AUTO" else None),
+        summary_regen_required=True,
     )
 
     logger.info(
@@ -172,6 +186,7 @@ def convene_grc(
     note: Optional[str] = None,
     convened_by_user_id: str,
     hearing_date: Optional[str] = None,
+    actor_role: Optional[str] = None,
 ) -> list[TicketEvent]:
     """
     GRC Chair convenes a hearing.
@@ -191,6 +206,8 @@ def convene_grc(
         payload={"convened_by": convened_by_user_id, "hearing_date": hearing_date},
         seen=True,
         created_by=convened_by_user_id,
+        actor_role=actor_role,
+        summary_regen_required=True,
     )
     events.append(convene_event)
 
@@ -208,6 +225,9 @@ def convene_grc(
             seen=False,
             notify_user_id=member_id,
             created_by=convened_by_user_id,
+            actor_role=actor_role,
+            # badge-only notification — summary regen not needed
+            summary_regen_required=False,
         )
         events.append(notif)
 
@@ -225,6 +245,7 @@ def grc_decide(
     decision: str,
     note: Optional[str] = None,
     decided_by_user_id: str,
+    actor_role: Optional[str] = None,
 ) -> TicketEvent:
     """
     GRC Chair records the committee's decision and optionally advances to L4
@@ -244,6 +265,8 @@ def grc_decide(
             payload={"decision": decision, "decided_by": decided_by_user_id},
             seen=True,
             created_by=decided_by_user_id,
+            actor_role=actor_role,
+            summary_regen_required=True,
         )
     elif decision == "ESCALATE_TO_LEGAL":
         event = _add_event(
@@ -255,6 +278,8 @@ def grc_decide(
             payload={"decision": decision, "decided_by": decided_by_user_id},
             seen=True,
             created_by=decided_by_user_id,
+            actor_role=actor_role,
+            summary_regen_required=True,
         )
         # Advance step to L4 (legal)
         escalate_ticket(
@@ -262,6 +287,7 @@ def grc_decide(
             triggered_by="GRC_DECIDE",
             note="GRC referred case to legal institutions.",
             created_by_user_id=decided_by_user_id,
+            actor_role=actor_role,
         )
     else:
         raise ValueError(f"Unknown GRC decision: {decision}")
@@ -338,6 +364,8 @@ def run_sla_check(db: Session) -> dict:
                     seen=False,
                     notify_user_id=ticket.assigned_to_user_id,
                     created_by="system",
+                    actor_role="system",
+                    summary_regen_required=True,
                 )
                 final_step += 1
             else:
