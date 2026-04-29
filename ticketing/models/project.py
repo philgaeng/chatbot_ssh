@@ -39,6 +39,10 @@ class Project(Base):
     short_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # e.g. 'KL_ROAD'
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # URL of the local chatbot backend for this project (e.g. http://backend:5001).
+    # Used to proxy complainant-info edits back to the chatbot's DB.
+    # NULL = fall back to settings.backend_grievance_base_url (single-instance deploy).
+    chatbot_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

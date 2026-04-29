@@ -61,6 +61,10 @@ class TicketEventOut(BaseModel):
     seen: bool
     created_at: datetime
     created_by_user_id: Optional[str]
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None
+    case_sensitivity: str = "standard"
+    summary_regen_required: bool = False
 
     class Config:
         from_attributes = True
@@ -106,6 +110,16 @@ class TicketListResponse(BaseModel):
     page_size: int
 
 
+class TicketViewerOut(BaseModel):
+    viewer_id: str
+    user_id: str
+    added_by_user_id: str
+    added_at: str  # ISO string injected by endpoint
+
+    class Config:
+        from_attributes = True
+
+
 class TicketDetail(BaseModel):
     ticket_id: str
     grievance_id: str
@@ -133,6 +147,7 @@ class TicketDetail(BaseModel):
     updated_by_user_id: Optional[str]
     current_step: Optional[WorkflowStepBrief]
     events: list[TicketEventOut] = []
+    viewers: list[TicketViewerOut] = []
     # LLM-generated findings (visible to grc_chair, adb_*, super_admin only)
     ai_summary_en: Optional[str] = None
     ai_summary_updated_at: Optional[datetime] = None
@@ -189,3 +204,35 @@ class TicketPatch(BaseModel):
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
     assigned_role_id: Optional[str] = Field(None, max_length=36)
     priority: Optional[str] = Field(None, max_length=32)
+
+
+class ComplainantPatch(BaseModel):
+    """
+    PATCH /api/v1/tickets/{ticket_id}/complainant
+
+    Officers can correct non-identity complainant fields that were missing or
+    wrong at submission time.  The update is proxied to the chatbot backend via
+    PATCH {chatbot_base_url}/api/complainant/{complainant_id}.
+
+    STRICTLY WHITELISTED — identity fields (full_name, phone, phone_hash) are
+    never writable from ticketing.  All fields are optional; only provided
+    (non-None) fields are sent to the backend.
+    """
+    complainant_address: Optional[str] = Field(None, max_length=512)
+    complainant_village: Optional[str] = Field(None, max_length=255)
+    complainant_ward: Optional[str] = Field(None, max_length=64)
+    complainant_municipality: Optional[str] = Field(None, max_length=255)
+    complainant_district: Optional[str] = Field(None, max_length=255)
+    complainant_province: Optional[str] = Field(None, max_length=255)
+    complainant_email: Optional[str] = Field(None, max_length=255)
+
+    def non_null_fields(self) -> dict:
+        """Return only the fields that were explicitly set (not None)."""
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class ComplainantPatchResponse(BaseModel):
+    ticket_id: str
+    complainant_id: str
+    fields_updated: list[str]
+    event_id: str
