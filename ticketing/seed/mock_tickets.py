@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from ticketing.models.base import SessionLocal
+from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.user import UserRole
 from ticketing.seed.kl_road_seah import (
@@ -123,6 +124,83 @@ def seed_mock_officers(db: Session) -> None:
             logger.info("  + officer role: %s → %s @ %s", user_id, role_key, org_id)
         else:
             logger.info("  = officer role already assigned: %s → %s", user_id, role_key)
+    db.flush()
+
+
+def seed_mock_officer_scopes(db: Session) -> None:
+    """
+    Seed OfficerScope rows so auto_assign_officer() can match live tickets.
+
+    Each row = "officer X acts as role Y for tickets in (org, location, project)".
+    Uses project_code (string) which is what _scope_candidates() queries.
+
+    includes_children=True: officer covers the scoped location AND all its
+    descendant locations (e.g. province → districts → municipalities).
+    """
+    from sqlalchemy import select
+
+    scopes = [
+        # L1 site officer: Morang district + all children (covers Urlabari etc.)
+        dict(user_id=OFFICER_SITE_L1, role_key="site_safeguards_focal_person",
+             organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # L2 PIU: Province 1 + all children (covers all districts along KL Road)
+        dict(user_id=OFFICER_PIU_L2, role_key="pd_piu_safeguards_focal",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # GRC chair: Province 1 level
+        dict(user_id=OFFICER_GRC_CHAIR, role_key="grc_chair",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # GRC members: Province 1 level
+        dict(user_id=OFFICER_GRC_MEMBER_1, role_key="grc_member",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_GRC_MEMBER_2, role_key="grc_member",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # SEAH national: Province 1 + all children (covers Sunsari etc.)
+        dict(user_id=OFFICER_SEAH_NATIONAL, role_key="seah_national_officer",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # SEAH HQ: no location = covers all locations for ADB / KL_ROAD
+        dict(user_id=OFFICER_SEAH_HQ, role_key="seah_hq_officer",
+             organization_id=ORG_ADB_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+
+        # ADB observer: no location = observes everything
+        dict(user_id=OFFICER_ADB_OBSERVER, role_key="adb_hq_safeguards",
+             organization_id=ORG_ADB_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+
+        # Super admin: no location, no project = global scope
+        dict(user_id=OFFICER_SUPER_ADMIN, role_key="super_admin",
+             organization_id=ORG_DOR_ID, location_code=None,
+             project_code=None, includes_children=False),
+    ]
+
+    for s in scopes:
+        existing = db.execute(
+            select(OfficerScope).where(
+                OfficerScope.user_id        == s["user_id"],
+                OfficerScope.role_key       == s["role_key"],
+                OfficerScope.organization_id == s["organization_id"],
+                OfficerScope.location_code  == s["location_code"],
+                OfficerScope.project_code   == s["project_code"],
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            db.add(OfficerScope(**s))
+            logger.info("  + scope: %s → %s @ %s / %s / %s",
+                        s["user_id"], s["role_key"], s["organization_id"],
+                        s["location_code"], s["project_code"])
+        else:
+            logger.info("  = scope already exists: %s → %s", s["user_id"], s["role_key"])
     db.flush()
 
 
@@ -414,6 +492,7 @@ def seed_all(reset: bool = False) -> None:
             logger.info("Reset mode: deleting all ticketing.* rows...")
             db.execute(TicketEvent.__table__.delete())
             db.execute(Ticket.__table__.delete())
+            db.execute(OfficerScope.__table__.delete())
             db.execute(UserRole.__table__.delete())
             from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
             from ticketing.models.organization import Organization
@@ -434,9 +513,11 @@ def seed_all(reset: bool = False) -> None:
         seed_standard(db)
         seed_seah(db)
 
-        # Seed mock officers and tickets
+        # Seed mock officers, scopes, and tickets
         logger.info("Seeding mock officers...")
         seed_mock_officers(db)
+        logger.info("Seeding mock officer scopes...")
+        seed_mock_officer_scopes(db)
         logger.info("Seeding mock tickets (demo scenarios)...")
         seed_mock_tickets(db)
 

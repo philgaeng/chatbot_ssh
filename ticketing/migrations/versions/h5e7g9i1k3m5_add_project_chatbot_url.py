@@ -6,7 +6,7 @@ Each project can point to a different local chatbot backend URL, enabling
 the ticketing system to proxy complainant-info edits back to the correct
 chatbot instance in a multi-country deployment.
 
-Revision ID: h5e7g9i1k3m5_add_project_chatbot_url
+Revision ID: h5e7g9i1k3m5
 Revises: g4d6f8b0c2e5
 Create Date: 2026-04-29
 """
@@ -17,7 +17,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "h5e7g9i1k3m5_add_project_chatbot_url"
+revision: str = "h5e7g9i1k3m5"
 down_revision: Union[str, None] = "g4d6f8b0c2e5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
