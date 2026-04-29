@@ -74,6 +74,7 @@ export const SYSTEM_EVENT_TYPES = new Set([
   "CREATED", "ACKNOWLEDGED", "ESCALATED", "ASSIGNED", "PRIORITY_CHANGED",
   "RESOLVED", "CLOSED", "GRC_CONVENED", "GRC_DECIDED", "SLA_BREACH_FINAL_STEP",
   "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED", "VIEWER_ADDED", "VIEWER_REMOVED",
+  "COMPLAINANT_UPDATED",
 ]);
 
 /** Events that render as a task card in-thread. */
@@ -102,6 +103,7 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "REVEAL_ORIGINAL_CLOSED":return "🔍 Reveal session closed";
     case "VIEWER_ADDED":          return `👁 ${payload?.added_user_id ?? "Officer"} added as viewer`;
     case "VIEWER_REMOVED":        return `👁 ${payload?.removed_user_id ?? "Officer"} removed from viewers`;
+    case "COMPLAINANT_UPDATED":   return `✏️ Complainant info updated (${(payload?.fields_changed as string[] | undefined)?.join(", ") ?? "fields"})`;
     default:                      return eventType.replace(/_/g, " ").toLowerCase();
   }
 }
