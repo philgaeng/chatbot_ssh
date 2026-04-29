@@ -37,7 +37,8 @@ WORKFLOW_SEAH_ID = "00000000-0000-0000-0002-000000000001"
 STEP_SEAH_L1_ID = "00000000-0000-0000-0002-000000000011"
 STEP_SEAH_L2_ID = "00000000-0000-0000-0002-000000000012"
 
-ASSIGNMENT_SEAH_ID = "00000000-0000-0000-0002-000000000021"
+ASSIGNMENT_SEAH_ID          = "00000000-0000-0000-0002-000000000021"
+ASSIGNMENT_SEAH_FALLBACK_ID = "00000000-0000-0000-0002-000000000022"
 
 
 def seed_seah_workflow(db: Session) -> None:
@@ -107,22 +108,40 @@ def seed_seah_workflow(db: Session) -> None:
 
 
 def seed_seah_assignment(db: Session) -> None:
-    """Map DOR + Province 1 + KL_ROAD + priority=SEAH → SEAH workflow."""
-    existing = db.get(WorkflowAssignment, ASSIGNMENT_SEAH_ID)
-    if existing:
-        logger.info("  = workflow assignment already exists (SEAH)")
-        return
+    """Map DOR + KL_ROAD + SEAH priority → SEAH workflow (two rows for coverage).
 
-    assignment = WorkflowAssignment(
-        assignment_id=ASSIGNMENT_SEAH_ID,
-        organization_id=ORG_DOR_ID,
-        location_code=LOC_PROVINCE1_CODE,
-        project_code="KL_ROAD",
-        priority="SEAH",  # special priority value used as lookup key for SEAH tickets
-        workflow_id=WORKFLOW_SEAH_ID,
-    )
-    db.add(assignment)
-    logger.info("  + workflow assignment: DOR + PROVINCE_1 + KL_ROAD + SEAH → KL_ROAD_SEAH")
+    Row 1: province-scoped (NP_P1) — preferred match for province-level tickets.
+    Row 2: location=None fallback — catches tickets from the sync task which
+           passes location_code=None (public.grievances has no location column).
+    """
+    existing = db.get(WorkflowAssignment, ASSIGNMENT_SEAH_ID)
+    if not existing:
+        db.add(WorkflowAssignment(
+            assignment_id=ASSIGNMENT_SEAH_ID,
+            organization_id=ORG_DOR_ID,
+            location_code=LOC_PROVINCE1_CODE,
+            project_code="KL_ROAD",
+            priority="SEAH",
+            workflow_id=WORKFLOW_SEAH_ID,
+        ))
+        logger.info("  + workflow assignment: DOR + NP_P1 + KL_ROAD + SEAH → KL_ROAD_SEAH")
+    else:
+        logger.info("  = workflow assignment already exists (SEAH NP_P1)")
+
+    existing_fb = db.get(WorkflowAssignment, ASSIGNMENT_SEAH_FALLBACK_ID)
+    if not existing_fb:
+        db.add(WorkflowAssignment(
+            assignment_id=ASSIGNMENT_SEAH_FALLBACK_ID,
+            organization_id=ORG_DOR_ID,
+            location_code=None,          # wildcard: catches sync-created SEAH tickets
+            project_code="KL_ROAD",
+            priority="SEAH",
+            workflow_id=WORKFLOW_SEAH_ID,
+        ))
+        logger.info("  + workflow assignment: DOR + (any loc) + KL_ROAD + SEAH → KL_ROAD_SEAH (fallback)")
+    else:
+        logger.info("  = workflow assignment already exists (SEAH fallback)")
+
     db.flush()
 
 
