@@ -146,4 +146,12 @@ class TicketEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     created_by_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    # ── SEAH privacy handoff fields (seah-privacy-worktree-handoff.md) ──────────
+    # actor_role: role key snapshotted at write time — audit correlation + UI role bubbles
+    actor_role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # case_sensitivity: 'standard'|'seah' — audit filtering without joining to tickets
+    case_sensitivity: Mapped[str] = mapped_column(String(16), nullable=False, default="standard")
+    # summary_regen_required: True → LLM summary pipeline must regenerate before next view
+    summary_regen_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="events")
