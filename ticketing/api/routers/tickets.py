@@ -133,6 +133,11 @@ def _next_step(db: Session, workflow_id: str, current_order: int) -> Optional[Wo
     ).scalar_one_or_none()
 
 
+def _actor_role(current_user: CurrentUser) -> Optional[str]:
+    """Snapshot the first role key at write time for audit correlation."""
+    return current_user.role_keys[0] if getattr(current_user, "role_keys", None) else None
+
+
 def _add_event(
     db: Session,
     ticket: Ticket,
@@ -148,6 +153,10 @@ def _add_event(
     created_by: Optional[str] = None,
     seen: bool = False,
     notify_user_id: Optional[str] = None,
+    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
+    actor_role: Optional[str] = None,
+    case_sensitivity: Optional[str] = None,   # derived from ticket when None
+    summary_regen_required: bool = False,
 ) -> TicketEvent:
     event = TicketEvent(
         event_id=_new_id(),
@@ -163,6 +172,9 @@ def _add_event(
         seen=seen,
         assigned_to_user_id=notify_user_id,
         created_by_user_id=created_by,
+        actor_role=actor_role,
+        case_sensitivity=case_sensitivity if case_sensitivity is not None else ("seah" if ticket.is_seah else "standard"),
+        summary_regen_required=summary_regen_required,
     )
     db.add(event)
     return event
@@ -248,6 +260,8 @@ def create_ticket(
         step_id=first_step.step_id if first_step else None,
         payload={"workflow_key": workflow.workflow_key},
         seen=True,  # creation event is not an unread notification
+        # No summary to regenerate at creation; actor is the inbound chatbot/API key
+        summary_regen_required=False,
     )
     db.commit()
     db.refresh(ticket)
@@ -431,6 +445,8 @@ def patch_ticket(
             created_by=current_user.user_id,
             seen=False,
             notify_user_id=payload.assign_to_user_id,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=False,
         )
 
     if payload.priority is not None:
@@ -441,6 +457,8 @@ def patch_ticket(
             payload={"new_priority": payload.priority},
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=False,
         )
 
     db.commit()
@@ -532,6 +550,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
 
     elif action == "ESCALATE":
@@ -541,6 +561,7 @@ def perform_action(
             triggered_by="MANUAL",
             note=payload.note,
             created_by_user_id=current_user.user_id,
+            actor_role=_actor_role(current_user),
         )
         if result is None:
             raise HTTPException(
@@ -563,6 +584,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
         _notify_complainant_text = (
             "Your grievance has been resolved. "
@@ -581,6 +604,8 @@ def perform_action(
             note=payload.note,
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
 
     elif action == "NOTE":
@@ -594,6 +619,8 @@ def perform_action(
             payload={"internal": True},
             created_by=current_user.user_id,
             seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
         )
         # Fire translation task after commit (7a — translate note to English for supervisors)
         _translate_note_event_id = event.event_id
@@ -606,6 +633,7 @@ def perform_action(
             note=payload.note,
             convened_by_user_id=current_user.user_id,
             hearing_date=hearing_date,
+            actor_role=_actor_role(current_user),
         )
         event = events[0]  # first event is the CONVENED event
 
@@ -616,6 +644,7 @@ def perform_action(
             decision=decision.upper(),
             note=payload.note,
             decided_by_user_id=current_user.user_id,
+            actor_role=_actor_role(current_user),
         )
 
     db.commit()
@@ -700,6 +729,8 @@ def reply_to_complainant(
         payload={"delivered_via_chatbot": delivered, "sent_by": current_user.user_id},
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
     )
     db.commit()
 
@@ -946,6 +977,8 @@ async def upload_officer_attachment(
         payload={"file_id": file_id, "internal": True},
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=True,
     )
 
     db.commit()
@@ -1190,6 +1223,9 @@ def begin_reveal(
         },
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        case_sensitivity=case_sensitivity,
+        summary_regen_required=False,  # reveal access doesn't change case content
     )
     db.commit()
 
@@ -1239,6 +1275,8 @@ def close_reveal(
         },
         created_by=current_user.user_id,
         seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
     )
     db.commit()
 
