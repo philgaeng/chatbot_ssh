@@ -44,13 +44,17 @@ from ticketing.api.schemas.ticket import (
     TicketPatch,
     TicketReplyRequest,
     TicketReplyResponse,
+    ComplainantPatch,
+    ComplainantPatchResponse,
 )
+from ticketing.clients.grievance_api import patch_complainant
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
 from ticketing.models.officer_scope import OfficerScope
+from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
 from ticketing.models.ticket_viewer import TicketViewer
@@ -535,6 +539,92 @@ def patch_ticket(
     db.commit()
     db.refresh(ticket)
     return ticket
+
+
+# ─── PATCH /tickets/{ticket_id}/complainant — edit complainant info ───────────
+
+# Roles that may edit complainant info (assigned officer + managers).
+_COMPLAINANT_EDIT_ROLES = {
+    "site_safeguards_focal_person", "pd_piu_safeguards_focal",
+    "seah_national_officer", "seah_hq_officer",
+    "super_admin", "local_admin",
+}
+
+
+@router.patch(
+    "/tickets/{ticket_id}/complainant",
+    response_model=ComplainantPatchResponse,
+    summary="Update whitelisted complainant fields",
+    description=(
+        "Proxies the update to the local chatbot backend "
+        "(`ticketing.projects.chatbot_base_url`). "
+        "Identity fields (full_name, phone) are never writable from ticketing. "
+        "Requires assigned officer or manager role."
+    ),
+)
+def patch_ticket_complainant(
+    ticket_id: str,
+    payload: ComplainantPatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ComplainantPatchResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Role check: assigned officer OR a manager role
+    is_assigned = ticket.assigned_to_user_id == current_user.user_id
+    is_manager  = current_user.role in _COMPLAINANT_EDIT_ROLES
+    if not (is_assigned or is_manager):
+        raise HTTPException(status_code=403, detail="Only the assigned officer or a manager can edit complainant info")
+
+    if not ticket.complainant_id:
+        raise HTTPException(status_code=422, detail="Ticket has no linked complainant_id")
+
+    fields = payload.non_null_fields()
+    if not fields:
+        raise HTTPException(status_code=422, detail="No fields provided to update")
+
+    # Resolve the chatbot URL for this project (multi-country support)
+    chatbot_url: str | None = None
+    if ticket.project_code:
+        project = db.execute(
+            select(Project).where(Project.short_code == ticket.project_code)
+        ).scalar_one_or_none()
+        if project:
+            chatbot_url = project.chatbot_base_url  # None → settings fallback
+
+    # Proxy to chatbot backend — raises httpx.HTTPError on non-recoverable failures
+    try:
+        result = patch_complainant(
+            complainant_id=ticket.complainant_id,
+            fields=fields,
+            chatbot_base_url=chatbot_url,
+        )
+    except Exception as exc:
+        logger.error("complainant patch failed: ticket=%s error=%s", ticket_id, exc)
+        raise HTTPException(status_code=502, detail=f"Chatbot backend unavailable: {exc}")
+
+    # Audit trail: log which fields were changed (no values — PII must not enter ticketing events)
+    updated_fields = result.get("updated_fields", list(fields.keys()))
+    event = _add_event(
+        db, ticket, "COMPLAINANT_UPDATED",
+        payload={"fields_changed": updated_fields, "proto_mode": result.get("_proto_mode", False)},
+        created_by=current_user.user_id,
+        seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+
+    return ComplainantPatchResponse(
+        ticket_id=ticket_id,
+        complainant_id=ticket.complainant_id,
+        fields_updated=updated_fields,
+        event_id=event.event_id,
+    )
 
 
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
