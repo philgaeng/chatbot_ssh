@@ -18,7 +18,7 @@ export interface RoleBubbleStyle {
 }
 
 export const ROLE_BUBBLE_STYLE: Record<string, RoleBubbleStyle> = {
-  site_safeguards_focal_person:  { bubbleCls: "bg-gray-100",                             labelCls: "text-gray-500",   emoji: "",   label: "L1 Officer" },
+  site_safeguards_focal_person:  { bubbleCls: "bg-green-50  border-l-4 border-green-400", labelCls: "text-green-700",  emoji: "🟢", label: "L1 Officer" },
   pd_piu_safeguards_focal:       { bubbleCls: "bg-amber-50  border-l-4 border-amber-400", labelCls: "text-amber-700",  emoji: "🟠", label: "L2 PIU" },
   grc_chair:                     { bubbleCls: "bg-purple-50 border-l-4 border-purple-400",labelCls: "text-purple-700", emoji: "🟣", label: "GRC Chair" },
   grc_member:                    { bubbleCls: "bg-purple-50 border-l-4 border-purple-300",labelCls: "text-purple-600", emoji: "🟣", label: "GRC" },
@@ -35,9 +35,9 @@ export const ROLE_BUBBLE_STYLE: Record<string, RoleBubbleStyle> = {
 
 /** Fallback for unknown roles */
 export const DEFAULT_BUBBLE_STYLE: RoleBubbleStyle = {
-  bubbleCls: "bg-gray-100",
-  labelCls: "text-gray-500",
-  emoji: "",
+  bubbleCls: "bg-gray-100 border-l-4 border-gray-400",
+  labelCls: "text-gray-600",
+  emoji: "👤",
   label: "Officer",
 };
 

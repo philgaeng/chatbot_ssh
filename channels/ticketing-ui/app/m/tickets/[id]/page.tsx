@@ -195,6 +195,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     [tasks],
   );
 
+  const viewerIds = useMemo(
+    () => new Set((ticket?.viewers ?? []).map((v) => v.user_id)),
+    [ticket],
+  );
+
   const myPendingTasks = useMemo(
     () => tasks.filter((t) => t.status === "PENDING" &&
       (t.assigned_to_user_id === currentUserId || t.assigned_to_user_id === "mock-super-admin")),
@@ -359,7 +364,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
                     onComplete={handleCompleteTask}
                   />
                 );
-              return <NoteBubble key={event.event_id} event={event} isMine={isMine} />;
+              return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} />;
             })
         )}
         <div ref={threadEndRef} />

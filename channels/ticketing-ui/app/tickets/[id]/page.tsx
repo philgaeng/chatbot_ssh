@@ -6,7 +6,7 @@ import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  getTeammates, generateFindings, listTicketTasks, completeTask,
+  generateFindings, listTicketTasks, completeTask,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
 } from "@/lib/api";
@@ -20,62 +20,49 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
-import { SlaSubHeader }                       from "@/components/thread/SlaSubHeader";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES,
 } from "@/lib/mobile-constants";
 
-// ── Workflow mini-stepper (desktop variant — horizontal, wider nodes) ──────────
+// ── SLA urgency helpers ───────────────────────────────────────────────────────
 
-const STEP_LABELS: Record<string, string> = {
-  LEVEL_1_SITE:            "L1 Site",
-  LEVEL_2_PIU:             "L2 PIU",
-  LEVEL_3_GRC:             "L3 GRC",
-  LEVEL_4_LEGAL:           "L4 Legal",
-  SEAH_LEVEL_1_NATIONAL:   "L1 National",
-  SEAH_LEVEL_2_HQ:         "L2 HQ",
-};
+function slaColorCls(hours: number | null | undefined, breached: boolean): string {
+  if (breached || (hours != null && hours < 24))
+    return "text-red-600 bg-red-50 border border-red-200";
+  if (hours != null && hours < 72)
+    return "text-amber-600 bg-amber-50 border border-amber-200";
+  if (hours != null)
+    return "text-green-600 bg-green-50 border border-green-200";
+  return "text-gray-500 bg-gray-50 border border-gray-200";
+}
 
-function WorkflowStepper({ currentStepKey }: { currentStepKey: string }) {
-  const isSeah = currentStepKey.startsWith("SEAH");
-  const steps = isSeah
-    ? ["SEAH_LEVEL_1_NATIONAL", "SEAH_LEVEL_2_HQ"]
-    : ["LEVEL_1_SITE", "LEVEL_2_PIU", "LEVEL_3_GRC", "LEVEL_4_LEGAL"];
-  const currentIdx = steps.indexOf(currentStepKey);
-
-  return (
-    <div className="flex items-center gap-1 mt-2">
-      {steps.map((s, i) => {
-        const done   = i < currentIdx;
-        const active = i === currentIdx;
-        return (
-          <div key={s} className="flex items-center gap-1 flex-1">
-            <div className={`flex-1 h-1 rounded ${done ? "bg-blue-500" : active ? "bg-blue-300" : "bg-gray-200"}`} />
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-              done   ? "bg-blue-500 text-white" :
-              active ? "bg-blue-600 text-white ring-2 ring-blue-300" :
-                       "bg-gray-200 text-gray-500"
-            }`}>
-              {i + 1}
-            </div>
-            {i === steps.length - 1 && <div className="flex-1 h-1 rounded bg-gray-200" />}
-          </div>
-        );
-      })}
-      <div className="flex justify-between w-full mt-1 absolute" style={{ display: "none" }} />
-    </div>
-  );
+function slaTimeLabel(
+  hours: number | null | undefined,
+  breached: boolean,
+  resolutionDays?: number | null,
+): string | null {
+  if (breached) return "Overdue";
+  if (hours != null)
+    return hours < 24 ? `${Math.round(hours)}h left` : `${Math.round(hours / 24)}d left`;
+  if (resolutionDays) return `${resolutionDays}d target`;
+  return null;
 }
 
 // ── Translation review panel ───────────────────────────────────────────────────
 
-function TranslationPanel({ events, onClose }: { events: TicketDetail["events"]; onClose: () => void }) {
+function TranslationPanel({
+  events,
+  onClose,
+}: {
+  events: TicketDetail["events"];
+  onClose: () => void;
+}) {
   const notes = [...events]
     .filter((e) => e.event_type === "NOTE_ADDED" && e.note)
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
-    <div className="w-80 shrink-0 flex flex-col border-l border-gray-200 bg-gray-50 overflow-y-auto" style={{ minHeight: 0 }}>
+    <div className="w-full h-full flex flex-col border-l border-gray-200 bg-gray-50 overflow-y-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
         <span className="text-sm font-semibold text-blue-700">🌐 Translation Review</span>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
@@ -121,7 +108,12 @@ function TranslationPanel({ events, onClose }: { events: TicketDetail["events"];
 
 // ── File attachments panel ────────────────────────────────────────────────────
 
-function FilesPanel({ ticketId, onBeforeDownload, isAssigned, onUpload }: {
+function FilesPanel({
+  ticketId,
+  onBeforeDownload,
+  isAssigned,
+  onUpload,
+}: {
   ticketId: string;
   onBeforeDownload: () => Promise<void>;
   isAssigned: boolean;
@@ -172,11 +164,11 @@ function FilesPanel({ ticketId, onBeforeDownload, isAssigned, onUpload }: {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Attachments</h2>
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Attachments</h2>
 
       <div>
-        <div className="text-xs font-medium text-gray-400 mb-1.5">From complainant</div>
+        <div className="text-xs font-medium text-gray-600 mb-1.5">From complainant</div>
         {loading ? <div className="text-xs text-gray-400">Loading…</div>
           : complainantFiles.length === 0
             ? <div className="text-xs text-gray-400 italic">No files uploaded by complainant.</div>
@@ -194,7 +186,7 @@ function FilesPanel({ ticketId, onBeforeDownload, isAssigned, onUpload }: {
       </div>
 
       <div>
-        <div className="text-xs font-medium text-gray-400 mb-1.5">Officer attachments</div>
+        <div className="text-xs font-medium text-gray-600 mb-1.5">Officer attachments</div>
         {officerFiles.length === 0
           ? <div className="text-xs text-gray-400 italic">No officer files attached yet.</div>
           : officerFiles.map((f) => (
@@ -215,15 +207,15 @@ function FilesPanel({ ticketId, onBeforeDownload, isAssigned, onUpload }: {
 
       {isAssigned && (
         <div className="border-t border-gray-100 pt-3 space-y-2">
-          <div className="text-xs font-medium text-gray-500">Attach a document</div>
+          <div className="text-xs font-medium text-gray-600">Attach a document</div>
           <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} className="text-xs text-gray-600 w-full" />
           <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)}
             placeholder="Caption (optional)…"
-            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
           {uploadError && <div className="text-xs text-red-500">{uploadError}</div>}
           <button onClick={handleUpload} disabled={!selectedFile || uploading}
-            className="w-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded px-2 py-1.5 disabled:opacity-50 transition font-medium"
+            className="w-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg px-2 py-1.5 disabled:opacity-50 transition font-medium"
           >
             {uploading ? "Uploading…" : "📎 Upload"}
           </button>
@@ -235,7 +227,10 @@ function FilesPanel({ ticketId, onBeforeDownload, isAssigned, onUpload }: {
 
 // ── Complainant card ───────────────────────────────────────────────────────────
 
-function ComplainantCard({ ticket, onRevealOriginal }: {
+function ComplainantCard({
+  ticket,
+  onRevealOriginal,
+}: {
   ticket: TicketDetail;
   onRevealOriginal: () => void;
 }) {
@@ -245,13 +240,16 @@ function ComplainantCard({ ticket, onRevealOriginal }: {
   const [phoneRevealed, setPhoneRevealed]   = useState(false);
   const [phoneRevealing, setPhoneRevealing] = useState(false);
 
-  useEffect(() => {
+  function loadPii() {
     setPiiLoading(true);
+    setPiiError(null);
     getGrievancePii(ticket.ticket_id)
       .then(setPii)
       .catch(() => setPiiError("Could not load complainant details"))
       .finally(() => setPiiLoading(false));
-  }, [ticket.ticket_id]);
+  }
+
+  useEffect(() => { loadPii(); }, [ticket.ticket_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePhoneReveal() {
     setPhoneRevealing(true);
@@ -261,14 +259,22 @@ function ComplainantCard({ ticket, onRevealOriginal }: {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Complainant</h2>
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">Complainant</h2>
       {piiLoading ? (
         <div className="text-xs text-gray-400">Loading…</div>
       ) : piiError ? (
-        <div className="text-xs space-y-1 text-gray-600">
-          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-          <div className="text-xs text-gray-400 italic">{piiError}</div>
+        <div className="text-xs space-y-2">
+          <div className="text-gray-600">
+            <span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}
+          </div>
+          <div className="text-gray-400 italic">{piiError}</div>
+          <button
+            onClick={loadPii}
+            className="text-xs text-blue-500 hover:text-blue-700 underline"
+          >
+            ↺ Retry
+          </button>
         </div>
       ) : (
         <div className="text-xs space-y-1.5 text-gray-700">
@@ -318,7 +324,11 @@ const FINDINGS_ROLES = new Set([
   "adb_national_project_director", "super_admin", "local_admin",
 ]);
 
-function FindingsCard({ ticket, roleKeys, onRefresh }: {
+function FindingsCard({
+  ticket,
+  roleKeys,
+  onRefresh,
+}: {
   ticket: TicketDetail;
   roleKeys: string[];
   onRefresh: () => void;
@@ -343,9 +353,9 @@ function FindingsCard({ ticket, roleKeys, onRefresh }: {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-blue-200 p-4">
+    <div className="bg-white rounded-xl border border-blue-100 p-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide">🧠 Findings</h2>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-indigo-400 pl-3">🧠 Findings</h2>
         <button onClick={handleRegenerate} disabled={regenerating}
           className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 underline"
         >
@@ -371,223 +381,156 @@ function FindingsCard({ ticket, roleKeys, onRefresh }: {
   );
 }
 
-// ── Top-right actions card ────────────────────────────────────────────────────
+// ── Workflow progress card ────────────────────────────────────────────────────
 
-function ActionsCard({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssigned }: {
-  ticket: TicketDetail;
-  roleKeys: string[];
-  onRefresh: () => void;
-  ensureAcknowledged: () => Promise<void>;
-  isAssigned: boolean;
+const WORKFLOW_STEPS: Record<string, { key: string; label: string }[]> = {
+  standard: [
+    { key: "LEVEL_1_SITE",   label: "L1 Site"   },
+    { key: "LEVEL_2_PIU",    label: "L2 PIU"    },
+    { key: "LEVEL_3_GRC",    label: "L3 GRC"    },
+    { key: "LEVEL_4_LEGAL",  label: "L4 Legal"  },
+  ],
+  seah: [
+    { key: "SEAH_LEVEL_1_NATIONAL", label: "L1 National" },
+    { key: "SEAH_LEVEL_2_HQ",       label: "L2 HQ"       },
+  ],
+};
+
+function WorkflowCard({ currentStepKey, displayName }: {
+  currentStepKey: string;
+  displayName: string;
 }) {
-  const [replyText, setReplyText]   = useState("");
-  const [loading, setLoading]       = useState(false);
-  const [grcHearingDate, setGrcHearingDate] = useState("");
-  const [grcDecision, setGrcDecision] = useState<"RESOLVED" | "ESCALATE_TO_LEGAL">("RESOLVED");
-  const [showAssignTask, setShowAssignTask] = useState(false);
-
-  // Officers for assign dropdown
-  const [officers, setOfficers]     = useState<OfficerBrief[]>([]);
-  const [teammates, setTeammates]   = useState<string[]>([]);
-  const [assignSelected, setAssignSelected] = useState(ticket.assigned_to_user_id ?? "");
-  const [reassignSelected, setReassignSelected] = useState("");
-  const [savingAssign, setSavingAssign]     = useState(false);
-  const [savingReassign, setSavingReassign] = useState(false);
-  const [reassignDone, setReassignDone]     = useState(false);
-
-  useEffect(() => { listOfficers().then(setOfficers).catch(() => {}); }, []);
-  useEffect(() => {
-    getTeammates(ticket.ticket_id).then((r) => setTeammates(r.teammates)).catch(() => {});
-  }, [ticket.ticket_id]);
-
-  const status    = ticket.status_code;
-  const stepKey   = ticket.current_step?.step_key ?? "";
-  const isGrcChair = roleKeys.includes("grc_chair") || roleKeys.includes("super_admin");
-  const isClosed   = ["RESOLVED", "CLOSED"].includes(status);
-  const isEscalated = status === "ESCALATED";
-
-  async function act(action_type: string, extra?: Record<string, string>) {
-    setLoading(true);
-    try {
-      if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
-      await performAction(ticket.ticket_id, { action_type, ...extra });
-      onRefresh();
-    } catch (e) { alert(String(e)); }
-    finally { setLoading(false); }
-  }
-
-  async function sendReply() {
-    if (!replyText.trim()) return;
-    setLoading(true);
-    try {
-      await ensureAcknowledged();
-      await replyToComplainant(ticket.ticket_id, replyText);
-      setReplyText("");
-      onRefresh();
-    } catch (e) { alert(String(e)); }
-    finally { setLoading(false); }
-  }
-
-  async function handleAssign() {
-    if (!assignSelected || assignSelected === ticket.assigned_to_user_id) return;
-    setSavingAssign(true);
-    try { await patchTicket(ticket.ticket_id, { assign_to_user_id: assignSelected }); onRefresh(); }
-    catch (e) { alert(String(e)); }
-    finally { setSavingAssign(false); }
-  }
-
-  async function handleReassign() {
-    if (!reassignSelected) return;
-    setSavingReassign(true);
-    try {
-      await patchTicket(ticket.ticket_id, { assign_to_user_id: reassignSelected });
-      setReassignDone(true);
-      setReassignSelected("");
-      onRefresh();
-      setTimeout(() => setReassignDone(false), 2000);
-    } catch (e) { alert(String(e)); }
-    finally { setSavingReassign(false); }
-  }
-
-  const btn = "px-3 py-1.5 rounded text-sm font-medium transition disabled:opacity-50";
+  const steps = currentStepKey.startsWith("SEAH")
+    ? WORKFLOW_STEPS.seah
+    : WORKFLOW_STEPS.standard;
+  const currentIdx = steps.findIndex((s) => s.key === currentStepKey);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Actions</h2>
-
-      {!isAssigned && (
-        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-          This ticket is assigned to another officer. You can add notes but cannot change its status.
-        </div>
-      )}
-
-      {/* Status-change actions — assigned officer only */}
-      {isAssigned && (
-        <div className="flex flex-wrap gap-2">
-          {(status === "OPEN" || isEscalated) && (
-            <button onClick={() => act("ACKNOWLEDGE")} disabled={loading}
-              className={`${btn} bg-blue-600 text-white hover:bg-blue-700`}>
-              ✅ Acknowledge
-            </button>
-          )}
-          {!isClosed && !isEscalated && (
-            <button onClick={() => act("ESCALATE")} disabled={loading}
-              className={`${btn} bg-orange-500 text-white hover:bg-orange-600`}>
-              🔺 Escalate
-            </button>
-          )}
-          {!isClosed && !isEscalated && (
-            <button onClick={() => act("RESOLVE")} disabled={loading}
-              className={`${btn} bg-green-600 text-white hover:bg-green-700`}>
-              🏁 Resolve
-            </button>
-          )}
-          {!isClosed && !isEscalated && (
-            <button onClick={() => act("CLOSE")} disabled={loading}
-              className={`${btn} bg-gray-400 text-white hover:bg-gray-500`}>
-              Close
-            </button>
-          )}
-          <button onClick={() => setShowAssignTask(true)}
-            className={`${btn} bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100`}>
-            📋 Assign task
-          </button>
-
-          {/* GRC Convene */}
-          {isGrcChair && stepKey === "LEVEL_3_GRC" && !isEscalated && status !== "GRC_HEARING_SCHEDULED" && (
-            <div className="flex gap-2 items-center w-full mt-1">
-              <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
-                className="text-sm border border-gray-300 rounded px-2 py-1.5" />
-              <button onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })} disabled={loading}
-                className={`${btn} bg-purple-600 text-white hover:bg-purple-700`}>
-                🏛️ Convene GRC
-              </button>
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Workflow</h2>
+        <span className="text-xs text-gray-500 font-medium">{displayName}</span>
+      </div>
+      <div className="flex items-start">
+        {steps.map((step, i) => {
+          const done   = i < currentIdx;
+          const active = i === currentIdx;
+          return (
+            <div key={step.key} className="flex items-start flex-1">
+              {/* Connecting line before node */}
+              {i > 0 && (
+                <div className={`flex-1 h-0.5 mt-3 ${done || active ? "bg-blue-400" : "bg-gray-200"}`} />
+              )}
+              <div className="flex flex-col items-center shrink-0">
+                {/* Node */}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  done   ? "bg-blue-500 text-white" :
+                  active ? "bg-blue-600 text-white ring-2 ring-blue-200" :
+                           "bg-gray-100 text-gray-400 border border-gray-200"
+                }`}>
+                  {done ? (
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : i + 1}
+                </div>
+                {/* Label */}
+                <span className={`text-xs font-medium mt-1.5 text-center whitespace-nowrap ${
+                  active ? "text-blue-700 font-semibold" :
+                  done   ? "text-blue-500"               : "text-gray-500"
+                }`}>
+                  {step.label}
+                </span>
+              </div>
+              {/* Connecting line after last node */}
+              {i === steps.length - 1 && (
+                <div className="flex-1 h-0.5 mt-3 bg-gray-200" />
+              )}
             </div>
-          )}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-          {/* GRC Decide */}
-          {isGrcChair && status === "GRC_HEARING_SCHEDULED" && (
-            <div className="flex gap-2 items-center w-full mt-1">
-              <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
-                className="text-sm border border-gray-300 rounded px-2 py-1.5">
-                <option value="RESOLVED">Decision: Resolved</option>
-                <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
-              </select>
-              <button onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })} disabled={loading}
-                className={`${btn} bg-purple-700 text-white hover:bg-purple-800`}>
-                ⚖️ Record Decision
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+// ── Open tasks card ───────────────────────────────────────────────────────────
 
-      {/* Reply to complainant */}
-      {isAssigned && (
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Reply to Complainant 💬</label>
-          <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={2}
-            placeholder="Message sent via chatbot (SMS fallback if session expired)…"
-            className="w-full text-sm border border-gray-200 rounded px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-          <button onClick={sendReply} disabled={!replyText.trim() || loading}
-            className={`mt-1 ${btn} bg-blue-50 text-blue-700 hover:bg-blue-100`}>
-            Send Reply
-          </button>
-        </div>
-      )}
+function TasksCard({ tasks, currentUserId, onComplete }: {
+  tasks: TicketTask[];
+  currentUserId: string;
+  onComplete: (taskId: string) => void;
+}) {
+  const pending   = tasks.filter((t) => t.status === "PENDING");
+  const done      = tasks.filter((t) => t.status === "DONE");
 
-      {/* Assign officer */}
-      <div className="border-t border-gray-100 pt-3">
-        <div className="text-xs font-medium text-gray-500 mb-2">Assign officer</div>
-        <div className="flex gap-2">
-          <select value={assignSelected} onChange={(e) => setAssignSelected(e.target.value)}
-            className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            <option value="">— Unassigned —</option>
-            {officers.map((o) => (
-              <option key={o.user_id} value={o.user_id}>
-                {o.user_id}{o.role_keys.length > 0 ? ` (${o.role_keys[0].replace(/_/g, " ")})` : ""}
-              </option>
-            ))}
-          </select>
-          {assignSelected !== (ticket.assigned_to_user_id ?? "") && (
-            <button onClick={handleAssign} disabled={savingAssign}
-              className="text-xs bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition">
-              {savingAssign ? "Saving…" : "Save"}
-            </button>
-          )}
-        </div>
+  if (tasks.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Tasks</h2>
+        {pending.length > 0 && (
+          <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            {pending.length} pending
+          </span>
+        )}
+        {pending.length === 0 && (
+          <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            All done
+          </span>
+        )}
       </div>
 
-      {/* Reassign to teammate */}
-      {teammates.length > 0 && (
-        <div>
-          <div className="text-xs font-medium text-gray-500 mb-2">Reassign to teammate</div>
-          <div className="flex gap-2">
-            <select value={reassignSelected} onChange={(e) => setReassignSelected(e.target.value)}
-              className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none">
-              <option value="">— Select colleague —</option>
-              {teammates.map((uid) => <option key={uid} value={uid}>{uid}</option>)}
-            </select>
-            {reassignSelected && (
-              <button onClick={handleReassign} disabled={savingReassign}
-                className="text-xs bg-slate-600 text-white rounded px-3 py-1.5 hover:bg-slate-700 disabled:opacity-50 transition">
-                {savingReassign ? "…" : reassignDone ? "✓ Done" : "Reassign"}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <div className="space-y-2">
+        {pending.map((task) => {
+          const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
+          const isAssignedToMe = task.assigned_to_user_id === currentUserId || task.assigned_to_user_id === "mock-super-admin";
+          return (
+            <div key={task.task_id} className="flex items-start gap-3 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
+              <span className="text-base shrink-0">{typeInfo?.icon ?? "📋"}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-gray-800">
+                  {typeInfo?.label ?? task.task_type.replace(/_/g, " ")}
+                </div>
+                {task.description && (
+                  <div className="text-xs text-gray-500 mt-0.5 truncate italic">&ldquo;{task.description}&rdquo;</div>
+                )}
+                <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                  <span>→ {task.assigned_to_user_id === currentUserId ? "You" : task.assigned_to_user_id}</span>
+                  {task.due_date && <><span>·</span><span>Due {new Date(task.due_date).toLocaleDateString()}</span></>}
+                </div>
+              </div>
+              {isAssignedToMe && (
+                <button
+                  onClick={() => onComplete(task.task_id)}
+                  className="shrink-0 text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 hover:bg-green-100 transition font-medium"
+                >
+                  ✓ Done
+                </button>
+              )}
+            </div>
+          );
+        })}
 
-      {/* Assign task modal */}
-      {showAssignTask && (
-        <AssignTaskSheet
-          ticketId={ticket.ticket_id}
-          variant="modal"
-          onClose={() => setShowAssignTask(false)}
-          onAssigned={() => { setShowAssignTask(false); onRefresh(); }}
-        />
-      )}
+        {done.length > 0 && (
+          <div className="pt-1 border-t border-gray-100 space-y-1.5">
+            {done.map((task) => {
+              const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
+              return (
+                <div key={task.task_id} className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="text-green-400">✓</span>
+                  <span className="line-through">{typeInfo?.label ?? task.task_type.replace(/_/g, " ")}</span>
+                  <span className="no-underline">→ {task.assigned_to_user_id}</span>
+                  {task.completed_at && (
+                    <span className="ml-auto">{new Date(task.completed_at).toLocaleDateString()}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -599,27 +542,40 @@ export default function TicketDetailPage() {
   const router = useRouter();
   const { user, roleKeys, canSeeSeah, isAdmin, effectiveLang } = useAuth();
 
+  // ── Core data ──────────────────────────────────────────────────────────
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [sla, setSla]       = useState<SlaStatus | null>(null);
   const [tasks, setTasks]   = useState<TicketTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
 
-  // Thread state
+  // ── Thread ─────────────────────────────────────────────────────────────
   const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
   const [noteText, setNoteText]         = useState("");
   const [submitting, setSubmitting]     = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  // Translation panel
+  // ── Top bar actions ────────────────────────────────────────────────────
+  const [actLoading, setActLoading]     = useState(false);
+  const [showReply, setShowReply]       = useState(false);
+  const [replyText, setReplyText]       = useState("");
+  const [showAssign, setShowAssign]     = useState(false);
+  const [officers, setOfficers]         = useState<OfficerBrief[]>([]);
+  const [assignSelected, setAssignSelected] = useState("");
+  const [savingAssign, setSavingAssign] = useState(false);
+  const [showAssignTask, setShowAssignTask] = useState(false);
+  const [grcHearingDate, setGrcHearingDate] = useState("");
+  const [grcDecision, setGrcDecision]   = useState<"RESOLVED" | "ESCALATE_TO_LEGAL">("RESOLVED");
+
+  // ── Translation panel ──────────────────────────────────────────────────
   const PANEL_KEY = "grm_translation_panel_open";
   const [panelOpen, setPanelOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(PANEL_KEY) === "true";
   });
-  function togglePanel() {
+  const togglePanel = () => {
     setPanelOpen((prev) => { const next = !prev; localStorage.setItem(PANEL_KEY, String(next)); return next; });
-  }
+  };
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
@@ -631,12 +587,11 @@ export default function TicketDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Vault reveal
+  // ── Vault reveal ───────────────────────────────────────────────────────
   const [revealModalOpen, setRevealModalOpen] = useState(false);
   const [revealSession, setRevealSession]     = useState<RevealSession | null>(null);
 
-  const showTranslations = effectiveLang !== "ne";
-
+  // ── Data loading ───────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
       const [t, s, tk] = await Promise.all([
@@ -647,6 +602,7 @@ export default function TicketDetailPage() {
       setTicket(t);
       setSla(s);
       setTasks(tk);
+      setAssignSelected(t.assigned_to_user_id ?? "");
       markSeen(id).catch(() => {});
     } catch (e) {
       setError(String(e));
@@ -657,35 +613,43 @@ export default function TicketDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const isAssigned = isAdmin || !ticket?.assigned_to_user_id || ticket?.assigned_to_user_id === user?.sub;
+  useEffect(() => {
+    if (showAssign && officers.length === 0) {
+      listOfficers().then(setOfficers).catch(() => {});
+    }
+  }, [showAssign]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ensureAcknowledged() {
-    if (!ticket || !["OPEN", "ESCALATED"].includes(ticket.status_code)) return;
-    if (!isAssigned) return;
-    await performAction(id, { action_type: "ACKNOWLEDGE" });
-    await load();
-  }
+  // ── Derived ────────────────────────────────────────────────────────────
+  const currentUserId = user?.sub ?? "mock-super-admin";
+  const isAssigned    = isAdmin || !ticket?.assigned_to_user_id || ticket?.assigned_to_user_id === user?.sub;
 
-  // ── Thread derived state ─────────────────────────────────────────────────
+  const status       = ticket?.status_code ?? "";
+  const isClosed     = ["RESOLVED", "CLOSED"].includes(status);
+  const isOpen       = status === "OPEN";
+  const isEscalated  = status === "ESCALATED";
+  const isGrcHearing = status === "GRC_HEARING_SCHEDULED";
+  const stepKey      = ticket?.current_step?.step_key ?? "";
+  const isGrcChair   = roleKeys.includes("grc_chair") || roleKeys.includes("super_admin");
+
+  const slaBreached = (ticket?.sla_breached ?? false) || (sla?.breached ?? false);
+  const slaHours    = sla?.remaining_hours ?? null;
+  const timeLabel   = slaTimeLabel(slaHours, slaBreached, sla?.resolution_time_days);
+  const slaCls      = slaColorCls(slaHours, slaBreached);
 
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
     switch (activeFilter) {
       case "all":    return ticket.events;
-      case "mine":   return ticket.events.filter((e) => e.created_by_user_id === (user?.sub ?? "mock-super-admin"));
+      case "mine":   return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
       case "tasks":  return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
       case "system": return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
       default:       return ticket.events.filter((e) => e.created_by_user_id === activeFilter);
     }
-  }, [ticket, activeFilter, user]);
+  }, [ticket, activeFilter, currentUserId]);
 
-  const pendingTaskCount = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
-  const currentUserId    = user?.sub ?? "mock-super-admin";
-
-  const canManageViewers = useMemo(
-    () => !!ticket && ticket.assigned_to_user_id === currentUserId,
-    [ticket, currentUserId],
-  );
+  const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
+  const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
+  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
 
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];
@@ -693,10 +657,52 @@ export default function TicketDetailPage() {
     if (ticket.assigned_to_user_id) ids.add(ticket.assigned_to_user_id);
     (ticket.viewers ?? []).forEach((v) => ids.add(v.user_id));
     ids.delete(currentUserId);
-    const list = Array.from(ids).map((id_) => ({ user_id: id_, label: `@${id_}` }));
+    const list = Array.from(ids).map((uid) => ({ user_id: uid, label: `@${uid}` }));
     list.unshift({ user_id: "all", label: "@all" });
     return list;
   }, [ticket, currentUserId]);
+
+  // ── Actions ────────────────────────────────────────────────────────────
+  const ensureAcknowledged = useCallback(async () => {
+    if (!ticket || !["OPEN", "ESCALATED"].includes(ticket.status_code)) return;
+    if (!isAssigned) return;
+    await performAction(id, { action_type: "ACKNOWLEDGE" });
+    await load();
+  }, [ticket, isAssigned, id, load]);
+
+  async function act(action_type: string, extra?: Record<string, string>) {
+    setActLoading(true);
+    try {
+      if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
+      await performAction(id, { action_type, ...extra });
+      await load();
+    } catch (e) { alert(String(e)); }
+    finally { setActLoading(false); }
+  }
+
+  async function sendReply() {
+    if (!replyText.trim()) return;
+    setActLoading(true);
+    try {
+      await ensureAcknowledged();
+      await replyToComplainant(id, replyText);
+      setReplyText("");
+      setShowReply(false);
+      await load();
+    } catch (e) { alert(String(e)); }
+    finally { setActLoading(false); }
+  }
+
+  async function handleAssign() {
+    if (!assignSelected || assignSelected === ticket?.assigned_to_user_id) return;
+    setSavingAssign(true);
+    try {
+      await patchTicket(id, { assign_to_user_id: assignSelected });
+      setShowAssign(false);
+      await load();
+    } catch (e) { alert(String(e)); }
+    finally { setSavingAssign(false); }
+  }
 
   const handleNote = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
@@ -720,8 +726,7 @@ export default function TicketDetailPage() {
     catch (e) { console.error("Complete task failed", e); }
   }, [id, load]);
 
-  // ── Render ───────────────────────────────────────────────────────────────
-
+  // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="flex items-center justify-center h-full min-h-[200px]">
       <div className="text-sm text-gray-400 animate-pulse">Loading…</div>
@@ -736,150 +741,299 @@ export default function TicketDetailPage() {
   if (!ticket) return null;
   if (ticket.is_seah && !canSeeSeah) return <div className="p-8 text-red-500 text-sm">Access denied.</div>;
 
-  return (
-    <div className="p-6 space-y-5">
-      {/* Back */}
-      <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-        ← Back to queue
-      </button>
+  const btnBase = "px-3 py-1.5 rounded-lg text-sm font-medium transition disabled:opacity-50";
+  const showTranslations = effectiveLang !== "ne";
 
-      {/* ── TOP ROW: ticket header + actions ────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Ticket header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h1 className="text-xl font-semibold text-gray-800">{ticket.grievance_id}</h1>
-            {ticket.is_seah && <SeahBadge />}
-            <StatusBadge code={ticket.status_code} />
-            <PriorityBadge priority={ticket.priority} />
-          </div>
-          <p className="text-sm text-gray-500">
-            {ticket.organization_id} · {ticket.location_code} · {ticket.project_code}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Created {new Date(ticket.created_at).toLocaleDateString()}
-          </p>
-          {/* SLA strip */}
-          {sla && (
-            <div className={`mt-3 text-xs px-3 py-2 rounded ${
-              sla.breached ? "bg-red-50 text-red-700" :
-              sla.urgency === "warning" ? "bg-yellow-50 text-yellow-700" :
-              sla.urgency !== "none" ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-500"
-            }`}>
-              ⏱ {sla.resolution_time_days}d resolution target
-              {sla.deadline ? ` · Deadline ${new Date(sla.deadline).toLocaleDateString()}` : ""}
-              {sla.remaining_hours != null
-                ? ` · ${sla.remaining_hours < 24 ? `${Math.round(sla.remaining_hours)}h left` : `${Math.round(sla.remaining_hours / 24)}d left`}`
-                : ""}
-            </div>
-          )}
-          {/* Workflow stepper */}
-          {ticket.current_step && (
-            <div className="mt-3">
-              <div className="text-xs text-gray-500 mb-1">
-                {ticket.current_step.display_name}
-                <span className="text-gray-400"> · {ticket.current_step.assigned_role_key.replace(/_/g, " ")}</span>
-              </div>
-              <WorkflowStepper currentStepKey={ticket.current_step.step_key} />
+  return (
+    <div className="flex flex-col h-full bg-gray-50">
+
+      {/* ── Compact top bar ──────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6">
+
+        {/* Row 1: identity + primary action buttons */}
+        <div className="flex items-center gap-2.5 py-2.5 min-w-0">
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-gray-400 hover:text-gray-600 shrink-0"
+          >
+            ← Back
+          </button>
+          <div className="w-px h-4 bg-gray-200 shrink-0" />
+          <h1 className="text-base font-semibold text-gray-900 shrink-0">{ticket.grievance_id}</h1>
+          {ticket.is_seah && <SeahBadge />}
+          <StatusBadge code={ticket.status_code} />
+          <PriorityBadge priority={ticket.priority} />
+
+          {/* Primary actions — right side of row 1 */}
+          {isAssigned && !isClosed && (
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {(isOpen || isEscalated) && (
+                <button onClick={() => act("ACKNOWLEDGE")} disabled={actLoading}
+                  className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
+                  ✅ Acknowledge
+                </button>
+              )}
+              {!isOpen && !isEscalated && !isGrcHearing && (
+                <>
+                  <button onClick={() => act("ESCALATE")} disabled={actLoading}
+                    className={`${btnBase} border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
+                    🔺 Escalate
+                  </button>
+                  <button onClick={() => act("RESOLVE")} disabled={actLoading}
+                    className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
+                    🏁 Resolve
+                  </button>
+                  <button onClick={() => act("CLOSE")} disabled={actLoading}
+                    className={`${btnBase} border border-red-200 text-red-600 hover:bg-red-50`}>
+                    Close
+                  </button>
+                </>
+              )}
+              {isGrcChair && isGrcHearing && (
+                <>
+                  <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
+                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400">
+                    <option value="RESOLVED">Decision: Resolved</option>
+                    <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
+                  </select>
+                  <button onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })} disabled={actLoading}
+                    className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700`}>
+                    ⚖️ GRC Decide
+                  </button>
+                </>
+              )}
+              {isGrcChair && stepKey === "LEVEL_3_GRC" && !isGrcHearing && (
+                <>
+                  <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
+                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    placeholder="Hearing date" />
+                  <button onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })} disabled={actLoading || !grcHearingDate}
+                    className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40`}>
+                    🏛️ Convene GRC
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {/* Actions card */}
-        <ActionsCard
-          ticket={ticket}
-          roleKeys={roleKeys}
-          onRefresh={load}
-          ensureAcknowledged={ensureAcknowledged}
-          isAssigned={isAssigned}
-        />
-      </div>
+        {/* Row 2: meta strip + secondary action toggles */}
+        <div className="flex items-center gap-x-2 pb-2.5 text-xs text-gray-500 flex-wrap min-w-0">
+          <span className="shrink-0">{ticket.organization_id}</span>
+          {ticket.location_code && <><span className="text-gray-300">·</span><span className="shrink-0">{ticket.location_code}</span></>}
+          {ticket.project_code  && <><span className="text-gray-300">·</span><span className="shrink-0">{ticket.project_code}</span></>}
+          <span className="text-gray-300">·</span>
+          <span className="shrink-0">Created {new Date(ticket.created_at).toLocaleDateString()}</span>
+          {timeLabel && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-medium ${slaCls}`}>
+                {timeLabel}
+              </span>
+            </>
+          )}
+          {ticket.current_step && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="shrink-0 text-gray-600 font-medium">{ticket.current_step.display_name}</span>
+            </>
+          )}
 
-      {/* ── MAIN AREA: thread (left) + info (right) ─────────────────── */}
-      <div className="flex gap-0 items-start">
+          {/* Not assigned warning */}
+          {!isAssigned && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="shrink-0 text-amber-600 text-[11px] font-medium">
+                ⚠️ Assigned to {ticket.assigned_to_user_id}
+              </span>
+            </>
+          )}
 
-        {/* Left — thread */}
-        <div className="flex-1 min-w-0 lg:mr-5">
-          <div className="bg-white rounded-lg border border-gray-200 flex flex-col" style={{ height: "60vh" }}>
-            {/* Thread header */}
-            <div className="flex-shrink-0 border-b border-gray-200">
-              <div className="flex items-center justify-between px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Case Thread</h2>
+          {/* Secondary toggles — far right */}
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            {isAssigned && (
+              <>
                 <button
-                  onClick={togglePanel}
-                  className={`text-xs px-2 py-1 rounded border transition ${
-                    panelOpen
+                  onClick={() => { setShowReply((v) => !v); setShowAssign(false); }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                    showReply
                       ? "bg-blue-100 border-blue-300 text-blue-700"
-                      : "bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
                   }`}
                 >
-                  🌐 {panelOpen ? "Hide translations" : "Translations"}
+                  💬 Reply
                 </button>
-              </div>
-              <FilterChips
-                events={ticket.events}
-                currentUserId={currentUserId}
-                active={activeFilter}
-                pendingTaskCount={pendingTaskCount}
-                onChange={setActiveFilter}
-              />
-              <ViewersBar
-                viewers={ticket.viewers ?? []}
-                canManage={canManageViewers}
-                ticketId={ticket.ticket_id}
-                onChanged={load}
-              />
-            </div>
-
-            {/* Scrollable thread body */}
-            <div className="flex-1 overflow-y-auto py-2">
-              {filteredEvents.length === 0 ? (
-                <div className="flex justify-center py-8 text-xs text-gray-400">No messages in this view</div>
-              ) : (
-                filteredEvents
-                  .filter((e: TicketEvent) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
-                  .map((event: TicketEvent) => {
-                    const isMine = event.created_by_user_id === currentUserId;
-                    if (SYSTEM_EVENT_TYPES.has(event.event_type))
-                      return <SystemPill key={event.event_id} event={event} />;
-                    if (TASK_EVENT_TYPES.has(event.event_type))
-                      return (
-                        <TaskCard
-                          key={event.event_id}
-                          event={event}
-                          tasks={tasks}
-                          currentUserId={currentUserId}
-                          ticketId={ticket.ticket_id}
-                          onComplete={handleCompleteTask}
-                        />
-                      );
-                    return <NoteBubble key={event.event_id} event={event} isMine={isMine} />;
-                  })
-              )}
-              <div ref={threadEndRef} />
-            </div>
-
-            {/* Compose bar */}
-            <div className="flex-shrink-0 border-t border-gray-200">
-              <ComposeBar
-                value={noteText}
-                onChange={setNoteText}
-                onSubmit={handleNote}
-                disabled={submitting}
-                participants={mentionParticipants}
-                placeholder="Add an internal note… (type @ to mention)"
-              />
-            </div>
+                <button
+                  onClick={() => setShowAssignTask(true)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-gray-300 bg-white transition"
+                >
+                  📋 Task
+                </button>
+                <button
+                  onClick={() => { setShowAssign((v) => !v); setShowReply(false); }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                    showAssign
+                      ? "bg-blue-100 border-blue-300 text-blue-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  👤 Assign
+                </button>
+              </>
+            )}
+            {showTranslations && (
+              <button
+                onClick={togglePanel}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                  panelOpen
+                    ? "bg-blue-100 border-blue-300 text-blue-700"
+                    : "border-gray-200 text-gray-500 hover:border-blue-300 bg-white"
+                }`}
+              >
+                🌐 Translations
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Right — info column */}
-        <div className="w-80 shrink-0 space-y-4">
-          {/* Original Grievance */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Original Grievance</h2>
+        {/* Expandable: Reply panel */}
+        {showReply && (
+          <div className="border-t border-gray-100 py-3 space-y-2">
+            <textarea
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              rows={2}
+              placeholder="Message sent via chatbot (SMS fallback if session expired)…"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setShowReply(false); setReplyText(""); }}
+                className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">
+                Cancel
+              </button>
+              <button onClick={sendReply} disabled={!replyText.trim() || actLoading}
+                className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+                {actLoading ? "Sending…" : "→ Send Reply"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Expandable: Assign officer panel */}
+        {showAssign && (
+          <div className="border-t border-gray-100 py-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500 shrink-0">Assign to:</span>
+            <select
+              value={assignSelected}
+              onChange={(e) => setAssignSelected(e.target.value)}
+              className="flex-1 min-w-[200px] text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="">— Unassigned —</option>
+              {officers.map((o) => (
+                <option key={o.user_id} value={o.user_id}>
+                  {o.user_id}{o.role_keys.length > 0 ? ` (${o.role_keys[0].replace(/_/g, " ")})` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAssign}
+              disabled={savingAssign || !assignSelected || assignSelected === ticket.assigned_to_user_id}
+              className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition font-medium"
+            >
+              {savingAssign ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => setShowAssign(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Main: thread (2/5) + info (3/5) ─────────────────────────── */}
+      <div className="flex-1 min-h-0 grid grid-cols-5 gap-4 p-4">
+
+        {/* Thread column */}
+        <div className="col-span-2 bg-white rounded-xl border border-gray-200 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-shrink-0 border-b border-gray-200">
+            <FilterChips
+              events={ticket.events}
+              currentUserId={currentUserId}
+              active={activeFilter}
+              pendingTaskCount={pendingTaskCount}
+              onChange={setActiveFilter}
+            />
+            <ViewersBar
+              viewers={ticket.viewers ?? []}
+              canManage={canManageViewers}
+              ticketId={ticket.ticket_id}
+              onChanged={load}
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-2">
+            {filteredEvents.length === 0 ? (
+              <div className="flex justify-center py-8 text-xs text-gray-400">No messages in this view</div>
+            ) : (
+              filteredEvents
+                .filter((e: TicketEvent) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
+                .map((event: TicketEvent) => {
+                  const isMine = event.created_by_user_id === currentUserId;
+                  if (SYSTEM_EVENT_TYPES.has(event.event_type))
+                    return <SystemPill key={event.event_id} event={event} />;
+                  if (TASK_EVENT_TYPES.has(event.event_type))
+                    return (
+                      <TaskCard
+                        key={event.event_id}
+                        event={event}
+                        tasks={tasks}
+                        currentUserId={currentUserId}
+                        ticketId={ticket.ticket_id}
+                        onComplete={handleCompleteTask}
+                      />
+                    );
+                  return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} />;
+                })
+            )}
+            <div ref={threadEndRef} />
+          </div>
+
+          <div className="flex-shrink-0 border-t border-gray-100">
+            <ComposeBar
+              value={noteText}
+              onChange={setNoteText}
+              onSubmit={handleNote}
+              disabled={submitting}
+              participants={mentionParticipants}
+              placeholder="Add an internal note… (@ to mention)"
+            />
+          </div>
+        </div>
+
+        {/* Info column — full-width top (text-rich), 2-col bottom (compact reference) */}
+        <div className="col-span-3 overflow-y-auto space-y-3 pb-4">
+
+          {/* Workflow progress — always visible at top */}
+          {ticket.current_step && (
+            <WorkflowCard
+              currentStepKey={ticket.current_step.step_key}
+              displayName={ticket.current_step.display_name}
+            />
+          )}
+
+          {/* Open tasks — shown only when tasks exist */}
+          <TasksCard
+            tasks={tasks}
+            currentUserId={currentUserId}
+            onComplete={handleCompleteTask}
+          />
+
+          {/* Original Grievance — full width: primary reading content */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">Original Grievance</h2>
             <p className="text-sm text-gray-700 leading-relaxed">
-              {ticket.grievance_summary ?? <span className="text-gray-400">No summary</span>}
+              {ticket.grievance_summary ?? <span className="text-gray-400 italic">No summary</span>}
             </p>
             {ticket.grievance_categories && (
               <p className="text-xs text-gray-500 mt-2">
@@ -893,28 +1047,33 @@ export default function TicketDetailPage() {
             )}
           </div>
 
+          {/* Findings — full width: AI summary can be several sentences */}
           <FindingsCard ticket={ticket} roleKeys={roleKeys} onRefresh={load} />
-          <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} />
-          <FilesPanel
-            ticketId={ticket.ticket_id}
-            onBeforeDownload={ensureAcknowledged}
-            isAssigned={isAssigned}
-            onUpload={load}
-          />
-        </div>
 
-        {/* Translation panel (rightmost, collapsible) */}
-        {panelOpen && (
-          <div className="sticky top-6 self-start ml-4 hidden lg:block">
-            <TranslationPanel
-              events={ticket.events}
-              onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }}
+          {/* Complainant + Attachments — side by side: compact reference cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} />
+            <FilesPanel
+              ticketId={ticket.ticket_id}
+              onBeforeDownload={ensureAcknowledged}
+              isAssigned={isAssigned}
+              onUpload={load}
             />
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Vault reveal */}
+      {/* ── Translation overlay (fixed right panel, T to toggle) ─────── */}
+      {panelOpen && (
+        <div className="fixed right-0 top-0 bottom-0 w-80 z-40 shadow-2xl">
+          <TranslationPanel
+            events={ticket.events}
+            onClose={() => { setPanelOpen(false); localStorage.setItem(PANEL_KEY, "false"); }}
+          />
+        </div>
+      )}
+
+      {/* ── Vault reveal ──────────────────────────────────────────────── */}
       {revealModalOpen && (
         <RevealModal
           ticketId={ticket.ticket_id}
@@ -928,6 +1087,16 @@ export default function TicketDetailPage() {
           session={revealSession}
           ticketId={ticket.ticket_id}
           onClose={() => setRevealSession(null)}
+        />
+      )}
+
+      {/* ── Assign task sheet ──────────────────────────────────────────── */}
+      {showAssignTask && (
+        <AssignTaskSheet
+          ticketId={ticket.ticket_id}
+          variant="modal"
+          onClose={() => setShowAssignTask(false)}
+          onAssigned={() => { setShowAssignTask(false); load(); }}
         />
       )}
     </div>
