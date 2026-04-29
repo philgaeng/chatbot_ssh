@@ -2,11 +2,13 @@
 Grievance API router. Same URL surface and behaviour as Flask backend.
 """
 
+import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from psycopg2 import sql
 
 from backend.services.database_services.grievance_manager import GrievanceDbManager
 from backend.services.messaging import Messaging
@@ -25,6 +27,22 @@ class UpdateStatusBody(BaseModel):
     status_code: str = Field(..., description="New status code")
     notes: Optional[str] = None
     created_by: Optional[str] = None
+
+
+class ComplainantPatchBody(BaseModel):
+    complainant_address: Optional[str] = None
+    complainant_village: Optional[str] = None
+    complainant_ward: Optional[str] = None
+    complainant_municipality: Optional[str] = None
+    complainant_district: Optional[str] = None
+    complainant_province: Optional[str] = None
+    complainant_email: Optional[str] = None
+
+
+def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
+    expected = os.environ.get("TICKETING_SECRET_KEY", "")
+    if expected and x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 def _send_status_update_notifications(
@@ -185,6 +203,74 @@ def get_grievance(grievance_id: str):
         }
     except Exception as e:
         print(f"Error retrieving grievance: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "ERROR", "message": f"Internal server error: {str(e)}"},
+        )
+
+
+@router.patch("/api/complainant/{complainant_id}")
+def patch_complainant(
+    complainant_id: str,
+    body: ComplainantPatchBody,
+    _: None = Depends(_ticketing_auth_check),
+):
+    """
+    Update whitelisted complainant fields. Called by ticketing API - never
+    stores PII in ticketing.*, proxies edits back here instead.
+    Identity fields (full_name, phone, phone_hash) are NOT in the whitelist
+    and cannot be changed through this endpoint.
+    """
+    allowed_fields = {
+        "complainant_address",
+        "complainant_village",
+        "complainant_ward",
+        "complainant_municipality",
+        "complainant_district",
+        "complainant_province",
+        "complainant_email",
+    }
+
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not fields:
+        return JSONResponse(status_code=422, content={"status": "ERROR", "message": "No fields provided"})
+
+    # Safety: re-check whitelist (defense in depth)
+    fields = {k: v for k, v in fields.items() if k in allowed_fields}
+    if not fields:
+        return JSONResponse(
+            status_code=422,
+            content={"status": "ERROR", "message": "No allowed fields provided"},
+        )
+
+    try:
+        set_fragments = [
+            sql.SQL("{} = %s").format(sql.Identifier(column_name)) for column_name in fields.keys()
+        ]
+        update_query = sql.SQL("UPDATE complainants SET {} WHERE complainant_id = %s").format(
+            sql.SQL(", ").join(set_fragments)
+        )
+        values = [*fields.values(), complainant_id]
+
+        with grievance_manager.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(update_query, values)
+                updated_rows = cursor.rowcount
+            conn.commit()
+
+        if updated_rows == 0:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "ERROR", "message": f"Complainant {complainant_id} not found"},
+            )
+
+        return {
+            "ok": True,
+            "updated_fields": list(fields.keys()),
+            "complainant_id": complainant_id,
+        }
+    except Exception as e:
+        print(f"Error in patch_complainant: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"status": "ERROR", "message": f"Internal server error: {str(e)}"},
