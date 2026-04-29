@@ -60,7 +60,11 @@ STEP_L2_ID = "00000000-0000-0000-0001-000000000012"
 STEP_L3_ID = "00000000-0000-0000-0001-000000000013"
 STEP_L4_ID = "00000000-0000-0000-0001-000000000014"
 
-ASSIGNMENT_STANDARD_ID = "00000000-0000-0000-0001-000000000021"
+ASSIGNMENT_STANDARD_ID          = "00000000-0000-0000-0001-000000000021"
+# Fallback: location=None catches district-level tickets (NP_D006 etc.) that
+# don't match the province-scoped assignment. resolve_workflow() tries None
+# after the specific location code, so this fires for all DOR/KL_ROAD tickets.
+ASSIGNMENT_STANDARD_FALLBACK_ID = "00000000-0000-0000-0001-000000000022"
 
 
 def seed_organizations(db: Session) -> None:
@@ -302,22 +306,41 @@ def seed_standard_workflow(db: Session) -> None:
 
 
 def seed_workflow_assignment(db: Session) -> None:
-    """Map DOR + Province 1 + KL_ROAD + NORMAL priority → standard workflow."""
-    existing = db.get(WorkflowAssignment, ASSIGNMENT_STANDARD_ID)
-    if existing:
-        logger.info("  = workflow assignment already exists (standard)")
-        return
+    """Map DOR + KL_ROAD + NORMAL → standard workflow (two rows for coverage).
 
-    assignment = WorkflowAssignment(
-        assignment_id=ASSIGNMENT_STANDARD_ID,
-        organization_id=ORG_DOR_ID,
-        location_code=LOC_PROVINCE1_CODE,
-        project_code="KL_ROAD",
-        priority="NORMAL",
-        workflow_id=WORKFLOW_STANDARD_ID,
-    )
-    db.add(assignment)
-    logger.info("  + workflow assignment: DOR + PROVINCE_1 + KL_ROAD + NORMAL → KL_ROAD_STANDARD")
+    Row 1: province-scoped (NP_P1) — preferred match for province-level tickets.
+    Row 2: location=None fallback — catches district/municipality-level tickets
+           (NP_D006, NP_D011, NP_D004 etc.) that don't match the province row.
+           resolve_workflow() tries None after the specific location code.
+    """
+    existing = db.get(WorkflowAssignment, ASSIGNMENT_STANDARD_ID)
+    if not existing:
+        db.add(WorkflowAssignment(
+            assignment_id=ASSIGNMENT_STANDARD_ID,
+            organization_id=ORG_DOR_ID,
+            location_code=LOC_PROVINCE1_CODE,
+            project_code="KL_ROAD",
+            priority="NORMAL",
+            workflow_id=WORKFLOW_STANDARD_ID,
+        ))
+        logger.info("  + workflow assignment: DOR + NP_P1 + KL_ROAD + NORMAL → KL_ROAD_STANDARD")
+    else:
+        logger.info("  = workflow assignment already exists (standard NP_P1)")
+
+    existing_fb = db.get(WorkflowAssignment, ASSIGNMENT_STANDARD_FALLBACK_ID)
+    if not existing_fb:
+        db.add(WorkflowAssignment(
+            assignment_id=ASSIGNMENT_STANDARD_FALLBACK_ID,
+            organization_id=ORG_DOR_ID,
+            location_code=None,          # wildcard: any location under DOR
+            project_code="KL_ROAD",
+            priority="NORMAL",
+            workflow_id=WORKFLOW_STANDARD_ID,
+        ))
+        logger.info("  + workflow assignment: DOR + (any loc) + KL_ROAD + NORMAL → KL_ROAD_STANDARD (fallback)")
+    else:
+        logger.info("  = workflow assignment already exists (standard fallback)")
+
     db.flush()
 
 

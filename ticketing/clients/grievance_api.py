@@ -173,12 +173,24 @@ def begin_reveal_session(
     ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     watermark_text = f"{actor_id} · {ts_str} · case:{grievance_id}"
 
+    # Unwrap the API envelope:
+    #   detail = {"status": "SUCCESS", "data": {"grievance": {...}, ...}}
+    # The real reveal API will return a content_token instead; for proto we embed
+    # the content directly with field names mapped to what VaultReveal.tsx expects.
+    grievance = (detail.get("data") or {}).get("grievance") or {}
+
     return {
         "granted": True,
         "reveal_session_id": session_id,
         "expires_at_utc": expires_at.isoformat(),
         "ttl_seconds": ttl,
-        "content": detail,           # proto only — real API returns content_token
+        "content": {
+            "grievance_description": grievance.get("grievance_description"),
+            "complainant_name":      grievance.get("complainant_full_name"),
+            "phone_number":          grievance.get("complainant_phone"),
+            "email":                 grievance.get("complainant_email"),
+            "address":               grievance.get("complainant_address"),
+        },
         "watermark_text": watermark_text,
         "_proto_mode": True,
     }

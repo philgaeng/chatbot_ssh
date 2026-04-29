@@ -946,3 +946,32 @@ export function removeViewer(ticketId: string, userId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/tickets/${ticketId}/viewers/${userId}`, { method: "DELETE" });
 }
 
+// ── Complainant info edit ─────────────────────────────────────────────────────
+
+export interface ComplainantPatchPayload {
+  complainant_address?:      string;
+  complainant_village?:      string;
+  complainant_ward?:         string;
+  complainant_municipality?: string;
+  complainant_district?:     string;
+  complainant_province?:     string;
+  complainant_email?:        string;
+}
+
+export interface ComplainantPatchResponse {
+  ticket_id:      string;
+  complainant_id: string;
+  fields_updated: string[];
+  event_id:       string;
+}
+
+export function patchComplainant(
+  ticketId: string,
+  fields: ComplainantPatchPayload,
+): Promise<ComplainantPatchResponse> {
+  return apiFetch<ComplainantPatchResponse>(`/api/v1/tickets/${ticketId}/complainant`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+

@@ -6,9 +6,10 @@ import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  generateFindings, listTicketTasks, completeTask,
+  generateFindings, listTicketTasks, completeTask, patchComplainant,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
+  type ComplainantPatchPayload,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
@@ -21,7 +22,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
 } from "@/lib/mobile-constants";
 
 // ── SLA urgency helpers ───────────────────────────────────────────────────────
@@ -225,20 +226,133 @@ function FilesPanel({
   );
 }
 
+// ── Complainant edit sheet ────────────────────────────────────────────────────
+
+const EDIT_FIELDS: { key: keyof ComplainantPatchPayload; label: string }[] = [
+  { key: "complainant_address",      label: "Address" },
+  { key: "complainant_village",      label: "Village / Tole" },
+  { key: "complainant_ward",         label: "Ward No." },
+  { key: "complainant_municipality", label: "Municipality / VDC" },
+  { key: "complainant_district",     label: "District" },
+  { key: "complainant_province",     label: "Province" },
+  { key: "complainant_email",        label: "Email" },
+];
+
+function EditComplainantSheet({
+  ticket,
+  pii,
+  onClose,
+  onSaved,
+}: {
+  ticket: TicketDetail;
+  pii: GrievancePii | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<ComplainantPatchPayload>({
+    complainant_address:      (pii?.address      as string | undefined) ?? "",
+    complainant_municipality: (pii?.municipality as string | undefined) ?? "",
+    complainant_district:     (pii?.district     as string | undefined) ?? "",
+    complainant_province:     (pii?.province     as string | undefined) ?? "",
+    complainant_email:        pii?.email ?? "",
+    complainant_village:      "",
+    complainant_ward:         "",
+  });
+  const [saving, setSaving]   = useState(false);
+  const [error,  setError]    = useState<string | null>(null);
+
+  async function handleSave() {
+    // Only send non-empty fields
+    const payload: ComplainantPatchPayload = {};
+    for (const { key } of EDIT_FIELDS) {
+      const val = form[key];
+      if (val && val.trim()) payload[key] = val.trim();
+    }
+    if (Object.keys(payload).length === 0) { onClose(); return; }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await patchComplainant(ticket.ticket_id, payload);
+      onSaved();
+      onClose();
+    } catch {
+      setError("Save failed — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-800">Edit complainant info</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+        </div>
+
+        <p className="text-xs text-gray-400 mb-4">
+          Name and phone number cannot be changed here — contact the chatbot admin.
+          All changes are logged in the case timeline.
+        </p>
+
+        <div className="space-y-3">
+          {EDIT_FIELDS.map(({ key, label }) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+              <input
+                type={key === "complainant_email" ? "email" : "text"}
+                value={form[key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder={`Enter ${label.toLowerCase()}`}
+              />
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2.5 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Complainant card ───────────────────────────────────────────────────────────
 
 function ComplainantCard({
   ticket,
   onRevealOriginal,
+  onComplainantUpdated,
 }: {
   ticket: TicketDetail;
   onRevealOriginal: () => void;
+  onComplainantUpdated?: () => void;
 }) {
   const [pii, setPii]               = useState<GrievancePii | null>(null);
   const [piiLoading, setPiiLoading] = useState(false);
   const [piiError, setPiiError]     = useState<string | null>(null);
   const [phoneRevealed, setPhoneRevealed]   = useState(false);
   const [phoneRevealing, setPhoneRevealing] = useState(false);
+  const [editOpen, setEditOpen]     = useState(false);
 
   function loadPii() {
     setPiiLoading(true);
@@ -258,62 +372,92 @@ function ComplainantCard({
     setPhoneRevealing(false);
   }
 
+  function handleSaved() {
+    loadPii();
+    onComplainantUpdated?.();
+  }
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">Complainant</h2>
-      {piiLoading ? (
-        <div className="text-xs text-gray-400">Loading…</div>
-      ) : piiError ? (
-        <div className="text-xs space-y-2">
-          <div className="text-gray-600">
-            <span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}
-          </div>
-          <div className="text-gray-400 italic">{piiError}</div>
-          <button
-            onClick={loadPii}
-            className="text-xs text-blue-500 hover:text-blue-700 underline"
-          >
-            ↺ Retry
-          </button>
-        </div>
-      ) : (
-        <div className="text-xs space-y-1.5 text-gray-700">
-          {pii?.complainant_name && <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>}
-          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-gray-400">Phone:</span>
-            {phoneRevealed && pii?.phone_number ? (
-              <span className="font-mono">{pii.phone_number}</span>
-            ) : (
-              <>
-                <span className="text-gray-300 font-mono">••••••••</span>
-                <button onClick={handlePhoneReveal} disabled={phoneRevealing}
-                  className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
-                >
-                  {phoneRevealing ? "…" : "Reveal"}
-                </button>
-              </>
-            )}
-          </div>
-          {pii?.email && <div><span className="text-gray-400">Email:</span> {pii.email}</div>}
-          <div>
-            <span className="text-gray-400">Session:</span>{" "}
-            {ticket.session_id
-              ? <span className="text-green-600">✅ Active</span>
-              : <span className="text-red-500">❌ Expired — SMS fallback</span>}
-          </div>
-          {ticket.grievance_id && (
-            <div className="border-t border-gray-100 pt-2 mt-1">
-              <button onClick={onRevealOriginal}
-                className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
-              >
-                📄 Reveal original statement
-              </button>
-            </div>
+    <>
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Complainant</h2>
+          {ticket.complainant_id && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              ✏️ Edit
+            </button>
           )}
         </div>
+        {piiLoading ? (
+          <div className="text-xs text-gray-400">Loading…</div>
+        ) : piiError ? (
+          <div className="text-xs space-y-2">
+            <div className="text-gray-600">
+              <span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}
+            </div>
+            <div className="text-gray-400 italic">{piiError}</div>
+            <button onClick={loadPii} className="text-xs text-blue-500 hover:text-blue-700 underline">
+              ↺ Retry
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs space-y-1.5 text-gray-700">
+            {pii?.complainant_name && <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>}
+            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-400">Phone:</span>
+              {phoneRevealed && pii?.phone_number ? (
+                <span className="font-mono">{pii.phone_number}</span>
+              ) : (
+                <>
+                  <span className="text-gray-300 font-mono">••••••••</span>
+                  <button onClick={handlePhoneReveal} disabled={phoneRevealing}
+                    className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
+                  >
+                    {phoneRevealing ? "…" : "Reveal"}
+                  </button>
+                </>
+              )}
+            </div>
+            {pii?.email && <div><span className="text-gray-400">Email:</span> {pii.email}</div>}
+            {pii?.address && <div><span className="text-gray-400">Address:</span> {pii.address}</div>}
+            {(pii as GrievancePii & { municipality?: string })?.municipality && (
+              <div><span className="text-gray-400">Municipality:</span> {(pii as GrievancePii & { municipality?: string }).municipality}</div>
+            )}
+            {(pii as GrievancePii & { district?: string })?.district && (
+              <div><span className="text-gray-400">District:</span> {(pii as GrievancePii & { district?: string }).district}</div>
+            )}
+            <div>
+              <span className="text-gray-400">Session:</span>{" "}
+              {ticket.session_id
+                ? <span className="text-green-600">✅ Active</span>
+                : <span className="text-red-500">❌ Expired — SMS fallback</span>}
+            </div>
+            {ticket.grievance_id && (
+              <div className="border-t border-gray-100 pt-2 mt-1">
+                <button onClick={onRevealOriginal}
+                  className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
+                >
+                  📄 Reveal original statement
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editOpen && (
+        <EditComplainantSheet
+          ticket={ticket}
+          pii={pii}
+          onClose={() => setEditOpen(false)}
+          onSaved={handleSaved}
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -636,20 +780,23 @@ export default function TicketDetailPage() {
   const timeLabel   = slaTimeLabel(slaHours, slaBreached, sla?.resolution_time_days);
   const slaCls      = slaColorCls(slaHours, slaBreached);
 
+  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
+
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
     switch (activeFilter) {
-      case "all":    return ticket.events;
-      case "mine":   return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
-      case "tasks":  return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
-      case "system": return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
-      default:       return ticket.events.filter((e) => e.created_by_user_id === activeFilter);
+      case "all":        return ticket.events;
+      case "mine":       return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
+      case "owner":      return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
+      case "supervisor": return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
+      case "observers":  return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
+      case "tasks":      return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
+      default:           return ticket.events;
     }
-  }, [ticket, activeFilter, currentUserId]);
+  }, [ticket, activeFilter, currentUserId, viewerIds]);
 
   const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
-  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
 
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];
@@ -960,6 +1107,8 @@ export default function TicketDetailPage() {
             <FilterChips
               events={ticket.events}
               currentUserId={currentUserId}
+              assignedToUserId={ticket.assigned_to_user_id ?? null}
+              viewerIds={viewerIds}
               active={activeFilter}
               pendingTaskCount={pendingTaskCount}
               onChange={setActiveFilter}
@@ -1052,7 +1201,7 @@ export default function TicketDetailPage() {
 
           {/* Complainant + Attachments — side by side: compact reference cards */}
           <div className="grid grid-cols-2 gap-3">
-            <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} />
+            <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} onComplainantUpdated={load} />
             <FilesPanel
               ticketId={ticket.ticket_id}
               onBeforeDownload={ensureAcknowledged}
