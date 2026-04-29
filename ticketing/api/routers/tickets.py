@@ -1273,19 +1273,32 @@ def get_ticket_pii(
         return {}
 
     try:
-        detail = get_grievance_detail(ticket.grievance_id)
+        raw = get_grievance_detail(ticket.grievance_id)
     except Exception as exc:
         logger.warning("get_ticket_pii: backend unavailable — %s", exc)
         raise HTTPException(status_code=503, detail=f"Grievance backend unavailable: {exc}")
 
-    # Return only the safe PII subset (name + contact) — not the full grievance narrative,
-    # which requires a vault reveal session (POST /tickets/{id}/reveal).
+    # get_grievance_detail returns the full API envelope:
+    #   {"status": "SUCCESS", "data": {"grievance": {...complainant fields...}, ...}}
+    # Unwrap to the grievance dict where PII fields live.
+    grievance = (raw.get("data") or {}).get("grievance") or raw  # raw fallback for any future shape change
+
+    # Return the safe PII subset (name + contact + location).
+    # Phone is included here; the UI gates its display behind the "Reveal contact" button.
+    # The full grievance narrative requires a vault reveal session (POST /tickets/{id}/reveal).
     return {
         "grievance_id": ticket.grievance_id,
-        "complainant_name": detail.get("complainant_name"),
-        "phone_number": detail.get("phone_number"),
-        "email": detail.get("email"),
-        "address": detail.get("address"),
+        # Identity
+        "complainant_name": grievance.get("complainant_full_name"),
+        "phone_number":     grievance.get("complainant_phone"),
+        "email":            grievance.get("complainant_email"),
+        # Location (used by complainant edit form pre-fill)
+        "address":          grievance.get("complainant_address"),
+        "village":          grievance.get("complainant_village"),
+        "ward":             grievance.get("complainant_ward"),
+        "municipality":     grievance.get("complainant_municipality"),
+        "district":         grievance.get("complainant_district"),
+        "province":         grievance.get("complainant_province"),
     }
 
 
