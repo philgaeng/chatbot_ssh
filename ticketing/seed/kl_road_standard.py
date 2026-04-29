@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.country import Location
 from ticketing.models.organization import Organization
+from ticketing.models.project import Project
 from ticketing.models.settings import Settings
 from ticketing.models.user import Role
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
@@ -349,6 +350,40 @@ def seed_settings(db: Session) -> None:
     db.flush()
 
 
+def seed_project(db: Session) -> None:
+    """
+    Ensure the KL_ROAD Project record exists with the correct chatbot_base_url.
+
+    project.chatbot_base_url tells the ticketing API where to proxy complainant
+    edits for this project.  In a multi-country deployment each project gets its
+    own local chatbot URL.  'http://backend:5001' is the Docker-network alias for
+    the Nepal chatbot backend.
+    """
+    from sqlalchemy import select
+    existing = db.execute(
+        select(Project).where(Project.short_code == "KL_ROAD")
+    ).scalar_one_or_none()
+
+    if existing:
+        # Backfill chatbot_base_url if it was seeded before this field existed
+        if not existing.chatbot_base_url:
+            existing.chatbot_base_url = "http://backend:5001"
+            logger.info("  ~ project KL_ROAD: backfilled chatbot_base_url")
+        else:
+            logger.info("  = project already exists: KL_ROAD")
+    else:
+        db.add(Project(
+            short_code="KL_ROAD",
+            country_code="NP",
+            name="Kakarbhitta–Laukahi Road (ADB 52097-003)",
+            description="KL Road GRM project — Province 1, Nepal",
+            chatbot_base_url="http://backend:5001",
+            is_active=True,
+        ))
+        logger.info("  + project: KL_ROAD")
+    db.flush()
+
+
 def seed_standard(db: Session | None = None) -> None:
     """Run all standard seed steps inside a single transaction."""
     own_session = db is None
@@ -362,6 +397,7 @@ def seed_standard(db: Session | None = None) -> None:
         seed_roles(db)
         seed_standard_workflow(db)
         seed_workflow_assignment(db)
+        seed_project(db)
         seed_settings(db)
         db.commit()
         logger.info("Standard seed complete.")
