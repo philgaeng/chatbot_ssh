@@ -196,7 +196,7 @@ UTTERANCE_MAPPING = {
                     'seah-focal': {
                         'reporter': {
                             1: {
-                                'en': "As a SEAH focal point, please enter your phone number for reporter contact. Nepali phone number starts with 9 and should be 10 digits long. You can skip if you do not want to share it.",
+                                'en': "As a SEAH focal point, please enter your phone number. Nepali phone number starts with 9 and should be 10 digits long. This is required.",
                                 'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टर सम्पर्कका लागि आफ्नो फोन नम्बर दिनुहोस्। नेपाली नम्बर 9 बाट सुरु भई 10 अंकको हुनुपर्छ। नचाहेमा छोड्न सक्नुहुन्छ।"
                             },
                             2: {
@@ -256,7 +256,7 @@ UTTERANCE_MAPPING = {
         'action_ask_complainant_municipality_temp': {
             'utterances': {
                 1: {
-                    'en': "Please enter a valid municipality name in {district}, {province} (at least 3 characters) or Skip to skip",
+                    'en': "To provide the Municipality where the incident happened, please enter a valid municipality name. You may Skip if you do not want to share or you do not know the location.",
                     'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
                 }
             },
@@ -476,11 +476,11 @@ UTTERANCE_MAPPING = {
                 'seah-focal': {
                     'reporter': {
                         1: {
-                            'en': "As a SEAH focal point, please enter your full name as the reporting person. You can skip this if needed.",
+                            'en': "As a SEAH focal point, please enter your full name as the reporting person.",
                             'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टरको हैसियतले आफ्नो पूरा नाम दिनुहोस्। आवश्यक परे छोड्न सक्नुहुन्छ।"
                         },
                         2: {
-                            'en': "As a SEAH focal point, please enter your full name as the reporting person. You can skip this if needed.",
+                            'en': "As a SEAH focal point, please enter your full name as the reporting person.",
                             'ne': "SEAH फोकल पर्सनको रूपमा रिपोर्टरको हैसियतले आफ्नो पूरा नाम दिनुहोस्। आवश्यक परे छोड्न सक्नुहुन्छ।"
                         }
                     },
@@ -503,7 +503,7 @@ UTTERANCE_MAPPING = {
         'action_ask_complainant_email_temp': {
             'utterances': {
                 1: {
-                    'en': "Please enter your contact email. You can skip this if you prefer to remain anonymous.",
+                    'en': "Please enter your email address so we can contact you for any needed follow-up. Skip if you do not want to share it.",
                     'ne': "कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
                 }
             },
@@ -768,11 +768,11 @@ UTTERANCE_MAPPING = {
         'action_seah_outro': {
             'utterances': {
                 1: {
-                    'en': "Thank you. Your SEAH focal-point report is logged. A handler may contact you only through channels you confirmed.",
+                    'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted. Your reference number is available in this chat.",
                     'ne': "धन्यवाद। तपाईंको SEAH फोकल-पोइन्ट रिपोर्ट दर्ता भयो। तपाईंले पुष्टि गर्नुभएको माध्यमबाट मात्र सम्पर्क हुन सक्छ।",
                 },
                 2: {
-                    'en': "Thank you. Your report is confidential. For safety, consider contacting a SEAH support point (details below). We may have limited ways to reach you.",
+                    'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted. Here are support services that may help victim-survivors: [list to be provided].",
                     'ne': "धन्यवाद। तपाईंको रिपोर्ट गोप्य छ। सुरक्षाका लागि नजिकको SEAH सहयोग बिन्दुमा सम्पर्क गर्न सक्नुहुन्छ (विवरण तल)।",
                 },
                 3: {
@@ -1217,12 +1217,12 @@ UTTERANCE_MAPPING = {
         'action_ask_form_seah_1_sensitive_issues_follow_up': {
             'utterances': {
                 1: {
-                    'en': "REPLACE_ME: You are entering the confidential SEAH/SEIA intake channel. Choose one path to continue. This chatbot does not send SEAH updates by SMS.",
-                    'ne': "REPLACE_ME: तपाईं गोप्य SEAH/SEIA दर्ता च्यानलमा प्रवेश गर्दै हुनुहुन्छ। अगाडि बढ्न एउटा बाटो छान्नुहोस्। यस च्याटबटले SEAH अद्यावधिक SMS बाट पठाउँदैन।"
+                    'en': "Would you like to file this report anonymously or with contact details?",
+                    'ne': "यो उजुरी गुमनाम रूपमा दर्ता गर्न चाहनुहुन्छ कि सम्पर्क विवरणसहित?"
                 },
                 2: {
-                    'en': "Please choose SEAH focal point, anonymous grievance, or grievance with contact details.",
-                    'ne': "कृपया SEAH फोकल पोइन्ट, गुमनाम उजुरी, वा सम्पर्क विवरण सहित उजुरीमध्ये छान्नुहोस्।"
+                    'en': "Please choose anonymous grievance or grievance with contact details.",
+                    'ne': "कृपया गुमनाम उजुरी वा सम्पर्क विवरण सहित उजुरी छान्नुहोस्।"
                 }
             },
             'buttons': {
@@ -1230,15 +1230,33 @@ UTTERANCE_MAPPING = {
             }
         },
         'action_ask_form_seah_1_seah_victim_survivor_role': {
-            'utterances': {1: {'en': "Are you the victim/survivor?", 'ne': "के तपाईं पीडित/उत्तरजीवी हुनुहुन्छ?"}},
+            'utterances': {1: {'en': "Are you:", 'ne': "तपाईं कुन भूमिका हुनुहुन्छ?"}},
             'buttons': {1: BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE}
+        },
+        'action_ask_form_seah_1_seah_witness_victim_consent_to_file': {
+            'utterances': {
+                1: {
+                    'en': "Did the victim-survivor agree that you file this complaint?",
+                    'ne': "के पीडित/उत्तरजीवीले तपाईंलाई यो उजुरी दर्ता गर्न सहमति दिनुभएको छ?"
+                }
+            },
+            'buttons': {1: BUTTONS_SEAH_YES_NO}
+        },
+        'action_ask_form_seah_1_seah_witness_immediate_danger': {
+            'utterances': {
+                1: {
+                    'en': "Is there an immediate danger to the life of the victim-survivor?",
+                    'ne': "के पीडित/उत्तरजीवीको ज्यानमा तत्काल खतरा छ?"
+                }
+            },
+            'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
     },
     'form_seah_2': {
         'action_ask_form_seah_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {
-                    'en': "Please provide a brief summary of the incident. You may write 'skipped' if you do not want to share details here.",
+                    'en': "Please provide a brief summary of the incident.",
                     'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्न सक्नुहुन्छ।"
                 },
                 2: {
@@ -1246,6 +1264,10 @@ UTTERANCE_MAPPING = {
 Do you want to add more details before submission?""",
                     'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
 के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
+                },
+                3: {
+                    'en': "Please add more details.",
+                    'ne': "कृपया थप विवरण थप्नुहोस्।"
                 }
             },
             'buttons': {
@@ -1254,8 +1276,8 @@ Do you want to add more details before submission?""",
             }
         },
         'action_ask_form_seah_2_seah_project_identification': {
-            'utterances': {1: {'en': "Please provide the ADB project/site name, or choose an option.", 'ne': "कृपया ADB आयोजना/साइटको नाम दिनुहोस्, वा विकल्प छान्नुहोस्।"}},
-            'buttons': {1: BUTTONS_SEAH_PROJECT_IDENTIFICATION}
+            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति ADB आयोजनामा कार्यरत छन्?"}},
+            'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_ask_form_seah_2_seah_contact_consent_channel': {
             'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "फलो-अपका लागि सम्पर्क गर्न सहमति छ? एक च्यानल छान्नुहोस्।"}},
@@ -1276,8 +1298,8 @@ Do you want to add more details before submission?""",
             'buttons': {1: BUTTONS_SEAH_IDENTITY_MODE}
         },
         'action_ask_form_seah_focal_point_2_seah_project_identification': {
-            'utterances': {1: {'en': "Please provide the name of the ADB project, or choose an option.", 'ne': "कृपया ADB आयोजनाको नाम दिनुहोस्, वा विकल्प छान्नुहोस्।"}},
-            'buttons': {1: BUTTONS_SEAH_PROJECT_IDENTIFICATION}
+            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति ADB आयोजनामा कार्यरत छन्?"}},
+            'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_survivor_risks': {
             'utterances': {1: {'en': "What additional risks to health, safety, or wellbeing are present? Choose an option below, or type your own response.", 'ne': "स्वास्थ्य, सुरक्षा वा कल्याणमा के थप जोखिमहरू छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
@@ -1302,7 +1324,7 @@ Do you want to add more details before submission?""",
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {
-                    'en': "Please provide a brief summary of the incident. You may write 'skipped' if you do not want to share details here.",
+                    'en': "Please provide a brief summary of the incident.",
                     'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्नुहोस्।"
                 },
                 2: {
@@ -1310,6 +1332,10 @@ Do you want to add more details before submission?""",
 Do you want to add more details before submission?""",
                     'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
 के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
+                },
+                3: {
+                    'en': "Please add more details.",
+                    'ne': "कृपया थप विवरण थप्नुहोस्।"
                 }
             },
             'buttons': {
@@ -1328,11 +1354,11 @@ Do you want to add more details before submission?""",
         'action_outro_sensitive_issues': {
             'utterances': {
                 1: {
-                    'en': "REPLACE_ME: Thank you. Your confidential SEAH intake has been recorded. A designated SEAH case handler may contact you only through your selected consent channel.",
+                    'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted.",
                     'ne': "REPLACE_ME: धन्यवाद। तपाईंको गोप्य SEAH दर्ता रेकर्ड गरिएको छ। तोकिएको SEAH केस ह्यान्डलरले तपाईंले अनुमति दिएको च्यानलबाट मात्र सम्पर्क गर्न सक्छ।"
                 },
                 2: {
-                    'en': "REPLACE_ME: Thank you. This does not appear to be an ADB project. We will handle your report confidentially and share external referral/support contacts.",
+                    'en': "Thank you. This does not appear to be an ADB project. We will still handle your report confidentially and share referral/support contacts.",
                     'ne': "REPLACE_ME: धन्यवाद। यो ADB आयोजना जस्तो देखिँदैन। हामी तपाईंको रिपोर्ट गोप्य रूपमा व्यवस्थापन गर्नेछौं र बाह्य रेफरल/सहयोग सम्पर्क उपलब्ध गराउनेछौं।"
                 }
             },

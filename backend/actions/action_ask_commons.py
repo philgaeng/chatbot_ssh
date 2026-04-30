@@ -172,6 +172,12 @@ class ActionAskComplainantPhone(ProfileAwareAskAction):
         else:
             message = self._get_profile_utterance(tracker, 1) or self.get_utterance(1)
             buttons = self.get_buttons(1)
+        if (
+            self._get_ask_profile(tracker) == "seah-focal"
+            and self._get_focal_prompt_phase(tracker) == "reporter"
+        ):
+            # Focal reporter phone is mandatory.
+            buttons = []
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
 
@@ -322,6 +328,12 @@ class ActionAskComplainantFullName(ProfileAwareAskAction):
         else:
             message = self._get_profile_utterance(tracker, 2) or self.get_utterance(2)
         buttons = self.get_buttons(1)
+        if (
+            self._get_ask_profile(tracker) == "seah-focal"
+            and tracker.get_slot("seah_focal_stage") == "bootstrap_reporter_contact"
+        ):
+            # Focal reporter name is mandatory.
+            buttons = []
         dispatcher.utter_message(text=message, buttons=buttons)
         return []
     

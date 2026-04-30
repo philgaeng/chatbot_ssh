@@ -405,9 +405,14 @@ class ActionSubmitSeah(BaseActionSubmit):
                 raise Exception(result.get("error", "SEAH submission failed"))
 
             # INTEGRATION POINT: chatbot → ticketing webhook (fire-and-forget, never blocks)
+            complainant_ref = (
+                result.get("complainant_id")
+                or grievance_data.get("complainant_id")
+                or tracker.get_slot("complainant_id")
+            )
             dispatch_ticket(
                 grievance_id=result.get("grievance_id") or self.grievance_id,
-                complainant_id=self.complainant_id,
+                complainant_id=complainant_ref,
                 session_id=tracker.sender_id,
                 is_seah=True,
                 priority="HIGH",

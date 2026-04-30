@@ -472,6 +472,14 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
         if value in ("skip", self.SKIP_VALUE):
             value = "cannot_specify"
 
+        if value in ("yes", "no"):
+            normalized = "yes" if value == "yes" else "no"
+            return {
+                "seah_project_identification": normalized,
+                "seah_not_adb_project": normalized == "no",
+                "project_uuid": None,
+            }
+
         if value in ("cannot_specify", "not_adb_project"):
             return {
                 "seah_project_identification": value,
