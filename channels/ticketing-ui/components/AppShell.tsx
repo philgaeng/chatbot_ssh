@@ -5,17 +5,27 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
+import {
+  IconQueue, IconAllTickets, IconEscalated, IconReports,
+  IconSettings, IconHelp, IconBell, IconSignOut, IconLock,
+  type LucideProps,
+} from "@/lib/icons";
 
-const NAV = [
-  { href: "/queue",     label: "My Queue",    icon: "🎫", badge: "action"   },
-  { href: "/tickets",   label: "All Tickets", icon: "📋", badge: null       },
-  { href: "/escalated", label: "Escalated",   icon: "🔺", badge: "escalated" },
+type NavIcon = React.ComponentType<LucideProps>;
+
+const NAV: Array<
+  | { href: string; label: string; Icon: NavIcon; badge: "action" | "escalated" | null; adminOnly?: boolean }
+  | null
+> = [
+  { href: "/queue",     label: "My Queue",    Icon: IconQueue,       badge: "action"    },
+  { href: "/tickets",   label: "All Tickets", Icon: IconAllTickets,  badge: null        },
+  { href: "/escalated", label: "Escalated",   Icon: IconEscalated,   badge: "escalated" },
   null, // divider
-  { href: "/reports",  label: "Reports",     icon: "📊", badge: null       },
+  { href: "/reports",   label: "Reports",     Icon: IconReports,     badge: null        },
   null,
-  { href: "/settings", label: "Settings",    icon: "⚙️",  badge: null, adminOnly: true },
-  { href: "/help",     label: "Help",        icon: "❓", badge: null       },
-] as const;
+  { href: "/settings",  label: "Settings",    Icon: IconSettings,    badge: null, adminOnly: true },
+  { href: "/help",      label: "Help",        Icon: IconHelp,        badge: null        },
+];
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login", "/auth/callback"];
@@ -44,7 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="text-sm text-gray-400">Loading…</div>
+        <div className="text-sm text-gray-600">Loading…</div>
       </div>
     );
   }
@@ -80,7 +90,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     : "text-slate-300 hover:bg-slate-700 hover:text-white"
                 }`}
               >
-                <span className="text-base leading-none">{item.icon}</span>
+                <item.Icon size={18} className="shrink-0" />
                 <span className="flex-1">{item.label}</span>
                 {badgeCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
@@ -96,9 +106,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-slate-700">
           <button
             onClick={signOut}
-            className="w-full text-left text-sm text-slate-400 hover:text-red-400 transition-colors px-3 py-2 rounded"
+            className="w-full text-left text-sm text-slate-400 hover:text-red-400 transition-colors px-3 py-2 rounded flex items-center gap-2"
           >
-            ↪ Sign out
+            <IconSignOut size={15} />
+            Sign out
           </button>
         </div>
       </aside>
@@ -107,21 +118,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
         <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-600">
             {canSeeSeah && (
-              <span className="mr-3 text-red-600 font-medium text-xs">🔒 SEAH access</span>
+              <span className="mr-3 text-red-700 font-semibold text-xs flex items-center gap-1">
+                <IconLock size={12} />
+                SEAH access
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative text-gray-400 hover:text-gray-600">
-              🔔
+            <button className="relative text-gray-600 hover:text-gray-800" aria-label="Notifications">
+              <IconBell size={18} />
               {unseenCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
                   {unseenCount > 9 ? "9+" : unseenCount}
                 </span>
               )}
             </button>
-            <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+            <span className="text-sm text-gray-700">{user?.name ?? user?.email}</span>
           </div>
         </header>
 

@@ -14,6 +14,14 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import {
+  IconBack, IconAcknowledge, IconEscalateAction, IconResolve, IconClose2,
+  IconGrcConvene, IconGrcDecide, IconNote, IconReply, IconUser, IconCreated,
+  IconComplainantNotified, IconEscalated, IconTranslation, IconReveal,
+  IconFindings, IconAttachment, IconImageFile, IconUpload, IconRefresh,
+  IconLock, IconBell, IconClose,
+  type LucideProps,
+} from "@/lib/icons";
 
 // ── Workflow level stepper ────────────────────────────────────────────────────
 
@@ -56,11 +64,29 @@ function WorkflowStepper({ currentStepKey }: { currentStepKey: string }) {
 
 // ── Event timeline ────────────────────────────────────────────────────────────
 
-const EVENT_ICON: Record<string, string> = {
-  CREATED: "🎫", ACKNOWLEDGED: "✅", ESCALATED: "🔺", RESOLVED: "🏁",
-  CLOSED: "🔒", NOTE_ADDED: "📝", REPLY_SENT: "💬", ASSIGNED: "👤",
-  GRC_CONVENED: "🏛️", GRC_DECIDED: "⚖️", GRC_HEARING_NOTIFICATION: "🔔",
-  COMPLAINANT_NOTIFIED: "📱", SLA_BREACH_FINAL_STEP: "⚠️",
+type IconComponent = React.ComponentType<LucideProps>;
+
+// Map event types → Lucide icon components + tailwind color for the icon container
+const EVENT_ICON_MAP: Record<string, { Icon: IconComponent; dot: string }> = {
+  CREATED:                    { Icon: IconCreated,            dot: "bg-blue-100 text-blue-700"   },
+  ACKNOWLEDGED:               { Icon: IconAcknowledge,        dot: "bg-green-100 text-green-700" },
+  ESCALATED:                  { Icon: IconEscalateAction,     dot: "bg-amber-100 text-amber-700" },
+  RESOLVED:                   { Icon: IconResolve,            dot: "bg-green-100 text-green-700" },
+  CLOSED:                     { Icon: IconClose2,             dot: "bg-gray-100 text-gray-600"   },
+  NOTE_ADDED:                 { Icon: IconNote,               dot: "bg-gray-100 text-gray-700"   },
+  REPLY_SENT:                 { Icon: IconReply,              dot: "bg-blue-100 text-blue-700"   },
+  ASSIGNED:                   { Icon: IconUser,               dot: "bg-gray-100 text-gray-700"   },
+  GRC_CONVENED:               { Icon: IconGrcConvene,         dot: "bg-violet-100 text-violet-700" },
+  GRC_DECIDED:                { Icon: IconGrcDecide,          dot: "bg-violet-100 text-violet-700" },
+  GRC_HEARING_NOTIFICATION:   { Icon: IconBell,               dot: "bg-violet-100 text-violet-700" },
+  COMPLAINANT_NOTIFIED:       { Icon: IconComplainantNotified, dot: "bg-blue-100 text-blue-700"  },
+  SLA_BREACH_FINAL_STEP:      { Icon: IconEscalated,          dot: "bg-red-100 text-red-700"     },
+};
+
+// Fallback for unknown event types
+const EVENT_ICON_DEFAULT: { Icon: IconComponent; dot: string } = {
+  Icon: IconCreated,
+  dot: "bg-gray-100 text-gray-600",
 };
 
 function EventTimeline({
@@ -79,10 +105,11 @@ function EventTimeline({
     <div className="space-y-3">
       {[...events].reverse().map((e) => {
         const translationEn = (e.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
+        const { Icon, dot } = EVENT_ICON_MAP[e.event_type] ?? EVENT_ICON_DEFAULT;
         return (
           <div key={e.event_id} className="flex gap-3">
-            <div className="shrink-0 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm">
-              {EVENT_ICON[e.event_type] ?? "•"}
+            <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${dot}`}>
+              <Icon size={14} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
@@ -90,29 +117,31 @@ function EventTimeline({
                   {e.event_type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
                 </span>
                 {e.new_status_code && (
-                  <span className="text-xs text-gray-400">→ {e.new_status_code}</span>
+                  <span className="text-xs text-gray-600">→ {e.new_status_code}</span>
                 )}
-                <span className="text-xs text-gray-400 ml-auto">
+                <span className="text-xs text-gray-600 ml-auto">
                   {new Date(e.created_at).toLocaleString()}
                 </span>
               </div>
               {e.note && (
-                <div className={`mt-1 text-sm text-gray-600 ${e.event_type === "NOTE_ADDED" ? "italic" : ""}`}>
+                <div className={`mt-1 text-sm text-gray-700 ${e.event_type === "NOTE_ADDED" ? "italic" : ""}`}>
                   {e.event_type === "NOTE_ADDED" && (
-                    <span className="text-xs text-gray-400 mr-1">🔒 Internal:</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-600 mr-1">
+                      <IconLock size={11} />Internal:
+                    </span>
                   )}
                   {e.note}
                 </div>
               )}
               {/* Inline translation chip — only shown for English-first users (showTranslations=true) */}
               {showTranslations && e.event_type === "NOTE_ADDED" && translationEn && translationEn !== e.note && (
-                <div className="mt-1.5 bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
-                  <span className="text-xs text-blue-500 font-medium mr-1.5">🌐 Translated</span>
+                <div className="mt-1.5 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 flex items-start gap-1.5">
+                  <IconTranslation size={13} className="text-blue-600 shrink-0 mt-0.5" />
                   <span className="text-sm text-blue-800 italic">{translationEn}</span>
                 </div>
               )}
               {e.created_by_user_id && (
-                <div className="text-xs text-gray-400 mt-0.5">by {e.created_by_user_id}</div>
+                <div className="text-xs text-gray-600 mt-0.5">by {e.created_by_user_id}</div>
               )}
             </div>
           </div>
@@ -145,13 +174,16 @@ function TranslationPanel({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <span className="text-sm font-semibold text-blue-700">🌐 Translation Review</span>
+        <span className="text-sm font-semibold text-blue-700 flex items-center gap-1.5">
+          <IconTranslation size={15} />Translation Review
+        </span>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+          className="text-gray-600 hover:text-gray-800 p-0.5 rounded"
           title="Close panel (T)"
+          aria-label="Close translation panel"
         >
-          ×
+          <IconClose size={16} />
         </button>
       </div>
 
@@ -255,8 +287,9 @@ function FilesPanel({
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  const fileIcon = (type: string | null) =>
-    type === "image" ? "🖼️" : type === "pdf" ? "📄" : "📎";
+  // Returns icon component for file type
+  const FileTypeIcon = ({ type }: { type: string | null }) =>
+    type === "image" ? <IconImageFile size={14} /> : <IconReveal size={14} />;
 
   async function handleComplainantDownload(fileId: string) {
     await onBeforeDownload();
@@ -302,7 +335,7 @@ function FilesPanel({
                 onClick={() => handleComplainantDownload(f.file_id)}
                 className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group w-full text-left"
               >
-                <span>{fileIcon(f.file_type)}</span>
+                <FileTypeIcon type={f.file_type} />
                 <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
                 <span className="text-gray-400 shrink-0">{formatSize(f.file_size)}</span>
               </button>
@@ -324,7 +357,7 @@ function FilesPanel({
                   onClick={() => window.open(getOfficerAttachmentUrl(f.file_id), "_blank", "noopener,noreferrer")}
                   className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 group shrink-0"
                 >
-                  <span>{fileIcon(f.file_type)}</span>
+                  <FileTypeIcon type={f.file_type} />
                   <span className="group-hover:underline max-w-[120px] truncate">{f.file_name}</span>
                   <span className="text-gray-400">{formatSize(f.file_size)}</span>
                 </button>
@@ -361,7 +394,7 @@ function FilesPanel({
             disabled={!selectedFile || uploading}
             className="w-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded px-2 py-1.5 disabled:opacity-50 transition font-medium"
           >
-            {uploading ? "Uploading…" : "📎 Upload"}
+            {uploading ? "Uploading…" : <span className="flex items-center justify-center gap-1.5"><IconUpload size={13} />Upload</span>}
           </button>
         </div>
       )}
@@ -532,16 +565,16 @@ function FindingsCard({
   return (
     <div className="bg-white rounded-lg border border-blue-200 p-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide">
-          🧠 Findings
+        <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide flex items-center gap-1.5">
+          <IconFindings size={15} />Findings
         </h2>
         <button
           onClick={handleRegenerate}
           disabled={regenerating}
           title="Regenerate AI summary"
-          className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 underline"
+          className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 flex items-center gap-1"
         >
-          {regenerating ? "Queuing…" : "↻ Regenerate"}
+          <IconRefresh size={13} />{regenerating ? "Queuing…" : "Regenerate"}
         </button>
       </div>
 
@@ -642,27 +675,27 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
           {/* Acknowledge — shown for OPEN or ESCALATED (L2 pickup) */}
           {(status === "OPEN" || isEscalated) && (
             <button onClick={() => act("ACKNOWLEDGE")} disabled={loading}
-              className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
-              ✅ Acknowledge
+              className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1.5`}>
+              <IconAcknowledge size={15} />Acknowledge
             </button>
           )}
           {/* Escalate / Resolve / Close — not available while ESCALATED (must acknowledge first) */}
           {!isClosed && !isEscalated && (
             <button onClick={() => act("ESCALATE")} disabled={loading}
-              className={`${btnBase} bg-orange-500 text-white hover:bg-orange-600`}>
-              🔺 Escalate
+              className={`${btnBase} bg-amber-600 text-white hover:bg-amber-700 flex items-center gap-1.5`}>
+              <IconEscalateAction size={15} />Escalate
             </button>
           )}
           {!isClosed && !isEscalated && (
             <button onClick={() => act("RESOLVE")} disabled={loading}
-              className={`${btnBase} bg-green-600 text-white hover:bg-green-700`}>
-              🏁 Resolve
+              className={`${btnBase} bg-green-600 text-white hover:bg-green-700 flex items-center gap-1.5`}>
+              <IconResolve size={15} />Resolve
             </button>
           )}
           {!isClosed && !isEscalated && (
             <button onClick={() => act("CLOSE")} disabled={loading}
-              className={`${btnBase} bg-gray-400 text-white hover:bg-gray-500`}>
-              Close
+              className={`${btnBase} bg-gray-600 text-white hover:bg-gray-700 flex items-center gap-1.5`}>
+              <IconClose2 size={15} />Close
             </button>
           )}
 
@@ -670,13 +703,13 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
           {isGrcChair && stepKey === "LEVEL_3_GRC" && !isEscalated && status !== "GRC_HEARING_SCHEDULED" && (
             <div className="flex gap-2 items-center w-full mt-1">
               <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
-                className="text-sm border border-gray-300 rounded px-2 py-1.5" />
+                className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
               <button
                 onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })}
                 disabled={loading}
-                className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700`}
+                className={`${btnBase} bg-violet-600 text-white hover:bg-violet-700 flex items-center gap-1.5`}
               >
-                🏛️ Convene GRC
+                <IconGrcConvene size={15} />Convene GRC
               </button>
             </div>
           )}
@@ -685,16 +718,16 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
           {isGrcChair && status === "GRC_HEARING_SCHEDULED" && (
             <div className="flex gap-2 items-center w-full mt-1">
               <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
-                className="text-sm border border-gray-300 rounded px-2 py-1.5">
+                className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
                 <option value="RESOLVED">Decision: Resolved</option>
                 <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
               </select>
               <button
                 onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })}
                 disabled={loading}
-                className={`${btnBase} bg-purple-700 text-white hover:bg-purple-800`}
+                className={`${btnBase} bg-violet-700 text-white hover:bg-violet-800 flex items-center gap-1.5`}
               >
-                ⚖️ Record Decision
+                <IconGrcDecide size={15} />Record Decision
               </button>
             </div>
           )}
@@ -703,7 +736,9 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
 
       {/* Internal note — available to all officers */}
       <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Internal Note 🔒</label>
+        <label className="text-xs font-semibold text-gray-600 block mb-1 flex items-center gap-1">
+          <IconLock size={12} />Internal Note
+        </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -714,16 +749,17 @@ function ActionPanel({ ticket, roleKeys, onRefresh, ensureAcknowledged, isAssign
         <button
           onClick={() => act("NOTE")}
           disabled={!note.trim() || loading}
-          className={`mt-1 ${btnBase} bg-gray-100 text-gray-700 hover:bg-gray-200`}
+          className={`mt-1 ${btnBase} bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5`}
         >
-          Save Note
+          <IconNote size={14} />Save Note
         </button>
       </div>
 
       {/* Reply to complainant — only for the assigned officer */}
       {isAssigned && (
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Reply to Complainant 💬</label>
+          <label className="text-xs font-semibold text-gray-600 block mb-1 flex items-center gap-1">
+            <IconReply size={12} />Reply to Complainant</label>
           <textarea
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
@@ -786,32 +822,32 @@ function ComplainantCard({
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Complainant</h2>
       {piiLoading ? (
-        <div className="text-xs text-gray-400">Loading…</div>
+        <div className="text-xs text-gray-600">Loading…</div>
       ) : piiError ? (
         <div className="text-xs space-y-1 text-gray-600">
-          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-          <div className="text-xs text-gray-400 italic">{piiError}</div>
-          <div><span className="text-gray-400">Session:</span> {ticket.session_id ? "✅ Active" : "❌ Expired"}</div>
+          <div><span className="text-gray-600">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+          <div className="text-xs text-gray-600 italic">{piiError}</div>
+          <div><span className="text-gray-600">Session:</span> {ticket.session_id ? "Active" : "Expired"}</div>
         </div>
       ) : (
         <div className="text-xs space-y-1.5 text-gray-700">
           {pii?.complainant_name && (
-            <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>
+            <div><span className="text-gray-600">Name:</span> {pii.complainant_name}</div>
           )}
-          <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+          <div><span className="text-gray-600">Ref:</span> {ticket.complainant_id ?? "—"}</div>
 
           {/* Phone — hidden, audited reveal (proto: no OTP) */}
           <div className="flex items-center gap-1.5">
-            <span className="text-gray-400">Phone:</span>
+            <span className="text-gray-600">Phone:</span>
             {phoneRevealed && pii?.phone_number ? (
               <span className="font-mono">{pii.phone_number}</span>
             ) : (
               <>
-                <span className="text-gray-300 font-mono">••••••••</span>
+                <span className="text-gray-400 font-mono">••••••••</span>
                 <button
                   onClick={handlePhoneReveal}
                   disabled={phoneRevealing}
-                  className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
+                  className="text-blue-600 hover:text-blue-800 underline text-xs ml-0.5 disabled:opacity-50"
                 >
                   {phoneRevealing ? "…" : "Reveal"}
                 </button>
@@ -820,14 +856,14 @@ function ComplainantCard({
           </div>
 
           {pii?.email && (
-            <div><span className="text-gray-400">Email:</span> {pii.email}</div>
+            <div><span className="text-gray-600">Email:</span> {pii.email}</div>
           )}
-          <div>
-            <span className="text-gray-400">Session:</span>{" "}
+          <div className="flex items-center gap-1">
+            <span className="text-gray-600">Session:</span>{" "}
             {ticket.session_id ? (
-              <span className="text-green-600">✅ Active</span>
+              <span className="text-green-700 font-medium">Active</span>
             ) : (
-              <span className="text-red-500">❌ Expired — SMS fallback</span>
+              <span className="text-amber-700 font-medium">Expired — SMS fallback</span>
             )}
           </div>
 
@@ -836,10 +872,10 @@ function ComplainantCard({
             <div className="border-t border-gray-100 pt-2 mt-1">
               <button
                 onClick={onRevealOriginal}
-                className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
+                className="text-xs text-red-700 hover:text-red-900 flex items-center gap-1 font-medium"
                 title="View original grievance statement — access is audited and time-limited"
               >
-                📄 Reveal original statement
+                <IconReveal size={13} />Reveal original statement
               </button>
             </div>
           )}
@@ -949,8 +985,8 @@ export default function TicketDetailPage() {
   return (
     <div className="p-6">
       {/* Back */}
-      <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1">
-        ← Back to queue
+      <button onClick={() => router.back()} className="text-sm text-gray-600 hover:text-gray-800 mb-4 flex items-center gap-1.5 font-medium">
+        <IconBack size={15} />Back to queue
       </button>
 
       {/* Title row */}
@@ -962,11 +998,11 @@ export default function TicketDetailPage() {
             <StatusBadge code={ticket.status_code} />
             <PriorityBadge priority={ticket.priority} />
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-600 mt-1">
             {ticket.organization_id} · {ticket.location_code} · {ticket.project_code}
           </p>
         </div>
-        <div className="text-sm text-gray-400">
+        <div className="text-sm text-gray-600">
           Created {new Date(ticket.created_at).toLocaleDateString()}
         </div>
       </div>
@@ -1036,7 +1072,10 @@ export default function TicketDetailPage() {
                     : "bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600"
                 }`}
               >
-                🌐 {panelOpen ? "Hide translations" : "Review translations"}
+                <span className="flex items-center gap-1">
+                  <IconTranslation size={13} />
+                  {panelOpen ? "Hide translations" : "Review translations"}
+                </span>
               </button>
             </div>
             <EventTimeline
