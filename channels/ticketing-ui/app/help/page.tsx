@@ -1,15 +1,22 @@
 "use client";
 
+import {
+  Rocket, LayoutList, Lock, Landmark, BarChart2, LifeBuoy,
+  type LucideProps,
+} from "lucide-react";
+
 type Section = {
   title: string;
-  icon: string;
+  Icon: React.ComponentType<LucideProps>;
+  iconCls: string;
   items: { q: string; a: string }[];
 };
 
 const SECTIONS: Section[] = [
   {
     title: "Getting Started",
-    icon: "🚀",
+    Icon: Rocket,
+    iconCls: "text-blue-500",
     items: [
       {
         q: "What is GRM Ticketing?",
@@ -23,7 +30,8 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Working with Tickets",
-    icon: "🎫",
+    Icon: LayoutList,
+    iconCls: "text-indigo-500",
     items: [
       {
         q: "What do I do when a ticket arrives?",
@@ -34,8 +42,8 @@ const SECTIONS: Section[] = [
         a: "Tickets escalate automatically when the SLA deadline passes (checked every 15 minutes). You can also escalate manually at any time using the Escalate button on the ticket.",
       },
       {
-        q: "What are the SLA colours?",
-        a: "🔴 Red: overdue (SLA breached). 🟡 Yellow: < 24h remaining (critical). 🟢 Green: > 72h remaining (ok). The urgency dot on each row reflects the worst-case status.",
+        q: "What are the SLA urgency indicators?",
+        a: "A red dot means overdue (SLA breached). Orange means less than 24h remaining (critical). Yellow means less than 72h remaining (warning). Green means on track. The urgency dot on each row reflects the worst-case status.",
       },
       {
         q: "How do I reply to a complainant?",
@@ -45,11 +53,12 @@ const SECTIONS: Section[] = [
   },
   {
     title: "SEAH Cases",
-    icon: "🔒",
+    Icon: Lock,
+    iconCls: "text-red-500",
     items: [
       {
         q: "What is SEAH?",
-        a: "Sexual Exploitation, Abuse, and Harassment. SEAH cases are handled by designated officers only and are invisible to standard officers. They appear with a red 🔒 SEAH badge.",
+        a: "Sexual Exploitation, Abuse, and Harassment. SEAH cases are handled by designated officers only and are invisible to standard officers. They appear with a red SEAH badge.",
       },
       {
         q: "Why can't I see a ticket my colleague mentioned?",
@@ -59,7 +68,8 @@ const SECTIONS: Section[] = [
   },
   {
     title: "GRC Process (Level 3)",
-    icon: "🏛️",
+    Icon: Landmark,
+    iconCls: "text-purple-500",
     items: [
       {
         q: "When does a GRC hearing apply?",
@@ -73,7 +83,8 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Reports",
-    icon: "📊",
+    Icon: BarChart2,
+    iconCls: "text-green-600",
     items: [
       {
         q: "How do I generate a report?",
@@ -83,7 +94,8 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Support",
-    icon: "🛟",
+    Icon: LifeBuoy,
+    iconCls: "text-gray-500",
     items: [
       {
         q: "Who do I contact for technical issues?",
@@ -107,7 +119,7 @@ export default function HelpPage() {
         {SECTIONS.map((section) => (
           <div key={section.title} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-              <span>{section.icon}</span>
+              <section.Icon size={15} strokeWidth={2} className={section.iconCls} />
               <span className="text-sm font-semibold text-gray-700">{section.title}</span>
             </div>
             <div className="divide-y divide-gray-100">

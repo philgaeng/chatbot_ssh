@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Check, ClipboardList } from "lucide-react";
 import { TASK_TYPES } from "@/lib/mobile-constants";
+import { TaskTypeIcon } from "@/lib/icons";
 import { createTask } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import type { TicketEvent, TicketTask, TaskCreateRequest } from "@/lib/api";
@@ -39,9 +41,14 @@ export function TaskCard({
       <div className={`px-3 py-2 rounded-t-xl font-semibold flex items-center gap-1.5 ${
         isCompleted ? "text-green-700" : "text-amber-800"
       }`}>
-        <span>{typeInfo?.icon ?? "📋"}</span>
+        <TaskTypeIcon name={typeInfo?.icon ?? "ClipboardList"} size={15} strokeWidth={2} />
         <span>{typeInfo?.label ?? taskType.replace(/_/g, " ")}</span>
-        {isCompleted && <span className="ml-auto text-xs font-normal text-green-600">✅ Done</span>}
+        {isCompleted && (
+          <span className="ml-auto inline-flex items-center gap-0.5 text-xs font-normal text-green-600">
+            <Check size={12} strokeWidth={2.5} />
+            Done
+          </span>
+        )}
       </div>
       <div className="px-3 pb-3 space-y-1">
         <div className="text-gray-600">
@@ -60,7 +67,8 @@ export function TaskCard({
             onClick={() => onComplete(taskId)}
             className="mt-2 w-full bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
           >
-            ✓ Mark Complete
+            <Check size={13} strokeWidth={2.5} className="inline mr-1" />
+            Mark Complete
           </button>
         )}
       </div>
@@ -122,7 +130,10 @@ export function AssignTaskSheet({
     <div className={wrapperCls} onClick={onClose}>
       <div className={panelCls} onClick={(e) => e.stopPropagation()}>
         <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-        <h3 className="text-base font-semibold text-gray-900 mb-4">📋 Assign task</h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-1.5">
+          <ClipboardList size={16} strokeWidth={2} className="text-gray-600" />
+          Assign task
+        </h3>
 
         <div className="mb-4">
           <div className="text-xs font-medium text-gray-500 uppercase mb-2">Type</div>
@@ -137,7 +148,7 @@ export function AssignTaskSheet({
                     : "border-gray-200 text-gray-700 active:bg-gray-50"
                 }`}
               >
-                <span className="text-lg">{t.icon}</span>
+                <TaskTypeIcon name={t.icon} size={16} strokeWidth={2} />
                 <span>{t.label}</span>
               </button>
             ))}

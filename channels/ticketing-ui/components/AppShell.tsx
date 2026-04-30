@@ -5,18 +5,23 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
+import {
+  IconQueue, IconAllTickets, IconEscalated, IconReports, IconSettings, IconHelp,
+  IconMobileQueue, IconMobileSearch, IconMobileTasks,
+  IconBell, IconSignOut, IconLock,
+} from "@/lib/icons";
 
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
 const NAV = [
-  { href: "/queue",     label: "My Queue",    icon: "🎫", badge: "action"   },
-  { href: "/tickets",   label: "All Tickets", icon: "📋", badge: null       },
-  { href: "/escalated", label: "Escalated",   icon: "🔺", badge: "escalated" },
+  { href: "/queue",     label: "My Queue",    Icon: IconQueue,      badge: "action"    },
+  { href: "/tickets",   label: "All Tickets", Icon: IconAllTickets, badge: null        },
+  { href: "/escalated", label: "Escalated",   Icon: IconEscalated,  badge: "escalated" },
   null, // divider
-  { href: "/reports",  label: "Reports",     icon: "📊", badge: null       },
+  { href: "/reports",   label: "Reports",     Icon: IconReports,    badge: null        },
   null,
-  { href: "/settings", label: "Settings",    icon: "⚙️",  badge: null, adminOnly: true },
-  { href: "/help",     label: "Help",        icon: "❓", badge: null       },
+  { href: "/settings",  label: "Settings",    Icon: IconSettings,   badge: null, adminOnly: true },
+  { href: "/help",      label: "Help",        Icon: IconHelp,       badge: null        },
 ] as const;
 
 // Routes that don't require authentication
@@ -25,9 +30,9 @@ const PUBLIC_ROUTES = ["/login", "/auth/callback"];
 // ── Mobile bottom tab nav ─────────────────────────────────────────────────────
 
 const MOBILE_TABS = [
-  { href: "/m/queue",   label: "Queue",       icon: "🏠" },
-  { href: "/m/tickets", label: "All",         icon: "🔍" },
-  { href: "/m/tasks",   label: "Tasks",       icon: "📋" },
+  { href: "/m/queue",   label: "Queue", Icon: IconMobileQueue  },
+  { href: "/m/tickets", label: "All",   Icon: IconMobileSearch },
+  { href: "/m/tasks",   label: "Tasks", Icon: IconMobileTasks  },
 ] as const;
 
 // ── Desktop shell ─────────────────────────────────────────────────────────────
@@ -73,6 +78,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             if ("adminOnly" in item && item.adminOnly && !isAdmin) return null;
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             const badgeCount = item.badge === "action" ? unseenCount : 0;
+            const { Icon } = item;
             return (
               <Link
                 key={item.href}
@@ -81,7 +87,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                   active ? "bg-slate-600 text-white font-medium" : "text-slate-300 hover:bg-slate-700 hover:text-white"
                 }`}
               >
-                <span className="text-base leading-none">{item.icon}</span>
+                <Icon size={16} strokeWidth={1.75} className="shrink-0" />
                 <span className="flex-1">{item.label}</span>
                 {badgeCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
@@ -93,8 +99,12 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-3 border-t border-slate-700">
-          <button onClick={signOut} className="w-full text-left text-sm text-slate-400 hover:text-red-400 transition-colors px-3 py-2 rounded">
-            ↪ Sign out
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-2 text-sm text-slate-400 hover:text-red-400 transition-colors px-3 py-2 rounded"
+          >
+            <IconSignOut size={14} strokeWidth={1.75} />
+            Sign out
           </button>
         </div>
       </aside>
@@ -102,13 +112,18 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 min-w-0">
         <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
           <div className="text-sm text-gray-500">
-            {canSeeSeah && <span className="mr-3 text-red-600 font-medium text-xs">🔒 SEAH access</span>}
+            {canSeeSeah && (
+              <span className="mr-3 inline-flex items-center gap-1 text-red-600 font-medium text-xs">
+                <IconLock size={12} strokeWidth={2.5} />
+                SEAH access
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative text-gray-400 hover:text-gray-600">
-              🔔
+            <button className="relative text-gray-400 hover:text-gray-600 p-1">
+              <IconBell size={18} strokeWidth={1.75} />
               {unseenCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                   {unseenCount > 9 ? "9+" : unseenCount}
                 </span>
               )}
@@ -170,6 +185,7 @@ function MobileShell({ children }: { children: React.ReactNode }) {
             {MOBILE_TABS.map((tab) => {
               const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
               const isQueue = tab.href === "/m/queue";
+              const { Icon } = tab;
               return (
                 <Link
                   key={tab.href}
@@ -178,9 +194,8 @@ function MobileShell({ children }: { children: React.ReactNode }) {
                     active ? "text-blue-600" : "text-gray-400"
                   }`}
                 >
-                  <span className="text-xl leading-none mb-0.5">{tab.icon}</span>
+                  <Icon size={22} strokeWidth={1.75} className="mb-0.5" />
                   <span className="font-medium">{tab.label}</span>
-                  {/* Unread badge on Queue tab */}
                   {isQueue && unseenCount > 0 && (
                     <span className="absolute top-1.5 right-[calc(50%-12px)] bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                       {unseenCount > 99 ? "99+" : unseenCount}

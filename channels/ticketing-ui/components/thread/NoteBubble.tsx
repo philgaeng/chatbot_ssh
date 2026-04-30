@@ -77,7 +77,7 @@ export function NoteBubble({
     viewerIds,
   );
   const roleStyle = getRoleBubbleStyle(event.actor_role);
-  const roleLabel = `${roleStyle.emoji ? roleStyle.emoji + " " : ""}${roleStyle.label || event.created_by_user_id || "Officer"}`;
+  const roleLabel = roleStyle.label || event.created_by_user_id || "Officer";
 
   return (
     <div className="flex flex-col items-start px-4 my-1">

@@ -24,6 +24,15 @@ import { ComposeBar }                         from "@/components/thread/ComposeB
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES,
 } from "@/lib/mobile-constants";
+import {
+  IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene, IconGrcDecide,
+  IconReply, IconTask, IconAssign, IconTranslations,
+  IconEdit, IconActiveSession, IconExpiredSession, IconRevealStatement,
+  IconFileImage, IconFilePdf, IconFileOther, IconUpload,
+  IconFindings, IconRegenerate, IconWarning, IconClose,
+  TaskTypeIcon,
+} from "@/lib/icons";
+import { Check, RefreshCw } from "lucide-react";
 
 // ── SLA urgency helpers ───────────────────────────────────────────────────────
 
@@ -65,8 +74,13 @@ function TranslationPanel({
   return (
     <div className="w-full h-full flex flex-col border-l border-gray-200 bg-gray-50 overflow-y-auto">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <span className="text-sm font-semibold text-blue-700">🌐 Translation Review</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+        <span className="text-sm font-semibold text-blue-700 flex items-center gap-1.5">
+          <IconTranslations size={14} strokeWidth={2} />
+          Translation Review
+        </span>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-0.5">
+          <IconClose size={16} strokeWidth={2} />
+        </button>
       </div>
       <div className="flex-1 p-3 space-y-4">
         {notes.length === 0 ? (
@@ -90,7 +104,7 @@ function TranslationPanel({
               }`}>
                 <div className="text-xs font-medium text-gray-400 mb-1">English</div>
                 {!translationEn
-                  ? <div className="text-xs text-amber-600">⟳ Translation pending</div>
+                  ? <div className="text-xs text-amber-600 flex items-center gap-1"><RefreshCw size={11} strokeWidth={2} className="animate-spin" /> Translation pending</div>
                   : isSame
                     ? <div className="text-xs text-gray-500">= Same (already English)</div>
                     : <div className="text-sm text-blue-800">{translationEn}</div>
@@ -144,7 +158,10 @@ function FilesPanel({
 
   const fmt = (bytes: number) =>
     bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  const icon = (type: string | null) => type === "image" ? "🖼️" : type === "pdf" ? "📄" : "📎";
+  const FileIcon = ({ type }: { type: string | null }) =>
+    type === "image" ? <IconFileImage size={13} strokeWidth={2} className="shrink-0" /> :
+    type === "pdf"   ? <IconFilePdf   size={13} strokeWidth={2} className="shrink-0" /> :
+                       <IconFileOther size={13} strokeWidth={2} className="shrink-0" />;
 
   async function handleUpload() {
     if (!selectedFile) return;
@@ -178,7 +195,7 @@ function FilesPanel({
                 onClick={async () => { await onBeforeDownload(); window.open(getFileDownloadUrl(f.file_id), "_blank", "noopener,noreferrer"); }}
                 className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group w-full text-left mb-1"
               >
-                <span>{icon(f.file_type)}</span>
+                <FileIcon type={f.file_type} />
                 <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
                 <span className="text-gray-400 shrink-0">{fmt(f.file_size)}</span>
               </button>
@@ -196,7 +213,7 @@ function FilesPanel({
                 onClick={() => window.open(getOfficerAttachmentUrl(f.file_id), "_blank", "noopener,noreferrer")}
                 className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 group shrink-0"
               >
-                <span>{icon(f.file_type)}</span>
+                <FileIcon type={f.file_type} />
                 <span className="group-hover:underline max-w-[120px] truncate">{f.file_name}</span>
                 <span className="text-gray-400">{fmt(f.file_size)}</span>
               </button>
@@ -218,7 +235,7 @@ function FilesPanel({
           <button onClick={handleUpload} disabled={!selectedFile || uploading}
             className="w-full text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg px-2 py-1.5 disabled:opacity-50 transition font-medium"
           >
-            {uploading ? "Uploading…" : "📎 Upload"}
+            {uploading ? "Uploading…" : <><IconUpload size={12} strokeWidth={2} className="inline mr-1" />Upload</>}
           </button>
         </div>
       )}
@@ -387,7 +404,8 @@ function ComplainantCard({
               onClick={() => setEditOpen(true)}
               className="text-xs text-blue-600 hover:text-blue-800 font-medium"
             >
-              ✏️ Edit
+              <IconEdit size={13} strokeWidth={2} className="inline mr-1" />
+              Edit
             </button>
           )}
         </div>
@@ -433,15 +451,16 @@ function ComplainantCard({
             <div>
               <span className="text-gray-400">Session:</span>{" "}
               {ticket.session_id
-                ? <span className="text-green-600">✅ Active</span>
-                : <span className="text-red-500">❌ Expired — SMS fallback</span>}
+                ? <span className="inline-flex items-center gap-1 text-green-600"><IconActiveSession size={12} strokeWidth={2} />Active</span>
+                : <span className="inline-flex items-center gap-1 text-red-500"><IconExpiredSession size={12} strokeWidth={2} />Expired — SMS fallback</span>}
             </div>
             {ticket.grievance_id && (
               <div className="border-t border-gray-100 pt-2 mt-1">
                 <button onClick={onRevealOriginal}
                   className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
                 >
-                  📄 Reveal original statement
+                  <IconRevealStatement size={13} strokeWidth={2} />
+                  Reveal original statement
                 </button>
               </div>
             )}
@@ -499,11 +518,15 @@ function FindingsCard({
   return (
     <div className="bg-white rounded-xl border border-blue-100 p-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-indigo-400 pl-3">🧠 Findings</h2>
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-indigo-400 pl-3 flex items-center gap-1.5">
+          <IconFindings size={14} strokeWidth={2} className="text-indigo-500" />
+          Findings
+        </h2>
         <button onClick={handleRegenerate} disabled={regenerating}
-          className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 underline"
+          className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
         >
-          {regenerating ? "Queuing…" : "↻ Regenerate"}
+          <IconRegenerate size={11} strokeWidth={2} className={regenerating ? "animate-spin" : ""} />
+          {regenerating ? "Queuing…" : "Regenerate"}
         </button>
       </div>
       {queuedMsg && <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 mb-2">{queuedMsg}</div>}
@@ -518,7 +541,7 @@ function FindingsCard({
         </>
       ) : (
         <p className="text-xs text-gray-400 italic">
-          No summary yet. Click ↻ Regenerate to generate one.
+          No summary yet. Click Regenerate to generate one.
         </p>
       )}
     </div>
@@ -632,7 +655,7 @@ function TasksCard({ tasks, currentUserId, onComplete }: {
           const isAssignedToMe = task.assigned_to_user_id === currentUserId || task.assigned_to_user_id === "mock-super-admin";
           return (
             <div key={task.task_id} className="flex items-start gap-3 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
-              <span className="text-base shrink-0">{typeInfo?.icon ?? "📋"}</span>
+              <TaskTypeIcon name={typeInfo?.icon ?? "ClipboardList"} size={15} strokeWidth={2} className="shrink-0 text-amber-600" />
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-medium text-gray-800">
                   {typeInfo?.label ?? task.task_type.replace(/_/g, " ")}
@@ -650,7 +673,7 @@ function TasksCard({ tasks, currentUserId, onComplete }: {
                   onClick={() => onComplete(task.task_id)}
                   className="shrink-0 text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 hover:bg-green-100 transition font-medium"
                 >
-                  ✓ Done
+                  <Check size={11} strokeWidth={2.5} className="inline mr-0.5" />Done
                 </button>
               )}
             </div>
@@ -663,7 +686,7 @@ function TasksCard({ tasks, currentUserId, onComplete }: {
               const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
               return (
                 <div key={task.task_id} className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="text-green-400">✓</span>
+                  <Check size={12} strokeWidth={2.5} className="text-green-500 shrink-0" />
                   <span className="line-through">{typeInfo?.label ?? task.task_type.replace(/_/g, " ")}</span>
                   <span className="no-underline">→ {task.assigned_to_user_id}</span>
                   {task.completed_at && (
@@ -878,7 +901,7 @@ export default function TicketDetailPage() {
   );
   if (error) return (
     <div className="flex flex-col items-center gap-3 py-16 text-sm text-gray-500">
-      <span className="text-3xl">⚠️</span><span>{error}</span>
+      <IconWarning size={32} strokeWidth={1.5} className="text-amber-400" /><span>{error}</span>
       <button onClick={load} className="text-blue-600">Retry</button>
     </div>
   );
@@ -913,19 +936,22 @@ export default function TicketDetailPage() {
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {(isOpen || isEscalated) && (
                 <button onClick={() => act("ACKNOWLEDGE")} disabled={actLoading}
-                  className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
-                  ✅ Acknowledge
+                  className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
+                  <IconAcknowledge size={15} strokeWidth={2} />
+                  Acknowledge
                 </button>
               )}
               {!isOpen && !isEscalated && !isGrcHearing && (
                 <>
                   <button onClick={() => act("ESCALATE")} disabled={actLoading}
-                    className={`${btnBase} border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
-                    🔺 Escalate
+                    className={`${btnBase} inline-flex items-center gap-1.5 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
+                    <IconEscalateAction size={15} strokeWidth={2} />
+                    Escalate
                   </button>
                   <button onClick={() => act("RESOLVE")} disabled={actLoading}
-                    className={`${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
-                    🏁 Resolve
+                    className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
+                    <IconResolve size={15} strokeWidth={2} />
+                    Resolve
                   </button>
                   <button onClick={() => act("CLOSE")} disabled={actLoading}
                     className={`${btnBase} border border-red-200 text-red-600 hover:bg-red-50`}>
@@ -941,8 +967,9 @@ export default function TicketDetailPage() {
                     <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
                   </select>
                   <button onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })} disabled={actLoading}
-                    className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700`}>
-                    ⚖️ GRC Decide
+                    className={`${btnBase} inline-flex items-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700`}>
+                    <IconGrcDecide size={15} strokeWidth={2} />
+                    GRC Decide
                   </button>
                 </>
               )}
@@ -952,8 +979,9 @@ export default function TicketDetailPage() {
                     className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
                     placeholder="Hearing date" />
                   <button onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })} disabled={actLoading || !grcHearingDate}
-                    className={`${btnBase} bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40`}>
-                    🏛️ Convene GRC
+                    className={`${btnBase} inline-flex items-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40`}>
+                    <IconGrcConvene size={15} strokeWidth={2} />
+                    Convene GRC
                   </button>
                 </>
               )}
@@ -987,8 +1015,9 @@ export default function TicketDetailPage() {
           {!isAssigned && (
             <>
               <span className="text-gray-300">·</span>
-              <span className="shrink-0 text-amber-600 text-[11px] font-medium">
-                ⚠️ Assigned to {ticket.assigned_to_user_id}
+              <span className="shrink-0 text-amber-600 text-[11px] font-medium inline-flex items-center gap-1">
+                <IconWarning size={11} strokeWidth={2} />
+                Assigned to {ticket.assigned_to_user_id}
               </span>
             </>
           )}
@@ -1005,23 +1034,26 @@ export default function TicketDetailPage() {
                       : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
                   }`}
                 >
-                  💬 Reply
+                  <IconReply size={12} strokeWidth={2} className="inline mr-1" />
+                  Reply
                 </button>
                 <button
                   onClick={() => setShowAssignTask(true)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-gray-300 bg-white transition"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:border-gray-300 bg-white transition inline-flex items-center gap-1"
                 >
-                  📋 Task
+                  <IconTask size={12} strokeWidth={2} />
+                  Task
                 </button>
                 <button
                   onClick={() => { setShowAssign((v) => !v); setShowReply(false); }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition inline-flex items-center gap-1 ${
                     showAssign
                       ? "bg-blue-100 border-blue-300 text-blue-700"
                       : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
                   }`}
                 >
-                  👤 Assign
+                  <IconAssign size={12} strokeWidth={2} />
+                  Assign
                 </button>
               </>
             )}
@@ -1034,7 +1066,8 @@ export default function TicketDetailPage() {
                     : "border-gray-200 text-gray-500 hover:border-blue-300 bg-white"
                 }`}
               >
-                🌐 Translations
+                <IconTranslations size={12} strokeWidth={2} className="inline mr-1" />
+                Translations
               </button>
             )}
           </div>

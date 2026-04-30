@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { LayoutList } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 
 export default function LoginPage() {
@@ -17,7 +18,9 @@ export default function LoginPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 w-full max-w-sm text-center">
         {/* Logo / title */}
         <div className="mb-8">
-          <div className="text-3xl mb-3">📋</div>
+          <div className="mb-4 inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl">
+            <LayoutList size={28} strokeWidth={1.75} className="text-white" />
+          </div>
           <h1 className="text-xl font-bold text-gray-800">GRM Ticketing</h1>
           <p className="text-sm text-gray-500 mt-1">
             ADB Grievance Redress Mechanism

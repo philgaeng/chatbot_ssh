@@ -1,13 +1,13 @@
 "use client";
 
-import { urgencyDot, urgencyTextCls, stepShortLabel, type SlaUrgency } from "@/lib/mobile-constants";
+import { urgencyDotCls, urgencyTextCls, stepShortLabel, type SlaUrgency } from "@/lib/mobile-constants";
+import { UrgencyDot } from "@/lib/icons";
 import type { TicketDetail, SlaStatus, WorkflowStepBrief } from "@/lib/api";
 
 // ── SLA strip ─────────────────────────────────────────────────────────────────
 
 export function SlaSubHeader({ ticket, sla }: { ticket: TicketDetail; sla: SlaStatus | null }) {
   const urgency: SlaUrgency = ticket.sla_breached ? "overdue" : (sla?.urgency ?? "none");
-  const dot = urgencyDot(urgency);
   const cls = urgencyTextCls(urgency);
 
   let timeText = "Active";
@@ -22,7 +22,7 @@ export function SlaSubHeader({ ticket, sla }: { ticket: TicketDetail; sla: SlaSt
 
   return (
     <div className={`flex items-center gap-1.5 px-4 py-1.5 bg-gray-50 border-b border-gray-200 text-xs ${cls}`}>
-      <span>{dot}</span>
+      <UrgencyDot urgency={urgency} />
       <span className="font-medium">{step}</span>
       {loc && <><span className="text-gray-300">·</span><span className="text-gray-500">{loc}</span></>}
       <span className="text-gray-300">·</span>

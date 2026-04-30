@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
+import { AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2 } from "lucide-react";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
 import { SystemPill }                         from "@/components/thread/SystemPill";
@@ -47,7 +48,7 @@ function MoreActionsSheet({
               onClick={() => { onAction("ESCALATE"); onClose(); }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-50 text-left"
             >
-              <span className="text-xl">🔺</span>
+              <ArrowUpCircle size={20} strokeWidth={2} className="text-amber-500 shrink-0" />
               <span className="text-sm font-medium text-gray-800">Escalate to next level</span>
             </button>
           )}
@@ -55,7 +56,7 @@ function MoreActionsSheet({
             onClick={() => { onAssignTask(); onClose(); }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-50 text-left"
           >
-            <span className="text-xl">📋</span>
+            <ClipboardList size={20} strokeWidth={2} className="text-blue-500 shrink-0" />
             <span className="text-sm font-medium text-gray-800">Assign a task</span>
           </button>
           {canEscalate && (
@@ -63,7 +64,7 @@ function MoreActionsSheet({
               onClick={() => { onAction("CLOSE"); onClose(); }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-50 text-left"
             >
-              <span className="text-xl">🔒</span>
+              <Lock size={20} strokeWidth={2} className="text-red-400 shrink-0" />
               <span className="text-sm font-medium text-red-600">Close without resolve</span>
             </button>
           )}
@@ -95,7 +96,9 @@ function PrimaryCtaBar({
     return (
       <div className="px-4 py-2">
         <div className="text-center text-sm text-gray-400 py-2">
-          {status_code === "RESOLVED" ? "✅ Case resolved" : "🔒 Case closed"}
+          {status_code === "RESOLVED"
+            ? <><CheckCircle2 size={15} strokeWidth={2} className="inline mr-1 text-green-500" />Case resolved</>
+            : <><Lock size={15} strokeWidth={2} className="inline mr-1 text-gray-400" />Case closed</>}
         </div>
       </div>
     );
@@ -108,7 +111,8 @@ function PrimaryCtaBar({
           onClick={() => onAction("ACKNOWLEDGE")}
           className="w-full bg-blue-600 active:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
         >
-          ✅ Acknowledge — tap to start
+          <CheckCircle2 size={16} strokeWidth={2} className="inline mr-1.5" />
+          Acknowledge — tap to start
         </button>
       </div>
     );
@@ -120,13 +124,13 @@ function PrimaryCtaBar({
         onClick={() => onAction("RESOLVE")}
         className="flex-1 bg-green-600 active:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
       >
-        🏁 Resolve
+        <Flag size={15} strokeWidth={2} className="inline mr-1.5" />Resolve
       </button>
       <button
         onClick={onMore}
-        className="flex-1 bg-gray-100 active:bg-gray-200 text-gray-800 font-semibold py-3 rounded-xl text-sm transition-colors"
+        className="flex-1 bg-gray-100 active:bg-gray-200 text-gray-800 font-semibold py-3 rounded-xl text-sm transition-colors inline-flex items-center justify-center gap-1"
       >
-        🔺 More ▾
+        <ArrowUpCircle size={15} strokeWidth={2} />More ▾
       </button>
     </div>
   );
@@ -279,7 +283,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   if (!ticket) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
-        <div className="text-3xl">⚠️</div>
+        <AlertTriangle size={32} strokeWidth={1.5} className="text-amber-400" />
         <div className="text-sm text-gray-500">Ticket not found</div>
         <button onClick={() => router.back()} className="text-blue-600 text-sm">← Go back</button>
       </div>
@@ -299,8 +303,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-gray-900 truncate">{ticket.grievance_id}</span>
               {ticket.is_seah && (
-                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
-                  🔒 SEAH
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
+                  <Lock size={9} strokeWidth={2.5} />SEAH
                 </span>
               )}
             </div>
@@ -324,7 +328,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
         {myPendingTasks.length > 0 && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-xs text-amber-700 font-medium">
-            📋 {myPendingTasks.length} task{myPendingTasks.length > 1 ? "s" : ""} assigned to you
+            <ClipboardList size={12} strokeWidth={2} className="inline mr-1" />
+            {myPendingTasks.length} task{myPendingTasks.length > 1 ? "s" : ""} assigned to you
           </div>
         )}
 

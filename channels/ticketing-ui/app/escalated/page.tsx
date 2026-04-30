@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { listTickets, type TicketListItem } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
@@ -61,7 +62,8 @@ export default function EscalatedPage() {
     <div className="p-6">
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-          🔺 Escalated Tickets
+          <AlertTriangle size={20} strokeWidth={2} className="text-orange-500" />
+          Escalated Tickets
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
           {total} ticket{total !== 1 ? "s" : ""} — SLA-breached or manually escalated
@@ -81,7 +83,8 @@ export default function EscalatedPage() {
           <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
         ) : tickets.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">
-            ✅ No escalated tickets right now.
+            <CheckCircle2 size={18} strokeWidth={2} className="inline mr-1.5 text-green-500" />
+            No escalated tickets right now.
           </div>
         ) : (
           <div>

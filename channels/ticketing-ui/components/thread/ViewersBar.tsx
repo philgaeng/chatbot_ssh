@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Eye } from "lucide-react";
 import { addViewer, removeViewer, listOfficers } from "@/lib/api";
 import type { TicketViewer, OfficerBrief } from "@/lib/api";
 
@@ -54,7 +55,10 @@ function AddViewerSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-        <h3 className="text-base font-semibold text-gray-900 mb-3">👁 Add viewer</h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+          <Eye size={15} strokeWidth={2} className="text-gray-500" />
+          Add viewer
+        </h3>
 
         <input
           type="text"
@@ -130,7 +134,10 @@ export function ViewersBar({
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-50 border-b border-gray-100 overflow-x-auto scrollbar-none">
-        <span className="text-[11px] text-gray-400 shrink-0">👁 Viewers:</span>
+        <span className="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
+          <Eye size={11} strokeWidth={2} />
+          Viewers:
+        </span>
         {viewers.length === 0
           ? <span className="text-[11px] text-gray-300 italic">None yet</span>
           : viewers.map((v) => (
