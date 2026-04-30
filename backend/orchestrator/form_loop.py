@@ -67,6 +67,8 @@ _ASK_ACTIONS_BY_SLOT = {
 _ASK_ACTIONS_BY_FORM_SLOT = {
     ("form_seah_1", "sensitive_issues_follow_up"): "action_ask_form_seah_1_sensitive_issues_follow_up",
     ("form_seah_1", "seah_victim_survivor_role"): "action_ask_form_seah_1_seah_victim_survivor_role",
+    ("form_seah_1", "seah_witness_victim_consent_to_file"): "action_ask_form_seah_1_seah_witness_victim_consent_to_file",
+    ("form_seah_1", "seah_witness_immediate_danger"): "action_ask_form_seah_1_seah_witness_immediate_danger",
     ("form_status_check_skip", "valid_province_and_district"): "action_ask_form_status_check_skip_valid_province_and_district",
     ("form_status_check_skip", "complainant_district"): "action_ask_form_status_check_skip_complainant_district",
     ("form_status_check_skip", "complainant_municipality_temp"): "action_ask_form_status_check_skip_complainant_municipality_temp",

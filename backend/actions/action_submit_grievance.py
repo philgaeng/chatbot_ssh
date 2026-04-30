@@ -8,6 +8,7 @@ import json
 import traceback
 from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
+from backend.actions.utils.ticketing_dispatch import dispatch_ticket
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 from backend.shared_functions.location_mapping import resolve_location_payload
@@ -297,19 +298,33 @@ class BaseActionSubmit(BaseAction):
         
 
             self.logger.info(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
-            
+
             await self._send_grievance_recap_sms(grievance_data, dispatcher) #call the function that extracts the phone number, generates the confirmation message and sends it to the user
-            
+
             # #send email to admin
             # await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
-            
+
             # #send email to complainant
             # complainant_email = grievance_data.get('complainant_email')
 
             # if complainant_email and self.is_valid_email(complainant_email):
             #     await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
-                
-                 
+
+            # INTEGRATION POINT: chatbot → ticketing webhook (fire-and-forget, never blocks)
+            dispatch_ticket(
+                grievance_id=self.grievance_id,
+                complainant_id=self.complainant_id,
+                session_id=tracker.sender_id,
+                is_seah=bool(self.grievance_sensitive_issue),
+                priority="HIGH" if grievance_data.get("grievance_high_priority") else "NORMAL",
+                location_code=grievance_data.get("location_code"),
+                project_code="KL_ROAD",
+                grievance_summary=tracker.get_slot("grievance_summary"),
+                grievance_categories=tracker.get_slot("grievance_categories"),
+                grievance_location=grievance_data.get("grievance_location"),
+                organization_id="DOR",
+            )
+
             return [
                 SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"])
             ]
@@ -388,6 +403,26 @@ class ActionSubmitSeah(BaseActionSubmit):
             result = self.db_manager.submit_seah_to_db(grievance_data)
             if not result.get("ok"):
                 raise Exception(result.get("error", "SEAH submission failed"))
+
+            # INTEGRATION POINT: chatbot → ticketing webhook (fire-and-forget, never blocks)
+            complainant_ref = (
+                result.get("complainant_id")
+                or grievance_data.get("complainant_id")
+                or tracker.get_slot("complainant_id")
+            )
+            dispatch_ticket(
+                grievance_id=result.get("grievance_id") or self.grievance_id,
+                complainant_id=complainant_ref,
+                session_id=tracker.sender_id,
+                is_seah=True,
+                priority="HIGH",
+                location_code=grievance_data.get("location_code"),
+                project_code="KL_ROAD",
+                grievance_summary=tracker.get_slot("grievance_summary"),
+                grievance_categories=tracker.get_slot("grievance_categories"),
+                grievance_location=grievance_data.get("grievance_location"),
+                organization_id="DOR",
+            )
 
             grievance_ref = result.get("grievance_id")
             if language_code == "ne":

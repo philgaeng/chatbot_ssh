@@ -82,228 +82,228 @@ def upgrade() -> None:
     )
 
     # 2) Backfill complainants_seah -> complainants (single canonical complainant table).
+    # Guard: only run when complainants_seah has the plaintext PII schema (complainant_full_name).
+    # Brownfield DBs that already use the vault-first schema (phone_hash / phone_encrypted) skip this.
     op.execute(
         """
-        INSERT INTO complainants (
-            complainant_id,
-            complainant_unique_id,
-            complainant_full_name,
-            complainant_phone,
-            complainant_email,
-            complainant_province,
-            complainant_district,
-            complainant_municipality,
-            complainant_ward,
-            complainant_village,
-            complainant_address,
-            contact_id,
-            country_code,
-            location_code,
-            location_resolution_status,
-            level_1_name,
-            level_2_name,
-            level_3_name,
-            level_4_name,
-            level_5_name,
-            level_6_name,
-            level_1_code,
-            level_2_code,
-            level_3_code,
-            level_4_code,
-            level_5_code,
-            level_6_code,
-            created_at,
-            updated_at
-        )
-        SELECT
-            cs.complainant_id,
-            cs.complainant_id AS complainant_unique_id,
-            cs.complainant_full_name,
-            cs.complainant_phone,
-            cs.complainant_email,
-            cs.complainant_province,
-            cs.complainant_district,
-            cs.complainant_municipality,
-            cs.complainant_ward,
-            cs.complainant_village,
-            cs.complainant_address,
-            cs.contact_id,
-            cs.country_code,
-            cs.location_code,
-            cs.location_resolution_status,
-            cs.level_1_name,
-            cs.level_2_name,
-            cs.level_3_name,
-            cs.level_4_name,
-            cs.level_5_name,
-            cs.level_6_name,
-            cs.level_1_code,
-            cs.level_2_code,
-            cs.level_3_code,
-            cs.level_4_code,
-            cs.level_5_code,
-            cs.level_6_code,
-            COALESCE(cs.created_at, CURRENT_TIMESTAMP),
-            COALESCE(cs.updated_at, CURRENT_TIMESTAMP)
-        FROM complainants_seah cs
-        ON CONFLICT (complainant_id) DO NOTHING;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'complainants_seah'
+                  AND column_name  = 'complainant_full_name'
+            ) THEN
+                INSERT INTO complainants (
+                    complainant_id, complainant_unique_id, complainant_full_name,
+                    complainant_phone, complainant_email, complainant_province,
+                    complainant_district, complainant_municipality, complainant_ward,
+                    complainant_village, complainant_address, contact_id,
+                    country_code, location_code, location_resolution_status,
+                    level_1_name, level_2_name, level_3_name, level_4_name,
+                    level_5_name, level_6_name,
+                    level_1_code, level_2_code, level_3_code, level_4_code,
+                    level_5_code, level_6_code,
+                    created_at, updated_at
+                )
+                SELECT
+                    cs.complainant_id,
+                    cs.complainant_id AS complainant_unique_id,
+                    cs.complainant_full_name, cs.complainant_phone, cs.complainant_email,
+                    cs.complainant_province, cs.complainant_district,
+                    cs.complainant_municipality, cs.complainant_ward,
+                    cs.complainant_village, cs.complainant_address, cs.contact_id,
+                    cs.country_code, cs.location_code, cs.location_resolution_status,
+                    cs.level_1_name, cs.level_2_name, cs.level_3_name, cs.level_4_name,
+                    cs.level_5_name, cs.level_6_name,
+                    cs.level_1_code, cs.level_2_code, cs.level_3_code, cs.level_4_code,
+                    cs.level_5_code, cs.level_6_code,
+                    COALESCE(cs.created_at, CURRENT_TIMESTAMP),
+                    COALESCE(cs.updated_at, CURRENT_TIMESTAMP)
+                FROM complainants_seah cs
+                ON CONFLICT (complainant_id) DO NOTHING;
+            END IF;
+        END
+        $$;
         """
     )
 
     # 3) Backfill grievances_seah -> grievances using canonical grievance_id.
+    # Guard: only run when grievances_seah has seah_case_id (the consolidated schema).
     # Canonical identifier policy: grievance_id remains canonical; for migrated SEAH rows we use seah_case_id.
     op.execute(
         """
-        INSERT INTO grievances (
-            grievance_id,
-            complainant_id,
-            grievance_categories,
-            grievance_summary,
-            grievance_sensitive_issue,
-            grievance_description,
-            grievance_timeline,
-            grievance_classification_status,
-            source,
-            language_code,
-            grievance_creation_date,
-            grievance_modification_date,
-            case_sensitivity,
-            vault_payload_ref,
-            vault_last_updated_at
-        )
-        SELECT
-            gs.seah_case_id AS grievance_id,
-            gs.complainant_id,
-            CASE
-                WHEN gs.grievance_categories IS NULL OR gs.grievance_categories = '' THEN NULL
-                ELSE to_jsonb(ARRAY[gs.grievance_categories])
-            END AS grievance_categories,
-            gs.grievance_summary,
-            TRUE AS grievance_sensitive_issue,
-            NULL AS grievance_description,
-            gs.grievance_timeline,
-            gs.grievance_status AS grievance_classification_status,
-            gs.submission_type AS source,
-            gs.language_code,
-            COALESCE(gs.created_at, CURRENT_TIMESTAMP),
-            COALESCE(gs.updated_at, CURRENT_TIMESTAMP),
-            'seah' AS case_sensitivity,
-            gs.vault_payload_ref,
-            gs.vault_last_updated_at
-        FROM grievances_seah gs
-        ON CONFLICT (grievance_id) DO NOTHING;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'grievances_seah'
+                  AND column_name  = 'seah_case_id'
+            ) THEN
+                INSERT INTO grievances (
+                    grievance_id, complainant_id, grievance_categories,
+                    grievance_summary, grievance_sensitive_issue, grievance_description,
+                    grievance_timeline, grievance_classification_status,
+                    source, language_code, grievance_creation_date,
+                    grievance_modification_date, case_sensitivity,
+                    vault_payload_ref, vault_last_updated_at
+                )
+                SELECT
+                    gs.seah_case_id AS grievance_id,
+                    gs.complainant_id,
+                    CASE
+                        WHEN gs.grievance_categories IS NULL OR gs.grievance_categories = '' THEN NULL
+                        ELSE to_jsonb(ARRAY[gs.grievance_categories])
+                    END AS grievance_categories,
+                    gs.grievance_summary,
+                    TRUE AS grievance_sensitive_issue,
+                    NULL AS grievance_description,
+                    gs.grievance_timeline,
+                    gs.grievance_status AS grievance_classification_status,
+                    gs.submission_type AS source,
+                    gs.language_code,
+                    COALESCE(gs.created_at, CURRENT_TIMESTAMP),
+                    COALESCE(gs.updated_at, CURRENT_TIMESTAMP),
+                    'seah' AS case_sensitivity,
+                    gs.vault_payload_ref,
+                    gs.vault_last_updated_at
+                FROM grievances_seah gs
+                ON CONFLICT (grievance_id) DO NOTHING;
+            END IF;
+        END
+        $$;
         """
     )
 
     # 4) Backfill vault payloads from historical SEAH free-text where available.
+    # Guard: only run when grievance_vault_payloads exists and grievances_seah has seah_case_id.
     op.execute(
         """
-        INSERT INTO grievance_vault_payloads (
-            vault_payload_id,
-            grievance_id,
-            seah_case_id,
-            case_sensitivity,
-            payload_type,
-            content_ciphertext,
-            content_redacted,
-            source_channel,
-            source_language_code,
-            created_by
-        )
-        SELECT
-            'vault-seah-' || gs.seah_case_id AS vault_payload_id,
-            gs.seah_case_id AS grievance_id,
-            gs.seah_case_id,
-            'seah' AS case_sensitivity,
-            'original_grievance' AS payload_type,
-            gs.grievance_description AS content_ciphertext,
-            NULL AS content_redacted,
-            'chatbot' AS source_channel,
-            gs.language_code,
-            'migration_pub004'
-        FROM grievances_seah gs
-        WHERE gs.grievance_description IS NOT NULL
-          AND gs.grievance_description <> ''
-        ON CONFLICT (vault_payload_id) DO NOTHING;
-        """
-    )
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'grievance_vault_payloads'
+            ) AND EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'grievances_seah'
+                  AND column_name  = 'seah_case_id'
+            ) THEN
+                INSERT INTO grievance_vault_payloads (
+                    vault_payload_id, grievance_id, seah_case_id,
+                    case_sensitivity, payload_type, content_ciphertext,
+                    content_redacted, source_channel, source_language_code, created_by
+                )
+                SELECT
+                    'vault-seah-' || gs.seah_case_id AS vault_payload_id,
+                    gs.seah_case_id AS grievance_id,
+                    gs.seah_case_id,
+                    'seah' AS case_sensitivity,
+                    'original_grievance' AS payload_type,
+                    gs.grievance_description AS content_ciphertext,
+                    NULL AS content_redacted,
+                    'chatbot' AS source_channel,
+                    gs.language_code,
+                    'migration_pub004'
+                FROM grievances_seah gs
+                WHERE gs.grievance_description IS NOT NULL
+                  AND gs.grievance_description <> ''
+                ON CONFLICT (vault_payload_id) DO NOTHING;
 
-    # Link migrated SEAH grievances to vault references.
-    op.execute(
-        """
-        UPDATE grievances g
-        SET
-            vault_payload_ref = COALESCE(g.vault_payload_ref, 'vault-seah-' || g.grievance_id),
-            vault_last_updated_at = COALESCE(g.vault_last_updated_at, CURRENT_TIMESTAMP)
-        WHERE g.case_sensitivity = 'seah'
-          AND EXISTS (
-              SELECT 1
-              FROM grievance_vault_payloads v
-              WHERE v.vault_payload_id = 'vault-seah-' || g.grievance_id
-          );
+                UPDATE grievances g
+                SET
+                    vault_payload_ref     = COALESCE(g.vault_payload_ref, 'vault-seah-' || g.grievance_id),
+                    vault_last_updated_at = COALESCE(g.vault_last_updated_at, CURRENT_TIMESTAMP)
+                WHERE g.case_sensitivity = 'seah'
+                  AND EXISTS (
+                      SELECT 1 FROM grievance_vault_payloads v
+                      WHERE v.vault_payload_id = 'vault-seah-' || g.grievance_id
+                  );
+            END IF;
+        END
+        $$;
         """
     )
 
     # 5) Backfill grievance_parties.
-    # Default + explicit: at least one party per grievance, primary reporter exactly one.
+    # SEAH parties: guard on seah_case_id column (not present in vault-first brownfield schema).
     op.execute(
         """
-        INSERT INTO grievance_parties (
-            party_id,
-            grievance_id,
-            complainant_id,
-            party_role,
-            is_primary_reporter,
-            contact_allowed,
-            created_at,
-            updated_at
-        )
-        SELECT
-            'party-seah-primary-' || gs.seah_case_id AS party_id,
-            gs.seah_case_id AS grievance_id,
-            CASE WHEN gs.complainant_id IS NULL OR gs.complainant_id = '' THEN NULL ELSE gs.complainant_id END,
-            CASE
-                WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'victim_survivor' THEN 'victim_survivor'
-                WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'not_victim_survivor' THEN 'relative_or_representative'
-                WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'focal_point' THEN 'seah_focal_point'
-                ELSE 'victim_survivor'
-            END AS party_role,
-            TRUE AS is_primary_reporter,
-            CASE
-                WHEN gs.seah_payload ->> 'seah_contact_provided' = 'false' THEN FALSE
-                ELSE TRUE
-            END AS contact_allowed,
-            COALESCE(gs.created_at, CURRENT_TIMESTAMP),
-            COALESCE(gs.updated_at, CURRENT_TIMESTAMP)
-        FROM grievances_seah gs
-        ON CONFLICT (party_id) DO NOTHING;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'grievances_seah'
+                  AND column_name  = 'seah_case_id'
+            ) THEN
+                INSERT INTO grievance_parties (
+                    party_id, grievance_id, complainant_id,
+                    party_role, is_primary_reporter, contact_allowed,
+                    created_at, updated_at
+                )
+                SELECT
+                    'party-seah-primary-' || gs.seah_case_id AS party_id,
+                    gs.seah_case_id AS grievance_id,
+                    CASE WHEN gs.complainant_id IS NULL OR gs.complainant_id = '' THEN NULL
+                         ELSE gs.complainant_id END,
+                    CASE
+                        WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'victim_survivor'
+                            THEN 'victim_survivor'
+                        WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'not_victim_survivor'
+                            THEN 'relative_or_representative'
+                        WHEN gs.seah_payload ->> 'seah_victim_survivor_role' = 'focal_point'
+                            THEN 'seah_focal_point'
+                        ELSE 'victim_survivor'
+                    END AS party_role,
+                    TRUE AS is_primary_reporter,
+                    CASE
+                        WHEN gs.seah_payload ->> 'seah_contact_provided' = 'false' THEN FALSE
+                        ELSE TRUE
+                    END AS contact_allowed,
+                    COALESCE(gs.created_at, CURRENT_TIMESTAMP),
+                    COALESCE(gs.updated_at, CURRENT_TIMESTAMP)
+                FROM grievances_seah gs
+                ON CONFLICT (party_id) DO NOTHING;
+            END IF;
+        END
+        $$;
         """
     )
 
     # Standard grievances: ensure one default primary party when missing.
+    # Only runs if grievances.complainant_id column exists (pub003 adds it).
     op.execute(
         """
-        INSERT INTO grievance_parties (
-            party_id,
-            grievance_id,
-            complainant_id,
-            party_role,
-            is_primary_reporter,
-            contact_allowed
-        )
-        SELECT
-            'party-standard-primary-' || g.grievance_id AS party_id,
-            g.grievance_id,
-            g.complainant_id,
-            'victim_survivor' AS party_role,
-            TRUE AS is_primary_reporter,
-            TRUE AS contact_allowed
-        FROM grievances g
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM grievance_parties gp
-            WHERE gp.grievance_id = g.grievance_id
-        );
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name   = 'grievances'
+                  AND column_name  = 'complainant_id'
+            ) THEN
+                INSERT INTO grievance_parties (
+                    party_id, grievance_id, complainant_id,
+                    party_role, is_primary_reporter, contact_allowed
+                )
+                SELECT
+                    'party-standard-primary-' || g.grievance_id AS party_id,
+                    g.grievance_id,
+                    g.complainant_id,
+                    'victim_survivor' AS party_role,
+                    TRUE AS is_primary_reporter,
+                    TRUE AS contact_allowed
+                FROM grievances g
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM grievance_parties gp
+                    WHERE gp.grievance_id = g.grievance_id
+                );
+            END IF;
+        END
+        $$;
         """
     )
 

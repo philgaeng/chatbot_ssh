@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `edfa942` — 2026-04-27
+> Last updated: `chatbot-webhook` — 2026-04-27
 
 ---
 
@@ -15,10 +15,11 @@
 - ✅ **Demo DB seeded** — 6 tickets across both demo scenarios, all 12 roles, 2 workflows
 - ✅ **Escalation gaps closed** — auto-assign on escalation + automatic complainant notification on RESOLVE/ESCALATE
 - ✅ **LLM translation + findings** — per-note translation to English (gpt-4, Celery); AI case-findings card (role-gated); `POST /tickets/{id}/findings` endpoint; Alembic migration `c1d5f8a2e047`
+- ✅ **Chatbot → ticketing webhook** — `backend/actions/utils/ticketing_dispatch.py` (fire-and-forget); wired into both `BaseActionSubmit.execute_action` (standard) and `ActionSubmitSeah.execute_action` (SEAH); env vars `TICKETING_API_URL` + `TICKETING_SECRET_KEY` added to `env.local`
 
 ### In progress / next
 - 🔲 **Week 2 frontend** — Cursor starts Apr 28: officer queue, ticket detail, action panel, SLA countdown
-- 🔲 **Week 3 integration** — SEAH role-gating, notifications, chatbot webhook, staging deploy
+- 🔲 **Week 3 integration** — SEAH role-gating, notifications, staging deploy
 
 ### Active containers
 | Container | Port | How to start |

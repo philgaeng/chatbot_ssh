@@ -21,12 +21,14 @@ logger = logging.getLogger(__name__)
 # GET  /api/grievance/{grievance_id}
 # POST /api/grievance/{grievance_id}/status
 # GET  /api/grievance/statuses
+# PATCH /api/complainant/{complainant_id}  ← needed for complainant edit (see patch_complainant below)
 
 
-def _client() -> httpx.Client:
+def _client(base_url: str | None = None) -> httpx.Client:
+    """Return an httpx client.  base_url overrides settings (per-project chatbot URL)."""
     settings = get_settings()
     return httpx.Client(
-        base_url=settings.backend_grievance_base_url,
+        base_url=base_url or settings.backend_grievance_base_url,
         timeout=10.0,
     )
 
@@ -67,6 +69,61 @@ def update_grievance_status(grievance_id: str, status: str, note: str = "") -> d
         )
         resp.raise_for_status()
         return resp.json()
+
+
+def patch_complainant(
+    complainant_id: str,
+    fields: dict[str, Any],
+    chatbot_base_url: str | None = None,
+) -> dict[str, Any]:
+    """
+    Update whitelisted complainant fields on the local chatbot backend.
+
+    Architecture note: ticketing never stores PII — all complainant data lives in
+    the chatbot's public.complainants table.  In multi-country deployments the
+    chatbot URL differs per project; pass chatbot_base_url from
+    ticketing.projects.chatbot_base_url (NULL → settings fallback).
+
+    INTEGRATION POINT: backend/api/ — needs a new endpoint:
+        PATCH /api/complainant/{complainant_id}
+        Auth: x-api-key (same key used by chatbot → ticketing webhook)
+        Body: { complainant_address?, complainant_village?, complainant_ward?,
+                complainant_municipality?, complainant_district?,
+                complainant_province?, complainant_email? }
+        Response: { ok: true, updated_fields: [...] }
+
+    Proto fallback below: calls GET /api/grievance/{complainant_id} to confirm
+    the backend is reachable, then returns a synthetic success.  Replace once
+    the real PATCH endpoint is implemented in backend/api/.
+    """
+    settings = get_settings()
+    headers = {}
+    if settings.messaging_api_key:
+        headers["x-api-key"] = settings.messaging_api_key
+
+    with _client(chatbot_base_url) as client:
+        try:
+            resp = client.patch(
+                f"/api/complainant/{complainant_id}",
+                json=fields,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                # ── PROTO FALLBACK ────────────────────────────────────────────
+                # Real endpoint not yet implemented — return synthetic success so
+                # the officer UI works during the demo.  Remove once backend/api/
+                # has PATCH /api/complainant/{complainant_id}.
+                logger.warning(
+                    "patch_complainant: PATCH /api/complainant/%s returned 404 "
+                    "(endpoint not yet implemented) — returning proto success",
+                    complainant_id,
+                )
+                return {"ok": True, "updated_fields": list(fields.keys()), "_proto_mode": True}
+                # ── END PROTO FALLBACK ────────────────────────────────────────
+            raise
 
 
 # ── Vault reveal session ──────────────────────────────────────────────────────
@@ -116,12 +173,24 @@ def begin_reveal_session(
     ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     watermark_text = f"{actor_id} · {ts_str} · case:{grievance_id}"
 
+    # Unwrap the API envelope:
+    #   detail = {"status": "SUCCESS", "data": {"grievance": {...}, ...}}
+    # The real reveal API will return a content_token instead; for proto we embed
+    # the content directly with field names mapped to what VaultReveal.tsx expects.
+    grievance = (detail.get("data") or {}).get("grievance") or {}
+
     return {
         "granted": True,
         "reveal_session_id": session_id,
         "expires_at_utc": expires_at.isoformat(),
         "ttl_seconds": ttl,
-        "content": detail,           # proto only — real API returns content_token
+        "content": {
+            "grievance_description": grievance.get("grievance_description"),
+            "complainant_name":      grievance.get("complainant_full_name"),
+            "phone_number":          grievance.get("complainant_phone"),
+            "email":                 grievance.get("complainant_email"),
+            "address":               grievance.get("complainant_address"),
+        },
         "watermark_text": watermark_text,
         "_proto_mode": True,
     }

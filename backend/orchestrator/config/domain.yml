@@ -571,6 +571,27 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  seah_witness_victim_consent_to_file:
+    type: categorical
+    values:
+      - yes
+      - no
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_witness_immediate_danger:
+    type: categorical
+    values:
+      - yes
+      - no
+    influence_conversation: false
+    mappings:
+      - type: custom
+  seah_witness_exit_without_filing:
+    type: bool
+    influence_conversation: false
+    mappings:
+      - type: custom
   seah_project_identification:
     type: text
     influence_conversation: false
@@ -863,6 +884,8 @@ actions:
   - action_ask_grievance_new_detail
   - action_ask_form_seah_1_sensitive_issues_follow_up
   - action_ask_form_seah_1_seah_victim_survivor_role
+  - action_ask_form_seah_1_seah_witness_victim_consent_to_file
+  - action_ask_form_seah_1_seah_witness_immediate_danger
   - action_ask_form_seah_2_seah_project_identification
   - action_ask_form_seah_2_sensitive_issues_new_detail
   - action_ask_form_seah_2_seah_contact_consent_channel

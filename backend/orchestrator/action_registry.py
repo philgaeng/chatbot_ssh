@@ -35,6 +35,8 @@ def _get_action(action_name: str) -> Any:
         from backend.actions.forms.form_seah_1 import (
             ActionAskFormSeah1SensitiveIssuesFollowUp,
             ActionAskFormSeah1SeahVictimSurvivorRole,
+            ActionAskFormSeah1SeahWitnessVictimConsentToFile,
+            ActionAskFormSeah1SeahWitnessImmediateDanger,
         )
         from backend.actions.forms.form_seah_2 import (
             ActionAskFormSeah2SeahProjectIdentification,
@@ -138,6 +140,8 @@ def _get_action(action_name: str) -> Any:
         # SEAH forms
         _ACTIONS["action_ask_form_seah_1_sensitive_issues_follow_up"] = ActionAskFormSeah1SensitiveIssuesFollowUp()
         _ACTIONS["action_ask_form_seah_1_seah_victim_survivor_role"] = ActionAskFormSeah1SeahVictimSurvivorRole()
+        _ACTIONS["action_ask_form_seah_1_seah_witness_victim_consent_to_file"] = ActionAskFormSeah1SeahWitnessVictimConsentToFile()
+        _ACTIONS["action_ask_form_seah_1_seah_witness_immediate_danger"] = ActionAskFormSeah1SeahWitnessImmediateDanger()
         _ACTIONS["action_ask_form_seah_2_seah_project_identification"] = ActionAskFormSeah2SeahProjectIdentification()
         _ACTIONS["action_ask_form_seah_2_sensitive_issues_new_detail"] = ActionAskFormSeah2SensitiveIssuesNewDetail()
         _ACTIONS["action_ask_form_seah_2_seah_contact_consent_channel"] = ActionAskFormSeah2SeahContactConsentChannel()
