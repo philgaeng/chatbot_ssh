@@ -41,6 +41,7 @@ class ValidateFormSeah1(BaseFormValidationAction):
                 return [
                     "seah_victim_survivor_role",
                     "seah_witness_victim_consent_to_file",
+                    "sensitive_issues_follow_up",
                 ]
             return [
                 "seah_victim_survivor_role",
@@ -73,20 +74,10 @@ class ValidateFormSeah1(BaseFormValidationAction):
         if isinstance(value, str):
             value = value.lstrip("/")
         if value in {"yes", "no"}:
-            if value == "yes":
-                language_code = tracker.get_slot("language_code") or "en"
-                if language_code == "ne":
-                    dispatcher.utter_message(
-                        text="धन्यवाद। यहाँ पीडित/उत्तरजीवीलाई सहयोग गर्न सक्ने सम्भावित सहयोग सेवाहरू छन्: [list to be provided]."
-                    )
-                else:
-                    dispatcher.utter_message(
-                        text="Thank you. Here are the potential support services that can help the victim-survivor: [list to be provided]."
-                    )
             return {
                 "seah_witness_victim_consent_to_file": value,
                 "seah_witness_immediate_danger": None if value == "yes" else tracker.get_slot("seah_witness_immediate_danger"),
-                "seah_witness_exit_without_filing": True if value == "yes" else tracker.get_slot("seah_witness_exit_without_filing"),
+                "seah_witness_exit_without_filing": False if value == "yes" else tracker.get_slot("seah_witness_exit_without_filing"),
             }
         return {"seah_witness_victim_consent_to_file": None}
 
@@ -114,6 +105,13 @@ class ValidateFormSeah1(BaseFormValidationAction):
         if isinstance(value, str):
             value = value.lstrip("/")
         if value in {"yes", "no"}:
+            # This question is only meaningful after witness consent = "no".
+            # Guard against stale or misrouted turns so consent="yes" continues normal flow.
+            if tracker.get_slot("seah_witness_victim_consent_to_file") != "no":
+                return {
+                    "seah_witness_immediate_danger": value,
+                    "seah_witness_exit_without_filing": False,
+                }
             language_code = tracker.get_slot("language_code") or "en"
             if language_code == "ne":
                 dispatcher.utter_message(
