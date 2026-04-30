@@ -6,6 +6,33 @@
 
 ---
 
+## Setup — Installing Dependencies
+
+All dependencies below are already installed on `feature/grm-ticketing`. If you are working on a fresh clone, a new branch, or a new environment (Docker, CI, staging), run the following from the UI root:
+
+```bash
+# From repo root
+cd channels/ticketing-ui
+
+# Install all dependencies (includes lucide-react)
+npm install
+
+# Verify lucide-react is present
+grep lucide package.json
+# Expected: "lucide-react": "^1.14.0"
+```
+
+If `node_modules` is missing or `lucide-react` is not in `package.json` for any reason, install it explicitly:
+
+```bash
+cd channels/ticketing-ui
+npm install lucide-react
+```
+
+No other icon or UI library is needed. Tailwind CSS v4 is already configured via `@tailwindcss/postcss` — no additional setup required beyond `npm install`.
+
+---
+
 ## Icon Library
 
 **Lucide React v1.14** — installed in `channels/ticketing-ui/package.json`.
