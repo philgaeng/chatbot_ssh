@@ -222,6 +222,17 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         """
         result = self.base_validate_phone(slot_value, dispatcher)
 
+        # Focal reporter phone is mandatory during bootstrap reporter OTP stage.
+        if (
+            tracker.get_slot("story_main") == "seah_intake"
+            and tracker.get_slot("seah_focal_stage") == "bootstrap_reporter_otp"
+            and result.get("complainant_phone") == self.DEFAULT_VALUES["SKIP_VALUE"]
+        ):
+            dispatcher.utter_message(
+                text="As a SEAH focal point, your phone number is required and cannot be skipped."
+            )
+            return {"complainant_phone": None}
+
         # When phone collection is skipped, also skip OTP-related slots so that
         # the OTP form can validate and move to the next step.
         if result.get("complainant_phone") == self.DEFAULT_VALUES["SKIP_VALUE"]:

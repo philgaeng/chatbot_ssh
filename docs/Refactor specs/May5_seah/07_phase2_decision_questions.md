@@ -14,7 +14,7 @@ Please answer each question directly (pick one option or write your own value).
 
 Which field becomes the single canonical internal identifier for all cases (standard + SEAH)?
 
-- [ ] A) `grievance_id` (recommended)
+- [ X] A) `grievance_id` (recommended)
 - [ ] B) `seah_case_id`
 - [ ] C) New synthetic `case_id`
 - [ ] D) Other: `____________________`
@@ -24,20 +24,22 @@ Which field becomes the single canonical internal identifier for all cases (stan
 How should `seah_public_ref` behave after consolidation?
 
 - [ ] A) Keep as public token mapped to canonical case id (recommended)
-- [ ] B) Replace with canonical id directly
+- [ X] B) Replace with canonical id directly
 - [ ] C) Keep both visible to officers
 - [ ] D) Other: `____________________`
+
+we dont need to keep backward compatibiity
 
 ### Q3. Uniqueness and format
 
 Should canonical case IDs follow a strict format rule?
 
 - [ ] A) Yes, enforce regex/format in DB constraint
-- [ ] B) Yes, enforce in app only
+- [ X] B) Yes, enforce in app only
 - [ ] C) No strict format
 - [ ] D) Other: `____________________`
 
-If yes, specify format: `____________________`
+If yes, specify format: format similar to the current grievance_id. it is enforced by the app
 
 ---
 
@@ -47,16 +49,17 @@ If yes, specify format: `____________________`
 
 What is the minimum required party linkage?
 
-- [ ] A) At least 1 `grievance_parties` row for every grievance (recommended)
+- [X ] A) At least 1 `grievance_parties` row for every grievance (recommended)
 - [ ] B) Optional for non-SEAH, required for SEAH
 - [ ] C) Optional for all
 - [ ] D) Other: `____________________`
+      by default, victim
 
 ### Q5. Primary reporter rule
 
 How many `is_primary_reporter = true` rows are allowed per grievance?
 
-- [ ] A) Exactly 1 (recommended)
+- [ X] A) Exactly 1 (recommended)
 - [ ] B) At most 1
 - [ ] C) Any number
 - [ ] D) Other: `____________________`
@@ -65,7 +68,7 @@ How many `is_primary_reporter = true` rows are allowed per grievance?
 
 For anonymous SEAH, what is required?
 
-- [ ] A) Allow `complainant_id = NULL` but require `party_role` row(s) (recommended)
+- [ X] A) Allow `complainant_id = NULL` but require `party_role` row(s) (recommended)
 - [ ] B) Require `complainant_id` always
 - [ ] C) No `grievance_parties` row required if anonymous
 - [ ] D) Other: `____________________`
@@ -74,8 +77,9 @@ For anonymous SEAH, what is required?
 
 Approve role enum for phase 2?
 
-- [ ] A) `victim_survivor`, `witness`, `relative_or_representative`, `seah_focal_point`, `reporter_other` (recommended)
+- [ X] A) `victim_survivor`, `witness`, `relative_or_representative`, `seah_focal_point`, `reporter_other` (recommended)
 - [ ] B) Add/remove roles: `____________________`
+      as of now, we have only 3 roles encoded by chatbot (`victim_survivor`, `relative_or_representative`, `seah_focal_point`), the others can be specicifed by officer in ticketing
 
 ---
 
@@ -85,7 +89,7 @@ Approve role enum for phase 2?
 
 Once phase 2 starts, should we hard-stop writes of sensitive narrative to old SEAH fields/tables?
 
-- [ ] A) Yes, hard-stop immediately after migration (recommended)
+- [X ] A) Yes, hard-stop immediately after migration (recommended)
 - [ ] B) Dual-write for a short window, then stop
 - [ ] C) Keep dual-write indefinitely
 - [ ] D) Other: `____________________`
@@ -96,7 +100,7 @@ If dual-write window: duration = `____________________`
 
 How to handle `seah_payload` (full snapshot) after cutover?
 
-- [ ] A) Stop writing it; move to vault payloads only (recommended)
+- [ X] A) Stop writing it; move to vault payloads only (recommended)
 - [ ] B) Keep writing but with aggressive redaction
 - [ ] C) Keep unchanged
 - [ ] D) Other: `____________________`
@@ -105,7 +109,7 @@ How to handle `seah_payload` (full snapshot) after cutover?
 
 Confirm source of truth for original narrative text:
 
-- [ ] A) `public.grievance_vault_payloads` only (recommended)
+- [ X] A) `public.grievance_vault_payloads` only (recommended)
 - [ ] B) Vault + canonical grievance text fields
 - [ ] C) Other: `____________________`
 
@@ -117,7 +121,7 @@ Confirm source of truth for original narrative text:
 
 How should payload contracts between public and ticketing be managed?
 
-- [ ] A) Versioned JSON schema with required/optional fields (recommended)
+- [ X] A) Versioned JSON schema with required/optional fields (recommended)
 - [ ] B) Document-only contract, no schema enforcement
 - [ ] C) Generated API client contract only
 - [ ] D) Other: `____________________`
@@ -126,11 +130,11 @@ How should payload contracts between public and ticketing be managed?
 
 Select minimum required fields ticketing must always receive:
 
-- [ ] `grievance_id`
-- [ ] `case_sensitivity`
-- [ ] non-PII routing (`country_code`, `location_code`, `organization_id`, `project_code`)
-- [ ] `summary_profile_version`
-- [ ] `safe_summary`
+- [ X] `grievance_id`
+- [ X] `case_sensitivity`
+- [X ] non-PII routing (`country_code`, `location_code`, `organization_id`, `project_code`)
+- [X ] `summary_profile_version`
+- [X ] `safe_summary`
 - [ ] other: `____________________`
 
 ---
@@ -139,7 +143,7 @@ Select minimum required fields ticketing must always receive:
 
 ### Q13. Should reveal policy include party-role context?
 
-- [ ] A) Yes, include `party_role` and `is_primary_reporter` in policy inputs (recommended)
+- [ X] A) Yes, include `party_role` and `is_primary_reporter` in policy inputs (recommended)
 - [ ] B) No, role/scope/sensitivity is enough
 - [ ] C) Other: `____________________`
 
@@ -147,7 +151,7 @@ Select minimum required fields ticketing must always receive:
 
 Pick SEAH-specific tightening strategy:
 
-- [ ] A) Lower TTL + lower quotas + stronger alerts (recommended baseline)
+- [ X] A) Lower TTL + lower quotas + stronger alerts (recommended baseline)
 - [ ] B) Add mandatory dual-approval for SEAH reveals
 - [ ] C) Allow by standard rule only
 - [ ] D) Other: `____________________`
@@ -160,7 +164,7 @@ Pick SEAH-specific tightening strategy:
 
 After successful backfill and verification, should legacy SEAH tables be dropped in phase 2?
 
-- [ ] A) Yes, drop in same migration series (recommended for clean dev state)
+- [X ] A) Yes, drop in same migration series (recommended for clean dev state)
 - [ ] B) Keep renamed/archive tables for one sprint
 - [ ] C) Keep indefinitely
 - [ ] D) Other: `____________________`
@@ -169,7 +173,7 @@ After successful backfill and verification, should legacy SEAH tables be dropped
 
 Preferred rollback approach:
 
-- [ ] A) DB snapshot restore only (recommended for high-change migration)
+- [ X] A) DB snapshot restore only (recommended for high-change migration)
 - [ ] B) Full down-migration support
 - [ ] C) Hybrid (partial down + snapshot fallback)
 - [ ] D) Other: `____________________`
@@ -178,7 +182,7 @@ Preferred rollback approach:
 
 ## G. Completion gate for phase 2
 
-### Q17. Accept phase 2 only when all are true?
+### Q17. Accept phase 2 only when all are true? YES
 
 - [ ] canonical single grievance table active
 - [ ] canonical single complainant table active
@@ -190,4 +194,3 @@ Preferred rollback approach:
 If any additional acceptance gate is needed, list here:
 
 `____________________________________________________________`
-

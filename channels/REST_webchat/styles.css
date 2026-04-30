@@ -155,9 +155,17 @@
   background: var(--light-bg);
   border-top: 1px solid #eee;
   display: flex;
+  flex-direction: column;
   gap: 10px;
   position: relative;
-  align-items: flex-end;
+  align-items: stretch;
+}
+
+.chat-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .input-container {
@@ -166,6 +174,21 @@
   position: relative;
   align-items: flex-end;
   gap: 8px;
+}
+
+.persistent-control-button {
+  background: #6c757d;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: clamp(13px, 3.5vw, 15px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.persistent-control-button:hover {
+  background: #5a6268;
 }
 
 #message-input {
@@ -204,6 +227,7 @@
   justify-content: center;
   min-width: 44px;
   height: 44px;
+  flex: 0 0 auto;
 }
 
 .attachment-button:disabled {
@@ -230,6 +254,7 @@
   justify-content: center;
   padding: 0;
   margin: 0;
+  flex: 0 0 auto;
 }
 
 .send-button:disabled {
