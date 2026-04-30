@@ -82,13 +82,13 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "File a grievance", "payload": "/new_grievance"},
-                        {"title": "Report SEAH/SEIA concern", "payload": "/seah_intake"},
+                        {"title": "Report sexual exploitation, sexual abuse, and sexual harassment", "payload": "/seah_intake"},
                         {"title": "Check my status", "payload": "/check_status"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
                     'ne': [
                         {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
-                        {"title": "SEAH/SEIA उजुरी दर्ता गर्नुहोस्", "payload": "/seah_intake"},
+                        {"title": "असुरक्षित व्यवहार, असुरक्षित व्यवहार, वा असुरक्षित व्यवहार रिपोर्ट गर्नुहोस्", "payload": "/seah_intake"},
                         {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                     ]
@@ -964,7 +964,7 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "File a grievance", "payload": "/new_grievance"},
-                        {"title": "Report SEAH/SEIA concern", "payload": "/seah_intake"},
+                        {"title": "Report sexual exploitation, sexual abuse, and sexual harassment", "payload": "/seah_intake"},
                         {"title": "Check my status", "payload": "/start_status_check"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
