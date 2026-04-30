@@ -1,0 +1,320 @@
+{
+  "flow_id": "seah_intake",
+  "version": "2026-04-21",
+  "title": "Dedicated SEAH intake (orchestrator)",
+  "authority": "backend/orchestrator/state_machine.py",
+  "related_specs": [
+    "docs/Refactor specs/April20_seah/00_seah_sensitive_flow_spec.md",
+    "docs/Refactor specs/April20_seah/01_seah_route_and_slots.md",
+    "docs/Refactor specs/April20_seah/07_seah_focal_point_flow.md",
+    "docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md"
+  ],
+  "entry_points": [
+    {
+      "id": "menu_seah_intake",
+      "intent": "start_seah_intake",
+      "payload": "/seah_intake",
+      "guards": ["SEAH enabled: _is_seah_enabled() in state_machine.py"],
+      "sets_slots": {
+        "story_main": "seah_intake",
+        "grievance_sensitive_issue": true
+      },
+      "first_turn_id": "form_seah_1",
+      "note": "If SEAH is disabled, user stays on main_menu (legacy)."
+    },
+    {
+      "id": "grievance_sensitive_merge",
+      "note": "After form_grievance completes with grievance_sensitive_issue true (non-dedicated route); merges into same form_seah_1.",
+      "first_turn_id": "form_seah_1"
+    }
+  ],
+  "main_turns": [
+    {
+      "id": "form_seah_1",
+      "summary": "Framing, identity mode (identified/anonymous), victim/survivor role (incl. focal_point when allowed).",
+      "orchestrator_state": "form_seah_1",
+      "active_loop": "form_seah_1",
+      "edges_on_complete": [
+        {
+          "when": "story_main == \"seah_intake\" AND seah_victim_survivor_role == \"focal_point\"",
+          "next_turn_id": "form_otp",
+          "orchestrator_next_state": "otp_form",
+          "active_loop": "form_otp",
+          "slot_effects": ["seah_focal_stage = bootstrap_reporter_otp"]
+        },
+        {
+          "when": "story_main == \"seah_intake\" AND sensitive_issues_follow_up == \"identified\"",
+          "next_turn_id": "form_otp",
+          "orchestrator_next_state": "otp_form",
+          "active_loop": "form_otp",
+          "slot_effects": ["Phone capture only for SEAH+sensitive (no OTP verification step)"]
+        },
+        {
+          "when": "Otherwise (e.g. anonymous victim path, or non-seah story_main)",
+          "next_turn_id": "contact_form",
+          "orchestrator_next_state": "contact_form",
+          "active_loop": "form_contact"
+        }
+      ]
+    },
+    {
+      "id": "form_otp",
+      "summary": "Shared OTP form; SEAH dedicated intake uses complainant_phone only (see step_details).",
+      "orchestrator_state": "otp_form",
+      "active_loop": "form_otp",
+      "edges_on_complete": [
+        {
+          "when": "story_main == \"seah_intake\" AND seah_focal_stage == \"bootstrap_reporter_otp\"",
+          "next_turn_id": "contact_form",
+          "orchestrator_next_state": "contact_form",
+          "active_loop": "form_contact",
+          "slot_effects": [
+            "seah_focal_stage = bootstrap_reporter_contact",
+            "Location-related complainant_* slots reset/skipped for next contact stage (see state_machine.py)"
+          ]
+        },
+        {
+          "when": "story_main == \"seah_intake\" AND seah_focal_stage == \"complainant_otp\"",
+          "next_turn_id": "contact_form",
+          "orchestrator_next_state": "contact_form",
+          "active_loop": "form_contact",
+          "slot_effects": ["seah_focal_stage = complainant_contact"]
+        },
+        {
+          "when": "story_main == \"seah_intake\" (identified victim: phone collected, no focal stage)",
+          "next_turn_id": "contact_form",
+          "orchestrator_next_state": "contact_form",
+          "active_loop": "form_contact"
+        }
+      ]
+    },
+    {
+      "id": "contact_form",
+      "summary": "Location + contact; SEAH overrides by identity and seah_focal_stage (see step_details).",
+      "orchestrator_state": "contact_form",
+      "active_loop": "form_contact",
+      "edges_on_complete": [
+        {
+          "when": "story_main == \"seah_intake\" AND focal_point AND seah_focal_stage == \"bootstrap_reporter_contact\"",
+          "next_turn_id": "form_seah_focal_point_1",
+          "orchestrator_next_state": "form_seah_focal_point_1",
+          "active_loop": "form_seah_focal_point_1",
+          "slot_effects": [
+            "Invokes action_prepare_seah_focal_complainant_capture before first focal form turn",
+            "seah_focal_stage = focal_point_1"
+          ]
+        },
+        {
+          "when": "story_main == \"seah_intake\" AND focal_point AND seah_focal_stage == \"complainant_contact\"",
+          "next_turn_id": "form_seah_focal_point_2",
+          "orchestrator_next_state": "form_seah_focal_point_2",
+          "active_loop": "form_seah_focal_point_2",
+          "slot_effects": ["seah_focal_stage = focal_point_2"]
+        },
+        {
+          "when": "story_main == \"seah_intake\" AND focal_point (other focal stages)",
+          "next_turn_id": "form_seah_focal_point_2",
+          "orchestrator_next_state": "form_seah_focal_point_2",
+          "active_loop": "form_seah_focal_point_2",
+          "slot_effects": ["seah_focal_stage = focal_point_2"]
+        },
+        {
+          "when": "story_main == \"seah_intake\" AND NOT focal_point",
+          "next_turn_id": "form_seah_2",
+          "orchestrator_next_state": "form_seah_2",
+          "active_loop": "form_seah_2"
+        }
+      ]
+    },
+    {
+      "id": "form_seah_focal_point_1",
+      "summary": "Focal reporter consent, learned_when, complainant identity mode; branches on consent to report.",
+      "orchestrator_state": "form_seah_focal_point_1",
+      "active_loop": "form_seah_focal_point_1",
+      "edges_on_complete": [
+        {
+          "when": "seah_focal_reporter_consent_to_report == \"no\"",
+          "next_turn_id": "form_seah_focal_point_2",
+          "orchestrator_next_state": "form_seah_focal_point_2",
+          "active_loop": "form_seah_focal_point_2",
+          "slot_effects": [
+            "seah_focal_stage = focal_point_2",
+            "Default/skip complainant identity and seah_contact_consent_channel as applicable (see code)"
+          ]
+        },
+        {
+          "when": "Consent to report is not \"no\"",
+          "next_turn_id": "form_otp",
+          "orchestrator_next_state": "otp_form",
+          "active_loop": "form_otp",
+          "slot_effects": ["seah_focal_stage = complainant_otp"]
+        }
+      ]
+    },
+    {
+      "id": "form_seah_2",
+      "summary": "Victim path: project, narrative, informed contact channel (when not anonymous).",
+      "orchestrator_state": "form_seah_2",
+      "active_loop": "form_seah_2",
+      "edges_on_complete": [
+        {
+          "when": "Form completes",
+          "next_turn_id": "submit_seah",
+          "orchestrator_next_state": "done",
+          "active_loop": null,
+          "slot_effects": [
+            "action_submit_seah",
+            "Optional action_seah_outro after successful submit when seah_public_ref set (spec 08)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "form_seah_focal_point_2",
+      "summary": "Focal path: project, narrative, risk fields, contact consent, referral.",
+      "orchestrator_state": "form_seah_focal_point_2",
+      "active_loop": "form_seah_focal_point_2",
+      "edges_on_complete": [
+        {
+          "when": "Form completes",
+          "next_turn_id": "submit_seah",
+          "orchestrator_next_state": "done",
+          "active_loop": null,
+          "slot_effects": [
+            "action_submit_seah",
+            "Optional action_seah_outro after successful submit when seah_public_ref set (spec 08)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "submit_seah",
+      "summary": "Terminal: no active loop; conversation ends at next_state done (outro messages may be appended).",
+      "orchestrator_state": "done",
+      "active_loop": null,
+      "terminal": true
+    }
+  ],
+  "step_details": {
+    "form_seah_1": {
+      "purpose": "SEAH intro, identity mode, and victim/survivor/focal role selection.",
+      "slots_collected": [
+        "sensitive_issues_follow_up",
+        "seah_victim_survivor_role"
+      ],
+      "slots_runtime_note": "Authoritative required_slots in backend/actions/forms/form_seah_1.py (ValidateFormSeah1). domain.yml lists a minimal placeholder.",
+      "guards": [
+        "If grievance_sensitive_issue becomes false (e.g. not_sensitive_content), form can complete with no further slots."
+      ],
+      "side_effects": [
+        "Anonymous path clears identity/OTP-related slots to skipped in validator."
+      ],
+      "code_refs": [
+        "backend/actions/forms/form_seah_1.py",
+        "backend/orchestrator/state_machine.py (state == \"form_seah_1\")"
+      ]
+    },
+    "form_otp": {
+      "purpose": "Phone / OTP collection depending on story; SEAH dedicated intake uses phone-only branch.",
+      "slots_collected": ["complainant_phone (SEAH seah_intake + sensitive)"],
+      "slots_runtime_note": "ValidateFormOtp.required_slots — for seah_intake + grievance_sensitive_issue returns only complainant_phone (no otp_consent / otp_input / otp_status).",
+      "guards": ["story_main and seah_focal_stage determine which contact stage follows."],
+      "code_refs": [
+        "backend/actions/forms/form_otp.py",
+        "backend/orchestrator/state_machine.py (state == \"otp_form\")"
+      ]
+    },
+    "contact_form": {
+      "purpose": "Location chain and complainant contact fields with SEAH-specific subsets.",
+      "slots_collected": [
+        "complainant_location_consent",
+        "complainant_province",
+        "complainant_district",
+        "complainant_municipality_temp",
+        "complainant_municipality",
+        "complainant_municipality_confirmed",
+        "complainant_village_temp",
+        "complainant_village",
+        "complainant_village_confirmed",
+        "complainant_ward",
+        "complainant_address_temp",
+        "complainant_address",
+        "complainant_address_confirmed",
+        "complainant_consent",
+        "complainant_full_name",
+        "complainant_email_temp",
+        "complainant_email_confirmed"
+      ],
+      "slots_runtime_note": "SEAH: anonymous seah_intake → location only; focal bootstrap_reporter_contact → location + consent + name only; focal complainant_contact → consent + name + email only; identified victim → full chain per ValidateFormContact.",
+      "actions_invoked": [
+        "action_prepare_seah_focal_complainant_capture (when focal bootstrap_reporter_contact completes)"
+      ],
+      "code_refs": [
+        "backend/actions/forms/form_contact.py",
+        "backend/orchestrator/state_machine.py (state == \"contact_form\")"
+      ]
+    },
+    "form_seah_2": {
+      "purpose": "Victim path incident details and informed contact channel.",
+      "slots_collected": [
+        "seah_project_identification",
+        "seah_not_adb_project",
+        "sensitive_issues_new_detail",
+        "grievance_description",
+        "grievance_description_status",
+        "seah_contact_consent_channel"
+      ],
+      "slots_runtime_note": "seah_contact_consent_channel omitted from required_slots when anonymous.",
+      "actions_invoked": ["action_submit_seah", "action_seah_outro (conditional)"],
+      "code_refs": [
+        "backend/actions/forms/form_seah_2.py",
+        "backend/actions/action_submit_grievance.py (ActionSubmitSeah)",
+        "backend/orchestrator/state_machine.py (state == \"form_seah_2\")"
+      ]
+    },
+    "form_seah_focal_point_1": {
+      "purpose": "Focal reporter: when learned, consent to report here, complainant identified vs anonymous.",
+      "slots_collected": [
+        "seah_focal_learned_when",
+        "seah_focal_reporter_consent_to_report",
+        "sensitive_issues_follow_up"
+      ],
+      "slots_runtime_note": "Full list and conditionals in ValidateFormSeahFocalPoint1.",
+      "side_effects": [
+        "If consent_to_report == no, jump to focal_point_2 with defaults/skips for complainant contact fields."
+      ],
+      "code_refs": [
+        "backend/actions/forms/form_seah_focal_point.py",
+        "backend/orchestrator/state_machine.py (state == \"form_seah_focal_point_1\")"
+      ]
+    },
+    "form_seah_focal_point_2": {
+      "purpose": "Focal project/narrative, risk assessment fields, contact consent, referred-to-support.",
+      "slots_collected": [
+        "seah_project_identification",
+        "sensitive_issues_new_detail",
+        "grievance_description",
+        "grievance_description_status",
+        "seah_contact_consent_channel",
+        "seah_focal_referred_to_support"
+      ],
+      "slots_runtime_note": "Additional focal-only slots (risks, mitigation, etc.) in ValidateFormSeahFocalPoint2; some branches skip when not_adb_project.",
+      "actions_invoked": ["action_submit_seah", "action_seah_outro (conditional)"],
+      "code_refs": [
+        "backend/actions/forms/form_seah_focal_point.py",
+        "backend/orchestrator/state_machine.py (state == \"form_seah_focal_point_2\")"
+      ]
+    },
+    "submit_seah": {
+      "purpose": "Persist SEAH intake and surface reference; optional variant outro.",
+      "actions_invoked": ["action_submit_seah", "action_seah_outro"],
+      "guards": [
+        "action_seah_outro only when story_main == seah_intake and seah_public_ref is set (_append_seah_outro_after_submit_if_applicable)."
+      ],
+      "code_refs": [
+        "backend/orchestrator/state_machine.py (_append_seah_outro_after_submit_if_applicable)",
+        "docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md"
+      ]
+    }
+  }
+}

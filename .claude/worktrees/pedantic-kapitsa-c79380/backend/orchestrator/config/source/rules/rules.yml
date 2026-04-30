@@ -1,0 +1,142 @@
+version: "3.1"
+
+rules:
+  - rule: Introduce the bot
+    steps:
+      - intent: introduce
+      - action: action_introduce
+
+  - rule: Say goodbye anytime the user says goodbye
+    steps:
+      - intent: nav_goodbye
+      - action: action_goodbye
+
+  - rule: Back to main menu
+    steps:
+      - intent: nav_main_menu
+      - action: action_main_menu
+
+  - rule: Respond to user challenge
+    steps:
+      - intent: bot_challenge
+      - action: action_respond_to_challenge
+
+  - rule: Respond to user stating their great mood
+    steps:
+      - intent: mood_great
+      - action: action_handle_mood_great
+
+  - rule: User files the grievance as is
+    steps:
+      - intent: grievance_submit_as_is
+      - action: action_submit_grievance_as_is
+
+  - rule: Exit grievance filing at any time
+    steps:
+      - intent: nav_exit
+      - action: action_exit_without_filing
+      - action: action_main_menu
+
+  - rule: Implementation of the Two-Stage-Fallback
+    steps:
+      - intent: nlu_fallback
+      - action: action_default_fallback
+
+  - rule: Close browser tab
+    steps:
+      - intent: nav_close_browser_tab
+      - action: action_close_browser_tab
+
+  - rule: Attach files
+    steps:
+      - intent: question_attach_files
+      - action: action_question_attach_files
+
+  - rule: Next action after form_status_check_1
+    condition:
+      - active_loop: form_status_check_1
+    steps:
+      - action: form_status_check_1
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_status_check_2
+    condition:
+      - active_loop: form_status_check_2
+    steps:
+      - action: form_status_check_2
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+
+    wait_for_user_input: false
+
+  - rule: Next action after form_otp
+    condition:
+      - active_loop: form_otp
+    steps:
+      - action: form_otp
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_grievance
+    condition:
+      - active_loop: form_grievance
+    steps:
+      - action: form_grievance
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_contact
+    condition:
+      - active_loop: form_contact
+    steps:
+      - action: form_contact
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_story_main
+    condition:
+      - active_loop: form_story_main
+    steps:
+      - action: form_story_main
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_story_route
+    condition:
+      - active_loop: form_story_route
+    steps:
+      - action: form_story_route
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false
+
+  - rule: Next action after form_story_step
+    condition:
+      - active_loop: form_story_step
+    steps:
+      - action: form_story_step
+      - active_loop: null
+      - slot_was_set:
+          - requested_slot: null
+      - action: action_next_action
+    wait_for_user_input: false

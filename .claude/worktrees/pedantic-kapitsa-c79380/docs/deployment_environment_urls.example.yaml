@@ -1,0 +1,79 @@
+# docs/deployment_environment_urls.local.yaml — do not commit secrets
+meta:
+  project: nepal_chatbot
+  purpose: >-
+    Public URLs, server names, host filesystem paths, and upstream targets
+    for dev / stage / prod. Keep in sync with deployment/nginx/*.conf.
+
+nginx_location_prefixes:
+  rest_webchat: /rest-webchat/
+  shared_assets: /shared/
+  orchestrator_message: /message
+  orchestrator_health: /health
+  accessible_socketio: /accessible-socket.io
+  upload_files: /upload-files
+  files_api: /files/
+  file_status: /file-status/
+  task_status: /task-status/
+  gsheet_get_grievances: /gsheet-get-grievances
+
+environments:
+
+  dev_wsl:
+    label: "Local dev (WSL)"
+    public:
+      base_url: "http://localhost"
+      server_name: "localhost"
+    tls:
+      terminated_at: none # none | nginx | alb
+    nginx:
+      listen_port: 80
+    host_paths:
+      repo_root: "/home/YOU/projects/nepal_chatbot"
+      rest_webchat_dir: REPLACE_ME
+      shared_dir: REPLACE_ME
+    upstreams:
+      orchestrator: "http://127.0.0.1:8000"
+      fastapi_backend: "http://127.0.0.1:5001"
+    notes: []
+
+  stage:
+    label: "Staging"
+    public:
+      base_url: "https://REPLACE_STAGE_HOST"
+      server_name: "REPLACE_STAGE_HOST"
+    tls:
+      terminated_at: alb
+    nginx:
+      listen_port: 80
+    host_paths:
+      repo_root: "/home/ubuntu/nepal_chatbot"
+      rest_webchat_dir: "/home/ubuntu/nepal_chatbot/channels/REST_webchat"
+      shared_dir: "/home/ubuntu/nepal_chatbot/channels/shared"
+    upstreams:
+      orchestrator: "http://127.0.0.1:8000"
+      fastapi_backend: "http://127.0.0.1:5001"
+    notes: []
+
+  prod_aws:
+    label: "Production (aligned with webchat_rest_aws.conf)"
+    public:
+      base_url: "https://nepal-gms-chatbot.facets-ai.com"
+      server_name: "nepal-gms-chatbot.facets-ai.com"
+    tls:
+      terminated_at: alb
+    nginx:
+      listen_port: 80
+    host_paths:
+      repo_root: "/home/ubuntu/nepal_chatbot"
+      rest_webchat_dir: "/home/ubuntu/nepal_chatbot/channels/REST_webchat"
+      shared_dir: "/home/ubuntu/nepal_chatbot/channels/shared"
+    upstreams:
+      orchestrator: "http://127.0.0.1:8000"
+      fastapi_backend: "http://127.0.0.1:5001"
+    notes:
+      - "Docker Compose: use service names, e.g. http://orchestrator:8000"
+
+# other_services:
+#   rasa: "http://127.0.0.1:5005"
+#   rasa_actions: "http://127.0.0.1:5055"

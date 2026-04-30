@@ -1,0 +1,99 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Logs and runtime files
+*.log
+*.pid
+*.out
+*.err
+.bash_history
+
+# Environment and dependency folders
+create_env.sh
+env.local
+env.local.example
+aws_local.local
+*.aws.local
+.env
+venv/
+.venv/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+rasa-env/
+
+# Data files
+*.db
+db.sqlite3
+instance/
+.mypy_cache/
+.pytest_cache/
+
+# Redis database files
+dump.rdb
+*.rdb
+appendonlydir/
+
+# Rasa-specific
+models/          # Trained model files
+results/         # Test results
+*.rasa           # Rasa files created during training
+events.log       # Rasa server logs
+rasa.db          # SQLite database used by tracker store (if applicable)
+.rasa/cache/
+**/.rasa/cache/
+*.dot            # Story graph files (generated)
+story_graph.dot  # Rasa story graph visualization
+
+# Docker-specific
+docker-compose.override.yml
+*.tar
+docker_images/
+deployment/certbot/
+
+# Cursor / agent scratch
+.cursor_tmp/
+
+# IDE-specific files
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Temporary files
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Other large files
+*.pkl
+*.tar.gz
+*.tar
+
+# Project-specific
+docs/deployment_environment_urls.local.yaml
+aws/            # AWS related files
+deployment/aws/ # AWS deployment files
+**/dist/        # Distribution files
+github_connection_setup.txt  # Contains sensitive setup information
+
+# AWS CLI and uploads
+**/awscliv2.zip    # Ignore awscliv2.zip in any directory
+*.zip           # Ignore all zip files
+/logs/              # Ignore entire logs directory
+/task_queue/logs/   # Ignore entire logs directory
+/models/            # Ignore entire models directory
+logs/               # Ignore entire logs directory
+logs/metrics.json
+task_queue/logs/    # Ignore entire logs directory
+models/             # Ignore entire models directory
+uploads/
+logs/*.log.*
+env.local
+

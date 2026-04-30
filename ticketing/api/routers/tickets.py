@@ -17,6 +17,7 @@ Officer UI (JWT auth — stub for proto):
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
@@ -43,15 +44,20 @@ from ticketing.api.schemas.ticket import (
     TicketPatch,
     TicketReplyRequest,
     TicketReplyResponse,
+    ComplainantPatch,
+    ComplainantPatchResponse,
 )
+from ticketing.clients.grievance_api import patch_complainant
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
 from ticketing.models.officer_scope import OfficerScope
+from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
+from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
@@ -136,6 +142,30 @@ def _next_step(db: Session, workflow_id: str, current_order: int) -> Optional[Wo
 def _actor_role(current_user: CurrentUser) -> Optional[str]:
     """Snapshot the first role key at write time for audit correlation."""
     return current_user.role_keys[0] if getattr(current_user, "role_keys", None) else None
+
+
+def _extract_mentions(text: str) -> list[str]:
+    """Return list of @mention targets from note text (e.g. ['piu-l2', 'all'])."""
+    return re.findall(r"@([\w][\w.-]*)", text)
+
+
+def _is_viewer(db: "Session", ticket_id: str, user_id: str) -> bool:
+    """True if this user is a viewer of the ticket."""
+    return db.execute(
+        select(TicketViewer).where(
+            TicketViewer.ticket_id == ticket_id,
+            TicketViewer.user_id == user_id,
+        )
+    ).scalar_one_or_none() is not None
+
+
+def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
+    """Return list of all viewer user_ids for a ticket."""
+    viewers = db.execute(
+        select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
+    ).scalars().all()
+    return [v.user_id for v in viewers]
+
 
 
 def _add_event(
@@ -303,14 +333,23 @@ def list_tickets(
 
     # ── Scope filter: non-admins only see tickets in their jurisdictions ──
     # Admins (super_admin, local_admin) and observers see all; field officers are scoped.
+    # Viewers also see their watched tickets regardless of scope.
     if not current_user.is_admin:
         scopes = db.execute(
             select(OfficerScope).where(OfficerScope.user_id == current_user.user_id)
         ).scalars().all()
 
+        # Tickets this user is a viewer of — always visible regardless of scope
+        viewed_ticket_ids = db.execute(
+            select(TicketViewer.ticket_id).where(TicketViewer.user_id == current_user.user_id)
+        ).scalars().all()
+
         if not scopes:
-            # No scope rows at all → officer only sees tickets explicitly assigned to them
-            q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
+            # No scope rows → only assigned tickets OR watched tickets
+            q = q.where(or_(
+                Ticket.assigned_to_user_id == current_user.user_id,
+                Ticket.ticket_id.in_(viewed_ticket_ids),
+            ))
         else:
             scope_conditions = []
             for scope in scopes:
@@ -320,6 +359,9 @@ def list_tickets(
                 if scope.project_code:
                     parts.append(Ticket.project_code == scope.project_code)
                 scope_conditions.append(and_(*parts))
+            # Also include viewed tickets outside the normal scope
+            if viewed_ticket_ids:
+                scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
             q = q.where(or_(*scope_conditions))
 
     if my_queue:
@@ -409,6 +451,40 @@ def get_ticket(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Viewer access — allow through even if not in normal scope
+    # (scope enforcement happens at list level; detail allows any authenticated viewer)
+    # Admins, assigned officer, and viewers all have access. Others with no scope
+    # record for this ticket are rejected.
+    if not current_user.is_admin:
+        if (
+            ticket.assigned_to_user_id != current_user.user_id
+            and not _is_viewer(db, ticket_id, current_user.user_id)
+        ):
+            # Fall back to scope check — if they have a scope that covers this ticket, allow
+            from ticketing.models.officer_scope import OfficerScope as _OfficerScope
+            scopes = db.execute(
+                select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
+            ).scalars().all()
+            in_scope = any(
+                s.organization_id == ticket.organization_id and
+                (s.location_code is None or s.location_code == ticket.location_code) and
+                (s.project_code is None or s.project_code == ticket.project_code)
+                for s in scopes
+            )
+            if not in_scope:
+                raise HTTPException(status_code=403, detail="Access denied")
+
+    # Attach viewer list (used by @mention autocomplete on the client)
+    viewers = db.execute(
+        select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
+        .order_by(TicketViewer.added_at)
+    ).scalars().all()
+    # Attach as a synthetic attribute so the Pydantic schema can pick it up
+    ticket.__dict__["viewers"] = [
+        {"viewer_id": v.viewer_id, "user_id": v.user_id, "added_by_user_id": v.added_by_user_id, "added_at": v.added_at.isoformat()}
+        for v in viewers
+    ]
+
     return ticket
 
 
@@ -464,6 +540,92 @@ def patch_ticket(
     db.commit()
     db.refresh(ticket)
     return ticket
+
+
+# ─── PATCH /tickets/{ticket_id}/complainant — edit complainant info ───────────
+
+# Roles that may edit complainant info (assigned officer + managers).
+_COMPLAINANT_EDIT_ROLES = {
+    "site_safeguards_focal_person", "pd_piu_safeguards_focal",
+    "seah_national_officer", "seah_hq_officer",
+    "super_admin", "local_admin",
+}
+
+
+@router.patch(
+    "/tickets/{ticket_id}/complainant",
+    response_model=ComplainantPatchResponse,
+    summary="Update whitelisted complainant fields",
+    description=(
+        "Proxies the update to the local chatbot backend "
+        "(`ticketing.projects.chatbot_base_url`). "
+        "Identity fields (full_name, phone) are never writable from ticketing. "
+        "Requires assigned officer or manager role."
+    ),
+)
+def patch_ticket_complainant(
+    ticket_id: str,
+    payload: ComplainantPatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ComplainantPatchResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Role check: assigned officer OR a manager role
+    is_assigned = ticket.assigned_to_user_id == current_user.user_id
+    is_manager  = current_user.role in _COMPLAINANT_EDIT_ROLES
+    if not (is_assigned or is_manager):
+        raise HTTPException(status_code=403, detail="Only the assigned officer or a manager can edit complainant info")
+
+    if not ticket.complainant_id:
+        raise HTTPException(status_code=422, detail="Ticket has no linked complainant_id")
+
+    fields = payload.non_null_fields()
+    if not fields:
+        raise HTTPException(status_code=422, detail="No fields provided to update")
+
+    # Resolve the chatbot URL for this project (multi-country support)
+    chatbot_url: str | None = None
+    if ticket.project_code:
+        project = db.execute(
+            select(Project).where(Project.short_code == ticket.project_code)
+        ).scalar_one_or_none()
+        if project:
+            chatbot_url = project.chatbot_base_url  # None → settings fallback
+
+    # Proxy to chatbot backend — raises httpx.HTTPError on non-recoverable failures
+    try:
+        result = patch_complainant(
+            complainant_id=ticket.complainant_id,
+            fields=fields,
+            chatbot_base_url=chatbot_url,
+        )
+    except Exception as exc:
+        logger.error("complainant patch failed: ticket=%s error=%s", ticket_id, exc)
+        raise HTTPException(status_code=502, detail=f"Chatbot backend unavailable: {exc}")
+
+    # Audit trail: log which fields were changed (no values — PII must not enter ticketing events)
+    updated_fields = result.get("updated_fields", list(fields.keys()))
+    event = _add_event(
+        db, ticket, "COMPLAINANT_UPDATED",
+        payload={"fields_changed": updated_fields, "proto_mode": result.get("_proto_mode", False)},
+        created_by=current_user.user_id,
+        seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+
+    return ComplainantPatchResponse(
+        ticket_id=ticket_id,
+        complainant_id=ticket.complainant_id,
+        fields_updated=updated_fields,
+        event_id=event.event_id,
+    )
 
 
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
@@ -624,6 +786,35 @@ def perform_action(
         )
         # Fire translation task after commit (7a — translate note to English for supervisors)
         _translate_note_event_id = event.event_id
+
+        # ── @mention notifications (UI_SPEC.md §2.8) ──────────────────────────
+        # Parse @mentions and create lightweight MENTION notification events.
+        # These events have seen=False (drive badge) but are NOT rendered in the thread.
+        mentions = _extract_mentions(payload.note)
+        if mentions:
+            viewer_ids = _get_viewer_ids(db, ticket_id)
+            assigned_id = ticket.assigned_to_user_id
+            all_participant_ids = list({*viewer_ids, *([assigned_id] if assigned_id else [])})
+
+            notify_set: set[str] = set()
+            for mention in mentions:
+                if mention.lower() == "all":
+                    notify_set.update(all_participant_ids)
+                elif mention != current_user.user_id:
+                    notify_set.add(mention)
+
+            for target_uid in notify_set:
+                _add_event(
+                    db, ticket, "MENTION",
+                    step_id=event_step_id,
+                    note=f"@mentioned by {current_user.user_id}",
+                    payload={"mentioned_by": current_user.user_id, "source_event_id": event.event_id},
+                    seen=False,
+                    notify_user_id=target_uid,
+                    created_by=current_user.user_id,
+                    actor_role=_actor_role(current_user),
+                    summary_regen_required=False,
+                )
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)

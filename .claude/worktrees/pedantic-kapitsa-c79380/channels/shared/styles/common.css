@@ -1,0 +1,586 @@
+/**
+ * Shared styles for Nepal Chatbot channels
+ */
+
+/* Basic Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Common Variables - Base theme */
+:root {
+    /* Colors - Base theme */
+    --primary-color: #0469ad;
+    --primary-dark: #033d66;
+    --primary-light: #e6f2f9;
+    --secondary-color: #2e7d32;
+    --secondary-dark: #1b5e20;
+    --secondary-light: #e8f5e9;
+    --error-color: #e03131;
+    --error-dark: #c92a2a;
+    --error-light: #ffe3e3;
+    --warning-color: #f08c00;
+    --warning-dark: #e67700;
+    --warning-light: #fff3bf;
+    --success-color: #2e7d32;
+    --success-dark: #1b5e20;
+    --success-light: #e8f5e9;
+    --info-color: #1971c2;
+    --info-dark: #1864ab;
+    --info-light: #d0ebff;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --light-bg: #ffffff;
+    --dark-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --border-radius: 0.375rem;
+    --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --transition: all 0.2s ease-in-out;
+    
+    /* Typography */
+    --base-font-size: 16px;
+    font-size: var(--base-font-size);
+}
+
+/* High Contrast Theme */
+body.high-contrast {
+    /* Primary colors - Dark blue palette */
+    --primary-color: #2c3e50;        /* Dark blue-gray */
+    --primary-dark: #1a252f;         /* Darker blue-gray */
+    --primary-light: #34495e;        /* Lighter blue-gray */
+    
+    /* Secondary colors - Complementary teal */
+    --secondary-color: #16a085;      /* Dark teal */
+    --secondary-dark: #138d75;       /* Darker teal */
+    --secondary-light: #48c9b0;      /* Lighter teal */
+    
+    /* Status colors - High contrast but refined */
+    --error-color: #e74c3c;          /* Clear red (less harsh than pure red) */
+    --error-dark: #c0392b;           /* Darker red */
+    --error-light: #f1948a;          /* Lighter red */
+    
+    --warning-color: #f39c12;        /* High contrast orange (better than pure yellow) */
+    --warning-dark: #d68910;         /* Darker orange */
+    --warning-light: #f8c471;        /* Lighter orange */
+    
+    --success-color: #27ae60;        /* Clear green (less harsh than pure green) */
+    --success-dark: #229954;         /* Darker green */
+    --success-light: #58d68d;        /* Lighter green */
+    
+    --info-color: #3498db;           /* Clear blue (less harsh than cyan) */
+    --info-dark: #2980b9;            /* Darker blue */
+    --info-light: #85c1e9;           /* Lighter blue */
+    
+    /* Text colors - High contrast */
+    --text-color: #ffffff;           /* Pure white for maximum contrast */
+    --text-muted: #bdc3c7;           /* Light gray for secondary text */
+    
+    /* Background colors - Charcoal palette */
+    --light-bg: #1a1a1a;             /* Dark charcoal */
+    --dark-bg: #2c2c2c;              /* Slightly lighter charcoal */
+    
+    /* UI elements */
+    --border-color: #ffffff;          /* White borders for maximum contrast */
+    --box-shadow: 0 0 0 2px #ffffff; /* White shadows for clarity */
+}
+
+/* High contrast specific overrides for better readability */
+body.high-contrast h1,
+body.high-contrast h2,
+body.high-contrast h3,
+body.high-contrast h4,
+body.high-contrast h5,
+body.high-contrast h6 {
+    color: var(--warning-color) !important; /* Use bright orange for headings for maximum visibility */
+}
+
+body.high-contrast .step-instruction {
+    color: var(--text-color) !important; /* Ensure step instructions are white */
+}
+
+body.high-contrast p,
+body.high-contrast span,
+body.high-contrast div {
+    color: var(--text-color); /* Ensure all text is white by default */
+}
+
+body.high-contrast .header-content h1 {
+    color: var(--warning-color) !important; /* Make header title clearly visible */
+}
+
+/* Base Typography */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-size: var(--base-font-size);
+}
+
+/* Typography Scale */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+h1 { 
+    font-size: calc(var(--base-font-size) * 1.375); 
+    margin-top: 1.8rem;
+    margin-bottom: 1.8rem;
+}
+h2 { font-size: calc(var(--base-font-size) * 1.125); }
+h3 { 
+    font-size: calc(var(--base-font-size) * 0.9375); 
+    color: var(--primary-dark);
+}
+h4 { 
+    font-size: calc(var(--base-font-size) * 0.78125);
+    color: var(--primary-dark);
+}
+h5 { font-size: calc(var(--base-font-size) * 0.6875); }
+h6 { font-size: calc(var(--base-font-size) * 0.625); }
+
+/* Enhanced font scaling - other elements */
+p, div, span, button, input, select, textarea {
+    font-size: inherit;
+}
+
+.step-instruction {
+    font-size: calc(var(--base-font-size) * 1.1);
+}
+
+button {
+    font-size: var(--base-font-size);
+}
+
+input, select, textarea {
+    font-size: var(--base-font-size);
+}
+
+/* Common Container */
+.container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Common Header */
+header {
+    padding: 10px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: var(--light-bg);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-content h1 {
+    font-size: 1.3rem;
+    margin: 0;
+    flex: 1;
+}
+
+.header-content img {
+    max-height: 40px;
+    width: auto;
+}
+
+/* Common Footer */
+footer {
+    margin-top: auto;
+    padding: 10px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--dark-bg);
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.footer-content p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Common Buttons */
+button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+button:hover {
+    background-color: var(--primary-dark);
+}
+
+button:active {
+    transform: translateY(2px);
+}
+
+/* Primary Button */
+.primary-btn {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.primary-btn:hover, 
+.primary-btn:focus {
+    background-color: var(--primary-dark);
+}
+
+/* Secondary Button */
+.secondary-btn {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.secondary-btn:hover,
+.secondary-btn:focus {
+    background-color: var(--secondary-dark);
+}
+
+/* Navigation Buttons */
+.nav-btn {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    border: 2px solid var(--primary-color);
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    margin: 0 10px;
+    padding: 0;
+}
+
+/* Ensure all icons inside nav-btn are consistent */
+.nav-btn i {
+    font-size: 1.4rem !important;
+    color: inherit !important;
+    width: 1em;
+    height: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-btn:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.nav-btn:disabled {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    background-color: var(--dark-bg);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.step-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+/* Form Elements */
+input, textarea, select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+    width: 100%;
+}
+
+input:focus, 
+textarea:focus, 
+select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(4, 92, 148, 0.2);
+}
+
+/* Enhanced focus styles */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+    position: relative;
+    z-index: 2;
+}
+
+/* Status Messages */
+.status-message {
+    padding: 10px 15px;
+    border-radius: var(--border-radius);
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-success {
+    background-color: var(--success-light);
+    color: var(--success-color);
+    border-left: 4px solid var(--success-color);
+}
+
+.status-error {
+    background-color: var(--error-light);
+    color: var(--error-color);
+    border-left: 4px solid var(--error-color);
+}
+
+.status-warning {
+    background-color: var(--warning-light);
+    color: var(--warning-color);
+    border-left: 4px solid var(--warning-color);
+}
+
+.status-info {
+    background-color: var(--info-light);
+    color: var(--info-color);
+    border-left: 4px solid var(--info-color);
+}
+
+/* Loading States */
+.loading {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid rgba(0,0,0,0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Dialog */
+dialog {
+    padding: 20px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--box-shadow);
+    max-width: 90%;
+    width: 400px;
+    margin: auto;
+    background-color: var(--light-bg);
+}
+
+dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+dialog h2 {
+    margin-top: 0;
+    color: var(--primary-color);
+}
+
+dialog ol, 
+dialog ul {
+    padding-left: 25px;
+    margin-bottom: 15px;
+}
+
+/* Tooltips */
+.tooltip {
+    position: absolute;
+    top: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0,0,0,0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition);
+    z-index: 1000;
+}
+
+.tooltip:hover,
+.tooltip:focus {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Accessibility */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--primary-color);
+    color: white;
+    padding: 8px;
+    z-index: 100;
+    transition: top 0.3s;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Enhanced High Contrast Styles */
+body.high-contrast {
+    /* Let CSS variables handle all colors - no hardcoded overrides */
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    
+    /* Enhanced borders and contrast for better visibility */
+    border-color: var(--border-color);
+}
+
+body.high-contrast button {
+    border: 2px solid var(--border-color);
+    background-color: var(--primary-color);
+    color: var(--text-color);
+}
+
+body.high-contrast button:hover,
+body.high-contrast button:focus {
+    background-color: var(--primary-dark);
+}
+
+body.high-contrast input,
+body.high-contrast textarea,
+body.high-contrast select {
+    background-color: var(--light-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+}
+
+body.high-contrast header,
+body.high-contrast footer {
+    background-color: var(--light-bg);
+    border-color: var(--border-color);
+}
+
+body.high-contrast .footer-content p {
+    color: var(--text-muted) !important;
+}
+
+body.high-contrast dialog {
+    background-color: var(--light-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+}
+
+body.high-contrast dialog h2 {
+    color: var(--warning-color) !important;  /* Use warning color for dialog titles for better visibility */
+}
+
+body.high-contrast dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+body.high-contrast .tooltip {
+    background-color: var(--dark-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+body.high-contrast .nav-btn {
+    border-color: var(--border-color);
+    color: var(--text-color);
+    background-color: transparent;
+}
+
+body.high-contrast .nav-btn:hover:not(:disabled),
+body.high-contrast .nav-btn:focus:not(:disabled) {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+}
+
+body.high-contrast .nav-btn:disabled {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    background-color: var(--dark-bg);
+}
+
+/* Additional high contrast improvements */
+body.high-contrast .language-selector select {
+    background-color: var(--light-bg) !important;
+    color: var(--text-color) !important;
+    border: 2px solid var(--border-color) !important;
+}
+
+body.high-contrast .language-selector select option {
+    background-color: var(--light-bg) !important;
+    color: var(--text-color) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    :root {
+        --base-font-size: 15px;  /* Slightly smaller base on mobile */
+    }
+    
+    .container {
+        padding: 10px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    
+    .header-content h1 {
+        font-size: calc(var(--base-font-size) * 1.1);  /* Smaller header on mobile */
+    }
+    
+    .header-content img {
+        max-height: 30px;
+    }
+    
+    .footer-content {
+        flex-direction: column-reverse;
+        align-items: center;
+    }
+    
+    .footer-content p {
+        margin-top: 10px;
+        text-align: center;
+    }
+
+    /* Navigation buttons stay circular but slightly smaller */
+    .nav-btn {
+        width: 2.8rem;
+        height: 2.8rem;
+    }
+} 

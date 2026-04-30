@@ -64,6 +64,13 @@ export interface TicketEvent {
   summary_regen_required: boolean;
 }
 
+export interface TicketViewer {
+  viewer_id: string;
+  user_id: string;
+  added_by_user_id: string;
+  added_at: string;
+}
+
 export interface TicketDetail extends TicketListItem {
   complainant_id: string | null;
   session_id: string | null;
@@ -77,6 +84,7 @@ export interface TicketDetail extends TicketListItem {
   updated_by_user_id: string | null;
   current_step: WorkflowStepBrief | null;
   events: TicketEvent[];
+  viewers: TicketViewer[];
   /** AI-generated case findings (supervisor/GRC view only). Null until first generated. */
   ai_summary_en: string | null;
   ai_summary_updated_at: string | null;
@@ -902,3 +910,94 @@ export function patchUserPreferences(preferred_language: "en" | "ne" | null): Pr
     body: JSON.stringify({ preferred_language }),
   });
 }
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+export interface TicketTask {
+  task_id: string;
+  ticket_id: string;
+  task_type: string;
+  assigned_to_user_id: string;
+  assigned_by_user_id: string;
+  description: string | null;
+  due_date: string | null;
+  status: "PENDING" | "DONE" | "DISMISSED";
+  completed_at: string | null;
+  completed_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface TaskCreateRequest {
+  task_type: string;
+  assigned_to_user_id: string;
+  description?: string;
+  due_date?: string;
+}
+
+export function listTicketTasks(ticketId: string): Promise<TicketTask[]> {
+  return apiFetch<TicketTask[]>(`/api/v1/tickets/${ticketId}/tasks`);
+}
+
+export function createTask(ticketId: string, body: TaskCreateRequest): Promise<TicketTask> {
+  return apiFetch<TicketTask>(`/api/v1/tickets/${ticketId}/tasks`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function completeTask(ticketId: string, taskId: string): Promise<TicketTask> {
+  return apiFetch<TicketTask>(`/api/v1/tickets/${ticketId}/tasks/${taskId}/complete`, {
+    method: "POST",
+  });
+}
+
+export function listMyTasks(): Promise<TicketTask[]> {
+  return apiFetch<TicketTask[]>("/api/v1/users/me/tasks");
+}
+
+// ── Viewers (watchers) ────────────────────────────────────────────────────────
+
+export function listViewers(ticketId: string): Promise<TicketViewer[]> {
+  return apiFetch<TicketViewer[]>(`/api/v1/tickets/${ticketId}/viewers`);
+}
+
+export function addViewer(ticketId: string, userId: string): Promise<TicketViewer> {
+  return apiFetch<TicketViewer>(`/api/v1/tickets/${ticketId}/viewers`, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function removeViewer(ticketId: string, userId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/tickets/${ticketId}/viewers/${userId}`, { method: "DELETE" });
+}
+
+// ── Complainant info edit ─────────────────────────────────────────────────────
+
+export interface ComplainantPatchPayload {
+  complainant_address?:      string;
+  complainant_village?:      string;
+  complainant_ward?:         string;
+  complainant_municipality?: string;
+  complainant_district?:     string;
+  complainant_province?:     string;
+  complainant_email?:        string;
+}
+
+export interface ComplainantPatchResponse {
+  ticket_id:      string;
+  complainant_id: string;
+  fields_updated: string[];
+  event_id:       string;
+}
+
+export function patchComplainant(
+  ticketId: string,
+  fields: ComplainantPatchPayload,
+): Promise<ComplainantPatchResponse> {
+  return apiFetch<ComplainantPatchResponse>(`/api/v1/tickets/${ticketId}/complainant`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+
