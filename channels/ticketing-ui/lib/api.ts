@@ -1,7 +1,9 @@
 // GRM Ticketing API client
-// Base URL: NEXT_PUBLIC_API_URL (default http://localhost:5002)
+// All requests use relative paths (/api/v1/...) so they are proxied through
+// the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
+// This avoids CORS issues and means the browser only needs port 3001.
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5002";
+const BASE = "";
 
 // ── Types (mirror ticketing backend schemas) ──────────────────────────────────
 
@@ -326,6 +328,8 @@ export interface GrievancePii {
   phone_number?: string;
   email?: string;
   address?: string;
+  /** True when the grievance backend was unreachable — PII fields will be null */
+  _backend_unavailable?: boolean;
   [key: string]: unknown;
 }
 

@@ -21,7 +21,7 @@ services:
   #   docker compose -f docker-compose.yml -f docker-compose.grm.yml exec ticketing_api \
   #     python -m ticketing.auth.keycloak_setup
   keycloak:
-    image: quay.io/keycloak/keycloak:26
+    image: quay.io/keycloak/keycloak:26.0.7
     command: start-dev
     environment:
       KC_DB: postgres
@@ -160,20 +160,24 @@ services:
     restart: unless-stopped
 
   # ── GRM Ticketing UI (Next.js, port 3001) ─────────────────────────────────────
-  # Bridge network — browser calls NEXT_PUBLIC_API_URL which is localhost:5002
-  # (the ticketing_api container is on host network so port 5002 is the host port)
+  # All API calls are proxied server-side via Next.js rewrites (see next.config.ts).
+  # Browser only uses port 3001 — no direct access to port 5002 needed.
+  # TICKETING_API_URL is a server-side runtime var (not baked into the image).
   grm_ui:
     build:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5002}
-        NEXT_PUBLIC_BACKEND_API_URL: ${NEXT_PUBLIC_BACKEND_API_URL:-http://localhost:5001}
         NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
         NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-}
         NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
         NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
         NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+    environment:
+      # Server-side proxy target — uses Docker service name (not localhost)
+      TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
     ports:
       - "3001:3001"
+    depends_on:
+      - ticketing_api
     restart: unless-stopped

@@ -859,19 +859,26 @@ def list_ticket_files(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    rows = db.execute(
-        text(
-            """
-            SELECT file_id::text, file_name, file_path, file_type, file_size, upload_timestamp
-            FROM public.file_attachments
-            WHERE grievance_id = :grievance_id
-            ORDER BY upload_timestamp
-            """
-        ),
-        {"grievance_id": ticket.grievance_id},
-    ).mappings().all()
-
-    return [dict(r) for r in rows]
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT file_id::text, file_name, file_path, file_type, file_size, upload_timestamp
+                FROM public.file_attachments
+                WHERE grievance_id = :grievance_id
+                ORDER BY upload_timestamp
+                """
+            ),
+            {"grievance_id": ticket.grievance_id},
+        ).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        # public.file_attachments may not exist in dev/test environments that
+        # only run the ticketing stack without the full chatbot DB.  Return an
+        # empty list so the UI degrades gracefully instead of crashing.
+        logger.warning("list_ticket_files: public.file_attachments unavailable — %s", exc)
+        db.rollback()  # clear the aborted transaction so the session stays usable
+        return []
 
 
 # ─── GET /files/{file_id} — stream attachment from disk ───────────────────────
@@ -1086,7 +1093,17 @@ def get_ticket_pii(
         detail = get_grievance_detail(ticket.grievance_id)
     except Exception as exc:
         logger.warning("get_ticket_pii: backend unavailable — %s", exc)
-        raise HTTPException(status_code=503, detail=f"Grievance backend unavailable: {exc}")
+        # Degrade gracefully: return null-filled record so the UI shows "—"
+        # instead of crashing.  The _backend_unavailable flag lets the UI
+        # display a "Backend offline" notice without treating it as an error.
+        return {
+            "grievance_id": ticket.grievance_id,
+            "complainant_name": None,
+            "phone_number": None,
+            "email": None,
+            "address": None,
+            "_backend_unavailable": True,
+        }
 
     # Return only the safe PII subset (name + contact) — not the full grievance narrative,
     # which requires a vault reveal session (POST /tickets/{id}/reveal).

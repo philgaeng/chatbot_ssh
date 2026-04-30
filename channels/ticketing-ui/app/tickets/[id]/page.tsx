@@ -831,6 +831,9 @@ function ComplainantCard({
         </div>
       ) : (
         <div className="text-xs space-y-1.5 text-gray-700">
+          {pii?._backend_unavailable && (
+            <div className="text-amber-700 italic mb-1">Grievance backend offline — PII unavailable</div>
+          )}
           {pii?.complainant_name && (
             <div><span className="text-gray-600">Name:</span> {pii.complainant_name}</div>
           )}
