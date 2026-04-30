@@ -1104,6 +1104,8 @@ export default function TicketDetailPage() {
             <FilterChips
               events={ticket.events}
               currentUserId={currentUserId}
+              assignedToUserId={ticket.assigned_to_user_id ?? null}
+              viewerIds={viewerIds}
               active={activeFilter}
               pendingTaskCount={pendingTaskCount}
               onChange={setActiveFilter}
@@ -1196,7 +1198,7 @@ export default function TicketDetailPage() {
 
           {/* Complainant + Attachments — side by side: compact reference cards */}
           <div className="grid grid-cols-2 gap-3">
-            <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} onComplainantUpdated={loadTicket} />
+            <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} onComplainantUpdated={load} />
             <FilesPanel
               ticketId={ticket.ticket_id}
               onBeforeDownload={ensureAcknowledged}
