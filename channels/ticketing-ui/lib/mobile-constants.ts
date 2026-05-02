@@ -55,15 +55,50 @@ export const AUTHORITY_ROLES = new Set([
 
 // ── Task types ────────────────────────────────────────────────────────────────
 // icon = Lucide icon name — rendered by TaskTypeIcon in lib/icons.tsx
+// hash = shortcut trigger in the ComposeBar # command palette
 
 export const TASK_TYPES = [
-  { key: "SITE_VISIT",      label: "Site Visit",       icon: "MapPin"   },
-  { key: "FOLLOW_UP_CALL",  label: "Follow-up Call",   icon: "Phone"    },
-  { key: "SYSTEM_NOTE",     label: "Add System Note",  icon: "FileText" },
-  { key: "DOCUMENT_PHOTO",  label: "Document & Photo", icon: "Camera"   },
+  { key: "SITE_VISIT",        label: "Inspection visit",    icon: "MapPin",        hash: "inspect" },
+  { key: "DOCUMENT_PHOTO",    label: "Site photo required", icon: "Camera",        hash: "photo"   },
+  { key: "FOLLOW_UP_CALL",    label: "Call complainant",    icon: "Phone",         hash: "call"    },
+  { key: "SYSTEM_NOTE",       label: "Field report",        icon: "FileText",      hash: "report"  },
+  { key: "ESCALATION_REVIEW", label: "Escalation review",   icon: "ClipboardList", hash: "review"  },
 ] as const;
 
 export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
+
+// ── # command palette ─────────────────────────────────────────────────────────
+// Shown when the officer types # in the ComposeBar.
+// Two groups separated by a divider:
+//   "task"   — creates a TicketTask assigned to the current user
+//   "report" — switches compose bar to report mode (submits as FIELD_REPORT action)
+//   "action" — performs an immediate ticket action (ESCALATE)
+//   "assign" — triggers @mention autocomplete to pick the assignee
+
+export type HashCommandKind = "task" | "report" | "action" | "assign";
+
+export interface HashCommand {
+  hash: string;
+  label: string;
+  icon: string;
+  kind: HashCommandKind;
+  /** task key (kind=task only) */
+  taskKey?: string;
+  /** backend action_type (kind=action only) */
+  action?: string;
+}
+
+export const HASH_COMMANDS: HashCommand[] = [
+  // ── Task shortcuts (creates TicketTask assigned to self) ──
+  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task",   taskKey: "SITE_VISIT"        },
+  { hash: "photo",    label: "Site photo required",  icon: "Camera",        kind: "task",   taskKey: "DOCUMENT_PHOTO"    },
+  { hash: "call",     label: "Call complainant",     icon: "Phone",         kind: "task",   taskKey: "FOLLOW_UP_CALL"    },
+  { hash: "review",   label: "Escalation review",    icon: "ClipboardList", kind: "task",   taskKey: "ESCALATION_REVIEW" },
+  // ── Direct actions ────────────────────────────────────────
+  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report"                              },
+  { hash: "escalate", label: "Escalate ticket",       icon: "ArrowUpCircle", kind: "action", action: "ESCALATE"           },
+  { hash: "assign",   label: "Assign ticket to…",     icon: "UserCheck",     kind: "assign"                              },
+];
 
 // ── Event type classification ─────────────────────────────────────────────────
 

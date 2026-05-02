@@ -631,7 +631,7 @@ def patch_ticket_complainant(
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
 
 VALID_ACTIONS = {
-    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE",
+    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE", "FIELD_REPORT",
     "GRC_CONVENE", "GRC_DECIDE",
 }
 
@@ -815,6 +815,24 @@ def perform_action(
                     actor_role=_actor_role(current_user),
                     summary_regen_required=False,
                 )
+
+    elif action == "FIELD_REPORT":
+        if not payload.note:
+            raise HTTPException(status_code=422, detail="note is required for action_type=FIELD_REPORT")
+        # Officer field report — structured finding, no status change, not visible to complainant.
+        # Stored as NOTE_ADDED with is_field_report=True so the UI can render it distinctly
+        # and the AI findings pipeline picks it up (NOTE_ADDED is already in _FINDINGS_EVENT_TYPES).
+        event = _add_event(
+            db, ticket, "NOTE_ADDED",
+            step_id=event_step_id,
+            note=payload.note,
+            payload={"internal": True, "is_field_report": True},
+            created_by=current_user.user_id,
+            seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
+        )
+        _translate_note_event_id = event.event_id
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)

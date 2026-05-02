@@ -6,7 +6,7 @@ import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  generateFindings, listTicketTasks, completeTask, patchComplainant,
+  generateFindings, listTicketTasks, completeTask, createTask, patchComplainant,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
   type ComplainantPatchPayload,
@@ -23,6 +23,7 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES,
+  type HashCommand,
 } from "@/lib/mobile-constants";
 import {
   IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene, IconGrcDecide,
@@ -548,6 +549,41 @@ function FindingsCard({
   );
 }
 
+// ── Field reports card ────────────────────────────────────────────────────────
+
+function FieldReportsCard({ ticket }: { ticket: TicketDetail }) {
+  const reports = (ticket.events ?? []).filter(
+    (e) => e.event_type === "NOTE_ADDED" && (e.payload as Record<string, unknown> | null)?.is_field_report === true
+  );
+
+  return (
+    <div className="bg-white rounded-xl border border-amber-100 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-amber-400 pl-3 flex items-center gap-1.5">
+          📋 Field Reports
+        </h2>
+        <span className="text-[11px] text-gray-400">{reports.length} report{reports.length !== 1 ? "s" : ""}</span>
+      </div>
+      {reports.length === 0 ? (
+        <p className="text-xs text-gray-400 italic">
+          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar to add one.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {[...reports].reverse().map((r) => (
+            <div key={r.event_id} className="border-l-2 border-amber-200 pl-3">
+              <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{r.note}</p>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {r.created_by_user_id ?? "Officer"} · {new Date(r.created_at).toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Workflow progress card ────────────────────────────────────────────────────
 
 const WORKFLOW_STEPS: Record<string, { key: string; label: string }[]> = {
@@ -623,15 +659,14 @@ function WorkflowCard({ currentStepKey, displayName }: {
 
 // ── Open tasks card ───────────────────────────────────────────────────────────
 
-function TasksCard({ tasks, currentUserId, onComplete }: {
+function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
   tasks: TicketTask[];
   currentUserId: string;
   onComplete: (taskId: string) => void;
+  onAddTask?: () => void;
 }) {
   const pending   = tasks.filter((t) => t.status === "PENDING");
   const done      = tasks.filter((t) => t.status === "DONE");
-
-  if (tasks.length === 0) return null;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -642,12 +677,21 @@ function TasksCard({ tasks, currentUserId, onComplete }: {
             {pending.length} pending
           </span>
         )}
-        {pending.length === 0 && (
+        {tasks.length > 0 && pending.length === 0 && (
           <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
             All done
           </span>
         )}
+        {onAddTask && (
+          <button onClick={onAddTask}
+            className="ml-auto text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+            + Task
+          </button>
+        )}
       </div>
+      {tasks.length === 0 && (
+        <p className="text-xs text-gray-400 italic">No tasks yet. Use <span className="font-mono bg-gray-100 px-1 rounded">#inspect</span> or <span className="font-mono bg-gray-100 px-1 rounded">#call</span> to assign one.</p>
+      )}
 
       <div className="space-y-2">
         {pending.map((task) => {
@@ -892,6 +936,59 @@ export default function TicketDetailPage() {
     try { await completeTask(id, taskId); await load(); }
     catch (e) { console.error("Complete task failed", e); }
   }, [id, load]);
+
+  // ── Report mode (# command palette) ────────────────────────────────────
+  const [reportMode, setReportMode] = useState(false);
+
+  const handleHashCommand = useCallback(async (cmd: HashCommand) => {
+    if (cmd.kind === "report") {
+      setReportMode(true);
+      return;
+    }
+    if (cmd.kind === "action" && cmd.action) {
+      // #escalate — same path as the Escalate button
+      await act(cmd.action);
+      return;
+    }
+    if (cmd.kind === "task" && cmd.taskKey) {
+      // instant self-assign task
+      try {
+        await createTask(id, { task_type: cmd.taskKey, assigned_to_user_id: currentUserId });
+        await load();
+      } catch (e) { console.error("Create task failed", e); }
+      return;
+    }
+    // #assign is handled inline in ComposeBar (text becomes "#assign @…")
+  }, [id, currentUserId, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNoteOrReport = useCallback(async () => {
+    const text = noteText.trim();
+    if (!text || submitting) return;
+    setSubmitting(true);
+
+    // Check for #assign @userId pattern
+    const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+
+    setNoteText("");
+    setReportMode(false);
+    try {
+      if (assignMatch) {
+        await patchTicket(id, { assign_to_user_id: assignMatch[1] });
+      } else if (reportMode) {
+        await performAction(id, { action_type: "FIELD_REPORT", note: text });
+      } else {
+        await performAction(id, { action_type: "NOTE", note: text });
+      }
+      await load();
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      console.error("Submit failed", e);
+      setNoteText(text);
+      if (reportMode) setReportMode(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [noteText, submitting, reportMode, id, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1178,39 +1275,48 @@ export default function TicketDetailPage() {
             <div ref={threadEndRef} />
           </div>
 
-          <div className="flex-shrink-0 border-t border-gray-100">
+          <div className={`flex-shrink-0 border-t ${reportMode ? "border-amber-200" : "border-gray-100"}`}>
             <ComposeBar
               value={noteText}
               onChange={setNoteText}
-              onSubmit={handleNote}
+              onSubmit={handleNoteOrReport}
+              onHashCommand={handleHashCommand}
+              reportMode={reportMode}
+              onExitReportMode={() => setReportMode(false)}
               disabled={submitting}
               participants={mentionParticipants}
-              placeholder="Add an internal note… (@ to mention)"
             />
           </div>
         </div>
 
-        {/* Info column — full-width top (text-rich), 2-col bottom (compact reference) */}
+        {/* ── Right info column — Option C layout ──────────────── */}
         <div className="col-span-3 overflow-y-auto space-y-3 pb-4">
 
-          {/* Workflow progress — always visible at top */}
-          {ticket.current_step && (
-            <WorkflowCard
-              currentStepKey={ticket.current_step.step_key}
-              displayName={ticket.current_step.display_name}
+          {/* Row 1: Workflow + Tasks side by side (both are "case state" cards) */}
+          <div className="grid grid-cols-2 gap-3">
+            {ticket.current_step ? (
+              <WorkflowCard
+                currentStepKey={ticket.current_step.step_key}
+                displayName={ticket.current_step.display_name}
+              />
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-center text-xs text-gray-400 italic">
+                No workflow assigned
+              </div>
+            )}
+            <TasksCard
+              tasks={tasks}
+              currentUserId={currentUserId}
+              onComplete={handleCompleteTask}
+              onAddTask={() => setShowAssignTask(true)}
             />
-          )}
+          </div>
 
-          {/* Open tasks — shown only when tasks exist */}
-          <TasksCard
-            tasks={tasks}
-            currentUserId={currentUserId}
-            onComplete={handleCompleteTask}
-          />
-
-          {/* Original Grievance — full width: primary reading content */}
+          {/* Row 2: Original Grievance — full width (primary reading content) */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">Original Grievance</h2>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">
+              Original Grievance
+            </h2>
             <p className="text-sm text-gray-700 leading-relaxed">
               {ticket.grievance_summary ?? <span className="text-gray-400 italic">No summary</span>}
             </p>
@@ -1226,10 +1332,13 @@ export default function TicketDetailPage() {
             )}
           </div>
 
-          {/* Findings — full width: AI summary can be several sentences */}
+          {/* Row 3: Field Reports — full width (officer-written, always visible) */}
+          <FieldReportsCard ticket={ticket} />
+
+          {/* Row 4: AI Findings — full width (supervisors+ only) */}
           <FindingsCard ticket={ticket} roleKeys={roleKeys} onRefresh={load} />
 
-          {/* Complainant + Attachments — side by side: compact reference cards */}
+          {/* Row 5: Complainant + Attachments side by side */}
           <div className="grid grid-cols-2 gap-3">
             <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} onComplainantUpdated={load} />
             <FilesPanel

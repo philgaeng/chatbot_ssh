@@ -6,15 +6,17 @@
  * Shared sub-components live in components/thread/ and are reused by the desktop.
  */
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask,
+  getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
+  listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
+  type TicketFile, type OfficerAttachment,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
-import { AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2 } from "lucide-react";
+import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, AUTHORITY_ROLES, type HashCommand } from "@/lib/mobile-constants";
+import { AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2, MoreVertical, User, FileText, Paperclip, Users, ChevronLeft, Download, FileIcon } from "lucide-react";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
 import { SystemPill }                         from "@/components/thread/SystemPill";
@@ -76,6 +78,302 @@ function MoreActionsSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Case info menu (⋮ dropdown) ───────────────────────────────────────────────
+
+type InfoPanel = "complainant" | "grievance" | "attachments" | "members";
+
+type InfoIcon = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+
+function CaseInfoMenu({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (panel: InfoPanel) => void;
+  onClose: () => void;
+}) {
+  const items: Array<{ key: InfoPanel; label: string; Icon: InfoIcon }> = [
+    { key: "complainant",  label: "Complainant info",       Icon: User },
+    { key: "grievance",    label: "Grievance & findings",   Icon: FileText },
+    { key: "attachments",  label: "Attachments",            Icon: Paperclip },
+    { key: "members",      label: "Members",                Icon: Users },
+  ];
+  return (
+    <>
+      {/* Tap-away backdrop */}
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* Dropdown — fixed top-right, below the header */}
+      <div className="fixed top-14 right-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 min-w-[220px] overflow-hidden">
+        {items.map(({ key, label, Icon }, idx) => (
+          <button
+            key={key}
+            onClick={() => { onSelect(key); onClose(); }}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm text-gray-700 active:bg-gray-50 ${idx < items.length - 1 ? "border-b border-gray-50" : ""}`}
+          >
+            <Icon size={18} strokeWidth={1.8} className="text-gray-400 shrink-0" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Shared panel shell (full-screen slide-up overlay) ─────────────────────────
+
+function PanelShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      <div className="flex-shrink-0 flex items-center gap-2 px-2 py-3 border-b border-gray-200 bg-white pt-safe-top">
+        <button onClick={onClose} className="p-2 text-gray-500 active:bg-gray-100 rounded-lg">
+          <ChevronLeft size={22} strokeWidth={2} />
+        </button>
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// helper: label + value row
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div className="px-5 py-3.5 border-b border-gray-50">
+      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{label}</div>
+      <div className="text-sm text-gray-800 leading-snug">{value}</div>
+    </div>
+  );
+}
+
+// ── Complainant Panel ─────────────────────────────────────────────────────────
+
+function ComplainantPanel({ ticket, onClose }: { ticket: TicketDetail; onClose: () => void }) {
+  return (
+    <PanelShell title="Complainant info" onClose={onClose}>
+      <div className="py-2">
+        <div className="mx-5 mt-3 mb-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs text-amber-700">
+          PII is masked per data policy. Full identity is retrieved on-demand from the grievance system.
+        </div>
+        <InfoRow label="Complainant ID" value={ticket.complainant_id} />
+        <InfoRow label="Grievance reference" value={ticket.grievance_id} />
+        <InfoRow label="Location" value={ticket.grievance_location} />
+        <InfoRow label="Categories" value={ticket.grievance_categories} />
+        <InfoRow label="Submitted" value={ticket.created_at ? new Date(ticket.created_at).toLocaleString() : null} />
+        <InfoRow label="Case status" value={ticket.status_code} />
+      </div>
+    </PanelShell>
+  );
+}
+
+// ── Grievance & Findings Panel ────────────────────────────────────────────────
+
+function GrievancePanel({ ticket, onClose }: { ticket: TicketDetail; onClose: () => void }) {
+  return (
+    <PanelShell title="Grievance & findings" onClose={onClose}>
+      <div className="py-2">
+        {ticket.grievance_summary && (
+          <div className="px-5 py-3.5 border-b border-gray-50">
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Summary</div>
+            <p className="text-sm text-gray-800 leading-relaxed">{ticket.grievance_summary}</p>
+          </div>
+        )}
+        <InfoRow label="Categories" value={ticket.grievance_categories} />
+        <InfoRow label="Location" value={ticket.grievance_location} />
+        <InfoRow label="Priority" value={ticket.priority} />
+
+        {ticket.ai_summary_en ? (
+          <div className="px-5 py-3.5 border-b border-gray-50">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">AI Findings</div>
+              {ticket.ai_summary_updated_at && (
+                <span className="text-[10px] text-gray-300">
+                  · {new Date(ticket.ai_summary_updated_at).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{ticket.ai_summary_en}</p>
+          </div>
+        ) : (
+          <div className="px-5 py-5 text-xs text-gray-400 italic">
+            AI case findings not yet generated.
+          </div>
+        )}
+      </div>
+    </PanelShell>
+  );
+}
+
+// ── Attachments Panel ─────────────────────────────────────────────────────────
+
+function AttachmentsPanel({
+  ticket,
+  onClose,
+}: {
+  ticket: TicketDetail;
+  onClose: () => void;
+}) {
+  const [chatbotFiles, setChatbotFiles] = useState<TicketFile[]>([]);
+  const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    Promise.all([
+      listTicketFiles(ticket.ticket_id).catch(() => [] as TicketFile[]),
+      listOfficerAttachments(ticket.ticket_id).catch(() => [] as OfficerAttachment[]),
+    ]).then(([cf, of]) => {
+      setChatbotFiles(cf);
+      setOfficerFiles(of);
+    }).finally(() => setLoading(false));
+  }, [ticket.ticket_id]);
+
+  const formatBytes = (b: number) => b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
+
+  return (
+    <PanelShell title="Attachments" onClose={onClose}>
+      {loading ? (
+        <div className="flex justify-center py-10 text-xs text-gray-400 animate-pulse">Loading…</div>
+      ) : (
+        <div className="py-2">
+          {chatbotFiles.length === 0 && officerFiles.length === 0 && (
+            <div className="flex flex-col items-center py-12 gap-2 text-gray-400">
+              <Paperclip size={32} strokeWidth={1.5} />
+              <span className="text-sm">No attachments yet</span>
+            </div>
+          )}
+
+          {chatbotFiles.length > 0 && (
+            <div>
+              <div className="px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                From complainant
+              </div>
+              {chatbotFiles.map((f) => (
+                <a
+                  key={f.file_id}
+                  href={getFileDownloadUrl(f.file_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-5 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <FileIcon size={20} strokeWidth={1.5} className="text-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-800 truncate">{f.file_name}</div>
+                    <div className="text-xs text-gray-400">{formatBytes(f.file_size)}</div>
+                  </div>
+                  <Download size={16} strokeWidth={1.8} className="text-gray-300 shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {officerFiles.length > 0 && (
+            <div>
+              <div className="px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                Officer uploads
+              </div>
+              {officerFiles.map((f) => (
+                <a
+                  key={f.file_id}
+                  href={getOfficerAttachmentUrl(f.file_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-5 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <FileIcon size={20} strokeWidth={1.5} className="text-green-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-800 truncate">{f.file_name}</div>
+                    <div className="text-xs text-gray-400">
+                      {formatBytes(f.file_size)}
+                      {f.caption ? ` · ${f.caption}` : ""}
+                    </div>
+                  </div>
+                  <Download size={16} strokeWidth={1.8} className="text-gray-300 shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Upload button */}
+          <div className="px-5 pt-4 pb-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={() => { /* wire to uploadOfficerAttachment in follow-up */ }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 active:bg-gray-50"
+            >
+              <Paperclip size={16} strokeWidth={2} />
+              Upload a file
+            </button>
+          </div>
+        </div>
+      )}
+    </PanelShell>
+  );
+}
+
+// ── Members Panel ─────────────────────────────────────────────────────────────
+
+function MembersPanel({ ticket, onClose }: { ticket: TicketDetail; onClose: () => void }) {
+  const viewers = ticket.viewers ?? [];
+  return (
+    <PanelShell title="Members" onClose={onClose}>
+      <div className="py-2">
+        {/* Case owner */}
+        <div className="px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+          Case owner
+        </div>
+        {ticket.assigned_to_user_id ? (
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-50">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+              <User size={18} strokeWidth={1.8} className="text-blue-500" />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-gray-800">{ticket.assigned_to_user_id}</div>
+              <div className="text-xs text-gray-400">Assigned officer</div>
+            </div>
+          </div>
+        ) : (
+          <div className="px-5 py-3 text-sm text-gray-400 italic border-b border-gray-50">Unassigned</div>
+        )}
+
+        {/* Watchers */}
+        <div className="px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+          Watchers ({viewers.length})
+        </div>
+        {viewers.length === 0 ? (
+          <div className="px-5 py-3 text-sm text-gray-400 italic">No watchers</div>
+        ) : (
+          viewers.map((v) => (
+            <div key={v.viewer_id} className="flex items-center gap-3 px-5 py-3 border-b border-gray-50">
+              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                <User size={17} strokeWidth={1.8} className="text-gray-400" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-800">{v.user_id}</div>
+                <div className="text-xs text-gray-400">Added {new Date(v.added_at).toLocaleDateString()}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </PanelShell>
   );
 }
 
@@ -153,6 +451,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [submitting, setSubmitting] = useState(false);
   const [showMore, setShowMore]   = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
+  const [showInfoMenu, setShowInfoMenu] = useState(false);
+  const [infoPanel, setInfoPanel] = useState<InfoPanel | null>(null);
+  const [reportMode, setReportMode] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -243,22 +544,43 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     }
   }, [ticket, ticketId, loadTicket]);
 
-  const handleNote = useCallback(async () => {
+  const handleHashCommand = useCallback(async (cmd: HashCommand) => {
+    if (cmd.kind === "report") { setReportMode(true); return; }
+    if (cmd.kind === "action" && cmd.action) { await handleAction(cmd.action); return; }
+    if (cmd.kind === "task" && cmd.taskKey) {
+      try {
+        await createTask(ticketId, { task_type: cmd.taskKey, assigned_to_user_id: currentUserId });
+        await loadTicket();
+      } catch (e) {
+        console.error("Create task failed", e);
+      }
+    }
+  }, [ticketId, currentUserId, loadTicket, handleAction]);
+
+  const handleNoteOrReport = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
     setSubmitting(true);
     const text = noteText.trim();
     setNoteText("");
+    setReportMode(false);
     try {
-      await performAction(ticketId, { action_type: "NOTE", note: text });
+      const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+      if (assignMatch) {
+        await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
+      } else if (reportMode) {
+        await performAction(ticketId, { action_type: "FIELD_REPORT", note: text });
+      } else {
+        await performAction(ticketId, { action_type: "NOTE", note: text });
+      }
       await loadTicket();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-      console.error("Note failed", e);
+      console.error("Submit failed", e);
       setNoteText(text);
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, ticketId, loadTicket]);
+  }, [noteText, submitting, reportMode, ticketId, loadTicket]);
 
   const handleCompleteTask = useCallback(async (taskId: string) => {
     if (!ticket) return;
@@ -312,7 +634,13 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
               {ticket.grievance_summary ?? "No summary"}
             </div>
           </div>
-          <button className="p-2 text-gray-400 active:bg-gray-100 rounded-lg text-lg">⋮</button>
+          <button
+            onClick={() => setShowInfoMenu(true)}
+            className="p-2 text-gray-400 active:bg-gray-100 rounded-lg"
+            aria-label="Case info"
+          >
+            <MoreVertical size={20} strokeWidth={2} />
+          </button>
         </div>
 
         <SlaSubHeader ticket={ticket} sla={sla} />
@@ -384,7 +712,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <ComposeBar
           value={noteText}
           onChange={setNoteText}
-          onSubmit={handleNote}
+          onSubmit={handleNoteOrReport}
+          onAttach={() => setInfoPanel("attachments")}
+          onHashCommand={handleHashCommand}
+          reportMode={reportMode}
+          onExitReportMode={() => setReportMode(false)}
           disabled={submitting}
           participants={mentionParticipants}
         />
@@ -407,6 +739,28 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onClose={() => setShowAssignTask(false)}
           onAssigned={async () => { setShowAssignTask(false); await loadTicket(); }}
         />
+      )}
+
+      {/* ── Case info dropdown menu ──────────────────────────────── */}
+      {showInfoMenu && (
+        <CaseInfoMenu
+          onSelect={(panel) => setInfoPanel(panel)}
+          onClose={() => setShowInfoMenu(false)}
+        />
+      )}
+
+      {/* ── Info panels (full-screen overlays) ──────────────────── */}
+      {infoPanel === "complainant" && (
+        <ComplainantPanel ticket={ticket} onClose={() => setInfoPanel(null)} />
+      )}
+      {infoPanel === "grievance" && (
+        <GrievancePanel ticket={ticket} onClose={() => setInfoPanel(null)} />
+      )}
+      {infoPanel === "attachments" && (
+        <AttachmentsPanel ticket={ticket} onClose={() => setInfoPanel(null)} />
+      )}
+      {infoPanel === "members" && (
+        <MembersPanel ticket={ticket} onClose={() => setInfoPanel(null)} />
       )}
     </div>
   );
