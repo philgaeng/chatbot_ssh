@@ -9,6 +9,8 @@ from .officer_scope import OfficerScope
 from .project import Project, ProjectOrganization, ProjectLocation
 from .package import ProjectPackage, PackageLocation
 from .settings import Settings
+from .ticket_context_cache import TicketContextCache
+from .ticket_viewer import TicketViewer
 
 __all__ = [
     "Base",
@@ -32,4 +34,6 @@ __all__ = [
     "ProjectPackage",
     "PackageLocation",
     "Settings",
+    "TicketContextCache",
+    "TicketViewer",
 ]

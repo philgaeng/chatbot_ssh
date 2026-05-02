@@ -8,6 +8,7 @@ API key: OPENAI_API_KEY in env.local (already present, used by chatbot).
 Init: get_settings().openai_api_key
 """
 
+import json
 import logging
 import re
 from typing import Optional
@@ -100,41 +101,108 @@ def translate_to_english(text: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Findings / summary helper
+# Findings / summary helper  (Layer 2 — structured JSON output)
 # ---------------------------------------------------------------------------
 
-_FINDINGS_SYSTEM = (
-    "You are a grievance redress officer writing an internal case summary. "
-    "Summarise the following case notes and key events into a brief Findings report. "
-    "Include: key facts, actions taken, outstanding issues, and recommended next step. "
-    "Write in formal English. Maximum 150 words. "
-    "Output only the findings text — no headings, no bullet lists, just a concise paragraph."
-)
+_FINDINGS_SYSTEM = """\
+You are an impartial GRM (Grievance Redress Mechanism) case analyst for ADB \
+infrastructure projects in Nepal.
+
+Analyse the case timeline and field reports provided as JSON.
+Return ONLY valid JSON — no prose, no markdown fences, no extra keys.
+
+Output schema (all fields required):
+{
+  "summary_en": "<2-4 sentence plain-English case summary>",
+  "key_findings": ["<finding 1>", "<finding 2>"],
+  "recommended_action": "<one actionable sentence for the case officer>",
+  "urgency": "HIGH | MEDIUM | LOW",
+  "languages_detected": ["en"]
+}
+
+Rules:
+- Never invent facts not present in the timeline.
+- NEVER include names, phone numbers, email addresses, or physical addresses in output.
+  Replace any that appear in notes with role descriptors (e.g. "the complainant").
+- urgency HIGH = health/safety risk OR SLA already breached OR SEAH case.
+- urgency MEDIUM = unresolved complaint escalated beyond L1.
+- urgency LOW = in progress within SLA, no safety risk.
+- If field reports contradict earlier notes, flag the discrepancy in key_findings.
+- If non-English notes are present, set languages_detected accordingly.
+- key_findings: minimum 1, maximum 5 items.
+"""
+
+# Model selection: cost vs. quality tradeoff
+# Standard cases: gpt-4o-mini — indistinguishable quality for structured extraction,
+#   ~15x cheaper than gpt-4o.
+# SEAH cases: gpt-4o — more careful reasoning for sensitive investigations.
+_MODEL_STANDARD = "gpt-4o-mini"
+_MODEL_SEAH = "gpt-4o"
 
 
-def generate_case_findings(case_text: str) -> Optional[str]:
+def generate_case_findings(
+    context: dict,
+    is_seah: bool = False,
+) -> Optional[dict]:
     """
-    Generate a case-findings summary over all key events and notes for a ticket.
+    Generate structured case findings from a pre-assembled context document.
 
-    *case_text* is a pre-formatted multi-line string with one event per line.
-    Returns the findings paragraph, or None on error.
+    *context* is the PII-clean dict produced by context_builder.build_ticket_context().
+    Returns a findings dict with keys: summary_en, key_findings, recommended_action,
+    urgency, languages_detected — or None on error.
+
+    Caller stores summary_en → Ticket.ai_summary_en (backward compat)
+    and full dict → TicketContextCache.findings_json.
     """
-    if not case_text or not case_text.strip():
+    if not context:
         return None
+
+    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
+    # Compact JSON — minimise tokens
+    user_content = json.dumps(context, separators=(",", ":"), ensure_ascii=False)
 
     client = _get_client()
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=model,
             messages=[
                 {"role": "system", "content": _FINDINGS_SYSTEM},
-                {"role": "user", "content": case_text},
+                {"role": "user", "content": user_content},
             ],
-            temperature=0.3,
-            max_tokens=300,
+            temperature=0.0,   # deterministic output
+            max_tokens=400,
+            response_format={"type": "json_object"},
         )
-        findings = response.choices[0].message.content or ""
-        return findings.strip() or None
+        raw = (response.choices[0].message.content or "").strip()
+        if not raw:
+            logger.error("generate_case_findings: empty response from LLM (model=%s)", model)
+            return None
+
+        findings = json.loads(raw)
+
+        # Validate required keys are present
+        required = {"summary_en", "key_findings", "recommended_action", "urgency"}
+        missing = required - findings.keys()
+        if missing:
+            logger.warning(
+                "generate_case_findings: LLM response missing keys %s — filling defaults",
+                missing,
+            )
+            findings.setdefault("summary_en", "")
+            findings.setdefault("key_findings", [])
+            findings.setdefault("recommended_action", "")
+            findings.setdefault("urgency", "MEDIUM")
+        findings.setdefault("languages_detected", ["en"])
+
+        logger.info(
+            "generate_case_findings: ok model=%s urgency=%s keys=%d",
+            model, findings.get("urgency"), len(findings.get("key_findings", [])),
+        )
+        return findings
+
+    except json.JSONDecodeError as exc:
+        logger.error("generate_case_findings: invalid JSON from LLM: %s", exc)
+        return None
     except Exception as exc:
         logger.error("generate_case_findings failed: %s", exc, exc_info=True)
         return None

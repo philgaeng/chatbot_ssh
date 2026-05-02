@@ -191,6 +191,84 @@ overrides to the existing ticketing-ui, hide desktop-only nav items, add a
 
 ---
 
+## 🟠 CHATBOT-SIDE INTEGRATION NOTE — PII scrubbing in grievance intake
+
+> **For whoever works on `backend/actions/` or `rasa_chatbot/` intake flow.**
+> This is a ticketing-system dependency — the findings pipeline reads `grievance_summary`
+> and officer notes, and those go to OpenAI. We need PII stripped before storage.
+
+### Problem
+When a complainant submits a grievance, the free-text narrative often contains PII
+(full name, phone number, neighbours' names, contractor names, home address details).
+The chatbot LLM call already summarises + categorises the grievance — we need to add
+PII scrubbing to that same call so the stored `grievance_summary` is clean.
+
+`ticketing.tickets.grievance_summary` is cached at ticket creation from this field
+and flows directly into the AI findings pipeline (OpenAI call). If the summary
+contains PII, it leaves the system.
+
+### Fix — extend the existing summarisation prompt
+In the LLM call that generates `grievance_summary` (wherever the chatbot assembles
+the grievance summary before storing it), add the following instruction:
+
+```
+Replace any personal identifiers with role descriptors:
+- Person names → "the complainant", "a neighbour", "the contractor", "the officer"
+- Phone numbers → [phone redacted]
+- Email addresses → [email redacted]
+- Specific street addresses → [address redacted]  (keep district/municipality level)
+- ID card / passport numbers → [ID redacted]
+Keep: location at district/municipality level, dates, nature of the grievance,
+project name, road name.
+```
+
+### Storage convention (two fields)
+- `grievance_summary` (existing) — **scrubbed** summary → safe for AI pipeline, ticketing
+- `original_statement` or `raw_narrative` (vault, existing) — original unredacted text
+  → only accessible via the reveal session (`POST /tickets/{id}/reveal`)
+
+If the chatbot currently stores only one field, the scrubbed version should replace it
+and the raw text should be kept in an encrypted/restricted column.
+
+### Why this boundary matters
+The ticketing `context_builder.py` (see `ticketing/engine/context_builder.py`) only
+reads `ticket.grievance_summary` — if that field is clean, the entire AI pipeline
+downstream is structurally PII-free. Officer notes may also contain incidental PII
+(e.g. officer writes "called Ram at 9841…") — the translation + findings prompts
+should also include the redaction instruction as a safety net (already done in
+`ticketing/clients/llm_client.py` `_FINDINGS_SYSTEM` prompt).
+
+### Officer notes
+Officer notes (`NOTE_ADDED` events) can also contain incidental PII. The findings
+prompt in `ticketing/clients/llm_client.py` already instructs the LLM never to
+include names/phones/addresses in output — this is a safety net, not a substitute
+for source-level scrubbing.
+
+---
+
+## 🟡 LLM: Structured context cache + findings pipeline (Layer 1 + 2)
+
+**Implemented:** `ticketing/engine/context_builder.py`, `ticketing/models/ticket_context_cache.py`,
+migration `i6j8l0n2p4`, updated `ticketing/clients/llm_client.py` + `ticketing/tasks/llm.py`.
+
+**Layer 1 — `ticketing.ticket_context_cache`**
+One row per ticket. Rebuilt whenever an event with `summary_regen_required=True` is committed.
+`context_builder.build_and_store()` is the single, auditable place that assembles events into
+a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_role`.
+`findings_json` stores the structured LLM output alongside the input context.
+
+**Layer 2 — Structured JSON output from LLM**
+`llm_client.generate_case_findings(context, is_seah)` now:
+- Takes the pre-assembled context dict (not raw text)
+- Uses `gpt-4o-mini` for standard tickets, `gpt-4o` for SEAH
+- `temperature=0.0` for consistency
+- Returns structured JSON: `{summary_en, key_findings[], recommended_action, urgency, languages_detected[]}`
+- `Ticket.ai_summary_en` still populated from `summary_en` (frontend backward compat)
+- Full structured output stored in `ticket_context_cache.findings_json`
+- System prompt explicitly instructs: never include names/phones/addresses in output
+
+---
+
 ## 🔵 TECH DEBT (low urgency)
 
 | Item | File | Notes |
