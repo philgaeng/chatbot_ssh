@@ -197,6 +197,40 @@ class TicketReplyResponse(BaseModel):
     detail: Optional[str] = None
 
 
+# ── Inbound complainant message ───────────────────────────────────────────────
+
+class InboundMessageRequest(BaseModel):
+    """
+    POST /api/v1/tickets/{ticket_id}/inbound
+    Called by chatbot backend when complainant sends a follow-up message.
+    Requires x-api-key header (same key as ticket creation).
+
+    intent values:
+      ADDITIONAL_INFO   — complainant adds info to the case → creates event, officer badge
+      AMENDMENT         — complainant formally amends the grievance → creates event, officer badge
+      STATUS_CHECK      — complainant asks for status → no event created, returns current status
+      WITHDRAW_REQUEST  — complainant wants to close the case → creates event, officer decides
+      OTHER             — unclassified follow-up → creates event
+    """
+    message: str = Field(..., min_length=1, max_length=4096,
+                         description="Complainant message text (may be in Nepali)")
+    intent: str = Field(
+        "OTHER",
+        description="ADDITIONAL_INFO | AMENDMENT | STATUS_CHECK | WITHDRAW_REQUEST | OTHER",
+    )
+    session_id: Optional[str] = Field(None, max_length=255,
+                                       description="Chatbot session ID for correlation")
+    channel: str = Field("chatbot", max_length=32)
+
+
+class InboundMessageResponse(BaseModel):
+    ticket_id: str
+    event_id: Optional[str] = None    # None when intent=STATUS_CHECK (no event created)
+    status: str                        # "received" | "skipped_status_check"
+    ticket_status: str
+    current_step: Optional[str] = None
+
+
 # ── Patch ─────────────────────────────────────────────────────────────────────
 
 class TicketPatch(BaseModel):

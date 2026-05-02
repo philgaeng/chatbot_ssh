@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { User, UserCheck, UserCog, Eye, ClipboardList } from "lucide-react";
-import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, AUTHORITY_ROLES } from "@/lib/mobile-constants";
+import { User, UserCheck, UserCog, Eye, ClipboardList, MessageCircle } from "lucide-react";
+import { SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, AUTHORITY_ROLES, COMPLAINANT_EVENT_TYPES } from "@/lib/mobile-constants";
 import type { TicketEvent } from "@/lib/api";
 
-export type FilterChip = "all" | "mine" | "owner" | "supervisor" | "observers" | "tasks" | "system";
+export type FilterChip = "all" | "mine" | "owner" | "supervisor" | "observers" | "tasks" | "complainant" | "system";
 
 export function FilterChips({
   events,
@@ -54,6 +54,11 @@ export function FilterChips({
 
   const hasTasks = pendingTaskCount > 0 || events.some((e) => TASK_EVENT_TYPES.has(e.event_type));
 
+  const complainantCount = useMemo(
+    () => events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type)).length,
+    [events],
+  );
+
   const chip = (id: FilterChip, label: string, Icon?: React.ComponentType<{ size?: number; strokeWidth?: number }>, badge?: number) => (
     <button
       key={id}
@@ -81,7 +86,8 @@ export function FilterChips({
       {hasOwner      && chip("owner",      "Case owner",  UserCheck)}
       {hasSupervisor && chip("supervisor", "Supervisor",  UserCog)}
       {hasObservers  && chip("observers",  "Observers",   Eye)}
-      {hasTasks      && chip("tasks",      "Tasks",       ClipboardList, pendingTaskCount)}
+      {hasTasks         && chip("tasks",       "Tasks",       ClipboardList, pendingTaskCount)}
+      {complainantCount > 0 && chip("complainant", "Complainant", MessageCircle, complainantCount)}
     </div>
   );
 }

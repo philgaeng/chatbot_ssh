@@ -22,7 +22,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, TASK_TYPES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES,
   type HashCommand,
 } from "@/lib/mobile-constants";
 import {
@@ -852,8 +852,9 @@ export default function TicketDetailPage() {
     switch (activeFilter) {
       case "all":    return ticket.events;
       case "mine":   return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
-      case "tasks":  return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
-      case "system": return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
+      case "tasks":       return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
+      case "complainant": return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
+      case "system":      return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
       default:       return ticket.events.filter((e) => e.created_by_user_id === activeFilter);
     }
   }, [ticket, activeFilter, currentUserId]);

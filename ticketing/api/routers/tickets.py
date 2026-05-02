@@ -46,6 +46,8 @@ from ticketing.api.schemas.ticket import (
     TicketReplyResponse,
     ComplainantPatch,
     ComplainantPatchResponse,
+    InboundMessageRequest,
+    InboundMessageResponse,
 )
 from ticketing.clients.grievance_api import patch_complainant
 from ticketing.clients.orchestrator import send_message_to_complainant
@@ -948,6 +950,96 @@ def reply_to_complainant(
         event_id=event.event_id,
         delivered=delivered,
         detail=detail,
+    )
+
+
+# ─── POST /tickets/{ticket_id}/inbound — complainant follow-up via chatbot ───
+
+# Intents that warrant a new event on the ticket (officer action / badge)
+_INBOUND_EVENT_INTENTS = {"ADDITIONAL_INFO", "AMENDMENT", "WITHDRAW_REQUEST", "OTHER"}
+# Intents that trigger LLM summary regen (new substantive case content)
+_INBOUND_REGEN_INTENTS = {"ADDITIONAL_INFO", "AMENDMENT", "OTHER"}
+
+@router.post(
+    "/tickets/{ticket_id}/inbound",
+    response_model=InboundMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Receive inbound complainant message from chatbot",
+    description=(
+        "Called by chatbot backend when a complainant sends a follow-up message on an "
+        "active ticket. Requires x-api-key header.\n\n"
+        "- **STATUS_CHECK**: no event created — returns current status for the chatbot to relay.\n"
+        "- **ADDITIONAL_INFO / AMENDMENT / OTHER**: creates COMPLAINANT_MESSAGE event, "
+        "sets unseen badge on assigned officer, fires translation task if non-English.\n"
+        "- **WITHDRAW_REQUEST**: same as above but officer decides — no auto-close.\n\n"
+        "# INTEGRATION POINT\n"
+        "Chatbot must look up ticket_id from session_id before calling this endpoint.\n"
+        "Lookup: `GET /api/v1/tickets?session_id={session_id}` (add this query param "
+        "to the list endpoint, or store ticket_id on the chatbot session at creation time)."
+    ),
+)
+def inbound_complainant_message(
+    ticket_id: str,
+    payload: InboundMessageRequest,
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
+) -> InboundMessageResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    step_display = ticket.current_step.display_name if ticket.current_step else None
+
+    # STATUS_CHECK: no event — chatbot reads status and auto-replies to complainant
+    if payload.intent == "STATUS_CHECK":
+        logger.info(
+            "inbound STATUS_CHECK ticket_id=%s status=%s", ticket_id, ticket.status_code
+        )
+        return InboundMessageResponse(
+            ticket_id=ticket_id,
+            event_id=None,
+            status="skipped_status_check",
+            ticket_status=ticket.status_code,
+            current_step=step_display,
+        )
+
+    # All other intents: create event + badge for assigned officer
+    intent = payload.intent.upper()
+    if intent not in _INBOUND_EVENT_INTENTS:
+        intent = "OTHER"
+
+    event = _add_event(
+        db, ticket, "COMPLAINANT_MESSAGE",
+        step_id=ticket.current_step_id,
+        note=payload.message,
+        payload={
+            "intent": intent,
+            "channel": payload.channel,
+            "from_complainant": True,
+            **({"session_id": payload.session_id} if payload.session_id else {}),
+        },
+        seen=False,
+        notify_user_id=ticket.assigned_to_user_id,
+        created_by=None,        # complainant has no officer user_id
+        actor_role="complainant",
+        summary_regen_required=(intent in _INBOUND_REGEN_INTENTS),
+    )
+
+    db.commit()
+
+    # Fire translation if message looks non-English (translate_note handles skip-if-English)
+    translate_note.delay(event.event_id)
+
+    logger.info(
+        "inbound_complainant_message: ticket_id=%s intent=%s event_id=%s",
+        ticket_id, intent, event.event_id,
+    )
+    return InboundMessageResponse(
+        ticket_id=ticket_id,
+        event_id=event.event_id,
+        status="received",
+        ticket_status=ticket.status_code,
+        current_step=step_display,
     )
 
 

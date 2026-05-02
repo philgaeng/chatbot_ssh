@@ -29,6 +29,7 @@ export const ROLE_BUBBLE_STYLE: Record<string, RoleBubbleStyle> = {
   super_admin:                   { bubbleCls: "bg-slate-100 border-l-4 border-slate-400", labelCls: "text-slate-700",  label: "Admin" },
   local_admin:                   { bubbleCls: "bg-slate-100 border-l-4 border-slate-400", labelCls: "text-slate-700",  label: "Admin" },
   system:                        { bubbleCls: "",                                          labelCls: "text-gray-400",   label: "System" },
+  complainant:                   { bubbleCls: "bg-emerald-50 border-l-4 border-emerald-500", labelCls: "text-emerald-700", label: "Complainant" },
 };
 
 /** Fallback for unknown roles */
@@ -118,6 +119,9 @@ export const TASK_EVENT_TYPES = new Set(["TASK_ASSIGNED", "TASK_COMPLETED", "TAS
  * (MENTION events are stored in ticket_events but are purely notification signals.)
  */
 export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION"]);
+
+/** Inbound complainant messages — rendered as a distinct emerald bubble. */
+export const COMPLAINANT_EVENT_TYPES = new Set(["COMPLAINANT_MESSAGE"]);
 
 /** Human-readable labels for system event pills — no emoji, pure text. */
 export function systemEventLabel(eventType: string, payload?: Record<string, unknown> | null): string {

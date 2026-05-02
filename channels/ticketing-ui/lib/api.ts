@@ -239,6 +239,29 @@ export function patchTicket(id: string, body: { assign_to_user_id?: string; prio
   });
 }
 
+export interface InboundMessagePayload {
+  message: string;
+  intent?: "ADDITIONAL_INFO" | "AMENDMENT" | "STATUS_CHECK" | "WITHDRAW_REQUEST" | "OTHER";
+  session_id?: string;
+  channel?: string;
+}
+
+export interface InboundMessageResult {
+  ticket_id: string;
+  event_id: string | null;
+  status: string;
+  ticket_status: string;
+  current_step: string | null;
+}
+
+/** Simulate a complainant inbound message (dev/testing only — chatbot calls this in production). */
+export function postInboundMessage(id: string, payload: InboundMessagePayload): Promise<InboundMessageResult> {
+  return apiFetch<InboundMessageResult>(`/api/v1/tickets/${id}/inbound`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Misc endpoints ────────────────────────────────────────────────────────────
 
 export function getBadge(): Promise<BadgeResponse> {

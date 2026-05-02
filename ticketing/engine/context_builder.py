@@ -43,6 +43,7 @@ _CONTEXT_EVENT_TYPES = {
     "CREATED",
     "ACKNOWLEDGED",
     "NOTE_ADDED",
+    "COMPLAINANT_MESSAGE",
     "ESCALATED",
     "RESOLVED",
     "CLOSED",
@@ -116,6 +117,8 @@ def build_ticket_context(ticket_id: str, db: Session) -> dict:
         elif ev.event_type in ("GRC_CONVENED", "GRC_DECIDED"):
             entry["hearing_date"] = payload.get("hearing_date")
             entry["decision"] = payload.get("grc_decision")
+        elif ev.event_type == "COMPLAINANT_MESSAGE":
+            entry["intent"] = payload.get("intent", "OTHER")
         elif is_field_report:
             entry["is_field_report"] = True
 

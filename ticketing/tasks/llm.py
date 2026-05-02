@@ -57,7 +57,7 @@ def translate_note(self, event_id: str) -> dict:
             logger.warning("translate_note: event_id=%s not found", event_id)
             return {"event_id": event_id, "status": "not_found"}
 
-        if event.event_type != "NOTE_ADDED":
+        if event.event_type not in {"NOTE_ADDED", "COMPLAINANT_MESSAGE"}:
             return {"event_id": event_id, "status": "skipped_not_a_note"}
 
         # Idempotency: already translated
