@@ -24,7 +24,8 @@ DOCKER_COMPOSE = docker compose
 # --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
 # Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
 .PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot compose_docker_wsl_ticketing compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
-	migrate_ticketing migrate_public migrate_all reset_public_dev
+	migrate_ticketing migrate_public migrate_all reset_public_dev \
+	compose_docker_wsl_grm_demo compose_docker_wsl_grm_auth
 
 # DB migrations (two Alembic streams — run from repo root; uses POSTGRES_* from env / env.local)
 migrate_ticketing:
@@ -67,6 +68,22 @@ compose_docker_wsl:
 # Local WSL full stack (chatbot + ticketing UI/API/workers)
 compose_docker_wsl_full:
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml up -d --build
+
+# Local WSL: chatbot + GRM demo stack (bypass-auth, no Keycloak).
+# grm_ui on :3001 (BYPASS_AUTH=true), ticketing_api on :5002.
+# Accessible via nginx at http://localhost/grm/
+compose_docker_wsl_grm_demo:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml up -d --build
+
+# Local WSL: chatbot + GRM full stack with Keycloak auth (--profile auth).
+# Adds: grm_ui_auth :3002, ticketing_api_auth :5003, keycloak :8080.
+# Accessible via nginx at http://localhost/grm/ (demo) and /grm-auth/ (auth).
+# CURSOR: uncomment /keycloak/ /grm-auth/ /grm-auth-api/ blocks in nginx conf first.
+# First-time realm setup (run once after keycloak is healthy):
+#   docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
+#     exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
+compose_docker_wsl_grm_auth:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml --profile auth up -d --build
 
 # Local WSL chatbot stack only (default compose file)
 compose_docker_wsl_chatbot:

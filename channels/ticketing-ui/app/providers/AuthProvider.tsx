@@ -6,12 +6,14 @@ import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { getUserPreferences } from "@/lib/api";
 
 // ── Mock user for proto (NEXT_PUBLIC_BYPASS_AUTH=true) ──────────────────────
+// sub matches mock-officer-site-l1 from seed data so "My Queue" shows tickets.
+// Switch to "mock-super-admin" / "super_admin" to test the admin view.
 const MOCK_USER: TokenPayload = {
-  sub: "mock-super-admin",
-  email: "admin@grm.local",
-  name: "GRM Admin (mock)",
+  sub: "mock-officer-site-l1",
+  email: "site.officer@grm.local",
+  name: "Site Officer L1 (mock)",
   email_verified: true,
-  "custom:grm_roles": "super_admin",
+  "custom:grm_roles": "site_safeguards_focal_person",
   "custom:organization_id": "DOR",
 };
 
