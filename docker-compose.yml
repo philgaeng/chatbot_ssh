@@ -156,7 +156,8 @@ services:
   nginx:
     image: nginx:stable
     ports:
-      - "80:80"
+      # Host :80 is often taken by another stack; use 8080 for local REST webchat.
+      - "8080:80"
     volumes:
       - ./deployment/nginx/webchat_rest_compose_wsl.conf:/etc/nginx/conf.d/default.conf:ro
       - ./channels/REST_webchat:/app/channels/REST_webchat:ro

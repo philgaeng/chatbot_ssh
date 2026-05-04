@@ -21,10 +21,18 @@ SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
 # Docker Compose Command
 DOCKER_COMPOSE = docker compose
 
-# --- Local WSL (default docker-compose.yml: nginx :80, orchestrator, backend, redis, db, celery) ---
-# Run from repo root. Requires env.local; free host port 80 if nginx binds 80:80.
-.PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot compose_docker_wsl_ticketing compose_docker_wsl_down compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
+# --- Local WSL (default docker-compose.yml: nginx host :8080→:80, orchestrator, backend, redis, db, celery) ---
+# Run from repo root. Requires env.local. REST webchat: http://localhost:8080/
+#
+# Chatbot-only (no GRM): use `make chatbot-local` — starts only services in docker-compose.yml
+# (db, redis, orchestrator, backend, celery workers, nginx). Does not start ticketing_api,
+# grm_ui, or grm_celery*, so host ports 5002 and 3001 stay free for other worktrees/stacks.
+.PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local compose_docker_wsl_ticketing compose_docker_wsl_down compose-down-all stop-all compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
 	migrate_ticketing migrate_public migrate_all reset_public_dev
+
+# Services defined only in docker-compose.yml (chatbot + REST webchat via nginx). Explicit list
+# avoids accidentally scaling the full grm overlay when iterating locally.
+CHATBOT_LOCAL_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 
 # DB migrations (two Alembic streams — run from repo root; uses POSTGRES_* from env / env.local)
 migrate_ticketing:
@@ -68,9 +76,9 @@ compose_docker_wsl:
 compose_docker_wsl_full:
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml up -d --build
 
-# Local WSL chatbot stack only (default compose file)
-compose_docker_wsl_chatbot:
-	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --build
+# Local WSL — chatbot stack only (same as compose_docker_wsl_chatbot)
+chatbot-local compose_docker_wsl_chatbot:
+	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --build $(CHATBOT_LOCAL_SERVICES)
 
 # Local WSL ticketing stack only (overlay services; expects shared deps as defined in compose files)
 compose_docker_wsl_ticketing:
@@ -81,8 +89,10 @@ compose_docker_wsl_ticketing:
 compose_seed_seah_catalog:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python scripts/database/migrate_seah_demo_catalog.py
 
-compose_docker_wsl_down:
-	$(DOCKER_COMPOSE) down
+# Stop and remove all containers for this Compose project (base + GRM). Frees host ports 8080, 3001, 5001, 5002, 8000, etc.
+# Does not delete volumes unless you add: COMPOSE_DOWN_FLAGS=--volumes make compose-down-all
+compose_docker_wsl_down compose-down-all stop-all:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml down $(COMPOSE_DOWN_FLAGS)
 
 # Recreate only nginx after editing deployment/nginx/webchat_rest_compose_wsl.conf
 compose_docker_wsl_nginx:
