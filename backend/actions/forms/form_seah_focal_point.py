@@ -31,11 +31,7 @@ class ValidateFormSeahFocalPoint1(BaseFormValidationAction):
         if tracker.get_slot("seah_victim_survivor_role") != "focal_point":
             return []
 
-        return [
-            "seah_focal_learned_when",
-            "seah_focal_reporter_consent_to_report",
-            "sensitive_issues_follow_up",
-        ]
+        return ["seah_focal_learned_when"]
 
     async def extract_seah_focal_learned_when(
         self,
@@ -231,24 +227,15 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
     ) -> List[Text]:
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []
-        required = ["seah_project_identification", "sensitive_issues_new_detail"]
-        if tracker.get_slot("seah_project_identification") != "not_adb_project":
-            required.extend(
-                [
-                    "seah_focal_survivor_risks",
-                    "seah_focal_mitigation_measures",
-                    "seah_focal_other_at_risk_parties",
-                    "seah_focal_project_risk",
-                    "seah_focal_reputational_risk",
-                ]
-            )
-            consent_to_report = tracker.get_slot("seah_focal_reporter_consent_to_report")
-            has_any_contact = (
-                tracker.get_slot("complainant_phone") not in (None, self.SKIP_VALUE)
-                or tracker.get_slot("complainant_email") not in (None, self.SKIP_VALUE)
-            )
-            if consent_to_report != "no" and has_any_contact:
-                required.append("seah_contact_consent_channel")
+        # Always collect risk / multiselect fields, including for not_adb_project.
+        required = [
+            "seah_project_identification",
+            "sensitive_issues_new_detail",
+            "seah_focal_survivor_risks",
+            "seah_focal_mitigation_measures",
+            "seah_focal_other_at_risk_parties",
+            "seah_focal_project_risk",
+        ]
         required.append("seah_focal_referred_to_support")
         return required
 
@@ -326,8 +313,13 @@ class ValidateFormSeahFocalPoint2(BaseFormValidationAction):
                 "grievance_description_status": "completed",
             }
 
-        slots = {"sensitive_issues_new_detail": self.SKIP_VALUE}
-        if slot_value not in [self.SKIP_VALUE, None] and slot_value not in expected_values and len(slot_value.strip()) > 3:
+        # Focal-point flow requires incident summary and should not accept skip.
+        slots: Dict[Text, Any] = {"sensitive_issues_new_detail": None}
+        if (
+            slot_value not in [self.SKIP_VALUE, None]
+            and slot_value not in expected_values
+            and len(slot_value.strip()) >= 8
+        ):
             existing_description = tracker.get_slot("grievance_description")
             base_text = (
                 existing_description.strip()
@@ -492,11 +484,25 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
     async def execute_action(
         self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict
     ) -> List[Dict[Text, Any]]:
-        return [
+        current_slots = dict(tracker.current_slot_values())
+        victim_party_updates = self.upsert_active_party_payload(
+            current_slots,
+            {"active_party_role": "victim_survivor"},
+        )
+
+        events: List[Dict[Text, Any]] = []
+        for slot_name in ("party_contacts", "party_victim_survivor"):
+            if slot_name in victim_party_updates:
+                events.append(
+                    {"event": "slot", "name": slot_name, "value": victim_party_updates[slot_name]}
+                )
+
+        events.extend([
             {"event": "slot", "name": "seah_focal_phone", "value": tracker.get_slot("complainant_phone")},
             {"event": "slot", "name": "seah_focal_full_name", "value": tracker.get_slot("complainant_full_name")},
             {"event": "slot", "name": "seah_focal_city", "value": tracker.get_slot("complainant_municipality")},
             {"event": "slot", "name": "seah_focal_village", "value": tracker.get_slot("complainant_village")},
+            {"event": "slot", "name": "active_party_role", "value": "seah_focal_point"},
             {"event": "slot", "name": "complainant_phone", "value": None},
             {"event": "slot", "name": "complainant_full_name", "value": None},
             {"event": "slot", "name": "complainant_email", "value": None},
@@ -505,7 +511,8 @@ class ActionPrepareSeahFocalComplainantCapture(BaseAction):
             {"event": "slot", "name": "complainant_consent", "value": None},
             {"event": "slot", "name": "complainant_municipality", "value": None},
             {"event": "slot", "name": "complainant_village", "value": None},
-        ]
+        ])
+        return events
 
 
 class ActionAskFormSeahFocalPoint1SeahFocalLearnedWhen(BaseAction):
@@ -540,10 +547,13 @@ class ActionAskFormSeahFocalPoint2SeahProjectIdentification(BaseAction):
         return "action_ask_form_seah_focal_point_2_seah_project_identification"
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        buttons = self.build_seah_project_identification_buttons(
-            tracker, max_projects=12
-        )
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
+        # Kept for quick restore if product asks to switch back to dynamic
+        # project catalog buttons instead of YES/NO.
+        # buttons = self.build_seah_project_identification_buttons(
+        #     tracker, max_projects=12
+        # )
+        # dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -628,14 +638,18 @@ class ActionAskFormSeahFocalPoint2SensitiveIssuesNewDetail(BaseAction):
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
         description_status = tracker.get_slot("grievance_description_status")
-        if description_status in ("show_options", "add_more_details"):
+        if description_status == "show_options":
             grievance_description = tracker.get_slot("grievance_description") or ""
             dispatcher.utter_message(
                 text=self.get_utterance(2).format(grievance_description=grievance_description),
                 buttons=self.get_buttons(2),
             )
+        elif description_status == "add_more_details":
+            # Mirror form_grievance behavior: ask for free text after "Add more details".
+            dispatcher.utter_message(text=self.get_utterance(3), buttons=[])
         else:
-            dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+            # Focal flow summary is required; do not show a Skip button.
+            dispatcher.utter_message(text=self.get_utterance(1), buttons=[])
         return []
 
 

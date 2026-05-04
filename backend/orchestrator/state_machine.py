@@ -365,7 +365,10 @@ async def run_flow_turn(
             await invoke_action("action_introduce", dispatcher, tracker, domain)
 
     elif state == "main_menu":
-        await invoke_action("action_main_menu", dispatcher, tracker, domain)
+        menu_transition_intents = {"new_grievance", "start_seah_intake", "start_status_check"}
+        # Avoid repeating the main menu utterance when the user already clicked one of its options.
+        if intent not in menu_transition_intents:
+            await invoke_action("action_main_menu", dispatcher, tracker, domain)
         if intent == "new_grievance":
             ask_dispatcher = CollectingDispatcher()
             events = await invoke_action(
@@ -489,6 +492,7 @@ async def run_flow_turn(
             story_main = merged_slots.get("story_main")
             identity_mode = merged_slots.get("sensitive_issues_follow_up")
             seah_role = merged_slots.get("seah_victim_survivor_role")
+            witness_exit_without_filing = bool(merged_slots.get("seah_witness_exit_without_filing"))
             next_state = "contact_form"
             session["active_loop"] = "form_contact"
             session["requested_slot"] = None
@@ -497,16 +501,21 @@ async def run_flow_turn(
             contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
             slot_preview = {k: session["slots"].get(k) for k in contact_slots}
             _log.info("form_seah_1 completed -> contact_form | contact slot preview: %s", slot_preview)
-            # Focal-point branch first bootstraps reporter phone/name/location using shared OTP/contact forms.
-            if story_main == "seah_intake" and seah_role == "focal_point":
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
+            # Witness path: if no consent and no immediate danger, stop with support-only acknowledgement.
+            if story_main == "seah_intake" and seah_role == "not_victim_survivor" and witness_exit_without_filing:
+                next_state = "done"
+                session["active_loop"] = None
                 session["requested_slot"] = None
-                slot_updates["seah_focal_stage"] = "bootstrap_reporter_otp"
-                session["slots"]["seah_focal_stage"] = "bootstrap_reporter_otp"
-                otp_form = _get_otp_form()
+            # Focal-point branch starts with reporter name, then reporter phone.
+            elif story_main == "seah_intake" and seah_role == "focal_point":
+                next_state = "contact_form"
+                session["active_loop"] = "form_contact"
+                session["requested_slot"] = None
+                slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
+                session["slots"]["seah_focal_stage"] = "bootstrap_reporter_contact"
+                contact_form = _get_contact_form()
                 msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
+                    contact_form, session, None, domain
                 )
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)
@@ -560,27 +569,18 @@ async def run_flow_turn(
             # in form_seah_2 / form_seah_focal_point before submission.
             if story_main == "seah_intake":
                 if seah_victim_survivor_role == "focal_point" and seah_focal_stage == "bootstrap_reporter_contact":
-                    prep_dispatcher = CollectingDispatcher()
-                    prep_events = await invoke_action(
-                        "action_prepare_seah_focal_complainant_capture",
-                        prep_dispatcher,
-                        SessionTracker(
-                            slots=session["slots"],
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
+                    next_state = "otp_form"
+                    session["active_loop"] = "form_otp"
+                    slot_updates["seah_focal_stage"] = "bootstrap_reporter_otp"
+                    session["slots"]["seah_focal_stage"] = "bootstrap_reporter_otp"
+                    session["requested_slot"] = None
+                    otp_form = _get_otp_form()
+                    msgs2, form_updates2, _ = await run_form_turn(
+                        otp_form, session, None, domain
                     )
-                    prep_updates = events_to_slot_updates(prep_events)
-                    slot_updates.update(prep_updates)
-                    session["slots"].update(prep_updates)
-                    next_state = "form_seah_focal_point_1"
-                    session["active_loop"] = "form_seah_focal_point_1"
-                    slot_updates["seah_focal_stage"] = "focal_point_1"
-                    session["slots"]["seah_focal_stage"] = "focal_point_1"
-                    seah_form = _get_form_seah_focal_point_1()
+                    dispatcher.messages.extend(msgs2)
+                    slot_updates.update(form_updates2)
+                    seah_form = None
                 elif seah_victim_survivor_role == "focal_point" and seah_focal_stage == "complainant_contact":
                     next_state = "form_seah_focal_point_2"
                     session["active_loop"] = "form_seah_focal_point_2"
@@ -598,12 +598,13 @@ async def run_flow_turn(
                     session["active_loop"] = "form_seah_2"
                     seah_form = _get_form_seah_2()
 
-                session["requested_slot"] = None
-                msgs2, form_updates2, _ = await run_form_turn(
-                    seah_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
+                if seah_form is not None:
+                    session["requested_slot"] = None
+                    msgs2, form_updates2, _ = await run_form_turn(
+                        seah_form, session, None, domain
+                    )
+                    dispatcher.messages.extend(msgs2)
+                    slot_updates.update(form_updates2)
 
             # If the user refused to share any contact information in the grievance flow,
             # skip the OTP form entirely and move directly to grievance submission +
@@ -717,45 +718,17 @@ async def run_flow_turn(
         slot_updates.update(form_updates)
         if completed:
             session["slots"].update(slot_updates)
-            consent_to_report = session.get("slots", {}).get("seah_focal_reporter_consent_to_report")
-            if consent_to_report == "no":
-                # If the complainant does not consent to report, end SEAH intake early:
-                # submit immediately and send the dedicated SEAH outro.
-                session["active_loop"] = None
-                session["requested_slot"] = None
-                ask_dispatcher = CollectingDispatcher()
-                submit_events = await invoke_action(
-                    "action_submit_seah",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=session["slots"],
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                submit_updates = events_to_slot_updates(submit_events)
-                slot_updates.update(submit_updates)
-                session["slots"].update(submit_updates)
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                await _append_seah_outro_after_submit_if_applicable(
-                    dispatcher, session, latest_message, domain, slot_updates
-                )
-                next_state = "done"
-            else:
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                slot_updates["seah_focal_stage"] = "complainant_otp"
-                session["slots"]["seah_focal_stage"] = "complainant_otp"
-                otp_form = _get_otp_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
+            next_state = "form_seah_focal_point_2"
+            session["active_loop"] = "form_seah_focal_point_2"
+            session["requested_slot"] = None
+            slot_updates["seah_focal_stage"] = "focal_point_2"
+            session["slots"]["seah_focal_stage"] = "focal_point_2"
+            focal_form_2 = _get_form_seah_focal_point_2()
+            msgs2, form_updates2, _ = await run_form_turn(
+                focal_form_2, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
 
     elif state == "form_seah_focal_point_2":
         user_input = latest_message if (text or payload) else None
@@ -807,24 +780,30 @@ async def run_flow_turn(
                 session["active_loop"] = "form_status_check_2"
                 session["requested_slot"] = None
             elif story_main == "seah_intake":
-                next_state = "contact_form"
-                session["active_loop"] = "form_contact"
-                session["requested_slot"] = None
                 if seah_focal_stage == "bootstrap_reporter_otp":
-                    slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
-                    # Default yes: reporter agrees to share contact for follow-up; user can still skip name/email fields.
-                    slot_updates["complainant_consent"] = True
-                elif seah_focal_stage == "complainant_otp":
-                    slot_updates["seah_focal_stage"] = "complainant_contact"
-                    # Consent already captured earlier; collect affected-person location/contact without re-asking.
-                    slot_updates["complainant_consent"] = True
-                session["slots"].update(slot_updates)
-                contact_form = _get_contact_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    contact_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
+                    next_state = "form_seah_focal_point_1"
+                    session["active_loop"] = "form_seah_focal_point_1"
+                    session["requested_slot"] = None
+                    slot_updates["seah_focal_stage"] = "focal_point_1"
+                    session["slots"]["seah_focal_stage"] = "focal_point_1"
+                    session["slots"].update(slot_updates)
+                    seah_form = _get_form_seah_focal_point_1()
+                    msgs2, form_updates2, _ = await run_form_turn(
+                        seah_form, session, None, domain
+                    )
+                    dispatcher.messages.extend(msgs2)
+                    slot_updates.update(form_updates2)
+                else:
+                    next_state = "contact_form"
+                    session["active_loop"] = "form_contact"
+                    session["requested_slot"] = None
+                    session["slots"].update(slot_updates)
+                    contact_form = _get_contact_form()
+                    msgs2, form_updates2, _ = await run_form_turn(
+                        contact_form, session, None, domain
+                    )
+                    dispatcher.messages.extend(msgs2)
+                    slot_updates.update(form_updates2)
             else:
                 session["slots"].update(slot_updates)
                 session["active_loop"] = None
@@ -1451,8 +1430,10 @@ async def run_flow_turn(
                 session["active_loop"] = None
                 session["requested_slot"] = None
                 slots_after = dict(session.get("slots", {}))
+                # Flush on any form completion — not only "I'm done" (modify_missing_info_complete).
+                # Natural completion (last missing field filled) previously skipped persist entirely.
+                form_modify.persist_all_contact_fields_to_complainant(slots_after)
                 if session.get("slots", {}).get("modify_missing_info_complete"):
-                    form_modify.persist_all_contact_fields_to_complainant(slots_after)
                     next_state = "status_check_form"
                     ask_dispatcher = CollectingDispatcher()
                     await invoke_action(
@@ -1506,8 +1487,8 @@ async def run_flow_turn(
             session["active_loop"] = None
             session["requested_slot"] = None
             slots_after = dict(session.get("slots", {}))
+            form_modify.persist_all_contact_fields_to_complainant(slots_after)
             if session.get("slots", {}).get("modify_missing_info_complete"):
-                form_modify.persist_all_contact_fields_to_complainant(slots_after)
                 next_state = "status_check_form"
                 ask_dispatcher = CollectingDispatcher()
                 await invoke_action(

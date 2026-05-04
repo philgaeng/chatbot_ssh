@@ -25,10 +25,104 @@ class ValidateFormSeah1(BaseFormValidationAction):
         # If user confirms content is not sensitive, stop this flow immediately.
         if tracker.get_slot("grievance_sensitive_issue") is False:
             return []
-        # Focal-point path now starts from the first SEAH question.
-        if tracker.get_slot("sensitive_issues_follow_up") == "focal_point":
-            return ["sensitive_issues_follow_up"]
-        return ["sensitive_issues_follow_up", "seah_victim_survivor_role"]
+        role = tracker.get_slot("seah_victim_survivor_role")
+        # First question: role selection.
+        if role == "victim_survivor":
+            # Second question: anonymity mode for victim/survivor.
+            return ["seah_victim_survivor_role", "sensitive_issues_follow_up"]
+        if role == "not_victim_survivor":
+            consent = tracker.get_slot("seah_witness_victim_consent_to_file")
+            if consent is None:
+                return [
+                    "seah_victim_survivor_role",
+                    "seah_witness_victim_consent_to_file",
+                ]
+            if consent == "yes":
+                return [
+                    "seah_victim_survivor_role",
+                    "seah_witness_victim_consent_to_file",
+                    "sensitive_issues_follow_up",
+                ]
+            return [
+                "seah_victim_survivor_role",
+                "seah_witness_victim_consent_to_file",
+                "seah_witness_immediate_danger",
+            ]
+        return ["seah_victim_survivor_role"]
+
+    async def extract_seah_witness_victim_consent_to_file(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "seah_witness_victim_consent_to_file",
+            tracker,
+            dispatcher,
+            domain,
+        )
+
+    async def validate_seah_witness_victim_consent_to_file(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value in {"yes", "no"}:
+            return {
+                "seah_witness_victim_consent_to_file": value,
+                "seah_witness_immediate_danger": None if value == "yes" else tracker.get_slot("seah_witness_immediate_danger"),
+                "seah_witness_exit_without_filing": False if value == "yes" else tracker.get_slot("seah_witness_exit_without_filing"),
+            }
+        return {"seah_witness_victim_consent_to_file": None}
+
+    async def extract_seah_witness_immediate_danger(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> Dict[Text, Any]:
+        return await self._handle_slot_extraction(
+            "seah_witness_immediate_danger",
+            tracker,
+            dispatcher,
+            domain,
+        )
+
+    async def validate_seah_witness_immediate_danger(
+        self,
+        slot_value: Any,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> Dict[Text, Any]:
+        value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
+        if isinstance(value, str):
+            value = value.lstrip("/")
+        if value in {"yes", "no"}:
+            # This question is only meaningful after witness consent = "no".
+            # Guard against stale or misrouted turns so consent="yes" continues normal flow.
+            if tracker.get_slot("seah_witness_victim_consent_to_file") != "no":
+                return {
+                    "seah_witness_immediate_danger": value,
+                    "seah_witness_exit_without_filing": False,
+                }
+            language_code = tracker.get_slot("language_code") or "en"
+            if language_code == "ne":
+                dispatcher.utter_message(
+                    text="धन्यवाद। यहाँ पीडित/उत्तरजीवीलाई सहयोग गर्न सक्ने सम्भावित सहयोग सेवाहरू छन्: [list to be provided]."
+                )
+            else:
+                dispatcher.utter_message(
+                    text="Thank you. Here are the potential support services that can help the victim-survivor: [list to be provided]."
+                )
+            return {"seah_witness_immediate_danger": value, "seah_witness_exit_without_filing": True}
+        return {"seah_witness_immediate_danger": None}
 
     async def extract_sensitive_issues_follow_up(
         self,
@@ -59,7 +153,7 @@ class ValidateFormSeah1(BaseFormValidationAction):
         if cmd == self.SKIP_VALUE:
             cmd = "anonymous"
 
-        if cmd not in {"identified", "anonymous", "focal_point"}:
+        if cmd not in {"identified", "anonymous"}:
             dispatcher.utter_message(text=self.get_utterance(2))
             return {"sensitive_issues_follow_up": None}
 
@@ -71,10 +165,7 @@ class ValidateFormSeah1(BaseFormValidationAction):
             # Identified path already carries contact via OTP/phone collection,
             # so prefill consent to avoid asking the same question again later.
             updates["complainant_consent"] = True
-        if cmd == "focal_point":
-            updates["seah_victim_survivor_role"] = "focal_point"
-            updates["active_party_role"] = "seah_focal_point"
-        elif cmd == "identified":
+        if cmd == "identified":
             updates["active_party_role"] = "victim_survivor"
         elif cmd == "anonymous":
             updates["active_party_role"] = "victim_survivor"
@@ -126,16 +217,20 @@ class ValidateFormSeah1(BaseFormValidationAction):
         value = (slot_value or "").strip() if isinstance(slot_value, str) else slot_value
         if isinstance(value, str):
             value = value.lstrip("/")
-        sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
-        if sensitive_issues_follow_up == "anonymous":
-            allowed = {"victim_survivor", "not_victim_survivor"}
-        else:
-            allowed = {"victim_survivor", "not_victim_survivor", "focal_point"}
+        allowed = {"victim_survivor", "not_victim_survivor", "focal_point"}
         if value in allowed:
-            return {
+            updates = {
                 "seah_victim_survivor_role": value,
                 "active_party_role": self._normalize_party_role(value),
+                "seah_witness_victim_consent_to_file": None,
+                "seah_witness_immediate_danger": None,
+                "seah_witness_exit_without_filing": False,
             }
+            # Focal-point path skips anonymity question.
+            if value == "focal_point":
+                updates["seah_anonymous_route"] = False
+                updates["sensitive_issues_follow_up"] = "identified"
+            return updates
         return {"seah_victim_survivor_role": None}
 
 
@@ -168,4 +263,32 @@ class ActionAskFormSeah1SeahVictimSurvivorRole(BaseAction):
             language_code, BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE["en"]
         )
         dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
+        return []
+
+
+class ActionAskFormSeah1SeahWitnessVictimConsentToFile(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_1_seah_witness_victim_consent_to_file"
+
+    async def execute_action(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
+        return []
+
+
+class ActionAskFormSeah1SeahWitnessImmediateDanger(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_seah_1_seah_witness_immediate_danger"
+
+    async def execute_action(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: DomainDict,
+    ) -> List[Dict[Text, Any]]:
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []

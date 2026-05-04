@@ -109,23 +109,21 @@ BUTTONS_SKIP = {
 BUTTONS_CLEAN_WINDOW_OPTIONS = {
     'en': [
         {"title": "Close Browser", "payload": "/nav_close_browser_tab"},
-        {"title": "Clear Session", "payload": "/nav_clear"}
+        {"title": "Close Session", "payload": "/nav_clear"}
     ],
     'ne': [
         {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
-        {"title": "सत्र खाली गर्नुहोस्", "payload": "/nav_clear"}
+        {"title": "सत्र बन्द गर्नुहोस्", "payload": "/nav_clear"}
     ]
 }
 
-# SEAH outro + submit-failure UX: same as clean-window plus explicit end-chat control.
+# SEAH outro + submit-failure UX uses explicit close controls.
 BUTTONS_SEAH_OUTRO = {
     "en": [
         *BUTTONS_CLEAN_WINDOW_OPTIONS["en"],
-        {"title": "Close Session", "payload": BUTTON_GOODBYE},
     ],
     "ne": [
         *BUTTONS_CLEAN_WINDOW_OPTIONS["ne"],
-        {"title": "सत्र बन्द गर्नुहोस्", "payload": BUTTON_GOODBYE},
     ],
 }
 
@@ -172,7 +170,7 @@ BUTTONS_GRIEVANCE_SUBMISSION = {
     'en': [
         {"title": "File as is", "payload": BUTTON_SUBMIT_DETAILS},
         {"title": "Add more details", "payload": BUTTON_ADD_MORE_DETAILS},
-        {"title": "Restart the process", "payload": BUTTON_RESTART}
+        {"title": "Rewrite the summary", "payload": BUTTON_RESTART}
     ],
     'ne': [
         {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
@@ -256,12 +254,10 @@ BUTTONS_CHECK_STATUS = {
 
 BUTTONS_SEAH_IDENTITY_MODE = {
     "en": [
-        {"title": "SEAH focal point", "payload": "/focal_point"},
         {"title": "Anonymous grievance", "payload": "/anonymous"},
         {"title": "Grievance with contact details", "payload": "/identified"},
     ],
     "ne": [
-        {"title": "SEAH फोकल पोइन्ट", "payload": "/focal_point"},
         {"title": "गुमनाम उजुरी", "payload": "/anonymous"},
         {"title": "सम्पर्क विवरण सहित उजुरी", "payload": "/identified"},
     ],
@@ -269,12 +265,14 @@ BUTTONS_SEAH_IDENTITY_MODE = {
 
 BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE = {
     "en": [
-        {"title": "Yes, I am the victim/survivor", "payload": "/victim_survivor"},
-        {"title": "No", "payload": "/not_victim_survivor"},
+        {"title": "SEAH focal-point", "payload": "/focal_point"},
+        {"title": "Victim-Survivor", "payload": "/victim_survivor"},
+        {"title": "Witness / Relative of the victim", "payload": "/not_victim_survivor"},
     ],
     "ne": [
-        {"title": "हो, म पीडित/उत्तरजीवी हुँ", "payload": "/victim_survivor"},
-        {"title": "होइन", "payload": "/not_victim_survivor"},
+        {"title": "SEAH फोकल-पोइन्ट", "payload": "/focal_point"},
+        {"title": "पीडित/उत्तरजीवी", "payload": "/victim_survivor"},
+        {"title": "साक्षी / पीडितको आफन्त", "payload": "/not_victim_survivor"},
     ],
 }
 

@@ -374,13 +374,12 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
         if slot_value == self.SKIP_VALUE:
             result = {"complainant_ward": self.SKIP_VALUE}
         else:
-            # Ensure the ward is an integer
-            if not slot_value.isdigit():
+            raw = str(slot_value).strip()
+            if not raw.isdigit():
                 result = {"complainant_ward": None}
             else:
-                result = {"complainant_ward": int(slot_value)}
-            result = {"complainant_ward": slot_value}
-        
+                result = {"complainant_ward": raw}
+
         self.logger.debug(f"Validate complainant_ward: {result}")
         return result
     
@@ -547,8 +546,15 @@ class ContactFormValidationAction(BaseContactForm, BaseFormValidationAction):
         )
     
     async def validate_complainant_full_name(self, slot_value: Any, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> Dict[Text, Any]:
+        is_focal_reporter_name_stage = (
+            tracker.get_slot("story_main") == "seah_intake"
+            and tracker.get_slot("seah_focal_stage") == "bootstrap_reporter_contact"
+        )
+        is_skip = isinstance(slot_value, str) and self.SKIP_VALUE in slot_value
 
-        if self.SKIP_VALUE in slot_value:
+        if is_skip and is_focal_reporter_name_stage:
+            result = {"complainant_full_name": None}
+        elif is_skip:
             result = {"complainant_full_name": self.SKIP_VALUE}
         
         elif not slot_value or slot_value.startswith('/'):
@@ -708,6 +714,7 @@ class ValidateFormContact(ContactFormValidationAction):
         story_main = tracker.get_slot("story_main")
         sensitive_issues_follow_up = tracker.get_slot("sensitive_issues_follow_up")
         seah_focal_stage = tracker.get_slot("seah_focal_stage")
+        seah_role = tracker.get_slot("seah_victim_survivor_role")
         
         required_slots_location = ["complainant_location_consent", 
                       "complainant_province",
@@ -721,6 +728,18 @@ class ValidateFormContact(ContactFormValidationAction):
                       "complainant_address_confirmed",
                       "complainant_address"
                       ]
+        required_slots_location_seah = [
+                      "complainant_province",
+                      "complainant_district",
+                      "complainant_municipality_temp",
+                      "complainant_municipality_confirmed",
+                      ]
+        required_slots_location_seah_municipality_only = [
+                      "complainant_province",
+                      "complainant_district",
+                      "complainant_municipality_temp",
+                      "complainant_municipality_confirmed",
+                      ]
         required_slots_contact = ["complainant_consent", "complainant_full_name", "complainant_email_temp", "complainant_email_confirmed"]
 
         # Focal reporter bootstrap: name only; consent defaults True in state_machine;
@@ -728,17 +747,21 @@ class ValidateFormContact(ContactFormValidationAction):
         if story_main == "seah_intake" and seah_focal_stage == "bootstrap_reporter_contact":
             return ["complainant_full_name"]
 
-        # Focal complainant capture: location + name/email; consent defaults True (already agreed to share).
+        # Focal flow no longer collects complainant profile/contact fields in chatbot.
         if story_main == "seah_intake" and seah_focal_stage == "complainant_contact":
-            return required_slots_location + [
-                "complainant_full_name",
-                "complainant_email_temp",
-                "complainant_email_confirmed",
-            ]
+            return []
 
         # In anonymous dedicated SEAH intake, do not ask identity/contact questions.
         if story_main == "seah_intake" and sensitive_issues_follow_up == "anonymous":
-            return required_slots_location
+            if seah_role in {"victim_survivor", "not_victim_survivor"}:
+                return required_slots_location_seah_municipality_only
+            return required_slots_location_seah
+
+        # In SEAH intake, skip location-consent question and go directly to location fields.
+        if story_main == "seah_intake":
+            if seah_role in {"victim_survivor", "not_victim_survivor"}:
+                return required_slots_location_seah_municipality_only + required_slots_contact
+            return required_slots_location_seah + required_slots_contact
 
         return required_slots_location + required_slots_contact
 

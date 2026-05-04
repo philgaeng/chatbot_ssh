@@ -155,10 +155,13 @@ class ActionAskFormSeah2SeahProjectIdentification(BaseAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
-        buttons = self.build_seah_project_identification_buttons(
-            tracker, max_projects=12
-        )
-        dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
+        # Kept for quick restore if product asks to switch back to dynamic
+        # project catalog buttons instead of YES/NO.
+        # buttons = self.build_seah_project_identification_buttons(
+        #     tracker, max_projects=12
+        # )
+        # dispatcher.utter_message(text=self.get_utterance(1), buttons=buttons)
+        dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []
 
 
@@ -173,12 +176,15 @@ class ActionAskFormSeah2SensitiveIssuesNewDetail(BaseAction):
         domain: DomainDict,
     ) -> List[Dict[Text, Any]]:
         description_status = tracker.get_slot("grievance_description_status")
-        if description_status in ("show_options", "add_more_details"):
+        if description_status == "show_options":
             grievance_description = tracker.get_slot("grievance_description") or ""
             dispatcher.utter_message(
                 text=self.get_utterance(2).format(grievance_description=grievance_description),
                 buttons=self.get_buttons(2),
             )
+        elif description_status == "add_more_details":
+            # Keep parity with form_grievance ask flow.
+            dispatcher.utter_message(text=self.get_utterance(3), buttons=self.get_buttons(1))
         else:
             dispatcher.utter_message(text=self.get_utterance(1), buttons=self.get_buttons(1))
         return []

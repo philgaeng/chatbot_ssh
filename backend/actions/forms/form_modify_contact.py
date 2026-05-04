@@ -75,17 +75,58 @@ class ValidateFormModifyContact(ContactFormValidationAction):
             return
         cid = complainant["complainant_id"]
         skip_confirmed = {"complainant_municipality_confirmed", "complainant_village_confirmed"}
+        updated_db_cols: List[str] = []
         for field in self.CONTACT_FIELDS_ORDER:
             if field in skip_confirmed:
                 continue
             val = slots.get(field) or slots.get(self._SLOT_TO_DB.get(field, field))
             if val is None or val == self.SKIP_VALUE:
                 continue
-            if field == "complainant_municipality_temp" and not slots.get("complainant_municipality_confirmed"):
-                continue
-            if field == "complainant_village_temp" and not slots.get("complainant_village_confirmed"):
-                continue
+            if field == "complainant_municipality_temp":
+                if slots.get("complainant_municipality_confirmed") is not True and not self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_municipality")
+                ):
+                    continue
+            if field == "complainant_village_temp":
+                if slots.get("complainant_village_confirmed") is not True and not self._has_meaningful_contact_persisted_value(
+                    slots.get("complainant_village")
+                ):
+                    continue
+            db_col = self._SLOT_TO_DB.get(field, field)
             self._persist_field(cid, field, val)
+            updated_db_cols.append(db_col)
+
+        # Validators often set canonical slots (e.g. complainant_municipality) while
+        # skipping *_temp in the loop above; flush meaningful canonical values last.
+        for col in (
+            "complainant_phone",
+            "complainant_full_name",
+            "complainant_province",
+            "complainant_district",
+            "complainant_municipality",
+            "complainant_village",
+            "complainant_ward",
+            "complainant_address",
+            "complainant_email",
+        ):
+            val = slots.get(col)
+            if not self._has_meaningful_contact_persisted_value(val):
+                continue
+            try:
+                self.db_manager.update_complainant(cid, {col: val})
+                updated_db_cols.append(col)
+            except Exception as e:
+                self.logger.error(
+                    "Failed to update complainant %s canonical %s: %s", cid, col, e
+                )
+
+        if updated_db_cols:
+            self.logger.info(
+                "modify_contact persist_all: grievance_id=%s complainant_id=%s columns=%s",
+                grievance_id,
+                cid,
+                sorted(set(updated_db_cols)),
+            )
 
     async def validate_complainant_phone(
         self,

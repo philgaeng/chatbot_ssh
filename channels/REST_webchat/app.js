@@ -30,6 +30,8 @@ let messages;
 let fileInput;
 let attachmentButton;
 let sendButton;
+let persistentCloseBrowserButton;
+let persistentCloseSessionButton;
 let invalidSendTooltip;
 let invalidSendTooltipTimer = null;
 
@@ -370,6 +372,8 @@ async function initializeChat() {
   messageInput = document.getElementById("message-input");
   fileInput = document.getElementById("file-input");
   attachmentButton = document.getElementById("attachment-button");
+  persistentCloseBrowserButton = document.getElementById("persistent-close-browser");
+  persistentCloseSessionButton = document.getElementById("persistent-close-session");
   messages = document.getElementById("messages");
 
   // Initialize UI Actions with DOM elements (pass refs for attach button, input lock)
@@ -413,6 +417,22 @@ function setupEventListeners() {
   attachmentButton.addEventListener("click", () => {
     fileInput.click();
   });
+
+  // Always-available bottom controls.
+  if (persistentCloseBrowserButton) {
+    persistentCloseBrowserButton.addEventListener("click", () => {
+      if (typeof window.handleCloseWindowCommand === "function") {
+        window.handleCloseWindowCommand();
+      }
+    });
+  }
+  if (persistentCloseSessionButton) {
+    persistentCloseSessionButton.addEventListener("click", () => {
+      if (typeof window.handleClearSessionCommand === "function") {
+        window.handleClearSessionCommand();
+      }
+    });
+  }
 
   // Allow backend to open the file picker (e.g. "Add pictures and documents" in Modify grievance)
   window.openFileUploadModal = function () {

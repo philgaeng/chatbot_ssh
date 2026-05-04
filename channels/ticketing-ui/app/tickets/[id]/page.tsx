@@ -22,7 +22,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
   type HashCommand,
 } from "@/lib/mobile-constants";
 import {
@@ -847,21 +847,25 @@ export default function TicketDetailPage() {
   const timeLabel   = slaTimeLabel(slaHours, slaBreached, sla?.resolution_time_days);
   const slaCls      = slaColorCls(slaHours, slaBreached);
 
+  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
+
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
     switch (activeFilter) {
-      case "all":    return ticket.events;
-      case "mine":   return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
+      case "all":         return ticket.events;
+      case "mine":        return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
+      case "owner":       return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
+      case "supervisor":  return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
+      case "observers":   return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
       case "tasks":       return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
       case "complainant": return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
       case "system":      return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
-      default:       return ticket.events.filter((e) => e.created_by_user_id === activeFilter);
+      default:            return ticket.events;
     }
-  }, [ticket, activeFilter, currentUserId]);
+  }, [ticket, activeFilter, currentUserId, viewerIds]);
 
   const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
-  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
 
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];

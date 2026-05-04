@@ -9,7 +9,6 @@ from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.action_submit_grievance import BaseActionSubmit
-from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 
 
@@ -51,8 +50,7 @@ class ActionSeahOutro(BaseAction):
         idx = order.get(variant, 2)
         body = self._get_seah_utterance(idx)
         full_text = body + contact_block
-        buttons = BUTTONS_SEAH_OUTRO.get(language_code, BUTTONS_SEAH_OUTRO["en"])
-        dispatcher.utter_message(text=full_text, buttons=buttons)
+        dispatcher.utter_message(text=full_text)
         return events
 
 
@@ -95,9 +93,7 @@ class ActionGrievanceOutro(BaseActionSubmit):
                 utterance = self._get_grievance_utterance(3)
             self.logger.debug(f"action_grievance_outro - utterance: {utterance}")
 
-            # Reuse shared close-session buttons used by SEAH outro for consistent UX.
-            buttons = BUTTONS_SEAH_OUTRO.get(language_code, BUTTONS_SEAH_OUTRO["en"])
-            dispatcher.utter_message(text=utterance, buttons=buttons)
+            dispatcher.utter_message(text=utterance)
             self.logger.debug("action_grievance_outro - outro sent")
 
             grievance_data = self._prepare_grievance_outro_data(tracker)
@@ -134,7 +130,6 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
     ) -> List[Dict[Text, Any]]:
         self._initialize_language_and_helpers(tracker)
         language_code = tracker.get_slot("language_code") or "en"
-        buttons = BUTTONS_SEAH_OUTRO.get(language_code, BUTTONS_SEAH_OUTRO["en"])
 
         complainant_phone = tracker.get_slot("complainant_phone")
         grievance_id = tracker.get_slot("status_check_grievance_id_selected")
@@ -146,7 +141,6 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
                 dispatcher.utter_message(text=self._get_status_check_utterance(3))
             else:
                 dispatcher.utter_message(text=self._get_status_check_utterance(4))
-            dispatcher.utter_message(buttons=buttons)
         else:
             # Show grievance details before confirmation for context.
             if grievance_id:
@@ -160,7 +154,7 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
             utterance = self._get_status_check_utterance(2).format(
                 grievance_id=grievance_id, complainant_phone=complainant_phone
             )
-            dispatcher.utter_message(text=utterance, buttons=buttons)
+            dispatcher.utter_message(text=utterance)
             self.send_sms(
                 sms_data={"grievance_id": grievance_id, "complainant_phone": complainant_phone},
                 body_name="GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP",
