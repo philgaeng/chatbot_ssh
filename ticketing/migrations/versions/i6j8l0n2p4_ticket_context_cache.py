@@ -7,7 +7,7 @@ structured findings JSON (output from LLM).  Rebuilt by context_builder.py
 whenever summary_regen_required events are committed.
 
 Revision ID: i6j8l0n2p4
-Revises: h5e7g9i1k3m5_add_project_chatbot_url
+Revises: h5e7g9i1k3m5
 Create Date: 2026-05-02
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "i6j8l0n2p4"
-down_revision: Union[str, None] = "h5e7g9i1k3m5_add_project_chatbot_url"
+down_revision: Union[str, None] = "h5e7g9i1k3m5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

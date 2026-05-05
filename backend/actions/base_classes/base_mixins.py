@@ -14,7 +14,7 @@ import logging
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
 from backend.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY, BUTTONS_SEAH_PROJECT_IDENTIFICATION
 from backend.shared_functions.helpers_repo import helpers_repo
-from backend.services.messaging import get_action_messaging
+from backend.services.messaging import Messaging
 from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, USER_FIELDS, GRIEVANCE_FIELDS, CLASSIFICATION_DATA, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, ADMIN_EMAILS
 from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT
 from backend.services.database_services.postgres_services import db_manager
@@ -35,7 +35,7 @@ class ActionCommonMixin(Action, ABC):
         self.logger = logging.getLogger(__name__)
         self.file_name = self.__class__.__module__.split(".")[-1]
         self.helpers = helpers_repo
-        self.messaging = get_action_messaging()
+        self.messaging = Messaging()
         self.db_manager = db_manager
         self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS
         self.SKIP_VALUE = SKIP_VALUE

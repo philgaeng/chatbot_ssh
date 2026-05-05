@@ -768,7 +768,7 @@ UTTERANCE_MAPPING = {
         'action_seah_outro': {
             'utterances': {
                 1: {
-                    'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted through the SEAH focal point. Your reference number is available in this chat.",
+                    'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted. Your reference number is available in this chat.",
                     'ne': "धन्यवाद। तपाईंको SEAH फोकल-पोइन्ट रिपोर्ट दर्ता भयो। तपाईंले पुष्टि गर्नुभएको माध्यमबाट मात्र सम्पर्क हुन सक्छ।",
                 },
                 2: {

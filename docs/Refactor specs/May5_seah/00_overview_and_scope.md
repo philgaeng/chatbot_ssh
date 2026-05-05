@@ -37,7 +37,6 @@ Never put `public.*` DDL in ticketing migrations, or `ticketing.*` in public mig
 | `07_phase2_decision_questions.md`           | Phase-2 decision questionnaire used to lock canonical IDs, party-role rules, cutover behavior, reveal policy inputs, and migration policy.                                  |
 | `08_phase2_query_and_submit_amendments.md`  | Exhaustive checklist of submit-path and SQL query amendments required in `action_submit_grievance.py` and DB service managers for canonical phase-2 rollout.                |
 | `agents_instructions.md`                    | Agent split (roles, boundaries, handoffs) and mandatory docs/checklists per agent for execution.                                                                          |
-| `11-messaging-api-split-deploy-and-providers.md` | Messaging API-only access between chatbot and ticketing, split deploy, pluggable SMS/email providers, and ticketing notifications settings (spec + open questions).   |
 
 Related implementation handoff:
 

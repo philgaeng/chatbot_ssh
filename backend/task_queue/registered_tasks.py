@@ -51,7 +51,7 @@ from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
 from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
 from backend.services.database_services.postgres_services import db_manager
-from backend.services.messaging import get_action_messaging
+from backend.services.messaging import messaging
 from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
 from .task_manager import TaskManager, DatabaseTaskManager
@@ -273,7 +273,7 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
             extra_data={'phone_number': phone_number}
         )
     try:
-        result = get_action_messaging().send_sms(phone_number, message)
+        result = messaging.send_sms(phone_number, message)
         if grievance_id:
             task_mgr.complete_task(
                 result=result, 
@@ -316,7 +316,7 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
             extra_data={'to_emails': to_emails}
         )
     try:
-        result = get_action_messaging().send_email(to_emails, subject, body)
+        result = messaging.send_email(to_emails, subject, body)
         if grievance_id:
             task_mgr.complete_task(
                 result=result,

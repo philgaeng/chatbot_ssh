@@ -167,9 +167,7 @@ def test_invoke_action_seah_outro_registered(domain, monkeypatch):
     _run(invoke_action("action_seah_outro", dispatcher, tracker, domain))
 
     assert dispatcher.messages, "Expected outro message"
-    combined = " ".join(m.get("text", "") for m in dispatcher.messages).lower()
-    # Focal-path outro (utterance index 1) — EN uses “focal point”; NE uses Devanagari फोकल.
-    assert "focal point" in combined or "फोकल" in "".join(m.get("text", "") for m in dispatcher.messages)
+    assert any("focal-point" in m.get("text", "").lower() for m in dispatcher.messages)
 
 
 def test_submit_seah_case_reference_uses_canonical_grievance_id():
