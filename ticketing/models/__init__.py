@@ -11,6 +11,7 @@ from .package import ProjectPackage, PackageLocation
 from .settings import Settings
 from .ticket_context_cache import TicketContextCache
 from .ticket_viewer import TicketViewer
+from .notification_route import NotificationRoute, resolve_notification_route
 
 __all__ = [
     "Base",
@@ -36,4 +37,6 @@ __all__ = [
     "Settings",
     "TicketContextCache",
     "TicketViewer",
+    "NotificationRoute",
+    "resolve_notification_route",
 ]

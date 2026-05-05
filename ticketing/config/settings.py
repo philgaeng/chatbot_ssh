@@ -4,6 +4,7 @@ All values loaded from env.local / .env — no hardcoded credentials.
 """
 
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,8 @@ class TicketingSettings(BaseSettings):
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
     messaging_api_key: str = ""
+    #: Base URL for ``POST /api/messaging/*`` (notify or backend). Env: ``MESSAGING_REMOTE_BASE_URL``. If empty, uses ``backend_grievance_base_url``.
+    messaging_remote_base_url: str = ""
 
     # ── Keycloak (replaces AWS Cognito for self-hosted deployments) ──
     # Leave keycloak_issuer empty to keep the dev bypass (returns mock-super-admin).
@@ -43,6 +46,14 @@ class TicketingSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def messaging_api_base_url(self) -> str:
+        """Host for messaging HTTP API (same spec as chatbot ``MESSAGING_REMOTE_BASE_URL``)."""
+        u = (self.messaging_remote_base_url or "").strip()
+        if u:
+            return u.rstrip("/")
+        return str(self.backend_grievance_base_url).rstrip("/")
 
     @property
     def database_url(self) -> str:
