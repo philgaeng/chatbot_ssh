@@ -10,14 +10,16 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from psycopg2 import sql
 
-from backend.services.database_services.grievance_manager import GrievanceDbManager
-from backend.services.messaging import Messaging
 from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
+from backend.services.database_services.grievance_manager import GrievanceDbManager
+from backend.services.messaging_http_dispatch import (
+    grievance_dispatch_send_email,
+    grievance_dispatch_send_sms,
+)
 
 router = APIRouter()
 
 grievance_manager = GrievanceDbManager()
-messaging_service = Messaging()
 
 
 # --- Request/response models (preserve Flask response structure) ---
@@ -51,7 +53,7 @@ def _send_status_update_notifications(
     notes: Optional[str],
     created_by: Optional[str],
 ) -> None:
-    """Send email and SMS when grievance status is updated. In-process Messaging."""
+    """Send email and SMS on status update via messaging API (or inprocess — see messaging_http_dispatch)."""
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
@@ -80,10 +82,16 @@ def _send_status_update_notifications(
         if office_emails:
             email_subject = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_SUBJECT"]["en"].format(**email_data)
             email_body = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_BODY"]["en"].format(**email_data)
-            email_success = messaging_service.send_email(
-                to_emails=office_emails,
-                subject=email_subject,
-                body=email_body,
+            ctx = {
+                "source_system": "ticketing",
+                "purpose": "grievance_status_update",
+                "grievance_id": grievance_id,
+            }
+            email_success = grievance_dispatch_send_email(
+                office_emails,
+                email_subject,
+                email_body,
+                context=ctx,
             )
             if email_success:
                 print(f"Status update email sent to {len(office_emails)} office staff")
@@ -97,7 +105,15 @@ def _send_status_update_notifications(
                 "grievance_timeline": grievance.get("grievance_timeline", "N/A"),
             }
             sms_message = DIC_SMS_TEMPLATES["GRIEVANCE_STATUS_UPDATE"]["en"].format(**sms_data)
-            sms_success = messaging_service.send_sms(phone_number=complainant_phone, message=sms_message)
+            sms_success = grievance_dispatch_send_sms(
+                complainant_phone,
+                sms_message,
+                context={
+                    "source_system": "ticketing",
+                    "purpose": "grievance_status_update",
+                    "grievance_id": grievance_id,
+                },
+            )
             if sms_success:
                 print(f"Status update SMS sent to complainant: {complainant_phone}")
             else:

@@ -9,6 +9,7 @@ from .officer_scope import OfficerScope
 from .project import Project, ProjectOrganization, ProjectLocation
 from .package import ProjectPackage, PackageLocation
 from .settings import Settings
+from .notification_route import NotificationRoute, resolve_notification_route
 
 __all__ = [
     "Base",
@@ -32,4 +33,6 @@ __all__ = [
     "ProjectPackage",
     "PackageLocation",
     "Settings",
+    "NotificationRoute",
+    "resolve_notification_route",
 ]

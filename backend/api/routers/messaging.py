@@ -1,10 +1,12 @@
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field, ValidationError, constr
 
-from backend.services.messaging import Messaging
+from backend.api.deps.messaging_auth import MessagingApiCaller, messaging_api_guard
 from backend.logger.logger import TaskLogger
+from backend.services.messaging import Messaging
+from backend.services.notification_routing_runtime import resolve_effective_route
 
 
 router = APIRouter()
@@ -21,6 +23,10 @@ class MessageContext(BaseModel):
     )
     grievance_id: Optional[str] = None
     ticket_id: Optional[str] = None
+    #: ISO 3166-1 alpha-2 (e.g. NP). Required for ticketing.notification_routes resolution.
+    country_code: Optional[str] = None
+    #: ticketing.projects.project_id — optional override row in notification_routes.
+    project_id: Optional[str] = None
     office_user: Optional[str] = None
     channel: Optional[str] = None
     client_message_id: Optional[str] = Field(
@@ -61,14 +67,10 @@ def _get_logger():
     return task_logger.logger
 
 
-def _auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
-    # Minimal placeholder for now; wire to real auth later.
-    expected = None  # e.g. os.getenv("MESSAGING_API_KEY")
-    if expected and x_api_key != expected:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"status": "FAILED", "error_code": "UNAUTHORIZED", "error": "Invalid API key"},
-        )
+def _context_dict(ctx: Optional[MessageContext]) -> Optional[Dict[str, Any]]:
+    if ctx is None:
+        return None
+    return ctx.model_dump(exclude_none=True)
 
 
 @router.post(
@@ -78,19 +80,28 @@ def _auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
 )
 def send_sms(
     payload: SendSmsRequest,
-    _auth: None = Depends(_auth_check),
+    caller: MessagingApiCaller = Depends(messaging_api_guard),
     messaging: Messaging = Depends(get_messaging),
 ):
     logger = _get_logger()
     try:
+        ctx_dict = _context_dict(payload.context)
+        route = resolve_effective_route("sms", ctx_dict)
         logger.info(
-            "Messaging API send-sms request",
+            "Messaging API send-sms request client_source=%s routing=%s",
+            caller.source,
+            route.provider_key if route else "env_default",
             extra={
                 "to": payload.to,
-                "context": payload.context.dict() if payload.context else None,
+                "client_source": caller.source,
+                "context": ctx_dict,
             },
         )
-        ok = messaging.send_sms(payload.to, payload.text)
+        ok = messaging.send_sms(
+            payload.to,
+            payload.text,
+            provider_key=route.provider_key if route else None,
+        )
         if not ok:
             return MessagingResponse(
                 status="FAILED",
@@ -131,7 +142,7 @@ def send_sms(
 )
 def send_email(
     payload: SendEmailRequest,
-    _auth: None = Depends(_auth_check),
+    caller: MessagingApiCaller = Depends(messaging_api_guard),
     messaging: Messaging = Depends(get_messaging),
 ):
     logger = _get_logger()
@@ -146,14 +157,24 @@ def send_email(
                 },
             )
 
+        ctx_dict = _context_dict(payload.context)
+        route = resolve_effective_route("email", ctx_dict)
         logger.info(
-            "Messaging API send-email request",
+            "Messaging API send-email request client_source=%s routing=%s",
+            caller.source,
+            route.provider_key if route else "env_default",
             extra={
                 "to": payload.to,
-                "context": payload.context.dict() if payload.context else None,
+                "client_source": caller.source,
+                "context": ctx_dict,
             },
         )
-        ok = messaging.send_email(payload.to, payload.subject, payload.html_body)
+        ok = messaging.send_email(
+            payload.to,
+            payload.subject,
+            payload.html_body,
+            provider_key=route.provider_key if route else None,
+        )
         if not ok:
             return MessagingResponse(
                 status="FAILED",
