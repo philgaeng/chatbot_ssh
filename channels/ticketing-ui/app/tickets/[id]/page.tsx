@@ -848,6 +848,11 @@ export default function TicketDetailPage() {
   const slaCls      = slaColorCls(slaHours, slaBreached);
 
   const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
+  const viewerTiers       = useMemo(() => {
+    const m = new Map<string, "informed" | "observer">();
+    (ticket?.viewers ?? []).forEach(v => m.set(v.user_id, v.tier as "informed" | "observer"));
+    return m;
+  }, [ticket]);
 
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
@@ -1124,6 +1129,17 @@ export default function TicketDetailPage() {
             </>
           )}
 
+          {/* Reply owner indicator (spec 12) */}
+          {ticket.complainant_reply_owner_id && ticket.complainant_reply_owner_id !== ticket.assigned_to_user_id && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="shrink-0 text-blue-500 text-[11px] inline-flex items-center gap-1" title="Officer who replies to the complainant">
+                <IconReply size={11} strokeWidth={2} />
+                Reply: {ticket.complainant_reply_owner_id === currentUserId ? "You" : ticket.complainant_reply_owner_id}
+              </span>
+            </>
+          )}
+
           {/* Secondary toggles — far right */}
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {isAssigned && (
@@ -1248,6 +1264,7 @@ export default function TicketDetailPage() {
             <ViewersBar
               viewers={ticket.viewers ?? []}
               canManage={canManageViewers}
+              isActor={ticket.assigned_to_user_id === currentUserId}
               ticketId={ticket.ticket_id}
               onChanged={load}
             />
@@ -1274,7 +1291,7 @@ export default function TicketDetailPage() {
                         onComplete={handleCompleteTask}
                       />
                     );
-                  return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} />;
+                  return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} viewerTiers={viewerTiers} />;
                 })
             )}
             <div ref={threadEndRef} />

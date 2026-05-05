@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `chatbot-webhook` — 2026-04-27
+> Last updated: `spec12-tier-model` — 2026-05-05
 
 ---
 
@@ -16,10 +16,18 @@
 - ✅ **Escalation gaps closed** — auto-assign on escalation + automatic complainant notification on RESOLVE/ESCALATE
 - ✅ **LLM translation + findings** — per-note translation to English (gpt-4, Celery); AI case-findings card (role-gated); `POST /tickets/{id}/findings` endpoint; Alembic migration `c1d5f8a2e047`
 - ✅ **Chatbot → ticketing webhook** — `backend/actions/utils/ticketing_dispatch.py` (fire-and-forget); wired into both `BaseActionSubmit.execute_action` (standard) and `ActionSubmitSeah.execute_action` (SEAH); env vars `TICKETING_API_URL` + `TICKETING_SECRET_KEY` added to `env.local`
+- ✅ **Spec 12 tier model** — 4-tier permission model (Actor/Supervisor/Informed/Observer) fully implemented:
+  - Alembic migration `k0l2n4p6r8`: `tier` column on `ticket_viewers`, `complainant_reply_owner_id` on `tickets`
+  - Backend: `POST /tickets/{id}/informed` (add to Informed), `PUT /tickets/{id}/complainant-reply-owner`
+  - Escalation: previous actor auto-moves to Informed on escalation; TIER_CHANGED event emitted
+  - `should_notify()` gate reads `notification_rules` from settings JSON
+  - Frontend: ViewersBar split into Informed (purple) + Observer (gray) rows
+  - Frontend: Actor/Informed tier badges on note bubbles in event thread
+  - Settings: tier config per step + WorkflowNotificationsPanel (event × tier × channel grid)
 
 ### In progress / next
-- 🔲 **Week 2 frontend** — Cursor starts Apr 28: officer queue, ticket detail, action panel, SLA countdown
-- 🔲 **Week 3 integration** — SEAH role-gating, notifications, staging deploy
+- 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
+- 🔲 **Staging deploy** — Docker deploy to grm.stage.facets-ai.com
 
 ### Active containers
 | Container | Port | How to start |

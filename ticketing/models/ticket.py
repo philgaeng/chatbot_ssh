@@ -83,6 +83,10 @@ class Ticket(Base):
     # ── Assignment ──
     assigned_to_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     assigned_role_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # complainant_reply_owner_id: user_id of the officer who holds the "reply to complainant"
+    # capability. Defaults to whoever was Actor at Step 1 (set on ticket creation).
+    # Any Actor above L1 can explicitly reassign via PUT /tickets/{id}/complainant-reply-owner.
+    complainant_reply_owner_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # ── SLA tracking ──
     step_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -41,6 +41,11 @@ export interface WorkflowStepBrief {
   assigned_role_key: string;
   response_time_hours: number | null;
   resolution_time_days: number | null;
+  // Spec 12 tier model
+  supervisor_role: string | null;
+  informed_roles: string[];
+  observer_roles: string[];
+  informed_pii_access: boolean;
 }
 
 export interface TicketEvent {
@@ -69,6 +74,8 @@ export interface TicketViewer {
   user_id: string;
   added_by_user_id: string;
   added_at: string;
+  /** 'observer' (read-only) | 'informed' (notes + tasks + notifications) */
+  tier: "observer" | "informed";
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -88,6 +95,8 @@ export interface TicketDetail extends TicketListItem {
   /** AI-generated case findings (supervisor/GRC view only). Null until first generated. */
   ai_summary_en: string | null;
   ai_summary_updated_at: string | null;
+  /** Spec 12: who holds the reply-to-complainant capability. Defaults to L1 actor. */
+  complainant_reply_owner_id: string | null;
 }
 
 export interface SlaStatus {
@@ -124,6 +133,11 @@ export interface WorkflowStep {
   resolution_time_days: number | null;
   stakeholders: string[] | null;
   expected_actions: string[] | null;
+  // Spec 12 tier model
+  supervisor_role: string | null;
+  informed_roles: string[];
+  observer_roles: string[];
+  informed_pii_access: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -239,6 +253,30 @@ export function patchTicket(id: string, body: { assign_to_user_id?: string; prio
   });
 }
 
+// ── Spec 12 tier endpoints ────────────────────────────────────────────────────
+
+export interface AddInformedResponse {
+  ticket_id: string;
+  user_id: string;
+  tier: string;
+  viewer_id: string;
+  event_id: string;
+}
+
+export function addInformed(ticketId: string, userId: string): Promise<AddInformedResponse> {
+  return apiFetch<AddInformedResponse>(`/api/v1/tickets/${ticketId}/informed`, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function updateReplyOwner(ticketId: string, userId: string): Promise<{ ticket_id: string; complainant_reply_owner_id: string; event_id: string }> {
+  return apiFetch(`/api/v1/tickets/${ticketId}/complainant-reply-owner`, {
+    method: "PUT",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
 export interface InboundMessagePayload {
   message: string;
   intent?: "ADDITIONAL_INFO" | "AMENDMENT" | "STATUS_CHECK" | "WITHDRAW_REQUEST" | "OTHER";
@@ -316,6 +354,11 @@ export interface StepPayload {
   resolution_time_days?: number | null;
   stakeholders?: string[] | null;
   expected_actions?: string[] | null;
+  // Spec 12 tier model fields
+  supervisor_role?: string | null;
+  informed_roles?: string[];
+  observer_roles?: string[];
+  informed_pii_access?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {

@@ -48,10 +48,16 @@ from ticketing.api.schemas.ticket import (
     ComplainantPatchResponse,
     InboundMessageRequest,
     InboundMessageResponse,
+    AddInformedRequest,
+    AddInformedResponse,
+    ReplyOwnerRequest,
 )
 from ticketing.clients.grievance_api import patch_complainant
 from ticketing.clients.orchestrator import send_message_to_complainant
-from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
+from ticketing.engine.escalation import (
+    convene_grc, escalate_ticket, grc_decide,
+    _apply_step_tier_roles, _ensure_viewer,
+)
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
@@ -279,6 +285,8 @@ def create_ticket(
         current_workflow_id=workflow.workflow_id,
         current_step_id=first_step.step_id if first_step else None,
         assigned_to_user_id=auto_assigned_id,
+        # Spec 12: reply-to-complainant capability defaults to the L1 actor
+        complainant_reply_owner_id=auto_assigned_id,
         priority=payload.priority,
         is_seah=payload.is_seah,
         is_deleted=False,
@@ -295,6 +303,11 @@ def create_ticket(
         # No summary to regenerate at creation; actor is the inbound chatbot/API key
         summary_regen_required=False,
     )
+
+    # Spec 12: seed Informed + Observer tiers from the first step's role configuration
+    if first_step:
+        _apply_step_tier_roles(db, ticket, first_step)
+
     db.commit()
     db.refresh(ticket)
 
@@ -483,7 +496,13 @@ def get_ticket(
     ).scalars().all()
     # Attach as a synthetic attribute so the Pydantic schema can pick it up
     ticket.__dict__["viewers"] = [
-        {"viewer_id": v.viewer_id, "user_id": v.user_id, "added_by_user_id": v.added_by_user_id, "added_at": v.added_at.isoformat()}
+        {
+            "viewer_id": v.viewer_id,
+            "user_id": v.user_id,
+            "added_by_user_id": v.added_by_user_id,
+            "added_at": v.added_at.isoformat(),
+            "tier": v.tier,
+        }
         for v in viewers
     ]
 
@@ -1137,6 +1156,134 @@ def mark_events_seen(
         .values(seen=True)
     )
     db.commit()
+
+
+# ─── POST /tickets/{ticket_id}/informed — add officer to Informed tier ────────
+
+@router.post(
+    "/tickets/{ticket_id}/informed",
+    response_model=AddInformedResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add an officer to the Informed tier on this ticket",
+    description=(
+        "Standard tickets: any Actor at the current step can add someone to Informed.\n\n"
+        "SEAH tickets: returns 403 pending supervisor approval (v2 — supervisor flow not yet implemented).\n\n"
+        "The added officer gains: read access, ability to add notes, ability to execute assigned tasks. "
+        "They do NOT gain workflow actions (escalate / resolve / close)."
+    ),
+)
+def add_to_informed(
+    ticket_id: str,
+    payload: AddInformedRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> AddInformedResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # SEAH: adding to Informed requires supervisor approval (spec 12 §1 — v2)
+    if ticket.is_seah:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "On SEAH tickets, adding someone to Informed requires supervisor approval. "
+                "This flow is not yet implemented (v2). Contact your supervisor directly."
+            ),
+        )
+
+    # Permission check: Actor at current step (or admin)
+    if not current_user.is_admin:
+        if ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the assigned officer (Actor) or an admin can add to Informed.",
+            )
+
+    # Don't add self
+    if payload.user_id == current_user.user_id:
+        raise HTTPException(status_code=422, detail="Cannot add yourself to Informed.")
+
+    viewer = _ensure_viewer(db, ticket_id, payload.user_id, "informed", current_user.user_id)
+
+    event = _add_event(
+        db, ticket, "TIER_CHANGED",
+        step_id=ticket.current_step_id,
+        note=f"Officer added to Informed tier by {current_user.user_id}.",
+        payload={"user_id": payload.user_id, "from_tier": None, "to_tier": "informed", "added_by": current_user.user_id},
+        seen=False,
+        notify_user_id=payload.user_id,
+        created_by=current_user.user_id,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+    db.refresh(viewer)
+
+    return AddInformedResponse(
+        ticket_id=ticket_id,
+        user_id=payload.user_id,
+        tier="informed",
+        viewer_id=viewer.viewer_id,
+        event_id=event.event_id,
+    )
+
+
+# ─── PUT /tickets/{ticket_id}/complainant-reply-owner ─────────────────────────
+
+@router.put(
+    "/tickets/{ticket_id}/complainant-reply-owner",
+    summary="Reassign the complainant-reply capability to another officer",
+    description=(
+        "Defaults to the L1 Actor on ticket creation. "
+        "Any Actor at any step can reassign this to another officer. "
+        "Returns the updated ticket's complainant_reply_owner_id."
+    ),
+)
+def update_reply_owner(
+    ticket_id: str,
+    payload: ReplyOwnerRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Permission: Actor (assigned) or admin
+    if not current_user.is_admin:
+        if ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the assigned officer (Actor) or an admin can reassign the reply owner.",
+            )
+
+    old_owner = ticket.complainant_reply_owner_id
+    ticket.complainant_reply_owner_id = payload.user_id
+    ticket.updated_by_user_id = current_user.user_id
+
+    event = _add_event(
+        db, ticket, "REPLY_OWNER_CHANGED",
+        step_id=ticket.current_step_id,
+        note=f"Complainant reply capability reassigned to {payload.user_id}.",
+        payload={"old_owner": old_owner, "new_owner": payload.user_id, "changed_by": current_user.user_id},
+        seen=False,
+        notify_user_id=payload.user_id,
+        created_by=current_user.user_id,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+
+    return {
+        "ticket_id": ticket_id,
+        "complainant_reply_owner_id": payload.user_id,
+        "event_id": event.event_id,
+    }
 
 
 # ─── GET /tickets/{id}/files — list chatbot-uploaded attachments ──────────────

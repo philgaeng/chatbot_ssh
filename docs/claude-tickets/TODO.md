@@ -2,7 +2,7 @@
 
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
-> Last reviewed: 2026-04-27
+> Last reviewed: 2026-05-05
 
 ---
 
@@ -61,14 +61,8 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 **Dependency:** User is currently rewriting `public.*` tables via Alembic migration.
   Do not test until that migration lands and DB is re-seeded.
 
-### 4. Wire OfficerScope seed rows so auto-assign works for live API tickets
-**File:** `ticketing/seed/mock_tickets.py`  
-**Problem:** Seed creates `UserRole` rows but no `OfficerScope` rows. `auto_assign_officer()`
-returns `None` for any ticket created via the live API (or chatbot webhook) — they arrive
-unassigned. Pre-seeded demo tickets have hardcoded `assigned_to` so demo is safe, but
-the chatbot → ticketing integration path will produce unassigned tickets.  
-**Fix:** Add `OfficerScope` rows for each mock officer in `mock_tickets.py`, matching
-their role, org, location, and project. Mirror the pattern in `kl_road_standard.py`.
+### ~~4. Wire OfficerScope seed rows so auto-assign works for live API tickets~~ ✅ DONE
+`seed_mock_officer_scopes()` in `mock_tickets.py` — already seeded 9 rows, auto-assign works.
 
 ### 5. Visual test + polish pass
 **What to do:** Open `http://localhost:3001`, click through every screen, verify:

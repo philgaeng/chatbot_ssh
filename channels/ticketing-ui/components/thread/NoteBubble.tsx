@@ -53,6 +53,22 @@ function contextStyle(
   return   { bubbleCls: "bg-gray-100 border-l-4 border-gray-400",  labelCls: "text-gray-600"                };
 }
 
+// ── Tier badge (Spec 12) ──────────────────────────────────────────────────────
+
+function TierBadge({ tier }: { tier: "actor" | "informed" | "observer" | null }) {
+  if (!tier || tier === "observer") return null;
+  const cls =
+    tier === "actor"
+      ? "bg-blue-100 text-blue-700"
+      : "bg-purple-100 text-purple-700";
+  const label = tier === "actor" ? "Actor" : "Informed";
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium leading-none ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function NoteBubble({
@@ -60,11 +76,14 @@ export function NoteBubble({
   isMine,
   assignedToUserId = null,
   viewerIds = new Set(),
+  viewerTiers = new Map(),
 }: {
   event:            TicketEvent;
   isMine:           boolean;
   assignedToUserId?: string | null;
   viewerIds?:        Set<string>;
+  /** Maps user_id → tier for all ticket viewers */
+  viewerTiers?:      Map<string, "informed" | "observer">;
 }) {
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -120,6 +139,15 @@ export function NoteBubble({
   const roleStyle = getRoleBubbleStyle(event.actor_role);
   const roleLabel = roleStyle.label || event.created_by_user_id || "Officer";
 
+  // Resolve tier badge (Spec 12)
+  const authorId = event.created_by_user_id;
+  const tier: "actor" | "informed" | "observer" | null =
+    authorId && authorId === assignedToUserId
+      ? "actor"
+      : authorId
+        ? (viewerTiers.get(authorId) ?? null)
+        : null;
+
   // Inline translation if available
   const translation = (event.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
 
@@ -133,7 +161,10 @@ export function NoteBubble({
           </div>
         )}
       </div>
-      <div className={`text-xs font-medium mt-1 ${labelCls}`}>{roleLabel} · {time}</div>
+      <div className={`text-xs font-medium mt-1 flex items-center gap-1.5 ${labelCls}`}>
+        <span>{roleLabel} · {time}</span>
+        <TierBadge tier={tier} />
+      </div>
     </div>
   );
 }

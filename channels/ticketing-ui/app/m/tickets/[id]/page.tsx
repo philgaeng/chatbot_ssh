@@ -488,6 +488,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     () => new Set((ticket?.viewers ?? []).map((v) => v.user_id)),
     [ticket],
   );
+  const viewerTiers = useMemo(() => {
+    const m = new Map<string, "informed" | "observer">();
+    (ticket?.viewers ?? []).forEach(v => m.set(v.user_id, v.tier as "informed" | "observer"));
+    return m;
+  }, [ticket]);
 
   const filteredEvents = useMemo(() => {
     if (!ticket) return [];
@@ -702,7 +707,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
                     onComplete={handleCompleteTask}
                   />
                 );
-              return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} />;
+              return <NoteBubble key={event.event_id} event={event} isMine={isMine} assignedToUserId={ticket.assigned_to_user_id} viewerIds={viewerIds} viewerTiers={viewerTiers} />;
             })
         )}
         <div ref={threadEndRef} />

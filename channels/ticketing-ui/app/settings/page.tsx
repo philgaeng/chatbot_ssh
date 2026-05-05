@@ -1067,17 +1067,24 @@ function StepForm({
   onSaved: (s: WorkflowStep) => void;
   onCancel: () => void;
 }) {
-  const [displayName, setDisplayName]       = useState(step.display_name);
-  const [stepKey, setStepKey]               = useState(step.step_key);
-  const [roleKey, setRoleKey]               = useState(step.assigned_role_key);
-  const [responseH, setResponseH]           = useState<string>(step.response_time_hours?.toString() ?? "");
-  const [resolutionD, setResolutionD]       = useState<string>(step.resolution_time_days?.toString() ?? "");
-  const [stakeholders, setStakeholders]     = useState<string[]>(step.stakeholders ?? []);
-  const [newStakeholder, setNewStakeholder] = useState("");
-  const [actions, setActions]               = useState<string[]>(step.expected_actions ?? []);
-  const [newAction, setNewAction]           = useState("");
-  const [saving, setSaving]                 = useState(false);
-  const [error, setError]                   = useState("");
+  const [displayName, setDisplayName]         = useState(step.display_name);
+  const [stepKey, setStepKey]                 = useState(step.step_key);
+  const [roleKey, setRoleKey]                 = useState(step.assigned_role_key);
+  const [responseH, setResponseH]             = useState<string>(step.response_time_hours?.toString() ?? "");
+  const [resolutionD, setResolutionD]         = useState<string>(step.resolution_time_days?.toString() ?? "");
+  const [stakeholders, setStakeholders]       = useState<string[]>(step.stakeholders ?? []);
+  const [newStakeholder, setNewStakeholder]   = useState("");
+  const [actions, setActions]                 = useState<string[]>(step.expected_actions ?? []);
+  const [newAction, setNewAction]             = useState("");
+  // Spec 12 tier fields
+  const [supervisorRole, setSupervisorRole]   = useState<string>(step.supervisor_role ?? "");
+  const [informedRoles, setInformedRoles]     = useState<string[]>(step.informed_roles ?? []);
+  const [newInformed, setNewInformed]         = useState("");
+  const [observerRoles, setObserverRoles]     = useState<string[]>(step.observer_roles ?? []);
+  const [newObserver, setNewObserver]         = useState("");
+  const [informedPii, setInformedPii]         = useState<boolean>(step.informed_pii_access ?? false);
+  const [saving, setSaving]                   = useState(false);
+  const [error, setError]                     = useState("");
 
   async function handleSave() {
     if (!displayName.trim() || !roleKey) { setError("Name and role are required."); return; }
@@ -1091,6 +1098,11 @@ function StepForm({
         resolution_time_days: resolutionD ? parseInt(resolutionD) : null,
         stakeholders: stakeholders.length ? stakeholders : null,
         expected_actions: actions.length ? actions : null,
+        // Spec 12 tier fields
+        supervisor_role: supervisorRole || null,
+        informed_roles: informedRoles,
+        observer_roles: observerRoles,
+        informed_pii_access: informedPii,
       };
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
@@ -1188,6 +1200,87 @@ function StepForm({
           <button onClick={() => addTag(actions, setActions, newAction, setNewAction)}
             disabled={!newAction.trim()}
             className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+        </div>
+      </div>
+
+      {/* ── Spec 12 tier model fields ────────────────────────────────────────── */}
+      <div className="border-t border-blue-100 pt-3 mt-1 space-y-3">
+        <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Tier configuration (Spec 12)</div>
+
+        {/* Supervisor role */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Supervisor role</label>
+          <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+            <option value="">— None (no supervisor at this step) —</option>
+            {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+          <p className="text-[11px] text-gray-400 mt-0.5">Notified on escalation/SLA breach. Can override Actor, reassign ticket.</p>
+        </div>
+
+        {/* Informed roles */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Informed roles — auto-added when ticket enters this step</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {informedRoles.map(r => (
+              <span key={r} className="flex items-center gap-1 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-2 py-0.5 rounded">
+                {r}
+                <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-purple-300 hover:text-red-500 leading-none">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <select value={newInformed} onChange={e => setNewInformed(e.target.value)}
+              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+              <option value="">+ Add informed role</option>
+              {ROLE_OPTIONS.filter(r => !informedRoles.includes(r.key)).map(r =>
+                <option key={r.key} value={r.key}>{r.label}</option>
+              )}
+            </select>
+            <button onClick={() => addTag(informedRoles, setInformedRoles, newInformed, setNewInformed)}
+              disabled={!newInformed}
+              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+          </div>
+        </div>
+
+        {/* Observer roles */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Observer roles — read-only access, no notifications</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {observerRoles.map(r => (
+              <span key={r} className="flex items-center gap-1 text-xs bg-gray-100 border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
+                {r}
+                <button onClick={() => setObserverRoles(observerRoles.filter(x => x !== r))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <select value={newObserver} onChange={e => setNewObserver(e.target.value)}
+              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+              <option value="">+ Add observer role</option>
+              {ROLE_OPTIONS.filter(r => !observerRoles.includes(r.key)).map(r =>
+                <option key={r.key} value={r.key}>{r.label}</option>
+              )}
+            </select>
+            <button onClick={() => addTag(observerRoles, setObserverRoles, newObserver, setNewObserver)}
+              disabled={!newObserver}
+              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+          </div>
+        </div>
+
+        {/* PII access toggle */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setInformedPii(!informedPii)}
+            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${informedPii ? "bg-purple-600" : "bg-gray-200"}`}
+          >
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${informedPii ? "translate-x-4" : "translate-x-0"}`} />
+          </button>
+          <span className="text-xs text-gray-600">
+            Informed tier can see complainant PII
+            <span className="text-gray-400 ml-1">(default: off)</span>
+          </span>
         </div>
       </div>
 
@@ -1519,6 +1612,152 @@ function WorkflowEditor({
         assignments={wf.assignments}
         onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
       />
+
+      {/* Notification rules (Spec 12 §4) */}
+      <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "SEAH" ? "seah" : "standard"} />
+    </div>
+  );
+}
+
+// ── Workflow Notifications Panel (Spec 12 §4) ─────────────────────────────────
+
+const NOTIFICATION_EVENTS: { key: string; label: string }[] = [
+  { key: "ticket_created",   label: "Ticket created"     },
+  { key: "ticket_escalated", label: "Ticket escalated"   },
+  { key: "ticket_resolved",  label: "Ticket resolved"    },
+  { key: "sla_breach",       label: "SLA breach"         },
+  { key: "grc_convened",     label: "GRC convened"       },
+  { key: "assignment",       label: "Assignment"         },
+  { key: "quarterly_report", label: "Quarterly report"   },
+];
+const SEAH_EVENTS = new Set(["ticket_created","ticket_escalated","ticket_resolved","sla_breach","assignment"]);
+const NOTIF_TIERS = ["actor","supervisor","informed","observer"] as const;
+const NOTIF_CHANNELS = ["app","email","sms"] as const;
+
+function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard" | "seah" }) {
+  const [open, setOpen] = useState(false);
+  const [rules, setRules] = useState<Record<string, Record<string, string[]>>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const events = workflowSlug === "seah"
+    ? NOTIFICATION_EVENTS.filter(e => SEAH_EVENTS.has(e.key))
+    : NOTIFICATION_EVENTS;
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetch("/api/v1/settings/notification_rules")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.value) setRules(data.value[workflowSlug] ?? {});
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [open, workflowSlug]);
+
+  function toggle(event: string, tier: string, channel: string) {
+    setRules(prev => {
+      const evRules = { ...prev };
+      const tierChannels: string[] = [...(evRules[event]?.[tier] ?? [])];
+      const idx = tierChannels.indexOf(channel);
+      if (idx >= 0) tierChannels.splice(idx, 1); else tierChannels.push(channel);
+      return { ...evRules, [event]: { ...(evRules[event] ?? {}), [tier]: tierChannels } };
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const current = await fetch("/api/v1/settings/notification_rules").then(r => r.json());
+      const fullValue = { ...(current?.value ?? {}), [workflowSlug]: rules };
+      await fetch("/api/v1/settings/notification_rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: fullValue }),
+      });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ } finally { setSaving(false); }
+  }
+
+  const isChecked = (event: string, tier: string, ch: string) =>
+    (rules[event]?.[tier] ?? []).includes(ch);
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition text-sm font-medium text-gray-700"
+      >
+        <span>Notification rules — {workflowSlug === "seah" ? "SEAH" : "Standard"}</span>
+        <span className="text-gray-400 text-xs">{open ? "▲ collapse" : "▼ expand"}</span>
+      </button>
+
+      {open && (
+        <div className="p-4">
+          {loading ? (
+            <div className="text-xs text-gray-400 text-center py-4">Loading…</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th className="text-left font-medium text-gray-500 pb-2 pr-4 whitespace-nowrap">Event</th>
+                    {NOTIF_TIERS.map(tier => (
+                      <th key={tier} className="text-center font-medium text-gray-500 pb-2 px-2 capitalize min-w-[90px]" colSpan={3}>
+                        {tier}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <th />
+                    {NOTIF_TIERS.map(tier =>
+                      NOTIF_CHANNELS.map(ch => (
+                        <th key={`${tier}-${ch}`} className="text-center text-[10px] text-gray-400 pb-2 px-1 uppercase">{ch}</th>
+                      ))
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((ev, i) => (
+                    <tr key={ev.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="py-1.5 pr-4 font-medium text-gray-700 whitespace-nowrap">{ev.label}</td>
+                      {NOTIF_TIERS.map(tier =>
+                        NOTIF_CHANNELS.map(ch => (
+                          <td key={`${tier}-${ch}`} className="text-center py-1.5 px-1">
+                            <button
+                              type="button"
+                              onClick={() => toggle(ev.key, tier, ch)}
+                              className={`w-5 h-5 rounded border flex items-center justify-center mx-auto transition ${
+                                isChecked(ev.key, tier, ch)
+                                  ? "bg-blue-600 border-blue-600 text-white"
+                                  : "border-gray-300 text-transparent hover:border-blue-400"
+                              }`}
+                            >
+                              ✓
+                            </button>
+                          </td>
+                        ))
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
+            <p className="text-[11px] text-gray-400">Changes apply to new events only — in-flight tickets unaffected.</p>
+            <button onClick={handleSave} disabled={saving || loading}
+              className={`text-xs px-4 py-1.5 rounded font-medium transition ${
+                saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+              } disabled:opacity-50`}>
+              {saved ? "✓ Saved" : saving ? "Saving…" : "Save rules"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

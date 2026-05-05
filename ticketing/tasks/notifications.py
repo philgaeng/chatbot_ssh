@@ -19,6 +19,54 @@ from ticketing.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+# ── Notification gate (spec 12 §4) ────────────────────────────────────────────
+
+def should_notify(
+    workflow_slug: str,
+    event_type: str,
+    tier: str,
+    channel: str,
+    db,
+) -> bool:
+    """
+    Return True if the given channel should fire for this workflow / event / tier combination.
+
+    Reads `notification_rules` from ticketing.settings (seeded by migration j8l0n2p4r6).
+    Falls back to False on any missing key so the system is safe by default.
+
+    Args:
+        workflow_slug: "standard" | "seah"
+        event_type:    "ticket_created" | "ticket_escalated" | "ticket_resolved" |
+                       "sla_breach" | "grc_convened" | "assignment" | "quarterly_report"
+        tier:          "actor" | "supervisor" | "informed" | "observer"
+        channel:       "app" | "email" | "sms"
+        db:            SQLAlchemy session
+    """
+    try:
+        from sqlalchemy import select
+        from ticketing.models.settings import Settings
+
+        row = db.execute(
+            select(Settings).where(Settings.key == "notification_rules")
+        ).scalar_one_or_none()
+
+        if not row or not row.value:
+            return False
+
+        rules = row.value  # JSON dict already deserialised by SQLAlchemy
+        channels: list = (
+            rules
+            .get(workflow_slug, {})
+            .get(event_type, {})
+            .get(tier, [])
+        )
+        return channel in channels
+
+    except Exception:
+        logger.exception("should_notify failed — defaulting to False")
+        return False
+
+
 @celery_app.task(
     name="ticketing.tasks.notifications.notify_complainant",
     bind=True,

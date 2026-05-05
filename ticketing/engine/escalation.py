@@ -25,8 +25,10 @@ from ticketing.engine.workflow_engine import (
     get_grc_member_user_ids,
     get_next_step,
     is_sla_breached,
+    _scope_candidates,
 )
 from ticketing.models.ticket import Ticket, TicketEvent
+from ticketing.models.ticket_viewer import TicketViewer
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,94 @@ def _add_event(
     return event
 
 
+# ── Tier management helpers ───────────────────────────────────────────────────
+
+def _ensure_viewer(
+    db: Session,
+    ticket_id: str,
+    user_id: str,
+    tier: str,
+    added_by: str,
+) -> TicketViewer:
+    """
+    Upsert a TicketViewer row for (ticket_id, user_id).
+    If the row already exists, updates tier to the new value.
+    Returns the viewer row.
+    """
+    from sqlalchemy import select
+    existing = db.execute(
+        select(TicketViewer).where(
+            TicketViewer.ticket_id == ticket_id,
+            TicketViewer.user_id == user_id,
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        if existing.tier != tier:
+            existing.tier = tier
+            logger.debug("Tier updated: user=%s ticket=%s tier=%s", user_id, ticket_id, tier)
+        return existing
+
+    viewer = TicketViewer(
+        ticket_id=ticket_id,
+        user_id=user_id,
+        added_by_user_id=added_by,
+        tier=tier,
+    )
+    db.add(viewer)
+    logger.debug("Tier assigned: user=%s ticket=%s tier=%s", user_id, ticket_id, tier)
+    return viewer
+
+
+def _apply_step_tier_roles(
+    db: Session,
+    ticket: Ticket,
+    step,  # WorkflowStep
+) -> None:
+    """
+    Auto-add users to the ticket's viewer list based on the step's
+    informed_roles and observer_roles configuration.
+
+    Called on both ticket creation (first step) and escalation (new step).
+    Scoped to the ticket's org / location / project.
+    """
+    from ticketing.models.workflow import WorkflowStep as _Step
+
+    if not isinstance(step, _Step):
+        return
+
+    for role_key in (step.informed_roles or []):
+        candidates = _scope_candidates(
+            role_key=role_key,
+            organization_id=ticket.organization_id,
+            location_code=ticket.location_code,
+            project_code=ticket.project_code,
+            db=db,
+        )
+        for uid in candidates:
+            _ensure_viewer(db, ticket.ticket_id, uid, "informed", "system")
+
+    for role_key in (step.observer_roles or []):
+        candidates = _scope_candidates(
+            role_key=role_key,
+            organization_id=ticket.organization_id,
+            location_code=ticket.location_code,
+            project_code=ticket.project_code,
+            db=db,
+        )
+        for uid in candidates:
+            # Don't demote an existing Informed to Observer
+            from sqlalchemy import select as _select
+            existing = db.execute(
+                _select(TicketViewer).where(
+                    TicketViewer.ticket_id == ticket.ticket_id,
+                    TicketViewer.user_id == uid,
+                )
+            ).scalar_one_or_none()
+            if existing is None or existing.tier == "observer":
+                _ensure_viewer(db, ticket.ticket_id, uid, "observer", "system")
+
+
 # ── Core escalation ───────────────────────────────────────────────────────────
 
 def escalate_ticket(
@@ -116,11 +206,29 @@ def escalate_ticket(
     old_step_id = ticket.current_step_id
     old_assigned = ticket.assigned_to_user_id
 
+    # ── Move previous Actor to Informed (tier lifecycle, spec 12 §2) ─────────
+    if old_assigned:
+        _ensure_viewer(db, ticket.ticket_id, old_assigned, "informed", "system")
+        _add_event(
+            db, ticket, "TIER_CHANGED",
+            step_id=old_step_id,
+            note=f"Officer moved from Actor to Informed on escalation.",
+            payload={"user_id": old_assigned, "from_tier": "actor", "to_tier": "informed"},
+            seen=False,
+            notify_user_id=old_assigned,
+            created_by="system",
+            actor_role="system",
+            summary_regen_required=False,
+        )
+
     ticket.current_step_id = next_step.step_id
     ticket.status_code = "ESCALATED"
     ticket.sla_breached = (triggered_by == "SLA_AUTO")
     ticket.step_started_at = None  # clock resets at new step; starts on ACKNOWLEDGE
     ticket.updated_by_user_id = created_by_user_id or "system"
+
+    # Auto-add informed_roles + observer_roles from the new step
+    _apply_step_tier_roles(db, ticket, next_step)
 
     # Auto-assign to the least-loaded officer at the next step's role
     new_assigned = auto_assign_officer(

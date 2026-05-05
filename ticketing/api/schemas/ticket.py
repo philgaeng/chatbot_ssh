@@ -43,6 +43,11 @@ class WorkflowStepBrief(BaseModel):
     assigned_role_key: str
     response_time_hours: Optional[int]
     resolution_time_days: Optional[int]
+    # ── Spec 12 tier model fields ──────────────────────────────────────────────
+    supervisor_role: Optional[str] = None
+    informed_roles: list = []
+    observer_roles: list = []
+    informed_pii_access: bool = False
 
     class Config:
         from_attributes = True
@@ -115,6 +120,8 @@ class TicketViewerOut(BaseModel):
     user_id: str
     added_by_user_id: str
     added_at: str  # ISO string injected by endpoint
+    # tier: 'observer' (read-only) | 'informed' (notes + tasks + notifications)
+    tier: str = "observer"
 
     class Config:
         from_attributes = True
@@ -151,9 +158,32 @@ class TicketDetail(BaseModel):
     # LLM-generated findings (visible to grc_chair, adb_*, super_admin only)
     ai_summary_en: Optional[str] = None
     ai_summary_updated_at: Optional[datetime] = None
+    # Spec 12: who holds the "reply to complainant" capability
+    # Defaults to L1 actor; any Actor above L1 can reassign.
+    complainant_reply_owner_id: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+# ── Spec 12 — Informed tier + reply owner endpoints ──────────────────────────
+
+class AddInformedRequest(BaseModel):
+    """POST /api/v1/tickets/{ticket_id}/informed"""
+    user_id: str = Field(..., max_length=128)
+
+
+class AddInformedResponse(BaseModel):
+    ticket_id: str
+    user_id: str
+    tier: str
+    viewer_id: str
+    event_id: str
+
+
+class ReplyOwnerRequest(BaseModel):
+    """PUT /api/v1/tickets/{ticket_id}/complainant-reply-owner"""
+    user_id: str = Field(..., max_length=128)
 
 
 # ── Actions ───────────────────────────────────────────────────────────────────

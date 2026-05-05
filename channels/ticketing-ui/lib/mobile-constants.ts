@@ -109,6 +109,8 @@ export const SYSTEM_EVENT_TYPES = new Set([
   "RESOLVED", "CLOSED", "GRC_CONVENED", "GRC_DECIDED", "SLA_BREACH_FINAL_STEP",
   "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED", "VIEWER_ADDED", "VIEWER_REMOVED",
   "COMPLAINANT_UPDATED",
+  // Spec 12 tier model events
+  "TIER_CHANGED", "REPLY_OWNER_CHANGED",
 ]);
 
 /** Events that render as a task card in-thread. */
@@ -141,6 +143,17 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "VIEWER_ADDED":          return `${payload?.added_user_id ?? "Officer"} added as viewer`;
     case "VIEWER_REMOVED":        return `${payload?.removed_user_id ?? "Officer"} removed from viewers`;
     case "COMPLAINANT_UPDATED":   return `Complainant info updated (${(payload?.fields_changed as string[] | undefined)?.join(", ") ?? "fields"})`;
+    case "TIER_CHANGED": {
+      const uid = payload?.user_id as string | undefined;
+      const to  = payload?.to_tier as string | undefined;
+      if (to === "informed") return `${uid ?? "Officer"} moved to Informed`;
+      if (to === "observer") return `${uid ?? "Officer"} added as Observer`;
+      return `Tier changed for ${uid ?? "officer"}`;
+    }
+    case "REPLY_OWNER_CHANGED": {
+      const newOwner = payload?.new_owner as string | undefined;
+      return `Complainant reply reassigned to ${newOwner ?? "officer"}`;
+    }
     default:                      return eventType.replace(/_/g, " ").toLowerCase();
   }
 }
