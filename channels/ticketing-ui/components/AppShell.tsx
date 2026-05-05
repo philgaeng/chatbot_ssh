@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuth } from "@/app/providers/AuthProvider";
+import { useAuth, MOCK_OFFICERS, setMockUserCookie, type MockOfficer } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
 import {
   IconQueue, IconAllTickets, IconEscalated, IconReports, IconSettings, IconHelp,
@@ -34,6 +34,67 @@ const MOBILE_TABS = [
   { href: "/m/tickets", label: "All",   Icon: IconMobileSearch },
   { href: "/m/tasks",   label: "Tasks", Icon: IconMobileTasks  },
 ] as const;
+
+// ── Demo role switcher (bypass-auth mode only) ────────────────────────────────
+
+function MockRoleSwitcher() {
+  const { user, switchMockUser } = useAuth();
+  const [open, setOpen] = useState(false);
+
+  const currentId = user?.sub ?? "";
+  const current = MOCK_OFFICERS.find(o => o.user_id === currentId) ?? MOCK_OFFICERS[0];
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-dashed border-amber-400 rounded-lg px-2.5 py-1 bg-amber-50 hover:bg-amber-100 transition"
+        title="Demo: click to switch officer role"
+      >
+        <span className="text-amber-600 text-[10px] font-bold uppercase tracking-wide">demo</span>
+        <span className="font-medium">{current.name}</span>
+        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden"
+          onBlur={() => setOpen(false)}
+        >
+          <div className="px-3 py-1.5 text-[10px] text-amber-600 font-semibold uppercase tracking-wide border-b border-gray-100">
+            Switch demo officer
+          </div>
+          {MOCK_OFFICERS.map(o => (
+            <button
+              key={o.user_id}
+              onClick={() => { setOpen(false); switchMockUser(o); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition ${
+                o.user_id === currentId
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                o.user_id === currentId ? "bg-blue-200 text-blue-700" : "bg-gray-100 text-gray-500"
+              }`}>
+                {o.name.charAt(0)}
+              </div>
+              <div>
+                <div>{o.name}</div>
+                <div className="text-[10px] text-gray-400">{o.role_keys[0]}</div>
+              </div>
+              {o.user_id === currentId && (
+                <span className="ml-auto text-blue-500 text-xs">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Desktop shell ─────────────────────────────────────────────────────────────
 
@@ -128,7 +189,11 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 </span>
               )}
             </button>
-            <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+            {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
+              <MockRoleSwitcher />
+            ) : (
+              <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+            )}
           </div>
         </header>
         <main className="flex-1 overflow-auto">{children}</main>

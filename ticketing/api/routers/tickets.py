@@ -61,6 +61,7 @@ from ticketing.engine.escalation import (
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
+from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -370,7 +371,16 @@ def list_tickets(
             for scope in scopes:
                 parts: list = [Ticket.organization_id == scope.organization_id]
                 if scope.location_code:
-                    parts.append(Ticket.location_code == scope.location_code)
+                    # Hierarchical match: exact location OR any direct child location
+                    # (e.g. province-scope NP_P1 matches district-level ticket NP_D006
+                    #  because NP_D006.parent_location_code = NP_P1)
+                    child_locs = select(Location.location_code).where(
+                        Location.parent_location_code == scope.location_code
+                    )
+                    parts.append(or_(
+                        Ticket.location_code == scope.location_code,
+                        Ticket.location_code.in_(child_locs),
+                    ))
                 if scope.project_code:
                     parts.append(Ticket.project_code == scope.project_code)
                 scope_conditions.append(and_(*parts))

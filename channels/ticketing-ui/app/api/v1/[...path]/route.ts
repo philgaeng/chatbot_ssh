@@ -6,6 +6,12 @@
  * anything into the image.
  *
  * Browser only needs port 3001. No CORS issues.
+ *
+ * Dev-bypass identity: when NEXT_PUBLIC_BYPASS_AUTH=true the browser sets
+ * a `grm_mock_user` cookie (JSON: {user_id, role_keys[]}).  This proxy
+ * reads it and injects X-Internal-User-Id / X-Internal-Role headers so the
+ * FastAPI backend sees the correct mock officer rather than the default
+ * mock-super-admin fallback.
  */
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -23,6 +29,27 @@ async function proxy(
   for (const [k, v] of req.headers.entries()) {
     if (k.toLowerCase() === "host") continue;
     fwdHeaders.set(k, v);
+  }
+
+  // Dev-bypass identity: inject X-Internal-User-Id / X-Internal-Role from the
+  // grm_mock_user cookie (set by the MockRoleSwitcher in the UI header).
+  // In production this cookie is never set so this is effectively a no-op.
+  // req.cookies.get() already URL-decodes the cookie value — parse directly.
+  const mockCookieRaw = req.cookies.get("grm_mock_user")?.value;
+  if (mockCookieRaw) {
+    try {
+      const identity = JSON.parse(mockCookieRaw) as {
+        user_id: string;
+        role_keys: string[];
+        organization_id?: string;
+      };
+      if (identity.user_id) {
+        fwdHeaders.set("x-internal-user-id", identity.user_id);
+        fwdHeaders.set("x-internal-role", identity.role_keys.join(","));
+      }
+    } catch {
+      // malformed cookie — fall through to backend default
+    }
   }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
