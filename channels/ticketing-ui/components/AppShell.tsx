@@ -131,7 +131,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex flex-col w-56 bg-slate-800 text-slate-100 shrink-0">
         <div className="px-5 pt-6 pb-4 border-b border-slate-700">
           <div className="text-lg font-bold tracking-tight">GRM Ticketing</div>
-          <div className="text-xs text-slate-400 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
+          {process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true" && (
+            <div className="text-xs text-slate-400 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
+          )}
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV.map((item, i) => {

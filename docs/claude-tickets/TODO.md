@@ -64,14 +64,21 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 ### ~~4. Wire OfficerScope seed rows so auto-assign works for live API tickets~~ ✅ DONE
 `seed_mock_officer_scopes()` in `mock_tickets.py` — already seeded 9 rows, auto-assign works.
 
-### 5. Visual test + polish pass
-**What to do:** Open `http://localhost:3001`, click through every screen, verify:
-- All 6 demo tickets show in queue with correct status/priority/SLA colours
-- Ticket detail for each demo ticket loads correctly
-- ACKNOWLEDGE → ESCALATE → RESOLVE flow works end-to-end
-- GRC CONVENE → DECIDE flow works (use GRV-2025-001)
-- SEAH ticket (GRV-2025-SEAH-001) shows 🔒 badge and red border
-- Reports page — currently a stub, decide if a placeholder is enough for demo
+### 5. Visual test + polish pass (backend verified 2026-05-06)
+**Backend smoke test results (all passing):**
+- All 6 demo tickets seeded and visible correctly per role (ACKNOWLEDGE action ✓, GRC_CONVENE+GRC_DECIDE ✓, RESOLVE ✓)
+- SEAH access gate: 403 for non-SEAH roles, 200 for seah_national_officer + super_admin ✓
+- Badge counts: Site L1=3, PIU L2=2, GRC Chair=1, SEAH National=1, ADB observer=0 ✓
+- SLA data: GRV-2025-005 breached (-24h, urgency=overdue), GRV-2025-001 warning (48h) ✓
+- XLSX report export: generates valid file ✓
+- My Queue counts: Site L1=2, PIU L2=1, GRC Chair=1, SEAH National=1, ADB observer=0 ✓
+- Escalated tab: GRV-2025-004 now in ESCALATED status, visible to all in-scope roles ✓
+
+**What remains:** Browser click-through (UI rendering, mobile shell, Settings panel)
+- Open http://localhost:3001, switch roles via MockRoleSwitcher, verify each screen
+- GRC convene → decide flow visual check (date picker + purple button)
+- Mobile shell (/m/ routes) quick pass on narrow viewport
+- Reports page — already implemented (date range picker + XLSX download + scheduled reports section)
 
 ### 6. Staging deploy to grm.stage.facets-ai.com
 **What:** Docker deploy to staging EC2, Nginx config, SSL.  

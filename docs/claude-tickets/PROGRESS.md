@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `spec12-tier-model` — 2026-05-05
+> Last updated: `demo-seed-polish` — 2026-05-06
 
 ---
 
@@ -24,6 +24,21 @@
   - Frontend: ViewersBar split into Informed (purple) + Observer (gray) rows
   - Frontend: Actor/Informed tier badges on note bubbles in event thread
   - Settings: tier config per step + WorkflowNotificationsPanel (event × tier × channel grid)
+- ✅ **Settings UI polish** (2026-05-06):
+  - Sidebar: hides redundant email in bypass/demo mode (MockRoleSwitcher already in header)
+  - Workflow step editor: removed redundant "Stakeholders notified" box (superseded by Informed tier)
+  - Org roles dropdown: seeded 9 spec-defined roles (Project Owner, Donor, CSC, etc.)
+  - Org ID auto-generation: removed manual field; derived from name initials + country code prefix (ADB = no prefix)
+  - WCAG contrast fixes in Packages list: ghost text, italic labels, location badges all pass 4:1
+  - Officer Edit button: wired to `OfficerEditModal` (was no-op stub)
+  - Add Role button: wired to `RoleEditModal` in create mode (was hard-disabled)
+  - Permissions editor: stripped from roles (superseded by Actor/Supervisor/Informed/Observer tiers)
+- ✅ **Demo seed polish** (2026-05-06):
+  - Fixed ADB observer scope: `organization_id` changed from ADB→DOR (tickets belong to executing agency DOR)
+  - Fixed SEAH HQ scope: same fix (DOR not ADB)
+  - GRV-2025-003 and GRV-2025-005: location moved to NP_D006 (Morang) so Site L1 has 2 tickets in My Queue
+  - GRV-2025-004: left in ESCALATED status (not pre-acknowledged) so Escalated tab is non-empty
+  - Cleaned test/dev tickets (GRV-SYNC-TEST, GRV-TEST-PII, GRV-TEST-SCOPE) from DB via --reset reseed
 
 ### In progress / next
 - 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
