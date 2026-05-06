@@ -1,7 +1,9 @@
 // GRM Ticketing API client
-// Base URL: NEXT_PUBLIC_API_URL (default http://localhost:5002)
+// All requests use relative paths (/api/v1/...) so they are proxied through
+// the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
+// This avoids CORS issues and means the browser only needs port 3001.
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5002";
+const BASE = "";
 
 // ── Types (mirror ticketing backend schemas) ──────────────────────────────────
 
@@ -39,6 +41,11 @@ export interface WorkflowStepBrief {
   assigned_role_key: string;
   response_time_hours: number | null;
   resolution_time_days: number | null;
+  // Spec 12 tier model
+  supervisor_role: string | null;
+  informed_roles: string[];
+  observer_roles: string[];
+  informed_pii_access: boolean;
 }
 
 export interface TicketEvent {
@@ -67,6 +74,8 @@ export interface TicketViewer {
   user_id: string;
   added_by_user_id: string;
   added_at: string;
+  /** 'observer' (read-only) | 'informed' (notes + tasks + notifications) */
+  tier: "observer" | "informed";
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -86,6 +95,8 @@ export interface TicketDetail extends TicketListItem {
   /** AI-generated case findings (supervisor/GRC view only). Null until first generated. */
   ai_summary_en: string | null;
   ai_summary_updated_at: string | null;
+  /** Spec 12: who holds the reply-to-complainant capability. Defaults to L1 actor. */
+  complainant_reply_owner_id: string | null;
 }
 
 export interface SlaStatus {
@@ -122,6 +133,11 @@ export interface WorkflowStep {
   resolution_time_days: number | null;
   stakeholders: string[] | null;
   expected_actions: string[] | null;
+  // Spec 12 tier model
+  supervisor_role: string | null;
+  informed_roles: string[];
+  observer_roles: string[];
+  informed_pii_access: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -237,6 +253,53 @@ export function patchTicket(id: string, body: { assign_to_user_id?: string; prio
   });
 }
 
+// ── Spec 12 tier endpoints ────────────────────────────────────────────────────
+
+export interface AddInformedResponse {
+  ticket_id: string;
+  user_id: string;
+  tier: string;
+  viewer_id: string;
+  event_id: string;
+}
+
+export function addInformed(ticketId: string, userId: string): Promise<AddInformedResponse> {
+  return apiFetch<AddInformedResponse>(`/api/v1/tickets/${ticketId}/informed`, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function updateReplyOwner(ticketId: string, userId: string): Promise<{ ticket_id: string; complainant_reply_owner_id: string; event_id: string }> {
+  return apiFetch(`/api/v1/tickets/${ticketId}/complainant-reply-owner`, {
+    method: "PUT",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export interface InboundMessagePayload {
+  message: string;
+  intent?: "ADDITIONAL_INFO" | "AMENDMENT" | "STATUS_CHECK" | "WITHDRAW_REQUEST" | "OTHER";
+  session_id?: string;
+  channel?: string;
+}
+
+export interface InboundMessageResult {
+  ticket_id: string;
+  event_id: string | null;
+  status: string;
+  ticket_status: string;
+  current_step: string | null;
+}
+
+/** Simulate a complainant inbound message (dev/testing only — chatbot calls this in production). */
+export function postInboundMessage(id: string, payload: InboundMessagePayload): Promise<InboundMessageResult> {
+  return apiFetch<InboundMessageResult>(`/api/v1/tickets/${id}/inbound`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Misc endpoints ────────────────────────────────────────────────────────────
 
 export function getBadge(): Promise<BadgeResponse> {
@@ -291,6 +354,11 @@ export interface StepPayload {
   resolution_time_days?: number | null;
   stakeholders?: string[] | null;
   expected_actions?: string[] | null;
+  // Spec 12 tier model fields
+  supervisor_role?: string | null;
+  informed_roles?: string[];
+  observer_roles?: string[];
+  informed_pii_access?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {
@@ -334,6 +402,8 @@ export interface GrievancePii {
   phone_number?: string;
   email?: string;
   address?: string;
+  /** True when the grievance backend was unreachable — PII fields will be null */
+  _backend_unavailable?: boolean;
   [key: string]: unknown;
 }
 
@@ -859,6 +929,28 @@ export function closeReveal(
   return apiFetch<{ ok: boolean }>(`/api/v1/tickets/${ticketId}/reveal/close`, {
     method: "POST",
     body: JSON.stringify({ reveal_session_id: sessionId, close_reason: closeReason }),
+  });
+}
+
+// ── Officer invite ────────────────────────────────────────────────────────────
+
+export interface OfficerInvitePayload {
+  email: string;
+  role_key: string;
+  organization_id: string;
+  temp_password?: string;
+}
+
+export interface OfficerInviteResult {
+  ok: boolean;
+  email: string;
+  message: string;
+}
+
+export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInviteResult> {
+  return apiFetch<OfficerInviteResult>("/api/v1/users/invite", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

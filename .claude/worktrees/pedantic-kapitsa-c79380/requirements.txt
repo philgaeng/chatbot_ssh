@@ -1,0 +1,53 @@
+# Production Python dependencies for the REST stack.
+# Python: 3.10–3.11 recommended (compatible with rasa-sdk 3.6.x).
+# No Rasa NLU / TensorFlow server – only Rasa SDK actions.
+# Use with: pip install -r requirements.txt
+#
+# Stack: backend.orchestrator (FastAPI) + backend.api (FastAPI) + backend.actions (via rasa-sdk)
+# Deployed behind nginx on AWS (e.g. t4g.small / t4g.medium EC2), frontends are static (no Python deps).
+
+# --- Orchestrator ---
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.9
+pyyaml>=6.0
+pydantic>=2.0
+email-validator>=2.0.0
+
+# --- WebSocket / Socket.IO (FastAPI ASGI: backend.api.websocket_fastapi, orchestrator socket bridge) ---
+# PyPI package name is python-socketio; import name is `socketio`.
+python-socketio>=5.11.0
+
+# --- Rasa SDK (for action classes used by orchestrator) ---
+rasa-sdk==3.6.2
+
+# --- Database ---
+psycopg2-binary==2.9.10
+SQLAlchemy>=2.0.36
+alembic>=1.13
+pytz
+
+# --- Task Queue ---
+redis==4.6.0
+celery==5.5.2
+flower==2.0.1
+
+# --- Messaging (SES/SMS) ---
+boto3==1.37.28
+
+# --- LLM (classification, if LLM_CLASSIFICATION=True) ---
+openai==1.70.0
+
+# --- HTTP clients ---
+requests>=2.32.3
+httpx==0.28.1
+
+# --- Utilities ---
+python-dotenv==1.1.1
+rapidfuzz==3.13.0
+icecream
+
+# --- Flask / Werkzeug (legacy backend.api.app and a few blueprints; production uses FastAPI only) ---
+Flask>=3.0.0,<4
+Werkzeug>=3.0.0,<4
+flask-socketio>=5.3.0

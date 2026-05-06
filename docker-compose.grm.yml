@@ -1,18 +1,62 @@
 # GRM Ticketing — Docker Compose overlay
 #
+# ── Demo stack (default — bypass auth, no Keycloak required) ─────────────────
+#   make compose_docker_wsl_grm_demo
+#   → grm_ui      :3001  BYPASS_AUTH=true  → ticketing_api:5002 (mock super-admin)
+#
+# ── Auth stack (requires --profile auth) ─────────────────────────────────────
+#   make compose_docker_wsl_grm_auth
+#   → grm_ui_auth :3002  BYPASS_AUTH=false → ticketing_api_auth:5003 (Keycloak JWT)
+#   → keycloak    :8080  admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD:-admin})
+#
+# After first start with auth profile, initialise the GRM realm once:
+#   docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
+#     exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
+#
 # Run alongside the existing stack:
 #   docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d
 #
 # Or standalone (db + redis must already be running on host):
 #   docker compose -f docker-compose.grm.yml up -d
 #
-# One-shot migration (run from host, not Docker):
+# One-shot migration:
 #   python -m alembic -c ticketing/migrations/alembic.ini upgrade head
 #
 # One-shot seed:
 #   python -m ticketing.seed.mock_tickets
 
 services:
+
+  # ── Keycloak (OIDC identity provider) — auth profile only ───────────────────
+  # Included only when: docker compose --profile auth up
+  # Admin UI: http://localhost:8080  (admin / ${KEYCLOAK_ADMIN_PASSWORD:-admin})
+  # Uses existing db container — stores state in the 'keycloak' schema in app_db.
+  keycloak:
+    profiles: [auth]
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/app_db
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: user
+      KC_DB_PASSWORD: password
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
@@ -50,6 +94,11 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # Keycloak (leave empty to keep dev bypass / mock-super-admin)
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
+      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
       - "5002:5002"
     depends_on:
@@ -122,22 +171,104 @@ services:
       - grm_celery
     restart: unless-stopped
 
-  # ── GRM Ticketing UI (Next.js, port 3001) ─────────────────────────────────────
-  # Bridge network — browser calls NEXT_PUBLIC_API_URL which is localhost:5002
-  # (the ticketing_api container is on host network so port 5002 is the host port)
+  # ── GRM Ticketing UI — demo build (port 3001, BYPASS_AUTH=true) ──────────────
+  # All API calls are proxied server-side via Next.js rewrites (see next.config.ts).
+  # Browser only uses port 3001 — no direct access to port 5002 needed.
+  # TICKETING_API_URL is a server-side runtime var (not baked into the image).
   grm_ui:
     build:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5002}
-        NEXT_PUBLIC_BACKEND_API_URL: ${NEXT_PUBLIC_BACKEND_API_URL:-http://localhost:5001}
         NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
-        NEXT_PUBLIC_COGNITO_DOMAIN: ${NEXT_PUBLIC_COGNITO_DOMAIN:-}
-        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${NEXT_PUBLIC_COGNITO_CLIENT_ID:-}
-        NEXT_PUBLIC_COGNITO_REGION: ${NEXT_PUBLIC_COGNITO_REGION:-ap-southeast-1}
+        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
         NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
         NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+    environment:
+      # Server-side proxy target — uses Docker service name (not localhost)
+      TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
     ports:
       - "3001:3001"
+    depends_on:
+      - ticketing_api
     restart: unless-stopped
+
+  # ── GRM Ticketing UI — auth build (port 3002, BYPASS_AUTH=false) — auth profile
+  # Built with real OIDC config baked in. Proxied at /grm-auth/ via nginx.
+  # CURSOR: ensure nginx /grm-auth/ block is uncommented before using.
+  # CURSOR: issuer URL note — NEXT_PUBLIC_OIDC_ISSUER must be reachable from the
+  # browser. Keycloak is proxied at http://localhost/keycloak/ (WSL) or
+  # https://<host>/keycloak/ (AWS) — see nginx conf. Set KC_HOSTNAME_URL to match.
+  grm_ui_auth:
+    profiles: [auth]
+    build:
+      context: ./channels/ticketing-ui
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BYPASS_AUTH: "false"
+        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-http://localhost/keycloak/realms/grm}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
+        NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
+        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+    environment:
+      TICKETING_API_URL: ${TICKETING_API_AUTH_URL:-http://ticketing_api_auth:5003}
+    ports:
+      - "3002:3001"
+    depends_on:
+      - ticketing_api_auth
+    restart: unless-stopped
+
+  # ── Ticketing API — auth instance (port 5003, Keycloak JWT) — auth profile ──
+  # Separate instance from ticketing_api so demo (port 5002) stays always-on.
+  # CURSOR: issuer URL split —
+  #   Browser-facing issuer (baked into tokens' `iss` claim) is the nginx-proxied URL:
+  #     http://localhost/keycloak/realms/grm  (WSL)
+  #   This container resolves Keycloak by Docker DNS, so use the KC internal URL:
+  #     KEYCLOAK_ISSUER: http://keycloak:8080/keycloak/realms/grm
+  #   These must match — set KC_HOSTNAME_URL in the keycloak service so Keycloak
+  #   issues tokens with iss=http://localhost/keycloak/realms/grm, then update
+  #   KEYCLOAK_ISSUER here AND add a hosts entry or split the settings into
+  #   KEYCLOAK_ISSUER_CLAIM (for jwt.decode) and KEYCLOAK_JWKS_URL (for fetch).
+  ticketing_api_auth:
+    profiles: [auth]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn ticketing.api.main:app --host 0.0.0.0 --port 5003
+    env_file:
+      - env.local
+    environment:
+      TICKETING_PORT: "5003"
+      REDIS_PASSWORD: ""
+      BACKEND_GRIEVANCE_BASE_URL: http://backend:5001
+      ORCHESTRATOR_BASE_URL: http://orchestrator:8000
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: app_db
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://keycloak:8080/keycloak/realms/grm}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
+      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-http://keycloak:8080}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
+    ports:
+      - "5003:5003"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5003/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s

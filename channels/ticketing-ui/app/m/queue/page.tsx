@@ -9,7 +9,8 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { listTickets, getSla, type TicketListItem, type SlaStatus } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { urgencyDot, urgencyTextCls, type SlaUrgency } from "@/lib/mobile-constants";
+import { urgencyDotCls, urgencyTextCls, type SlaUrgency } from "@/lib/mobile-constants";
+import { SeahBadge, UrgencyDot } from "@/lib/icons";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,6 @@ function QueueRow({ ticket }: { ticket: TicketListItem }) {
   }, [ticket.ticket_id]);
 
   const urgency: SlaUrgency = ticket.sla_breached ? "overdue" : (sla?.urgency ?? "none");
-  const dot = urgencyDot(urgency);
   const timeCls = urgencyTextCls(urgency);
   const isSeah = ticket.is_seah;
 
@@ -52,14 +52,14 @@ function QueueRow({ ticket }: { ticket: TicketListItem }) {
       }`}
     >
       {/* Urgency dot — leftmost, seen before reading anything (spec §2.1) */}
-      <span className="text-lg leading-none shrink-0">{dot}</span>
+      <UrgencyDot urgency={urgency} className="w-2.5 h-2.5" />
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-xs text-gray-400 font-mono truncate">{ticket.grievance_id}</span>
           {isSeah && (
-            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded">🔒 SEAH</span>
+            <SeahBadge size="xs" />
           )}
           {ticket.unseen_event_count > 0 && (
             <span className="ml-auto flex-shrink-0 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
@@ -199,7 +199,6 @@ export default function MobileQueuePage() {
           </div>
         ) : tickets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
-            <span className="text-3xl">✅</span>
             <span className="text-sm text-gray-400">No tickets in this view</span>
           </div>
         ) : (

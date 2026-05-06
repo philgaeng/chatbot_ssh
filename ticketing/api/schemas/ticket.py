@@ -43,6 +43,11 @@ class WorkflowStepBrief(BaseModel):
     assigned_role_key: str
     response_time_hours: Optional[int]
     resolution_time_days: Optional[int]
+    # ── Spec 12 tier model fields ──────────────────────────────────────────────
+    supervisor_role: Optional[str] = None
+    informed_roles: list = []
+    observer_roles: list = []
+    informed_pii_access: bool = False
 
     class Config:
         from_attributes = True
@@ -115,6 +120,8 @@ class TicketViewerOut(BaseModel):
     user_id: str
     added_by_user_id: str
     added_at: str  # ISO string injected by endpoint
+    # tier: 'observer' (read-only) | 'informed' (notes + tasks + notifications)
+    tier: str = "observer"
 
     class Config:
         from_attributes = True
@@ -151,9 +158,32 @@ class TicketDetail(BaseModel):
     # LLM-generated findings (visible to grc_chair, adb_*, super_admin only)
     ai_summary_en: Optional[str] = None
     ai_summary_updated_at: Optional[datetime] = None
+    # Spec 12: who holds the "reply to complainant" capability
+    # Defaults to L1 actor; any Actor above L1 can reassign.
+    complainant_reply_owner_id: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+# ── Spec 12 — Informed tier + reply owner endpoints ──────────────────────────
+
+class AddInformedRequest(BaseModel):
+    """POST /api/v1/tickets/{ticket_id}/informed"""
+    user_id: str = Field(..., max_length=128)
+
+
+class AddInformedResponse(BaseModel):
+    ticket_id: str
+    user_id: str
+    tier: str
+    viewer_id: str
+    event_id: str
+
+
+class ReplyOwnerRequest(BaseModel):
+    """PUT /api/v1/tickets/{ticket_id}/complainant-reply-owner"""
+    user_id: str = Field(..., max_length=128)
 
 
 # ── Actions ───────────────────────────────────────────────────────────────────
@@ -195,6 +225,40 @@ class TicketReplyResponse(BaseModel):
     event_id: str
     delivered: bool
     detail: Optional[str] = None
+
+
+# ── Inbound complainant message ───────────────────────────────────────────────
+
+class InboundMessageRequest(BaseModel):
+    """
+    POST /api/v1/tickets/{ticket_id}/inbound
+    Called by chatbot backend when complainant sends a follow-up message.
+    Requires x-api-key header (same key as ticket creation).
+
+    intent values:
+      ADDITIONAL_INFO   — complainant adds info to the case → creates event, officer badge
+      AMENDMENT         — complainant formally amends the grievance → creates event, officer badge
+      STATUS_CHECK      — complainant asks for status → no event created, returns current status
+      WITHDRAW_REQUEST  — complainant wants to close the case → creates event, officer decides
+      OTHER             — unclassified follow-up → creates event
+    """
+    message: str = Field(..., min_length=1, max_length=4096,
+                         description="Complainant message text (may be in Nepali)")
+    intent: str = Field(
+        "OTHER",
+        description="ADDITIONAL_INFO | AMENDMENT | STATUS_CHECK | WITHDRAW_REQUEST | OTHER",
+    )
+    session_id: Optional[str] = Field(None, max_length=255,
+                                       description="Chatbot session ID for correlation")
+    channel: str = Field("chatbot", max_length=32)
+
+
+class InboundMessageResponse(BaseModel):
+    ticket_id: str
+    event_id: Optional[str] = None    # None when intent=STATUS_CHECK (no event created)
+    status: str                        # "received" | "skipped_status_check"
+    ticket_status: str
+    current_step: Optional[str] = None
 
 
 # ── Patch ─────────────────────────────────────────────────────────────────────

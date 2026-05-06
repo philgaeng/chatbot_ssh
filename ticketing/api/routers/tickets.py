@@ -46,13 +46,22 @@ from ticketing.api.schemas.ticket import (
     TicketReplyResponse,
     ComplainantPatch,
     ComplainantPatchResponse,
+    InboundMessageRequest,
+    InboundMessageResponse,
+    AddInformedRequest,
+    AddInformedResponse,
+    ReplyOwnerRequest,
 )
 from ticketing.clients.grievance_api import patch_complainant
 from ticketing.clients.orchestrator import send_message_to_complainant
-from ticketing.engine.escalation import convene_grc, escalate_ticket, grc_decide
+from ticketing.engine.escalation import (
+    convene_grc, escalate_ticket, grc_decide,
+    _apply_step_tier_roles, _ensure_viewer,
+)
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
 from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
+from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -167,6 +176,7 @@ def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
     return [v.user_id for v in viewers]
 
 
+
 def _add_event(
     db: Session,
     ticket: Ticket,
@@ -276,6 +286,8 @@ def create_ticket(
         current_workflow_id=workflow.workflow_id,
         current_step_id=first_step.step_id if first_step else None,
         assigned_to_user_id=auto_assigned_id,
+        # Spec 12: reply-to-complainant capability defaults to the L1 actor
+        complainant_reply_owner_id=auto_assigned_id,
         priority=payload.priority,
         is_seah=payload.is_seah,
         is_deleted=False,
@@ -292,6 +304,11 @@ def create_ticket(
         # No summary to regenerate at creation; actor is the inbound chatbot/API key
         summary_regen_required=False,
     )
+
+    # Spec 12: seed Informed + Observer tiers from the first step's role configuration
+    if first_step:
+        _apply_step_tier_roles(db, ticket, first_step)
+
     db.commit()
     db.refresh(ticket)
 
@@ -354,7 +371,16 @@ def list_tickets(
             for scope in scopes:
                 parts: list = [Ticket.organization_id == scope.organization_id]
                 if scope.location_code:
-                    parts.append(Ticket.location_code == scope.location_code)
+                    # Hierarchical match: exact location OR any direct child location
+                    # (e.g. province-scope NP_P1 matches district-level ticket NP_D006
+                    #  because NP_D006.parent_location_code = NP_P1)
+                    child_locs = select(Location.location_code).where(
+                        Location.parent_location_code == scope.location_code
+                    )
+                    parts.append(or_(
+                        Ticket.location_code == scope.location_code,
+                        Ticket.location_code.in_(child_locs),
+                    ))
                 if scope.project_code:
                     parts.append(Ticket.project_code == scope.project_code)
                 scope_conditions.append(and_(*parts))
@@ -480,7 +506,13 @@ def get_ticket(
     ).scalars().all()
     # Attach as a synthetic attribute so the Pydantic schema can pick it up
     ticket.__dict__["viewers"] = [
-        {"viewer_id": v.viewer_id, "user_id": v.user_id, "added_by_user_id": v.added_by_user_id, "added_at": v.added_at.isoformat()}
+        {
+            "viewer_id": v.viewer_id,
+            "user_id": v.user_id,
+            "added_by_user_id": v.added_by_user_id,
+            "added_at": v.added_at.isoformat(),
+            "tier": v.tier,
+        }
         for v in viewers
     ]
 
@@ -630,7 +662,7 @@ def patch_ticket_complainant(
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
 
 VALID_ACTIONS = {
-    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE",
+    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE", "FIELD_REPORT",
     "GRC_CONVENE", "GRC_DECIDE",
 }
 
@@ -815,6 +847,24 @@ def perform_action(
                     summary_regen_required=False,
                 )
 
+    elif action == "FIELD_REPORT":
+        if not payload.note:
+            raise HTTPException(status_code=422, detail="note is required for action_type=FIELD_REPORT")
+        # Officer field report — structured finding, no status change, not visible to complainant.
+        # Stored as NOTE_ADDED with is_field_report=True so the UI can render it distinctly
+        # and the AI findings pipeline picks it up (NOTE_ADDED is already in _FINDINGS_EVENT_TYPES).
+        event = _add_event(
+            db, ticket, "NOTE_ADDED",
+            step_id=event_step_id,
+            note=payload.note,
+            payload={"internal": True, "is_field_report": True},
+            created_by=current_user.user_id,
+            seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
+        )
+        _translate_note_event_id = event.event_id
+
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
         hearing_date = (payload.grc_hearing_date if hasattr(payload, "grc_hearing_date") else None)
@@ -932,6 +982,96 @@ def reply_to_complainant(
     )
 
 
+# ─── POST /tickets/{ticket_id}/inbound — complainant follow-up via chatbot ───
+
+# Intents that warrant a new event on the ticket (officer action / badge)
+_INBOUND_EVENT_INTENTS = {"ADDITIONAL_INFO", "AMENDMENT", "WITHDRAW_REQUEST", "OTHER"}
+# Intents that trigger LLM summary regen (new substantive case content)
+_INBOUND_REGEN_INTENTS = {"ADDITIONAL_INFO", "AMENDMENT", "OTHER"}
+
+@router.post(
+    "/tickets/{ticket_id}/inbound",
+    response_model=InboundMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Receive inbound complainant message from chatbot",
+    description=(
+        "Called by chatbot backend when a complainant sends a follow-up message on an "
+        "active ticket. Requires x-api-key header.\n\n"
+        "- **STATUS_CHECK**: no event created — returns current status for the chatbot to relay.\n"
+        "- **ADDITIONAL_INFO / AMENDMENT / OTHER**: creates COMPLAINANT_MESSAGE event, "
+        "sets unseen badge on assigned officer, fires translation task if non-English.\n"
+        "- **WITHDRAW_REQUEST**: same as above but officer decides — no auto-close.\n\n"
+        "# INTEGRATION POINT\n"
+        "Chatbot must look up ticket_id from session_id before calling this endpoint.\n"
+        "Lookup: `GET /api/v1/tickets?session_id={session_id}` (add this query param "
+        "to the list endpoint, or store ticket_id on the chatbot session at creation time)."
+    ),
+)
+def inbound_complainant_message(
+    ticket_id: str,
+    payload: InboundMessageRequest,
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key),
+) -> InboundMessageResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    step_display = ticket.current_step.display_name if ticket.current_step else None
+
+    # STATUS_CHECK: no event — chatbot reads status and auto-replies to complainant
+    if payload.intent == "STATUS_CHECK":
+        logger.info(
+            "inbound STATUS_CHECK ticket_id=%s status=%s", ticket_id, ticket.status_code
+        )
+        return InboundMessageResponse(
+            ticket_id=ticket_id,
+            event_id=None,
+            status="skipped_status_check",
+            ticket_status=ticket.status_code,
+            current_step=step_display,
+        )
+
+    # All other intents: create event + badge for assigned officer
+    intent = payload.intent.upper()
+    if intent not in _INBOUND_EVENT_INTENTS:
+        intent = "OTHER"
+
+    event = _add_event(
+        db, ticket, "COMPLAINANT_MESSAGE",
+        step_id=ticket.current_step_id,
+        note=payload.message,
+        payload={
+            "intent": intent,
+            "channel": payload.channel,
+            "from_complainant": True,
+            **({"session_id": payload.session_id} if payload.session_id else {}),
+        },
+        seen=False,
+        notify_user_id=ticket.assigned_to_user_id,
+        created_by=None,        # complainant has no officer user_id
+        actor_role="complainant",
+        summary_regen_required=(intent in _INBOUND_REGEN_INTENTS),
+    )
+
+    db.commit()
+
+    # Fire translation if message looks non-English (translate_note handles skip-if-English)
+    translate_note.delay(event.event_id)
+
+    logger.info(
+        "inbound_complainant_message: ticket_id=%s intent=%s event_id=%s",
+        ticket_id, intent, event.event_id,
+    )
+    return InboundMessageResponse(
+        ticket_id=ticket_id,
+        event_id=event.event_id,
+        status="received",
+        ticket_status=ticket.status_code,
+        current_step=step_display,
+    )
+
+
 # ─── POST /tickets/{ticket_id}/seen — clear notification badge ───────────────
 
 # ─── GET /tickets/{ticket_id}/sla — SLA countdown for UI ──────────────────────
@@ -1028,6 +1168,134 @@ def mark_events_seen(
     db.commit()
 
 
+# ─── POST /tickets/{ticket_id}/informed — add officer to Informed tier ────────
+
+@router.post(
+    "/tickets/{ticket_id}/informed",
+    response_model=AddInformedResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add an officer to the Informed tier on this ticket",
+    description=(
+        "Standard tickets: any Actor at the current step can add someone to Informed.\n\n"
+        "SEAH tickets: returns 403 pending supervisor approval (v2 — supervisor flow not yet implemented).\n\n"
+        "The added officer gains: read access, ability to add notes, ability to execute assigned tasks. "
+        "They do NOT gain workflow actions (escalate / resolve / close)."
+    ),
+)
+def add_to_informed(
+    ticket_id: str,
+    payload: AddInformedRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> AddInformedResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # SEAH: adding to Informed requires supervisor approval (spec 12 §1 — v2)
+    if ticket.is_seah:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "On SEAH tickets, adding someone to Informed requires supervisor approval. "
+                "This flow is not yet implemented (v2). Contact your supervisor directly."
+            ),
+        )
+
+    # Permission check: Actor at current step (or admin)
+    if not current_user.is_admin:
+        if ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the assigned officer (Actor) or an admin can add to Informed.",
+            )
+
+    # Don't add self
+    if payload.user_id == current_user.user_id:
+        raise HTTPException(status_code=422, detail="Cannot add yourself to Informed.")
+
+    viewer = _ensure_viewer(db, ticket_id, payload.user_id, "informed", current_user.user_id)
+
+    event = _add_event(
+        db, ticket, "TIER_CHANGED",
+        step_id=ticket.current_step_id,
+        note=f"Officer added to Informed tier by {current_user.user_id}.",
+        payload={"user_id": payload.user_id, "from_tier": None, "to_tier": "informed", "added_by": current_user.user_id},
+        seen=False,
+        notify_user_id=payload.user_id,
+        created_by=current_user.user_id,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+    db.refresh(viewer)
+
+    return AddInformedResponse(
+        ticket_id=ticket_id,
+        user_id=payload.user_id,
+        tier="informed",
+        viewer_id=viewer.viewer_id,
+        event_id=event.event_id,
+    )
+
+
+# ─── PUT /tickets/{ticket_id}/complainant-reply-owner ─────────────────────────
+
+@router.put(
+    "/tickets/{ticket_id}/complainant-reply-owner",
+    summary="Reassign the complainant-reply capability to another officer",
+    description=(
+        "Defaults to the L1 Actor on ticket creation. "
+        "Any Actor at any step can reassign this to another officer. "
+        "Returns the updated ticket's complainant_reply_owner_id."
+    ),
+)
+def update_reply_owner(
+    ticket_id: str,
+    payload: ReplyOwnerRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Permission: Actor (assigned) or admin
+    if not current_user.is_admin:
+        if ticket.assigned_to_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the assigned officer (Actor) or an admin can reassign the reply owner.",
+            )
+
+    old_owner = ticket.complainant_reply_owner_id
+    ticket.complainant_reply_owner_id = payload.user_id
+    ticket.updated_by_user_id = current_user.user_id
+
+    event = _add_event(
+        db, ticket, "REPLY_OWNER_CHANGED",
+        step_id=ticket.current_step_id,
+        note=f"Complainant reply capability reassigned to {payload.user_id}.",
+        payload={"old_owner": old_owner, "new_owner": payload.user_id, "changed_by": current_user.user_id},
+        seen=False,
+        notify_user_id=payload.user_id,
+        created_by=current_user.user_id,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=False,
+    )
+    db.commit()
+
+    return {
+        "ticket_id": ticket_id,
+        "complainant_reply_owner_id": payload.user_id,
+        "event_id": event.event_id,
+    }
+
+
 # ─── GET /tickets/{id}/files — list chatbot-uploaded attachments ──────────────
 
 @router.get(
@@ -1049,19 +1317,26 @@ def list_ticket_files(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    rows = db.execute(
-        text(
-            """
-            SELECT file_id::text, file_name, file_path, file_type, file_size, upload_timestamp
-            FROM public.file_attachments
-            WHERE grievance_id = :grievance_id
-            ORDER BY upload_timestamp
-            """
-        ),
-        {"grievance_id": ticket.grievance_id},
-    ).mappings().all()
-
-    return [dict(r) for r in rows]
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT file_id::text, file_name, file_path, file_type, file_size, upload_timestamp
+                FROM public.file_attachments
+                WHERE grievance_id = :grievance_id
+                ORDER BY upload_timestamp
+                """
+            ),
+            {"grievance_id": ticket.grievance_id},
+        ).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        # public.file_attachments may not exist in dev/test environments that
+        # only run the ticketing stack without the full chatbot DB.  Return an
+        # empty list so the UI degrades gracefully instead of crashing.
+        logger.warning("list_ticket_files: public.file_attachments unavailable — %s", exc)
+        db.rollback()  # clear the aborted transaction so the session stays usable
+        return []
 
 
 # ─── GET /files/{file_id} — stream attachment from disk ───────────────────────
@@ -1276,7 +1551,17 @@ def get_ticket_pii(
         raw = get_grievance_detail(ticket.grievance_id)
     except Exception as exc:
         logger.warning("get_ticket_pii: backend unavailable — %s", exc)
-        raise HTTPException(status_code=503, detail=f"Grievance backend unavailable: {exc}")
+        # Degrade gracefully: return null-filled record so the UI shows "—"
+        # instead of crashing.  The _backend_unavailable flag lets the UI
+        # display a "Backend offline" notice without treating it as an error.
+        return {
+            "grievance_id": ticket.grievance_id,
+            "complainant_name": None,
+            "phone_number": None,
+            "email": None,
+            "address": None,
+            "_backend_unavailable": True,
+        }
 
     # get_grievance_detail returns the full API envelope:
     #   {"status": "SUCCESS", "data": {"grievance": {...complainant fields...}, ...}}

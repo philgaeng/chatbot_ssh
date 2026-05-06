@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl -d Ubuntu -e bash -c \"cd /home/philg/projects/nepal_chatbot_claude && docker compose -f docker-compose.yml -f docker-compose.grm.yml build grm_ui 2>&1\")"
+    ]
+  }
+}

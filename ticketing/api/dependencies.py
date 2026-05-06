@@ -1,9 +1,12 @@
 """
 FastAPI dependency injection for GRM Ticketing.
 
-Auth stubs:
+Auth:
   - verify_api_key: simple secret for chatbot → ticketing inbound calls
-  - get_current_user: INTEGRATION POINT — replace stub with Cognito JWT
+  - get_current_user:
+      • KEYCLOAK_ISSUER not set → dev bypass (returns mock-super-admin)
+      • x-internal-user-id header present → trust header (internal service calls)
+      • Otherwise → validate Bearer JWT against Keycloak JWKS
 """
 from __future__ import annotations
 
@@ -11,6 +14,8 @@ from dataclasses import dataclass, field
 from typing import Generator
 
 from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
@@ -35,12 +40,9 @@ def verify_api_key(x_api_key: str = Header(...)) -> str:
     """
     Validates the API key sent by the chatbot backend when creating tickets.
     Set TICKETING_SECRET_KEY in env.local.
-
-    INTEGRATION POINT: consider rotating to a per-client key scheme in v2.
     """
     settings = get_settings()
     if not settings.ticketing_secret_key:
-        # Dev-only shortcut: if no key is configured, skip check and warn
         import warnings
         warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev mode)", stacklevel=2)
         return x_api_key
@@ -77,33 +79,56 @@ class CurrentUser:
         )
 
 
-def get_current_user() -> CurrentUser:
+_bearer = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    x_internal_user_id: str | None = Header(None),
+    x_internal_role: str | None = Header(None),
+) -> CurrentUser:
     """
-    INTEGRATION POINT: AWS Cognito JWT verification.
+    Resolve the calling officer:
 
-    Replace this stub with real JWT validation:
+    1. Dev bypass — KEYCLOAK_ISSUER is empty (no Keycloak running locally):
+       returns mock-super-admin so development works without auth infrastructure.
 
-        from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-        from ticketing.auth.cognito import verify_cognito_token
+    2. Internal service header — x-internal-user-id present (chatbot → ticketing
+       or Celery → ticketing internal calls): trusts the header, skips JWT.
 
-        security = HTTPBearer()
-
-        def get_current_user(
-            credentials: HTTPAuthorizationCredentials = Depends(security),
-        ) -> CurrentUser:
-            claims = verify_cognito_token(credentials.credentials)
-            return CurrentUser(
-                user_id=claims["sub"],
-                role_keys=claims.get("custom:grm_roles", "").split(","),
-                organization_id=claims.get("custom:organization_id", ""),
-                location_code=claims.get("custom:location_code"),
-            )
-
-    For proto: returns a mock super_admin with full access.
+    3. Normal path — validates the Bearer JWT against Keycloak JWKS.
     """
+    settings = get_settings()
+
+    # Dev bypass: no Keycloak configured
+    if not settings.keycloak_issuer:
+        return CurrentUser(
+            user_id=x_internal_user_id or "mock-super-admin",
+            role_keys=(x_internal_role or "super_admin").split(","),
+            organization_id="DOR",
+        )
+
+    # Internal service-to-service call (trusted header)
+    if x_internal_user_id:
+        return CurrentUser(
+            user_id=x_internal_user_id,
+            role_keys=(x_internal_role or "super_admin").split(","),
+            organization_id="DOR",
+        )
+
+    # Normal path: validate Keycloak JWT
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    from ticketing.auth.keycloak_jwt import verify_keycloak_token
+    try:
+        claims = verify_keycloak_token(credentials.credentials)
+    except JWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}")
+
     return CurrentUser(
-        user_id="mock-super-admin",
-        role_keys=["super_admin"],
-        organization_id="DOR",
-        location_code=None,
+        user_id=claims["sub"],
+        role_keys=claims.get("custom:grm_roles", "").split(","),
+        organization_id=claims.get("custom:organization_id", ""),
+        location_code=claims.get("custom:location_code"),
     )

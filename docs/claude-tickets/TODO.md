@@ -2,7 +2,7 @@
 
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
-> Last reviewed: 2026-04-27
+> Last reviewed: 2026-05-05
 
 ---
 
@@ -61,23 +61,24 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 **Dependency:** User is currently rewriting `public.*` tables via Alembic migration.
   Do not test until that migration lands and DB is re-seeded.
 
-### 4. Wire OfficerScope seed rows so auto-assign works for live API tickets
-**File:** `ticketing/seed/mock_tickets.py`  
-**Problem:** Seed creates `UserRole` rows but no `OfficerScope` rows. `auto_assign_officer()`
-returns `None` for any ticket created via the live API (or chatbot webhook) — they arrive
-unassigned. Pre-seeded demo tickets have hardcoded `assigned_to` so demo is safe, but
-the chatbot → ticketing integration path will produce unassigned tickets.  
-**Fix:** Add `OfficerScope` rows for each mock officer in `mock_tickets.py`, matching
-their role, org, location, and project. Mirror the pattern in `kl_road_standard.py`.
+### ~~4. Wire OfficerScope seed rows so auto-assign works for live API tickets~~ ✅ DONE
+`seed_mock_officer_scopes()` in `mock_tickets.py` — already seeded 9 rows, auto-assign works.
 
-### 5. Visual test + polish pass
-**What to do:** Open `http://localhost:3001`, click through every screen, verify:
-- All 6 demo tickets show in queue with correct status/priority/SLA colours
-- Ticket detail for each demo ticket loads correctly
-- ACKNOWLEDGE → ESCALATE → RESOLVE flow works end-to-end
-- GRC CONVENE → DECIDE flow works (use GRV-2025-001)
-- SEAH ticket (GRV-2025-SEAH-001) shows 🔒 badge and red border
-- Reports page — currently a stub, decide if a placeholder is enough for demo
+### 5. Visual test + polish pass (backend verified 2026-05-06)
+**Backend smoke test results (all passing):**
+- All 6 demo tickets seeded and visible correctly per role (ACKNOWLEDGE action ✓, GRC_CONVENE+GRC_DECIDE ✓, RESOLVE ✓)
+- SEAH access gate: 403 for non-SEAH roles, 200 for seah_national_officer + super_admin ✓
+- Badge counts: Site L1=3, PIU L2=2, GRC Chair=1, SEAH National=1, ADB observer=0 ✓
+- SLA data: GRV-2025-005 breached (-24h, urgency=overdue), GRV-2025-001 warning (48h) ✓
+- XLSX report export: generates valid file ✓
+- My Queue counts: Site L1=2, PIU L2=1, GRC Chair=1, SEAH National=1, ADB observer=0 ✓
+- Escalated tab: GRV-2025-004 now in ESCALATED status, visible to all in-scope roles ✓
+
+**What remains:** Browser click-through (UI rendering, mobile shell, Settings panel)
+- Open http://localhost:3001, switch roles via MockRoleSwitcher, verify each screen
+- GRC convene → decide flow visual check (date picker + purple button)
+- Mobile shell (/m/ routes) quick pass on narrow viewport
+- Reports page — already implemented (date range picker + XLSX download + scheduled reports section)
 
 ### 6. Staging deploy to grm.stage.facets-ai.com
 **What:** Docker deploy to staging EC2, Nginx config, SSL.  
@@ -188,6 +189,84 @@ on phones. The full Next.js settings-heavy UI is not suitable for mobile field u
 overrides to the existing ticketing-ui, hide desktop-only nav items, add a
 `manifest.json` for PWA install. Revisit native if offline or camera is needed.
 **Dependencies:** Week 2 desktop UI complete ✅. Consider adding note translation (#7a) to the mobile UI once that feature lands.
+
+---
+
+## 🟠 CHATBOT-SIDE INTEGRATION NOTE — PII scrubbing in grievance intake
+
+> **For whoever works on `backend/actions/` or `rasa_chatbot/` intake flow.**
+> This is a ticketing-system dependency — the findings pipeline reads `grievance_summary`
+> and officer notes, and those go to OpenAI. We need PII stripped before storage.
+
+### Problem
+When a complainant submits a grievance, the free-text narrative often contains PII
+(full name, phone number, neighbours' names, contractor names, home address details).
+The chatbot LLM call already summarises + categorises the grievance — we need to add
+PII scrubbing to that same call so the stored `grievance_summary` is clean.
+
+`ticketing.tickets.grievance_summary` is cached at ticket creation from this field
+and flows directly into the AI findings pipeline (OpenAI call). If the summary
+contains PII, it leaves the system.
+
+### Fix — extend the existing summarisation prompt
+In the LLM call that generates `grievance_summary` (wherever the chatbot assembles
+the grievance summary before storing it), add the following instruction:
+
+```
+Replace any personal identifiers with role descriptors:
+- Person names → "the complainant", "a neighbour", "the contractor", "the officer"
+- Phone numbers → [phone redacted]
+- Email addresses → [email redacted]
+- Specific street addresses → [address redacted]  (keep district/municipality level)
+- ID card / passport numbers → [ID redacted]
+Keep: location at district/municipality level, dates, nature of the grievance,
+project name, road name.
+```
+
+### Storage convention (two fields)
+- `grievance_summary` (existing) — **scrubbed** summary → safe for AI pipeline, ticketing
+- `original_statement` or `raw_narrative` (vault, existing) — original unredacted text
+  → only accessible via the reveal session (`POST /tickets/{id}/reveal`)
+
+If the chatbot currently stores only one field, the scrubbed version should replace it
+and the raw text should be kept in an encrypted/restricted column.
+
+### Why this boundary matters
+The ticketing `context_builder.py` (see `ticketing/engine/context_builder.py`) only
+reads `ticket.grievance_summary` — if that field is clean, the entire AI pipeline
+downstream is structurally PII-free. Officer notes may also contain incidental PII
+(e.g. officer writes "called Ram at 9841…") — the translation + findings prompts
+should also include the redaction instruction as a safety net (already done in
+`ticketing/clients/llm_client.py` `_FINDINGS_SYSTEM` prompt).
+
+### Officer notes
+Officer notes (`NOTE_ADDED` events) can also contain incidental PII. The findings
+prompt in `ticketing/clients/llm_client.py` already instructs the LLM never to
+include names/phones/addresses in output — this is a safety net, not a substitute
+for source-level scrubbing.
+
+---
+
+## 🟡 LLM: Structured context cache + findings pipeline (Layer 1 + 2)
+
+**Implemented:** `ticketing/engine/context_builder.py`, `ticketing/models/ticket_context_cache.py`,
+migration `i6j8l0n2p4`, updated `ticketing/clients/llm_client.py` + `ticketing/tasks/llm.py`.
+
+**Layer 1 — `ticketing.ticket_context_cache`**
+One row per ticket. Rebuilt whenever an event with `summary_regen_required=True` is committed.
+`context_builder.build_and_store()` is the single, auditable place that assembles events into
+a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_role`.
+`findings_json` stores the structured LLM output alongside the input context.
+
+**Layer 2 — Structured JSON output from LLM**
+`llm_client.generate_case_findings(context, is_seah)` now:
+- Takes the pre-assembled context dict (not raw text)
+- Uses `gpt-4o-mini` for standard tickets, `gpt-4o` for SEAH
+- `temperature=0.0` for consistency
+- Returns structured JSON: `{summary_en, key_findings[], recommended_action, urgency, languages_detected[]}`
+- `Ticket.ai_summary_en` still populated from `summary_en` (frontend backward compat)
+- Full structured output stored in `ticket_context_cache.findings_json`
+- System prompt explicitly instructs: never include names/phones/addresses in output
 
 ---
 

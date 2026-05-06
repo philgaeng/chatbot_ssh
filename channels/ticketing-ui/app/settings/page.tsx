@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { AlertTriangle, X, Lock, ClipboardList, Construction } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
   listWorkflows,
@@ -56,6 +57,7 @@ import {
   type OrgRole,
   type PackageItem,
   type PackageCreate,
+  inviteOfficer,
 } from "@/lib/api";
 
 // ── Role edit modal ───────────────────────────────────────────────────────────
@@ -65,101 +67,103 @@ type RoleEntry = {
   label: string;
   workflow: string;
   description: string;
-  permissions: string[];
 };
 
-function RoleEditModal({ role, onSave, onClose }: {
+function RoleEditModal({ role, onSave, onClose, isNew = false }: {
   role: RoleEntry;
   onSave: (updated: RoleEntry) => void;
   onClose: () => void;
+  isNew?: boolean;
 }) {
-  const [label, setLabel] = useState(role.label);
+  const [key, setKey]               = useState(role.key);
+  const [label, setLabel]           = useState(role.label);
+  const [workflow, setWorkflow]     = useState(role.workflow || "Standard");
   const [description, setDescription] = useState(role.description);
-  const [permissions, setPermissions] = useState<string[]>(role.permissions);
-  const [newPerm, setNewPerm] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]           = useState(false);
 
-  function removePerm(p: string) {
-    setPermissions(permissions.filter((x) => x !== p));
-  }
-
-  function addPerm() {
-    const trimmed = newPerm.trim();
-    if (!trimmed || permissions.includes(trimmed)) return;
-    setPermissions([...permissions, trimmed]);
-    setNewPerm("");
-  }
+  const derivedKey = isNew
+    ? key.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
+    : role.key;
 
   function handleSave() {
-    onSave({ ...role, label, description, permissions });
+    if (isNew && !derivedKey) return;
+    onSave({ ...role, key: derivedKey, label, workflow, description });
     setSaved(true);
     setTimeout(() => { setSaved(false); onClose(); }, 800);
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
           <div>
-            <div className="font-semibold">Edit Role</div>
-            <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>
+            <div className="font-semibold">{isNew ? "New Role" : "Edit Role"}</div>
+            {!isNew && <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>}
+            {isNew && derivedKey && <div className="text-xs text-slate-300 font-mono mt-0.5">{derivedKey}</div>}
           </div>
           <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
+        <div className="p-6 space-y-4">
+          {isNew && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Display name *</label>
+                <input
+                  autoFocus
+                  value={label}
+                  onChange={(e) => {
+                    setLabel(e.target.value);
+                    if (!key || key === label.toLowerCase().replace(/[^a-z0-9]+/g, "_")) {
+                      setKey(e.target.value);
+                    }
+                  }}
+                  placeholder="e.g. Site Focal Person"
+                  className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Workflow</label>
+                <select
+                  value={workflow}
+                  onChange={(e) => setWorkflow(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                >
+                  <option value="Standard">Standard</option>
+                  <option value="SEAH">SEAH</option>
+                  <option value="Both">Both</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {!isNew && (
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
+              <input
+                autoFocus
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={2}
+              rows={3}
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-2">Permissions</label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {permissions.map((p) => (
-                <span key={p} className="flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                  {p}
-                  <button onClick={() => removePerm(p)} className="text-gray-400 hover:text-red-500 ml-0.5 leading-none">×</button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={newPerm}
-                onChange={(e) => setNewPerm(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addPerm()}
-                placeholder="Add permission…"
-                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <button
-                onClick={addPerm}
-                disabled={!newPerm.trim()}
-                className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-
-          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            ⚠️ Permissions listed here are informational for the demo. API-level enforcement is defined in the backend code.
-          </div>
+          <p className="text-xs text-gray-400">
+            Access control is enforced by role key in the backend. Ticket-level actions are governed by the Actor / Supervisor / Informed / Observer tiers defined per workflow step.
+          </p>
         </div>
 
         {/* Footer */}
@@ -169,11 +173,12 @@ function RoleEditModal({ role, onSave, onClose }: {
           </button>
           <button
             onClick={handleSave}
-            className={`text-sm px-4 py-1.5 rounded font-medium transition ${
+            disabled={isNew && (!derivedKey || !label.trim())}
+            className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
               saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            {saved ? "✓ Saved" : "Save changes"}
+            {saved ? "✓ Saved" : isNew ? "Create role" : "Save changes"}
           </button>
         </div>
       </div>
@@ -189,11 +194,12 @@ const TABS: { id: Tab; label: string; superAdminOnly?: boolean }[] = [
   { id: "workflows",       label: "Workflows"                 },
   { id: "organizations",   label: "Organizations & Locations" },
   { id: "report_schedule", label: "Report Schedule"           },
-  { id: "system_config",   label: "⚙ System Config",          superAdminOnly: true },
+  { id: "system_config",   label: "System Config",             superAdminOnly: true },
 ];
 
-// Color classes for org role badges (keyed by role.key prefix)
+// Color classes for org role badges (keyed by role.key)
 const ORG_ROLE_COLORS: Record<string, string> = {
+  project_owner:           "bg-slate-100 text-slate-700 border-slate-200",
   donor:                   "bg-blue-100 text-blue-700 border-blue-200",
   executing_agency:        "bg-purple-100 text-purple-700 border-purple-200",
   implementing_agency:     "bg-indigo-100 text-indigo-700 border-indigo-200",
@@ -203,6 +209,27 @@ const ORG_ROLE_COLORS: Record<string, string> = {
   supervision_consultant:  "bg-teal-100 text-teal-700 border-teal-200",
   specialized_consultant:  "bg-green-100 text-green-700 border-green-200",
 };
+
+/** Derive a short org ID from name + country code.
+ *  Rule: initials of each word, uppercased, prefixed by country code.
+ *  Exception: no country selected, OR initials === "ADB" → no prefix (international org).
+ */
+function generateOrgId(name: string, country: string): string {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .map((w) => {
+      const clean = w.replace(/[^a-zA-Z0-9]/g, "");
+      if (!clean) return "";
+      return /^[0-9]/.test(clean) ? clean : clean[0].toUpperCase();
+    })
+    .filter(Boolean)
+    .join("");
+  if (!initials) return "";
+  // International / multi-country org (no country) or natural "ADB" acronym → no prefix
+  if (!country || initials === "ADB") return initials;
+  return `${country}_${initials}`;
+}
 
 // ── Location search autocomplete ─────────────────────────────────────────────
 
@@ -322,7 +349,9 @@ function LocationSearch({
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
-const MOCK_OFFICERS = [
+type MockOfficerEntry = { name: string; email: string; role: string; org: string | null; location: string | null };
+
+const MOCK_OFFICERS: MockOfficerEntry[] = [
   { name: "Mock Site L1",       email: "mock-officer-site-l1@grm.local",       role: "site_safeguards_focal_person", org: "DOR", location: "JHAPA"  },
   { name: "Mock PIU L2",        email: "mock-officer-piu-l2@grm.local",        role: "pd_piu_safeguards_focal",      org: "DOR", location: "MORANG" },
   { name: "Mock GRC Chair",     email: "mock-officer-grc-chair@grm.local",     role: "grc_chair",                   org: "DOR", location: null     },
@@ -332,84 +361,18 @@ const MOCK_OFFICERS = [
   { name: "GRM Admin (mock)",   email: "admin@grm.local",                      role: "super_admin",                 org: null,  location: null     },
 ];
 
-const ROLES = [
-  {
-    key: "super_admin",
-    label: "Super Admin",
-    workflow: "Both",
-    description: "Full system access. Can manage all settings, users, and tickets.",
-    permissions: ["View all tickets", "Manage users & roles", "Manage workflows", "Export reports", "SEAH access"],
-  },
-  {
-    key: "local_admin",
-    label: "Local Admin",
-    workflow: "Standard",
-    description: "Administrative access scoped to their organization and location.",
-    permissions: ["View all tickets (own org)", "Manage officers (own org)", "Export reports"],
-  },
-  {
-    key: "site_safeguards_focal_person",
-    label: "Site Safeguards Focal Person",
-    workflow: "Standard",
-    description: "Level 1 officer — first point of contact for standard grievances.",
-    permissions: ["View assigned tickets", "Acknowledge", "Escalate to L2", "Resolve", "Add notes", "Reply to complainant"],
-  },
-  {
-    key: "pd_piu_safeguards_focal",
-    label: "PD / PIU Safeguards Focal",
-    workflow: "Standard",
-    description: "Level 2 officer — receives escalations from L1.",
-    permissions: ["View assigned tickets", "Acknowledge", "Escalate to L3 (GRC)", "Resolve", "Add notes", "Reply to complainant"],
-  },
-  {
-    key: "grc_chair",
-    label: "GRC Chair",
-    workflow: "Standard",
-    description: "Level 3 — convenes GRC hearing and records the committee decision.",
-    permissions: ["View GRC tickets", "Convene GRC hearing", "Record GRC decision", "Escalate to L4", "Resolve", "Add notes"],
-  },
-  {
-    key: "grc_member",
-    label: "GRC Member",
-    workflow: "Standard",
-    description: "Level 3 — participates in GRC hearing. Receives hearing notifications.",
-    permissions: ["View GRC tickets (read)", "Add notes"],
-  },
-  {
-    key: "adb_national_project_director",
-    label: "ADB National Project Director",
-    workflow: "Standard",
-    description: "Observer role — read-only oversight of standard GRM cases.",
-    permissions: ["View all standard tickets (read-only)", "Export reports"],
-  },
-  {
-    key: "adb_hq_safeguards",
-    label: "ADB HQ Safeguards",
-    workflow: "Standard",
-    description: "Observer role — read-only oversight of standard GRM cases.",
-    permissions: ["View all standard tickets (read-only)", "Export reports"],
-  },
-  {
-    key: "seah_national_officer",
-    label: "SEAH National Officer",
-    workflow: "SEAH",
-    description: "Level 1 SEAH officer — handles SEAH cases. Invisible to standard officers.",
-    permissions: ["View SEAH tickets", "Acknowledge", "Escalate to SEAH L2", "Resolve", "Add notes", "Reply to complainant"],
-  },
-  {
-    key: "seah_hq_officer",
-    label: "SEAH HQ Officer",
-    workflow: "SEAH",
-    description: "Level 2 SEAH officer — receives SEAH escalations.",
-    permissions: ["View SEAH tickets", "Acknowledge", "Resolve", "Close", "Add notes", "Reply to complainant"],
-  },
-  {
-    key: "adb_hq_exec",
-    label: "ADB HQ Executive",
-    workflow: "Both",
-    description: "Senior oversight — read-only access to both standard and SEAH cases.",
-    permissions: ["View all tickets (read-only)", "SEAH access (read-only)", "Export reports"],
-  },
+const ROLES: RoleEntry[] = [
+  { key: "super_admin",                   label: "Super Admin",                    workflow: "Both",     description: "Full system access. Can manage all settings, users, and tickets." },
+  { key: "local_admin",                   label: "Local Admin",                    workflow: "Standard", description: "Administrative access scoped to their organization and location." },
+  { key: "site_safeguards_focal_person",  label: "Site Safeguards Focal Person",   workflow: "Standard", description: "Level 1 officer — first point of contact for standard grievances." },
+  { key: "pd_piu_safeguards_focal",       label: "PD / PIU Safeguards Focal",      workflow: "Standard", description: "Level 2 officer — receives escalations from L1." },
+  { key: "grc_chair",                     label: "GRC Chair",                      workflow: "Standard", description: "Level 3 — convenes GRC hearing and records the committee decision." },
+  { key: "grc_member",                    label: "GRC Member",                     workflow: "Standard", description: "Level 3 — participates in GRC hearing. Receives hearing notifications." },
+  { key: "adb_national_project_director", label: "ADB National Project Director",  workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
+  { key: "adb_hq_safeguards",             label: "ADB HQ Safeguards",              workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
+  { key: "seah_national_officer",         label: "SEAH National Officer",          workflow: "SEAH",     description: "Level 1 SEAH officer — handles SEAH cases. Invisible to standard officers." },
+  { key: "seah_hq_officer",              label: "SEAH HQ Officer",                workflow: "SEAH",     description: "Level 2 SEAH officer — receives SEAH escalations." },
+  { key: "adb_hq_exec",                  label: "ADB HQ Executive",               workflow: "Both",     description: "Senior oversight — read-only access to both standard and SEAH cases." },
 ];
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -586,7 +549,7 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
                           onClick={() => handleDelete(s.scope_id)}
                           className="text-red-400 hover:text-red-600 font-medium"
                         >
-                          ✕
+                          <X size={13} strokeWidth={2.5} />
                         </button>
                       </td>
                     </tr>
@@ -703,11 +666,256 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
   );
 }
 
+// ── InviteOfficerModal ────────────────────────────────────────────────────────
+
+function InviteOfficerModal({ onClose, onSuccess }: {
+  onClose: () => void;
+  onSuccess: (email: string) => void;
+}) {
+  const [email, setEmail]         = useState("");
+  const [roleKey, setRoleKey]     = useState(ROLES[0].key);
+  const [orgId, setOrgId]         = useState("");
+  const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    listOrganizations().then(setOrgs).catch(() => {});
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !orgId) { setError("Email and organization are required."); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await inviteOfficer({ email: email.trim(), role_key: roleKey, organization_id: orgId });
+      onSuccess(email.trim());
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg.includes("409") ? `${email} already exists.` : msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
+          <div className="font-semibold">Invite Officer</div>
+          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Email address *</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="officer@example.com"
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Role *</label>
+            <select
+              value={roleKey}
+              onChange={(e) => setRoleKey(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              {ROLES.map((r) => (
+                <option key={r.key} value={r.key}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
+            <select
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              required
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="">Select organization…</option>
+              {orgs.map((o) => (
+                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            The officer will receive a temporary password and be required to change it on first login.
+            SMTP must be configured in Keycloak for email delivery; otherwise share the password manually.
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            >
+              {submitting ? "Inviting…" : "Send invite"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Officer edit modal ────────────────────────────────────────────────────────
+
+function OfficerEditModal({ officer, onSave, onClose }: {
+  officer: MockOfficerEntry;
+  onSave:  (updated: MockOfficerEntry) => void;
+  onClose: () => void;
+}) {
+  const [name, setName]         = useState(officer.name);
+  const [role, setRole]         = useState(officer.role);
+  const [org, setOrg]           = useState(officer.org ?? "");
+  const [location, setLocation] = useState(officer.location ?? "");
+  const [saved, setSaved]       = useState(false);
+
+  function handleSave() {
+    onSave({ ...officer, name: name.trim(), role, org: org || null, location: location || null });
+    setSaved(true);
+    setTimeout(() => { setSaved(false); onClose(); }, 700);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
+          <div>
+            <div className="font-semibold">Edit Officer</div>
+            <div className="text-xs text-slate-300 mt-0.5">{officer.email}</div>
+          </div>
+          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Role</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              >
+                {ROLES.map((r) => (
+                  <option key={r.key} value={r.key}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Organization</label>
+              <input
+                value={org}
+                onChange={(e) => setOrg(e.target.value.toUpperCase())}
+                placeholder="e.g. DOR"
+                className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Location code</label>
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value.toUpperCase())}
+              placeholder="e.g. NP_D006 (leave blank for national scope)"
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            Changes apply to the demo display only. Email and authentication are managed via Cognito.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim()}
+            className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
+              saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
+          >
+            {saved ? "✓ Saved" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Officers tab ──────────────────────────────────────────────────────────────
+
 function OfficersTab() {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [officerList, setOfficerList]   = useState<MockOfficerEntry[]>(MOCK_OFFICERS);
+  const [expandedId, setExpandedId]     = useState<string | null>(null);
+  const [showInvite, setShowInvite]     = useState(false);
+  const [editingOfficer, setEditingOfficer] = useState<MockOfficerEntry | null>(null);
+  const [successMsg, setSuccessMsg]     = useState<string | null>(null);
+
+  function handleInviteSuccess(email: string) {
+    setShowInvite(false);
+    setSuccessMsg(`Invite sent to ${email}. They will receive a temporary password.`);
+    setTimeout(() => setSuccessMsg(null), 6000);
+  }
 
   return (
     <div>
+      {showInvite && (
+        <InviteOfficerModal
+          onClose={() => setShowInvite(false)}
+          onSuccess={handleInviteSuccess}
+        />
+      )}
+      {editingOfficer && (
+        <OfficerEditModal
+          officer={editingOfficer}
+          onSave={(updated) => {
+            setOfficerList(officerList.map((o) => o.email === updated.email ? updated : o));
+            setEditingOfficer(null);
+          }}
+          onClose={() => setEditingOfficer(null)}
+        />
+      )}
+
+      {successMsg && (
+        <div className="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+          ✓ {successMsg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <input
@@ -720,7 +928,10 @@ function OfficersTab() {
             {ROLES.map((r) => <option key={r.key}>{r.key}</option>)}
           </select>
         </div>
-        <button className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium">
+        <button
+          onClick={() => setShowInvite(true)}
+          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
+        >
           + Invite Officer
         </button>
       </div>
@@ -740,7 +951,7 @@ function OfficersTab() {
             </tr>
           </thead>
           <tbody>
-            {MOCK_OFFICERS.map((o, i) => {
+            {officerList.map((o, i) => {
               const rowId = `mock-${i}`;
               const isOpen = expandedId === rowId;
               return (
@@ -769,8 +980,14 @@ function OfficersTab() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-3">
-                        <button className="text-blue-600 hover:underline text-xs">Edit</button>
-                        <button className="text-red-500 hover:underline text-xs">Remove</button>
+                        <button
+                          onClick={() => setEditingOfficer(o)}
+                          className="text-blue-600 hover:underline text-xs"
+                        >Edit</button>
+                        <button
+                          onClick={() => setOfficerList(officerList.filter((x) => x.email !== o.email))}
+                          className="text-red-500 hover:underline text-xs"
+                        >Remove</button>
                       </div>
                     </td>
                   </tr>
@@ -788,15 +1005,18 @@ function OfficersTab() {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Full invite flow (Cognito email) — coming in Week 3. Jurisdictions managed via ▶ expand.
+        Jurisdictions managed via ▶ expand.
       </p>
     </div>
   );
 }
 
 function RolesTab() {
-  const [roles, setRoles] = useState<RoleEntry[]>(ROLES.map((r) => ({ ...r })));
-  const [editing, setEditing] = useState<RoleEntry | null>(null);
+  const [roles, setRoles]       = useState<RoleEntry[]>(ROLES.map((r) => ({ ...r })));
+  const [editing, setEditing]   = useState<RoleEntry | null>(null);
+  const [showAdd, setShowAdd]   = useState(false);
+
+  const BLANK_ROLE: RoleEntry = { key: "", label: "", workflow: "Standard", description: "" };
 
   const workflowBadge = (w: string) =>
     w === "SEAH"
@@ -809,6 +1029,12 @@ function RolesTab() {
     setRoles(roles.map((r) => r.key === updated.key ? updated : r));
   }
 
+  function handleAdd(newRole: RoleEntry) {
+    if (!newRole.key) return;
+    setRoles([...roles, newRole]);
+    setShowAdd(false);
+  }
+
   return (
     <div>
       {editing && (
@@ -818,14 +1044,22 @@ function RolesTab() {
           onClose={() => setEditing(null)}
         />
       )}
+      {showAdd && (
+        <RoleEditModal
+          role={BLANK_ROLE}
+          onSave={handleAdd}
+          onClose={() => setShowAdd(false)}
+          isNew
+        />
+      )}
 
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm text-gray-500">
-          {roles.length} roles defined · permissions are enforced at the API level
+          {roles.length} roles defined · access control enforced by role key in the backend
         </p>
         <button
-          disabled
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded font-medium opacity-40 cursor-not-allowed"
+          onClick={() => setShowAdd(true)}
+          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded font-medium hover:bg-blue-700 transition"
         >
           + Add Role
         </button>
@@ -838,7 +1072,6 @@ function RolesTab() {
               <th className="px-4 py-2.5 font-medium">Role</th>
               <th className="px-4 py-2.5 font-medium">Workflow</th>
               <th className="px-4 py-2.5 font-medium">Description</th>
-              <th className="px-4 py-2.5 font-medium">Permissions</th>
               <th className="px-4 py-2.5 font-medium">Actions</th>
             </tr>
           </thead>
@@ -854,16 +1087,7 @@ function RolesTab() {
                     {r.workflow}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-xs max-w-xs">{r.description}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {r.permissions.map((p) => (
-                      <span key={p} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                        {p}
-                      </span>
-                    ))}
-                  </div>
-                </td>
+                <td className="px-4 py-3 text-gray-500 text-xs max-w-sm">{r.description}</td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => setEditing(r)}
@@ -927,17 +1151,22 @@ function StepForm({
   onSaved: (s: WorkflowStep) => void;
   onCancel: () => void;
 }) {
-  const [displayName, setDisplayName]       = useState(step.display_name);
-  const [stepKey, setStepKey]               = useState(step.step_key);
-  const [roleKey, setRoleKey]               = useState(step.assigned_role_key);
-  const [responseH, setResponseH]           = useState<string>(step.response_time_hours?.toString() ?? "");
-  const [resolutionD, setResolutionD]       = useState<string>(step.resolution_time_days?.toString() ?? "");
-  const [stakeholders, setStakeholders]     = useState<string[]>(step.stakeholders ?? []);
-  const [newStakeholder, setNewStakeholder] = useState("");
-  const [actions, setActions]               = useState<string[]>(step.expected_actions ?? []);
-  const [newAction, setNewAction]           = useState("");
-  const [saving, setSaving]                 = useState(false);
-  const [error, setError]                   = useState("");
+  const [displayName, setDisplayName]         = useState(step.display_name);
+  const [stepKey, setStepKey]                 = useState(step.step_key);
+  const [roleKey, setRoleKey]                 = useState(step.assigned_role_key);
+  const [responseH, setResponseH]             = useState<string>(step.response_time_hours?.toString() ?? "");
+  const [resolutionD, setResolutionD]         = useState<string>(step.resolution_time_days?.toString() ?? "");
+  const [actions, setActions]                 = useState<string[]>(step.expected_actions ?? []);
+  const [newAction, setNewAction]             = useState("");
+  // Spec 12 tier fields
+  const [supervisorRole, setSupervisorRole]   = useState<string>(step.supervisor_role ?? "");
+  const [informedRoles, setInformedRoles]     = useState<string[]>(step.informed_roles ?? []);
+  const [newInformed, setNewInformed]         = useState("");
+  const [observerRoles, setObserverRoles]     = useState<string[]>(step.observer_roles ?? []);
+  const [newObserver, setNewObserver]         = useState("");
+  const [informedPii, setInformedPii]         = useState<boolean>(step.informed_pii_access ?? false);
+  const [saving, setSaving]                   = useState(false);
+  const [error, setError]                     = useState("");
 
   async function handleSave() {
     if (!displayName.trim() || !roleKey) { setError("Name and role are required."); return; }
@@ -949,8 +1178,12 @@ function StepForm({
         assigned_role_key: roleKey,
         response_time_hours: responseH ? parseInt(responseH) : null,
         resolution_time_days: resolutionD ? parseInt(resolutionD) : null,
-        stakeholders: stakeholders.length ? stakeholders : null,
         expected_actions: actions.length ? actions : null,
+        // Spec 12 tier fields
+        supervisor_role: supervisorRole || null,
+        informed_roles: informedRoles,
+        observer_roles: observerRoles,
+        informed_pii_access: informedPii,
       };
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
@@ -1004,31 +1237,6 @@ function StepForm({
         </div>
       </div>
 
-      {/* Stakeholders */}
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Stakeholders notified</label>
-        <div className="flex flex-wrap gap-1 mb-1">
-          {stakeholders.map(s => (
-            <span key={s} className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
-              {s}
-              <button onClick={() => setStakeholders(stakeholders.filter(x => x !== s))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <select value={newStakeholder} onChange={e => setNewStakeholder(e.target.value)}
-            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            <option value="">+ Add stakeholder role</option>
-            {ROLE_OPTIONS.filter(r => !stakeholders.includes(r.key)).map(r =>
-              <option key={r.key} value={r.key}>{r.label}</option>
-            )}
-          </select>
-          <button onClick={() => addTag(stakeholders, setStakeholders, newStakeholder, setNewStakeholder)}
-            disabled={!newStakeholder}
-            className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
-        </div>
-      </div>
-
       {/* Expected actions */}
       <div>
         <label className="text-xs font-medium text-gray-500 block mb-1">Expected actions</label>
@@ -1048,6 +1256,87 @@ function StepForm({
           <button onClick={() => addTag(actions, setActions, newAction, setNewAction)}
             disabled={!newAction.trim()}
             className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+        </div>
+      </div>
+
+      {/* ── Spec 12 tier model fields ────────────────────────────────────────── */}
+      <div className="border-t border-blue-100 pt-3 mt-1 space-y-3">
+        <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Tier configuration (Spec 12)</div>
+
+        {/* Supervisor role */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Supervisor role</label>
+          <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+            <option value="">— None (no supervisor at this step) —</option>
+            {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+          <p className="text-[11px] text-gray-400 mt-0.5">Notified on escalation/SLA breach. Can override Actor, reassign ticket.</p>
+        </div>
+
+        {/* Informed roles */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Informed roles — auto-added when ticket enters this step</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {informedRoles.map(r => (
+              <span key={r} className="flex items-center gap-1 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-2 py-0.5 rounded">
+                {r}
+                <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-purple-300 hover:text-red-500 leading-none">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <select value={newInformed} onChange={e => setNewInformed(e.target.value)}
+              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+              <option value="">+ Add informed role</option>
+              {ROLE_OPTIONS.filter(r => !informedRoles.includes(r.key)).map(r =>
+                <option key={r.key} value={r.key}>{r.label}</option>
+              )}
+            </select>
+            <button onClick={() => addTag(informedRoles, setInformedRoles, newInformed, setNewInformed)}
+              disabled={!newInformed}
+              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+          </div>
+        </div>
+
+        {/* Observer roles */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Observer roles — read-only access, no notifications</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {observerRoles.map(r => (
+              <span key={r} className="flex items-center gap-1 text-xs bg-gray-100 border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
+                {r}
+                <button onClick={() => setObserverRoles(observerRoles.filter(x => x !== r))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <select value={newObserver} onChange={e => setNewObserver(e.target.value)}
+              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+              <option value="">+ Add observer role</option>
+              {ROLE_OPTIONS.filter(r => !observerRoles.includes(r.key)).map(r =>
+                <option key={r.key} value={r.key}>{r.label}</option>
+              )}
+            </select>
+            <button onClick={() => addTag(observerRoles, setObserverRoles, newObserver, setNewObserver)}
+              disabled={!newObserver}
+              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
+          </div>
+        </div>
+
+        {/* PII access toggle */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setInformedPii(!informedPii)}
+            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${informedPii ? "bg-purple-600" : "bg-gray-200"}`}
+          >
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${informedPii ? "translate-x-4" : "translate-x-0"}`} />
+          </button>
+          <span className="text-xs text-gray-600">
+            Informed tier can see complainant PII
+            <span className="text-gray-400 ml-1">(default: off)</span>
+          </span>
         </div>
       </div>
 
@@ -1282,7 +1571,7 @@ function WorkflowEditor({
               {wf.display_name}
             </h2>
           )}
-          {wf.workflow_type === "seah" && <span className="text-xs text-red-600">🔒 SEAH</span>}
+          {wf.workflow_type === "seah" && <span className="inline-flex items-center gap-0.5 text-xs text-red-600"><Lock size={10} strokeWidth={2.5} />SEAH</span>}
         </div>
         <div className="flex items-center gap-3">
           {msg && <span className="text-xs text-green-600 font-medium">{msg}</span>}
@@ -1379,6 +1668,152 @@ function WorkflowEditor({
         assignments={wf.assignments}
         onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
       />
+
+      {/* Notification rules (Spec 12 §4) */}
+      <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "SEAH" ? "seah" : "standard"} />
+    </div>
+  );
+}
+
+// ── Workflow Notifications Panel (Spec 12 §4) ─────────────────────────────────
+
+const NOTIFICATION_EVENTS: { key: string; label: string }[] = [
+  { key: "ticket_created",   label: "Ticket created"     },
+  { key: "ticket_escalated", label: "Ticket escalated"   },
+  { key: "ticket_resolved",  label: "Ticket resolved"    },
+  { key: "sla_breach",       label: "SLA breach"         },
+  { key: "grc_convened",     label: "GRC convened"       },
+  { key: "assignment",       label: "Assignment"         },
+  { key: "quarterly_report", label: "Quarterly report"   },
+];
+const SEAH_EVENTS = new Set(["ticket_created","ticket_escalated","ticket_resolved","sla_breach","assignment"]);
+const NOTIF_TIERS = ["actor","supervisor","informed","observer"] as const;
+const NOTIF_CHANNELS = ["app","email","sms"] as const;
+
+function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard" | "seah" }) {
+  const [open, setOpen] = useState(false);
+  const [rules, setRules] = useState<Record<string, Record<string, string[]>>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const events = workflowSlug === "seah"
+    ? NOTIFICATION_EVENTS.filter(e => SEAH_EVENTS.has(e.key))
+    : NOTIFICATION_EVENTS;
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetch("/api/v1/settings/notification_rules")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.value) setRules(data.value[workflowSlug] ?? {});
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [open, workflowSlug]);
+
+  function toggle(event: string, tier: string, channel: string) {
+    setRules(prev => {
+      const evRules = { ...prev };
+      const tierChannels: string[] = [...(evRules[event]?.[tier] ?? [])];
+      const idx = tierChannels.indexOf(channel);
+      if (idx >= 0) tierChannels.splice(idx, 1); else tierChannels.push(channel);
+      return { ...evRules, [event]: { ...(evRules[event] ?? {}), [tier]: tierChannels } };
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const current = await fetch("/api/v1/settings/notification_rules").then(r => r.json());
+      const fullValue = { ...(current?.value ?? {}), [workflowSlug]: rules };
+      await fetch("/api/v1/settings/notification_rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: fullValue }),
+      });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ } finally { setSaving(false); }
+  }
+
+  const isChecked = (event: string, tier: string, ch: string) =>
+    (rules[event]?.[tier] ?? []).includes(ch);
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition text-sm font-medium text-gray-700"
+      >
+        <span>Notification rules — {workflowSlug === "seah" ? "SEAH" : "Standard"}</span>
+        <span className="text-gray-400 text-xs">{open ? "▲ collapse" : "▼ expand"}</span>
+      </button>
+
+      {open && (
+        <div className="p-4">
+          {loading ? (
+            <div className="text-xs text-gray-400 text-center py-4">Loading…</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th className="text-left font-medium text-gray-500 pb-2 pr-4 whitespace-nowrap">Event</th>
+                    {NOTIF_TIERS.map(tier => (
+                      <th key={tier} className="text-center font-medium text-gray-500 pb-2 px-2 capitalize min-w-[90px]" colSpan={3}>
+                        {tier}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <th />
+                    {NOTIF_TIERS.map(tier =>
+                      NOTIF_CHANNELS.map(ch => (
+                        <th key={`${tier}-${ch}`} className="text-center text-[10px] text-gray-400 pb-2 px-1 uppercase">{ch}</th>
+                      ))
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((ev, i) => (
+                    <tr key={ev.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="py-1.5 pr-4 font-medium text-gray-700 whitespace-nowrap">{ev.label}</td>
+                      {NOTIF_TIERS.map(tier =>
+                        NOTIF_CHANNELS.map(ch => (
+                          <td key={`${tier}-${ch}`} className="text-center py-1.5 px-1">
+                            <button
+                              type="button"
+                              onClick={() => toggle(ev.key, tier, ch)}
+                              className={`w-5 h-5 rounded border flex items-center justify-center mx-auto transition ${
+                                isChecked(ev.key, tier, ch)
+                                  ? "bg-blue-600 border-blue-600 text-white"
+                                  : "border-gray-300 text-transparent hover:border-blue-400"
+                              }`}
+                            >
+                              ✓
+                            </button>
+                          </td>
+                        ))
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
+            <p className="text-[11px] text-gray-400">Changes apply to new events only — in-flight tickets unaffected.</p>
+            <button onClick={handleSave} disabled={saving || loading}
+              className={`text-xs px-4 py-1.5 rounded font-medium transition ${
+                saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+              } disabled:opacity-50`}>
+              {saved ? "✓ Saved" : saving ? "Saving…" : "Save rules"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1564,7 +1999,7 @@ function WorkflowsTab() {
       {/* Workflow list */}
       {!loading && visible.length === 0 && (
         <div className="text-center py-16 text-gray-400">
-          <div className="text-3xl mb-3">📋</div>
+          <ClipboardList size={36} strokeWidth={1.25} className="mx-auto mb-3 text-gray-300" />
           <p className="text-sm">No workflows yet. Create one to get started.</p>
         </div>
       )}
@@ -1575,7 +2010,7 @@ function WorkflowsTab() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-800 text-sm">{wf.display_name}</span>
-                {wf.workflow_type === "seah" && <span className="text-xs text-red-500">🔒</span>}
+                {wf.workflow_type === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
               </div>
               <div className="text-xs text-gray-400 mt-0.5">
                 {wf.steps.filter(s => s && !s.is_deleted).length} steps
@@ -1607,7 +2042,7 @@ function WorkflowsTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-800 text-sm">{tpl.display_name}</span>
-                    {tpl.workflow_type === "seah" && <span className="text-xs text-red-500">🔒</span>}
+                    {tpl.workflow_type === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
                     {tpl.steps.filter(s => s && !s.is_deleted).length} steps · {tpl.workflow_id.startsWith("__builtin_") ? "built-in" : "admin template"}
@@ -1784,17 +2219,17 @@ function OrgCreateModal({
   onCreated: (org: OrganizationItem) => void;
   onClose: () => void;
 }) {
-  const [orgId, setOrgId]       = useState("");
   const [name, setName]         = useState("");
   const [country, setCountry]   = useState("NP");
   const [isActive, setIsActive] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
 
+  const generatedId = generateOrgId(name, country);
+
   async function handleCreate() {
-    const id = orgId.trim().toUpperCase();
-    if (!id || !name.trim()) { setError("ID and name are required."); return; }
-    if (!/^[A-Z0-9_]+$/.test(id)) { setError("ID must be uppercase letters, digits, or underscores only (e.g. DOR, ABC_CONST)."); return; }
+    const id = generatedId;
+    if (!id || !name.trim()) { setError("Name is required."); return; }
     setCreating(true); setError("");
     try {
       const org = await createOrganization({
@@ -1806,7 +2241,7 @@ function OrgCreateModal({
       onCreated(org);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Create failed";
-      setError(msg.includes("409") ? `ID "${id}" is already taken.` : msg);
+      setError(msg.includes("409") ? `ID "${id}" is already taken — try a more specific name.` : msg);
       setCreating(false);
     }
   }
@@ -1823,22 +2258,9 @@ function OrgCreateModal({
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">
-              Organization ID <span className="text-gray-400 font-normal">(short code, permanent)</span>
-            </label>
-            <input
-              autoFocus
-              value={orgId}
-              onChange={(e) => setOrgId(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))}
-              placeholder="e.g. DOR, ADB, ABC_CONST"
-              className="w-full text-sm font-mono border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-            <p className="text-xs text-gray-400 mt-1">Uppercase letters, numbers, underscores only. Cannot be changed later.</p>
-          </div>
-
-          <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Full name *</label>
             <input
+              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Department of Roads"
@@ -1870,13 +2292,24 @@ function OrgCreateModal({
               </label>
             </div>
           </div>
+
+          {/* Auto-generated ID preview */}
+          {generatedId ? (
+            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+              Will be created as: <span className="font-mono font-semibold text-gray-700">{generatedId}</span>
+            </p>
+          ) : (
+            name.trim() && (
+              <p className="text-xs text-amber-600">Enter a valid name to generate the ID.</p>
+            )
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
           <button
             onClick={handleCreate}
-            disabled={creating || !orgId.trim() || !name.trim()}
+            disabled={creating || !generatedId || !name.trim()}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition"
           >
             {creating ? "Creating…" : "Create organization"}
@@ -2921,23 +3354,23 @@ function PackageRow({
         <span className={`font-medium text-sm flex-1 min-w-0 truncate ${expanded ? "text-blue-700" : "text-gray-800"}`}>
           {pkg.name}
         </span>
-        <span className="text-xs text-gray-400 shrink-0">
-          {contractor ? contractor.name : <em className="text-gray-300">No contractor</em>}
+        <span className="text-xs text-gray-600 shrink-0">
+          {contractor ? contractor.name : <em className="text-gray-500">No contractor</em>}
         </span>
         {pkg.location_codes.length > 0 && (
           <div className="flex gap-1 shrink-0">
             {pkg.location_codes.map((c) => (
-              <span key={c} className="text-xs font-mono bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded">
+              <span key={c} className="text-xs font-mono bg-blue-100 text-blue-800 border border-blue-300 px-1.5 py-0.5 rounded">
                 {c}
               </span>
             ))}
           </div>
         )}
-        {!pkg.is_active && <span className="text-xs text-gray-400 shrink-0">(inactive)</span>}
+        {!pkg.is_active && <span className="text-xs text-gray-500 shrink-0">(inactive)</span>}
         {/* Edit hint — visible on hover when collapsed */}
         {!expanded && (
-          <span className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
-            ✏ edit
+          <span className="text-xs italic text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
+            edit
           </span>
         )}
       </button>
@@ -2995,9 +3428,9 @@ function PackageRow({
                 <span className="text-xs text-gray-400 italic">No locations linked</span>
               )}
               {pkg.location_codes.map((c) => (
-                <span key={c} className="flex items-center gap-1 text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                <span key={c} className="flex items-center gap-1 text-xs font-mono bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-full">
                   {c}
-                  <button onClick={() => onRemoveLoc(c)} className="text-blue-400 hover:text-red-500 leading-none">×</button>
+                  <button onClick={() => onRemoveLoc(c)} className="text-blue-600 hover:text-red-600 leading-none">×</button>
                 </span>
               ))}
             </div>
@@ -3215,7 +3648,7 @@ function SystemConfigTab() {
 function ComingSoon({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="text-4xl mb-4">🚧</div>
+      <Construction size={40} strokeWidth={1.25} className="mb-4 text-gray-300" />
       <h3 className="text-base font-semibold text-gray-700 mb-1">{label}</h3>
       <p className="text-sm text-gray-400 max-w-xs">
         This section is coming in Week 3. Contact your administrator to make changes directly.
@@ -3234,7 +3667,7 @@ export default function SettingsPage() {
   if (!isAdmin) {
     return (
       <div className="p-8 text-center">
-        <div className="text-3xl mb-3">🔒</div>
+        <Lock size={32} strokeWidth={1.5} className="mx-auto mb-3 text-gray-300" />
         <p className="text-sm text-gray-500">Settings are only accessible to administrators.</p>
       </div>
     );

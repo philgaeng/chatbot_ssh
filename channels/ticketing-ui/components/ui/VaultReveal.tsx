@@ -23,6 +23,7 @@ import {
   REVEAL_REASON_CODES,
   type RevealSession,
 } from "@/lib/api";
+import { IconLock, IconReveal, IconClose, IconEscalated } from "@/lib/icons";
 
 // ── RevealModal ───────────────────────────────────────────────────────────────
 
@@ -79,27 +80,29 @@ export function RevealModal({
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">
-              {isSeah ? "🔒 Reveal original SEAH statement" : "📄 Reveal original statement"}
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-1.5">
+              {isSeah ? <IconLock size={16} className="text-red-700" /> : <IconReveal size={16} className="text-gray-700" />}
+              {isSeah ? "Reveal original SEAH statement" : "Reveal original statement"}
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-600 mt-0.5">
               Access is audited and time-limited ({ttlSeconds} seconds).
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
+            className="text-gray-600 hover:text-gray-800 shrink-0 p-0.5 rounded"
             aria-label="Cancel"
           >
-            ×
+            <IconClose size={18} />
           </button>
         </div>
 
         {/* SEAH warning banner */}
         {isSeah && (
-          <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700">
-            ⚠️ <strong>SEAH case.</strong> This access is subject to strict rate limits,
-            enhanced alerting, and mandatory reporting requirements.
+          <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700 flex items-start gap-2">
+            <IconEscalated size={14} className="shrink-0 mt-0.5" />
+            <span><strong>SEAH case.</strong> This access is subject to strict rate limits,
+            enhanced alerting, and mandatory reporting requirements.</span>
           </div>
         )}
 
@@ -292,16 +295,16 @@ export function RevealOverlay({
         {/* ── Header ── */}
         <div className="relative z-20 flex items-center justify-between px-5 py-3 border-b border-red-200 bg-red-50 shrink-0">
           <div className="flex items-center gap-4">
-            <span className="text-sm font-semibold text-red-800">
-              📄 Original statement — READ ONLY
+            <span className="text-sm font-semibold text-red-800 flex items-center gap-1.5">
+              <IconReveal size={15} />Original statement — READ ONLY
             </span>
             <span className={`text-xs font-mono ${timerColor}`}>
-              ⏱ {mm}:{ss}
+              {mm}:{ss}
             </span>
           </div>
           <button
             onClick={() => handleClose("user_closed")}
-            className="text-sm text-red-700 hover:text-red-900 underline"
+            className="text-sm text-red-700 hover:text-red-900 font-medium"
           >
             Close
           </button>

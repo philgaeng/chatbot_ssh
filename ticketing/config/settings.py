@@ -28,10 +28,12 @@ class TicketingSettings(BaseSettings):
     orchestrator_base_url: str = "http://localhost:8000"
     messaging_api_key: str = ""
 
-    # ── AWS Cognito (GRM pool — separate from Stratcon) ──
-    cognito_grm_user_pool_id: str = ""
-    cognito_grm_client_id: str = ""
-    cognito_grm_region: str = "ap-southeast-1"
+    # ── Keycloak (replaces AWS Cognito for self-hosted deployments) ──
+    # Leave keycloak_issuer empty to keep the dev bypass (returns mock-super-admin).
+    keycloak_issuer: str = ""           # e.g. http://keycloak:8080/realms/grm
+    keycloak_client_id: str = "ticketing-api"   # confidential client for JWT audience check
+    keycloak_admin_url: str = ""        # e.g. http://keycloak:8080 (no trailing slash)
+    keycloak_admin_password: str = ""   # KEYCLOAK_ADMIN_PASSWORD
 
     # ── LLM (OpenAI — same key used by chatbot backend) ──
     openai_api_key: str = ""

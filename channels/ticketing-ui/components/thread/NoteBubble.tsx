@@ -3,6 +3,7 @@
 import { getRoleBubbleStyle } from "@/lib/mobile-constants";
 import type { TicketEvent } from "@/lib/api";
 import { NoteText } from "./NoteText";
+import { MessageCircle, AlertTriangle, FilePen } from "lucide-react";
 
 // ── 4 contextual bubble styles ────────────────────────────────────────────────
 // Color = relationship to this case (not role title)
@@ -12,6 +13,7 @@ import { NoteText } from "./NoteText";
 // 2. Higher authority — supervisors, ADB, GRC   → amber
 // 3. Viewer / observer                           → subtle gray
 // 4. Other officer (default)                    → neutral gray
+// 5. Complainant (COMPLAINANT_MESSAGE)           → emerald (always left)
 
 const AUTHORITY_ROLES = new Set([
   "pd_piu_safeguards_focal",
@@ -20,6 +22,13 @@ const AUTHORITY_ROLES = new Set([
   "seah_hq_officer",
   "super_admin", "local_admin",
 ]);
+
+// Intent badges shown on COMPLAINANT_MESSAGE bubbles
+const INTENT_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }> }> = {
+  WITHDRAW_REQUEST: { label: "Withdraw request",  cls: "bg-red-100 text-red-700",    Icon: AlertTriangle },
+  AMENDMENT:        { label: "Amendment",          cls: "bg-blue-100 text-blue-700",  Icon: FilePen },
+  ADDITIONAL_INFO:  { label: "Additional info",    cls: "bg-emerald-100 text-emerald-700", Icon: MessageCircle },
+};
 
 interface BubbleStyle {
   bubbleCls: string;
@@ -44,6 +53,22 @@ function contextStyle(
   return   { bubbleCls: "bg-gray-100 border-l-4 border-gray-400",  labelCls: "text-gray-600"                };
 }
 
+// ── Tier badge (Spec 12) ──────────────────────────────────────────────────────
+
+function TierBadge({ tier }: { tier: "actor" | "informed" | "observer" | null }) {
+  if (!tier || tier === "observer") return null;
+  const cls =
+    tier === "actor"
+      ? "bg-blue-100 text-blue-700"
+      : "bg-purple-100 text-purple-700";
+  const label = tier === "actor" ? "Actor" : "Informed";
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium leading-none ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function NoteBubble({
@@ -51,14 +76,48 @@ export function NoteBubble({
   isMine,
   assignedToUserId = null,
   viewerIds = new Set(),
+  viewerTiers = new Map(),
 }: {
   event:            TicketEvent;
   isMine:           boolean;
   assignedToUserId?: string | null;
   viewerIds?:        Set<string>;
+  /** Maps user_id → tier for all ticket viewers */
+  viewerTiers?:      Map<string, "informed" | "observer">;
 }) {
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+  // ── Complainant message bubble ─────────────────────────────────────────────
+  if (event.event_type === "COMPLAINANT_MESSAGE") {
+    const intent = (event.payload as Record<string, unknown> | null)?.intent as string | undefined;
+    const meta = intent ? INTENT_META[intent] : undefined;
+    const translation = (event.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
+
+    return (
+      <div className="flex flex-col items-start px-4 my-1.5">
+        {meta && (
+          <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-1 ${meta.cls}`}>
+            <meta.Icon size={10} strokeWidth={2.5} />
+            {meta.label}
+          </div>
+        )}
+        <div className="max-w-[80%] bg-emerald-50 border-l-4 border-emerald-500 rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-gray-800">
+          <NoteText text={event.note ?? ""} />
+          {translation && translation !== event.note && (
+            <div className="mt-1.5 pt-1.5 border-t border-emerald-100 text-xs text-emerald-700 italic">
+              <span className="font-medium not-italic">🌐 </span>{translation}
+            </div>
+          )}
+        </div>
+        <div className="text-xs font-medium mt-0.5 text-emerald-700 flex items-center gap-1">
+          <MessageCircle size={10} strokeWidth={2} />
+          Complainant · {time}
+        </div>
+      </div>
+    );
+  }
+
+  // ── My own message (right-aligned blue) ───────────────────────────────────
   if (isMine) {
     return (
       <div className="flex flex-col items-end px-4 my-1">
@@ -70,6 +129,7 @@ export function NoteBubble({
     );
   }
 
+  // ── Other officer bubbles (left-aligned, role-coloured) ───────────────────
   const { bubbleCls, labelCls } = contextStyle(
     event.created_by_user_id,
     event.actor_role,
@@ -77,14 +137,34 @@ export function NoteBubble({
     viewerIds,
   );
   const roleStyle = getRoleBubbleStyle(event.actor_role);
-  const roleLabel = `${roleStyle.emoji ? roleStyle.emoji + " " : ""}${roleStyle.label || event.created_by_user_id || "Officer"}`;
+  const roleLabel = roleStyle.label || event.created_by_user_id || "Officer";
+
+  // Resolve tier badge (Spec 12)
+  const authorId = event.created_by_user_id;
+  const tier: "actor" | "informed" | "observer" | null =
+    authorId && authorId === assignedToUserId
+      ? "actor"
+      : authorId
+        ? (viewerTiers.get(authorId) ?? null)
+        : null;
+
+  // Inline translation if available
+  const translation = (event.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
 
   return (
     <div className="flex flex-col items-start px-4 my-1">
       <div className={`max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-gray-800 ${bubbleCls}`}>
         <NoteText text={event.note ?? ""} />
+        {translation && translation !== event.note && (
+          <div className="mt-1.5 pt-1.5 border-t border-gray-100 text-xs text-gray-500 italic">
+            <span className="font-medium not-italic">🌐 </span>{translation}
+          </div>
+        )}
       </div>
-      <div className={`text-xs font-medium mt-1 ${labelCls}`}>{roleLabel} · {time}</div>
+      <div className={`text-xs font-medium mt-1 flex items-center gap-1.5 ${labelCls}`}>
+        <span>{roleLabel} · {time}</span>
+        <TierBadge tier={tier} />
+      </div>
     </div>
   );
 }

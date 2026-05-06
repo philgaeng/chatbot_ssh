@@ -4,33 +4,25 @@ Celery tasks: LLM translation and findings generation.
 Two tasks:
   translate_note(event_id)     — translates a NOTE_ADDED event's note to English,
                                   stores result in TicketEvent.payload["translation_en"]
-  generate_findings(ticket_id) — aggregates key events + notes for a ticket and
-                                  produces an AI summary stored in Ticket.ai_summary_en
+  generate_findings(ticket_id) — builds PII-clean context via context_builder,
+                                  calls LLM for structured JSON findings,
+                                  stores summary_en → Ticket.ai_summary_en
+                                  and full findings → TicketContextCache.findings_json
 
-LLM provider: OpenAI gpt-4 via ticketing/clients/llm_client.py
-Key:          OPENAI_API_KEY (already in env.local — same key as chatbot)
+LLM provider: OpenAI via ticketing/clients/llm_client.py
+  Standard tickets: gpt-4o-mini  (cost-optimised, temperature=0)
+  SEAH tickets:     gpt-4o        (more careful reasoning)
+Key: OPENAI_API_KEY in env.local
 
 DO NOT import from backend/services/ — keep ticketing independent.
 """
 
 import logging
-import uuid
 from datetime import datetime, timezone
 
 from ticketing.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
-
-# Event types included in the findings summary (chronological context)
-_FINDINGS_EVENT_TYPES = {
-    "NOTE_ADDED",
-    "ESCALATED",
-    "GRC_CONVENED",
-    "GRC_DECIDED",
-    "RESOLVED",
-    "CLOSED",
-    "ACKNOWLEDGED",
-}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,7 +57,7 @@ def translate_note(self, event_id: str) -> dict:
             logger.warning("translate_note: event_id=%s not found", event_id)
             return {"event_id": event_id, "status": "not_found"}
 
-        if event.event_type != "NOTE_ADDED":
+        if event.event_type not in {"NOTE_ADDED", "COMPLAINANT_MESSAGE"}:
             return {"event_id": event_id, "status": "skipped_not_a_note"}
 
         # Idempotency: already translated
@@ -112,21 +104,25 @@ def translate_note(self, event_id: str) -> dict:
 )
 def generate_findings(self, ticket_id: str) -> dict:
     """
-    Generate an AI case-findings summary for a ticket.
+    Generate structured AI case-findings for a ticket.
 
-    Aggregates all NOTE_ADDED events plus key status events (ESCALATED,
-    GRC_CONVENED, GRC_DECIDED, RESOLVED, CLOSED, ACKNOWLEDGED) into a
-    formatted text block, then calls generate_case_findings().
-
-    Stores the result in Ticket.ai_summary_en + Ticket.ai_summary_updated_at.
+    Steps:
+      1. Build PII-clean context via context_builder.build_and_store()
+         → writes to ticketing.ticket_context_cache.context_json
+      2. Call LLM with the context (gpt-4o-mini standard / gpt-4o SEAH)
+         → returns {summary_en, key_findings, recommended_action, urgency, languages_detected}
+      3. Store full findings_json in ticket_context_cache
+      4. Store summary_en in Ticket.ai_summary_en (backward-compat with frontend)
 
     Called:
       - Automatically when a ticket is RESOLVED (tickets.py)
       - On demand via POST /api/v1/tickets/{id}/findings (admin/supervisor only)
     """
     from ticketing.clients.llm_client import generate_case_findings
+    from ticketing.engine.context_builder import build_and_store
     from ticketing.models.base import SessionLocal
-    from ticketing.models.ticket import Ticket, TicketEvent
+    from ticketing.models.ticket import Ticket
+    from ticketing.models.ticket_context_cache import TicketContextCache
 
     db = SessionLocal()
     try:
@@ -135,64 +131,44 @@ def generate_findings(self, ticket_id: str) -> dict:
             logger.warning("generate_findings: ticket_id=%s not found", ticket_id)
             return {"ticket_id": ticket_id, "status": "not_found"}
 
-        # Fetch relevant events in chronological order
-        events = (
-            db.query(TicketEvent)
-            .filter(
-                TicketEvent.ticket_id == ticket_id,
-                TicketEvent.event_type.in_(_FINDINGS_EVENT_TYPES),
-            )
-            .order_by(TicketEvent.created_at)
-            .all()
-        )
+        # ── Step 1: build and persist PII-clean context ──────────────────
+        cache = build_and_store(ticket_id, db)
+        db.commit()
 
-        if not events:
+        if cache.event_count == 0:
             logger.info("generate_findings: no relevant events for ticket_id=%s", ticket_id)
             return {"ticket_id": ticket_id, "status": "no_events"}
 
-        # Build case text
-        lines: list[str] = []
-        lines.append(f"Case: {ticket.grievance_id}")
-        if ticket.grievance_summary:
-            lines.append(f"Summary: {ticket.grievance_summary}")
-        lines.append("")
-
-        for ev in events:
-            ts = ev.created_at.strftime("%Y-%m-%d") if ev.created_at else "unknown"
-            # Prefer English translation if available; fall back to original note
-            payload = ev.payload or {}
-            note_text = payload.get("translation_en") or ev.note or ""
-
-            if ev.event_type == "NOTE_ADDED" and note_text:
-                lines.append(f"[{ts}] Note: {note_text}")
-            elif ev.event_type == "ESCALATED":
-                lines.append(f"[{ts}] Escalated to next level.")
-            elif ev.event_type == "GRC_CONVENED":
-                hearing = payload.get("hearing_date", "")
-                lines.append(f"[{ts}] GRC hearing convened{f' for {hearing}' if hearing else ''}.")
-            elif ev.event_type == "GRC_DECIDED":
-                decision = payload.get("grc_decision", "")
-                lines.append(f"[{ts}] GRC decision: {decision}. {note_text}")
-            elif ev.event_type == "RESOLVED":
-                lines.append(f"[{ts}] Case resolved. {note_text}")
-            elif ev.event_type == "CLOSED":
-                lines.append(f"[{ts}] Case closed. {note_text}")
-            elif ev.event_type == "ACKNOWLEDGED":
-                lines.append(f"[{ts}] Case acknowledged by officer.")
-
-        case_text = "\n".join(lines)
-
-        findings = generate_case_findings(case_text)
+        # ── Step 2: call LLM ──────────────────────────────────────────────
+        findings = generate_case_findings(cache.context_json, is_seah=ticket.is_seah)
         if findings is None:
             logger.error("generate_findings: LLM returned None for ticket_id=%s", ticket_id)
             return {"ticket_id": ticket_id, "status": "llm_error"}
 
-        ticket.ai_summary_en = findings
-        ticket.ai_summary_updated_at = datetime.now(timezone.utc)
-        db.commit()
+        # ── Step 3: store structured output in cache ──────────────────────
+        # Re-fetch cache in case session was refreshed
+        cache = db.get(TicketContextCache, ticket_id)
+        cache.findings_json = findings
+        cache.findings_updated_at = datetime.now(timezone.utc)
 
-        logger.info("generate_findings: generated findings for ticket_id=%s", ticket_id)
-        return {"ticket_id": ticket_id, "status": "generated"}
+        # ── Step 4: populate Ticket.ai_summary_en (frontend reads this) ───
+        ticket.ai_summary_en = findings.get("summary_en", "")
+        ticket.ai_summary_updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        logger.info(
+            "generate_findings: ok ticket_id=%s urgency=%s model=%s tokens≈%d",
+            ticket_id,
+            findings.get("urgency"),
+            "gpt-4o" if ticket.is_seah else "gpt-4o-mini",
+            cache.token_estimate,
+        )
+        return {
+            "ticket_id": ticket_id,
+            "status": "generated",
+            "urgency": findings.get("urgency"),
+            "token_estimate": cache.token_estimate,
+        }
 
     except Exception as exc:
         db.rollback()

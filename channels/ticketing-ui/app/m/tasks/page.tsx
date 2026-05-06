@@ -9,10 +9,12 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { listMyTasks, completeTask, type TicketTask } from "@/lib/api";
 import { TASK_TYPES } from "@/lib/mobile-constants";
+import { TaskTypeIcon } from "@/lib/icons";
+import { Check, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 
 function taskTypeInfo(key: string) {
-  return TASK_TYPES.find((t) => t.key === key) ?? { icon: "📋", label: key.replace(/_/g, " ") };
+  return TASK_TYPES.find((t) => t.key === key) ?? { icon: "ClipboardList", label: key.replace(/_/g, " ") };
 }
 
 function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: TicketTask) => void }) {
@@ -36,7 +38,7 @@ function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: Tick
     <div className={`mx-4 my-2 rounded-xl border ${overdue ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
       <div className="px-4 py-3">
         <div className="flex items-start gap-2 mb-1">
-          <span className="text-lg">{info.icon}</span>
+          <TaskTypeIcon name={info.icon} size={18} strokeWidth={2} className="shrink-0 text-amber-600" />
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm text-gray-900">{info.label}</div>
             {task.description && (
@@ -64,7 +66,7 @@ function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: Tick
               : "bg-amber-500 active:bg-amber-600 text-white"
           }`}
         >
-          {completing ? "Completing…" : "✓ Mark Complete"}
+          {completing ? "Completing…" : <><Check size={14} strokeWidth={2.5} className="inline mr-1" />Mark Complete</>}
         </button>
       </div>
     </div>
@@ -107,7 +109,7 @@ export default function MobileTasksPage() {
           <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
         ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
-            <span className="text-4xl">✅</span>
+            <CheckCircle2 size={40} strokeWidth={1.25} className="text-green-200" />
             <span className="text-sm text-gray-400">No pending tasks</span>
           </div>
         ) : (

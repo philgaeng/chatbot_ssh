@@ -1,0 +1,11 @@
+# GRM Integration Dependencies
+# MySQL Database Connector
+mysql-connector-python>=9.1.0
+
+# SSH Tunnel Support
+paramiko==3.4.0
+
+# Additional utilities for GRM integration
+cryptography>=42.0.4  # Required for paramiko (CVE fix: NULL pointer dereference)
+bcrypt==4.1.2         # For SSH key authentication
+pynacl==1.5.0         # For SSH key authentication 

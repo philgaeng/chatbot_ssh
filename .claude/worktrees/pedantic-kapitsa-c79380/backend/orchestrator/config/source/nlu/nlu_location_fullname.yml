@@ -1,0 +1,108 @@
+version: "3.1"
+
+nlu:
+  ######### basic intent #########
+
+  - intent: full_names_nepali
+    examples: |
+      - राम शर्मा
+      - श्याम पाण्डे
+      - हरि अधिकारी
+      - कृष्ण राज
+      - गोपाल शाह
+      - मोहन राणा
+      - सुरेश थापा
+      - महेश मगर
+      - विशाल गुरुङ
+      - अजय तामाङ
+      - राज लिम्बू
+      - कुमार राई
+      - प्रकाश लामा
+      - दीपक शेर्पा
+      - सुनील भट्ट
+
+  - intent: full_names_english
+    examples: |
+      - Ram Sharma
+      - Shyam Pandey
+      - Hari Acharya
+      - Krishna Raj
+      - Gopal Shah
+      - Mohan Rai
+      - Suraj Thapa
+      - Mahesh Magar
+      - Vishal Gurung
+      - Ajay Tamang
+      - Raj Limbu
+      - Kumar Rai
+      - Prashant Lama
+      - Deepak Sherpa
+
+  - intent: full_names_english_with_middle_name
+    examples: |
+      - Ram Kumar Sharma
+      - Shyam Kumar Pandey
+      - Hari Kumar Acharya
+      - Krishna Kumar Raj
+      - Gopal Kumar Shah
+      - Mohan Kumar Rai
+      - Suraj Kumar Thapa
+      - Mahesh Magar Kumar
+      - Vishal Kumar Gurung
+      - Ajay Tamang Kumar
+      - Raj Kumar Limbu
+      - Kumar Rai Kumar
+      - Prashant Lama Kumar
+      - Deepak Sherpa Kumar
+
+  - intent: full_names_nepali_with_middle_name
+    examples: |
+      - श्री राम कुमार शर्मा
+      - श्रीमती श्याम कुमार पाण्डे
+      - श्रीमती हरि अधिकारी
+      - श्री कृष्ण कुमार राज
+      - श्री गोपाल शाह
+      - श्री मोहन कुमार राणा
+      - श्री सुरेश कुमार थापा
+      - श्री महेश मगर
+      - श्री विशाल कुमार गुरुङ
+      - श्री अजय कुमार तामाङ
+      - श्री राज कुमार लिम्बू
+      - श्रीमती कुमारी राई
+
+  - intent: location_names_english
+    examples: |
+      - Shadanand
+      - Bhojpur
+      - Hatuwagadhi
+      - Ramprasad Rai
+      - Aamchok
+      - Tyamke Maiyum
+      - Arun
+      - Pauwadungma
+      - Salpasilichho
+      - Dhankuta
+      - Pakhribas
+      - Mahalaxmi
+      - Sangurigadhi
+      - Chaubise
+      - Sahidbhumi
+
+  - intent: location_names_nepali
+    examples: |
+      - षडानन्द
+      - भोजपुर
+      - हतुवागढी
+      - रामप्रसाद राई
+      - आमचोक
+      - टेम्केमैयुङ
+      - अरुण
+      - पौवादुङमा
+      - साल्पासिलिछो
+      - धनकुटा
+      - पाख्रिबास
+      - महालक्ष्मी
+      - साँगुरीगढी
+      - चौविसे
+      - सहिदभूमि
+      - नेपाल प्रदेश

@@ -25,7 +25,7 @@ from ticketing.models.ticket_task import TicketTask
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-VALID_TASK_TYPES = {"SITE_VISIT", "FOLLOW_UP_CALL", "SYSTEM_NOTE", "DOCUMENT_PHOTO"}
+VALID_TASK_TYPES = {"SITE_VISIT", "FOLLOW_UP_CALL", "SYSTEM_NOTE", "DOCUMENT_PHOTO", "ESCALATION_REVIEW"}
 
 
 def _now() -> datetime:

@@ -24,6 +24,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Widen alembic_version.version_num to accommodate long revision IDs.
+    # The default VARCHAR(32) is too narrow for IDs like this one (35 chars).
+    op.execute(
+        """
+        ALTER TABLE ticketing.alembic_version
+        ALTER COLUMN version_num TYPE VARCHAR(128);
+        """
+    )
     op.execute(
         """
         ALTER TABLE ticketing.projects

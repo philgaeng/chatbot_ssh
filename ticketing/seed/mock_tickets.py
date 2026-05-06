@@ -168,14 +168,16 @@ def seed_mock_officer_scopes(db: Session) -> None:
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
-        # SEAH HQ: no location = covers all locations for ADB / KL_ROAD
+        # SEAH HQ: no location = sees all DOR SEAH tickets across KL_ROAD
+        # (organization_id=DOR because all tickets are owned by DOR, the executing agency)
         dict(user_id=OFFICER_SEAH_HQ, role_key="seah_hq_officer",
-             organization_id=ORG_ADB_ID, location_code=None,
+             organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
-        # ADB observer: no location = observes everything
+        # ADB observer: no location = observes all DOR standard tickets
+        # (organization_id=DOR because tickets belong to the executing agency, not the donor)
         dict(user_id=OFFICER_ADB_OBSERVER, role_key="adb_hq_safeguards",
-             organization_id=ORG_ADB_ID, location_code=None,
+             organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
         # Super admin: no location, no project = global scope
@@ -383,6 +385,7 @@ def seed_mock_tickets(db: Session) -> None:
     # ── Supporting tickets: realistic queue ───────────────────────────────────
 
     # T3: L1 new, unacknowledged (shows red NEW badge)
+    # Location = Morang (NP_D006) so it falls within Site L1's scope
     t3 = _make_ticket(
         grievance_id="GRV-2025-003",
         workflow_id=WORKFLOW_STANDARD_ID,
@@ -390,11 +393,11 @@ def seed_mock_tickets(db: Session) -> None:
         is_seah=False,
         status_code="OPEN",
         priority="NORMAL",
-        location_code=LOC_JHAPA_CODE,
+        location_code=LOC_MORANG_CODE,
         project_code="KL_ROAD",
         summary="Road widening has damaged boundary wall of residential property. Owner requesting compensation.",
         categories="Property Damage, Compensation",
-        grievance_location="Birtamod, Jhapa District, Province 1",
+        grievance_location="Biratnagar, Morang District, Province 1",
         assigned_to=OFFICER_SITE_L1,
         created_days_ago=1,
         complainant_id="CPL-2025-003",
@@ -404,13 +407,13 @@ def seed_mock_tickets(db: Session) -> None:
     db.add(_event(t3, "ASSIGNED", 1, new_assigned=OFFICER_SITE_L1, step_id=STEP_L1_ID,
                   notify_user_id=OFFICER_SITE_L1, seen=False))
 
-    # T4: L2 in progress, SLA close
+    # T4: escalated to L2 — waiting for PIU acknowledgment (shows Escalated tab + badge)
     t4 = _make_ticket(
         grievance_id="GRV-2025-004",
         workflow_id=WORKFLOW_STANDARD_ID,
         step_id=STEP_L2_ID,
         is_seah=False,
-        status_code="IN_PROGRESS",
+        status_code="ESCALATED",  # Awaiting PIU L2 acknowledgment
         priority="HIGH",
         location_code=LOC_MORANG_CODE,
         project_code="KL_ROAD",
@@ -424,11 +427,12 @@ def seed_mock_tickets(db: Session) -> None:
     )
     db.add(t4)
     db.add(_event(t4, "CREATED", 8, new_status="OPEN", step_id=STEP_L1_ID, created_by="system"))
+    db.add(_event(t4, "ACKNOWLEDGED", 7, old_status="OPEN", new_status="IN_PROGRESS",
+                  step_id=STEP_L1_ID, created_by=OFFICER_SITE_L1,
+                  note="Conducted site inspection. Night blasting confirmed. Escalating to PIU."))
     db.add(_event(t4, "ESCALATED", 5, old_status="IN_PROGRESS", new_status="ESCALATED",
-                  step_id=STEP_L2_ID, created_by=OFFICER_SITE_L1))
-    db.add(_event(t4, "ACKNOWLEDGED", 4, old_status="ESCALATED", new_status="IN_PROGRESS",
-                  step_id=STEP_L2_ID, created_by=OFFICER_PIU_L2,
-                  note="Contacted contractor operations manager. Awaiting blast schedule review."))
+                  step_id=STEP_L2_ID, created_by=OFFICER_SITE_L1,
+                  notify_user_id=OFFICER_PIU_L2, seen=False))
 
     # T5: Resolved (shows historical view)
     t5 = _make_ticket(
@@ -456,6 +460,7 @@ def seed_mock_tickets(db: Session) -> None:
                   note="Contractor removed stockpile within 24 hours. Complainant confirmed access restored."))
 
     # T6: SLA breached at L1 — shows overdue indicator
+    # Location = Morang (NP_D006) so it falls within Site L1's scope and appears in their queue
     t6 = _make_ticket(
         grievance_id="GRV-2025-005",
         workflow_id=WORKFLOW_STANDARD_ID,
@@ -463,11 +468,11 @@ def seed_mock_tickets(db: Session) -> None:
         is_seah=False,
         status_code="OPEN",
         priority="NORMAL",
-        location_code=LOC_PROVINCE1_CODE,
+        location_code=LOC_MORANG_CODE,
         project_code="KL_ROAD",
         summary="Culvert installation is blocking irrigation channel serving 12 farms. Crops at risk.",
         categories="Agricultural Impact, Water Access",
-        grievance_location="Itahari, Sunsari District, Province 1",
+        grievance_location="Urlabari, Morang District, Province 1",
         assigned_to=OFFICER_SITE_L1,
         created_days_ago=4,
         sla_breached=True,  # SLA of 2 days breached
@@ -482,6 +487,31 @@ def seed_mock_tickets(db: Session) -> None:
     logger.info("  + scenario 1 (dust): GRV-2025-001 at L3 GRC")
     logger.info("  + scenario 2 (SEAH): GRV-2025-SEAH-001 at L1 investigation")
     logger.info("  + supporting tickets: GRV-2025-002 through GRV-2025-005")
+
+
+def seed_default_settings(db: Session) -> None:
+    """Upsert default settings rows (safe to run multiple times)."""
+    from ticketing.models.settings import Settings
+
+    ORG_ROLES = [
+        {"key": "project_owner",         "label": "Project Owner",                          "description": "Government agency that owns and executes the project (e.g. DOR)"},
+        {"key": "donor",                  "label": "Donor / Lender",                         "description": "Multilateral or bilateral financing institution (e.g. ADB)"},
+        {"key": "executing_agency",       "label": "Executing Agency",                       "description": "Central ministry or agency responsible for project oversight"},
+        {"key": "implementing_agency",    "label": "Implementing Agency",                    "description": "PD/PIU or other unit responsible for day-to-day implementation"},
+        {"key": "main_contractor",        "label": "Main Contractor",                        "description": "Primary civil works contractor"},
+        {"key": "subcontractor_t1",       "label": "Subcontractor (Tier 1)",                 "description": "First-tier subcontractor to the main contractor"},
+        {"key": "subcontractor_t2",       "label": "Subcontractor (Tier 2)",                 "description": "Second-tier subcontractor"},
+        {"key": "supervision_consultant", "label": "CSC – Construction Supervision Consultant", "description": "Independent consultant supervising construction quality"},
+        {"key": "specialized_consultant", "label": "Specialized Consultant",                 "description": "Safeguards, environment, social, or other specialist consultant"},
+    ]
+
+    existing = db.get(Settings, "org_roles")
+    if existing is None:
+        db.add(Settings(key="org_roles", value=ORG_ROLES))
+        logger.info("Seeded org_roles setting (%d roles)", len(ORG_ROLES))
+    else:
+        existing.value = ORG_ROLES
+        logger.info("Updated org_roles setting (%d roles)", len(ORG_ROLES))
 
 
 def seed_all(reset: bool = False) -> None:
@@ -520,6 +550,10 @@ def seed_all(reset: bool = False) -> None:
         seed_mock_officer_scopes(db)
         logger.info("Seeding mock tickets (demo scenarios)...")
         seed_mock_tickets(db)
+
+        # Seed default settings (idempotent — upsert)
+        logger.info("Seeding default settings...")
+        seed_default_settings(db)
 
         db.commit()
         logger.info("All seed data committed successfully.")

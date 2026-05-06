@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Clock } from "lucide-react";
 import { getSla, type SlaStatus, type SlaUrgency } from "@/lib/api";
 
 const URGENCY_CLASS: Record<SlaUrgency, string> = {
@@ -47,7 +48,7 @@ export function SlaCountdown({ ticketId, initial, className = "" }: Props) {
 
   return (
     <span className={`text-xs flex items-center gap-1 ${cls} ${className}`}>
-      <span>⏱</span>
+      <Clock size={12} strokeWidth={2} />
       <span>{label}</span>
     </span>
   );

@@ -1,9 +1,11 @@
 # actions/helpers.py
 
+import copy
 import csv
 import logging
 from datetime import datetime
 import json
+from collections import defaultdict
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -36,9 +38,13 @@ def _norm_district(name: Optional[str]) -> str:
 class ContactLocationValidator:
     """
     Validate and normalize location names using fuzzy matching.
-    Uses cleaned JSON under dev-resources (location_dataset_*_cleaned.json) and
-    municipality / GRM office rows from Postgres when seeded, else CSV fallbacks.
+    Province / district / municipality hierarchy is loaded from ticketing.locations
+    + ticketing.location_translations when available; otherwise cleaned JSON
+    (location_dataset_*_cleaned.json). Villages and GRM office rows use Postgres
+    when seeded, else CSV fallbacks.
     """
+
+    _LOCATION_COUNTRY_CODE = "NP"
 
     def __init__(self, json_path: Optional[str] = None) -> None:
         json_path = json_path or LOCATION_FOLDER_PATH
@@ -48,13 +54,118 @@ class ContactLocationValidator:
         self.json_path_office_in_charge = f"{self._json_base}_GRM_list_office_in_charge.csv"
         self.logger = logging.getLogger(__name__)
         self.locations_both_language: Dict[str, Any] = {}
-        with open(json_path_en, "r", encoding="utf-8") as file:
-            self.locations_both_language["en"] = self._normalize_locations(json.load(file))
-        with open(json_path_ne, "r", encoding="utf-8") as file:
-            self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
+        db_trees = self._load_province_district_municipality_from_db()
+        if db_trees is not None:
+            self.locations_both_language["en"] = self._normalize_locations(db_trees["en"])
+            self.locations_both_language["ne"] = self._normalize_locations(db_trees["ne"])
+            n_prov = len(self.locations_both_language["en"])
+            self.logger.info(
+                "LOCATION_HIERARCHY_SOURCE=database (ticketing.locations + "
+                "location_translations, NP): %s provinces after normalize; DB=%s@%s:%s",
+                n_prov,
+                DB_CONFIG.get("database"),
+                DB_CONFIG.get("host"),
+                DB_CONFIG.get("port"),
+            )
+        else:
+            with open(json_path_en, "r", encoding="utf-8") as file:
+                self.locations_both_language["en"] = self._normalize_locations(json.load(file))
+            with open(json_path_ne, "r", encoding="utf-8") as file:
+                self.locations_both_language["ne"] = self._normalize_locations(json.load(file))
+            self.logger.info(
+                "LOCATION_HIERARCHY_SOURCE=json_files (%s / *_ne_cleaned.json)",
+                json_path_en,
+            )
 
         self.municipality_villages: List[Dict[str, str]] = self._load_municipality_villages()
         self._office_rows: List[Dict[str, Any]] = self._load_office_rows()
+
+    def _build_location_tree_for_lang(self, lang_code: str) -> Optional[List[Dict[str, Any]]]:
+        """Build province → district → municipality list from ticketing schema."""
+        try:
+            conn = psycopg2.connect(
+                host=DB_CONFIG["host"],
+                database=DB_CONFIG["database"],
+                user=DB_CONFIG["user"],
+                password=DB_CONFIG["password"],
+                port=DB_CONFIG["port"],
+            )
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        SELECT l.location_code, l.level_number, l.parent_location_code,
+                               lt.name
+                        FROM ticketing.locations l
+                        INNER JOIN ticketing.location_translations lt
+                          ON lt.location_code = l.location_code
+                         AND lt.lang_code = %s
+                        WHERE l.country_code = %s
+                          AND COALESCE(l.is_active, TRUE) = TRUE
+                          AND l.level_number IN (1, 2, 3)
+                        ORDER BY l.level_number, l.location_code
+                        """,
+                        (lang_code, self._LOCATION_COUNTRY_CODE),
+                    )
+                    rows = cur.fetchall()
+            finally:
+                conn.close()
+        except Exception as e:
+            self.logger.warning(
+                "Could not load location tree from DB for lang=%s (%s)", lang_code, e
+            )
+            return None
+
+        if not rows:
+            return None
+
+        by_parent: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
+        for r in rows:
+            parent = r.get("parent_location_code")
+            by_parent[parent].append(dict(r))
+
+        roots = by_parent.get(None) or []
+        provinces_l1 = [r for r in roots if int(r.get("level_number") or 0) == 1]
+        if not provinces_l1:
+            return None
+
+        out: List[Dict[str, Any]] = []
+        for p in sorted(provinces_l1, key=lambda x: (x.get("name") or "", x["location_code"])):
+            pdata: Dict[str, Any] = {"name": (p.get("name") or "").strip(), "districts": []}
+            for d in sorted(
+                by_parent.get(p["location_code"], []),
+                key=lambda x: (x.get("name") or "", x["location_code"]),
+            ):
+                if int(d.get("level_number") or 0) != 2:
+                    continue
+                ddata: Dict[str, Any] = {"name": (d.get("name") or "").strip(), "municipalities": []}
+                for m in sorted(
+                    by_parent.get(d["location_code"], []),
+                    key=lambda x: (x.get("name") or "", x["location_code"]),
+                ):
+                    if int(m.get("level_number") or 0) != 3:
+                        continue
+                    ddata["municipalities"].append(
+                        {"name": (m.get("name") or "").strip()}
+                    )
+                pdata["districts"].append(ddata)
+            out.append(pdata)
+        return out if out else None
+
+    def _load_province_district_municipality_from_db(
+        self,
+    ) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+        en_tree = self._build_location_tree_for_lang("en")
+        if not en_tree:
+            return None
+        ne_tree = self._build_location_tree_for_lang("ne")
+        if not ne_tree:
+            self.logger.warning(
+                "ticketing.locations has English but no Nepali translations; "
+                "using English labels for Nepali slot (prefer seeding ne translations)"
+            )
+            ne_tree = copy.deepcopy(en_tree)
+        return {"en": en_tree, "ne": ne_tree}
 
     def _load_municipality_villages(self) -> List[Dict[str, str]]:
         try:

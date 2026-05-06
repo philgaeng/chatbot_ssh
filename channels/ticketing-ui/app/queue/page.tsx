@@ -6,6 +6,7 @@ import { listTickets, type TicketListItem } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import { IconChevronRight } from "@/lib/icons";
 
 // ── Tab definition ────────────────────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ function SummaryTile({
     >
       <div className={`text-2xl ${countCls}`}>{count}</div>
       <div className="text-sm font-medium text-gray-700 mt-0.5">{label}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-gray-600 mt-0.5">{sub}</div>}
     </button>
   );
 }
@@ -73,7 +74,7 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
       {/* ID + summary */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-400 font-mono">{ticket.grievance_id}</span>
+          <span className="text-xs text-gray-600 font-mono">{ticket.grievance_id}</span>
           {ticket.is_seah && <SeahBadge />}
           <StatusBadge code={ticket.status_code} />
           <PriorityBadge priority={ticket.priority} />
@@ -81,7 +82,7 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
         <div className="text-sm text-gray-700 mt-0.5 truncate">
           {ticket.grievance_summary ?? "No summary"}
         </div>
-        <div className="text-xs text-gray-400 mt-0.5">
+        <div className="text-xs text-gray-600 mt-0.5">
           {[ticket.location_code, ticket.project_code].filter(Boolean).join(" · ")}
         </div>
       </div>
@@ -92,7 +93,7 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
       </div>
 
       {/* Assigned */}
-      <div className="hidden lg:block shrink-0 w-36 text-xs text-gray-400 truncate text-right">
+      <div className="hidden lg:block shrink-0 w-36 text-xs text-gray-600 truncate text-right">
         {ticket.assigned_to_user_id ?? "—"}
       </div>
 
@@ -102,7 +103,7 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
       </div>
 
       {/* Arrow */}
-      <span className="text-gray-300 shrink-0">›</span>
+      <IconChevronRight size={16} className="text-gray-400 shrink-0" />
     </Link>
   );
 }
@@ -223,9 +224,9 @@ export default function QueuePage() {
       {/* Ticket list */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+          <div className="p-8 text-center text-gray-600 text-sm">Loading…</div>
         ) : tickets.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">No tickets in this view.</div>
+          <div className="p-8 text-center text-gray-600 text-sm">No tickets in this view.</div>
         ) : (
           <div>
             {/* Column headers */}

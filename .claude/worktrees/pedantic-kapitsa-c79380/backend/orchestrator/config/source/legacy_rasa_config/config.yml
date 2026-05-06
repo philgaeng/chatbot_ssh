@@ -1,0 +1,37 @@
+recipe: default.v1
+assistant_id: 20241128-101605-happy-jail
+language: en
+
+pipeline:
+  - name: SpacyNLP
+    model: "en_core_web_md"
+  - name: SpacyTokenizer
+  - name: SpacyFeaturizer
+  - name: RegexFeaturizer
+  - name: CountVectorsFeaturizer
+  - name: LexicalSyntacticFeaturizer
+  - name: DIETClassifier
+    epochs: 120
+    constrain_similarities: true
+  - name: EntitySynonymMapper
+  - name: FallbackClassifier
+    threshold: 0.2
+    ambiguity_threshold: 0.05
+
+policies:
+  - name: AugmentedMemoizationPolicy
+    max_history: 10
+    priority: 2
+  - name: MemoizationPolicy
+    max_history: 10
+    priority: 3
+  - name: TEDPolicy
+    max_history: 8
+    epochs: 100
+    constrain_similarities: true
+    cache_dir: null
+  - name: RulePolicy
+    core_fallback_threshold: 0.1
+    core_fallback_action_name: "action_custom_fallback"
+    enable_fallback_prediction: true
+    enable_prediction_debugging: true

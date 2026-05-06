@@ -72,11 +72,99 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
 
 ---
 
+## Running migrations in Docker (quick reference)
+
+All commands assume you are in the repo root and have the compose stack running (at minimum the `db` container).
+
+```bash
+# Ticketing stream — upgrade to head
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+
+# Public stream — upgrade to head
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c migrations/public/alembic.ini upgrade head
+
+# Both streams at once (Makefile shortcut)
+make migrate_all
+
+# Check current revision (ticketing)
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c ticketing/migrations/alembic.ini current
+
+# Check chain heads (should always be exactly one per stream)
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c ticketing/migrations/alembic.ini heads
+```
+
+> **If `current` shows the previous head (not the new revision):** the backend image is stale.
+> Rebuild it before running migrations:
+> ```bash
+> docker compose build --no-cache backend
+> # then re-run the upgrade command above
+> ```
+> A container that reports `Running` in `docker ps` may still be running the previous image.
+> Always rebuild after pulling a branch that adds new migration files.
+
+---
+
+## Common migration errors and fixes
+
+### `KeyError: '<revision_id>_<slug>'` — full slug used as `down_revision`
+
+**Symptom:**
+```
+KeyError: 'h5e7g9i1k3m5_add_project_chatbot_url'
+```
+or similar when running `alembic heads`, `current`, or `upgrade head`.
+
+**Cause:** A migration file has a `down_revision` that includes the human-readable
+slug in addition to the hex ID, e.g.:
+```python
+down_revision = "h5e7g9i1k3m5_add_project_chatbot_url"   # WRONG
+```
+Alembic's revision map is keyed by the **hex ID only**. The full slug is only a
+comment artifact — it must never appear in `down_revision`.
+
+**Fix:**
+```python
+down_revision = "h5e7g9i1k3m5"   # correct — hex ID only
+```
+Grep for the pattern before committing any new migration:
+```bash
+grep -r "down_revision" ticketing/migrations/versions/ | grep "_[a-z]"
+# should produce no output (all values should be pure hex IDs)
+```
+
+**This happened on 2026-05-05** in `i6j8l0n2p4_ticket_context_cache.py`.
+Fixed in commit `f4a428c`.
+
+---
+
+### `alembic heads` shows a revision lower than expected — stale image
+
+**Symptom:** `alembic heads` or `alembic current` returns an older revision even
+though the migration file exists in `ticketing/migrations/versions/`.
+
+**Cause:** The running Docker image was built before the new migration file was
+added to the codebase. `docker compose run --rm backend` runs whatever is in the
+image, not the live filesystem.
+
+**Fix:**
+```bash
+docker compose build --no-cache backend
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+```
+
+---
+
 ## Review Checklist for PRs
 
 - `python -m alembic -c ticketing/migrations/alembic.ini heads` returns exactly one head (ticketing stream).
 - `python -m alembic -c migrations/public/alembic.ini heads` returns exactly one head (public stream).
 - Ticketing migration files include clear `down_revision` and the standard header: only `ticketing.*`, never `public.*`.
+- **`down_revision` uses the hex ID only** — never the full `<hex>_<slug>` form (causes `KeyError` at runtime).
 - Public migration files include the standard header: only `public.*`, never `ticketing.*`.
 - No new schema-changing script added under `scripts/database/` for ticketing.
 - If the PR changes **`public.*`** schema: include a new revision under `migrations/public/versions/` (or document why not, e.g. bootstrap-only with follow-up migration).

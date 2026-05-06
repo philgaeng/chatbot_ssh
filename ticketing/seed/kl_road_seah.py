@@ -70,6 +70,10 @@ def seed_seah_workflow(db: Session) -> None:
             step_key="SEAH_LEVEL_1_NATIONAL",
             display_name="SEAH Level 1 – National Officer Investigation",
             assigned_role_key="seah_national_officer",
+            supervisor_role="seah_hq_officer",
+            informed_roles=[],               # SEAH: no auto-informed; supervisor approval required to add
+            observer_roles=[],
+            informed_pii_access=False,       # Informed cannot see complainant PII on SEAH cases
             stakeholders=["SEAH National Officer", "Complainant (confidential)"],
             response_time_hours=24,
             resolution_time_days=7,
@@ -88,6 +92,10 @@ def seed_seah_workflow(db: Session) -> None:
             step_key="SEAH_LEVEL_2_HQ",
             display_name="SEAH Level 2 – HQ Officer Review",
             assigned_role_key="seah_hq_officer",
+            supervisor_role="adb_hq_exec",
+            informed_roles=[],
+            observer_roles=[],
+            informed_pii_access=False,
             stakeholders=["SEAH HQ Officer", "SEAH National Officer", "Legal if required"],
             response_time_hours=24,
             resolution_time_days=15,

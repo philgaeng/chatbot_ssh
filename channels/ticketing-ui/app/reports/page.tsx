@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BarChart2, Download, Loader2, Settings } from "lucide-react";
 import { exportReport } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 
@@ -41,7 +42,10 @@ export default function ReportsPage() {
 
       {/* Export card */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">📊 Export Report</h2>
+        <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-1.5">
+          <BarChart2 size={15} strokeWidth={2} className="text-blue-500" />
+          Export Report
+        </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
           <div>
@@ -80,9 +84,9 @@ export default function ReportsPage() {
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition disabled:opacity-50 flex items-center gap-2"
         >
           {downloading ? (
-            <>⏳ Preparing…</>
+            <><Loader2 size={15} strokeWidth={2} className="animate-spin" /> Preparing…</>
           ) : (
-            <>📥 Download XLSX</>
+            <><Download size={15} strokeWidth={2} /> Download XLSX</>
           )}
         </button>
       </div>
@@ -121,7 +125,8 @@ export default function ReportsPage() {
             to: ADB National Project Director, ADB HQ Safeguards, MoPIT representative, DOR representative.
           </p>
           <div className="bg-gray-50 rounded border border-gray-200 px-4 py-3 text-xs text-gray-500">
-            ⚙️ Report schedule and recipients are configured in{" "}
+            <Settings size={12} strokeWidth={2} className="inline mr-1 text-gray-400" />
+            Report schedule and recipients are configured in{" "}
             <a href="/settings" className="text-blue-500 hover:underline">Settings → Report Schedule</a>.
           </div>
         </div>

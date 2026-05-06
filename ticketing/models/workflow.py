@@ -73,6 +73,17 @@ class WorkflowStep(Base):
     # SLA — null = no specific timeline (e.g. Level 4 legal)
     response_time_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resolution_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ── Tier model (spec 12) ─────────────────────────────────────────────────
+    # supervisor_role: role key for the step supervisor (notified on escalation/SLA)
+    supervisor_role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # informed_roles: role keys auto-added as Informed when ticket enters this step
+    # (e.g. grc_member at L3). Previous-step actors are added dynamically by the engine.
+    informed_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # observer_roles: role keys granted read-only viewer access, zero notifications
+    observer_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # informed_pii_access: if True, Informed-tier users can see complainant PII
+    informed_pii_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # stakeholders: legacy display field (human-readable names, not role keys) — kept for UI compat
     stakeholders: Mapped[list | None] = mapped_column(JSON, nullable=True)
     expected_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

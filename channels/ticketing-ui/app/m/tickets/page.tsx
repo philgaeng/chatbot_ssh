@@ -9,7 +9,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { listTickets, type TicketListItem } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { urgencyDot, type SlaUrgency } from "@/lib/mobile-constants";
+import { urgencyDotCls, type SlaUrgency } from "@/lib/mobile-constants";
+import { UrgencyDot, SeahBadge } from "@/lib/icons";
+import { Search } from "lucide-react";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
   const urgency: SlaUrgency = ticket.sla_breached ? "overdue" : "none";
@@ -20,12 +22,12 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
         ticket.is_seah ? "border-l-4 border-l-red-500" : ""
       }`}
     >
-      <span className="text-base shrink-0">{urgencyDot(urgency)}</span>
+      <UrgencyDot urgency={urgency} className="w-2.5 h-2.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-xs text-gray-400 font-mono truncate">{ticket.grievance_id}</span>
           {ticket.is_seah && (
-            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1 rounded">🔒</span>
+            <SeahBadge size="xs" />
           )}
         </div>
         <div className="text-sm text-gray-800 truncate">
@@ -80,7 +82,7 @@ export default function MobileAllTicketsPage() {
         </div>
         {/* Search */}
         <div className="relative mb-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+          <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={search}
@@ -97,7 +99,7 @@ export default function MobileAllTicketsPage() {
           <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
-            <span className="text-3xl">🔍</span>
+            <Search size={32} strokeWidth={1.25} className="text-gray-200" />
             <span className="text-sm text-gray-400">No tickets found</span>
           </div>
         ) : (

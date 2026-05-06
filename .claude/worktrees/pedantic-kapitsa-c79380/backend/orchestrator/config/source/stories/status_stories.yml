@@ -1,0 +1,165 @@
+version: "3.1"
+# #Stories that enable an user to retrieve its grievance and check its status
+# #The first story is for retrieving the grievance with phone number and OTP verification
+# #The second story is for retrieving the grievance with the grievance ID
+# #The third story is for checking the status of the grievance that happens once the grievance is retrieved
+
+stories:
+  - story: Happy path - retrieve grievance with phone and check status in english
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_english
+      - action: action_set_english
+      - slot_was_set:
+          - language_code: "en"
+      - action: action_main_menu
+      - intent: start_status_check
+      - action: action_start_status_check
+      - slot_was_set:
+          - story_main: "status_check"
+      - action: form_status_check_1
+      - active_loop: form_status_check_1
+      - active_loop: null
+      - action: action_next_action
+
+  - story: Happy path - retrieve grievance with phone and check status in nepali
+    steps:
+      - intent: introduce
+      - action: action_introduce
+      - intent: set_nepali
+      - action: action_set_nepali
+      - slot_was_set:
+          - language_code: "ne"
+      - action: action_main_menu
+      - intent: start_status_check
+      - action: action_start_status_check
+      - slot_was_set:
+          - story_main: "status_check"
+      - action: form_status_check_1
+      - active_loop: form_status_check_1
+      - active_loop: null
+      - action: action_next_action
+
+  - story: status check flow exit without retrieval
+    steps:
+      - action: form_status_check_1
+      - active_loop: form_status_check_1
+      - slot_was_set:
+          - story_route: "slot_skipped"
+      - active_loop: null
+      - action: action_next_action
+      - action: form_status_check_skip
+      - active_loop: form_status_check_skip
+      - active_loop: null
+      - action: action_next_action
+#   - story: status check flow with phone number
+#     steps:
+#       - action: form_status_check_1
+#       - active_loop: form_status_check_1
+#       - slot_was_set:
+#           - story_main: "status_check"
+#           - story_route: "route_status_check_phone"
+#           - complainant_phone: "9800000000"
+#           - status_check_complainant_phone_valid: True
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_otp
+#       - active_loop: form_otp
+#       - active_loop: null
+#       - action: action_next_action
+#       - slot_was_set:
+#           - otp_status: verified
+#       - action: form_status_check_2
+#       - active_loop: form_status_check_2
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_story_step
+
+#   - story: status check flow with phone number and full name
+#     steps:
+#       - action: form_status_check_1
+#       - active_loop: form_status_check_1
+#       - slot_was_set:
+#           - story_main: "status_check"
+#           - story_route: "route_status_check_phone"
+#           - complainant_phone: "9800000000"
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_otp
+#       - active_loop: form_otp
+#       - active_loop: null
+#       - action: action_next_action
+#       - slot_was_set:
+#           - otp_status: verified
+#       - action: form_status_check_2
+#       - active_loop: form_status_check_2
+#       - slot_was_set:
+#           - status_check_complainant_full_name: "Kamal Kumar Shrestha"
+#           - status_check_grievance_id_selected: "B-GR-20250926-KOJH-9718"
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_story_step
+
+#   - story: status check flow with phone number and request follow up
+#     steps:
+#       - slot_was_set:
+#           - story_main: "status_check"
+#           - story_route: "route_status_check_phone"
+#           - complainant_phone: "9800000000"
+#           - status_check_complainant_phone_valid: True
+#       - action: action_next_action
+#       - action: form_status_check_1
+#       - active_loop: form_status_check_1
+#       - action: action_next_action
+#       - action: form_otp
+#       - active_loop: form_otp
+#       - active_loop: null
+#       - slot_was_set:
+#           - otp_status: verified
+#       - action: form_status_check_2
+#       - active_loop: form_status_check_2
+#       - slot_was_set:
+#           - status_check_complainant_full_name: "Kamal Kumar Shrestha"
+#           - status_check_grievance_id_selected: "B-GR-20250926-KOJH-9718"
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_story_step
+
+#   - story: status check flow with grievance ID and request follow up
+#     steps:
+#       - action: form_status_check_1
+#       - active_loop: form_status_check_1
+#       - slot_was_set:
+#           - story_main: "status_check"
+#           - story_route: "route_status_check_grievance_id"
+#           - status_check_grievance_id_selected: "B-GR-20250926-KOJH-9718"
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_story_step
+#       - slot_was_set:
+#           - story_step: request_follow_up
+#       - active_loop: null
+#       - action: form_otp
+#       - active_loop: form_otp
+#       - active_loop: null
+#       - action: action_next_action
+
+#   - story: status check flow with grievance ID and request follow up
+#     steps:
+#       - action: form_status_check_1
+#       - active_loop: form_status_check_1
+#       - slot_was_set:
+#           - story_main: "status_check"
+#           - story_route: "route_status_check_grievance_id"
+#           - status_check_grievance_id_selected: "B-GR-20250926-KOJH-9718"
+#       - active_loop: null
+#       - action: action_next_action
+#       - action: form_story_step
+#       - slot_was_set:
+#           - story_step: status_check_modify
+#       - active_loop: null
+#       - action: form_otp
+#       - active_loop: form_otp
+#       - active_loop: null
+#       - action: action_next_action

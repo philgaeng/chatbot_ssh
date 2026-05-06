@@ -45,3 +45,6 @@ class TicketViewer(Base):
     user_id: Mapped[str] = mapped_column(String(128), nullable=False)
     added_by_user_id: Mapped[str] = mapped_column(String(128), nullable=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    # tier: 'observer' (read-only, no notifications) | 'informed' (notes + tasks + notifications)
+    # Default 'observer' is back-compat with all existing viewer rows.
+    tier: Mapped[str] = mapped_column(String(32), nullable=False, default="observer")
