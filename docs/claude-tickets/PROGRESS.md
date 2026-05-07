@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `demo-seed-polish` — 2026-05-06
+> Last updated: `qr-token-feature` — 2026-05-07
 
 ---
 
@@ -40,7 +40,16 @@
   - GRV-2025-004: left in ESCALATED status (not pre-acknowledged) so Escalated tab is non-empty
   - Cleaned test/dev tickets (GRV-SYNC-TEST, GRV-TEST-PII, GRV-TEST-SCOPE) from DB via --reset reseed
 
+- ✅ **QR token feature** (2026-05-07):
+  - `ticketing/models/qr_token.py` — QrToken model (opaque 8-char hex, package_id FK, is_active, expires_at)
+  - `ticketing/migrations/versions/l2m4o6q8s0_qr_tokens_and_ticket_package.py` — creates `ticketing.qr_tokens`; adds `package_id` to `ticketing.tickets`
+  - `ticketing/api/routers/scan.py` — 4 endpoints (public scan + admin CRUD); `scan_url` returned in both create and list responses
+  - `ticketing/config/settings.py` — `chatbot_webchat_url` setting (overridable via env var, default: `https://grm.facets-ai.com/chat`)
+  - `channels/ticketing-ui/lib/api.ts` — QrTokenOut, QrTokenCreateResponse types + listQrTokens / createQrToken / revokeQrToken functions
+  - `channels/ticketing-ui/app/settings/page.tsx` — QR Tokens section in PackageRow (list tokens, generate, revoke) + QrCodeModal (QR image via qrserver.com, copy URL, download PNG)
+
 ### In progress / next
+- 🔲 **Chatbot-side QR integration** — Cursor task: read `?t=` URL param, call `GET /api/v1/scan/{token}`, pre-fill district/province slots, update welcome message, pass `package_id` in ticket dispatch (see handoff note in `docs/claude-tickets/`)
 - 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
 - 🔲 **Staging deploy** — Docker deploy to grm.stage.facets-ai.com
 
