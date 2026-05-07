@@ -27,6 +27,9 @@ class TicketingSettings(BaseSettings):
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
     messaging_api_key: str = ""
+    # User-facing webchat URL — embedded in QR codes so complainants reach the chatbot.
+    # Override via CHATBOT_WEBCHAT_URL env var in production.
+    chatbot_webchat_url: str = "https://grm.facets-ai.com/chat"
 
     # ── Keycloak (replaces AWS Cognito for self-hosted deployments) ──
     # Leave keycloak_issuer empty to keep the dev bypass (returns mock-super-admin).

@@ -62,6 +62,9 @@ class Ticket(Base):
     )
     # project_code kept for backwards compat during transition; deprecated — use project_id
     project_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # package_id — set when ticket is created via QR token scan; NULL for walk-in / phone intake
+    # Soft ref (no FK) so tickets without a QR context are always valid.
+    package_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # ── Status & workflow ──
     status_code: Mapped[str] = mapped_column(String(32), nullable=False, default="OPEN")
