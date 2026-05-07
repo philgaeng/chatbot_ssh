@@ -318,11 +318,12 @@ class BaseActionSubmit(BaseAction):
                 is_seah=bool(self.grievance_sensitive_issue),
                 priority="HIGH" if grievance_data.get("grievance_high_priority") else "NORMAL",
                 location_code=grievance_data.get("location_code"),
-                project_code="KL_ROAD",
+                project_code=tracker.get_slot("project_code") or "KL_ROAD",
                 grievance_summary=tracker.get_slot("grievance_summary"),
                 grievance_categories=tracker.get_slot("grievance_categories"),
                 grievance_location=grievance_data.get("grievance_location"),
                 organization_id="DOR",
+                package_id=tracker.get_slot("package_id"),
             )
 
             return [
@@ -417,11 +418,12 @@ class ActionSubmitSeah(BaseActionSubmit):
                 is_seah=True,
                 priority="HIGH",
                 location_code=grievance_data.get("location_code"),
-                project_code="KL_ROAD",
+                project_code=tracker.get_slot("project_code") or "KL_ROAD",
                 grievance_summary=tracker.get_slot("grievance_summary"),
                 grievance_categories=tracker.get_slot("grievance_categories"),
                 grievance_location=grievance_data.get("grievance_location"),
                 organization_id="DOR",
+                package_id=tracker.get_slot("package_id"),
             )
 
             grievance_ref = result.get("grievance_id")

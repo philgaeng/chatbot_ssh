@@ -21,6 +21,7 @@ from ticketing.api.routers import reports
 from ticketing.api.routers import locations as locations_router
 from ticketing.api.routers import tasks as tasks_router
 from ticketing.api.routers import viewers as viewers_router
+from ticketing.api.routers import scan as scan_router
 from ticketing.config.settings import get_settings
 from ticketing.models.base import ensure_ticketing_schema
 
@@ -73,6 +74,7 @@ app.include_router(reports.router,          prefix="/api/v1", tags=["Reports"])
 app.include_router(locations_router.router, prefix="/api/v1", tags=["Locations & Projects"])
 app.include_router(tasks_router.router,     prefix="/api/v1", tags=["Tasks"])
 app.include_router(viewers_router.router,   prefix="/api/v1", tags=["Viewers"])
+app.include_router(scan_router.router,      prefix="/api/v1", tags=["QR Tokens"])
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

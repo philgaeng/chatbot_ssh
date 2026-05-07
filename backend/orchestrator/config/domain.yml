@@ -227,6 +227,31 @@ slots:
     influence_conversation: false
     mappings:
       - type: custom
+  qr_token:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  package_id:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  package_label:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  project_code:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  location_code:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
   last_message_saved:
     type: text
     influence_conversation: false

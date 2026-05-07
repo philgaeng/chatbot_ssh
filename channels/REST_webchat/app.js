@@ -97,6 +97,10 @@ function getUrlParams() {
     province: params.get("province"),
     district: params.get("district"),
     lang: params.get("lang"),
+    // QR-scan token (e.g. /chat?t=a3f9b2c1) — server-side resolves it to
+    // package + project + location and pre-fills slots. Falls back gracefully
+    // if invalid/expired.
+    t: params.get("t"),
   };
 }
 
@@ -249,18 +253,22 @@ async function sendIntroduceMessage() {
     return;
   }
 
-  const { province, district } = getUrlParams();
+  const { province, district, t } = getUrlParams();
   const flaskSessionId = window.flaskSessionId || window.getSessionId();
-  const initialMessage =
-    province && district
-      ? `/introduce{"province": "${province}", "district": "${district}", "flask_session_id": "${flaskSessionId}"}`
-      : `/introduce{"flask_session_id": "${flaskSessionId}"}`;
+  const introducePayload = {
+    flask_session_id: flaskSessionId,
+  };
+  if (province) introducePayload.province = province;
+  if (district) introducePayload.district = district;
+  if (t) introducePayload.t = t;
+  const initialMessage = `/introduce${JSON.stringify(introducePayload)}`;
 
   console.log("Preparing to send initial message:", initialMessage);
 
   const ok = await restSendMessage(initialMessage, {
     province,
     district,
+    t,
     flask_session_id: flaskSessionId,
   });
 

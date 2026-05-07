@@ -290,6 +290,7 @@ def create_ticket(
         complainant_reply_owner_id=auto_assigned_id,
         priority=payload.priority,
         is_seah=payload.is_seah,
+        package_id=payload.package_id,
         is_deleted=False,
         sla_breached=False,
     )

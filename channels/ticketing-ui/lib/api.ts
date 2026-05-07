@@ -811,6 +811,38 @@ export async function importLocations(
   return resp.json();
 }
 
+// ── QR Tokens ─────────────────────────────────────────────────────────────────
+
+export interface QrTokenOut {
+  token: string;
+  package_id: string;
+  is_active: boolean;
+  created_at: string;
+  created_by_user_id: string | null;
+  expires_at: string | null;
+  scan_url: string | null;
+}
+
+export interface QrTokenCreateResponse {
+  token: string;
+  package_id: string;
+  scan_url: string;
+}
+
+export function listQrTokens(packageId: string): Promise<QrTokenOut[]> {
+  return apiFetch<QrTokenOut[]>(`/api/v1/packages/${packageId}/qr-tokens`);
+}
+
+export function createQrToken(packageId: string): Promise<QrTokenCreateResponse> {
+  return apiFetch<QrTokenCreateResponse>(`/api/v1/packages/${packageId}/qr-tokens`, {
+    method: "POST",
+  });
+}
+
+export function revokeQrToken(token: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/qr-tokens/${token}`, { method: "DELETE" });
+}
+
 // ── Officer jurisdiction scopes ───────────────────────────────────────────────
 
 export interface OfficerScope {
