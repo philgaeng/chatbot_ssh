@@ -157,21 +157,56 @@ Footer: *GRM Ticketing v0.1 · KL Road Project · ADB Loan 52097-003*
 
 ---
 
+## Design Philosophy (key differentiators for the pitch)
+
+### 1. Built for the Region
+The UI is designed specifically for **South Asia, Central Asia, and Southeast Asia** deployment contexts:
+- **High contrast** colour palette — readable in bright sunlight on low-spec devices
+- **Icon-first design** — every action and status has a clear icon so the interface works across literacy levels and languages
+- Tested for use on mid-range Android phones (the dominant device in the field)
+
+### 2. WhatsApp-Inspired Collaboration — With Enforcement
+The ticket thread is deliberately modelled on **messaging apps familiar to every field officer**:
+- Conversation-style thread (bubbles, timestamps, read indicators)
+- Case holder can **add teammates** as Informed members — they receive notifications and can contribute
+- **Assign tasks** directly from the thread (like pinning a task in a group chat)
+- **Attach files** — photos, PDFs, site reports — uploaded inline just like sending a file in WhatsApp
+- But unlike a chat group: **privacy is enforced by role** — SEAH cases are structurally invisible to standard officers, not just hidden behind a UI toggle; PII is never stored in the ticketing layer
+
+### 3. AI That Works for Multilingual Teams
+Two AI features reduce the language burden on senior stakeholders:
+- **AI Translation** — every note written in Nepali (or any local language) is automatically translated to English; ADB HQ reviewers read a bilingual thread without asking anyone for a summary
+- **AI Case Findings** — one click generates a structured case summary visible to GRC chairs, ADB project directors, and HQ; keeps all stakeholders aligned without email chains
+
+### 4. Fully Customisable for Any DOR Project
+The system is not hardcoded to KL Road:
+- **Workflows** are fully configurable in Settings — number of levels, SLA at each level, roles assigned
+- **Locations** are importable from CSV (any country's administrative hierarchy)
+- **Packages / Lots** can be created for any civil works contract
+- **QR tokens** are generated per package — deploy a new project by creating a project, packages, and printing new QR codes; no code changes required
+- **Organisations and roles** are admin-managed — DOR can onboard a new contractor or consultant in minutes
+- One platform can run **multiple concurrent projects** with full data isolation by project/package scope
+
+---
+
 ## Key Features Summary (for slide talking points)
 
 | Feature | What it does |
 |---------|-------------|
 | **QR code intake** | Complainant scans QR on a site notice board → chatbot activates pre-filled with project + location → ticket filed in seconds |
+| **WhatsApp-style thread** | Familiar conversation UI — add notes, files, tasks inline; feels like a group chat but with enforced privacy and full audit trail |
+| **Teammate collaboration** | Case holder adds colleagues as Informed members; they get notifications and can contribute notes and tasks |
 | **4-level escalation workflow** | L1 Site → L2 PIU → L3 GRC → L4 Legal; each level has SLA clocks that auto-escalate on breach |
-| **SEAH case isolation** | SEAH tickets are invisible to standard officers at the DB level; separate SEAH workflow with dedicated officers |
+| **SEAH case isolation** | SEAH tickets are invisible to standard officers at the DB level; separate workflow with dedicated officers; 🔒 badge for SEAH roles |
 | **SLA tracking** | Per-ticket countdown visible to every officer; queue tiles surface Due Today and Overdue at a glance |
-| **AI translation** | Officer notes in Nepali auto-translated to English (GPT-4, async); translation review panel per ticket |
-| **AI case findings** | LLM generates a case summary for senior/ADB roles; regeneratable on demand |
-| **GRC hearing flow** | Two-step GRC: Convene (schedules hearing, notifies all GRC members) → Decide (records resolution) |
-| **Complainant privacy** | Phone hidden by default; "Reveal" logged as audit event; PII never stored in ticketing schema |
-| **Officer reply** | Officer types a reply → delivered to complainant via chatbot session or SMS fallback (AWS SNS) |
-| **XLSX reporting** | One-click quarterly export in ADB format; also emailed automatically to relevant roles |
-| **Role-based access** | 12 roles with jurisdiction scopes (org + location + project + package); super_admin to SEAH-only officers |
+| **AI translation** | Officer notes in Nepali auto-translated to English (GPT-4, async); bilingual thread readable by ADB HQ without asking for summaries |
+| **AI case findings** | LLM generates a structured case summary for senior/ADB roles; one click keeps all stakeholders aligned |
+| **GRC hearing flow** | Two-step GRC: Convene (schedules hearing, notifies all GRC members) → Decide (records resolution or escalate to legal) |
+| **Total complainant privacy** | Phone hidden by default; "Reveal" logged as audit event; PII never stored in ticketing schema — separated at DB architecture level |
+| **Officer reply** | Officer types a reply → delivered to complainant via chatbot session or SMS fallback (AWS SNS, works internationally) |
+| **XLSX reporting** | One-click quarterly export in ADB format; also auto-emailed to relevant roles on schedule |
+| **Role-based access** | 12 roles with jurisdiction scopes (org + location + project + package); from site L1 officer to ADB HQ executive |
+| **Fully customisable** | Any project, any workflow depth, any location hierarchy — configured in the admin UI, no code changes needed |
 
 ---
 
