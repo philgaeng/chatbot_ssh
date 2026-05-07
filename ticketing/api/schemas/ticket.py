@@ -24,6 +24,9 @@ class TicketCreate(BaseModel):
     organization_id: str = Field(..., max_length=64)
     location_code: Optional[str] = Field(None, max_length=64)
     project_code: Optional[str] = Field(None, max_length=64)
+    # package_id — UUID of the ProjectPackage resolved from the QR token scan.
+    # Omit (or null) for walk-in / phone intake; always null for SEAH tickets.
+    package_id: Optional[str] = Field(None, max_length=36)
     priority: str = Field("NORMAL", max_length=32)  # NORMAL | HIGH | SENSITIVE
     is_seah: bool = False
 
@@ -161,6 +164,8 @@ class TicketDetail(BaseModel):
     # Spec 12: who holds the "reply to complainant" capability
     # Defaults to L1 actor; any Actor above L1 can reassign.
     complainant_reply_owner_id: Optional[str] = None
+    # QR token context — UUID of the package this ticket was filed from (null = no QR)
+    package_id: Optional[str] = None
 
     class Config:
         from_attributes = True

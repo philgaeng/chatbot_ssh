@@ -43,6 +43,11 @@ import {
   updatePackage,
   addPackageLocation,
   removePackageLocation,
+  listQrTokens,
+  createQrToken,
+  revokeQrToken,
+  type QrTokenOut,
+  type QrTokenCreateResponse,
   type WorkflowDefinition,
   type WorkflowStep,
   type WorkflowAssignmentItem,
@@ -3321,6 +3326,12 @@ function PackageRow({
   const [saving, setSaving]         = useState(false);
   const [dirty, setDirty]           = useState(false);
 
+  // ── QR token state ────────────────────────────────────────────────────────
+  const [tokens, setTokens]               = useState<QrTokenOut[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [generatingToken, setGeneratingToken] = useState(false);
+  const [qrModal, setQrModal]             = useState<{ token: string; scan_url: string } | null>(null);
+
   // Sync local state if pkg prop changes (e.g. after parent reload)
   React.useEffect(() => {
     setNameVal(pkg.name);
@@ -3328,6 +3339,47 @@ function PackageRow({
     setContractorVal(pkg.contractor_org_id ?? "");
     setDirty(false);
   }, [pkg.package_id, pkg.name, pkg.description, pkg.contractor_org_id]);
+
+  // Load QR tokens when package is expanded
+  React.useEffect(() => {
+    if (!expanded) return;
+    setTokensLoading(true);
+    listQrTokens(pkg.package_id)
+      .then(setTokens)
+      .catch(() => setTokens([]))
+      .finally(() => setTokensLoading(false));
+  }, [expanded, pkg.package_id]);
+
+  async function handleGenerateToken() {
+    setGeneratingToken(true);
+    try {
+      const result = await createQrToken(pkg.package_id);
+      // Add to token list and open QR modal
+      setTokens((prev) => [{
+        token: result.token,
+        package_id: result.package_id,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        created_by_user_id: null,
+        expires_at: null,
+        scan_url: result.scan_url,
+      }, ...prev]);
+      setQrModal({ token: result.token, scan_url: result.scan_url });
+    } catch {
+      // silent — user can retry
+    } finally {
+      setGeneratingToken(false);
+    }
+  }
+
+  async function handleRevokeToken(token: string) {
+    try {
+      await revokeQrToken(token);
+      setTokens((prev) => prev.filter((t) => t.token !== token));
+    } catch {
+      // silent
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -3453,8 +3505,161 @@ function PackageRow({
               </button>
             </div>
           )}
+
+          {/* ── QR Tokens ──────────────────────────────────────────────── */}
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-gray-500">QR tokens</label>
+              <button
+                onClick={handleGenerateToken}
+                disabled={generatingToken}
+                className="text-xs bg-slate-700 text-white px-3 py-1 rounded hover:bg-slate-800 disabled:opacity-50 transition flex items-center gap-1"
+              >
+                {generatingToken ? "Generating…" : "+ Generate QR token"}
+              </button>
+            </div>
+
+            {tokensLoading ? (
+              <p className="text-xs text-gray-400 italic">Loading tokens…</p>
+            ) : tokens.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No QR tokens yet. Generate one to create a scannable QR code for this package.</p>
+            ) : (
+              <div className="space-y-1">
+                {tokens.map((t) => (
+                  <div key={t.token} className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-2 gap-2">
+                    <button
+                      onClick={() => setQrModal({ token: t.token, scan_url: t.scan_url ?? "" })}
+                      title="View QR code"
+                      className="flex items-center gap-2 flex-1 min-w-0 text-left hover:text-blue-600 group"
+                    >
+                      <span className="text-base shrink-0">⬛</span>
+                      <span className="font-mono text-xs text-gray-700 truncate group-hover:text-blue-600">{t.token}</span>
+                      <span className="text-xs text-gray-400 shrink-0">
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleRevokeToken(t.token)}
+                      className="text-xs text-red-500 hover:text-red-700 shrink-0 px-2 py-0.5 rounded hover:bg-red-50 transition"
+                      title="Revoke token"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      {/* QR code viewer modal */}
+      {qrModal && (
+        <QrCodeModal
+          token={qrModal.token}
+          scanUrl={qrModal.scan_url}
+          packageCode={pkg.package_code}
+          packageName={pkg.name}
+          onClose={() => setQrModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── QR code viewer modal ──────────────────────────────────────────────────────
+
+function QrCodeModal({
+  token, scanUrl, packageCode, packageName, onClose,
+}: {
+  token: string;
+  scanUrl: string;
+  packageCode: string;
+  packageName: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const qrImageUrl = scanUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(scanUrl)}`
+    : null;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(scanUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="bg-slate-700 text-white px-5 py-3 flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-sm">QR token</div>
+            <div className="text-xs text-slate-300 font-mono">{packageCode}</div>
+          </div>
+          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Package label */}
+          <p className="text-xs text-gray-500 truncate">{packageName}</p>
+
+          {/* QR image */}
+          <div className="flex justify-center">
+            {qrImageUrl ? (
+              <img
+                src={qrImageUrl}
+                alt={`QR code for token ${token}`}
+                width={240}
+                height={240}
+                className="border border-gray-200 rounded"
+              />
+            ) : (
+              <div className="w-60 h-60 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-400">
+                No URL available
+              </div>
+            )}
+          </div>
+
+          {/* Token value */}
+          <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            <p className="text-xs text-gray-400 mb-0.5">Token</p>
+            <p className="font-mono text-sm text-gray-800">{token}</p>
+          </div>
+
+          {/* Scan URL + copy */}
+          {scanUrl && (
+            <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2">
+              <p className="text-xs text-gray-400 mb-0.5">Scan URL</p>
+              <p className="font-mono text-xs text-gray-700 break-all">{scanUrl}</p>
+              <button
+                onClick={handleCopy}
+                className="mt-2 text-xs text-blue-600 hover:text-blue-800 transition"
+              >
+                {copied ? "✓ Copied!" : "Copy URL"}
+              </button>
+            </div>
+          )}
+
+          {/* Download */}
+          {qrImageUrl && (
+            <div className="flex justify-end">
+              <a
+                href={qrImageUrl}
+                download={`qr-${token}.png`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 transition"
+              >
+                ↓ Download PNG
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
