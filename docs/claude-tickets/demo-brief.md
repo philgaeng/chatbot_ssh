@@ -17,7 +17,7 @@ ADB-compliant Grievance Redress Mechanism (GRM) ticketing system for Nepal road 
 
 ---
 
-## App Summary: 6 Pages
+## App Summary: 7 Pages
 
 ### 1. Officer Queue (`/queue`) — Main landing page
 
@@ -117,7 +117,35 @@ Footer: *GRM Ticketing v0.1 · KL Road Project · ADB Loan 52097-003*
 
 ---
 
-### 5. Settings (`/settings`) — Admin panel (6 tabs)
+### 5. QR Codes (`/qr-codes`) — Package QR codes for all officers
+
+Standalone page in the sidebar, **visible to every authenticated user** (not just admins).
+
+**Purpose:** Any officer assigned to a package can open this page, see the QR code for their package(s), and download or print it to post at the site office, works camp, or notice board.
+
+**What the page shows:**
+- One card per package in the officer's scope
+- Each card contains:
+  - Package code and name (e.g. `SHEP/OCB/KL/01 — Lot 1, Kakarbhitta to Sitapur`)
+  - Project code
+  - Full QR code image (scannable)
+  - Token value and full scan URL (copyable)
+  - **Download PNG** button — high-resolution image for print
+- **Print all** button — prints the entire grid in one click for posting on site
+
+**Access logic:**
+- Admins see all packages across all projects
+- Scoped officers (e.g. L1 site officer) see only the package(s) they are assigned to
+- Tokens are auto-provisioned on first visit — no manual generation step required
+
+**Scan flow (what happens when a complainant scans):**
+- QR encodes a URL like `https://grm.facets-ai.com/chat?t=15a8f16b`
+- Chatbot reads the `?t=` token, calls the ticketing API, pre-fills project + district
+- Complainant skips location questions entirely — intake is faster and more accurate
+
+---
+
+### 7. Settings (`/settings`) — Admin panel (6 tabs)
 
 **Officers tab:**
 - Invite officers by email (Keycloak-backed in production, mock in demo)
@@ -194,6 +222,7 @@ The system is not hardcoded to KL Road:
 | Feature | What it does |
 |---------|-------------|
 | **QR code intake** | Complainant scans QR on a site notice board → chatbot activates pre-filled with project + location → ticket filed in seconds |
+| **QR Codes page** | Every officer can open the QR Codes page, see their package QR codes, and download/print — no admin needed; tokens auto-provisioned |
 | **WhatsApp-style thread** | Familiar conversation UI — add notes, files, tasks inline; feels like a group chat but with enforced privacy and full audit trail |
 | **Teammate collaboration** | Case holder adds colleagues as Informed members; they get notifications and can contribute notes and tasks |
 | **4-level escalation workflow** | L1 Site → L2 PIU → L3 GRC → L4 Legal; each level has SLA clocks that auto-escalate on breach |
@@ -236,9 +265,9 @@ The system is not hardcoded to KL Road:
 5. **Switch to GRC chair** → Escalated ticket arrives at L3 → Convene GRC (set hearing date) → GRC Decide → Resolved
 6. Show **AI Findings card** populating for GRC chair view
 7. **Switch to SEAH officer** → show 🔒 case visible only to them
-8. **Settings → Projects → Lot 1** → generate QR token → QR modal with scannable code + download button
+8. **QR Codes page** → show L1 officer's package cards → Download PNG → explain how it gets printed and posted at the site office
 9. **Reports → Download XLSX** → show column structure
 
 ---
 
-*Generated: 2026-05-07 from live codebase at `channels/ticketing-ui/` and `ticketing/`*
+*Updated: 2026-05-08 from live codebase at `channels/ticketing-ui/` and `ticketing/`*
