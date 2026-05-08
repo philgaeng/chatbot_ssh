@@ -558,19 +558,30 @@ def get_ticket(
             ticket.assigned_to_user_id != current_user.user_id
             and not _is_viewer(db, ticket_id, current_user.user_id)
         ):
-            # Fall back to scope check — if they have a scope that covers this ticket, allow
-            from ticketing.models.officer_scope import OfficerScope as _OfficerScope
-            scopes = db.execute(
-                select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
-            ).scalars().all()
-            in_scope = any(
-                s.organization_id == ticket.organization_id and
-                (s.location_code is None or s.location_code == ticket.location_code) and
-                (s.project_code is None or s.project_code == ticket.project_code)
-                for s in scopes
-            )
-            if not in_scope:
-                raise HTTPException(status_code=403, detail="Access denied")
+            # Task-holder check: officer with a pending task on this ticket always gets access
+            # (task assignment grants implicit read access so the officer can work the task)
+            has_pending_task = db.execute(
+                select(TicketTask).where(
+                    TicketTask.ticket_id == ticket_id,
+                    TicketTask.assigned_to_user_id == current_user.user_id,
+                    TicketTask.status == "PENDING",
+                ).limit(1)
+            ).scalar_one_or_none() is not None
+
+            if not has_pending_task:
+                # Fall back to scope check — if they have a scope that covers this ticket, allow
+                from ticketing.models.officer_scope import OfficerScope as _OfficerScope
+                scopes = db.execute(
+                    select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
+                ).scalars().all()
+                in_scope = any(
+                    s.organization_id == ticket.organization_id and
+                    (s.location_code is None or s.location_code == ticket.location_code) and
+                    (s.project_code is None or s.project_code == ticket.project_code)
+                    for s in scopes
+                )
+                if not in_scope:
+                    raise HTTPException(status_code=403, detail="Access denied")
 
     # Attach viewer list (used by @mention autocomplete on the client)
     viewers = db.execute(
