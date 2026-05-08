@@ -23,6 +23,10 @@ export interface TicketListItem {
   sla_breached: boolean;
   step_started_at: string | null;
   created_at: string;
+  /** Computed: step_started_at + step.resolution_time_days. Null if not started or no SLA configured. */
+  sla_deadline_at: string | null;
+  /** Earliest pending task due date assigned to me on this ticket. Null if none. */
+  my_earliest_task_due_at: string | null;
   unseen_event_count: number;
 }
 

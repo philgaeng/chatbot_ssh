@@ -104,6 +104,12 @@ class TicketListItem(BaseModel):
     sla_breached: bool
     step_started_at: Optional[datetime]
     created_at: datetime
+    # Computed SLA deadline: step_started_at + step.resolution_time_days
+    # Null if step not started, or step has no resolution_time_days configured
+    sla_deadline_at: Optional[datetime] = None
+    # Earliest pending task due date assigned to the requesting user on this ticket
+    # Null if no tasks, or all tasks have no due_date set
+    my_earliest_task_due_at: Optional[datetime] = None
     # Unread badge: number of unseen events assigned to requesting user
     unseen_event_count: int = 0
 
