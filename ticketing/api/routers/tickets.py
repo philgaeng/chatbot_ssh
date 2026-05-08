@@ -66,6 +66,7 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
+from ticketing.models.ticket_task import TicketTask
 from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
@@ -391,7 +392,16 @@ def list_tickets(
             q = q.where(or_(*scope_conditions))
 
     if my_queue:
-        q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
+        # My Queue = tickets assigned to me as action owner
+        #            OR tickets with a pending task assigned to me (even if not the action owner)
+        pending_task_ticket_ids = select(TicketTask.ticket_id).where(
+            TicketTask.assigned_to_user_id == current_user.user_id,
+            TicketTask.status == "PENDING",
+        )
+        q = q.where(or_(
+            Ticket.assigned_to_user_id == current_user.user_id,
+            Ticket.ticket_id.in_(pending_task_ticket_ids),
+        ))
     if status_code:
         q = q.where(Ticket.status_code == status_code)
     if organization_id:
