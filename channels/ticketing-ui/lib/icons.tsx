@@ -11,6 +11,7 @@ export {
   LayoutList     as IconAllTickets,
   AlertTriangle  as IconEscalated,
   BarChart2      as IconReports,
+  QrCode         as IconQrCodes,
   Settings       as IconSettings,
   HelpCircle     as IconHelp,
 

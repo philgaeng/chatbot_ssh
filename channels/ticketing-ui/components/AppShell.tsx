@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth, MOCK_OFFICERS, setMockUserCookie, type MockOfficer } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
 import {
-  IconQueue, IconAllTickets, IconEscalated, IconReports, IconSettings, IconHelp,
+  IconQueue, IconAllTickets, IconEscalated, IconReports, IconQrCodes, IconSettings, IconHelp,
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
   IconBell, IconSignOut, IconLock,
 } from "@/lib/icons";
@@ -19,6 +19,7 @@ const NAV = [
   { href: "/escalated", label: "Escalated",   Icon: IconEscalated,  badge: "escalated" },
   null, // divider
   { href: "/reports",   label: "Reports",     Icon: IconReports,    badge: null        },
+  { href: "/qr-codes",  label: "QR Codes",    Icon: IconQrCodes,    badge: null        },
   null,
   { href: "/settings",  label: "Settings",    Icon: IconSettings,   badge: null, adminOnly: true },
   { href: "/help",      label: "Help",        Icon: IconHelp,       badge: null        },

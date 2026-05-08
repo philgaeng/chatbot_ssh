@@ -829,6 +829,19 @@ export interface QrTokenCreateResponse {
   scan_url: string;
 }
 
+export interface PackageQrItem {
+  package_id: string;
+  package_code: string;
+  name: string;
+  project_code: string;
+  token: string;
+  scan_url: string;
+}
+
+export function listMyPackagesQr(): Promise<PackageQrItem[]> {
+  return apiFetch<PackageQrItem[]>("/api/v1/my-packages/qr");
+}
+
 export function listQrTokens(packageId: string): Promise<QrTokenOut[]> {
   return apiFetch<QrTokenOut[]>(`/api/v1/packages/${packageId}/qr-tokens`);
 }
