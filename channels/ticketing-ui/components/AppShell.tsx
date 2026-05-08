@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth, MOCK_OFFICERS, setMockUserCookie, type MockOfficer } from "@/app/providers/AuthProvider";
 import { getBadge } from "@/lib/api";
 import {
-  IconQueue, IconAllTickets, IconEscalated, IconReports, IconQrCodes, IconSettings, IconHelp,
+  IconAllTickets, IconReports, IconQrCodes, IconSettings, IconHelp,
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
   IconBell, IconSignOut, IconLock,
 } from "@/lib/icons";
@@ -14,9 +14,7 @@ import {
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
 const NAV = [
-  { href: "/queue",     label: "My Queue",    Icon: IconQueue,      badge: "action"    },
-  { href: "/tickets",   label: "All Tickets", Icon: IconAllTickets, badge: null        },
-  { href: "/escalated", label: "Escalated",   Icon: IconEscalated,  badge: "escalated" },
+  { href: "/queue",     label: "Tickets",     Icon: IconAllTickets, badge: "action"    },
   null, // divider
   { href: "/reports",   label: "Reports",     Icon: IconReports,    badge: null        },
   { href: "/qr-codes",  label: "QR Codes",    Icon: IconQrCodes,    badge: null        },
