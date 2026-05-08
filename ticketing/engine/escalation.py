@@ -164,15 +164,34 @@ def _apply_step_tier_roles(
         )
         for uid in candidates:
             # Don't demote an existing Informed to Observer
-            from sqlalchemy import select as _select
             existing = db.execute(
-                _select(TicketViewer).where(
+                select(TicketViewer).where(
                     TicketViewer.ticket_id == ticket.ticket_id,
                     TicketViewer.user_id == uid,
                 )
             ).scalar_one_or_none()
             if existing is None or existing.tier == "observer":
                 _ensure_viewer(db, ticket.ticket_id, uid, "observer", "system")
+
+    # Supervisor tier — use this step's configured supervisor_role field
+    # (set in Settings → Workflows → step editor; maps to WorkflowStep.supervisor_role)
+    if step.supervisor_role:
+        for uid in _scope_candidates(
+            role_key=step.supervisor_role,
+            organization_id=ticket.organization_id,
+            location_code=ticket.location_code,
+            project_code=ticket.project_code,
+            db=db,
+        ):
+            existing = db.execute(
+                select(TicketViewer).where(
+                    TicketViewer.ticket_id == ticket.ticket_id,
+                    TicketViewer.user_id == uid,
+                )
+            ).scalar_one_or_none()
+            # Add as supervisor; don't demote someone who is already Informed (higher tier)
+            if existing is None or existing.tier == "observer":
+                _ensure_viewer(db, ticket.ticket_id, uid, "supervisor", "system")
 
 
 # ── Core escalation ───────────────────────────────────────────────────────────

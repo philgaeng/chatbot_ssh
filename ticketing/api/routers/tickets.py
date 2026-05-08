@@ -329,7 +329,16 @@ def create_ticket(
     summary="List tickets (officer queue)",
 )
 def list_tickets(
-    my_queue: bool = Query(False, description="Only tickets assigned to current user"),
+    tab: Optional[str] = Query(
+        None,
+        description=(
+            "Role-tier tab filter. "
+            "actor = tickets I am the action owner of (or have a pending task on); "
+            "supervisor | informed | observer = tickets where I have that viewer tier; "
+            "high_priority = HIGH/CRITICAL priority or SLA-breached tickets; "
+            "omit for all visible tickets."
+        ),
+    ),
     status_code: Optional[str] = Query(None),
     is_seah: Optional[bool] = Query(None, description="Filter by SEAH flag (omit = all visible to role)"),
     organization_id: Optional[str] = Query(None),
@@ -391,17 +400,32 @@ def list_tickets(
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
             q = q.where(or_(*scope_conditions))
 
-    if my_queue:
-        # My Queue = tickets assigned to me as action owner
-        #            OR tickets with a pending task assigned to me (even if not the action owner)
-        pending_task_ticket_ids = select(TicketTask.ticket_id).where(
-            TicketTask.assigned_to_user_id == current_user.user_id,
-            TicketTask.status == "PENDING",
-        )
-        q = q.where(or_(
-            Ticket.assigned_to_user_id == current_user.user_id,
-            Ticket.ticket_id.in_(pending_task_ticket_ids),
-        ))
+    if tab:
+        tab_lower = tab.lower()
+        if tab_lower == "actor":
+            # Actor = tickets where I am the action owner OR have a pending task
+            pending_task_ticket_ids = select(TicketTask.ticket_id).where(
+                TicketTask.assigned_to_user_id == current_user.user_id,
+                TicketTask.status == "PENDING",
+            )
+            q = q.where(or_(
+                Ticket.assigned_to_user_id == current_user.user_id,
+                Ticket.ticket_id.in_(pending_task_ticket_ids),
+            ))
+        elif tab_lower in ("supervisor", "informed", "observer"):
+            # Tier tabs: only tickets where I have a viewer row with that tier
+            tier_ticket_ids = select(TicketViewer.ticket_id).where(
+                TicketViewer.user_id == current_user.user_id,
+                TicketViewer.tier == tab_lower,
+            )
+            q = q.where(Ticket.ticket_id.in_(tier_ticket_ids))
+        elif tab_lower == "high_priority":
+            q = q.where(or_(
+                Ticket.priority.in_(["HIGH", "CRITICAL"]),
+                Ticket.sla_breached.is_(True),
+            ))
+        # tab="all" or unrecognised: no additional filter
+
     if status_code:
         q = q.where(Ticket.status_code == status_code)
     if organization_id:

@@ -187,7 +187,8 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
 // ── Ticket endpoints ──────────────────────────────────────────────────────────
 
 export interface TicketFilters {
-  my_queue?: boolean;
+  /** Role-tier tab: "actor" | "supervisor" | "informed" | "observer" | "high_priority" | "all" */
+  tab?: string;
   status_code?: string;
   is_seah?: boolean;
   organization_id?: string;
@@ -200,7 +201,7 @@ export interface TicketFilters {
 
 export function listTickets(filters: TicketFilters = {}): Promise<TicketListResponse> {
   const p = new URLSearchParams();
-  if (filters.my_queue) p.set("my_queue", "true");
+  if (filters.tab) p.set("tab", filters.tab);
   if (filters.status_code) p.set("status_code", filters.status_code);
   if (filters.is_seah !== undefined) p.set("is_seah", String(filters.is_seah));
   if (filters.organization_id) p.set("organization_id", filters.organization_id);

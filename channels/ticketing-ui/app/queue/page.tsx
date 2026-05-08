@@ -10,13 +10,61 @@ import { IconChevronRight } from "@/lib/icons";
 
 // ── Tab definition ────────────────────────────────────────────────────────────
 
-type Tab = "my_queue" | "all" | "escalated" | "resolved";
+type Tab = "actor" | "supervisor" | "informed" | "observer" | "high_priority" | "all";
 
-const TABS: { id: Tab; label: string; redBadge: boolean }[] = [
-  { id: "my_queue",  label: "My Queue",    redBadge: true  },
-  { id: "all",       label: "All Tickets", redBadge: false },
-  { id: "escalated", label: "Escalated",   redBadge: true  },
-  { id: "resolved",  label: "Resolved",    redBadge: false },
+interface TabDef {
+  id: Tab;
+  label: string;
+  /** Show red badge when count > 0 */
+  redBadge: boolean;
+  /** Show badge at all */
+  showBadge: boolean;
+  description: string;
+}
+
+const TABS: TabDef[] = [
+  {
+    id: "actor",
+    label: "Actor",
+    redBadge: true,
+    showBadge: true,
+    description: "Tickets where I'm the action owner or have a pending task",
+  },
+  {
+    id: "supervisor",
+    label: "Supervisor",
+    redBadge: false,
+    showBadge: true,
+    description: "Tickets I'm supervising at the next level",
+  },
+  {
+    id: "informed",
+    label: "Informed",
+    redBadge: false,
+    showBadge: true,
+    description: "Tickets I've been added to as an informed member",
+  },
+  {
+    id: "observer",
+    label: "Observer",
+    redBadge: false,
+    showBadge: false,
+    description: "Tickets I'm watching in read-only mode",
+  },
+  {
+    id: "high_priority",
+    label: "High Priority",
+    redBadge: true,
+    showBadge: true,
+    description: "HIGH / CRITICAL priority or SLA-breached tickets",
+  },
+  {
+    id: "all",
+    label: "All Tickets",
+    redBadge: false,
+    showBadge: false,
+    description: "All tickets visible to my role",
+  },
 ];
 
 // ── Summary tile ──────────────────────────────────────────────────────────────
@@ -112,109 +160,129 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
 
 export default function QueuePage() {
   const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("my_queue");
+  const [activeTab, setActiveTab] = useState<Tab>("actor");
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // ── My Queue tiles — fetched independently so they always reflect
-  //    the officer's own plate regardless of which tab is active. ──────────────
-  const [myQueueTickets, setMyQueueTickets] = useState<TicketListItem[]>([]);
+  // ── Tab badge counts — fetched independently so switching tabs
+  //    doesn't flicker the badge numbers ─────────────────────────────────────
+  const [tabCounts, setTabCounts] = useState<Partial<Record<Tab, number>>>({});
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    listTickets({ my_queue: true, page_size: 50 })
-      .then((r) => setMyQueueTickets(r.items))
+    // Fetch counts for tabs that show badges
+    const badgeTabs: Tab[] = ["actor", "supervisor", "informed", "high_priority"];
+    badgeTabs.forEach((tab) => {
+      listTickets({ tab, page_size: 1 })
+        .then((r) => setTabCounts((prev) => ({ ...prev, [tab]: r.total })))
+        .catch(() => {});
+    });
+  }, [isAuthenticated]);
+
+  // ── Actor tab tickets — used for summary tiles regardless of active tab ──
+  const [actorTickets, setActorTickets] = useState<TicketListItem[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    listTickets({ tab: "actor", page_size: 50 })
+      .then((r) => {
+        setActorTickets(r.items);
+        setTabCounts((prev) => ({ ...prev, actor: r.total }));
+      })
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Tile counts always come from My Queue, never from the current tab.
+  // Summary tile counts — always from Actor tab
   const actionNeeded = useMemo(
-    () => myQueueTickets.filter((t) => t.status_code === "OPEN" || t.unseen_event_count > 0).length,
-    [myQueueTickets],
+    () => actorTickets.filter((t) => t.status_code === "OPEN" || t.unseen_event_count > 0).length,
+    [actorTickets],
   );
   const dueToday = useMemo(
-    () => myQueueTickets.filter((t) => !t.sla_breached && t.step_started_at !== null).length,
-    [myQueueTickets],
+    () => actorTickets.filter((t) => !t.sla_breached && t.step_started_at !== null).length,
+    [actorTickets],
   );
   const overdue = useMemo(
-    () => myQueueTickets.filter((t) => t.sla_breached).length,
-    [myQueueTickets],
+    () => actorTickets.filter((t) => t.sla_breached).length,
+    [actorTickets],
   );
-
-  // ── Independent escalated count for the tab badge ─────────────────────────
-  const [escalatedTotal, setEscalatedTotal] = useState(0);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    listTickets({ status_code: "ESCALATED", page_size: 1 })
-      .then((r) => setEscalatedTotal(r.total))
-      .catch(() => {});
-  }, [isAuthenticated]);
 
   // ── Tab ticket list ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
 
-    const filters =
-      activeTab === "my_queue"  ? { my_queue: true } :
-      activeTab === "escalated" ? { status_code: "ESCALATED" } :
-      activeTab === "resolved"  ? { status_code: "RESOLVED" } :
-      {};
-
-    listTickets({ ...filters, page_size: 50 })
+    listTickets({ tab: activeTab, page_size: 50 })
       .then((r) => {
         setTickets(r.items);
         setTotal(r.total);
-        // Sync escalated count when we land on that tab
-        if (activeTab === "escalated") setEscalatedTotal(r.total);
-        // Sync my queue tiles when we land on My Queue tab
-        if (activeTab === "my_queue") setMyQueueTickets(r.items);
+        // Keep tab counts in sync when we load a badge tab
+        const tabDef = TABS.find((t) => t.id === activeTab);
+        if (tabDef?.showBadge) {
+          setTabCounts((prev) => ({ ...prev, [activeTab]: r.total }));
+        }
+        // Keep actor tiles in sync when we're on the actor tab
+        if (activeTab === "actor") setActorTickets(r.items);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activeTab, isAuthenticated]);
 
+  const activeTabDef = TABS.find((t) => t.id === activeTab)!;
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="mb-5">
-        <h1 className="text-xl font-semibold text-gray-800">Officer Queue</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{total} ticket{total !== 1 ? "s" : ""}</p>
+        <h1 className="text-xl font-semibold text-gray-800">Tickets</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {total} ticket{total !== 1 ? "s" : ""} · {activeTabDef.description}
+        </p>
       </div>
 
-      {/* Summary tiles — shown on all tabs */}
+      {/* Summary tiles — always show Actor counts */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <SummaryTile label="Action Needed" count={actionNeeded} sub="OPEN or unread" />
-        <SummaryTile label="Due Today"     count={dueToday}     sub="SLA &lt; 24 h" warning />
-        <SummaryTile label="Overdue"       count={overdue}      sub="SLA breached"   urgent />
+        <SummaryTile
+          label="Action Needed"
+          count={actionNeeded}
+          sub="OPEN or unread"
+          onClick={() => setActiveTab("actor")}
+        />
+        <SummaryTile
+          label="Due Today"
+          count={dueToday}
+          sub="SLA &lt; 24 h"
+          warning
+          onClick={() => setActiveTab("actor")}
+        />
+        <SummaryTile
+          label="Overdue"
+          count={overdue}
+          sub="SLA breached"
+          urgent
+          onClick={() => setActiveTab("actor")}
+        />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-gray-200 mb-4">
+      <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
-          // Use the independent escalatedTotal for the Escalated tab badge
-          // so it shows the correct count regardless of which tab is active.
-          const tabBadgeCount =
-            tab.id === "escalated" ? escalatedTotal :
-            tab.id === "my_queue"  ? total :
-            total;
+          const count = tabCounts[tab.id] ?? 0;
 
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 isActive
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               {tab.label}
-              {tabBadgeCount > 0 && (
-                <CountBubble count={tabBadgeCount} red={tab.redBadge} />
+              {tab.showBadge && count > 0 && (
+                <CountBubble count={count} red={tab.redBadge} />
               )}
             </button>
           );
@@ -226,7 +294,9 @@ export default function QueuePage() {
         {loading ? (
           <div className="p-8 text-center text-gray-600 text-sm">Loading…</div>
         ) : tickets.length === 0 ? (
-          <div className="p-8 text-center text-gray-600 text-sm">No tickets in this view.</div>
+          <div className="p-8 text-center text-gray-500 text-sm">
+            No tickets in this view.
+          </div>
         ) : (
           <div>
             {/* Column headers */}
