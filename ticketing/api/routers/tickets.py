@@ -569,17 +569,34 @@ def get_ticket(
             ).scalar_one_or_none() is not None
 
             if not has_pending_task:
-                # Fall back to scope check — if they have a scope that covers this ticket, allow
+                # Fall back to scope check — mirrors the hierarchical list-endpoint logic:
+                # a province-scoped officer (NP_P1) can access district-level tickets (NP_D006).
                 from ticketing.models.officer_scope import OfficerScope as _OfficerScope
                 scopes = db.execute(
                     select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
                 ).scalars().all()
-                in_scope = any(
-                    s.organization_id == ticket.organization_id and
-                    (s.location_code is None or s.location_code == ticket.location_code) and
-                    (s.project_code is None or s.project_code == ticket.project_code)
-                    for s in scopes
-                )
+
+                # Pre-fetch child locations for any scope that has a location_code
+                in_scope = False
+                for s in scopes:
+                    if s.organization_id != ticket.organization_id:
+                        continue
+                    if s.project_code and s.project_code != ticket.project_code:
+                        continue
+                    # Exact location match or no location restriction
+                    if s.location_code is None or s.location_code == ticket.location_code:
+                        in_scope = True
+                        break
+                    # Hierarchical match: scope covers a parent location
+                    child_loc_codes = db.execute(
+                        select(Location.location_code).where(
+                            Location.parent_location_code == s.location_code
+                        )
+                    ).scalars().all()
+                    if ticket.location_code in child_loc_codes:
+                        in_scope = True
+                        break
+
                 if not in_scope:
                     raise HTTPException(status_code=403, detail="Access denied")
 
