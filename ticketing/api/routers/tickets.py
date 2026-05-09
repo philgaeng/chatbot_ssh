@@ -66,6 +66,7 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
+from ticketing.models.ticket_task import TicketTask
 from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
@@ -328,7 +329,16 @@ def create_ticket(
     summary="List tickets (officer queue)",
 )
 def list_tickets(
-    my_queue: bool = Query(False, description="Only tickets assigned to current user"),
+    tab: Optional[str] = Query(
+        None,
+        description=(
+            "Role-tier tab filter. "
+            "actor = tickets I am the action owner of (or have a pending task on); "
+            "supervisor | informed | observer = tickets where I have that viewer tier; "
+            "high_priority = HIGH/CRITICAL priority or SLA-breached tickets; "
+            "omit for all visible tickets."
+        ),
+    ),
     status_code: Optional[str] = Query(None),
     is_seah: Optional[bool] = Query(None, description="Filter by SEAH flag (omit = all visible to role)"),
     organization_id: Optional[str] = Query(None),
@@ -390,8 +400,32 @@ def list_tickets(
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
             q = q.where(or_(*scope_conditions))
 
-    if my_queue:
-        q = q.where(Ticket.assigned_to_user_id == current_user.user_id)
+    if tab:
+        tab_lower = tab.lower()
+        if tab_lower == "actor":
+            # Actor = tickets where I am the action owner OR have a pending task
+            pending_task_ticket_ids = select(TicketTask.ticket_id).where(
+                TicketTask.assigned_to_user_id == current_user.user_id,
+                TicketTask.status == "PENDING",
+            )
+            q = q.where(or_(
+                Ticket.assigned_to_user_id == current_user.user_id,
+                Ticket.ticket_id.in_(pending_task_ticket_ids),
+            ))
+        elif tab_lower in ("supervisor", "informed", "observer"):
+            # Tier tabs: only tickets where I have a viewer row with that tier
+            tier_ticket_ids = select(TicketViewer.ticket_id).where(
+                TicketViewer.user_id == current_user.user_id,
+                TicketViewer.tier == tab_lower,
+            )
+            q = q.where(Ticket.ticket_id.in_(tier_ticket_ids))
+        elif tab_lower == "high_priority":
+            q = q.where(or_(
+                Ticket.priority.in_(["HIGH", "CRITICAL"]),
+                Ticket.sla_breached.is_(True),
+            ))
+        # tab="all" or unrecognised: no additional filter
+
     if status_code:
         q = q.where(Ticket.status_code == status_code)
     if organization_id:
@@ -411,10 +445,11 @@ def list_tickets(
         .limit(page_size)
     ).scalars().all()
 
+    ticket_ids = [t.ticket_id for t in tickets]
+
     # Unseen event counts per ticket for this user
     unseen_counts: dict[str, int] = {}
-    if tickets:
-        ticket_ids = [t.ticket_id for t in tickets]
+    if ticket_ids:
         rows = db.execute(
             select(TicketEvent.ticket_id, func.count())
             .where(
@@ -425,6 +460,41 @@ def list_tickets(
             .group_by(TicketEvent.ticket_id)
         ).all()
         unseen_counts = {row[0]: row[1] for row in rows}
+
+    # SLA deadline: step_started_at + step.resolution_time_days per ticket
+    # Single bulk query — no N+1
+    from datetime import timedelta
+    step_ids = list({t.current_step_id for t in tickets if t.current_step_id})
+    step_map: dict[str, WorkflowStep] = {}
+    if step_ids:
+        step_rows = db.execute(
+            select(WorkflowStep).where(WorkflowStep.step_id.in_(step_ids))
+        ).scalars().all()
+        step_map = {s.step_id: s for s in step_rows}
+
+    sla_deadlines: dict[str, Optional[datetime]] = {}
+    for t in tickets:
+        step = step_map.get(t.current_step_id) if t.current_step_id else None
+        if step and t.step_started_at and step.resolution_time_days:
+            sla_deadlines[t.ticket_id] = t.step_started_at + timedelta(days=step.resolution_time_days)
+        else:
+            sla_deadlines[t.ticket_id] = None
+
+    # Earliest pending task due date per ticket assigned to the current user
+    # Single bulk query — no N+1
+    earliest_task_due: dict[str, Optional[datetime]] = {}
+    if ticket_ids:
+        task_rows = db.execute(
+            select(TicketTask.ticket_id, func.min(TicketTask.due_date))
+            .where(
+                TicketTask.ticket_id.in_(ticket_ids),
+                TicketTask.assigned_to_user_id == current_user.user_id,
+                TicketTask.status == "PENDING",
+                TicketTask.due_date.is_not(None),
+            )
+            .group_by(TicketTask.ticket_id)
+        ).all()
+        earliest_task_due = {row[0]: row[1] for row in task_rows}
 
     items = []
     for t in tickets:
@@ -442,6 +512,8 @@ def list_tickets(
             sla_breached=t.sla_breached,
             step_started_at=t.step_started_at,
             created_at=t.created_at,
+            sla_deadline_at=sla_deadlines.get(t.ticket_id),
+            my_earliest_task_due_at=earliest_task_due.get(t.ticket_id),
             unseen_event_count=unseen_counts.get(t.ticket_id, 0),
         )
         items.append(item)
@@ -486,19 +558,47 @@ def get_ticket(
             ticket.assigned_to_user_id != current_user.user_id
             and not _is_viewer(db, ticket_id, current_user.user_id)
         ):
-            # Fall back to scope check — if they have a scope that covers this ticket, allow
-            from ticketing.models.officer_scope import OfficerScope as _OfficerScope
-            scopes = db.execute(
-                select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
-            ).scalars().all()
-            in_scope = any(
-                s.organization_id == ticket.organization_id and
-                (s.location_code is None or s.location_code == ticket.location_code) and
-                (s.project_code is None or s.project_code == ticket.project_code)
-                for s in scopes
-            )
-            if not in_scope:
-                raise HTTPException(status_code=403, detail="Access denied")
+            # Task-holder check: officer with a pending task on this ticket always gets access
+            # (task assignment grants implicit read access so the officer can work the task)
+            has_pending_task = db.execute(
+                select(TicketTask).where(
+                    TicketTask.ticket_id == ticket_id,
+                    TicketTask.assigned_to_user_id == current_user.user_id,
+                    TicketTask.status == "PENDING",
+                ).limit(1)
+            ).scalar_one_or_none() is not None
+
+            if not has_pending_task:
+                # Fall back to scope check — mirrors the hierarchical list-endpoint logic:
+                # a province-scoped officer (NP_P1) can access district-level tickets (NP_D006).
+                from ticketing.models.officer_scope import OfficerScope as _OfficerScope
+                scopes = db.execute(
+                    select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
+                ).scalars().all()
+
+                # Pre-fetch child locations for any scope that has a location_code
+                in_scope = False
+                for s in scopes:
+                    if s.organization_id != ticket.organization_id:
+                        continue
+                    if s.project_code and s.project_code != ticket.project_code:
+                        continue
+                    # Exact location match or no location restriction
+                    if s.location_code is None or s.location_code == ticket.location_code:
+                        in_scope = True
+                        break
+                    # Hierarchical match: scope covers a parent location
+                    child_loc_codes = db.execute(
+                        select(Location.location_code).where(
+                            Location.parent_location_code == s.location_code
+                        )
+                    ).scalars().all()
+                    if ticket.location_code in child_loc_codes:
+                        in_scope = True
+                        break
+
+                if not in_scope:
+                    raise HTTPException(status_code=403, detail="Access denied")
 
     # Attach viewer list (used by @mention autocomplete on the client)
     viewers = db.execute(

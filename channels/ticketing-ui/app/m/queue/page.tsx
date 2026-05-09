@@ -118,7 +118,7 @@ export default function MobileQueuePage() {
       if (showRefresh) setRefreshing(true); else setLoading(true);
 
       const params =
-        filter === "mine"      ? { my_queue: true, page_size: 50 } :
+        filter === "mine"      ? { tab: "actor", page_size: 50 } :
         filter === "escalated" ? { status_code: "ESCALATED", page_size: 50 } :
         { page_size: 50 };
 
