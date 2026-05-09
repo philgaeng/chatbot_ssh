@@ -23,6 +23,10 @@ export interface TicketListItem {
   sla_breached: boolean;
   step_started_at: string | null;
   created_at: string;
+  /** Computed: step_started_at + step.resolution_time_days. Null if not started or no SLA configured. */
+  sla_deadline_at: string | null;
+  /** Earliest pending task due date assigned to me on this ticket. Null if none. */
+  my_earliest_task_due_at: string | null;
   unseen_event_count: number;
 }
 
@@ -187,7 +191,8 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
 // ── Ticket endpoints ──────────────────────────────────────────────────────────
 
 export interface TicketFilters {
-  my_queue?: boolean;
+  /** Role-tier tab: "actor" | "supervisor" | "informed" | "observer" | "high_priority" | "all" */
+  tab?: string;
   status_code?: string;
   is_seah?: boolean;
   organization_id?: string;
@@ -200,7 +205,7 @@ export interface TicketFilters {
 
 export function listTickets(filters: TicketFilters = {}): Promise<TicketListResponse> {
   const p = new URLSearchParams();
-  if (filters.my_queue) p.set("my_queue", "true");
+  if (filters.tab) p.set("tab", filters.tab);
   if (filters.status_code) p.set("status_code", filters.status_code);
   if (filters.is_seah !== undefined) p.set("is_seah", String(filters.is_seah));
   if (filters.organization_id) p.set("organization_id", filters.organization_id);
@@ -827,6 +832,19 @@ export interface QrTokenCreateResponse {
   token: string;
   package_id: string;
   scan_url: string;
+}
+
+export interface PackageQrItem {
+  package_id: string;
+  package_code: string;
+  name: string;
+  project_code: string;
+  token: string;
+  scan_url: string;
+}
+
+export function listMyPackagesQr(): Promise<PackageQrItem[]> {
+  return apiFetch<PackageQrItem[]>("/api/v1/my-packages/qr");
 }
 
 export function listQrTokens(packageId: string): Promise<QrTokenOut[]> {
