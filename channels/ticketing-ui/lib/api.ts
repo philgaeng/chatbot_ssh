@@ -119,6 +119,22 @@ export interface BadgeResponse {
   unseen_count: number;
 }
 
+export interface NotificationItem {
+  event_id: string;
+  ticket_id: string;
+  grievance_id: string;
+  grievance_summary: string | null;
+  event_type: string;
+  note: string | null;
+  created_at: string;
+  created_by_user_id: string | null;
+}
+
+export interface NotificationsResponse {
+  items: NotificationItem[];
+  total: number;
+}
+
 export interface ActionResponse {
   ticket_id: string;
   action_type: string;
@@ -309,6 +325,10 @@ export function postInboundMessage(id: string, payload: InboundMessagePayload): 
 
 export function getBadge(): Promise<BadgeResponse> {
   return apiFetch<BadgeResponse>("/api/v1/users/me/badge");
+}
+
+export function getNotifications(limit = 20): Promise<NotificationsResponse> {
+  return apiFetch<NotificationsResponse>(`/api/v1/users/me/notifications?limit=${limit}`);
 }
 
 export function listWorkflows(filters?: {
