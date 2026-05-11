@@ -97,8 +97,3 @@ uploads/
 logs/*.log.*
 env.local
 
-# Utterance translation tooling — regenerated CSV/XLSX (baseline snapshots stay tracked if committed)
-backend/actions/utils/utterance_mapping_translation_checks/new_mappings/buttons.csv
-backend/actions/utils/utterance_mapping_translation_checks/new_mappings/utterances.csv
-backend/actions/utils/utterance_mapping_translation_checks/mapping_with_latest_translations/*.xlsx
-
