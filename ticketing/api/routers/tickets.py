@@ -475,8 +475,11 @@ def list_tickets(
     sla_deadlines: dict[str, Optional[datetime]] = {}
     for t in tickets:
         step = step_map.get(t.current_step_id) if t.current_step_id else None
-        if step and t.step_started_at and step.resolution_time_days:
-            sla_deadlines[t.ticket_id] = t.step_started_at + timedelta(days=step.resolution_time_days)
+        # Mirror compute_sla_deadline(): use step_started_at, fall back to created_at
+        # so unacknowledged tickets still show an SLA countdown from submission date.
+        clock_start = t.step_started_at or t.created_at
+        if step and clock_start and step.resolution_time_days:
+            sla_deadlines[t.ticket_id] = clock_start + timedelta(days=step.resolution_time_days)
         else:
             sla_deadlines[t.ticket_id] = None
 

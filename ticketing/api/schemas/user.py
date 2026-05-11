@@ -41,3 +41,23 @@ class UserRoleResponse(BaseModel):
 class NotificationBadgeResponse(BaseModel):
     """Unread event count for the notification badge in the officer UI."""
     unseen_count: int
+
+
+class NotificationItem(BaseModel):
+    """A single unseen event surfaced in the notification panel."""
+    event_id: str
+    ticket_id: str
+    grievance_id: str
+    grievance_summary: Optional[str]
+    event_type: str
+    note: Optional[str]
+    created_at: datetime
+    created_by_user_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationsResponse(BaseModel):
+    items: list[NotificationItem]
+    total: int
