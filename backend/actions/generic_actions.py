@@ -5,9 +5,7 @@ from rasa_sdk.events import SlotSet, SessionStarted,ActionExecuted, FollowupActi
 from rasa_sdk.forms import FormValidationAction
 from rasa_sdk.types import DomainDict
 from .base_classes.base_classes  import BaseAction
-from backend.actions.utils.ticketing_dispatch import fetch_qr_scan
 from backend.config.database_constants import TASK_STATUS
-from backend.shared_functions.location_mapping import resolve_location_code_to_names
 import json
 import os
 
@@ -68,114 +66,39 @@ class ActionSessionStart(BaseAction):
 class ActionIntroduce(BaseAction):
     def name(self) -> Text:
         return "action_introduce"
-
-    def parse_introduce_payload(self, message: str) -> Dict[str, Any]:
-        """Extract the JSON payload embedded in the /introduce message.
-
-        Recognised keys: province, district, flask_session_id, t (QR token).
-        Any other keys are ignored. Returns an empty dict on parse failure.
-        """
-        if not message or '{' not in message or '}' not in message:
-            return {}
-        try:
-            json_str = message[message.index('{'):message.rindex('}') + 1]
+    
+    def get_province_and_district_and_flask_session_id(self, message: str) -> tuple:
+        if '{' in message and '}' in message:
+            json_str = message[message.index('{'):message.rindex('}')+1]
             data = json.loads(json_str)
-        except (ValueError, json.JSONDecodeError) as exc:
-            self.logger.warning(f"{self.name()} - failed to parse introduce payload: {exc}")
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        return data
+            province = data.get('province')
+            district = data.get('district')
+            flask_session_id = data.get('flask_session_id')
+            return province, district, flask_session_id
+        else:
+            return None, None, None
 
-    def _resolve_qr_token(self, token: str) -> Dict[str, Any]:
-        """Resolve a QR token to a slot bundle (token + scan + place names).
-
-        Always returns a dict — empty when the token is missing/invalid so the
-        caller can fall back to the standard geo questions.
-        """
-        if not token:
-            return {}
-        scan = fetch_qr_scan(token)
-        if not scan:
-            self.logger.info(f"{self.name()} - QR token unresolved, falling back to geo questions: token={token}")
-            return {}
-
-        location_code = scan.get("location_code")
-        names: Dict[str, Any] = {}
-        if location_code:
-            try:
-                names = resolve_location_code_to_names(self.db_manager, location_code) or {}
-            except Exception as exc:  # pylint: disable=broad-except
-                self.logger.warning(f"{self.name()} - location code resolution failed: {exc}")
-                names = {}
-
-        bundle = {
-            "qr_token": token,
-            "package_id": scan.get("package_id"),
-            "package_label": scan.get("label"),
-            "project_code": scan.get("project_code"),
-            "location_code": location_code,
-            "complainant_province": names.get("province_name"),
-            "complainant_district": names.get("district_name"),
-        }
-        self.logger.info(
-            f"{self.name()} - QR token resolved: token=%s package_id=%s project_code=%s "
-            f"location_code=%s district=%s province=%s",
-            token,
-            bundle.get("package_id"),
-            bundle.get("project_code"),
-            bundle.get("location_code"),
-            bundle.get("complainant_district"),
-            bundle.get("complainant_province"),
-        )
-        return bundle
 
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        events: List[Dict[Text, Any]] = []
+        events = []
         message = tracker.latest_message.get('text', '')
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {message}")
-
-        if message and "introduce" in message.lower():
-            payload = self.parse_introduce_payload(message)
-
-            province = payload.get('province')
-            district = payload.get('district')
-            flask_session_id = payload.get('flask_session_id')
-            token = payload.get('t')
-
-            qr_bundle = self._resolve_qr_token(token) if token else {}
-
-            if qr_bundle:
-                qr_district = qr_bundle.get("complainant_district")
-                qr_province = qr_bundle.get("complainant_province")
-
-                slot_pairs = [
-                    ("qr_token", qr_bundle.get("qr_token")),
-                    ("package_id", qr_bundle.get("package_id")),
-                    ("package_label", qr_bundle.get("package_label")),
-                    ("project_code", qr_bundle.get("project_code")),
-                    ("location_code", qr_bundle.get("location_code")),
-                    ("complainant_province", qr_province or province),
-                    ("complainant_district", qr_district or district),
-                ]
-                for slot_name, slot_value in slot_pairs:
-                    if slot_value:
-                        events.append(SlotSet(slot_name, slot_value))
-            else:
+        if message:
+            if "introduce" in message.lower():
+                province, district, flask_session_id = self.get_province_and_district_and_flask_session_id(message)
                 if province and district:
                     events.extend([
                         SlotSet("complainant_province", province),
-                        SlotSet("complainant_district", district),
+                        SlotSet("complainant_district", district)
                     ])
-
-            if flask_session_id:
-                events.append(SlotSet("flask_session_id", flask_session_id))
-
-        utterance = self.get_utterance(1)
+                if flask_session_id:
+                    events.append(SlotSet("flask_session_id", flask_session_id))
+        #dispatch message to choose language
+        message = self.get_utterance(1)
         buttons = self.get_buttons(1)
-        self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {utterance}")
+        self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Message: {message}")
         self.logger.debug(f"{self.name()} - 🔍 [RASA DEBUG] Buttons: {buttons}")
-        dispatcher.utter_message(text=utterance, buttons=buttons)
+        dispatcher.utter_message(text=message, buttons=buttons)
         return events
     
 
@@ -211,24 +134,16 @@ class ActionMainMenu(BaseAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> List[Dict[Text, Any]]:
-
+        
+        # Get language, district and province
         district = tracker.get_slot("complainant_district")
         province = tracker.get_slot("complainant_province")
-        package_label = tracker.get_slot("package_label")
-
-        if package_label and district:
-            # QR-scanned arrival: include the package label in the welcome.
-            message = self.get_utterance(3)
-            message = message.format(
-                package_label=package_label,
-                district=district,
-                province=province or "",
-            )
-        elif district and province:
+        #ic(language, district, province)
+        if district and province:
             message = self.get_utterance(2)
             message = message.format(
                 district=district,
-                province=province,
+                province=province
             )
         else:
             message = self.get_utterance(1)

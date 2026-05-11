@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth, MOCK_OFFICERS, setMockUserCookie, type MockOfficer } from "@/app/providers/AuthProvider";
-import { getBadge } from "@/lib/api";
+import { getBadge, getNotifications, type NotificationItem } from "@/lib/api";
 import {
   IconAllTickets, IconReports, IconQrCodes, IconSettings, IconHelp,
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
@@ -95,6 +95,110 @@ function MockRoleSwitcher() {
   );
 }
 
+// ── Notification bell + panel ─────────────────────────────────────────────────
+
+const EVENT_LABELS: Record<string, string> = {
+  TICKET_CREATED:    "New ticket filed",
+  ACKNOWLEDGED:      "Ticket acknowledged",
+  ESCALATED:         "Ticket escalated",
+  RESOLVED:          "Ticket resolved",
+  CLOSED:            "Ticket closed",
+  NOTE:              "Internal note added",
+  REPLY_SENT:        "Reply sent to complainant",
+  COMPLAINANT_MSG:   "Complainant sent a message",
+  TASK_ASSIGNED:     "Task assigned to you",
+  TASK_COMPLETED:    "Task completed",
+  GRC_CONVENED:      "GRC hearing convened",
+  GRC_DECIDED:       "GRC decision recorded",
+};
+
+function timeAgo(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60)   return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function NotificationPanel({
+  items,
+  total,
+  onClose,
+}: {
+  items: NotificationItem[];
+  total: number;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+
+  function go(ticketId: string) {
+    onClose();
+    router.push(`/tickets/${ticketId}`);
+  }
+
+  return (
+    <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+        <span className="text-sm font-semibold text-gray-800">Notifications</span>
+        {total > 0 && (
+          <span className="text-xs text-gray-500">{total} unread</span>
+        )}
+      </div>
+
+      {/* List */}
+      {items.length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-gray-400">
+          No unread notifications
+        </div>
+      ) : (
+        <ul className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+          {items.map((n) => (
+            <li key={n.event_id}>
+              <button
+                onClick={() => go(n.ticket_id)}
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-blue-700 truncate">
+                      {n.grievance_id}
+                    </p>
+                    <p className="text-sm text-gray-800 mt-0.5">
+                      {EVENT_LABELS[n.event_type] ?? n.event_type}
+                    </p>
+                    {n.note && (
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.note}</p>
+                    )}
+                    {!n.note && n.grievance_summary && (
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{n.grievance_summary}</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-400 shrink-0 mt-0.5 whitespace-nowrap">
+                    {timeAgo(n.created_at)}
+                  </span>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Footer — view all link */}
+      {total > items.length && (
+        <div className="border-t border-gray-100 px-4 py-2 text-center">
+          <button
+            onClick={() => { onClose(); router.push("/queue"); }}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            + {total - items.length} more — go to queue
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Desktop shell ─────────────────────────────────────────────────────────────
 
 function DesktopShell({ children }: { children: React.ReactNode }) {
@@ -102,6 +206,10 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin } = useAuth();
   const [unseenCount, setUnseenCount] = useState(0);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifTotal, setNotifTotal] = useState(0);
+  const bellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -114,6 +222,26 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) return;
     getBadge().then((b) => setUnseenCount(b.unseen_count)).catch(() => {});
   }, [pathname, isAuthenticated]);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!bellOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [bellOpen]);
+
+  function openBell() {
+    if (bellOpen) { setBellOpen(false); return; }
+    getNotifications(20)
+      .then((r) => { setNotifications(r.items); setNotifTotal(r.total); })
+      .catch(() => {});
+    setBellOpen(true);
+  }
 
   if (isLoading) {
     return (
@@ -182,14 +310,27 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative text-gray-400 hover:text-gray-600 p-1">
-              <IconBell size={18} strokeWidth={1.75} />
-              {unseenCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                  {unseenCount > 9 ? "9+" : unseenCount}
-                </span>
+            <div ref={bellRef} className="relative">
+              <button
+                onClick={openBell}
+                className="relative text-gray-400 hover:text-gray-600 p-1"
+                title="Notifications"
+              >
+                <IconBell size={18} strokeWidth={1.75} />
+                {unseenCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {unseenCount > 9 ? "9+" : unseenCount}
+                  </span>
+                )}
+              </button>
+              {bellOpen && (
+                <NotificationPanel
+                  items={notifications}
+                  total={notifTotal}
+                  onClose={() => setBellOpen(false)}
+                />
               )}
-            </button>
+            </div>
             {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
               <MockRoleSwitcher />
             ) : (

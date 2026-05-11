@@ -223,9 +223,6 @@ To change any of these for local dev, set them in `env.local` and rebuild `grm_u
 | `relation "ticketing.tickets" does not exist` | Migration not applied | Run `upgrade head` |
 | Seed fails with location warning | Geodata not imported | Location verify-only — warning is safe, seed continues |
 | Port 5002 already in use | Old container still running | `docker compose down` first |
-| `GET /api/v1/scan/{token}` → `422 package_has_no_location` | Package referenced by the QR token has no rows in `ticketing.package_locations` | Open the Settings UI → Packages → attach at least one location, then re-test the scan. See the "QR Token Scan Flow" section in `docs/COMMIT_STRATEGY.md`. |
-| QR sticker scans but webchat asks geography anyway | Token resolved with no district info, or chatbot can't reach `ticketing_api` (logged but non-fatal) | Confirm `curl http://127.0.0.1:5002/api/v1/scan/{token}` returns `location_code`; check `backend` container has `TICKETING_API_URL` reachable |
-| QR URL printed by Settings UI points at wrong host | `CHATBOT_WEBCHAT_URL` env var unset or stale in `ticketing_api` | Set `CHATBOT_WEBCHAT_URL` in `env.local` and recreate `ticketing_api` only — see `docs/COMMIT_STRATEGY.md` |
 
 ---
 

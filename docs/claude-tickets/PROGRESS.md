@@ -48,18 +48,8 @@
   - `channels/ticketing-ui/lib/api.ts` — QrTokenOut, QrTokenCreateResponse types + listQrTokens / createQrToken / revokeQrToken functions
   - `channels/ticketing-ui/app/settings/page.tsx` — QR Tokens section in PackageRow (list tokens, generate, revoke) + QrCodeModal (QR image via qrserver.com, copy URL, download PNG)
 
-- ✅ **Chatbot-side QR integration** (2026-05-07, Cursor):
-  - `channels/REST_webchat/app.js` + `channels/webchat/app.js` — `getUrlParams()` reads `t`; `/introduce` payload now JSON with `province`, `district`, `flask_session_id`, `t`
-  - `backend/orchestrator/config/domain.yml` — 5 new custom slots: `qr_token`, `package_id`, `package_label`, `project_code`, `location_code`
-  - `backend/actions/utils/ticketing_dispatch.py` — `fetch_qr_scan(token)` helper (GET `/api/v1/scan/{token}`, treats 404/410/422/network errors as "no token", never raises); `dispatch_ticket(... package_id=…)` forwards to ticketing
-  - `backend/shared_functions/location_mapping.py` — `resolve_location_code_to_names()` (joins `ticketing.locations` + `location_translations` to derive district + province from a `location_code`)
-  - `backend/actions/generic_actions.py` — `ActionIntroduce.parse_introduce_payload()` + `_resolve_qr_token()`; sets all 7 slots when token is valid; `ActionMainMenu` uses utterance index 3 ("You are reaching out from {package_label}, {district} District.") when QR data is present
-  - `backend/actions/utils/utterance_mapping_rasa.py` — added EN + NE utterance index 3 for `action_main_menu`
-  - `backend/actions/action_submit_grievance.py` — both standard + SEAH submit paths now pass `project_code=tracker.get_slot("project_code") or "KL_ROAD"` and `package_id=tracker.get_slot("package_id")` to `dispatch_ticket`
-  - `tests/test_qr_token_integration.py` — 17 unit tests (fetch_qr_scan happy/error paths, location resolution, dispatch_ticket package_id propagation)
-  - Operational notes (env override + 422 data gotcha + local recipe): see "QR Token Scan Flow" in `docs/COMMIT_STRATEGY.md`
-
 ### In progress / next
+- 🔲 **Chatbot-side QR integration** — Cursor task: read `?t=` URL param, call `GET /api/v1/scan/{token}`, pre-fill district/province slots, update welcome message, pass `package_id` in ticket dispatch (see handoff note in `docs/claude-tickets/`)
 - 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
 - 🔲 **Staging deploy** — Docker deploy to grm.stage.facets-ai.com
 

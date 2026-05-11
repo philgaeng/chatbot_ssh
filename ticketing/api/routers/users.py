@@ -15,12 +15,14 @@ from sqlalchemy.orm import Session
 from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
 from ticketing.api.schemas.user import (
     NotificationBadgeResponse,
+    NotificationItem,
+    NotificationsResponse,
     RoleResponse,
     UserRoleCreate,
     UserRoleResponse,
 )
 from ticketing.models.officer_scope import OfficerScope
-from ticketing.models.ticket import TicketEvent
+from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.user import Role, UserRole
 
 router = APIRouter()
@@ -481,3 +483,54 @@ def get_badge(
         )
     ).scalar_one()
     return NotificationBadgeResponse(unseen_count=count)
+
+
+@router.get(
+    "/users/me/notifications",
+    response_model=NotificationsResponse,
+    summary="Get unseen notifications for the current officer (for bell panel)",
+)
+def get_notifications(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> NotificationsResponse:
+    """
+    Returns the most recent unseen events assigned to the current officer,
+    joined with their parent ticket for display context.
+    Ordered oldest-first so the panel shows the backlog from top.
+    """
+    from sqlalchemy import func
+
+    rows = db.execute(
+        select(TicketEvent, Ticket.grievance_id, Ticket.grievance_summary)
+        .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
+        .where(
+            TicketEvent.assigned_to_user_id == current_user.user_id,
+            TicketEvent.seen.is_(False),
+        )
+        .order_by(TicketEvent.created_at.asc())
+        .limit(limit)
+    ).all()
+
+    total_count = db.execute(
+        select(func.count(TicketEvent.event_id)).where(
+            TicketEvent.assigned_to_user_id == current_user.user_id,
+            TicketEvent.seen.is_(False),
+        )
+    ).scalar_one()
+
+    items = [
+        NotificationItem(
+            event_id=ev.event_id,
+            ticket_id=ev.ticket_id,
+            grievance_id=grievance_id,
+            grievance_summary=grievance_summary,
+            event_type=ev.event_type,
+            note=ev.note,
+            created_at=ev.created_at,
+            created_by_user_id=ev.created_by_user_id,
+        )
+        for ev, grievance_id, grievance_summary in rows
+    ]
+    return NotificationsResponse(items=items, total=total_count)
