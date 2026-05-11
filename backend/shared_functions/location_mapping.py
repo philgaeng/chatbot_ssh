@@ -20,6 +20,88 @@ def _normalize(value: Any) -> Optional[str]:
     return text if text else None
 
 
+def resolve_location_code_to_names(
+    db_manager: Any,
+    location_code: str,
+    lang_code: str = "en",
+) -> Dict[str, Optional[str]]:
+    """Resolve a ticketing location_code to its district + province names.
+
+    Best-effort: returns whatever can be resolved. Never raises.
+    Output keys: district_code, district_name, province_code, province_name.
+
+    Notes:
+    - Designed for QR-scan pre-fill where the token resolves to a district code
+      (level 2 in NP). When the supplied code is at a different level we still
+      best-effort fill whichever names we can find for the code itself and its
+      parent.
+    """
+    result: Dict[str, Optional[str]] = {
+        "district_code": None,
+        "district_name": None,
+        "province_code": None,
+        "province_name": None,
+    }
+
+    cleaned = _normalize(location_code)
+    if not cleaned:
+        return result
+
+    try:
+        rows = db_manager.execute_query(
+            """
+            SELECT
+                l.location_code,
+                l.parent_location_code,
+                l.level_number,
+                COALESCE(lt_pref.name, lt_en.name) AS name,
+                COALESCE(parent_pref.name, parent_en.name) AS parent_name,
+                p.location_code AS parent_code
+            FROM ticketing.locations l
+            LEFT JOIN ticketing.location_translations lt_pref
+              ON lt_pref.location_code = l.location_code AND lt_pref.lang_code = %s
+            LEFT JOIN ticketing.location_translations lt_en
+              ON lt_en.location_code = l.location_code AND lt_en.lang_code = 'en'
+            LEFT JOIN ticketing.locations p
+              ON p.location_code = l.parent_location_code
+            LEFT JOIN ticketing.location_translations parent_pref
+              ON parent_pref.location_code = p.location_code AND parent_pref.lang_code = %s
+            LEFT JOIN ticketing.location_translations parent_en
+              ON parent_en.location_code = p.location_code AND parent_en.lang_code = 'en'
+            WHERE l.location_code = %s
+              AND l.is_active = TRUE
+            LIMIT 1
+            """,
+            (lang_code, lang_code, cleaned),
+            "resolve_location_code_to_names",
+        )
+    except Exception:
+        return result
+
+    if not rows:
+        return result
+
+    row = rows[0]
+    level = row.get("level_number")
+
+    # Level 2 = district in Nepal. Anything else is best-effort.
+    if level == 2:
+        result["district_code"] = row.get("location_code")
+        result["district_name"] = row.get("name")
+        result["province_code"] = row.get("parent_code")
+        result["province_name"] = row.get("parent_name")
+    elif level == 1:
+        result["province_code"] = row.get("location_code")
+        result["province_name"] = row.get("name")
+    else:
+        result["district_code"] = row.get("location_code")
+        result["district_name"] = row.get("name")
+        result["province_code"] = row.get("parent_code")
+        result["province_name"] = row.get("parent_name")
+
+    return result
+
+
 def resolve_location_payload(
     db_manager: Any,
     slots: Dict[str, Any],
