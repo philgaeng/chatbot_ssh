@@ -191,11 +191,24 @@ export interface WorkflowDefinition {
 
 // ── Fetch wrapper ─────────────────────────────────────────────────────────────
 
+/**
+ * Read the OIDC access token (set by lib/auth/oidc-auth.ts) and turn it into
+ * an Authorization header. Returns an empty object on the server side or when
+ * no token is present (bypass-auth builds), so it's safe to spread blindly.
+ */
+function authHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = window.localStorage.getItem("grm_access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const resp = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...opts?.headers },
-    ...opts,
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...authHeaders(),
+    ...((opts?.headers as Record<string, string> | undefined) ?? {}),
+  };
+  const resp = await fetch(`${BASE}${path}`, { ...opts, headers });
   if (!resp.ok) {
     const body = await resp.text();
     throw new Error(`API ${resp.status} ${path}: ${body}`);
@@ -500,6 +513,7 @@ export async function uploadOfficerAttachment(
   // Do NOT set Content-Type — browser sets multipart boundary automatically
   const resp = await fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
     method: "POST",
+    headers: authHeaders(),
     body: form,
   });
   if (!resp.ok) {
@@ -828,7 +842,11 @@ export async function importLocations(
   form.append("dry_run", String(opts.dry_run ?? false));
   form.append("max_level", String(opts.max_level ?? 3));
   form.append("format", "auto");
-  const resp = await fetch(`${BASE}/api/v1/locations/import`, { method: "POST", body: form });
+  const resp = await fetch(`${BASE}/api/v1/locations/import`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
   if (!resp.ok) {
     const body = await resp.text();
     throw new Error(`Import failed ${resp.status}: ${body}`);

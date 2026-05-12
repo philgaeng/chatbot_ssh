@@ -77,7 +77,21 @@ DEMO_OFFICERS: list[dict[str, str]] = [
 
 # Token mappers: emit Cognito-compatible claim names so the rest of the code
 # (frontend TokenPayload, backend get_current_user) requires zero changes.
+# Also injects `ticketing-api` into the access token's `aud` claim so the
+# backend's jose.jwt.decode(audience="ticketing-api", ...) accepts the token.
 MAPPERS: list[dict[str, Any]] = [
+    {
+        "name": "audience-ticketing-api",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "consentRequired": False,
+        "config": {
+            "included.client.audience": "ticketing-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false",
+        },
+    },
     {
         "name": "grm_roles",
         "protocol": "openid-connect",
@@ -159,55 +173,98 @@ def _realm_admin() -> KeycloakAdmin:
 
 def setup_realm(master: KeycloakAdmin) -> None:
     realms = master.get_realms()
-    if any(r["realm"] == REALM for r in realms):
-        logger.info("Realm '%s' already exists — skipping", REALM)
+    if not any(r["realm"] == REALM for r in realms):
+        master.create_realm({
+            "realm": REALM,
+            "enabled": True,
+            "displayName": "GRM Ticketing",
+            "ssoSessionMaxLifespan": 28800,    # 8h
+            "accessTokenLifespan": 3600,        # 1h
+            "bruteForceProtected": True,
+        })
+        logger.info("Created realm '%s'", REALM)
+    else:
+        logger.info("Realm '%s' already exists — skipping create", REALM)
+
+
+def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
+    """Enable unmanaged attribute storage.
+
+    Keycloak 24+ uses the User Profile feature, which silently DROPS any
+    attribute not declared in the profile schema. Without this, our seeded
+    `grm_roles` / `organization_id` user attributes vanish at create time
+    and the token mappers find nothing to emit. Setting policy to ENABLED
+    permits arbitrary attributes — safe for the GRM use case where we
+    control all token mappers.
+    """
+    import json
+    profile = admin.connection.raw_get(f"/admin/realms/{REALM}/users/profile").json()
+    if profile.get("unmanagedAttributePolicy") == "ENABLED":
+        logger.info("User profile unmanagedAttributePolicy already ENABLED")
         return
-    master.create_realm({
-        "realm": REALM,
-        "enabled": True,
-        "displayName": "GRM Ticketing",
-        "ssoSessionMaxLifespan": 28800,    # 8h
-        "accessTokenLifespan": 3600,        # 1h
-        "bruteForceProtected": True,
-    })
-    logger.info("Created realm '%s'", REALM)
+    profile["unmanagedAttributePolicy"] = "ENABLED"
+    resp = admin.connection.raw_put(
+        f"/admin/realms/{REALM}/users/profile",
+        data=json.dumps(profile),
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Failed to update user profile policy: {resp.status_code} {resp.text}")
+    logger.info("User profile unmanagedAttributePolicy set to ENABLED")
 
 
 def _get_client_uuid(admin: KeycloakAdmin, client_id: str) -> str | None:
-    clients = admin.get_clients(query={"clientId": client_id, "exact": "true"})
-    return clients[0]["id"] if clients else None
+    # python-keycloak 7.1.1's get_clients() takes no args and returns all clients;
+    # filter by clientId in Python rather than relying on server-side query.
+    for client in admin.get_clients():
+        if client.get("clientId") == client_id:
+            return client["id"]
+    return None
 
 
 def setup_clients(admin: KeycloakAdmin) -> str:
-    """Create ticketing-ui and ticketing-api clients. Returns ticketing-ui internal UUID."""
-    # ticketing-ui — public, PKCE
+    """Create ticketing-ui and ticketing-api clients. Returns ticketing-ui internal UUID.
+
+    Idempotent: re-runs update the existing client's redirectUris and
+    post.logout.redirect.uris so adding a new deployment hostname only needs
+    a code change + re-run of this script.
+    """
+    redirect_uris = [
+        "http://localhost:3001/*",
+        "http://localhost:3002/*",
+        "https://nepal-gms-chatbot.facets-ai.com/grm-auth/*",
+        "https://grm.stage.facets-ai.com/*",
+        "https://grm.facets-ai.com/*",
+    ]
+    # Keycloak stores post-logout URIs as a '##'-joined string, not a list.
+    post_logout_uris = "##".join([
+        "http://localhost:3001/login",
+        "http://localhost:3002/login",
+        "https://nepal-gms-chatbot.facets-ai.com/grm-auth/login",
+        "https://grm.stage.facets-ai.com/login",
+        "https://grm.facets-ai.com/login",
+    ])
+    ui_payload = {
+        "clientId": CLIENT_UI,
+        "publicClient": True,
+        "standardFlowEnabled": True,
+        "directAccessGrantsEnabled": False,
+        "implicitFlowEnabled": False,
+        "serviceAccountsEnabled": False,
+        "redirectUris": redirect_uris,
+        "webOrigins": ["+"],
+        "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "access.token.lifespan": "3600",
+            "post.logout.redirect.uris": post_logout_uris,
+        },
+    }
+
     ui_uuid = _get_client_uuid(admin, CLIENT_UI)
     if ui_uuid:
-        logger.info("Client '%s' already exists", CLIENT_UI)
+        admin.update_client(ui_uuid, ui_payload)
+        logger.info("Client '%s' updated (redirect + post-logout URIs synced)", CLIENT_UI)
     else:
-        admin.create_client({
-            "clientId": CLIENT_UI,
-            "publicClient": True,
-            "standardFlowEnabled": True,
-            "directAccessGrantsEnabled": False,
-            "implicitFlowEnabled": False,
-            "serviceAccountsEnabled": False,
-            "redirectUris": [
-                "http://localhost:3001/*",
-                "https://grm.stage.facets-ai.com/*",
-                "https://grm.facets-ai.com/*",
-            ],
-            "webOrigins": ["+"],
-            "attributes": {
-                "pkce.code.challenge.method": "S256",
-                "access.token.lifespan": "3600",
-                "post.logout.redirect.uris": (
-                    "http://localhost:3001/login"
-                    "##https://grm.stage.facets-ai.com/login"
-                    "##https://grm.facets-ai.com/login"
-                ),
-            },
-        })
+        admin.create_client(ui_payload)
         ui_uuid = _get_client_uuid(admin, CLIENT_UI)
         logger.info("Created client '%s' (uuid=%s)", CLIENT_UI, ui_uuid)
 
@@ -241,9 +298,22 @@ def setup_token_mappers(admin: KeycloakAdmin, ui_uuid: str) -> None:
 
 def setup_demo_users(admin: KeycloakAdmin) -> None:
     for officer in DEMO_OFFICERS:
-        found = admin.get_users(query={"username": officer["username"], "exact": "true"})
+        # Keycloak's REST API stores attributes as list[str] per key. Passing
+        # bare strings silently sets attributes=None — which then leaves the
+        # token mappers with nothing to emit (no custom:grm_roles claim).
+        attributes = {
+            "grm_roles":       [officer["grm_roles"]],
+            "organization_id": [officer["organization_id"]],
+        }
+        # python-keycloak's get_users takes a positional dict, not query= kw.
+        found = admin.get_users({"username": officer["username"], "exact": "true"})
         if found:
-            logger.info("User '%s' already exists — skipping", officer["username"])
+            # Update the attributes on every run — earlier runs of this script
+            # may have created users with attributes=None. This re-attaches
+            # them so the token mappers can populate the claims.
+            user_id = found[0]["id"]
+            admin.update_user(user_id, {"attributes": attributes})
+            logger.info("User '%s' attributes refreshed", officer["username"])
             continue
         try:
             admin.create_user({
@@ -253,10 +323,7 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
                 "lastName": officer["lastName"],
                 "enabled": True,
                 "emailVerified": True,
-                "attributes": {
-                    "grm_roles": officer["grm_roles"],
-                    "organization_id": officer["organization_id"],
-                },
+                "attributes": attributes,
                 "credentials": [{"type": "password", "value": "GrmDemo2026!", "temporary": True}],
                 "requiredActions": ["UPDATE_PASSWORD"],
             })
@@ -282,6 +349,7 @@ def main() -> None:
     setup_realm(master)
 
     grm = _realm_admin()
+    setup_user_profile_policy(grm)
     ui_uuid = setup_clients(grm)
     setup_token_mappers(grm, ui_uuid)
     setup_demo_users(grm)

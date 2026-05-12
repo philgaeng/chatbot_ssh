@@ -19,7 +19,11 @@ SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNIN
 SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
 
 # Docker Compose Command
-DOCKER_COMPOSE = docker compose
+# --env-file env.local makes env.local available for ${VAR} substitution in
+# compose files (in addition to per-service env_file: blocks). Without this,
+# auth-profile build args like NEXT_PUBLIC_OIDC_ISSUER and KEYCLOAK_HOST_PORT
+# fall back to defaults instead of values from env.local.
+DOCKER_COMPOSE = docker compose --env-file env.local
 
 # --- Local WSL (default docker-compose.yml: nginx host :8080→:80, orchestrator, backend, redis, db, celery) ---
 # Run from repo root. Requires env.local. REST webchat: http://localhost:8080/
@@ -29,7 +33,7 @@ DOCKER_COMPOSE = docker compose
 # grm_ui, or grm_celery*, so host ports 5002 and 3001 stay free for other worktrees/stacks.
 .PHONY: compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local compose_docker_wsl_ticketing compose_docker_wsl_down compose-down-all stop-all compose_docker_wsl_nginx compose_docker_aws compose_docker_aws_full compose_docker_aws_main check_grm_ports compose_seed_seah_catalog \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
-	compose_docker_wsl_grm_demo compose_docker_wsl_grm_auth
+	compose_docker_wsl_grm_demo compose_docker_wsl_grm_auth compose_keycloak_setup
 
 # Services defined only in docker-compose.yml (chatbot + REST webchat via nginx). Explicit list
 # avoids accidentally scaling the full grm overlay when iterating locally.
@@ -84,14 +88,22 @@ compose_docker_wsl_grm_demo:
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml up -d --build
 
 # Local WSL: chatbot + GRM full stack with Keycloak auth (--profile auth).
-# Adds: grm_ui_auth :3002, ticketing_api_auth :5003, keycloak :8080.
-# Accessible via nginx at http://localhost/grm/ (demo) and /grm-auth/ (auth).
-# CURSOR: uncomment /keycloak/ /grm-auth/ /grm-auth-api/ blocks in nginx conf first.
+# Adds: grm_ui_auth :3002, ticketing_api_auth :5003, keycloak :18080.
+# Accessible at http://localhost:3002/ (auth UI) — Keycloak admin at :18080/admin.
+# Requires KEYCLOAK_ADMIN_PASSWORD + NEXT_PUBLIC_OIDC_* in env.local
+# (DOCKER_COMPOSE above passes --env-file env.local automatically).
 # First-time realm setup (run once after keycloak is healthy):
-#   docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
-#     exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
+#   make compose_keycloak_setup
 compose_docker_wsl_grm_auth:
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml --profile auth up -d --build
+
+# One-time Keycloak realm bootstrap. Idempotent — safe to re-run.
+# Creates the `grm` realm, ticketing-ui + ticketing-api clients, token mappers
+# (incl. audience injection), unmanaged-attribute policy, and 6 demo officers.
+# Only needed after the keycloak container reports healthy.
+compose_keycloak_setup:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
+	    exec -T ticketing_api_auth python -m ticketing.auth.keycloak_setup
 
 # Local WSL — chatbot stack only (same as compose_docker_wsl_chatbot)
 chatbot-local compose_docker_wsl_chatbot:

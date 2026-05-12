@@ -7,7 +7,10 @@
 # ── Auth stack (requires --profile auth) ─────────────────────────────────────
 #   make compose_docker_wsl_grm_auth
 #   → grm_ui_auth :3002  BYPASS_AUTH=false → ticketing_api_auth:5003 (Keycloak JWT)
-#   → keycloak    :8080  admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD:-admin})
+#   → keycloak    :18080 admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD})
+#                        Host port configurable via KEYCLOAK_HOST_PORT.
+#                        Browser-facing URL pinned by KC_HOSTNAME_URL so tokens'
+#                        `iss` claim matches what the UI uses for login.
 #
 # After first start with auth profile, initialise the GRM realm once:
 #   docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
@@ -29,7 +32,8 @@ services:
 
   # ── Keycloak (OIDC identity provider) — auth profile only ───────────────────
   # Included only when: docker compose --profile auth up
-  # Admin UI: http://localhost:8080  (admin / ${KEYCLOAK_ADMIN_PASSWORD:-admin})
+  # Admin UI: http://localhost:${KEYCLOAK_HOST_PORT:-18080}/  (admin / KEYCLOAK_ADMIN_PASSWORD)
+  # Default host port is 18080 to avoid clashing with nginx on host :8080.
   # Uses existing db container — stores state in the 'keycloak' schema in app_db.
   keycloak:
     profiles: [auth]
@@ -43,20 +47,26 @@ services:
       KC_DB_PASSWORD: password
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
+      # Canonical browser-facing URL — bakes into tokens' `iss` claim and the
+      # discovery endpoint. Backend reaches Keycloak via Docker DNS instead
+      # (see KEYCLOAK_JWKS_URL in ticketing_api_auth).
+      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://localhost:18080}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
-      - "8080:8080"
+      - "${KEYCLOAK_HOST_PORT:-18080}:8080"
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
-      interval: 30s
+      # Keycloak 26 exposes /health/ready on the management port (9000), not 8080.
+      # Quarkus management interface starts only when KC_HEALTH_ENABLED=true.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 60s
+      retries: 20
+      start_period: 90s
 
   # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
@@ -250,7 +260,11 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://keycloak:8080/keycloak/realms/grm}
+      # `iss` claim validation — must match what the BROWSER sees, i.e. the value
+      # of KC_HOSTNAME_URL on the keycloak service plus /realms/grm.
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18080/realms/grm}
+      # JWKS fetched via Docker DNS — backend can't reach host port 18080.
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/grm/protocol/openid-connect/certs}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
       KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-http://keycloak:8080}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
