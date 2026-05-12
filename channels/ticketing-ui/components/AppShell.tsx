@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useAuth, MOCK_OFFICERS, setMockUserCookie, type MockOfficer } from "@/app/providers/AuthProvider";
+import { useAuth } from "@/app/providers/AuthProvider";
+import type { OfficerRosterEntry } from "@/lib/api";
 import { getBadge, getNotifications, type NotificationItem } from "@/lib/api";
 import {
   IconAllTickets, IconReports, IconQrCodes, IconSettings, IconHelp,
@@ -34,59 +35,73 @@ const MOBILE_TABS = [
   { href: "/m/tasks",   label: "Tasks", Icon: IconMobileTasks  },
 ] as const;
 
-// ── Demo role switcher (bypass-auth mode only) ────────────────────────────────
+// ── Demo role switcher (bypass-auth only) — options from DB roster ────────────
 
-function MockRoleSwitcher() {
-  const { user, switchMockUser } = useAuth();
+function BypassRoleSwitcher() {
+  const { user, switchBypassUser, bypassRoster, bypassRosterError } = useAuth();
   const [open, setOpen] = useState(false);
 
   const currentId = user?.sub ?? "";
-  const current = MOCK_OFFICERS.find(o => o.user_id === currentId) ?? MOCK_OFFICERS[0];
+  const sorted: OfficerRosterEntry[] =
+    bypassRoster === null ? [] : [...bypassRoster].sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const currentLabel =
+    sorted.find((o) => o.user_id === currentId)?.display_name ?? user?.name ?? "Officer";
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-dashed border-amber-400 rounded-lg px-2.5 py-1 bg-amber-50 hover:bg-amber-100 transition"
-        title="Demo: click to switch officer role"
+        title="Demo: auth bypass — switch officer (ticketing.user_roles)"
       >
         <span className="text-amber-600 text-[10px] font-bold uppercase tracking-wide">demo</span>
-        <span className="font-medium">{current.name}</span>
-        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className="font-medium max-w-[10rem] truncate">{bypassRoster === null ? "Loading…" : currentLabel}</span>
+        <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden"
+          className="absolute right-0 top-full mt-1 w-64 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1"
           onBlur={() => setOpen(false)}
         >
           <div className="px-3 py-1.5 text-[10px] text-amber-600 font-semibold uppercase tracking-wide border-b border-gray-100">
-            Switch demo officer
+            Switch officer (database roster)
           </div>
-          {MOCK_OFFICERS.map(o => (
+          {bypassRosterError && (
+            <div className="px-3 py-2 text-xs text-red-600">{bypassRosterError}</div>
+          )}
+          {!bypassRosterError && bypassRoster !== null && sorted.length === 0 && (
+            <div className="px-3 py-2 text-xs text-gray-500">No officers in ticketing.user_roles.</div>
+          )}
+          {sorted.map((o) => (
             <button
               key={o.user_id}
-              onClick={() => { setOpen(false); switchMockUser(o); }}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                switchBypassUser(o);
+              }}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition ${
                 o.user_id === currentId
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "text-gray-700 hover:bg-gray-50"
               }`}
             >
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                o.user_id === currentId ? "bg-blue-200 text-blue-700" : "bg-gray-100 text-gray-500"
-              }`}>
-                {o.name.charAt(0)}
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                  o.user_id === currentId ? "bg-blue-200 text-blue-700" : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {o.display_name.charAt(0)}
               </div>
-              <div>
-                <div>{o.name}</div>
-                <div className="text-[10px] text-gray-400">{o.role_keys[0]}</div>
+              <div className="min-w-0">
+                <div className="truncate">{o.display_name}</div>
+                <div className="text-[10px] text-gray-400 truncate">{o.role_keys[0] ?? "—"}</div>
               </div>
-              {o.user_id === currentId && (
-                <span className="ml-auto text-blue-500 text-xs">✓</span>
-              )}
+              {o.user_id === currentId && <span className="ml-auto text-blue-500 text-xs shrink-0">✓</span>}
             </button>
           ))}
         </div>
@@ -332,7 +347,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
             {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
-              <MockRoleSwitcher />
+              <BypassRoleSwitcher />
             ) : (
               <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
             )}

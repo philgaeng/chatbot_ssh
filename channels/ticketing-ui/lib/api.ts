@@ -194,7 +194,8 @@ export interface WorkflowDefinition {
 /**
  * Read the OIDC access token (set by lib/auth/oidc-auth.ts) and turn it into
  * an Authorization header. Returns an empty object on the server side or when
- * no token is present (bypass-auth builds), so it's safe to spread blindly.
+ * no token is present (bypass-auth builds rely on the proxy cookie instead),
+ * so it's safe to spread blindly.
  */
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -461,6 +462,22 @@ export interface OfficerBrief {
 
 export function listOfficers(): Promise<OfficerBrief[]> {
   return apiFetch<OfficerBrief[]>("/api/v1/users/officers");
+}
+
+/** Settings → Officers (admin): aggregated ticketing.user_roles — no Keycloak sync. */
+export interface OfficerRosterEntry {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  role_keys: string[];
+  organization_ids: string[];
+  location_codes: string[];
+  /** invited until Keycloak webhook confirms password update */
+  onboarding_status?: string;
+}
+
+export function listOfficerRoster(): Promise<OfficerRosterEntry[]> {
+  return apiFetch<OfficerRosterEntry[]>("/api/v1/users/roster");
 }
 
 // ── File attachments ──────────────────────────────────────────────────────────
