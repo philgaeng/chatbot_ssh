@@ -68,7 +68,11 @@ services:
     healthcheck:
       # Keycloak 26 exposes /health/ready on the management port (9000), not 8080.
       # Quarkus management interface starts only when KC_HEALTH_ENABLED=true.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      # KC_HTTP_RELATIVE_PATH (set on the service env) shifts the path prefix —
+      # in Pattern A it's "/" (no prefix), in Pattern B "/keycloak". `$$VAR`
+      # defers expansion to the container's shell at runtime instead of compose
+      # render time. The `%/` strips a trailing slash so Pattern A becomes "".
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET %s/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' \"$${KC_HTTP_RELATIVE_PATH%/}\" >&3 && grep -q '\"status\": \"UP\"' <&3"]
       interval: 15s
       timeout: 10s
       retries: 20
