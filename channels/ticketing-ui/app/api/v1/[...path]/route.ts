@@ -17,6 +17,23 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const UPSTREAM = process.env.TICKETING_API_URL ?? "http://localhost:5002";
 
+// Hop-by-hop headers (RFC 7230 §6.1) — must NOT be forwarded by a proxy.
+// undici (Node 18+ fetch) explicitly refuses any of these in the request
+// headers and throws UND_ERR_INVALID_ARG, which surfaces here as a 500.
+// Browsers / load balancers happily set Connection/Keep-Alive on inbound
+// requests, so the proxy has to filter them out before the upstream fetch.
+const HOP_BY_HOP = new Set([
+  "host",                  // SNI mismatch inside Docker; preserved by upstream's Host
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
 async function proxy(
   req: NextRequest,
   path: string[],
@@ -24,10 +41,9 @@ async function proxy(
   const { search } = new URL(req.url);
   const target = `${UPSTREAM}/api/v1/${path.join("/")}${search}`;
 
-  // Forward all headers except host (would cause SNI mismatch inside Docker)
   const fwdHeaders = new Headers();
   for (const [k, v] of req.headers.entries()) {
-    if (k.toLowerCase() === "host") continue;
+    if (HOP_BY_HOP.has(k.toLowerCase())) continue;
     fwdHeaders.set(k, v);
   }
 
