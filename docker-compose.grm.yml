@@ -50,7 +50,13 @@ services:
       # Canonical browser-facing URL — bakes into tokens' `iss` claim and the
       # discovery endpoint. Backend reaches Keycloak via Docker DNS instead
       # (see KEYCLOAK_JWKS_URL in ticketing_api_auth).
+      #   Pattern A (local direct ports): http://localhost:18080
+      #   Pattern B (EC2 nginx subdomain): https://grm-auth.<host>/keycloak
       KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://localhost:18080}
+      # Path prefix Keycloak expects in incoming requests. Empty = root.
+      # Set to /keycloak on EC2 (Pattern B) so KC and nginx agree on the
+      # subpath. MUST match the path in KC_HOSTNAME_URL.
+      KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
