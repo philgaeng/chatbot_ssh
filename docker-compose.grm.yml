@@ -52,10 +52,19 @@ services:
       # (see KEYCLOAK_JWKS_URL in ticketing_api_auth).
       #   Pattern A (local direct ports): http://localhost:18080
       #   Pattern B (EC2 nginx subdomain): https://grm-auth.<host>/keycloak
-      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://localhost:18080}
+      # KC_HOSTNAME is the v2 hostname option (KC 26+). The deprecated
+      # KC_HOSTNAME_URL would print a warning and is being removed in 27.
+      KC_HOSTNAME: ${KC_HOSTNAME_URL:-http://localhost:18080}
+      # Trust X-Forwarded-* from nginx so KC issues HTTPS URLs (matching
+      # KC_HOSTNAME's scheme) when traffic arrives over plaintext from the
+      # internal Docker network. Without this, Pattern B's discovery doc
+      # returns http:// URLs even though KC_HOSTNAME starts with https://,
+      # which breaks browser-side OIDC (mixed content) and JWT iss-claim
+      # validation on the backend.
+      KC_PROXY_HEADERS: xforwarded
       # Path prefix Keycloak expects in incoming requests. Empty = root.
       # Set to /keycloak on EC2 (Pattern B) so KC and nginx agree on the
-      # subpath. MUST match the path in KC_HOSTNAME_URL.
+      # subpath. MUST match the path in KC_HOSTNAME.
       KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
