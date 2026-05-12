@@ -198,13 +198,17 @@ def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
     control all token mappers.
     """
     import json
-    profile = admin.connection.raw_get(f"/admin/realms/{REALM}/users/profile").json()
+    # NB: no leading slash — `raw_get` urljoins onto `server_url`. A leading
+    # slash discards any path prefix (e.g. `/keycloak` in Pattern B), causing
+    # the request to land on `http://keycloak:8080/admin/...` which 404s with
+    # an empty body and breaks .json() parsing downstream.
+    profile = admin.connection.raw_get(f"admin/realms/{REALM}/users/profile").json()
     if profile.get("unmanagedAttributePolicy") == "ENABLED":
         logger.info("User profile unmanagedAttributePolicy already ENABLED")
         return
     profile["unmanagedAttributePolicy"] = "ENABLED"
     resp = admin.connection.raw_put(
-        f"/admin/realms/{REALM}/users/profile",
+        f"admin/realms/{REALM}/users/profile",
         data=json.dumps(profile),
     )
     if resp.status_code >= 300:
