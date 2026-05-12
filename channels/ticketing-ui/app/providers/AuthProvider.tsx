@@ -246,7 +246,13 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     window.location.href = "/queue";
   };
 
-  const roleKeys = (user?.["custom:grm_roles"] ?? "super_admin").split(",").map((r) => r.trim()).filter(Boolean);
+  // SECURITY: fail-closed when the token has no role claim. The old default
+  // was "super_admin" which silently elevated any badly-seeded user to
+  // admin. An empty role list now means "no permissions" everywhere.
+  const roleKeys = ((user?.["custom:grm_roles"] as string | undefined) ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
   const { canSeeSeah, isAdmin } = derivePermissions(roleKeys);
 
   return (

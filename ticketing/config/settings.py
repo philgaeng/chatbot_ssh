@@ -33,7 +33,12 @@ class TicketingSettings(BaseSettings):
 
     # ── Keycloak (replaces AWS Cognito for self-hosted deployments) ──
     # Leave keycloak_issuer empty to keep the dev bypass (returns mock-super-admin).
-    keycloak_issuer: str = ""           # e.g. http://keycloak:8080/realms/grm
+    keycloak_issuer: str = ""           # browser-facing URL — must match tokens' `iss` claim, e.g. http://localhost:18080/realms/grm
+    # Optional JWKS URL override. When set, JWT verification fetches keys from this
+    # URL instead of `{keycloak_issuer}/protocol/openid-connect/certs`. Use this when
+    # the browser-facing issuer is unreachable from the backend container (e.g. local
+    # dev with KC on a host port) — point this at the Docker-internal Keycloak URL.
+    keycloak_jwks_url: str = ""         # e.g. http://keycloak:8080/realms/grm/protocol/openid-connect/certs
     keycloak_client_id: str = "ticketing-api"   # confidential client for JWT audience check
     keycloak_admin_url: str = ""        # e.g. http://keycloak:8080 (no trailing slash)
     keycloak_admin_password: str = ""   # KEYCLOAK_ADMIN_PASSWORD

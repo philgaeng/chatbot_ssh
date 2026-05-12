@@ -22,7 +22,10 @@ def _get_jwks() -> dict[str, Any]:
     if time.time() - _cache_ts < _CACHE_TTL:
         return _jwks_cache
     settings = get_settings()
-    url = f"{settings.keycloak_issuer}/protocol/openid-connect/certs"
+    url = (
+        settings.keycloak_jwks_url
+        or f"{settings.keycloak_issuer}/protocol/openid-connect/certs"
+    )
     resp = httpx.get(url, timeout=5.0)
     resp.raise_for_status()
     _jwks_cache = resp.json()

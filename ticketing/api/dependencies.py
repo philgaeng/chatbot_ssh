@@ -86,15 +86,22 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     x_internal_user_id: str | None = Header(None),
     x_internal_role: str | None = Header(None),
+    x_api_key: str | None = Header(None),
 ) -> CurrentUser:
     """
     Resolve the calling officer:
 
     1. Dev bypass — KEYCLOAK_ISSUER is empty (no Keycloak running locally):
        returns mock-super-admin so development works without auth infrastructure.
+       In this mode, x-internal-user-id is honored unconditionally because
+       there is no JWT to validate against.
 
-    2. Internal service header — x-internal-user-id present (chatbot → ticketing
-       or Celery → ticketing internal calls): trusts the header, skips JWT.
+    2. Internal service header — x-internal-user-id present AND x-api-key
+       matches TICKETING_SECRET_KEY (chatbot → ticketing or Celery → ticketing
+       internal calls): trusts the header, skips JWT.
+
+       SECURITY: without the api-key gate, anyone could curl the API with
+       `x-internal-user-id: super_admin` and bypass auth completely.
 
     3. Normal path — validates the Bearer JWT against Keycloak JWKS.
     """
@@ -108,12 +115,20 @@ def get_current_user(
             organization_id="DOR",
         )
 
-    # Internal service-to-service call (trusted header)
-    if x_internal_user_id:
-        return CurrentUser(
-            user_id=x_internal_user_id,
-            role_keys=(x_internal_role or "super_admin").split(","),
-            organization_id="DOR",
+    # Internal service-to-service call: only honored when paired with the
+    # shared API key. This is the path Celery workers / chatbot inbound use.
+    if x_internal_user_id and settings.ticketing_secret_key:
+        if x_api_key == settings.ticketing_secret_key:
+            return CurrentUser(
+                user_id=x_internal_user_id,
+                role_keys=(x_internal_role or "super_admin").split(","),
+                organization_id="DOR",
+            )
+        # Header present but api-key missing/wrong → reject explicitly so a
+        # caller doesn't silently fall through to anonymous JWT path.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="x-internal-user-id requires a valid x-api-key",
         )
 
     # Normal path: validate Keycloak JWT
@@ -132,3 +147,17 @@ def get_current_user(
         organization_id=claims.get("custom:organization_id", ""),
         location_code=claims.get("custom:location_code"),
     )
+
+
+def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """FastAPI dependency that enforces admin role on the current user.
+
+    Use as: ``_: CurrentUser = Depends(require_admin)`` in an endpoint signature.
+    Raises 403 if the user is not super_admin or local_admin.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user

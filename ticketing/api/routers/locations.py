@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from ticketing.api.dependencies import CurrentUser, require_admin
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
@@ -52,14 +53,6 @@ UTC = timezone.utc
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _require_admin(x_role: str | None = None) -> None:
-    """Placeholder: replace with real Cognito JWT role check in production."""
-    # INTEGRATION POINT: validate Cognito JWT and check role = super_admin / local_admin
-    pass
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -175,9 +168,12 @@ def list_organizations(
 
 @router.post("/organizations", response_model=OrganizationResponse, status_code=201,
              summary="Create an organization (admin)")
-def create_organization(body: OrganizationCreate, db: Session = Depends(get_db)):
+def create_organization(
+    body: OrganizationCreate,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Create a new organization. Admin only."""
-    _require_admin()
     org_id = body.organization_id.strip().upper()
     if db.get(Organization, org_id):
         raise HTTPException(status_code=409, detail=f"Organization '{org_id}' already exists")
@@ -200,9 +196,9 @@ def update_organization(
     organization_id: str,
     body: OrganizationUpdate,
     db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
 ):
     """Update organization name, country, or active status. Admin only."""
-    _require_admin()
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -318,6 +314,7 @@ async def import_locations(
     # CSV-specific column mapping (optional overrides)
     lang_prefix: str = Form("name_", description="CSV language column prefix (default: name_)"),
     db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
 ):
     """
     Upload a location file and upsert into ticketing.locations + location_translations.
@@ -339,8 +336,6 @@ async def import_locations(
     Both formats are **idempotent** (ON CONFLICT DO UPDATE).
     Only `super_admin` may use this endpoint.
     """
-    _require_admin()
-
     # Validate country exists
     from ticketing.models.country import Country
     if not db.get(Country, country):
@@ -517,9 +512,12 @@ def list_projects(
 
 
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
-def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
+def create_project(
+    body: ProjectCreate,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Create a new project. Admin only."""
-    _require_admin()
 
     # Validate country exists
     if not db.get(Country, body.country_code):
@@ -570,9 +568,13 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
-def update_project(project_id: str, body: ProjectUpdate, db: Session = Depends(get_db)):
+def update_project(
+    project_id: str,
+    body: ProjectUpdate,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Update project metadata. Admin only."""
-    _require_admin()
 
     p = db.execute(
         select(Project)
@@ -619,10 +621,9 @@ def add_project_organization(
     organization_id: str,
     body: OrgRoleBody = OrgRoleBody(),
     db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
 ):
     """Link an organization to a project with an optional role. Admin only."""
-    _require_admin()
-
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     if not db.get(Organization, organization_id):
@@ -658,10 +659,9 @@ def update_project_organization_role(
     organization_id: str,
     body: OrgRoleBody,
     db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
 ):
     """Update the role of an already-linked organization. Admin only."""
-    _require_admin()
-
     row = db.execute(
         select(ProjectOrganization)
         .where(
@@ -677,9 +677,13 @@ def update_project_organization_role(
 
 
 @router.delete("/projects/{project_id}/organizations/{organization_id}", status_code=204)
-def remove_project_organization(project_id: str, organization_id: str, db: Session = Depends(get_db)):
+def remove_project_organization(
+    project_id: str,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Unlink an organization from a project. Admin only."""
-    _require_admin()
 
     row = db.execute(
         select(ProjectOrganization)
@@ -724,9 +728,13 @@ def list_project_locations(
 
 
 @router.post("/projects/{project_id}/locations/{location_code}", status_code=201)
-def add_project_location(project_id: str, location_code: str, db: Session = Depends(get_db)):
+def add_project_location(
+    project_id: str,
+    location_code: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Link a location node to a project. Admin only."""
-    _require_admin()
 
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
@@ -749,9 +757,13 @@ def add_project_location(project_id: str, location_code: str, db: Session = Depe
 
 
 @router.delete("/projects/{project_id}/locations/{location_code}", status_code=204)
-def remove_project_location(project_id: str, location_code: str, db: Session = Depends(get_db)):
+def remove_project_location(
+    project_id: str,
+    location_code: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Unlink a location from a project. Admin only."""
-    _require_admin()
 
     row = db.execute(
         select(ProjectLocation)
@@ -828,9 +840,13 @@ def list_packages(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/projects/{project_id}/packages", response_model=PackageResponse, status_code=201)
-def create_package(project_id: str, body: PackageCreate, db: Session = Depends(get_db)):
+def create_package(
+    project_id: str,
+    body: PackageCreate,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Create a package within a project. Admin only."""
-    _require_admin()
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     if body.contractor_org_id and not db.get(Organization, body.contractor_org_id):
@@ -861,10 +877,14 @@ def create_package(project_id: str, body: PackageCreate, db: Session = Depends(g
 
 
 @router.patch("/projects/{project_id}/packages/{package_id}", response_model=PackageResponse)
-def update_package(project_id: str, package_id: str, body: PackageUpdate,
-                   db: Session = Depends(get_db)):
+def update_package(
+    project_id: str,
+    package_id: str,
+    body: PackageUpdate,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Update package metadata. Admin only."""
-    _require_admin()
     pkg = db.execute(
         select(ProjectPackage)
         .options(selectinload(ProjectPackage.locations))
@@ -889,10 +909,14 @@ def update_package(project_id: str, package_id: str, body: PackageUpdate,
 
 @router.post("/projects/{project_id}/packages/{package_id}/locations/{location_code}",
              status_code=201)
-def add_package_location(project_id: str, package_id: str, location_code: str,
-                         db: Session = Depends(get_db)):
+def add_package_location(
+    project_id: str,
+    package_id: str,
+    location_code: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Link a district/location to a package. Admin only."""
-    _require_admin()
     pkg = db.execute(
         select(ProjectPackage).where(
             ProjectPackage.package_id == package_id,
@@ -920,10 +944,14 @@ def add_package_location(project_id: str, package_id: str, location_code: str,
 
 @router.delete("/projects/{project_id}/packages/{package_id}/locations/{location_code}",
                status_code=204)
-def remove_package_location(project_id: str, package_id: str, location_code: str,
-                             db: Session = Depends(get_db)):
+def remove_package_location(
+    project_id: str,
+    package_id: str,
+    location_code: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
     """Unlink a location from a package. Admin only."""
-    _require_admin()
     row = db.execute(
         select(PackageLocation).where(
             PackageLocation.package_id == package_id,
