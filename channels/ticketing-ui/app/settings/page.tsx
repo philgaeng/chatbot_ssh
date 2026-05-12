@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AlertTriangle, X, Lock, ClipboardList, Construction } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
@@ -53,93 +53,88 @@ import {
   type CountryItem,
   type LocationNode,
   type ProjectItem,
+  listOfficerRoster,
+  type OfficerRosterEntry,
   type ProjectOrgItem,
   type OrgRole,
   type PackageItem,
   type PackageCreate,
   inviteOfficer,
+  listRoles,
+  updateRole,
+  type GrmRole,
 } from "@/lib/api";
 
-// ── Role edit modal ───────────────────────────────────────────────────────────
+// ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
 type RoleEntry = {
+  role_id: string;
   key: string;
   label: string;
   workflow: string;
   description: string;
 };
 
-function RoleEditModal({ role, onSave, onClose, isNew = false }: {
+function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
+  return {
+    role_id: r.role_id,
+    key: r.role_key,
+    label: r.display_name,
+    workflow: r.workflow_scope ?? "Standard",
+    description: r.description ?? "",
+  };
+}
+
+function officerRoleLabels(roleKeys: string[], catalog: RoleEntry[]): string {
+  return roleKeys.map((k) => catalog.find((x) => x.key === k)?.label ?? k).join(", ");
+}
+
+// ── Role edit modal ───────────────────────────────────────────────────────────
+
+function RoleEditModal({ role, onSaved, onClose }: {
   role: RoleEntry;
-  onSave: (updated: RoleEntry) => void;
+  onSaved: (updated: RoleEntry) => void;
   onClose: () => void;
-  isNew?: boolean;
 }) {
-  const [key, setKey]               = useState(role.key);
-  const [label, setLabel]           = useState(role.label);
-  const [workflow, setWorkflow]     = useState(role.workflow || "Standard");
+  const [label, setLabel]               = useState(role.label);
+  const [workflow, setWorkflow]         = useState(role.workflow || "Standard");
   const [description, setDescription] = useState(role.description);
-  const [saved, setSaved]           = useState(false);
+  const [saved, setSaved]               = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [err, setErr]                   = useState("");
 
-  const derivedKey = isNew
-    ? key.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
-    : role.key;
-
-  function handleSave() {
-    if (isNew && !derivedKey) return;
-    onSave({ ...role, key: derivedKey, label, workflow, description });
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 800);
+  async function handleSave() {
+    setErr("");
+    setSaving(true);
+    try {
+      const raw = await updateRole(role.role_id, {
+        display_name: label.trim(),
+        description: description.trim() || null,
+        workflow_scope: workflow.trim() || null,
+      });
+      onSaved(mapGrmRoleToEntry(raw));
+      setSaved(true);
+      setTimeout(() => { setSaved(false); onClose(); }, 650);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
           <div>
-            <div className="font-semibold">{isNew ? "New Role" : "Edit Role"}</div>
-            {!isNew && <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>}
-            {isNew && derivedKey && <div className="text-xs text-slate-300 font-mono mt-0.5">{derivedKey}</div>}
+            <div className="font-semibold">Edit Role</div>
+            <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>
           </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+          <button type="button" onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
 
-        {/* Body */}
         <div className="p-6 space-y-4">
-          {isNew && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Display name *</label>
-                <input
-                  autoFocus
-                  value={label}
-                  onChange={(e) => {
-                    setLabel(e.target.value);
-                    if (!key || key === label.toLowerCase().replace(/[^a-z0-9]+/g, "_")) {
-                      setKey(e.target.value);
-                    }
-                  }}
-                  placeholder="e.g. Site Focal Person"
-                  className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Workflow</label>
-                <select
-                  value={workflow}
-                  onChange={(e) => setWorkflow(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                >
-                  <option value="Standard">Standard</option>
-                  <option value="SEAH">SEAH</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {!isNew && (
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
               <input
@@ -149,7 +144,19 @@ function RoleEditModal({ role, onSave, onClose, isNew = false }: {
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
             </div>
-          )}
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Workflow scope</label>
+              <select
+                value={workflow}
+                onChange={(e) => setWorkflow(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              >
+                <option value="Standard">Standard</option>
+                <option value="SEAH">SEAH</option>
+                <option value="Both">Both</option>
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
@@ -161,24 +168,26 @@ function RoleEditModal({ role, onSave, onClose, isNew = false }: {
             />
           </div>
 
+          {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{err}</p>}
+
           <p className="text-xs text-gray-400">
-            Access control is enforced by role key in the backend. Ticket-level actions are governed by the Actor / Supervisor / Informed / Observer tiers defined per workflow step.
+            Changes are saved to <span className="font-mono">ticketing.roles</span>. Role <span className="font-mono">role_key</span> is fixed; workflow assignment tiers are configured per workflow step.
           </p>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">
             Cancel
           </button>
           <button
-            onClick={handleSave}
-            disabled={isNew && (!derivedKey || !label.trim())}
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving || !label.trim()}
             className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
               saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            {saved ? "✓ Saved" : isNew ? "Create role" : "Save changes"}
+            {saved ? "✓ Saved" : saving ? "Saving…" : "Save changes"}
           </button>
         </div>
       </div>
@@ -210,25 +219,59 @@ const ORG_ROLE_COLORS: Record<string, string> = {
   specialized_consultant:  "bg-green-100 text-green-700 border-green-200",
 };
 
-/** Derive a short org ID from name + country code.
- *  Rule: initials of each word, uppercased, prefixed by country code.
- *  Exception: no country selected, OR initials === "ADB" → no prefix (international org).
+/** Same token rules as ticketing/utils/organization_identifier.py */
+const ORG_NAME_TOKEN_RE = /[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|\d+/g;
+
+function splitOrgNameTokens(name: string): string[] {
+  const parts = name.trim().split(/[\s_\-/]+/).filter(Boolean);
+  const tokens: string[] = [];
+  for (const p of parts) {
+    const found = p.match(ORG_NAME_TOKEN_RE);
+    if (!found || found.length === 0) {
+      const alnum = p.replace(/[^a-zA-Z0-9]/g, "");
+      if (alnum) tokens.push(alnum);
+      continue;
+    }
+    for (const s of found) {
+      const alnum = s.replace(/[^a-zA-Z0-9]/g, "");
+      if (alnum) tokens.push(alnum);
+    }
+  }
+  return tokens;
+}
+
+function slugCoreFromOrgName(name: string): string {
+  const tokens = splitOrgNameTokens(name);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) {
+    const t = tokens[0];
+    if (/^\d+$/.test(t)) return t;
+    if (t.length <= 3) return t.toUpperCase();
+    return t.slice(0, 6).toUpperCase();
+  }
+  let core = tokens.map((t) => (/^\d+$/.test(t) ? t : t[0].toUpperCase())).join("");
+  if (core.length > 12) core = core.slice(0, 12);
+  return core;
+}
+
+/**
+ * Preview of the id the API will use (first free candidate).
+ * Keep logic aligned with suggested_organization_id + allocate_unique_organization_id.
  */
-function generateOrgId(name: string, country: string): string {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .map((w) => {
-      const clean = w.replace(/[^a-zA-Z0-9]/g, "");
-      if (!clean) return "";
-      return /^[0-9]/.test(clean) ? clean : clean[0].toUpperCase();
-    })
-    .filter(Boolean)
-    .join("");
-  if (!initials) return "";
-  // International / multi-country org (no country) or natural "ADB" acronym → no prefix
-  if (!country || initials === "ADB") return initials;
-  return `${country}_${initials}`;
+function generateOrgId(name: string, country: string, existingIds: Set<string>): string {
+  const core = slugCoreFromOrgName(name);
+  if (!core) return "";
+  const base = !country || core === "ADB" ? core : `${country}_${core}`;
+  if (!existingIds.has(base)) return base;
+  let n = 2;
+  while (n < 100000) {
+    const suffix = `_${n}`;
+    const prefixLen = Math.max(0, 64 - suffix.length);
+    const cand = base.slice(0, prefixLen) + suffix;
+    if (!existingIds.has(cand)) return cand;
+    n += 1;
+  }
+  return base;
 }
 
 // ── Location search autocomplete ─────────────────────────────────────────────
@@ -346,34 +389,6 @@ function LocationSearch({
     </div>
   );
 }
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-type MockOfficerEntry = { name: string; email: string; role: string; org: string | null; location: string | null };
-
-const MOCK_OFFICERS: MockOfficerEntry[] = [
-  { name: "Mock Site L1",       email: "mock-officer-site-l1@grm.local",       role: "site_safeguards_focal_person", org: "DOR", location: "JHAPA"  },
-  { name: "Mock PIU L2",        email: "mock-officer-piu-l2@grm.local",        role: "pd_piu_safeguards_focal",      org: "DOR", location: "MORANG" },
-  { name: "Mock GRC Chair",     email: "mock-officer-grc-chair@grm.local",     role: "grc_chair",                   org: "DOR", location: null     },
-  { name: "Mock GRC Member",    email: "mock-officer-grc-member@grm.local",    role: "grc_member",                  org: "DOR", location: null     },
-  { name: "Mock SEAH National", email: "mock-officer-seah-national@grm.local", role: "seah_national_officer",        org: "ADB", location: null     },
-  { name: "Mock SEAH HQ",       email: "mock-officer-seah-hq@grm.local",       role: "seah_hq_officer",             org: "ADB", location: null     },
-  { name: "GRM Admin (mock)",   email: "admin@grm.local",                      role: "super_admin",                 org: null,  location: null     },
-];
-
-const ROLES: RoleEntry[] = [
-  { key: "super_admin",                   label: "Super Admin",                    workflow: "Both",     description: "Full system access. Can manage all settings, users, and tickets." },
-  { key: "local_admin",                   label: "Local Admin",                    workflow: "Standard", description: "Administrative access scoped to their organization and location." },
-  { key: "site_safeguards_focal_person",  label: "Site Safeguards Focal Person",   workflow: "Standard", description: "Level 1 officer — first point of contact for standard grievances." },
-  { key: "pd_piu_safeguards_focal",       label: "PD / PIU Safeguards Focal",      workflow: "Standard", description: "Level 2 officer — receives escalations from L1." },
-  { key: "grc_chair",                     label: "GRC Chair",                      workflow: "Standard", description: "Level 3 — convenes GRC hearing and records the committee decision." },
-  { key: "grc_member",                    label: "GRC Member",                     workflow: "Standard", description: "Level 3 — participates in GRC hearing. Receives hearing notifications." },
-  { key: "adb_national_project_director", label: "ADB National Project Director",  workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
-  { key: "adb_hq_safeguards",             label: "ADB HQ Safeguards",              workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
-  { key: "seah_national_officer",         label: "SEAH National Officer",          workflow: "SEAH",     description: "Level 1 SEAH officer — handles SEAH cases. Invisible to standard officers." },
-  { key: "seah_hq_officer",              label: "SEAH HQ Officer",                workflow: "SEAH",     description: "Level 2 SEAH officer — receives SEAH escalations." },
-  { key: "adb_hq_exec",                  label: "ADB HQ Executive",               workflow: "Both",     description: "Senior oversight — read-only access to both standard and SEAH cases." },
-];
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
@@ -668,12 +683,13 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
 
 // ── InviteOfficerModal ────────────────────────────────────────────────────────
 
-function InviteOfficerModal({ onClose, onSuccess }: {
+function InviteOfficerModal({ roleChoices, onClose, onSuccess }: {
+  roleChoices: RoleEntry[];
   onClose: () => void;
   onSuccess: (email: string) => void;
 }) {
   const [email, setEmail]         = useState("");
-  const [roleKey, setRoleKey]     = useState(ROLES[0].key);
+  const [roleKey, setRoleKey]     = useState(roleChoices[0]?.key ?? "");
   const [orgId, setOrgId]         = useState("");
   const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -682,6 +698,13 @@ function InviteOfficerModal({ onClose, onSuccess }: {
   useEffect(() => {
     listOrganizations().then(setOrgs).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (roleChoices.length === 0) return;
+    if (!roleChoices.some((r) => r.key === roleKey)) {
+      setRoleKey(roleChoices[0].key);
+    }
+  }, [roleChoices, roleKey]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -729,7 +752,7 @@ function InviteOfficerModal({ onClose, onSuccess }: {
               onChange={(e) => setRoleKey(e.target.value)}
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
             >
-              {ROLES.map((r) => (
+              {roleChoices.map((r) => (
                 <option key={r.key} value={r.key}>{r.label}</option>
               ))}
             </select>
@@ -767,7 +790,7 @@ function InviteOfficerModal({ onClose, onSuccess }: {
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || roleChoices.length === 0}
               className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
             >
               {submitting ? "Inviting…" : "Send invite"}
@@ -779,134 +802,64 @@ function InviteOfficerModal({ onClose, onSuccess }: {
   );
 }
 
-// ── Officer edit modal ────────────────────────────────────────────────────────
-
-function OfficerEditModal({ officer, onSave, onClose }: {
-  officer: MockOfficerEntry;
-  onSave:  (updated: MockOfficerEntry) => void;
-  onClose: () => void;
-}) {
-  const [name, setName]         = useState(officer.name);
-  const [role, setRole]         = useState(officer.role);
-  const [org, setOrg]           = useState(officer.org ?? "");
-  const [location, setLocation] = useState(officer.location ?? "");
-  const [saved, setSaved]       = useState(false);
-
-  function handleSave() {
-    onSave({ ...officer, name: name.trim(), role, org: org || null, location: location || null });
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 700);
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div>
-            <div className="font-semibold">Edit Officer</div>
-            <div className="text-xs text-slate-300 mt-0.5">{officer.email}</div>
-          </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                {ROLES.map((r) => (
-                  <option key={r.key} value={r.key}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Organization</label>
-              <input
-                value={org}
-                onChange={(e) => setOrg(e.target.value.toUpperCase())}
-                placeholder="e.g. DOR"
-                className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Location code</label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value.toUpperCase())}
-              placeholder="e.g. NP_D006 (leave blank for national scope)"
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Changes apply to the demo display only. Email and authentication are managed via Cognito.
-          </p>
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">Cancel</button>
-          <button
-            onClick={handleSave}
-            disabled={!name.trim()}
-            className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
-              saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
-            {saved ? "✓ Saved" : "Save changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Officers tab ──────────────────────────────────────────────────────────────
 
-function OfficersTab() {
-  const [officerList, setOfficerList]   = useState<MockOfficerEntry[]>(MOCK_OFFICERS);
+function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
+  const [officerList, setOfficerList]   = useState<OfficerRosterEntry[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
   const [expandedId, setExpandedId]     = useState<string | null>(null);
   const [showInvite, setShowInvite]     = useState(false);
-  const [editingOfficer, setEditingOfficer] = useState<MockOfficerEntry | null>(null);
   const [successMsg, setSuccessMsg]     = useState<string | null>(null);
+  const [searchQ, setSearchQ]           = useState("");
+  const [roleFilter, setRoleFilter]     = useState("");
+
+  const loadRoster = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const rows = await listOfficerRoster();
+      setOfficerList(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load officers";
+      setLoadError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRoster();
+  }, [loadRoster]);
 
   function handleInviteSuccess(email: string) {
     setShowInvite(false);
-    setSuccessMsg(`Invite sent to ${email}. They will receive a temporary password.`);
-    setTimeout(() => setSuccessMsg(null), 6000);
+    setSuccessMsg(
+      `Invite sent to ${email}. They appear as Invited until Keycloak reports password setup (webhook).`,
+    );
+    setTimeout(() => setSuccessMsg(null), 8000);
+    loadRoster();
   }
+
+  const filtered = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    return officerList.filter((o) => {
+      const hay = [o.display_name, o.user_id, ...o.role_keys, ...o.organization_ids, ...o.location_codes]
+        .join(" ")
+        .toLowerCase();
+      const matchesQ = !q || hay.includes(q);
+      const matchesR = !roleFilter || o.role_keys.includes(roleFilter);
+      return matchesQ && matchesR;
+    });
+  }, [officerList, searchQ, roleFilter]);
 
   return (
     <div>
       {showInvite && (
         <InviteOfficerModal
+          roleChoices={roleCatalog}
           onClose={() => setShowInvite(false)}
           onSuccess={handleInviteSuccess}
-        />
-      )}
-      {editingOfficer && (
-        <OfficerEditModal
-          officer={editingOfficer}
-          onSave={(updated) => {
-            setOfficerList(officerList.map((o) => o.email === updated.email ? updated : o));
-            setEditingOfficer(null);
-          }}
-          onClose={() => setEditingOfficer(null)}
         />
       )}
 
@@ -916,17 +869,38 @@ function OfficersTab() {
         </div>
       )}
 
+      <p className="text-xs text-gray-500 mb-4">
+        Roster rows come from <span className="font-mono">ticketing.user_roles</span>. Invite seeds roles and sets status to{" "}
+        <strong>Invited</strong>; configure Keycloak to POST password events to the ticketing webhook so status becomes{" "}
+        <strong>Active</strong> after first password change.
+      </p>
+
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <input
             type="text"
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Search officers…"
             className="text-sm border border-gray-300 rounded px-3 py-1.5 w-56 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
-          <select className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            <option>All roles</option>
-            {ROLES.map((r) => <option key={r.key}>{r.key}</option>)}
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            <option value="">All roles</option>
+            {roleCatalog.map((r) => (
+              <option key={r.key} value={r.key}>{r.label}</option>
+            ))}
           </select>
+          <button
+            type="button"
+            onClick={() => loadRoster()}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Refresh
+          </button>
         </div>
         <button
           onClick={() => setShowInvite(true)}
@@ -936,87 +910,88 @@ function OfficersTab() {
         </button>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-700 text-slate-100 text-left">
-              <th className="px-4 py-2.5 font-medium w-6" />
-              <th className="px-4 py-2.5 font-medium">Name</th>
-              <th className="px-4 py-2.5 font-medium">Email</th>
-              <th className="px-4 py-2.5 font-medium">Role</th>
-              <th className="px-4 py-2.5 font-medium">Organization</th>
-              <th className="px-4 py-2.5 font-medium">Location</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {officerList.map((o, i) => {
-              const rowId = `mock-${i}`;
-              const isOpen = expandedId === rowId;
-              return (
-                <React.Fragment key={rowId}>
-                  <tr className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-2 py-2.5 text-center">
-                      <button
-                        onClick={() => setExpandedId(isOpen ? null : rowId)}
-                        title="Manage jurisdiction scopes"
-                        className="text-slate-400 hover:text-slate-600 text-xs leading-none"
-                      >
-                        {isOpen ? "▼" : "▶"}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{o.name}</td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.email}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
-                        {o.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.org ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.location ?? "—"}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs text-green-600 font-medium">Active</span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-3">
+      {loading && <p className="text-sm text-gray-400 mb-3">Loading roster…</p>}
+      {loadError && <p className="text-sm text-red-600 mb-3">{loadError}</p>}
+
+      {!loading && !loadError && filtered.length === 0 && (
+        <p className="text-sm text-gray-500 mb-3">No officers with role assignments in the database.</p>
+      )}
+
+      {!loading && !loadError && filtered.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-700 text-slate-100 text-left">
+                <th className="px-4 py-2.5 font-medium w-6" />
+                <th className="px-4 py-2.5 font-medium">Name</th>
+                <th className="px-4 py-2.5 font-medium">User id / email</th>
+                <th className="px-4 py-2.5 font-medium">Role</th>
+                <th className="px-4 py-2.5 font-medium">Organization</th>
+                <th className="px-4 py-2.5 font-medium">Location codes</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o) => {
+                const isOpen = expandedId === o.user_id;
+                const primaryRoleForScope = o.role_keys[0] ?? "";
+                return (
+                  <React.Fragment key={o.user_id}>
+                    <tr className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-2 py-2.5 text-center">
                         <button
-                          onClick={() => setEditingOfficer(o)}
-                          className="text-blue-600 hover:underline text-xs"
-                        >Edit</button>
-                        <button
-                          onClick={() => setOfficerList(officerList.filter((x) => x.email !== o.email))}
-                          className="text-red-500 hover:underline text-xs"
-                        >Remove</button>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr key={`${rowId}-scopes`}>
-                      <td colSpan={8} className="p-0">
-                        <OfficerScopePanel userId={o.email} roleKey={o.role} />
+                          type="button"
+                          onClick={() => setExpandedId(isOpen ? null : o.user_id)}
+                          title="Manage jurisdiction scopes"
+                          className="text-slate-400 hover:text-slate-600 text-xs leading-none"
+                        >
+                          {isOpen ? "▼" : "▶"}
+                        </button>
+                      </td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800">{o.display_name}</td>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs break-all">{o.email ?? o.user_id}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-700">{officerRoleLabels(o.role_keys, roleCatalog)}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{o.organization_ids.length ? o.organization_ids.join(", ") : "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{o.location_codes.length ? o.location_codes.join(", ") : "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={
+                            (o.onboarding_status ?? "active") === "invited"
+                              ? "text-xs text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded"
+                              : "text-xs text-green-600 font-medium"
+                          }
+                        >
+                          {(o.onboarding_status ?? "active") === "invited" ? "Invited" : "Active"}
+                        </span>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    {isOpen && primaryRoleForScope && (
+                      <tr key={`${o.user_id}-scopes`}>
+                        <td colSpan={7} className="p-0">
+                          <OfficerScopePanel userId={o.user_id} roleKey={primaryRoleForScope} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       <p className="text-xs text-gray-400 mt-3">
-        Jurisdictions managed via ▶ expand.
+        Jurisdiction scopes (▶) use the officer&apos;s <span className="font-mono">user_id</span>. Edit / Remove from this table is not implemented — use role assignment APIs or seeds.
       </p>
     </div>
   );
 }
 
-function RolesTab() {
-  const [roles, setRoles]       = useState<RoleEntry[]>(ROLES.map((r) => ({ ...r })));
+function RolesTab({ catalog, loading, onReload }: {
+  catalog: RoleEntry[];
+  loading: boolean;
+  onReload: () => void;
+}) {
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
-  const [showAdd, setShowAdd]   = useState(false);
-
-  const BLANK_ROLE: RoleEntry = { key: "", label: "", workflow: "Standard", description: "" };
 
   const workflowBadge = (w: string) =>
     w === "SEAH"
@@ -1025,45 +1000,35 @@ function RolesTab() {
       ? "bg-purple-100 text-purple-700"
       : "bg-blue-100 text-blue-700";
 
-  function handleSave(updated: RoleEntry) {
-    setRoles(roles.map((r) => r.key === updated.key ? updated : r));
-  }
-
-  function handleAdd(newRole: RoleEntry) {
-    if (!newRole.key) return;
-    setRoles([...roles, newRole]);
-    setShowAdd(false);
-  }
-
   return (
     <div>
       {editing && (
         <RoleEditModal
           role={editing}
-          onSave={handleSave}
+          onSaved={() => { onReload(); }}
           onClose={() => setEditing(null)}
-        />
-      )}
-      {showAdd && (
-        <RoleEditModal
-          role={BLANK_ROLE}
-          onSave={handleAdd}
-          onClose={() => setShowAdd(false)}
-          isNew
         />
       )}
 
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm text-gray-500">
-          {roles.length} roles defined · access control enforced by role key in the backend
+          {loading ? "Loading roles…" : `${catalog.length} roles in ticketing.roles`}
         </p>
         <button
-          onClick={() => setShowAdd(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded font-medium hover:bg-blue-700 transition"
+          type="button"
+          onClick={() => onReload()}
+          className="text-xs text-blue-600 hover:underline"
         >
-          + Add Role
+          Refresh
         </button>
       </div>
+
+      {!loading && catalog.length === 0 && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+          No roles found. Run Alembic migrations and seed (e.g. <span className="font-mono">mock_tickets --reset</span>) so{" "}
+          <span className="font-mono">ticketing.constants.grm_role_catalog</span> is applied.
+        </p>
+      )}
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -1076,7 +1041,7 @@ function RolesTab() {
             </tr>
           </thead>
           <tbody>
-            {roles.map((r) => (
+            {catalog.map((r) => (
               <tr key={r.key} className="border-t border-gray-100 hover:bg-gray-50 align-top">
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-800">{r.label}</div>
@@ -1090,6 +1055,7 @@ function RolesTab() {
                 <td className="px-4 py-3 text-gray-500 text-xs max-w-sm">{r.description}</td>
                 <td className="px-4 py-3">
                   <button
+                    type="button"
                     onClick={() => setEditing(r)}
                     className="text-blue-600 hover:underline text-xs"
                   >
@@ -1102,7 +1068,8 @@ function RolesTab() {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Changes here update the display only. API-level enforcement requires a backend deploy.
+        New role <span className="font-mono">role_key</span> values require a migration / catalog update. Edit updates
+        labels and descriptions in the database.
       </p>
     </div>
   );
@@ -1110,19 +1077,7 @@ function RolesTab() {
 
 // ── Workflow helpers ──────────────────────────────────────────────────────────
 
-const ROLE_OPTIONS = [
-  { key: "site_safeguards_focal_person", label: "Site Safeguards Focal Person" },
-  { key: "pd_piu_safeguards_focal",      label: "PD / PIU Safeguards Focal" },
-  { key: "grc_chair",                    label: "GRC Chair" },
-  { key: "grc_member",                   label: "GRC Member" },
-  { key: "adb_national_project_director",label: "ADB National Project Director" },
-  { key: "adb_hq_safeguards",            label: "ADB HQ Safeguards" },
-  { key: "adb_hq_project",              label: "ADB HQ Project" },
-  { key: "seah_national_officer",        label: "SEAH National Officer" },
-  { key: "seah_hq_officer",             label: "SEAH HQ Officer" },
-  { key: "super_admin",                  label: "Super Admin" },
-  { key: "local_admin",                  label: "Local Admin" },
-];
+type WorkflowRoleOption = { key: string; label: string };
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -1143,11 +1098,13 @@ function typeBadge(t: string) {
 function StepForm({
   step,
   workflowId,
+  roleOptions,
   onSaved,
   onCancel,
 }: {
   step: WorkflowStep;
   workflowId: string;
+  roleOptions: WorkflowRoleOption[];
   onSaved: (s: WorkflowStep) => void;
   onCancel: () => void;
 }) {
@@ -1220,7 +1177,7 @@ function StepForm({
         <select value={roleKey} onChange={e => setRoleKey(e.target.value)}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
           <option value="">— select role —</option>
-          {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
       </div>
 
@@ -1269,7 +1226,7 @@ function StepForm({
           <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
             <option value="">— None (no supervisor at this step) —</option>
-            {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <p className="text-[11px] text-gray-400 mt-0.5">Notified on escalation/SLA breach. Can override Actor, reassign ticket.</p>
         </div>
@@ -1289,7 +1246,7 @@ function StepForm({
             <select value={newInformed} onChange={e => setNewInformed(e.target.value)}
               className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
               <option value="">+ Add informed role</option>
-              {ROLE_OPTIONS.filter(r => !informedRoles.includes(r.key)).map(r =>
+              {roleOptions.filter(r => !informedRoles.includes(r.key)).map(r =>
                 <option key={r.key} value={r.key}>{r.label}</option>
               )}
             </select>
@@ -1314,7 +1271,7 @@ function StepForm({
             <select value={newObserver} onChange={e => setNewObserver(e.target.value)}
               className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
               <option value="">+ Add observer role</option>
-              {ROLE_OPTIONS.filter(r => !observerRoles.includes(r.key)).map(r =>
+              {roleOptions.filter(r => !observerRoles.includes(r.key)).map(r =>
                 <option key={r.key} value={r.key}>{r.label}</option>
               )}
             </select>
@@ -1460,10 +1417,12 @@ function AssignmentPanel({
 
 function WorkflowEditor({
   workflow: initial,
+  roleOptions,
   onBack,
   onUpdated,
 }: {
   workflow: WorkflowDefinition;
+  roleOptions: WorkflowRoleOption[];
   onBack: () => void;
   onUpdated: (w: WorkflowDefinition) => void;
 }) {
@@ -1647,6 +1606,7 @@ function WorkflowEditor({
                 <StepForm
                   step={step}
                   workflowId={wf.workflow_id}
+                  roleOptions={roleOptions}
                   onSaved={handleStepSaved}
                   onCancel={() => setExpanded(null)}
                 />
@@ -1925,8 +1885,12 @@ function NewWorkflowModal({
 
 // ── Workflows tab ─────────────────────────────────────────────────────────────
 
-function WorkflowsTab() {
+function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
   const { canSeeSeah } = useAuth();
+  const wfRoleOptions: WorkflowRoleOption[] = useMemo(
+    () => roleCatalog.map((r) => ({ key: r.key, label: r.label })),
+    [roleCatalog],
+  );
   const [workflows, setWorkflows]     = useState<WorkflowDefinition[]>([]);
   const [templates, setTemplates]     = useState<WorkflowDefinition[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -1953,6 +1917,7 @@ function WorkflowsTab() {
     return (
       <WorkflowEditor
         workflow={editing}
+        roleOptions={wfRoleOptions}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={updated => setEditing(updated)}
       />
@@ -2159,6 +2124,7 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
       {showCreate && (
         <OrgCreateModal
           countries={countries}
+          existingOrganizationIds={new Set(orgs.map((o) => o.organization_id))}
           onCreated={(org) => { setShowCreate(false); setOrgs((prev) => [...prev, org]); setEditing(org); }}
           onClose={() => setShowCreate(false)}
         />
@@ -2212,10 +2178,12 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
 
 function OrgCreateModal({
   countries,
+  existingOrganizationIds,
   onCreated,
   onClose,
 }: {
   countries: CountryItem[];
+  existingOrganizationIds: Set<string>;
   onCreated: (org: OrganizationItem) => void;
   onClose: () => void;
 }) {
@@ -2225,15 +2193,13 @@ function OrgCreateModal({
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
 
-  const generatedId = generateOrgId(name, country);
+  const generatedId = generateOrgId(name, country, existingOrganizationIds);
 
   async function handleCreate() {
-    const id = generatedId;
-    if (!id || !name.trim()) { setError("Name is required."); return; }
+    if (!name.trim()) { setError("Name is required."); return; }
     setCreating(true); setError("");
     try {
       const org = await createOrganization({
-        organization_id: id,
         name: name.trim(),
         country_code: country || null,
         is_active: isActive,
@@ -2241,7 +2207,7 @@ function OrgCreateModal({
       onCreated(org);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Create failed";
-      setError(msg.includes("409") ? `ID "${id}" is already taken — try a more specific name.` : msg);
+      setError(msg);
       setCreating(false);
     }
   }
@@ -2297,6 +2263,7 @@ function OrgCreateModal({
           {generatedId ? (
             <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
               Will be created as: <span className="font-mono font-semibold text-gray-700">{generatedId}</span>
+              <span className="block mt-1 text-gray-400">The server uses the same rules and picks the next free id if another admin creates an org at the same time.</span>
             </p>
           ) : (
             name.trim() && (
@@ -2309,7 +2276,7 @@ function OrgCreateModal({
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
           <button
             onClick={handleCreate}
-            disabled={creating || !generatedId || !name.trim()}
+            disabled={creating || !name.trim() || !generatedId}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition"
           >
             {creating ? "Creating…" : "Create organization"}
@@ -3663,6 +3630,24 @@ export default function SettingsPage() {
   const { isAdmin, roleKeys } = useAuth();
   const isSuperAdmin = roleKeys.includes("super_admin");
   const [activeTab, setActiveTab] = useState<Tab>("officers");
+  const [roleCatalog, setRoleCatalog]     = useState<RoleEntry[]>([]);
+  const [rolesLoading, setRolesLoading]     = useState(true);
+
+  const loadRoleCatalog = useCallback(async () => {
+    setRolesLoading(true);
+    try {
+      const raw = await listRoles();
+      setRoleCatalog(raw.map(mapGrmRoleToEntry));
+    } catch {
+      setRoleCatalog([]);
+    } finally {
+      setRolesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRoleCatalog();
+  }, [loadRoleCatalog]);
 
   if (!isAdmin) {
     return (
@@ -3700,9 +3685,11 @@ export default function SettingsPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "officers"        && <OfficersTab />}
-      {activeTab === "roles"           && <RolesTab />}
-      {activeTab === "workflows"       && <WorkflowsTab />}
+      {activeTab === "officers"        && <OfficersTab roleCatalog={roleCatalog} />}
+      {activeTab === "roles"           && (
+        <RolesTab catalog={roleCatalog} loading={rolesLoading} onReload={loadRoleCatalog} />
+      )}
+      {activeTab === "workflows"       && <WorkflowsTab roleCatalog={roleCatalog} />}
       {activeTab === "organizations"   && <OrganizationsTab />}
       {activeTab === "report_schedule" && <ComingSoon label="Report Schedule" />}
       {activeTab === "system_config"   && isSuperAdmin && <SystemConfigTab />}

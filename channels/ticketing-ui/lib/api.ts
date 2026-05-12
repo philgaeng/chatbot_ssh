@@ -464,6 +464,36 @@ export function listOfficers(): Promise<OfficerBrief[]> {
   return apiFetch<OfficerBrief[]>("/api/v1/users/officers");
 }
 
+/** ticketing.roles row — catalog metadata + permissions JSON */
+export interface GrmRole {
+  role_id: string;
+  role_key: string;
+  display_name: string;
+  description: string | null;
+  workflow_scope: string | null;
+  permissions: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listRoles(): Promise<GrmRole[]> {
+  return apiFetch<GrmRole[]>("/api/v1/roles");
+}
+
+export function updateRole(
+  roleId: string,
+  payload: {
+    display_name?: string | null;
+    description?: string | null;
+    workflow_scope?: string | null;
+  }
+): Promise<GrmRole> {
+  return apiFetch<GrmRole>(`/api/v1/roles/${roleId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Settings → Officers (admin): aggregated ticketing.user_roles — no Keycloak sync. */
 export interface OfficerRosterEntry {
   user_id: string;
@@ -636,7 +666,8 @@ export interface ImportResult {
 }
 
 export interface OrganizationCreate {
-  organization_id: string;
+  /** Omit to let the API derive a unique id from name + country. */
+  organization_id?: string | null;
   name: string;
   country_code?: string | null;
   is_active?: boolean;
