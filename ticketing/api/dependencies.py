@@ -4,7 +4,8 @@ FastAPI dependency injection for GRM Ticketing.
 Auth:
   - verify_api_key: simple secret for chatbot → ticketing inbound calls
   - get_current_user:
-      • KEYCLOAK_ISSUER not set → dev bypass (returns mock-super-admin)
+      • KEYCLOAK_ISSUER not set → dev bypass (mock-super-admin unless
+        x-internal-user-id; optional x-internal-organization-id)
       • x-internal-user-id header present → trust header (internal service calls)
       • Otherwise → validate Bearer JWT against Keycloak JWKS
 """
@@ -86,6 +87,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     x_internal_user_id: str | None = Header(None),
     x_internal_role: str | None = Header(None),
+    x_internal_organization_id: str | None = Header(None),
     x_api_key: str | None = Header(None),
 ) -> CurrentUser:
     """
@@ -109,10 +111,11 @@ def get_current_user(
 
     # Dev bypass: no Keycloak configured
     if not settings.keycloak_issuer:
+        org = (x_internal_organization_id or "").strip() or "DOR"
         return CurrentUser(
             user_id=x_internal_user_id or "mock-super-admin",
             role_keys=(x_internal_role or "super_admin").split(","),
-            organization_id="DOR",
+            organization_id=org,
         )
 
     # Internal service-to-service call: only honored when paired with the
