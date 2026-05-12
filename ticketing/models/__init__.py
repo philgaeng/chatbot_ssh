@@ -2,6 +2,7 @@ from .base import Base
 from .country import Country, LocationLevelDef, Location, LocationTranslation
 from .organization import Organization
 from .user import Role, UserRole
+from .officer_onboarding import OfficerOnboarding
 from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
 from .ticket import Ticket, TicketEvent
 from .ticket_file import TicketFile
@@ -21,6 +22,7 @@ __all__ = [
     "Organization",
     "Role",
     "UserRole",
+    "OfficerOnboarding",
     "WorkflowDefinition",
     "WorkflowStep",
     "WorkflowAssignment",

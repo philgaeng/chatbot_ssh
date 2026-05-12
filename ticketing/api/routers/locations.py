@@ -43,6 +43,10 @@ from ticketing.api.dependencies import CurrentUser, require_admin
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
+from ticketing.utils.organization_identifier import (
+    allocate_unique_organization_id,
+    suggested_organization_id,
+)
 from ticketing.models.package import PackageLocation, ProjectPackage
 from ticketing.models.project import Project, ProjectLocation, ProjectOrganization
 
@@ -136,8 +140,11 @@ class OrganizationResponse(BaseModel):
 
 
 class OrganizationCreate(BaseModel):
-    organization_id: str = Field(..., max_length=64,
-                                  description="Short uppercase key, e.g. DOR, ABC_CONST")
+    organization_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Optional short uppercase key. Omit to auto-generate from name + country.",
+    )
     name: str
     country_code: str | None = None
     is_active: bool = True
@@ -174,12 +181,28 @@ def create_organization(
     _admin: CurrentUser = Depends(require_admin),
 ):
     """Create a new organization. Admin only."""
-    org_id = body.organization_id.strip().upper()
-    if db.get(Organization, org_id):
-        raise HTTPException(status_code=409, detail=f"Organization '{org_id}' already exists")
+    name_clean = body.name.strip()
+    if not name_clean:
+        raise HTTPException(status_code=400, detail="Name is required")
+
+    raw = body.organization_id.strip() if body.organization_id else ""
+    if raw:
+        org_id = "".join(c for c in raw.upper() if c.isalnum() or c == "_")
+        if not org_id:
+            raise HTTPException(status_code=400, detail="Invalid organization_id")
+        if db.get(Organization, org_id):
+            raise HTTPException(status_code=409, detail=f"Organization '{org_id}' already exists")
+    else:
+        base = suggested_organization_id(name_clean, body.country_code)
+        if not base:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not derive organization_id from name; provide organization_id explicitly.",
+            )
+        org_id = allocate_unique_organization_id(db, base)
     org = Organization(
         organization_id=org_id,
-        name=body.name.strip(),
+        name=name_clean,
         country_code=body.country_code or None,
         is_active=body.is_active,
         default_language=body.default_language,

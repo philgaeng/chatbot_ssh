@@ -52,6 +52,9 @@ class Role(Base):
     role_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     role_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    # Admin UI / docs — seeded from ticketing.constants.grm_role_catalog
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workflow_scope: Mapped[str | None] = mapped_column(String(32), nullable=True)
     permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now

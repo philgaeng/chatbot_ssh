@@ -4,7 +4,7 @@ Seed data: KL Road Standard 4-level GRM workflow.
 Creates:
   - Organization: DOR (Department of Roads), ADB
   - Locations: Province 1 + KL Road districts
-  - Roles: all 12 GRM roles with permissions
+  - Roles: GRM catalog (ticketing.constants.grm_role_catalog) upserted into ticketing.roles
   - Workflow: KL_ROAD_STANDARD (4 levels matching Escalation_rules.md)
   - Workflow assignment: DOR + Province 1 + KL_ROAD → standard workflow
   - Settings: integration URLs
@@ -27,8 +27,8 @@ from ticketing.models.country import Location
 from ticketing.models.organization import Organization
 from ticketing.models.project import Project
 from ticketing.models.settings import Settings
-from ticketing.models.user import Role
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.seed.grm_roles import upsert_grm_roles
 
 logger = logging.getLogger(__name__)
 
@@ -111,99 +111,8 @@ def seed_locations(db: Session) -> None:
 
 
 def seed_roles(db: Session) -> None:
-    """Seed all 12 GRM roles with their permissions."""
-    roles_data = [
-        {
-            "role_key": "super_admin",
-            "display_name": "Super Administrator",
-            "permissions": ["*"],  # full access
-        },
-        {
-            "role_key": "country_admin",
-            "display_name": "Country Administrator",
-            "permissions": ["tickets:read", "projects:manage", "locations:manage", "workflows:manage", "users:invite", "settings:write"],
-        },
-        {
-            "role_key": "project_admin",
-            "display_name": "Project Administrator",
-            "permissions": ["tickets:read", "officers:assign", "notifications:configure", "settings:project"],
-        },
-        {
-            "role_key": "local_admin",
-            "display_name": "Local Administrator (deprecated — use project_admin)",
-            "permissions": ["tickets:read", "tickets:write", "users:manage", "settings:write"],
-        },
-        {
-            "role_key": "site_safeguards_focal_person",
-            "display_name": "Site Safeguards Focal Person (L1)",
-            "permissions": ["tickets:read", "tickets:acknowledge", "tickets:note", "tickets:resolve"],
-        },
-        {
-            "role_key": "pd_piu_safeguards_focal",
-            "display_name": "PD/PIU Safeguards Focal Person (L2)",
-            "permissions": ["tickets:read", "tickets:acknowledge", "tickets:note", "tickets:escalate", "tickets:resolve"],
-        },
-        {
-            "role_key": "grc_chair",
-            "display_name": "GRC Chair (L3 — Convene + Decide)",
-            "permissions": ["tickets:read", "tickets:acknowledge", "tickets:note", "tickets:escalate", "tickets:resolve", "grc:convene", "grc:decide"],
-        },
-        {
-            "role_key": "grc_member",
-            "display_name": "GRC Member (L3 — Input)",
-            "permissions": ["tickets:read", "tickets:note"],
-        },
-        {
-            "role_key": "adb_national_project_director",
-            "display_name": "ADB National Project Director (Observer)",
-            "permissions": ["tickets:read", "reports:read"],
-        },
-        {
-            "role_key": "adb_hq_safeguards",
-            "display_name": "ADB HQ Safeguards (Observer)",
-            "permissions": ["tickets:read", "reports:read"],
-        },
-        {
-            "role_key": "adb_hq_project",
-            "display_name": "ADB HQ Project (Observer)",
-            "permissions": ["tickets:read", "reports:read"],
-        },
-        {
-            "role_key": "seah_national_officer",
-            "display_name": "SEAH National Officer",
-            "permissions": ["tickets:read", "tickets:acknowledge", "tickets:note", "tickets:escalate", "tickets:resolve", "seah:access"],
-        },
-        {
-            "role_key": "seah_hq_officer",
-            "display_name": "SEAH HQ Officer",
-            "permissions": ["tickets:read", "tickets:acknowledge", "tickets:note", "tickets:escalate", "tickets:resolve", "seah:access"],
-        },
-        {
-            "role_key": "adb_hq_exec",
-            "display_name": "ADB HQ Executive (Senior Oversight)",
-            "permissions": ["tickets:read", "reports:read", "seah:access"],
-        },
-    ]
-
-    from sqlalchemy import select
-    from ticketing.models.user import Role as RoleModel
-
-    for rd in roles_data:
-        existing = db.execute(
-            select(RoleModel).where(RoleModel.role_key == rd["role_key"])
-        ).scalar_one_or_none()
-        if not existing:
-            role = RoleModel(
-                role_id=_id(),
-                role_key=rd["role_key"],
-                display_name=rd["display_name"],
-                permissions=rd["permissions"],
-            )
-            db.add(role)
-            logger.info("  + role: %s", rd["role_key"])
-        else:
-            logger.info("  = role already exists: %s", rd["role_key"])
-    db.flush()
+    """Seed or refresh all GRM roles from ticketing.constants.grm_role_catalog."""
+    upsert_grm_roles(db)
 
 
 def seed_standard_workflow(db: Session) -> None:

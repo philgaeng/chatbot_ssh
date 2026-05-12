@@ -12,11 +12,20 @@ class RoleResponse(BaseModel):
     role_id: str
     role_key: str
     display_name: str
+    description: str | None = None
+    workflow_scope: str | None = None
     permissions: Any
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class RoleUpdate(BaseModel):
+    display_name: str | None = None
+    description: str | None = None
+    workflow_scope: str | None = None
 
 
 class UserRoleCreate(BaseModel):

@@ -4,6 +4,7 @@ Officer user management endpoints.
 INTEGRATION POINT: full Cognito invite flow (create user → Cognito invite → set password)
 is deferred to post-proto. For proto, role assignments are managed via seed data.
 """
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -12,20 +13,38 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
+from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, require_admin
 from ticketing.api.schemas.user import (
     NotificationBadgeResponse,
     NotificationItem,
     NotificationsResponse,
     RoleResponse,
+    RoleUpdate,
     UserRoleCreate,
     UserRoleResponse,
 )
 from ticketing.models.officer_scope import OfficerScope
+from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.user import Role, UserRole
 
 router = APIRouter()
+
+
+def _display_name_from_user_id(user_id: str) -> str:
+    """Derive a short label — ticketing stores no PII; IdPs use email or opaque sub."""
+    if "@" in user_id:
+        local = user_id.split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
+        return local.title() if local else user_id
+    if user_id.startswith("mock-"):
+        return user_id[5:].replace("-", " ").title()
+    if len(user_id) >= 32 and user_id.count("-") >= 4:
+        return f"{user_id[:8]}…"
+    return user_id
+
+
+def _email_hint(user_id: str) -> str | None:
+    return user_id if "@" in user_id else None
 
 
 # ── Roles ─────────────────────────────────────────────────────────────────────
@@ -36,6 +55,38 @@ def list_roles(
     _: CurrentUser = Depends(get_current_user),
 ) -> list[Role]:
     return db.execute(select(Role).order_by(Role.role_key)).scalars().all()
+
+
+@router.patch(
+    "/roles/{role_id}",
+    response_model=RoleResponse,
+    summary="Update role catalog fields (admin)",
+)
+def update_role(
+    role_id: str,
+    body: RoleUpdate,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> Role:
+    role = db.get(Role, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    if body.display_name is not None:
+        role.display_name = body.display_name.strip()
+    if body.description is not None:
+        role.description = body.description.strip() or None
+    if body.workflow_scope is not None:
+        v = body.workflow_scope.strip()
+        if v and v not in ("Standard", "SEAH", "Both"):
+            raise HTTPException(
+                status_code=422,
+                detail="workflow_scope must be Standard, SEAH, Both, or empty",
+            )
+        role.workflow_scope = v or None
+    role.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(role)
+    return role
 
 
 # ── User roles ─────────────────────────────────────────────────────────────────
@@ -116,6 +167,75 @@ class OfficerBrief(BaseModel):
     role_keys: list[str]
     organization_id: str | None = None
     location_code: str | None = None
+
+
+class OfficerRosterEntry(BaseModel):
+    """One officer identity with all role rows aggregated from ticketing.user_roles."""
+
+    user_id: str
+    display_name: str
+    email: str | None = None
+    role_keys: list[str]
+    organization_ids: list[str]
+    location_codes: list[str]
+    onboarding_status: str = "active"  # invited | active
+
+
+@router.get(
+    "/users/roster",
+    response_model=list[OfficerRosterEntry],
+    summary="List officers for Settings UI (admin) — from ticketing.user_roles",
+)
+def list_officer_roster(
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> list[OfficerRosterEntry]:
+    """
+    Admin roster: distinct user_ids from user_roles with merged roles and org/locations.
+    No Keycloak call — identities are opaque user_id strings (email or sub).
+    """
+    rows = db.execute(
+        select(UserRole.user_id, Role.role_key, UserRole.organization_id, UserRole.location_code)
+        .join(Role, Role.role_id == UserRole.role_id)
+        .order_by(UserRole.user_id, Role.role_key)
+    ).all()
+
+    order: list[str] = []
+    role_keys_by: dict[str, list[str]] = {}
+    seen_key: dict[str, set[str]] = defaultdict(set)
+    orgs_by: dict[str, set[str]] = defaultdict(set)
+    locs_by: dict[str, set[str]] = defaultdict(set)
+
+    for uid, rk, org_id, loc in rows:
+        if uid not in role_keys_by:
+            role_keys_by[uid] = []
+            order.append(uid)
+        if rk not in seen_key[uid]:
+            seen_key[uid].add(rk)
+            role_keys_by[uid].append(rk)
+        orgs_by[uid].add(org_id)
+        if loc:
+            locs_by[uid].add(loc)
+
+    onboard_map: dict[str, str] = {}
+    if order:
+        ob_rows = db.execute(
+            select(OfficerOnboarding).where(OfficerOnboarding.user_id.in_(order))
+        ).scalars().all()
+        onboard_map = {o.user_id: o.status for o in ob_rows}
+
+    return [
+        OfficerRosterEntry(
+            user_id=uid,
+            display_name=_display_name_from_user_id(uid),
+            email=_email_hint(uid),
+            role_keys=role_keys_by[uid],
+            organization_ids=sorted(orgs_by[uid]),
+            location_codes=sorted(locs_by[uid]),
+            onboarding_status=onboard_map.get(uid, "active"),
+        )
+        for uid in order
+    ]
 
 
 @router.get(
@@ -405,6 +525,7 @@ class OfficerInviteResponse(BaseModel):
 )
 def invite_officer(
     body: OfficerInviteRequest,
+    db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> OfficerInviteResponse:
     """
@@ -423,9 +544,13 @@ def invite_officer(
             detail="Keycloak not configured — set KEYCLOAK_ADMIN_URL to enable officer invite",
         )
 
+    email = body.email.strip()
+    role = db.execute(select(Role).where(Role.role_key == body.role_key)).scalar_one_or_none()
+    if not role:
+        raise HTTPException(status_code=404, detail=f"Role not found: {body.role_key}")
+
     try:
         from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
-        from keycloak.exceptions import KeycloakPostError
 
         conn = KeycloakOpenIDConnection(
             server_url=settings.keycloak_admin_url.rstrip("/") + "/",
@@ -437,8 +562,8 @@ def invite_officer(
         )
         admin = KeycloakAdmin(connection=conn)
         admin.create_user({
-            "username": body.email,
-            "email": body.email,
+            "username": email,
+            "email": email,
             "enabled": True,
             "attributes": {
                 "grm_roles": body.role_key,
@@ -454,13 +579,48 @@ def invite_officer(
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
-            raise HTTPException(status_code=409, detail=f"User {body.email!r} already exists in Keycloak")
+            raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
         raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+
+    existing_ur = db.execute(
+        select(UserRole).where(
+            UserRole.user_id == email,
+            UserRole.role_id == role.role_id,
+            UserRole.organization_id == body.organization_id,
+        )
+    ).scalar_one_or_none()
+    if not existing_ur:
+        db.add(
+            UserRole(
+                user_id=email,
+                role_id=role.role_id,
+                organization_id=body.organization_id,
+                location_code=None,
+            )
+        )
+
+    ob = db.get(OfficerOnboarding, email)
+    if ob:
+        if ob.status != "active":
+            ob.status = "invited"
+            ob.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(
+            OfficerOnboarding(
+                user_id=email,
+                status="invited",
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+    db.commit()
 
     return OfficerInviteResponse(
         ok=True,
-        email=body.email,
-        message="Officer created in Keycloak — they will receive a setup email if SMTP is configured.",
+        email=email,
+        message=(
+            "Officer created in Keycloak and roster seeded in ticketing. "
+            "Status becomes Active when Keycloak emits UPDATE_PASSWORD (webhook) after first password change."
+        ),
     )
 
 

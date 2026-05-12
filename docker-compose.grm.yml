@@ -68,6 +68,9 @@ services:
       KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Event → ticketing: use an HTTP Keycloak event-listener extension to POST
+      # UPDATE_PASSWORD events to http://ticketing_api_auth:5003/api/v1/webhooks/keycloak
+      # (auth stack) with header X-Keycloak-Webhook-Secret: ${KEYCLOAK_WEBHOOK_SECRET}.
     ports:
       - "${KEYCLOAK_HOST_PORT:-18080}:8080"
     depends_on:
@@ -128,6 +131,8 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
       KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # POST /api/v1/webhooks/keycloak — set the same value on Keycloak HTTP event listener
+      KEYCLOAK_WEBHOOK_SECRET: ${KEYCLOAK_WEBHOOK_SECRET:-}
     ports:
       - "5002:5002"
     depends_on:
@@ -287,6 +292,7 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
       KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-http://keycloak:8080}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_WEBHOOK_SECRET: ${KEYCLOAK_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
     ports:
