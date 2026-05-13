@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `578ef24` / `c60d8ee` — 2026-05-12 (roles catalog, onboarding webhook, Settings UI)
+> Last updated: `71de359` — 2026-05-12 (PROGRESS synced after `c60d8ee` / `578ef24`)
 
 ---
 
@@ -158,6 +158,7 @@ mock-officer-adb-observer   → adb_hq_safeguards @ ADB
 
 | Hash | Date | What changed |
 |------|------|-------------|
+| `71de359` | 2026-05-12 | **docs** PROGRESS: document `c60d8ee` + `578ef24`, migrations, revert / Alembic downgrade notes |
 | `578ef24` | 2026-05-12 | **feat(ticketing-ui)** Settings roles editor + roster onboarding UI + org create optional id; api client `GrmRole` / `listRoles` / `updateRole` |
 | `c60d8ee` | 2026-05-12 | **feat(ticketing)** Migrations `n4p6r8t0` + `o5p7q9r1`; Keycloak webhook; invite/onboarding; `grm_role_catalog` + seed; org id allocator; compose webhook secret |
 | `db8e679` | 2026-05-12 | **docs** PROGRESS for demo bypass roster (`07edd4d` / `dee4421`) |
