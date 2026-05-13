@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `dee4421` / `07edd4d` — 2026-05-12 (demo bypass roster + org header)
+> Last updated: `578ef24` / `c60d8ee` — 2026-05-12 (roles catalog, onboarding webhook, Settings UI)
 
 ---
 
@@ -63,6 +63,14 @@
   - **Backend:** dev bypass `CurrentUser.organization_id` reads optional `X-Internal-Organization-Id` (still defaults to `DOR` when absent).
   - **ticketing-ui:** Removed hardcoded `MOCK_OFFICERS`. With `NEXT_PUBLIC_BYPASS_AUTH=true`, the header switcher lists officers from `GET /api/v1/users/roster` (same `ticketing.user_roles` as Settings). Cookie renamed to `grm_bypass_user` (proxy forwards org); legacy `grm_mock_user` is cleared on write and still read if the new cookie is missing.
   - **API client:** `OfficerRosterEntry` + `listOfficerRoster()` in `lib/api.ts`.
+
+- ✅ **Roles catalog + officer onboarding + Keycloak webhook** (2026-05-12, `c60d8ee` + `578ef24`):
+  - **Alembic:** `n4p6r8t0` → `roles.description`, `roles.workflow_scope`; `o5p7q9r1` → `ticketing.officer_onboarding` (`invited` \| `active`), backfill existing roster users as `active`. Run from repo root: `cd ticketing/migrations && alembic upgrade head` (see `docs/claude-tickets/DOCKER.md`).
+  - **Backend:** `ticketing/constants/grm_role_catalog.py` + `ticketing/seed/grm_roles.py`; `POST /api/v1/webhooks/keycloak` (header `X-Keycloak-Webhook-Secret` = `KEYCLOAK_WEBHOOK_SECRET`); invite seeds `UserRole` + `OfficerOnboarding`; roster includes `onboarding_status`; `ticketing/utils/organization_identifier.py` for server-allocated org IDs; locations/org create path updated.
+  - **Compose:** `KEYCLOAK_WEBHOOK_SECRET` passed into `ticketing_api` and `ticketing_api_auth` (`docker-compose.grm.yml`).
+  - **ticketing-ui:** Settings — role catalog editor (`PATCH /api/v1/roles/{id}`), officers roster Invited/Active badges, invite copy; `lib/api.ts` — `GrmRole`, `listRoles`, `updateRole`, optional `organization_id` on org create.
+
+**Restore / revert this batch:** `git revert 578ef24` (UI), then `git revert c60d8ee` (backend). After reverting the backend commit, roll back DB with Alembic if needed: `alembic downgrade o5p7q9r1` then step before `n4p6r8t0` per your head revision (see `DOCKER.md`).
 
 ### In progress / next
 - 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
@@ -150,6 +158,9 @@ mock-officer-adb-observer   → adb_hq_safeguards @ ADB
 
 | Hash | Date | What changed |
 |------|------|-------------|
+| `578ef24` | 2026-05-12 | **feat(ticketing-ui)** Settings roles editor + roster onboarding UI + org create optional id; api client `GrmRole` / `listRoles` / `updateRole` |
+| `c60d8ee` | 2026-05-12 | **feat(ticketing)** Migrations `n4p6r8t0` + `o5p7q9r1`; Keycloak webhook; invite/onboarding; `grm_role_catalog` + seed; org id allocator; compose webhook secret |
+| `db8e679` | 2026-05-12 | **docs** PROGRESS for demo bypass roster (`07edd4d` / `dee4421`) |
 | `dee4421` | 2026-05-12 | **feat(ticketing-ui)** Demo bypass: officer switcher driven by `GET /api/v1/users/roster`; cookie `grm_bypass_user`; `listOfficerRoster` in api client |
 | `07edd4d` | 2026-05-12 | **feat(ticketing)** Dev bypass auth honors `X-Internal-Organization-Id` (from proxy cookie) instead of hardcoding DOR only |
 | `edfa942` | 2026-04-27 | **feat(llm)** Note translation + case findings summary. `llm_client.py`, `tasks/llm.py`, migration `c1d5f8a2e047`, `FindingsCard` frontend component, translation chip in timeline |
