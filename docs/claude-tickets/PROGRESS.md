@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `71de359` — 2026-05-12 (PROGRESS synced after `c60d8ee` / `578ef24`)
+> Last updated: 2026-05-12 — roles catalog, officer onboarding, Keycloak webhook, Settings UI, PROGRESS sync
 
 ---
 
