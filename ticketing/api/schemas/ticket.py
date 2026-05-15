@@ -112,6 +112,8 @@ class TicketListItem(BaseModel):
     my_earliest_task_due_at: Optional[datetime] = None
     # Unread badge: number of unseen events assigned to requesting user
     unseen_event_count: int = 0
+    # True when no assignee — admins should see routing misconfiguration (spec §2)
+    needs_assignment: bool = False
 
     class Config:
         from_attributes = True

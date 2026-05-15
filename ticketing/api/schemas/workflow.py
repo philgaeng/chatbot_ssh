@@ -104,6 +104,11 @@ class WorkflowCreate(BaseModel):
     workflow_type: str = "standard"         # "standard" | "seah"
     description: Optional[str] = None
     clone_from_id: Optional[str] = None     # clone steps from this workflow/template
+    is_template: bool = False               # True → reusable template (not assigned to tickets)
+
+
+class SaveAsTemplateBody(BaseModel):
+    display_name: Optional[str] = None      # defaults to "{source name} (template)"
 
 
 class WorkflowUpdate(BaseModel):

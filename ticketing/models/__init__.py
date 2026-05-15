@@ -2,6 +2,7 @@ from .base import Base
 from .country import Country, LocationLevelDef, Location, LocationTranslation
 from .organization import Organization
 from .user import Role, UserRole
+from .officer_onboarding import OfficerOnboarding
 from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
 from .ticket import Ticket, TicketEvent
 from .ticket_file import TicketFile
@@ -11,6 +12,7 @@ from .package import ProjectPackage, PackageLocation
 from .settings import Settings
 from .ticket_context_cache import TicketContextCache
 from .ticket_viewer import TicketViewer
+from .admin_audit_log import AdminAuditLog
 
 __all__ = [
     "Base",
@@ -21,6 +23,7 @@ __all__ = [
     "Organization",
     "Role",
     "UserRole",
+    "OfficerOnboarding",
     "WorkflowDefinition",
     "WorkflowStep",
     "WorkflowAssignment",
@@ -36,4 +39,5 @@ __all__ = [
     "Settings",
     "TicketContextCache",
     "TicketViewer",
+    "AdminAuditLog",
 ]

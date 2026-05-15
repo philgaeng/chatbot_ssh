@@ -1,8 +1,0 @@
-fastapi>=0.100.0
-uvicorn>=0.22.0
-pyyaml>=6.0
-pydantic>=2.0
-
-# Required when using real Rasa actions (rasa_chatbot)
-# Install from project root: pip install -r requirements.txt
-# rasa-sdk, backend deps, etc. come from main project

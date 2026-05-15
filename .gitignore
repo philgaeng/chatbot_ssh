@@ -55,6 +55,8 @@ deployment/certbot/
 
 # Cursor / agent scratch
 .cursor_tmp/
+# Claude Code agent session copies (never commit; canonical app is channels/ticketing-ui/)
+.claude/worktrees/
 
 # IDE-specific files
 .idea/

@@ -1,12 +1,15 @@
 # GRM Ticketing — Docker Compose overlay
 #
-# ── Demo stack (default — bypass auth, no Keycloak required) ─────────────────
-#   make compose_docker_wsl_grm_demo
+# ── Demo stack (bypass auth, no Keycloak) ─────────────────────────────────────
+#   make wsl-demo-bypass   (or wsl-ticketing)
 #   → grm_ui      :3001  BYPASS_AUTH=true  → ticketing_api:5002 (mock super-admin)
 #
-# ── Auth stack (requires --profile auth) ─────────────────────────────────────
-#   make compose_docker_wsl_grm_auth
+# ── Auth stack (--profile auth) ───────────────────────────────────────────────
+#   make wsl-auth
 #   → grm_ui_auth :3002  BYPASS_AUTH=false → ticketing_api_auth:5003 (Keycloak JWT)
+#
+# ── Full local stack ──────────────────────────────────────────────────────────
+#   make wsl-up   → chatbot + demo :3001 + auth :3002
 #   → keycloak    :18080 admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD})
 #                        Host port configurable via KEYCLOAK_HOST_PORT.
 #                        Browser-facing URL pinned by KC_HOSTNAME_URL so tokens'
@@ -68,6 +71,9 @@ services:
       KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Event → ticketing: use an HTTP Keycloak event-listener extension to POST
+      # UPDATE_PASSWORD events to http://ticketing_api_auth:5003/api/v1/webhooks/keycloak
+      # (auth stack) with header X-Keycloak-Webhook-Secret: ${KEYCLOAK_WEBHOOK_SECRET}.
     ports:
       - "${KEYCLOAK_HOST_PORT:-18080}:8080"
     depends_on:
@@ -123,11 +129,14 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      # Keycloak (leave empty to keep dev bypass / mock-super-admin)
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
-      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
+      # Demo API (:5002): always dev bypass — do not inherit env.local Keycloak URLs.
+      # Auth stack uses ticketing_api_auth (:5003) with real JWT validation.
+      KEYCLOAK_ISSUER: ""
+      KEYCLOAK_JWKS_URL: ""
+      KEYCLOAK_CLIENT_ID: ticketing-api
+      KEYCLOAK_ADMIN_URL: ""
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_WEBHOOK_SECRET: ""
     ports:
       - "5002:5002"
     depends_on:
@@ -209,11 +218,12 @@ services:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
-        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-}
-        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
-        NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
-        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+        # Always demo/bypass on :3001 — do not inherit env.local OIDC vars (those apply to grm_ui_auth).
+        NEXT_PUBLIC_BYPASS_AUTH: "true"
+        NEXT_PUBLIC_OIDC_ISSUER: ""
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ticketing-ui
+        NEXT_PUBLIC_REDIRECT_SIGN_IN: ""
+        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ""
     environment:
       # Server-side proxy target — uses Docker service name (not localhost)
       TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
@@ -287,6 +297,7 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
       KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-http://keycloak:8080}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_WEBHOOK_SECRET: ${KEYCLOAK_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
     ports:

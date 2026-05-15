@@ -256,6 +256,7 @@ def escalate_ticket(
         location_code=ticket.location_code,
         project_code=ticket.project_code,
         db=db,
+        ticket_package_id=ticket.package_id,
     )
     if new_assigned:
         ticket.assigned_to_user_id = new_assigned

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AlertTriangle, X, Lock, ClipboardList, Construction } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import {
@@ -10,6 +10,9 @@ import {
   updateWorkflow,
   publishWorkflow,
   archiveWorkflow,
+  deleteWorkflow,
+  getWorkflow,
+  saveWorkflowAsTemplate,
   addStep,
   updateStep,
   deleteStep,
@@ -25,6 +28,7 @@ import {
   listProjects,
   createProject,
   updateProject,
+  deleteProject,
   addProjectOrg,
   removeProjectOrg,
   addProjectLocation,
@@ -37,6 +41,7 @@ import {
   setOrgRoles,
   createOrganization,
   updateOrganization,
+  deleteOrganization,
   listProjectsForOrg,
   listPackages,
   createPackage,
@@ -57,89 +62,80 @@ import {
   type OrgRole,
   type PackageItem,
   type PackageCreate,
-  inviteOfficer,
+  listRoles,
+  updateRole,
+  deleteRole,
+  type GrmRole,
 } from "@/lib/api";
+import { OfficersTab } from "@/components/settings/OfficersTab";
+import { LocationSearch } from "@/components/LocationSearch";
 
-// ── Role edit modal ───────────────────────────────────────────────────────────
+// ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
 type RoleEntry = {
+  role_id: string;
   key: string;
   label: string;
   workflow: string;
   description: string;
 };
 
-function RoleEditModal({ role, onSave, onClose, isNew = false }: {
+function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
+  return {
+    role_id: r.role_id,
+    key: r.role_key,
+    label: r.display_name,
+    workflow: r.workflow_scope ?? "Standard",
+    description: r.description ?? "",
+  };
+}
+
+// ── Role edit modal ───────────────────────────────────────────────────────────
+
+function RoleEditModal({ role, onSaved, onClose }: {
   role: RoleEntry;
-  onSave: (updated: RoleEntry) => void;
+  onSaved: (updated: RoleEntry) => void;
   onClose: () => void;
-  isNew?: boolean;
 }) {
-  const [key, setKey]               = useState(role.key);
-  const [label, setLabel]           = useState(role.label);
-  const [workflow, setWorkflow]     = useState(role.workflow || "Standard");
+  const [label, setLabel]               = useState(role.label);
+  const [workflow, setWorkflow]         = useState(role.workflow || "Standard");
   const [description, setDescription] = useState(role.description);
-  const [saved, setSaved]           = useState(false);
+  const [saved, setSaved]               = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [err, setErr]                   = useState("");
 
-  const derivedKey = isNew
-    ? key.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
-    : role.key;
-
-  function handleSave() {
-    if (isNew && !derivedKey) return;
-    onSave({ ...role, key: derivedKey, label, workflow, description });
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 800);
+  async function handleSave() {
+    setErr("");
+    setSaving(true);
+    try {
+      const raw = await updateRole(role.role_id, {
+        display_name: label.trim(),
+        description: description.trim() || null,
+        workflow_scope: workflow.trim() || null,
+      });
+      onSaved(mapGrmRoleToEntry(raw));
+      setSaved(true);
+      setTimeout(() => { setSaved(false); onClose(); }, 650);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
           <div>
-            <div className="font-semibold">{isNew ? "New Role" : "Edit Role"}</div>
-            {!isNew && <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>}
-            {isNew && derivedKey && <div className="text-xs text-slate-300 font-mono mt-0.5">{derivedKey}</div>}
+            <div className="font-semibold">Edit Role</div>
+            <div className="text-xs text-slate-300 font-mono mt-0.5">{role.key}</div>
           </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
+          <button type="button" onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
 
-        {/* Body */}
         <div className="p-6 space-y-4">
-          {isNew && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Display name *</label>
-                <input
-                  autoFocus
-                  value={label}
-                  onChange={(e) => {
-                    setLabel(e.target.value);
-                    if (!key || key === label.toLowerCase().replace(/[^a-z0-9]+/g, "_")) {
-                      setKey(e.target.value);
-                    }
-                  }}
-                  placeholder="e.g. Site Focal Person"
-                  className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Workflow</label>
-                <select
-                  value={workflow}
-                  onChange={(e) => setWorkflow(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                >
-                  <option value="Standard">Standard</option>
-                  <option value="SEAH">SEAH</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {!isNew && (
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
               <input
@@ -149,7 +145,19 @@ function RoleEditModal({ role, onSave, onClose, isNew = false }: {
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
             </div>
-          )}
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Workflow scope</label>
+              <select
+                value={workflow}
+                onChange={(e) => setWorkflow(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              >
+                <option value="Standard">Standard</option>
+                <option value="SEAH">SEAH</option>
+                <option value="Both">Both</option>
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
@@ -161,24 +169,26 @@ function RoleEditModal({ role, onSave, onClose, isNew = false }: {
             />
           </div>
 
+          {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{err}</p>}
+
           <p className="text-xs text-gray-400">
-            Access control is enforced by role key in the backend. Ticket-level actions are governed by the Actor / Supervisor / Informed / Observer tiers defined per workflow step.
+            Changes are saved to <span className="font-mono">ticketing.roles</span>. Role <span className="font-mono">role_key</span> is fixed; workflow assignment tiers are configured per workflow step.
           </p>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">
             Cancel
           </button>
           <button
-            onClick={handleSave}
-            disabled={isNew && (!derivedKey || !label.trim())}
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving || !label.trim()}
             className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
               saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            {saved ? "✓ Saved" : isNew ? "Create role" : "Save changes"}
+            {saved ? "✓ Saved" : saving ? "Saving…" : "Save changes"}
           </button>
         </div>
       </div>
@@ -210,813 +220,82 @@ const ORG_ROLE_COLORS: Record<string, string> = {
   specialized_consultant:  "bg-green-100 text-green-700 border-green-200",
 };
 
-/** Derive a short org ID from name + country code.
- *  Rule: initials of each word, uppercased, prefixed by country code.
- *  Exception: no country selected, OR initials === "ADB" → no prefix (international org).
- */
-function generateOrgId(name: string, country: string): string {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .map((w) => {
-      const clean = w.replace(/[^a-zA-Z0-9]/g, "");
-      if (!clean) return "";
-      return /^[0-9]/.test(clean) ? clean : clean[0].toUpperCase();
-    })
-    .filter(Boolean)
-    .join("");
-  if (!initials) return "";
-  // International / multi-country org (no country) or natural "ADB" acronym → no prefix
-  if (!country || initials === "ADB") return initials;
-  return `${country}_${initials}`;
+/** Same token rules as ticketing/utils/organization_identifier.py */
+const ORG_NAME_TOKEN_RE = /[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|\d+/g;
+
+function splitOrgNameTokens(name: string): string[] {
+  const parts = name.trim().split(/[\s_\-/]+/).filter(Boolean);
+  const tokens: string[] = [];
+  for (const p of parts) {
+    const found = p.match(ORG_NAME_TOKEN_RE);
+    if (!found || found.length === 0) {
+      const alnum = p.replace(/[^a-zA-Z0-9]/g, "");
+      if (alnum) tokens.push(alnum);
+      continue;
+    }
+    for (const s of found) {
+      const alnum = s.replace(/[^a-zA-Z0-9]/g, "");
+      if (alnum) tokens.push(alnum);
+    }
+  }
+  return tokens;
 }
 
-// ── Location search autocomplete ─────────────────────────────────────────────
-
-const LOC_LEVEL_LABELS: Record<number, string> = {
-  1: "Province",
-  2: "District",
-  3: "Municipality",
-};
-const LOC_LEVEL_COLORS: Record<number, string> = {
-  1: "bg-purple-100 text-purple-700",
-  2: "bg-blue-100 text-blue-700",
-  3: "bg-green-100 text-green-700",
-};
+function slugCoreFromOrgName(name: string): string {
+  const tokens = splitOrgNameTokens(name);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) {
+    const t = tokens[0];
+    if (/^\d+$/.test(t)) return t;
+    if (t.length <= 3) return t.toUpperCase();
+    return t.slice(0, 6).toUpperCase();
+  }
+  let core = tokens.map((t) => (/^\d+$/.test(t) ? t : t[0].toUpperCase())).join("");
+  if (core.length > 12) core = core.slice(0, 12);
+  return core;
+}
 
 /**
- * Autocomplete that searches the location tree (province / district / municipality).
- * Calls GET /api/v1/locations?q=<text> with a 220 ms debounce.
- * Also matches on location_code so admins can type "NP_D004" and still find the result.
+ * Preview of the id the API will use (first free candidate).
+ * Keep logic aligned with suggested_organization_id + allocate_unique_organization_id.
  */
-function LocationSearch({
-  country = "NP",
-  placeholder,
-  excludeCodes = [],
-  onSelect,
-}: {
-  country?: string;
-  placeholder?: string;
-  excludeCodes?: string[];
-  onSelect: (code: string, name: string) => void;
-}) {
-  const [q, setQ]           = useState("");
-  const [hits, setHits]     = useState<LocationNode[]>([]);
-  const [open, setOpen]     = useState(false);
-  const [loading, setLoading] = useState(false);
-  const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // stable string for excludeCodes dep
-  const excludeKey = excludeCodes.join(",");
-
-  function getName(node: LocationNode) {
-    return node.translations.find((t) => t.lang_code === "en")?.name ?? node.location_code;
+function generateOrgId(name: string, country: string, existingIds: Set<string>): string {
+  const core = slugCoreFromOrgName(name);
+  if (!core) return "";
+  const base = !country || core === "ADB" ? core : `${country}_${core}`;
+  if (!existingIds.has(base)) return base;
+  let n = 2;
+  while (n < 100000) {
+    const suffix = `_${n}`;
+    const prefixLen = Math.max(0, 64 - suffix.length);
+    const cand = base.slice(0, prefixLen) + suffix;
+    if (!existingIds.has(cand)) return cand;
+    n += 1;
   }
-
-  useEffect(() => {
-    if (q.trim().length < 2) { setHits([]); setOpen(false); return; }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await listLocations({ country, q: q.trim(), limit: 8, active_only: true });
-        setHits(res.filter((n) => !excludeCodes.includes(n.location_code)));
-        setOpen(true);
-      } catch {
-        setHits([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 220);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, country, excludeKey]);
-
-  function handleSelect(node: LocationNode) {
-    onSelect(node.location_code, getName(node));
-    setQ(""); setHits([]); setOpen(false);
-  }
-
-  return (
-    <div className="relative">
-      {/* Input */}
-      <div className="flex items-center gap-1.5 border border-gray-300 rounded px-2.5 py-1.5 focus-within:ring-1 focus-within:ring-blue-400 bg-white">
-        <span className="text-gray-400 text-xs shrink-0 select-none">⌕</span>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onBlur={() => setTimeout(() => setOpen(false), 180)}
-          onFocus={() => hits.length > 0 && setOpen(true)}
-          placeholder={placeholder ?? "Search province, district or municipality…"}
-          className="flex-1 text-sm bg-transparent outline-none min-w-0"
-        />
-        {loading && <span className="text-xs text-gray-300 animate-pulse shrink-0">…</span>}
-        {q && (
-          <button
-            onClick={() => { setQ(""); setHits([]); setOpen(false); }}
-            className="text-gray-300 hover:text-gray-500 text-base leading-none shrink-0"
-          >×</button>
-        )}
-      </div>
-
-      {/* Dropdown */}
-      {open && hits.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-          {hits.map((node) => (
-            <button
-              key={node.location_code}
-              onMouseDown={() => handleSelect(node)}
-              className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2 border-t border-gray-50 first:border-t-0 transition-colors"
-            >
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${LOC_LEVEL_COLORS[node.level_number] ?? "bg-gray-100 text-gray-600"}`}>
-                {LOC_LEVEL_LABELS[node.level_number] ?? `L${node.level_number}`}
-              </span>
-              <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{getName(node)}</span>
-              <span className="text-xs font-mono text-gray-400 shrink-0">{node.location_code}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* No results */}
-      {open && q.trim().length >= 2 && !loading && hits.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2.5">
-          <span className="text-sm text-gray-400 italic">No locations match &ldquo;{q}&rdquo;</span>
-        </div>
-      )}
-    </div>
-  );
+  return base;
 }
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-type MockOfficerEntry = { name: string; email: string; role: string; org: string | null; location: string | null };
-
-const MOCK_OFFICERS: MockOfficerEntry[] = [
-  { name: "Mock Site L1",       email: "mock-officer-site-l1@grm.local",       role: "site_safeguards_focal_person", org: "DOR", location: "JHAPA"  },
-  { name: "Mock PIU L2",        email: "mock-officer-piu-l2@grm.local",        role: "pd_piu_safeguards_focal",      org: "DOR", location: "MORANG" },
-  { name: "Mock GRC Chair",     email: "mock-officer-grc-chair@grm.local",     role: "grc_chair",                   org: "DOR", location: null     },
-  { name: "Mock GRC Member",    email: "mock-officer-grc-member@grm.local",    role: "grc_member",                  org: "DOR", location: null     },
-  { name: "Mock SEAH National", email: "mock-officer-seah-national@grm.local", role: "seah_national_officer",        org: "ADB", location: null     },
-  { name: "Mock SEAH HQ",       email: "mock-officer-seah-hq@grm.local",       role: "seah_hq_officer",             org: "ADB", location: null     },
-  { name: "GRM Admin (mock)",   email: "admin@grm.local",                      role: "super_admin",                 org: null,  location: null     },
-];
-
-const ROLES: RoleEntry[] = [
-  { key: "super_admin",                   label: "Super Admin",                    workflow: "Both",     description: "Full system access. Can manage all settings, users, and tickets." },
-  { key: "local_admin",                   label: "Local Admin",                    workflow: "Standard", description: "Administrative access scoped to their organization and location." },
-  { key: "site_safeguards_focal_person",  label: "Site Safeguards Focal Person",   workflow: "Standard", description: "Level 1 officer — first point of contact for standard grievances." },
-  { key: "pd_piu_safeguards_focal",       label: "PD / PIU Safeguards Focal",      workflow: "Standard", description: "Level 2 officer — receives escalations from L1." },
-  { key: "grc_chair",                     label: "GRC Chair",                      workflow: "Standard", description: "Level 3 — convenes GRC hearing and records the committee decision." },
-  { key: "grc_member",                    label: "GRC Member",                     workflow: "Standard", description: "Level 3 — participates in GRC hearing. Receives hearing notifications." },
-  { key: "adb_national_project_director", label: "ADB National Project Director",  workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
-  { key: "adb_hq_safeguards",             label: "ADB HQ Safeguards",              workflow: "Standard", description: "Observer — read-only oversight of standard GRM cases." },
-  { key: "seah_national_officer",         label: "SEAH National Officer",          workflow: "SEAH",     description: "Level 1 SEAH officer — handles SEAH cases. Invisible to standard officers." },
-  { key: "seah_hq_officer",              label: "SEAH HQ Officer",                workflow: "SEAH",     description: "Level 2 SEAH officer — receives SEAH escalations." },
-  { key: "adb_hq_exec",                  label: "ADB HQ Executive",               workflow: "Both",     description: "Senior oversight — read-only access to both standard and SEAH cases." },
-];
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
-// ── OfficerScopePanel — expandable jurisdictions editor ──────────────────────
-
-function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: string }) {
-  const [scopes, setScopes]   = useState<OfficerScope[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding]   = useState(false);
-
-  // Reference data loaded once
-  const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [pkgMap, setPkgMap]     = useState<Record<string, PackageItem>>({});
-
-  // New scope form state
-  const [selOrg,      setSelOrg]      = useState("");
-  const [selProject,  setSelProject]  = useState("");
-  const [selLoc,      setSelLoc]      = useState<{ code: string; name: string } | null>(null);
-  const [selPkg,      setSelPkg]      = useState("");
-  const [inclChildren, setInclChildren] = useState(false);
-  const [pkgOptions,  setPkgOptions]  = useState<PackageItem[]>([]);
-
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
-
-  // Load scopes + reference data once
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([listScopes(userId), listOrganizations(), listProjects()])
-      .then(([scopeData, orgData, projData]) => {
-        setScopes(scopeData);
-        setOrgs(orgData);
-        setProjects(projData);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [userId]);
-
-  // Build pkgMap for packages referenced by existing scopes (for display)
-  useEffect(() => {
-    const projIds = [...new Set(scopes.map((s) => s.project_id).filter(Boolean) as string[])];
-    if (projIds.length === 0) return;
-    Promise.all(projIds.map((pid) => listPackages(pid)))
-      .then((arrays) => {
-        const map: Record<string, PackageItem> = {};
-        arrays.flat().forEach((pkg) => { map[pkg.package_id] = pkg; });
-        setPkgMap(map);
-      })
-      .catch(() => {});
-  }, [scopes]);
-
-  // When selected org changes, reset project selection
-  useEffect(() => {
-    setSelProject(""); setPkgOptions([]); setSelPkg("");
-  }, [selOrg]);
-
-  // When selected project changes, load its packages
-  useEffect(() => {
-    if (!selProject) { setPkgOptions([]); setSelPkg(""); return; }
-    listPackages(selProject).then(setPkgOptions).catch(() => setPkgOptions([]));
-    setSelPkg("");
-  }, [selProject]);
-
-  const filteredProjects = selOrg
-    ? projects.filter((p) => p.organizations.some((o) => o.organization_id === selOrg))
-    : projects;
-
-  const orgMap = Object.fromEntries(orgs.map((o) => [o.organization_id, o.name]));
-
-  function resetForm() {
-    setSelOrg(""); setSelProject(""); setSelLoc(null);
-    setSelPkg(""); setInclChildren(false); setPkgOptions([]);
-  }
-
-  async function handleAdd() {
-    if (!selOrg) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const created = await addScope(userId, {
-        role_key:         roleKey,
-        organization_id:  selOrg,
-        location_code:    selLoc?.code ?? null,
-        project_id:       selProject || null,
-        package_id:       selPkg || null,
-        includes_children: inclChildren,
-      });
-      setScopes((s) => [...s, created]);
-      resetForm();
-      setAdding(false);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg.includes("409") ? "Scope already exists" : "Failed to add scope");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(scopeId: string) {
-    try {
-      await deleteScope(userId, scopeId);
-      setScopes((s) => s.filter((x) => x.scope_id !== scopeId));
-    } catch {
-      setError("Failed to remove scope");
-    }
-  }
-
-  return (
-    <div className="bg-slate-50 border-t border-gray-200 px-6 py-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Jurisdiction scopes
-        <span className="ml-1 text-slate-400 font-normal normal-case">(tickets this officer can see)</span>
-      </p>
-
-      {loading ? (
-        <p className="text-xs text-gray-400">Loading…</p>
-      ) : (
-        <>
-          {scopes.length === 0 && !adding && (
-            <p className="text-xs text-amber-600 mb-2">
-              No scopes — officer only sees tickets assigned directly to them.
-            </p>
-          )}
-
-          {scopes.length > 0 && (
-            <table className="w-full text-xs mb-2">
-              <thead>
-                <tr className="text-left text-slate-400">
-                  <th className="pr-3 pb-1 font-medium">Organization</th>
-                  <th className="pr-3 pb-1 font-medium">Location</th>
-                  <th className="pr-3 pb-1 font-medium">Project</th>
-                  <th className="pr-3 pb-1 font-medium">Package</th>
-                  <th className="pb-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {scopes.map((s) => {
-                  const pkg = s.package_id ? pkgMap[s.package_id] : null;
-                  const proj = s.project_id ? projects.find((p) => p.project_id === s.project_id) : null;
-                  return (
-                    <tr key={s.scope_id} className="border-t border-gray-100">
-                      <td className="pr-3 py-1 text-gray-700">{orgMap[s.organization_id] ?? s.organization_id}</td>
-                      <td className="pr-3 py-1 text-gray-500">
-                        {s.location_code ? (
-                          <span className="inline-flex items-center gap-1">
-                            {s.location_code}
-                            {s.includes_children && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-1 rounded" title="Includes child locations">+sub</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">all</span>
-                        )}
-                      </td>
-                      <td className="pr-3 py-1 text-gray-500">
-                        {proj ? proj.short_code : s.project_id ? s.project_id : <span className="text-gray-300">all</span>}
-                      </td>
-                      <td className="pr-3 py-1">
-                        {pkg ? (
-                          <span
-                            className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-mono cursor-default"
-                            title={pkg.name}
-                          >
-                            {pkg.package_code}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="py-1 text-right">
-                        <button
-                          onClick={() => handleDelete(s.scope_id)}
-                          className="text-red-400 hover:text-red-600 font-medium"
-                        >
-                          <X size={13} strokeWidth={2.5} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {adding ? (
-            <div className="mt-2 bg-white border border-gray-200 rounded-lg p-3 space-y-2">
-
-              {/* Row 1: Org + Project */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={selOrg}
-                  onChange={(e) => setSelOrg(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                >
-                  <option value="">— Organization * —</option>
-                  {orgs.map((o) => (
-                    <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={selProject}
-                  onChange={(e) => setSelProject(e.target.value)}
-                  disabled={filteredProjects.length === 0}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-                >
-                  <option value="">— Project (all) —</option>
-                  {filteredProjects.map((p) => (
-                    <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Row 2: Location search / selected pill */}
-              <div>
-                {selLoc ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs">
-                      {selLoc.name}
-                      <span className="font-mono text-blue-400 text-xs">{selLoc.code}</span>
-                      <button onClick={() => setSelLoc(null)} className="text-blue-300 hover:text-blue-600 ml-0.5 leading-none">×</button>
-                    </span>
-                    <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={inclChildren}
-                        onChange={(e) => setInclChildren(e.target.checked)}
-                        className="accent-purple-500"
-                      />
-                      include sub-locations
-                    </label>
-                  </div>
-                ) : (
-                  <LocationSearch
-                    placeholder="Location (leave blank = all)"
-                    onSelect={(code, name) => setSelLoc({ code, name })}
-                  />
-                )}
-              </div>
-
-              {/* Row 3: Package (only when project has packages) */}
-              {selProject && pkgOptions.length > 0 && (
-                <div>
-                  <select
-                    value={selPkg}
-                    onChange={(e) => setSelPkg(e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                  >
-                    <option value="">— Package (all packages in project) —</option>
-                    {pkgOptions.map((pkg) => (
-                      <option key={pkg.package_id} value={pkg.package_id}>
-                        {pkg.package_code} — {pkg.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400 mt-0.5">L1 officers are typically scoped to a single package.</p>
-                </div>
-              )}
-
-              {/* Row 4: Actions */}
-              <div className="flex items-center gap-2 pt-0.5">
-                <button
-                  onClick={handleAdd}
-                  disabled={saving || !selOrg}
-                  className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? "Saving…" : "Add scope"}
-                </button>
-                <button
-                  onClick={() => { setAdding(false); resetForm(); setError(null); }}
-                  className="text-gray-400 hover:text-gray-600 text-xs"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAdding(true)}
-              className="text-blue-600 hover:underline text-xs mt-1"
-            >
-              + Add scope
-            </button>
-          )}
-
-          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ── InviteOfficerModal ────────────────────────────────────────────────────────
-
-function InviteOfficerModal({ onClose, onSuccess }: {
-  onClose: () => void;
-  onSuccess: (email: string) => void;
+function RolesTab({ catalog, loading, onReload }: {
+  catalog: RoleEntry[];
+  loading: boolean;
+  onReload: () => void;
 }) {
-  const [email, setEmail]         = useState("");
-  const [roleKey, setRoleKey]     = useState(ROLES[0].key);
-  const [orgId, setOrgId]         = useState("");
-  const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-
-  useEffect(() => {
-    listOrganizations().then(setOrgs).catch(() => {});
-  }, []);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !orgId) { setError("Email and organization are required."); return; }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await inviteOfficer({ email: email.trim(), role_key: roleKey, organization_id: orgId });
-      onSuccess(email.trim());
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg.includes("409") ? `${email} already exists.` : msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div className="font-semibold">Invite Officer</div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Email address *</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="officer@example.com"
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Role *</label>
-            <select
-              value={roleKey}
-              onChange={(e) => setRoleKey(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              {ROLES.map((r) => (
-                <option key={r.key} value={r.key}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
-            <select
-              value={orgId}
-              onChange={(e) => setOrgId(e.target.value)}
-              required
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              <option value="">Select organization…</option>
-              {orgs.map((o) => (
-                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            The officer will receive a temporary password and be required to change it on first login.
-            SMTP must be configured in Keycloak for email delivery; otherwise share the password manually.
-          </div>
-
-          {error && <p className="text-xs text-red-500">{error}</p>}
-
-          <div className="flex justify-end gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-            >
-              {submitting ? "Inviting…" : "Send invite"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Officer edit modal ────────────────────────────────────────────────────────
-
-function OfficerEditModal({ officer, onSave, onClose }: {
-  officer: MockOfficerEntry;
-  onSave:  (updated: MockOfficerEntry) => void;
-  onClose: () => void;
-}) {
-  const [name, setName]         = useState(officer.name);
-  const [role, setRole]         = useState(officer.role);
-  const [org, setOrg]           = useState(officer.org ?? "");
-  const [location, setLocation] = useState(officer.location ?? "");
-  const [saved, setSaved]       = useState(false);
-
-  function handleSave() {
-    onSave({ ...officer, name: name.trim(), role, org: org || null, location: location || null });
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 700);
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div>
-            <div className="font-semibold">Edit Officer</div>
-            <div className="text-xs text-slate-300 mt-0.5">{officer.email}</div>
-          </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Display name</label>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                {ROLES.map((r) => (
-                  <option key={r.key} value={r.key}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Organization</label>
-              <input
-                value={org}
-                onChange={(e) => setOrg(e.target.value.toUpperCase())}
-                placeholder="e.g. DOR"
-                className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Location code</label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value.toUpperCase())}
-              placeholder="e.g. NP_D006 (leave blank for national scope)"
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Changes apply to the demo display only. Email and authentication are managed via Cognito.
-          </p>
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">Cancel</button>
-          <button
-            onClick={handleSave}
-            disabled={!name.trim()}
-            className={`text-sm px-4 py-1.5 rounded font-medium transition disabled:opacity-40 ${
-              saved ? "bg-green-600 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
-            {saved ? "✓ Saved" : "Save changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Officers tab ──────────────────────────────────────────────────────────────
-
-function OfficersTab() {
-  const [officerList, setOfficerList]   = useState<MockOfficerEntry[]>(MOCK_OFFICERS);
-  const [expandedId, setExpandedId]     = useState<string | null>(null);
-  const [showInvite, setShowInvite]     = useState(false);
-  const [editingOfficer, setEditingOfficer] = useState<MockOfficerEntry | null>(null);
-  const [successMsg, setSuccessMsg]     = useState<string | null>(null);
-
-  function handleInviteSuccess(email: string) {
-    setShowInvite(false);
-    setSuccessMsg(`Invite sent to ${email}. They will receive a temporary password.`);
-    setTimeout(() => setSuccessMsg(null), 6000);
-  }
-
-  return (
-    <div>
-      {showInvite && (
-        <InviteOfficerModal
-          onClose={() => setShowInvite(false)}
-          onSuccess={handleInviteSuccess}
-        />
-      )}
-      {editingOfficer && (
-        <OfficerEditModal
-          officer={editingOfficer}
-          onSave={(updated) => {
-            setOfficerList(officerList.map((o) => o.email === updated.email ? updated : o));
-            setEditingOfficer(null);
-          }}
-          onClose={() => setEditingOfficer(null)}
-        />
-      )}
-
-      {successMsg && (
-        <div className="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded text-sm text-green-700">
-          ✓ {successMsg}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            placeholder="Search officers…"
-            className="text-sm border border-gray-300 rounded px-3 py-1.5 w-56 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-          <select className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            <option>All roles</option>
-            {ROLES.map((r) => <option key={r.key}>{r.key}</option>)}
-          </select>
-        </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
-        >
-          + Invite Officer
-        </button>
-      </div>
-
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-700 text-slate-100 text-left">
-              <th className="px-4 py-2.5 font-medium w-6" />
-              <th className="px-4 py-2.5 font-medium">Name</th>
-              <th className="px-4 py-2.5 font-medium">Email</th>
-              <th className="px-4 py-2.5 font-medium">Role</th>
-              <th className="px-4 py-2.5 font-medium">Organization</th>
-              <th className="px-4 py-2.5 font-medium">Location</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {officerList.map((o, i) => {
-              const rowId = `mock-${i}`;
-              const isOpen = expandedId === rowId;
-              return (
-                <React.Fragment key={rowId}>
-                  <tr className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-2 py-2.5 text-center">
-                      <button
-                        onClick={() => setExpandedId(isOpen ? null : rowId)}
-                        title="Manage jurisdiction scopes"
-                        className="text-slate-400 hover:text-slate-600 text-xs leading-none"
-                      >
-                        {isOpen ? "▼" : "▶"}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{o.name}</td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.email}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
-                        {o.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.org ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-gray-500">{o.location ?? "—"}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="text-xs text-green-600 font-medium">Active</span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => setEditingOfficer(o)}
-                          className="text-blue-600 hover:underline text-xs"
-                        >Edit</button>
-                        <button
-                          onClick={() => setOfficerList(officerList.filter((x) => x.email !== o.email))}
-                          className="text-red-500 hover:underline text-xs"
-                        >Remove</button>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr key={`${rowId}-scopes`}>
-                      <td colSpan={8} className="p-0">
-                        <OfficerScopePanel userId={o.email} roleKey={o.role} />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-gray-400 mt-3">
-        Jurisdictions managed via ▶ expand.
-      </p>
-    </div>
-  );
-}
-
-function RolesTab() {
-  const [roles, setRoles]       = useState<RoleEntry[]>(ROLES.map((r) => ({ ...r })));
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
-  const [showAdd, setShowAdd]   = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const BLANK_ROLE: RoleEntry = { key: "", label: "", workflow: "Standard", description: "" };
+  async function handleRemoveRole(r: RoleEntry) {
+    if (!confirm(`Remove role "${r.label}" (${r.key}) from the catalog?`)) return;
+    setDeleteError(null);
+    try {
+      await deleteRole(r.role_id);
+      if (editing?.role_id === r.role_id) setEditing(null);
+      onReload();
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
 
   const workflowBadge = (w: string) =>
     w === "SEAH"
@@ -1025,45 +304,39 @@ function RolesTab() {
       ? "bg-purple-100 text-purple-700"
       : "bg-blue-100 text-blue-700";
 
-  function handleSave(updated: RoleEntry) {
-    setRoles(roles.map((r) => r.key === updated.key ? updated : r));
-  }
-
-  function handleAdd(newRole: RoleEntry) {
-    if (!newRole.key) return;
-    setRoles([...roles, newRole]);
-    setShowAdd(false);
-  }
-
   return (
     <div>
       {editing && (
         <RoleEditModal
           role={editing}
-          onSave={handleSave}
+          onSaved={() => { onReload(); }}
           onClose={() => setEditing(null)}
-        />
-      )}
-      {showAdd && (
-        <RoleEditModal
-          role={BLANK_ROLE}
-          onSave={handleAdd}
-          onClose={() => setShowAdd(false)}
-          isNew
         />
       )}
 
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm text-gray-500">
-          {roles.length} roles defined · access control enforced by role key in the backend
+          {loading ? "Loading roles…" : `${catalog.length} roles in ticketing.roles`}
         </p>
         <button
-          onClick={() => setShowAdd(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded font-medium hover:bg-blue-700 transition"
+          type="button"
+          onClick={() => onReload()}
+          className="text-xs text-blue-600 hover:underline"
         >
-          + Add Role
+          Refresh
         </button>
       </div>
+
+      {!loading && catalog.length === 0 && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+          No roles found. Run Alembic migrations and seed (e.g. <span className="font-mono">mock_tickets --reset</span>) so{" "}
+          <span className="font-mono">ticketing.constants.grm_role_catalog</span> is applied.
+        </p>
+      )}
+
+      {deleteError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">{deleteError}</p>
+      )}
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -1076,7 +349,7 @@ function RolesTab() {
             </tr>
           </thead>
           <tbody>
-            {roles.map((r) => (
+            {catalog.map((r) => (
               <tr key={r.key} className="border-t border-gray-100 hover:bg-gray-50 align-top">
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-800">{r.label}</div>
@@ -1088,12 +361,20 @@ function RolesTab() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs max-w-sm">{r.description}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <button
+                    type="button"
                     onClick={() => setEditing(r)}
-                    className="text-blue-600 hover:underline text-xs"
+                    className="text-blue-600 hover:underline text-xs mr-3"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRole(r)}
+                    className="text-red-600 hover:underline text-xs"
+                  >
+                    Remove
                   </button>
                 </td>
               </tr>
@@ -1102,7 +383,8 @@ function RolesTab() {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Changes here update the display only. API-level enforcement requires a backend deploy.
+        New role <span className="font-mono">role_key</span> values require a migration / catalog update. Edit updates
+        labels and descriptions in the database. Remove is blocked while officers or workflows still use the role.
       </p>
     </div>
   );
@@ -1110,19 +392,7 @@ function RolesTab() {
 
 // ── Workflow helpers ──────────────────────────────────────────────────────────
 
-const ROLE_OPTIONS = [
-  { key: "site_safeguards_focal_person", label: "Site Safeguards Focal Person" },
-  { key: "pd_piu_safeguards_focal",      label: "PD / PIU Safeguards Focal" },
-  { key: "grc_chair",                    label: "GRC Chair" },
-  { key: "grc_member",                   label: "GRC Member" },
-  { key: "adb_national_project_director",label: "ADB National Project Director" },
-  { key: "adb_hq_safeguards",            label: "ADB HQ Safeguards" },
-  { key: "adb_hq_project",              label: "ADB HQ Project" },
-  { key: "seah_national_officer",        label: "SEAH National Officer" },
-  { key: "seah_hq_officer",             label: "SEAH HQ Officer" },
-  { key: "super_admin",                  label: "Super Admin" },
-  { key: "local_admin",                  label: "Local Admin" },
-];
+type WorkflowRoleOption = { key: string; label: string };
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -1143,11 +413,13 @@ function typeBadge(t: string) {
 function StepForm({
   step,
   workflowId,
+  roleOptions,
   onSaved,
   onCancel,
 }: {
   step: WorkflowStep;
   workflowId: string;
+  roleOptions: WorkflowRoleOption[];
   onSaved: (s: WorkflowStep) => void;
   onCancel: () => void;
 }) {
@@ -1220,7 +492,7 @@ function StepForm({
         <select value={roleKey} onChange={e => setRoleKey(e.target.value)}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
           <option value="">— select role —</option>
-          {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
       </div>
 
@@ -1269,7 +541,7 @@ function StepForm({
           <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
             <option value="">— None (no supervisor at this step) —</option>
-            {ROLE_OPTIONS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <p className="text-[11px] text-gray-400 mt-0.5">Notified on escalation/SLA breach. Can override Actor, reassign ticket.</p>
         </div>
@@ -1289,7 +561,7 @@ function StepForm({
             <select value={newInformed} onChange={e => setNewInformed(e.target.value)}
               className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
               <option value="">+ Add informed role</option>
-              {ROLE_OPTIONS.filter(r => !informedRoles.includes(r.key)).map(r =>
+              {roleOptions.filter(r => !informedRoles.includes(r.key)).map(r =>
                 <option key={r.key} value={r.key}>{r.label}</option>
               )}
             </select>
@@ -1314,7 +586,7 @@ function StepForm({
             <select value={newObserver} onChange={e => setNewObserver(e.target.value)}
               className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
               <option value="">+ Add observer role</option>
-              {ROLE_OPTIONS.filter(r => !observerRoles.includes(r.key)).map(r =>
+              {roleOptions.filter(r => !observerRoles.includes(r.key)).map(r =>
                 <option key={r.key} value={r.key}>{r.label}</option>
               )}
             </select>
@@ -1460,10 +732,12 @@ function AssignmentPanel({
 
 function WorkflowEditor({
   workflow: initial,
+  roleOptions,
   onBack,
   onUpdated,
 }: {
   workflow: WorkflowDefinition;
+  roleOptions: WorkflowRoleOption[];
   onBack: () => void;
   onUpdated: (w: WorkflowDefinition) => void;
 }) {
@@ -1473,9 +747,11 @@ function WorkflowEditor({
   const [nameVal, setNameVal]       = useState(wf.display_name);
   const [publishing, setPublishing] = useState(false);
   const [archiving, setArchiving]   = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [addingStep, setAddingStep] = useState(false);
   const [msg, setMsg]               = useState("");
 
+  const isTemplate = wf.is_template;
   const steps = wf.steps.filter(s => !s.is_deleted).sort((a, b) => a.step_order - b.step_order);
 
   function flash(text: string) { setMsg(text); setTimeout(() => setMsg(""), 2500); }
@@ -1547,6 +823,23 @@ function WorkflowEditor({
     } finally { setAddingStep(false); }
   }
 
+  async function handleSaveAsTemplate() {
+    const defaultName = `${wf.display_name} (template)`;
+    const name = window.prompt("Template name", defaultName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSavingTemplate(true);
+    try {
+      const tpl = await saveWorkflowAsTemplate(wf.workflow_id, { display_name: trimmed });
+      flash(`Template created: ${tpl.display_name}`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to save template");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
   function handleStepSaved(updated: WorkflowStep) {
     setWf(prev => ({ ...prev, steps: prev.steps.map(s => s.step_id === updated.step_id ? updated : s) }));
     setExpanded(null);
@@ -1559,7 +852,7 @@ function WorkflowEditor({
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">
-            ← <span>Workflows</span>
+            ← <span>{isTemplate ? "Templates" : "Workflows"}</span>
           </button>
           <span className="text-gray-300">/</span>
           {editingName ? (
@@ -1572,21 +865,32 @@ function WorkflowEditor({
             </h2>
           )}
           {wf.workflow_type === "seah" && <span className="inline-flex items-center gap-0.5 text-xs text-red-600"><Lock size={10} strokeWidth={2.5} />SEAH</span>}
+          {isTemplate && <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700">Template</span>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           {msg && <span className="text-xs text-green-600 font-medium">{msg}</span>}
           <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusBadge(wf.status)}`}>{wf.status}</span>
           <span className="text-xs text-gray-400">v{wf.version}</span>
-          {wf.status !== "archived" && (
-            <button onClick={handlePublish} disabled={publishing}
+          {!isTemplate && wf.status !== "archived" && (
+            <button type="button" onClick={handlePublish} disabled={publishing}
               className="text-sm bg-green-600 text-white hover:bg-green-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
               {publishing ? "Publishing…" : wf.status === "published" ? "Re-publish" : "Publish"}
             </button>
           )}
-          {wf.status === "published" && (
-            <button onClick={handleArchive} disabled={archiving}
+          {!isTemplate && wf.status === "published" && (
+            <button type="button" onClick={handleArchive} disabled={archiving}
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded transition">
               {archiving ? "Archiving…" : "Archive"}
+            </button>
+          )}
+          {!isTemplate && (
+            <button
+              type="button"
+              onClick={handleSaveAsTemplate}
+              disabled={savingTemplate}
+              className="text-sm text-blue-700 hover:text-blue-900 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded transition disabled:opacity-50"
+            >
+              {savingTemplate ? "Saving…" : "Save as template"}
             </button>
           )}
         </div>
@@ -1647,6 +951,7 @@ function WorkflowEditor({
                 <StepForm
                   step={step}
                   workflowId={wf.workflow_id}
+                  roleOptions={roleOptions}
                   onSaved={handleStepSaved}
                   onCancel={() => setExpanded(null)}
                 />
@@ -1662,15 +967,19 @@ function WorkflowEditor({
         {addingStep ? "Adding…" : "+ Add step"}
       </button>
 
-      {/* Assignments */}
-      <AssignmentPanel
-        workflowId={wf.workflow_id}
-        assignments={wf.assignments}
-        onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
-      />
+      {/* Assignments — operational workflows only */}
+      {!isTemplate && (
+        <AssignmentPanel
+          workflowId={wf.workflow_id}
+          assignments={wf.assignments}
+          onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
+        />
+      )}
 
       {/* Notification rules (Spec 12 §4) */}
-      <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "SEAH" ? "seah" : "standard"} />
+      {!isTemplate && (
+        <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "seah" ? "seah" : "standard"} />
+      )}
     </div>
   );
 }
@@ -1821,19 +1130,24 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
 // ── New workflow modal ────────────────────────────────────────────────────────
 
 function NewWorkflowModal({
+  mode = "workflow",
   templates,
   canSeeSeah,
+  initialCloneFrom,
   onCreated,
   onClose,
 }: {
+  mode?: "workflow" | "template";
   templates: WorkflowDefinition[];
   canSeeSeah: boolean;
+  initialCloneFrom?: string;
   onCreated: (w: WorkflowDefinition) => void;
   onClose: () => void;
 }) {
+  const isTemplateMode = mode === "template";
   const [name, setName]             = useState("");
   const [wfType, setWfType]         = useState("standard");
-  const [cloneFrom, setCloneFrom]   = useState("__builtin_default_grm");
+  const [cloneFrom, setCloneFrom]   = useState(initialCloneFrom ?? "__builtin_default_grm");
   const [creating, setCreating]     = useState(false);
   const [error, setError]           = useState("");
 
@@ -1846,13 +1160,17 @@ function NewWorkflowModal({
   const adminTemplates = templates.filter(t => canSeeSeah || t.workflow_type !== "seah");
 
   async function handleCreate() {
-    if (!name.trim()) { setError("Workflow name is required."); return; }
+    if (!name.trim()) {
+      setError(isTemplateMode ? "Template name is required." : "Workflow name is required.");
+      return;
+    }
     setCreating(true); setError("");
     try {
       const created = await createWorkflow({
         display_name: name.trim(),
         workflow_type: wfType,
         clone_from_id: cloneFrom || undefined,
+        is_template: isTemplateMode,
       });
       onCreated(created);
     } catch (e: unknown) {
@@ -1865,7 +1183,7 @@ function NewWorkflowModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div className="font-semibold">New workflow</div>
+          <div className="font-semibold">{isTemplateMode ? "New template" : "New workflow"}</div>
           <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
 
@@ -1873,10 +1191,10 @@ function NewWorkflowModal({
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Workflow name *</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{isTemplateMode ? "Template name *" : "Workflow name *"}</label>
             <input autoFocus value={name} onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleCreate()}
-              placeholder="e.g. KL Road Standard GRM"
+              placeholder={isTemplateMode ? "e.g. KL Road GRM template" : "e.g. KL Road Standard GRM"}
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           </div>
 
@@ -1925,21 +1243,27 @@ function NewWorkflowModal({
 
 // ── Workflows tab ─────────────────────────────────────────────────────────────
 
-function WorkflowsTab() {
+function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
   const { canSeeSeah } = useAuth();
+  const wfRoleOptions: WorkflowRoleOption[] = useMemo(
+    () => roleCatalog.map((r) => ({ key: r.key, label: r.label })),
+    [roleCatalog],
+  );
   const [workflows, setWorkflows]     = useState<WorkflowDefinition[]>([]);
   const [templates, setTemplates]     = useState<WorkflowDefinition[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState("");
   const [editing, setEditing]         = useState<WorkflowDefinition | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newModalMode, setNewModalMode] = useState<"workflow" | "template">("workflow");
+  const [clonePreset, setClonePreset] = useState<string | undefined>(undefined);
   const [search, setSearch]           = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const [wfRes, tplRes] = await Promise.all([listWorkflows(), listTemplates()]);
-      setWorkflows(wfRes.items);
+      setWorkflows(wfRes.items.filter((w) => !w.is_template));
       setTemplates(tplRes.items.filter(t => t.is_template));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load workflows");
@@ -1948,11 +1272,44 @@ function WorkflowsTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  async function openEditor(wf: WorkflowDefinition) {
+    if (wf.workflow_id.startsWith("__builtin_")) return;
+    try {
+      const full = await getWorkflow(wf.workflow_id);
+      setEditing(full);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to open workflow");
+    }
+  }
+
+  async function handleRemoveWorkflow(wf: WorkflowDefinition) {
+    if (wf.workflow_id.startsWith("__builtin_")) return;
+    if (wf.status === "published") {
+      if (!confirm(`Archive "${wf.display_name}"? It will no longer be used for new tickets.`)) return;
+      try {
+        await archiveWorkflow(wf.workflow_id);
+        await load();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Archive failed");
+      }
+      return;
+    }
+    if (!confirm(`Permanently remove "${wf.display_name}"? This cannot be undone.`)) return;
+    try {
+      await deleteWorkflow(wf.workflow_id);
+      setWorkflows((prev) => prev.filter((w) => w.workflow_id !== wf.workflow_id));
+      if (editing?.workflow_id === wf.workflow_id) setEditing(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
   // Editor view
   if (editing) {
     return (
       <WorkflowEditor
         workflow={editing}
+        roleOptions={wfRoleOptions}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={updated => setEditing(updated)}
       />
@@ -1972,10 +1329,21 @@ function WorkflowsTab() {
     <div>
       {showNewModal && (
         <NewWorkflowModal
+          mode={newModalMode}
           templates={templates}
           canSeeSeah={!!canSeeSeah}
-          onCreated={w => { setShowNewModal(false); setWorkflows(prev => [...prev, w]); setEditing(w); }}
-          onClose={() => setShowNewModal(false)}
+          initialCloneFrom={clonePreset}
+          onCreated={w => {
+            setShowNewModal(false);
+            setClonePreset(undefined);
+            if (w.is_template) {
+              setTemplates((prev) => [...prev.filter((t) => t.workflow_id !== w.workflow_id), w]);
+            } else {
+              setWorkflows((prev) => [...prev, w]);
+            }
+            setEditing(w);
+          }}
+          onClose={() => { setShowNewModal(false); setClonePreset(undefined); }}
         />
       )}
 
@@ -1990,7 +1358,9 @@ function WorkflowsTab() {
           {loading && <span className="text-xs text-gray-400 animate-pulse">Loading…</span>}
           {error && <span className="text-xs text-red-500">{error}</span>}
         </div>
-        <button onClick={() => setShowNewModal(true)}
+        <button
+          type="button"
+          onClick={() => { setNewModalMode("workflow"); setClonePreset(undefined); setShowNewModal(true); }}
           className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium">
           + New workflow
         </button>
@@ -2025,17 +1395,30 @@ function WorkflowsTab() {
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${statusBadge(wf.status)}`}>
                 {wf.status.charAt(0).toUpperCase() + wf.status.slice(1)}
               </span>
-              <button onClick={() => setEditing(wf)}
+              <button type="button" onClick={() => openEditor(wf)}
                 className="text-sm text-blue-600 hover:underline ml-2">Edit</button>
+              <button type="button" onClick={() => handleRemoveWorkflow(wf)}
+                className="text-sm text-red-600 hover:underline ml-2">
+                {wf.status === "published" ? "Archive" : "Remove"}
+              </button>
             </div>
           </div>
         ))}
       </div>
 
       {/* Templates section */}
-      {allTemplates.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Templates</h3>
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Templates</h3>
+          <button
+            type="button"
+            onClick={() => { setNewModalMode("template"); setClonePreset(undefined); setShowNewModal(true); }}
+            className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 font-medium"
+          >
+            + New template
+          </button>
+        </div>
+      {allTemplates.length > 0 ? (
           <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
             {allTemplates.map(tpl => (
               <div key={tpl.workflow_id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition">
@@ -2053,14 +1436,40 @@ function WorkflowsTab() {
                     {tpl.workflow_type.toUpperCase()}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-700">Template</span>
-                  <button onClick={() => setShowNewModal(true)}
-                    className="text-sm text-blue-600 hover:underline ml-2">Clone</button>
+                  {!tpl.workflow_id.startsWith("__builtin_") && (
+                    <button type="button" onClick={() => openEditor(tpl)}
+                      className="text-sm text-blue-600 hover:underline ml-2">Edit</button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewModalMode("workflow");
+                      setClonePreset(tpl.workflow_id);
+                      setShowNewModal(true);
+                    }}
+                    className="text-sm text-blue-600 hover:underline ml-2"
+                  >
+                    Clone
+                  </button>
+                  {!tpl.workflow_id.startsWith("__builtin_") && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWorkflow(tpl)}
+                      className="text-sm text-red-600 hover:underline ml-2"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+      ) : (
+        <p className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center">
+          No custom templates yet. Create one or use <strong>Save as template</strong> from a workflow.
+        </p>
       )}
+      </div>
     </div>
   );
 }
@@ -2132,6 +1541,17 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
 
   useEffect(() => { load(); }, []);
 
+  async function handleRemoveOrg(o: OrganizationItem) {
+    if (!confirm(`Remove organization "${o.name}" (${o.organization_id})? This cannot be undone.`)) return;
+    try {
+      await deleteOrganization(o.organization_id);
+      if (editing?.organization_id === o.organization_id) setEditing(null);
+      setOrgs((prev) => prev.filter((x) => x.organization_id !== o.organization_id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
   if (editing) {
     return (
       <OrgEditor
@@ -2159,6 +1579,7 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
       {showCreate && (
         <OrgCreateModal
           countries={countries}
+          existingOrganizationIds={new Set(orgs.map((o) => o.organization_id))}
           onCreated={(org) => { setShowCreate(false); setOrgs((prev) => [...prev, org]); setEditing(org); }}
           onClose={() => setShowCreate(false)}
         />
@@ -2176,7 +1597,7 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Country</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium w-16" />
+                <th className="px-4 py-2.5 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -2193,9 +1614,12 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
                       {o.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setEditing(o)} className="text-xs text-blue-600 hover:underline">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button type="button" onClick={() => setEditing(o)} className="text-xs text-blue-600 hover:underline mr-3">
                       Edit
+                    </button>
+                    <button type="button" onClick={() => handleRemoveOrg(o)} className="text-xs text-red-600 hover:underline">
+                      Remove
                     </button>
                   </td>
                 </tr>
@@ -2212,10 +1636,12 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
 
 function OrgCreateModal({
   countries,
+  existingOrganizationIds,
   onCreated,
   onClose,
 }: {
   countries: CountryItem[];
+  existingOrganizationIds: Set<string>;
   onCreated: (org: OrganizationItem) => void;
   onClose: () => void;
 }) {
@@ -2225,15 +1651,13 @@ function OrgCreateModal({
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
 
-  const generatedId = generateOrgId(name, country);
+  const generatedId = generateOrgId(name, country, existingOrganizationIds);
 
   async function handleCreate() {
-    const id = generatedId;
-    if (!id || !name.trim()) { setError("Name is required."); return; }
+    if (!name.trim()) { setError("Name is required."); return; }
     setCreating(true); setError("");
     try {
       const org = await createOrganization({
-        organization_id: id,
         name: name.trim(),
         country_code: country || null,
         is_active: isActive,
@@ -2241,7 +1665,7 @@ function OrgCreateModal({
       onCreated(org);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Create failed";
-      setError(msg.includes("409") ? `ID "${id}" is already taken — try a more specific name.` : msg);
+      setError(msg);
       setCreating(false);
     }
   }
@@ -2297,6 +1721,7 @@ function OrgCreateModal({
           {generatedId ? (
             <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
               Will be created as: <span className="font-mono font-semibold text-gray-700">{generatedId}</span>
+              <span className="block mt-1 text-gray-400">The server uses the same rules and picks the next free id if another admin creates an org at the same time.</span>
             </p>
           ) : (
             name.trim() && (
@@ -2309,7 +1734,7 @@ function OrgCreateModal({
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
           <button
             onClick={handleCreate}
-            disabled={creating || !generatedId || !name.trim()}
+            disabled={creating || !name.trim() || !generatedId}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition"
           >
             {creating ? "Creating…" : "Create organization"}
@@ -2831,6 +2256,17 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEditId, projects]);
 
+  async function handleRemoveProject(p: ProjectItem) {
+    if (!confirm(`Remove project "${p.name}" (${p.short_code})? Packages and links will be deleted.`)) return;
+    try {
+      await deleteProject(p.project_id);
+      if (editing?.project_id === p.project_id) setEditing(null);
+      setProjects((prev) => prev.filter((x) => x.project_id !== p.project_id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
   if (editing) {
     return (
       <ProjectEditor
@@ -2890,8 +2326,11 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
                     <span>Locations: {p.location_codes.length > 0 ? `${p.location_codes.length} linked` : <em>none</em>}</span>
                   </div>
                 </div>
-                <button onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0">
+                <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">
                   Edit
+                </button>
+                <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
+                  Remove
                 </button>
               </div>
             );
@@ -3663,6 +3102,24 @@ export default function SettingsPage() {
   const { isAdmin, roleKeys } = useAuth();
   const isSuperAdmin = roleKeys.includes("super_admin");
   const [activeTab, setActiveTab] = useState<Tab>("officers");
+  const [roleCatalog, setRoleCatalog]     = useState<RoleEntry[]>([]);
+  const [rolesLoading, setRolesLoading]     = useState(true);
+
+  const loadRoleCatalog = useCallback(async () => {
+    setRolesLoading(true);
+    try {
+      const raw = await listRoles();
+      setRoleCatalog(raw.map(mapGrmRoleToEntry));
+    } catch {
+      setRoleCatalog([]);
+    } finally {
+      setRolesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRoleCatalog();
+  }, [loadRoleCatalog]);
 
   if (!isAdmin) {
     return (
@@ -3700,9 +3157,11 @@ export default function SettingsPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "officers"        && <OfficersTab />}
-      {activeTab === "roles"           && <RolesTab />}
-      {activeTab === "workflows"       && <WorkflowsTab />}
+      {activeTab === "officers"        && <OfficersTab roleCatalog={roleCatalog} />}
+      {activeTab === "roles"           && (
+        <RolesTab catalog={roleCatalog} loading={rolesLoading} onReload={loadRoleCatalog} />
+      )}
+      {activeTab === "workflows"       && <WorkflowsTab roleCatalog={roleCatalog} />}
       {activeTab === "organizations"   && <OrganizationsTab />}
       {activeTab === "report_schedule" && <ComingSoon label="Report Schedule" />}
       {activeTab === "system_config"   && isSuperAdmin && <SystemConfigTab />}

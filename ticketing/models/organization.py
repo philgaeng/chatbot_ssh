@@ -21,6 +21,9 @@ class Organization(Base):
     __tablename__ = "organizations"
     __table_args__ = {"schema": "ticketing"}
 
+    # PK is assigned at insert: explicit admin value or auto via
+    # ticketing.utils.organization_identifier.suggested_organization_id +
+    # allocate_unique_organization_id.
     organization_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     # Nullable: cross-country orgs (e.g. ADB) have no single country

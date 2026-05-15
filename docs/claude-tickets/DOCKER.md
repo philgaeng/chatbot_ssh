@@ -63,13 +63,17 @@ curl http://localhost:5002/health
 wsl -d Ubuntu -e bash -c "cd /home/philg/projects/nepal_chatbot_claude && \
   docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d"
 
-# Stop (keeps volumes/data)
+# Stop (keeps volumes/data) — demo stack only; leaves Keycloak/auth running if started
 wsl -d Ubuntu -e bash -c "cd /home/philg/projects/nepal_chatbot_claude && \
   docker compose -f docker-compose.yml -f docker-compose.grm.yml down"
 
-# Stop + wipe all data (full reset)
+# Stop everything including Keycloak, grm_ui_auth (:3002), ticketing_api_auth (:5003)
+# (from repo root, with env.local for compose substitution — same as `make compose-down-all`)
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml --profile auth down
+
+# Stop + wipe all data (full reset; includes auth profile containers)
 wsl -d Ubuntu -e bash -c "cd /home/philg/projects/nepal_chatbot_claude && \
-  docker compose -f docker-compose.yml -f docker-compose.grm.yml down -v"
+  docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth down -v"
 ```
 
 ---

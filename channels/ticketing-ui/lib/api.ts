@@ -3,6 +3,9 @@
 // the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
 // This avoids CORS issues and means the browser only needs port 3001.
 
+import { handleSessionExpired, isSessionExpiredResponse } from "./auth/session-expired";
+import { projectsForOrganization } from "./officerJurisdiction";
+
 const BASE = "";
 
 // ── Types (mirror ticketing backend schemas) ──────────────────────────────────
@@ -28,6 +31,7 @@ export interface TicketListItem {
   /** Earliest pending task due date assigned to me on this ticket. Null if none. */
   my_earliest_task_due_at: string | null;
   unseen_event_count: number;
+  needs_assignment?: boolean;
 }
 
 export interface TicketListResponse {
@@ -194,7 +198,8 @@ export interface WorkflowDefinition {
 /**
  * Read the OIDC access token (set by lib/auth/oidc-auth.ts) and turn it into
  * an Authorization header. Returns an empty object on the server side or when
- * no token is present (bypass-auth builds), so it's safe to spread blindly.
+ * no token is present (bypass-auth builds rely on the proxy cookie instead),
+ * so it's safe to spread blindly.
  */
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -211,6 +216,9 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const resp = await fetch(`${BASE}${path}`, { ...opts, headers });
   if (!resp.ok) {
     const body = await resp.text();
+    if (isSessionExpiredResponse(resp.status, body)) {
+      handleSessionExpired();
+    }
     throw new Error(`API ${resp.status} ${path}: ${body}`);
   }
   if (resp.status === 204) return undefined as T;
@@ -366,10 +374,25 @@ export interface WorkflowCreatePayload {
   workflow_type: string;
   description?: string;
   clone_from_id?: string;
+  is_template?: boolean;
 }
 
 export function createWorkflow(payload: WorkflowCreatePayload): Promise<WorkflowDefinition> {
   return apiFetch("/api/v1/workflows", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function getWorkflow(workflowId: string): Promise<WorkflowDefinition> {
+  return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}`);
+}
+
+export function saveWorkflowAsTemplate(
+  workflowId: string,
+  payload?: { display_name?: string },
+): Promise<WorkflowDefinition> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/save-as-template`, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
 }
 
 export function updateWorkflow(id: string, payload: { display_name?: string; description?: string; workflow_key?: string }): Promise<WorkflowDefinition> {
@@ -382,6 +405,10 @@ export function publishWorkflow(id: string): Promise<WorkflowDefinition> {
 
 export function archiveWorkflow(id: string): Promise<WorkflowDefinition> {
   return apiFetch(`/api/v1/workflows/${id}/archive`, { method: "POST" });
+}
+
+export function deleteWorkflow(id: string): Promise<void> {
+  return apiFetch(`/api/v1/workflows/${id}`, { method: "DELETE" });
 }
 
 export interface StepPayload {
@@ -463,6 +490,58 @@ export function listOfficers(): Promise<OfficerBrief[]> {
   return apiFetch<OfficerBrief[]>("/api/v1/users/officers");
 }
 
+/** ticketing.roles row — catalog metadata + permissions JSON */
+export interface GrmRole {
+  role_id: string;
+  role_key: string;
+  display_name: string;
+  description: string | null;
+  workflow_scope: string | null;
+  permissions: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listRoles(): Promise<GrmRole[]> {
+  return apiFetch<GrmRole[]>("/api/v1/roles");
+}
+
+export function updateRole(
+  roleId: string,
+  payload: {
+    display_name?: string | null;
+    description?: string | null;
+    workflow_scope?: string | null;
+  }
+): Promise<GrmRole> {
+  return apiFetch<GrmRole>(`/api/v1/roles/${roleId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteRole(roleId: string): Promise<void> {
+  return apiFetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
+}
+
+/** Settings → Officers (admin): aggregated ticketing.user_roles — no Keycloak sync. */
+export interface OfficerRosterEntry {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  role_keys: string[];
+  organization_ids: string[];
+  location_codes: string[];
+  project_codes?: string[];
+  package_ids?: string[];
+  /** invited until Keycloak webhook confirms password update */
+  onboarding_status?: string;
+}
+
+export function listOfficerRoster(): Promise<OfficerRosterEntry[]> {
+  return apiFetch<OfficerRosterEntry[]>("/api/v1/users/roster");
+}
+
 // ── File attachments ──────────────────────────────────────────────────────────
 
 export interface TicketFile {
@@ -518,6 +597,9 @@ export async function uploadOfficerAttachment(
   });
   if (!resp.ok) {
     const body = await resp.text();
+    if (isSessionExpiredResponse(resp.status, body)) {
+      handleSessionExpired();
+    }
     throw new Error(`Upload failed ${resp.status}: ${body}`);
   }
   return resp.json();
@@ -619,7 +701,8 @@ export interface ImportResult {
 }
 
 export interface OrganizationCreate {
-  organization_id: string;
+  /** Omit to let the API derive a unique id from name + country. */
+  organization_id?: string | null;
   name: string;
   country_code?: string | null;
   is_active?: boolean;
@@ -650,12 +733,24 @@ export function updateOrganization(orgId: string, payload: OrganizationUpdate): 
   });
 }
 
-/** List all projects that include a given organization. */
-export function listProjectsForOrg(orgId: string): Promise<ProjectItem[]> {
-  // Filter client-side from the full project list (no dedicated endpoint needed yet)
-  return listProjects().then((all) =>
-    all.filter((p) => p.organizations.some((o) => o.organization_id === orgId))
+export function deleteOrganization(orgId: string): Promise<void> {
+  return apiFetch(`/api/v1/organizations/${orgId}`, { method: "DELETE" });
+}
+
+/** List all projects that include a given organization (linked org or contractor packages). */
+export async function listProjectsForOrg(orgId: string): Promise<ProjectItem[]> {
+  const all = await listProjects();
+  const pkgEntries = await Promise.all(
+    all.map(async (p) => {
+      try {
+        return [p.project_id, await listPackages(p.project_id)] as const;
+      } catch {
+        return [p.project_id, []] as const;
+      }
+    }),
   );
+  const packagesByProject = Object.fromEntries(pkgEntries);
+  return projectsForOrganization(orgId, all, packagesByProject);
 }
 
 export function listCountries(): Promise<CountryItem[]> {
@@ -699,6 +794,10 @@ export function updateProject(projectId: string, payload: { name?: string; descr
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export function deleteProject(projectId: string): Promise<void> {
+  return apiFetch(`/api/v1/projects/${projectId}`, { method: "DELETE" });
 }
 
 export function addProjectOrg(
@@ -1026,6 +1125,11 @@ export interface OfficerInvitePayload {
   email: string;
   role_key: string;
   organization_id: string;
+  location_code?: string | null;
+  project_id?: string | null;
+  project_code?: string | null;
+  package_id?: string | null;
+  includes_children?: boolean;
   temp_password?: string;
 }
 
@@ -1040,6 +1144,45 @@ export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInv
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function deleteOfficer(userId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+}
+
+export function updateOfficerKeycloak(
+  userId: string,
+  payload: {
+    role_keys: string[];
+    organization_id: string;
+    location_code?: string | null;
+    sync_keycloak?: boolean;
+  },
+): Promise<{ ok: boolean; user_id: string }> {
+  return apiFetch(`/api/v1/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface UserRoleRow {
+  user_role_id: string;
+  user_id: string;
+  role_id: string;
+  organization_id: string;
+  location_code: string | null;
+  created_at: string;
+}
+
+export function listUserRoles(userId: string): Promise<UserRoleRow[]> {
+  return apiFetch<UserRoleRow[]>(`/api/v1/users/${encodeURIComponent(userId)}/roles`);
+}
+
+export function deleteUserRole(userId: string, userRoleId: string): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(userRoleId)}`,
+    { method: "DELETE" },
+  );
 }
 
 // ── Language preferences ──────────────────────────────────────────────────────

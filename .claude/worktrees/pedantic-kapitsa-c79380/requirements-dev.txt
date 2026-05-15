@@ -1,4 +1,0 @@
-# Optional dev / tooling dependencies (not required for production REST stack).
-# Example: pip install -r requirements-dev.txt
-pandas>=2.2.3
-numpy>=1.26.4

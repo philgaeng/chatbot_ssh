@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: `qr-token-feature` — 2026-05-07
+> Last updated: 2026-05-12 — roles catalog, officer onboarding, Keycloak webhook, Settings UI, PROGRESS sync
 
 ---
 
@@ -25,7 +25,7 @@
   - Frontend: Actor/Informed tier badges on note bubbles in event thread
   - Settings: tier config per step + WorkflowNotificationsPanel (event × tier × channel grid)
 - ✅ **Settings UI polish** (2026-05-06):
-  - Sidebar: hides redundant email in bypass/demo mode (MockRoleSwitcher already in header)
+  - Sidebar: hides redundant email in bypass/demo mode (BypassRoleSwitcher in header)
   - Workflow step editor: removed redundant "Stakeholders notified" box (superseded by Informed tier)
   - Org roles dropdown: seeded 9 spec-defined roles (Project Owner, Donor, CSC, etc.)
   - Org ID auto-generation: removed manual field; derived from name initials + country code prefix (ADB = no prefix)
@@ -58,6 +58,19 @@
   - `backend/actions/action_submit_grievance.py` — both standard + SEAH submit paths now pass `project_code=tracker.get_slot("project_code") or "KL_ROAD"` and `package_id=tracker.get_slot("package_id")` to `dispatch_ticket`
   - `tests/test_qr_token_integration.py` — 17 unit tests (fetch_qr_scan happy/error paths, location resolution, dispatch_ticket package_id propagation)
   - Operational notes (env override + 422 data gotcha + local recipe): see "QR Token Scan Flow" in `docs/COMMIT_STRATEGY.md`
+
+- ✅ **Demo bypass roster** (2026-05-12, `07edd4d` + `dee4421`):
+  - **Backend:** dev bypass `CurrentUser.organization_id` reads optional `X-Internal-Organization-Id` (still defaults to `DOR` when absent).
+  - **ticketing-ui:** Removed hardcoded `MOCK_OFFICERS`. With `NEXT_PUBLIC_BYPASS_AUTH=true`, the header switcher lists officers from `GET /api/v1/users/roster` (same `ticketing.user_roles` as Settings). Cookie renamed to `grm_bypass_user` (proxy forwards org); legacy `grm_mock_user` is cleared on write and still read if the new cookie is missing.
+  - **API client:** `OfficerRosterEntry` + `listOfficerRoster()` in `lib/api.ts`.
+
+- ✅ **Roles catalog + officer onboarding + Keycloak webhook** (2026-05-12, `c60d8ee` + `578ef24`):
+  - **Alembic:** `n4p6r8t0` → `roles.description`, `roles.workflow_scope`; `o5p7q9r1` → `ticketing.officer_onboarding` (`invited` \| `active`), backfill existing roster users as `active`. Run from repo root: `cd ticketing/migrations && alembic upgrade head` (see `docs/claude-tickets/DOCKER.md`).
+  - **Backend:** `ticketing/constants/grm_role_catalog.py` + `ticketing/seed/grm_roles.py`; `POST /api/v1/webhooks/keycloak` (header `X-Keycloak-Webhook-Secret` = `KEYCLOAK_WEBHOOK_SECRET`); invite seeds `UserRole` + `OfficerOnboarding`; roster includes `onboarding_status`; `ticketing/utils/organization_identifier.py` for server-allocated org IDs; locations/org create path updated.
+  - **Compose:** `KEYCLOAK_WEBHOOK_SECRET` passed into `ticketing_api` and `ticketing_api_auth` (`docker-compose.grm.yml`).
+  - **ticketing-ui:** Settings — role catalog editor (`PATCH /api/v1/roles/{id}`), officers roster Invited/Active badges, invite copy; `lib/api.ts` — `GrmRole`, `listRoles`, `updateRole`, optional `organization_id` on org create.
+
+**Restore / revert this batch:** `git revert 578ef24` (UI), then `git revert c60d8ee` (backend). After reverting the backend commit, roll back DB with Alembic if needed: `alembic downgrade o5p7q9r1` then step before `n4p6r8t0` per your head revision (see `DOCKER.md`).
 
 ### In progress / next
 - 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
@@ -137,8 +150,7 @@ mock-officer-seah-national  → seah_national_officer @ DOR / NP_P1
 mock-officer-adb-observer   → adb_hq_safeguards @ ADB
 ```
 
-Proto auth stub in `ticketing/api/dependencies.py` always returns `mock-super-admin`.
-Replace with Cognito JWT for production.
+**Proto auth / demo:** `ticketing/api/dependencies.py` — when `KEYCLOAK_ISSUER` is unset, requests without a Bearer token resolve to `mock-super-admin` unless the Next.js proxy sends `X-Internal-User-Id` / `X-Internal-Role` (and optionally `X-Internal-Organization-Id`) from the `grm_bypass_user` cookie (`NEXT_PUBLIC_BYPASS_AUTH` demo UI). Replace with Keycloak JWT validation for production (`KEYCLOAK_ISSUER` set).
 
 ---
 
@@ -146,6 +158,12 @@ Replace with Cognito JWT for production.
 
 | Hash | Date | What changed |
 |------|------|-------------|
+| `71de359` | 2026-05-12 | **docs** PROGRESS: document `c60d8ee` + `578ef24`, migrations, revert / Alembic downgrade notes |
+| `578ef24` | 2026-05-12 | **feat(ticketing-ui)** Settings roles editor + roster onboarding UI + org create optional id; api client `GrmRole` / `listRoles` / `updateRole` |
+| `c60d8ee` | 2026-05-12 | **feat(ticketing)** Migrations `n4p6r8t0` + `o5p7q9r1`; Keycloak webhook; invite/onboarding; `grm_role_catalog` + seed; org id allocator; compose webhook secret |
+| `db8e679` | 2026-05-12 | **docs** PROGRESS for demo bypass roster (`07edd4d` / `dee4421`) |
+| `dee4421` | 2026-05-12 | **feat(ticketing-ui)** Demo bypass: officer switcher driven by `GET /api/v1/users/roster`; cookie `grm_bypass_user`; `listOfficerRoster` in api client |
+| `07edd4d` | 2026-05-12 | **feat(ticketing)** Dev bypass auth honors `X-Internal-Organization-Id` (from proxy cookie) instead of hardcoding DOR only |
 | `edfa942` | 2026-04-27 | **feat(llm)** Note translation + case findings summary. `llm_client.py`, `tasks/llm.py`, migration `c1d5f8a2e047`, `FindingsCard` frontend component, translation chip in timeline |
 | `d4e2f1a` | 2026-04-27 | **fix(escalation)** Auto-assign officer on `escalate_ticket()`; automatic complainant notification on RESOLVE/ESCALATE via `notify_complainant.delay()` |
 | `c171ac4` | 2026-04-26 | **fix(seed)** Location codes → real Nepal codes (`NP_P1`/`NP_D004`/`NP_D006`/`NP_D011`); `project_code` backfill in `add_user_scope`; fix t_dust status `ESCALATED→IN_PROGRESS` |

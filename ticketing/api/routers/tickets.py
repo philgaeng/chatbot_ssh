@@ -268,6 +268,7 @@ def create_ticket(
             location_code=payload.location_code,
             project_code=payload.project_code,
             db=db,
+            ticket_package_id=payload.package_id,
         )
 
     ticket = Ticket(
@@ -518,6 +519,7 @@ def list_tickets(
             sla_deadline_at=sla_deadlines.get(t.ticket_id),
             my_earliest_task_due_at=earliest_task_due.get(t.ticket_id),
             unseen_event_count=unseen_counts.get(t.ticket_id, 0),
+            needs_assignment=t.assigned_to_user_id is None,
         )
         items.append(item)
 
@@ -1240,6 +1242,7 @@ def get_ticket_teammates(
         project_code=ticket.project_code,
         exclude_user_id=ticket.assigned_to_user_id,
         db=db,
+        ticket_package_id=ticket.package_id,
     )
     return {"ticket_id": ticket_id, "teammates": teammates}
 
