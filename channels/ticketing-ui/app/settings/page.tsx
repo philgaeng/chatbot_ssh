@@ -10,6 +10,9 @@ import {
   updateWorkflow,
   publishWorkflow,
   archiveWorkflow,
+  deleteWorkflow,
+  getWorkflow,
+  saveWorkflowAsTemplate,
   addStep,
   updateStep,
   deleteStep,
@@ -25,6 +28,7 @@ import {
   listProjects,
   createProject,
   updateProject,
+  deleteProject,
   addProjectOrg,
   removeProjectOrg,
   addProjectLocation,
@@ -37,6 +41,7 @@ import {
   setOrgRoles,
   createOrganization,
   updateOrganization,
+  deleteOrganization,
   listProjectsForOrg,
   listPackages,
   createPackage,
@@ -53,17 +58,16 @@ import {
   type CountryItem,
   type LocationNode,
   type ProjectItem,
-  listOfficerRoster,
-  type OfficerRosterEntry,
   type ProjectOrgItem,
   type OrgRole,
   type PackageItem,
   type PackageCreate,
   listRoles,
   updateRole,
+  deleteRole,
   type GrmRole,
 } from "@/lib/api";
-import { InviteOfficerModal, EditOfficerModal } from "@/components/settings/OfficerModals";
+import { OfficersTab } from "@/components/settings/OfficersTab";
 import { LocationSearch } from "@/components/LocationSearch";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
@@ -84,10 +88,6 @@ function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
     workflow: r.workflow_scope ?? "Standard",
     description: r.description ?? "",
   };
-}
-
-function officerRoleLabels(roleKeys: string[], catalog: RoleEntry[]): string {
-  return roleKeys.map((k) => catalog.find((x) => x.key === k)?.label ?? k).join(", ");
 }
 
 // ── Role edit modal ───────────────────────────────────────────────────────────
@@ -277,507 +277,25 @@ function generateOrgId(name: string, country: string, existingIds: Set<string>):
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
-// ── OfficerScopePanel — expandable jurisdictions editor ──────────────────────
-
-function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: string }) {
-  const [scopes, setScopes]   = useState<OfficerScope[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding]   = useState(false);
-
-  // Reference data loaded once
-  const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [pkgMap, setPkgMap]     = useState<Record<string, PackageItem>>({});
-
-  // New scope form state
-  const [selOrg,      setSelOrg]      = useState("");
-  const [selProject,  setSelProject]  = useState("");
-  const [selLoc,      setSelLoc]      = useState<{ code: string; name: string } | null>(null);
-  const [selPkg,      setSelPkg]      = useState("");
-  const [inclChildren, setInclChildren] = useState(false);
-  const [pkgOptions,  setPkgOptions]  = useState<PackageItem[]>([]);
-
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
-
-  // Load scopes + reference data once
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([listScopes(userId), listOrganizations(), listProjects()])
-      .then(([scopeData, orgData, projData]) => {
-        setScopes(scopeData);
-        setOrgs(orgData);
-        setProjects(projData);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [userId]);
-
-  // Build pkgMap for packages referenced by existing scopes (for display)
-  useEffect(() => {
-    const projIds = [...new Set(scopes.map((s) => s.project_id).filter(Boolean) as string[])];
-    if (projIds.length === 0) return;
-    Promise.all(projIds.map((pid) => listPackages(pid)))
-      .then((arrays) => {
-        const map: Record<string, PackageItem> = {};
-        arrays.flat().forEach((pkg) => { map[pkg.package_id] = pkg; });
-        setPkgMap(map);
-      })
-      .catch(() => {});
-  }, [scopes]);
-
-  // When selected org changes, reset project selection
-  useEffect(() => {
-    setSelProject(""); setPkgOptions([]); setSelPkg("");
-  }, [selOrg]);
-
-  // When selected project changes, load its packages
-  useEffect(() => {
-    if (!selProject) { setPkgOptions([]); setSelPkg(""); return; }
-    listPackages(selProject).then(setPkgOptions).catch(() => setPkgOptions([]));
-    setSelPkg("");
-  }, [selProject]);
-
-  const filteredProjects = selOrg
-    ? projects.filter((p) => p.organizations.some((o) => o.organization_id === selOrg))
-    : projects;
-
-  const orgMap = Object.fromEntries(orgs.map((o) => [o.organization_id, o.name]));
-
-  function resetForm() {
-    setSelOrg(""); setSelProject(""); setSelLoc(null);
-    setSelPkg(""); setInclChildren(false); setPkgOptions([]);
-  }
-
-  async function handleAdd() {
-    if (!selOrg) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const created = await addScope(userId, {
-        role_key:         roleKey,
-        organization_id:  selOrg,
-        location_code:    selLoc?.code ?? null,
-        project_id:       selProject || null,
-        package_id:       selPkg || null,
-        includes_children: inclChildren,
-      });
-      setScopes((s) => [...s, created]);
-      resetForm();
-      setAdding(false);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg.includes("409") ? "Scope already exists" : "Failed to add scope");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(scopeId: string) {
-    try {
-      await deleteScope(userId, scopeId);
-      setScopes((s) => s.filter((x) => x.scope_id !== scopeId));
-    } catch {
-      setError("Failed to remove scope");
-    }
-  }
-
-  return (
-    <div className="bg-slate-50 border-t border-gray-200 px-6 py-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Jurisdiction scopes
-        <span className="ml-1 text-slate-400 font-normal normal-case">(tickets this officer can see)</span>
-      </p>
-
-      {loading ? (
-        <p className="text-xs text-gray-400">Loading…</p>
-      ) : (
-        <>
-          {scopes.length === 0 && !adding && (
-            <p className="text-xs text-amber-600 mb-2">
-              No scopes — officer only sees tickets assigned directly to them.
-            </p>
-          )}
-
-          {scopes.length > 0 && (
-            <table className="w-full text-xs mb-2">
-              <thead>
-                <tr className="text-left text-slate-400">
-                  <th className="pr-3 pb-1 font-medium">Organization</th>
-                  <th className="pr-3 pb-1 font-medium">Location</th>
-                  <th className="pr-3 pb-1 font-medium">Project</th>
-                  <th className="pr-3 pb-1 font-medium">Package</th>
-                  <th className="pb-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {scopes.map((s) => {
-                  const pkg = s.package_id ? pkgMap[s.package_id] : null;
-                  const proj = s.project_id ? projects.find((p) => p.project_id === s.project_id) : null;
-                  return (
-                    <tr key={s.scope_id} className="border-t border-gray-100">
-                      <td className="pr-3 py-1 text-gray-700">{orgMap[s.organization_id] ?? s.organization_id}</td>
-                      <td className="pr-3 py-1 text-gray-500">
-                        {s.location_code ? (
-                          <span className="inline-flex items-center gap-1">
-                            {s.location_code}
-                            {s.includes_children && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-1 rounded" title="Includes child locations">+sub</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">all</span>
-                        )}
-                      </td>
-                      <td className="pr-3 py-1 text-gray-500">
-                        {proj ? proj.short_code : s.project_id ? s.project_id : <span className="text-gray-300">all</span>}
-                      </td>
-                      <td className="pr-3 py-1">
-                        {pkg ? (
-                          <span
-                            className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-mono cursor-default"
-                            title={pkg.name}
-                          >
-                            {pkg.package_code}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="py-1 text-right">
-                        <button
-                          onClick={() => handleDelete(s.scope_id)}
-                          className="text-red-400 hover:text-red-600 font-medium"
-                        >
-                          <X size={13} strokeWidth={2.5} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {adding ? (
-            <div className="mt-2 bg-white border border-gray-200 rounded-lg p-3 space-y-2">
-
-              {/* Row 1: Org + Project */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={selOrg}
-                  onChange={(e) => setSelOrg(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                >
-                  <option value="">— Organization * —</option>
-                  {orgs.map((o) => (
-                    <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={selProject}
-                  onChange={(e) => setSelProject(e.target.value)}
-                  disabled={filteredProjects.length === 0}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-                >
-                  <option value="">— Project (all) —</option>
-                  {filteredProjects.map((p) => (
-                    <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Row 2: Location search / selected pill */}
-              <div>
-                {selLoc ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs">
-                      {selLoc.name}
-                      <span className="font-mono text-blue-400 text-xs">{selLoc.code}</span>
-                      <button onClick={() => setSelLoc(null)} className="text-blue-300 hover:text-blue-600 ml-0.5 leading-none">×</button>
-                    </span>
-                    <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={inclChildren}
-                        onChange={(e) => setInclChildren(e.target.checked)}
-                        className="accent-purple-500"
-                      />
-                      include sub-locations
-                    </label>
-                  </div>
-                ) : (
-                  <LocationSearch
-                    placeholder="Location (leave blank = all)"
-                    onSelect={(code, name) => setSelLoc({ code, name })}
-                  />
-                )}
-              </div>
-
-              {/* Row 3: Package (only when project has packages) */}
-              {selProject && pkgOptions.length > 0 && (
-                <div>
-                  <select
-                    value={selPkg}
-                    onChange={(e) => setSelPkg(e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                  >
-                    <option value="">— Package (all packages in project) —</option>
-                    {pkgOptions.map((pkg) => (
-                      <option key={pkg.package_id} value={pkg.package_id}>
-                        {pkg.package_code} — {pkg.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400 mt-0.5">L1 officers are typically scoped to a single package.</p>
-                </div>
-              )}
-
-              {/* Row 4: Actions */}
-              <div className="flex items-center gap-2 pt-0.5">
-                <button
-                  onClick={handleAdd}
-                  disabled={saving || !selOrg}
-                  className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? "Saving…" : "Add scope"}
-                </button>
-                <button
-                  onClick={() => { setAdding(false); resetForm(); setError(null); }}
-                  className="text-gray-400 hover:text-gray-600 text-xs"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAdding(true)}
-              className="text-blue-600 hover:underline text-xs mt-1"
-            >
-              + Add scope
-            </button>
-          )}
-
-          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-        </>
-      )}
-    </div>
-  );
-}
-
-
-// ── Officers tab ──────────────────────────────────────────────────────────────
-
-function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
-  const [officerList, setOfficerList]   = useState<OfficerRosterEntry[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [loadError, setLoadError]       = useState<string | null>(null);
-  const [expandedId, setExpandedId]     = useState<string | null>(null);
-  const [showInvite, setShowInvite]     = useState(false);
-  const [editOfficer, setEditOfficer]   = useState<OfficerRosterEntry | null>(null);
-  const [successMsg, setSuccessMsg]     = useState<string | null>(null);
-  const [searchQ, setSearchQ]           = useState("");
-  const [roleFilter, setRoleFilter]     = useState("");
-
-  const loadRoster = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const rows = await listOfficerRoster();
-      setOfficerList(rows);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load officers";
-      setLoadError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadRoster();
-  }, [loadRoster]);
-
-  function handleInviteSuccess(email: string) {
-    setShowInvite(false);
-    setSuccessMsg(
-      `Invite sent to ${email}. They appear as Invited until Keycloak reports password setup (webhook).`,
-    );
-    setTimeout(() => setSuccessMsg(null), 8000);
-    loadRoster();
-  }
-
-  const filtered = useMemo(() => {
-    const q = searchQ.trim().toLowerCase();
-    return officerList.filter((o) => {
-      const hay = [o.display_name, o.user_id, ...o.role_keys, ...o.organization_ids, ...o.location_codes]
-        .join(" ")
-        .toLowerCase();
-      const matchesQ = !q || hay.includes(q);
-      const matchesR = !roleFilter || o.role_keys.includes(roleFilter);
-      return matchesQ && matchesR;
-    });
-  }, [officerList, searchQ, roleFilter]);
-
-  return (
-    <div>
-      {showInvite && (
-        <InviteOfficerModal
-          roleChoices={roleCatalog}
-          onClose={() => setShowInvite(false)}
-          onSuccess={handleInviteSuccess}
-        />
-      )}
-
-      {editOfficer && (
-        <EditOfficerModal
-          officer={editOfficer}
-          roleChoices={roleCatalog}
-          onClose={() => setEditOfficer(null)}
-          onSaved={loadRoster}
-        />
-      )}
-
-      {successMsg && (
-        <div className="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded text-sm text-green-700">
-          ✓ {successMsg}
-        </div>
-      )}
-
-      <p className="text-xs text-gray-500 mb-4">
-        Roster rows come from <span className="font-mono">ticketing.user_roles</span>. Invite seeds roles and sets status to{" "}
-        <strong>Invited</strong>; configure Keycloak to POST password events to the ticketing webhook so status becomes{" "}
-        <strong>Active</strong> after first password change.
-      </p>
-
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={searchQ}
-            onChange={(e) => setSearchQ(e.target.value)}
-            placeholder="Search officers…"
-            className="text-sm border border-gray-300 rounded px-3 py-1.5 w-56 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            <option value="">All roles</option>
-            {roleCatalog.map((r) => (
-              <option key={r.key} value={r.key}>{r.label}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => loadRoster()}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Refresh
-          </button>
-        </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
-        >
-          + Invite Officer
-        </button>
-      </div>
-
-      {loading && <p className="text-sm text-gray-400 mb-3">Loading roster…</p>}
-      {loadError && <p className="text-sm text-red-600 mb-3">{loadError}</p>}
-
-      {!loading && !loadError && filtered.length === 0 && (
-        <p className="text-sm text-gray-500 mb-3">No officers with role assignments in the database.</p>
-      )}
-
-      {!loading && !loadError && filtered.length > 0 && (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-700 text-slate-100 text-left">
-                <th className="px-4 py-2.5 font-medium w-6" />
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">User id / email</th>
-                <th className="px-4 py-2.5 font-medium">Role</th>
-                <th className="px-4 py-2.5 font-medium">Organization</th>
-                <th className="px-4 py-2.5 font-medium">Location codes</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium w-24">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((o) => {
-                const isOpen = expandedId === o.user_id;
-                const primaryRoleForScope = o.role_keys[0] ?? "";
-                return (
-                  <React.Fragment key={o.user_id}>
-                    <tr className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-2 py-2.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(isOpen ? null : o.user_id)}
-                          title="Manage jurisdiction scopes"
-                          className="text-slate-400 hover:text-slate-600 text-xs leading-none"
-                        >
-                          {isOpen ? "▼" : "▶"}
-                        </button>
-                      </td>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">{o.display_name}</td>
-                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs break-all">{o.email ?? o.user_id}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-700">{officerRoleLabels(o.role_keys, roleCatalog)}</td>
-                      <td className="px-4 py-2.5 text-gray-500">{o.organization_ids.length ? o.organization_ids.join(", ") : "—"}</td>
-                      <td className="px-4 py-2.5 text-gray-500">{o.location_codes.length ? o.location_codes.join(", ") : "—"}</td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={
-                            (o.onboarding_status ?? "active") === "invited"
-                              ? "text-xs text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded"
-                              : "text-xs text-green-600 font-medium"
-                          }
-                        >
-                          {(o.onboarding_status ?? "active") === "invited" ? "Invited" : "Active"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditOfficer(o)}
-                          className="text-xs text-blue-600 hover:underline mr-2"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                    {isOpen && primaryRoleForScope && (
-                      <tr key={`${o.user_id}-scopes`}>
-                        <td colSpan={8} className="p-0">
-                          <OfficerScopePanel userId={o.user_id} roleKey={primaryRoleForScope} />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="text-xs text-gray-400 mt-3">
-        Expand a row (▶) for quick scope edits, or use <strong>Edit</strong> for the full officer modal (scopes, Keycloak sync, delete).
-        Invite requires at least one of project, package, or location per spec §10.
-      </p>
-    </div>
-  );
-}
-
 function RolesTab({ catalog, loading, onReload }: {
   catalog: RoleEntry[];
   loading: boolean;
   onReload: () => void;
 }) {
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleRemoveRole(r: RoleEntry) {
+    if (!confirm(`Remove role "${r.label}" (${r.key}) from the catalog?`)) return;
+    setDeleteError(null);
+    try {
+      await deleteRole(r.role_id);
+      if (editing?.role_id === r.role_id) setEditing(null);
+      onReload();
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
 
   const workflowBadge = (w: string) =>
     w === "SEAH"
@@ -816,6 +334,10 @@ function RolesTab({ catalog, loading, onReload }: {
         </p>
       )}
 
+      {deleteError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">{deleteError}</p>
+      )}
+
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -839,13 +361,20 @@ function RolesTab({ catalog, loading, onReload }: {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs max-w-sm">{r.description}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => setEditing(r)}
-                    className="text-blue-600 hover:underline text-xs"
+                    className="text-blue-600 hover:underline text-xs mr-3"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRole(r)}
+                    className="text-red-600 hover:underline text-xs"
+                  >
+                    Remove
                   </button>
                 </td>
               </tr>
@@ -855,7 +384,7 @@ function RolesTab({ catalog, loading, onReload }: {
       </div>
       <p className="text-xs text-gray-400 mt-3">
         New role <span className="font-mono">role_key</span> values require a migration / catalog update. Edit updates
-        labels and descriptions in the database.
+        labels and descriptions in the database. Remove is blocked while officers or workflows still use the role.
       </p>
     </div>
   );
@@ -1218,9 +747,11 @@ function WorkflowEditor({
   const [nameVal, setNameVal]       = useState(wf.display_name);
   const [publishing, setPublishing] = useState(false);
   const [archiving, setArchiving]   = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [addingStep, setAddingStep] = useState(false);
   const [msg, setMsg]               = useState("");
 
+  const isTemplate = wf.is_template;
   const steps = wf.steps.filter(s => !s.is_deleted).sort((a, b) => a.step_order - b.step_order);
 
   function flash(text: string) { setMsg(text); setTimeout(() => setMsg(""), 2500); }
@@ -1292,6 +823,23 @@ function WorkflowEditor({
     } finally { setAddingStep(false); }
   }
 
+  async function handleSaveAsTemplate() {
+    const defaultName = `${wf.display_name} (template)`;
+    const name = window.prompt("Template name", defaultName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSavingTemplate(true);
+    try {
+      const tpl = await saveWorkflowAsTemplate(wf.workflow_id, { display_name: trimmed });
+      flash(`Template created: ${tpl.display_name}`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to save template");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
   function handleStepSaved(updated: WorkflowStep) {
     setWf(prev => ({ ...prev, steps: prev.steps.map(s => s.step_id === updated.step_id ? updated : s) }));
     setExpanded(null);
@@ -1304,7 +852,7 @@ function WorkflowEditor({
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">
-            ← <span>Workflows</span>
+            ← <span>{isTemplate ? "Templates" : "Workflows"}</span>
           </button>
           <span className="text-gray-300">/</span>
           {editingName ? (
@@ -1317,21 +865,32 @@ function WorkflowEditor({
             </h2>
           )}
           {wf.workflow_type === "seah" && <span className="inline-flex items-center gap-0.5 text-xs text-red-600"><Lock size={10} strokeWidth={2.5} />SEAH</span>}
+          {isTemplate && <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700">Template</span>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           {msg && <span className="text-xs text-green-600 font-medium">{msg}</span>}
           <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusBadge(wf.status)}`}>{wf.status}</span>
           <span className="text-xs text-gray-400">v{wf.version}</span>
-          {wf.status !== "archived" && (
-            <button onClick={handlePublish} disabled={publishing}
+          {!isTemplate && wf.status !== "archived" && (
+            <button type="button" onClick={handlePublish} disabled={publishing}
               className="text-sm bg-green-600 text-white hover:bg-green-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
               {publishing ? "Publishing…" : wf.status === "published" ? "Re-publish" : "Publish"}
             </button>
           )}
-          {wf.status === "published" && (
-            <button onClick={handleArchive} disabled={archiving}
+          {!isTemplate && wf.status === "published" && (
+            <button type="button" onClick={handleArchive} disabled={archiving}
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded transition">
               {archiving ? "Archiving…" : "Archive"}
+            </button>
+          )}
+          {!isTemplate && (
+            <button
+              type="button"
+              onClick={handleSaveAsTemplate}
+              disabled={savingTemplate}
+              className="text-sm text-blue-700 hover:text-blue-900 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded transition disabled:opacity-50"
+            >
+              {savingTemplate ? "Saving…" : "Save as template"}
             </button>
           )}
         </div>
@@ -1408,15 +967,19 @@ function WorkflowEditor({
         {addingStep ? "Adding…" : "+ Add step"}
       </button>
 
-      {/* Assignments */}
-      <AssignmentPanel
-        workflowId={wf.workflow_id}
-        assignments={wf.assignments}
-        onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
-      />
+      {/* Assignments — operational workflows only */}
+      {!isTemplate && (
+        <AssignmentPanel
+          workflowId={wf.workflow_id}
+          assignments={wf.assignments}
+          onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
+        />
+      )}
 
       {/* Notification rules (Spec 12 §4) */}
-      <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "SEAH" ? "seah" : "standard"} />
+      {!isTemplate && (
+        <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "seah" ? "seah" : "standard"} />
+      )}
     </div>
   );
 }
@@ -1567,19 +1130,24 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
 // ── New workflow modal ────────────────────────────────────────────────────────
 
 function NewWorkflowModal({
+  mode = "workflow",
   templates,
   canSeeSeah,
+  initialCloneFrom,
   onCreated,
   onClose,
 }: {
+  mode?: "workflow" | "template";
   templates: WorkflowDefinition[];
   canSeeSeah: boolean;
+  initialCloneFrom?: string;
   onCreated: (w: WorkflowDefinition) => void;
   onClose: () => void;
 }) {
+  const isTemplateMode = mode === "template";
   const [name, setName]             = useState("");
   const [wfType, setWfType]         = useState("standard");
-  const [cloneFrom, setCloneFrom]   = useState("__builtin_default_grm");
+  const [cloneFrom, setCloneFrom]   = useState(initialCloneFrom ?? "__builtin_default_grm");
   const [creating, setCreating]     = useState(false);
   const [error, setError]           = useState("");
 
@@ -1592,13 +1160,17 @@ function NewWorkflowModal({
   const adminTemplates = templates.filter(t => canSeeSeah || t.workflow_type !== "seah");
 
   async function handleCreate() {
-    if (!name.trim()) { setError("Workflow name is required."); return; }
+    if (!name.trim()) {
+      setError(isTemplateMode ? "Template name is required." : "Workflow name is required.");
+      return;
+    }
     setCreating(true); setError("");
     try {
       const created = await createWorkflow({
         display_name: name.trim(),
         workflow_type: wfType,
         clone_from_id: cloneFrom || undefined,
+        is_template: isTemplateMode,
       });
       onCreated(created);
     } catch (e: unknown) {
@@ -1611,7 +1183,7 @@ function NewWorkflowModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div className="font-semibold">New workflow</div>
+          <div className="font-semibold">{isTemplateMode ? "New template" : "New workflow"}</div>
           <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
 
@@ -1619,10 +1191,10 @@ function NewWorkflowModal({
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Workflow name *</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{isTemplateMode ? "Template name *" : "Workflow name *"}</label>
             <input autoFocus value={name} onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleCreate()}
-              placeholder="e.g. KL Road Standard GRM"
+              placeholder={isTemplateMode ? "e.g. KL Road GRM template" : "e.g. KL Road Standard GRM"}
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           </div>
 
@@ -1683,13 +1255,15 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
   const [error, setError]             = useState("");
   const [editing, setEditing]         = useState<WorkflowDefinition | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newModalMode, setNewModalMode] = useState<"workflow" | "template">("workflow");
+  const [clonePreset, setClonePreset] = useState<string | undefined>(undefined);
   const [search, setSearch]           = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const [wfRes, tplRes] = await Promise.all([listWorkflows(), listTemplates()]);
-      setWorkflows(wfRes.items);
+      setWorkflows(wfRes.items.filter((w) => !w.is_template));
       setTemplates(tplRes.items.filter(t => t.is_template));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load workflows");
@@ -1697,6 +1271,38 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function openEditor(wf: WorkflowDefinition) {
+    if (wf.workflow_id.startsWith("__builtin_")) return;
+    try {
+      const full = await getWorkflow(wf.workflow_id);
+      setEditing(full);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to open workflow");
+    }
+  }
+
+  async function handleRemoveWorkflow(wf: WorkflowDefinition) {
+    if (wf.workflow_id.startsWith("__builtin_")) return;
+    if (wf.status === "published") {
+      if (!confirm(`Archive "${wf.display_name}"? It will no longer be used for new tickets.`)) return;
+      try {
+        await archiveWorkflow(wf.workflow_id);
+        await load();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Archive failed");
+      }
+      return;
+    }
+    if (!confirm(`Permanently remove "${wf.display_name}"? This cannot be undone.`)) return;
+    try {
+      await deleteWorkflow(wf.workflow_id);
+      setWorkflows((prev) => prev.filter((w) => w.workflow_id !== wf.workflow_id));
+      if (editing?.workflow_id === wf.workflow_id) setEditing(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
 
   // Editor view
   if (editing) {
@@ -1723,10 +1329,21 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
     <div>
       {showNewModal && (
         <NewWorkflowModal
+          mode={newModalMode}
           templates={templates}
           canSeeSeah={!!canSeeSeah}
-          onCreated={w => { setShowNewModal(false); setWorkflows(prev => [...prev, w]); setEditing(w); }}
-          onClose={() => setShowNewModal(false)}
+          initialCloneFrom={clonePreset}
+          onCreated={w => {
+            setShowNewModal(false);
+            setClonePreset(undefined);
+            if (w.is_template) {
+              setTemplates((prev) => [...prev.filter((t) => t.workflow_id !== w.workflow_id), w]);
+            } else {
+              setWorkflows((prev) => [...prev, w]);
+            }
+            setEditing(w);
+          }}
+          onClose={() => { setShowNewModal(false); setClonePreset(undefined); }}
         />
       )}
 
@@ -1741,7 +1358,9 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
           {loading && <span className="text-xs text-gray-400 animate-pulse">Loading…</span>}
           {error && <span className="text-xs text-red-500">{error}</span>}
         </div>
-        <button onClick={() => setShowNewModal(true)}
+        <button
+          type="button"
+          onClick={() => { setNewModalMode("workflow"); setClonePreset(undefined); setShowNewModal(true); }}
           className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium">
           + New workflow
         </button>
@@ -1776,17 +1395,30 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${statusBadge(wf.status)}`}>
                 {wf.status.charAt(0).toUpperCase() + wf.status.slice(1)}
               </span>
-              <button onClick={() => setEditing(wf)}
+              <button type="button" onClick={() => openEditor(wf)}
                 className="text-sm text-blue-600 hover:underline ml-2">Edit</button>
+              <button type="button" onClick={() => handleRemoveWorkflow(wf)}
+                className="text-sm text-red-600 hover:underline ml-2">
+                {wf.status === "published" ? "Archive" : "Remove"}
+              </button>
             </div>
           </div>
         ))}
       </div>
 
       {/* Templates section */}
-      {allTemplates.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Templates</h3>
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Templates</h3>
+          <button
+            type="button"
+            onClick={() => { setNewModalMode("template"); setClonePreset(undefined); setShowNewModal(true); }}
+            className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 font-medium"
+          >
+            + New template
+          </button>
+        </div>
+      {allTemplates.length > 0 ? (
           <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
             {allTemplates.map(tpl => (
               <div key={tpl.workflow_id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition">
@@ -1804,14 +1436,40 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
                     {tpl.workflow_type.toUpperCase()}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-700">Template</span>
-                  <button onClick={() => setShowNewModal(true)}
-                    className="text-sm text-blue-600 hover:underline ml-2">Clone</button>
+                  {!tpl.workflow_id.startsWith("__builtin_") && (
+                    <button type="button" onClick={() => openEditor(tpl)}
+                      className="text-sm text-blue-600 hover:underline ml-2">Edit</button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewModalMode("workflow");
+                      setClonePreset(tpl.workflow_id);
+                      setShowNewModal(true);
+                    }}
+                    className="text-sm text-blue-600 hover:underline ml-2"
+                  >
+                    Clone
+                  </button>
+                  {!tpl.workflow_id.startsWith("__builtin_") && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWorkflow(tpl)}
+                      className="text-sm text-red-600 hover:underline ml-2"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+      ) : (
+        <p className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center">
+          No custom templates yet. Create one or use <strong>Save as template</strong> from a workflow.
+        </p>
       )}
+      </div>
     </div>
   );
 }
@@ -1883,6 +1541,17 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
 
   useEffect(() => { load(); }, []);
 
+  async function handleRemoveOrg(o: OrganizationItem) {
+    if (!confirm(`Remove organization "${o.name}" (${o.organization_id})? This cannot be undone.`)) return;
+    try {
+      await deleteOrganization(o.organization_id);
+      if (editing?.organization_id === o.organization_id) setEditing(null);
+      setOrgs((prev) => prev.filter((x) => x.organization_id !== o.organization_id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
   if (editing) {
     return (
       <OrgEditor
@@ -1928,7 +1597,7 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Country</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium w-16" />
+                <th className="px-4 py-2.5 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1945,9 +1614,12 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
                       {o.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setEditing(o)} className="text-xs text-blue-600 hover:underline">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button type="button" onClick={() => setEditing(o)} className="text-xs text-blue-600 hover:underline mr-3">
                       Edit
+                    </button>
+                    <button type="button" onClick={() => handleRemoveOrg(o)} className="text-xs text-red-600 hover:underline">
+                      Remove
                     </button>
                   </td>
                 </tr>
@@ -2584,6 +2256,17 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEditId, projects]);
 
+  async function handleRemoveProject(p: ProjectItem) {
+    if (!confirm(`Remove project "${p.name}" (${p.short_code})? Packages and links will be deleted.`)) return;
+    try {
+      await deleteProject(p.project_id);
+      if (editing?.project_id === p.project_id) setEditing(null);
+      setProjects((prev) => prev.filter((x) => x.project_id !== p.project_id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
+
   if (editing) {
     return (
       <ProjectEditor
@@ -2643,8 +2326,11 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
                     <span>Locations: {p.location_codes.length > 0 ? `${p.location_codes.length} linked` : <em>none</em>}</span>
                   </div>
                 </div>
-                <button onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0">
+                <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">
                   Edit
+                </button>
+                <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
+                  Remove
                 </button>
               </div>
             );

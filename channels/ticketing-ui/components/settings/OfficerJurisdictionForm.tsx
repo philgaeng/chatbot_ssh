@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   listOrganizations,
   listProjects,
@@ -9,6 +9,11 @@ import {
   type ProjectItem,
   type PackageItem,
 } from "@/lib/api";
+import {
+  isDonorAllProjectsOrg,
+  packagesForOrganizationOnProject,
+  projectsForOrganization,
+} from "@/lib/officerJurisdiction";
 import { LocationSearch } from "@/components/LocationSearch";
 
 export type JurisdictionFormValue = {
@@ -27,32 +32,73 @@ export function useOfficerJurisdictionState() {
   const [inclChildren, setInclChildren] = useState(false);
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [pkgOptions, setPkgOptions] = useState<PackageItem[]>([]);
+  const [packagesByProject, setPackagesByProject] = useState<Record<string, PackageItem[]>>({});
+  const [catalogLoading, setCatalogLoading] = useState(true);
 
   useEffect(() => {
-    listOrganizations().then(setOrgs).catch(() => {});
-    listProjects().then(setProjects).catch(() => {});
+    let cancelled = false;
+    setCatalogLoading(true);
+    (async () => {
+      try {
+        const [orgRows, projectRows] = await Promise.all([listOrganizations(), listProjects()]);
+        if (cancelled) return;
+        setOrgs(orgRows);
+        setProjects(projectRows);
+        const pkgEntries = await Promise.all(
+          projectRows.map(async (p) => {
+            try {
+              return [p.project_id, await listPackages(p.project_id)] as const;
+            } catch {
+              return [p.project_id, []] as const;
+            }
+          }),
+        );
+        if (!cancelled) {
+          setPackagesByProject(Object.fromEntries(pkgEntries));
+        }
+      } catch {
+        if (!cancelled) {
+          setOrgs([]);
+          setProjects([]);
+          setPackagesByProject({});
+        }
+      } finally {
+        if (!cancelled) setCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     setSelProject("");
     setSelPkg("");
-    setPkgOptions([]);
   }, [orgId]);
 
   useEffect(() => {
-    if (!selProject) {
-      setPkgOptions([]);
-      setSelPkg("");
-      return;
-    }
-    listPackages(selProject).then(setPkgOptions).catch(() => setPkgOptions([]));
     setSelPkg("");
   }, [selProject]);
 
-  const filteredProjects = orgId
-    ? projects.filter((p) => p.organizations.some((o) => o.organization_id === orgId))
-    : projects;
+  const filteredProjects = useMemo(
+    () => projectsForOrganization(orgId, projects, packagesByProject),
+    [orgId, projects, packagesByProject],
+  );
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.project_id === selProject),
+    [projects, selProject],
+  );
+
+  const filteredPackages = useMemo(
+    () =>
+      packagesForOrganizationOnProject(
+        orgId,
+        selectedProject,
+        packagesByProject[selProject] ?? [],
+      ),
+    [orgId, selectedProject, selProject, packagesByProject],
+  );
 
   function reset() {
     setOrgId("");
@@ -90,7 +136,9 @@ export function useOfficerJurisdictionState() {
     setInclChildren,
     orgs,
     filteredProjects,
-    pkgOptions,
+    filteredPackages,
+    catalogLoading,
+    isDonorOrg: isDonorAllProjectsOrg(orgId),
     reset,
     hasJurisdiction,
     toPayload,
@@ -110,15 +158,19 @@ type FieldsProps = {
   setInclChildren: (v: boolean) => void;
   orgs: OrganizationItem[];
   filteredProjects: ProjectItem[];
-  pkgOptions: PackageItem[];
+  filteredPackages: PackageItem[];
+  catalogLoading?: boolean;
+  isDonorOrg?: boolean;
 };
 
 export function OfficerJurisdictionFields(props: FieldsProps) {
   const {
     orgId, setOrgId, selProject, setSelProject, selLoc, setSelLoc,
     selPkg, setSelPkg, inclChildren, setInclChildren,
-    orgs, filteredProjects, pkgOptions,
+    orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
   } = props;
+
+  const projectDisabled = !orgId || catalogLoading || filteredProjects.length === 0;
 
   return (
     <div className="space-y-3">
@@ -137,15 +189,27 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         <select
           value={selProject}
           onChange={(e) => setSelProject(e.target.value)}
-          disabled={filteredProjects.length === 0}
+          disabled={projectDisabled}
           className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
         >
-          <option value="">Project (optional)</option>
+          <option value="">
+            {catalogLoading
+              ? "Loading projects…"
+              : !orgId
+                ? "Select organization first"
+                : filteredProjects.length === 0
+                  ? "No projects for this organization"
+                  : "Project (optional)"}
+          </option>
           {filteredProjects.map((p) => (
             <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
           ))}
         </select>
       </div>
+
+      {isDonorOrg && orgId && (
+        <p className="text-xs text-blue-600">ADB may scope officers to any project on the system.</p>
+      )}
 
       {selLoc ? (
         <div className="flex items-center gap-2 flex-wrap">
@@ -171,14 +235,18 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         />
       )}
 
-      {selProject && pkgOptions.length > 0 && (
+      {selProject && (
         <select
           value={selPkg}
           onChange={(e) => setSelPkg(e.target.value)}
           className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
         >
-          <option value="">Package (all under project)</option>
-          {pkgOptions.map((pkg) => (
+          <option value="">
+            {filteredPackages.length === 0
+              ? "No packages for this organization on this project"
+              : "Package (all under project)"}
+          </option>
+          {filteredPackages.map((pkg) => (
             <option key={pkg.package_id} value={pkg.package_id}>
               {pkg.package_code} — {pkg.name}
             </option>
@@ -188,9 +256,8 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
 
       <p className="text-xs text-gray-500">
         At least one of <strong>project</strong>, <strong>package</strong>, or <strong>location</strong> is required.
-        Project scope includes all packages under that project.
+        Contractors see projects via their awarded packages; ADB may select any project.
       </p>
     </div>
   );
 }
-

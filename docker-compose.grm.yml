@@ -1,12 +1,15 @@
 # GRM Ticketing — Docker Compose overlay
 #
-# ── Demo stack (default — bypass auth, no Keycloak required) ─────────────────
-#   make wsl-up   (or wsl-ticketing for GRM services only)
+# ── Demo stack (bypass auth, no Keycloak) ─────────────────────────────────────
+#   make wsl-demo-bypass   (or wsl-ticketing)
 #   → grm_ui      :3001  BYPASS_AUTH=true  → ticketing_api:5002 (mock super-admin)
 #
-# ── Auth stack (requires --profile auth) ─────────────────────────────────────
+# ── Auth stack (--profile auth) ───────────────────────────────────────────────
 #   make wsl-auth
 #   → grm_ui_auth :3002  BYPASS_AUTH=false → ticketing_api_auth:5003 (Keycloak JWT)
+#
+# ── Full local stack ──────────────────────────────────────────────────────────
+#   make wsl-up   → chatbot + demo :3001 + auth :3002
 #   → keycloak    :18080 admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD})
 #                        Host port configurable via KEYCLOAK_HOST_PORT.
 #                        Browser-facing URL pinned by KC_HOSTNAME_URL so tokens'

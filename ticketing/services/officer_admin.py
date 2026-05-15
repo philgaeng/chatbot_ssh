@@ -3,7 +3,10 @@ Officer admin helpers: jurisdiction validation, Keycloak sync, audit logging.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel
@@ -139,14 +142,19 @@ def log_admin_audit(
     target_user_id: Optional[str] = None,
     payload: Optional[dict[str, Any]] = None,
 ) -> None:
-    db.add(
-        AdminAuditLog(
-            actor_user_id=actor_user_id,
-            action=action,
-            target_user_id=target_user_id,
-            payload=payload,
-        )
-    )
+    """Best-effort audit row; savepoint so missing table does not roll back caller work."""
+    try:
+        with db.begin_nested():
+            db.add(
+                AdminAuditLog(
+                    actor_user_id=actor_user_id,
+                    action=action,
+                    target_user_id=target_user_id,
+                    payload=payload,
+                )
+            )
+    except Exception as exc:
+        logger.warning("admin_audit_log skipped (%s): %s", action, exc)
 
 
 def keycloak_configured() -> bool:

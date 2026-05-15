@@ -10,11 +10,12 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import get_db, get_current_user, CurrentUser
 from ticketing.api.schemas.workflow import (
+    SaveAsTemplateBody,
     StepReorderRequest,
     WorkflowAssignmentCreate,
     WorkflowAssignmentResponse,
@@ -26,6 +27,7 @@ from ticketing.api.schemas.workflow import (
     WorkflowStepUpdate,
     WorkflowUpdate,
 )
+from ticketing.models.ticket import Ticket
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 
 router = APIRouter()
@@ -196,7 +198,10 @@ def create_workflow(
         _require_seah(current_user)
 
     wf_id = _new_id()
-    wf_key = _slug(payload.display_name) + "_" + wf_id[:8]
+    if payload.is_template:
+        wf_key = f"tpl_{_slug(payload.display_name)}_{wf_id[:8]}"
+    else:
+        wf_key = _slug(payload.display_name) + "_" + wf_id[:8]
 
     wf = WorkflowDefinition(
         workflow_id=wf_id,
@@ -204,9 +209,9 @@ def create_workflow(
         display_name=payload.display_name,
         description=payload.description,
         workflow_type=payload.workflow_type,
-        status="draft",
+        status="published" if payload.is_template else "draft",
         version=1,
-        is_template=False,
+        is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
     )
     db.add(wf)
@@ -305,17 +310,26 @@ def publish_workflow(
 @router.post("/workflows/{workflow_id}/save-as-template", response_model=WorkflowDefinitionResponse, status_code=201, summary="Save workflow as reusable template")
 def save_as_template(
     workflow_id: str,
+    body: SaveAsTemplateBody | None = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> WorkflowDefinitionResponse:
     _require_admin(current_user)
     src = _load_workflow(workflow_id, db, current_user)
+    if src.is_template:
+        raise HTTPException(status_code=422, detail="Workflow is already a template")
+
+    tpl_name = (
+        body.display_name.strip()
+        if body and body.display_name and body.display_name.strip()
+        else f"{src.display_name} (template)"
+    )
 
     tpl_id = _new_id()
     tpl = WorkflowDefinition(
         workflow_id=tpl_id,
-        workflow_key=f"tpl_{_slug(src.display_name)}_{tpl_id[:8]}",
-        display_name=f"{src.display_name} (template)",
+        workflow_key=f"tpl_{_slug(tpl_name)}_{tpl_id[:8]}",
+        display_name=tpl_name,
         description=src.description,
         workflow_type=src.workflow_type,
         status="published",
@@ -355,6 +369,38 @@ def archive_workflow(
     db.commit()
     db.refresh(wf)
     return WorkflowDefinitionResponse.model_validate(wf)
+
+
+@router.delete(
+    "/workflows/{workflow_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete workflow (blocked when tickets reference it)",
+)
+def delete_workflow(
+    workflow_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    _require_admin(current_user)
+    if workflow_id.startswith("__builtin_"):
+        raise HTTPException(status_code=403, detail="Built-in templates cannot be deleted")
+
+    wf = _load_workflow(workflow_id, db, current_user)
+    ticket_count = db.scalar(
+        select(func.count())
+        .select_from(Ticket)
+        .where(Ticket.current_workflow_id == workflow_id)
+    ) or 0
+    if ticket_count:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete: {ticket_count} ticket(s) use this workflow. "
+                "Archive it instead so existing cases keep their workflow."
+            ),
+        )
+    db.delete(wf)
+    db.commit()
 
 
 # ── Steps ─────────────────────────────────────────────────────────────────────

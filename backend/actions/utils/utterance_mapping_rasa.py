@@ -41,7 +41,7 @@ SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
                 4: {
                     'en': """You can decide to file your grievance anonymously with one phone number or not.
                     """,
-                    'ne': """तपाईं एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ वा छोड्न सक्नुहुन्छ।
+                    'ne': """तपाईले बेनामी रूपमा फोन नम्बर प्रयोग गरेर  वा फोन नम्बर प्रयोग नगरी आफ्नो गुनासो दर्ता गर्न सक्नुहुन्छ।
                     """
                 },
                 5: {
@@ -110,7 +110,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
-                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।"
+                    'ne': "तपाईं आफ्नो गुनासो गुनासो परिचय नम्बर  वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।",
                 }
             },
             'buttons': {
@@ -132,11 +132,11 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Here are the details of the grievance:",
-                    'ne': "यो गुनासोको विवरण छ:"
+                    'ne': "यहाँ गुनासोको विवरणहरु छन्:",
                 },
                 2: {
                     'en': "We couldn't find any grievance details.",
-                    'ne': "हामी कुनै गुनासो विवरण भेट्टाउन सकिनौं।"
+                    'ne': "हामीले कुनै पनि गुनासो विवरण फेला पार्न सकेनौं।",
                 }
             },
             'buttons': {
@@ -169,7 +169,7 @@ UTTERANCE_MAPPING = {
                     },
                      2: {
                     'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
-                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                    'ne': "कृपया तपाईंको आधिकारिक फोन नम्बर प्रदान गर्नुहोस् - फोन नम्बर ९ अंक बाट सुरु हुनुपर्छ र १० अंकको हुनुपर्छ"
                 },
                 },
                 'profile_utterances': {
@@ -257,7 +257,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "To provide the Municipality where the incident happened, please enter a valid municipality name. You may Skip if you do not want to share or you do not know the location.",
-                    'ne': "कृपया {district}, {province} मा वैध नगरपालिका नाम प्रविष्ट गर्नुहोस् (कम्तिमा 3 अक्षर) वा छोड्न स्किप गर्नुहोस्"
+                    'ne': "कृपया {municipality} मा घटना भएको नगरपालिकाको आधाकारिक नाम प्रविष्ट गर्नुहोस्  (कम्तिमा ३ अक्षर) ।  यदि तपाईं साझा गर्न चाहनुहुन्न वा तपाईंलाई स्थान थाहा छैन भने तपाईं स्किप गर्न सक्नुहुन्छ।",
                 }
             },
             'buttons': {
@@ -310,7 +310,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Is {validated_village} in ward number {validated_ward} your correct village?",
-                    'ne': "के {validated_village} गाउँ बारेमा वर्ड नम्बर {validated_ward} तपाईंको सही गाउँ हो?"
+                    'ne': "तपाईले उपलब्ध गराएको गाउँ  {validated_village},  वडा  {validated_ward} को विवरण  सही हो?",
                 }
             },
             'profile_utterances': {
@@ -331,7 +331,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Please provide your ward number (number between 1 and 20) or Skip to skip",
-                    'ne': "कृपया आफ्नो वर्ड नम्बर प्रदान गर्नुहोस् (1 बाट 20 बीचको संख्या) वा छोड्न स्किप गर्नुहोस्"
+                    'ne': "कृपया आफ्नो वडा नम्बर प्रदान गर्नुहोस् (१ बाट २० बीचको संख्या) वा छोड्नको लागि  स्किप गर्नुहोस्",
                 }
             },
             'profile_utterances': {
@@ -455,11 +455,11 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Please enter the name you want us to address you by. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया हामीलाई तपाईंको नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    'ne': "कृपया हामीले तपाईलाई सम्बोधन गर्न चाहेको नाम प्रविष्ट गर्नुहोस्। तपाईको सहि पहिचानको लागि आफ्नो पुरा नाम थर  (पहिलो नाम, बिचको  नाम र थर) प्रविष्ट गर्नुहोस्। यदि तपाई बेनामी  रहन चाहनुहुन्छ भने यसलाई स्किप गर्न सक्नुहुन्छ।",
                 },
                 2: {
                     'en': "Please enter your full name. We recommend you to enter your full name with first name, middle name and last name for better identification. You can skip this if you prefer to remain anonymous.",
-                    'ne': "कृपया आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्। हामीले आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहोस् अच्छा पहचान गर्नको लागि। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    'ne': "तपाईको सहि पहिचानको लागि आफ्नो पुरा नाम थर  (पहिलो नाम, मध्य नाम र अन्तिम नाम) प्रविष्ट गर्नुहोस्। यदि तपाईं बेनामी  रहन चाहनुहुन्छ भने यसलाई स्किप गर्न सक्नुहुन्छ।",
                 }
             },
             'profile_utterances': {
@@ -504,7 +504,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Please enter your email address so we can contact you for any needed follow-up. Skip if you do not want to share it.",
-                    'ne': "कृपया आफ्नो सम्पर्क इमेल प्रविष्ट गर्नुहोस्। यदि तपाईं गुमनाम रहन चाहनुहुन्छ भने यसलाई छोड्न सक्नुहुन्छ।"
+                    'ne': "कृपया आफ्नो इमेल ठेगाना प्रविष्ट गर्नुहोस्, जसबाट आवश्यक फलो-अपको लागि हामी तपाईलाई सम्पर्क गर्न सकौं। यदि तपाई साझा गर्न चाहनुहुन्न भने यसलाई स्किप गर्न सक्नुहुन्छ।",
                 }
             },
             'profile_utterances': {
@@ -598,7 +598,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Please enter your correct village and address",
-                    'ne': "कृपया आफ्नो सही गाउँ र ठेगाना प्रविष्ट गर्नुहोस्"
+                    'ne': "कृपया आफ्नो सही गाउँ र ठेगाना प्रविष्ट गर्नुहोस्।",
                 }
             }
         },
@@ -607,7 +607,7 @@ UTTERANCE_MAPPING = {
                 1: {
                     # Reuse the generic email prompt text for invalid email format
                     'en': "The email you provided is not valid. Please enter a valid email address, or type 'skip' if you prefer to remain anonymous.",
-                    'ne': "तपाईंले प्रदान गर्नुभएको इमेल मान्य छैन। कृपया मान्य इमेल ठेगाना प्रविष्ट गर्नुहोस्, वा गुमनाम रहन चाहनुहुन्छ भने 'skip' टाइप गर्नुहोस्।"
+                    'ne': "तपाईले प्रदान गर्नुभएको इमेल सही छैन। कृपया सही इमेल ठेगाना प्रविष्ट गर्नुहोस्, वा बेनामी रहन चाहनुहुन्छ भने 'skip' टाइप गर्नुहोस्।",
                 }
             }
         },
@@ -644,7 +644,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Great!  Let's start by understanding your grievance...",
-                    'ne': "राम्रो!  चल्नुस् तपाईंको गुनासो बुझेर सुरु गरौं..."
+                    'ne': "राम्रो!  तपाईको गुनासो बुझेर सुरु गरौं...",
                 }
             }
         },
@@ -656,7 +656,7 @@ UTTERANCE_MAPPING = {
                 },
                 2: {
                     'en': "Lets restart, please enter your grievance details...",
-                    'ne': "प्रक्रिया पुनः सुरु गर्नुहोस्, कृपया आफ्नो गुनासो विवरण प्रविष्ट गर्नुहोस्..."
+                    'ne': "प्रक्रिया पुनः सुरु गर्नुहोस्, कृपया आफ्नो गुनासो विवरणहरु प्रविष्ट गर्नुहोस्... ",
                 },
                 3: {
                     'en': "Please enter more details...",
@@ -669,13 +669,12 @@ UTTERANCE_MAPPING = {
                     - Persons involved\n
                     - Quantification of damages (e.g., number of bags of rice lost)\n"
                     - Monetary value of damages""",
-                    'ne': """
-                    तपाईंको प्रविष्टिको लागि धन्यवाद। "{grievance_description}\n. 
-                    के तपाईं आफ्नो गुनासोको बारेमा थप विवरण गर्न चाहनुहुन्छ, जुन यस प्रकारको हुन्छ:\n
-                    - स्थान जानकारी\n
-                    - भागहरूको सम्बन्धमा\n
-                    - हानिको मात्रात्मकको सम्बन्धमा (उदाहरणका लागि, गुनासोको बर्गहरूको संख्या)\n"
-                    - हानिको मुनाफा मूल्य"""
+                    'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद। "{grievance_description}                                             
+.     के तपाई आफ्नो गुनासोमा थप विवरणहरू थप्न चाहनुहुन्छ, जस्तै: 
+                    - स्थान जानकारी
+                    -  संलग्न व्यक्तिहरू सम्बन्धमा
+                    -  क्षतिको परिमाण निर्धारण (जस्तै, हराएको चामलको बोराको संख्या)"
+                    - क्षतिको मौद्रिक मूल्य""",
                 }
             },
             'buttons': {
@@ -692,11 +691,11 @@ UTTERANCE_MAPPING = {
                 },
                 2: {
                     'en': "✅ A recap of your grievance has been sent to your phone : {complainant_phone}.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {complainant_phone}"
+                    'ne': "✅ तपाईको गुनासोको सारांश तपाईको फोनमा पठाइएको छ। {complainant_phone}",
                 },
                 3: {
                     'en': "✅ A recap of your grievance has been sent to your email : {complainant_email}.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {complainant_email}"
+                    'ne': "✅ तपाईको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {complainant_email}",
                 },
                 4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
@@ -708,15 +707,15 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
-                    'ne': "तपाईंको गुनासो दर्ता गरिएको छ। हामीलाई एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न सक्नुहुन्छ।"
+                    'ne': "तपाईको गुनासो दर्ता गरिएको छ, हामी तपाईलाई मोरङको एकल बिन्दु विपत व्यवस्थापन केन्द्रमा सम्पर्क गर्न अनुरोध गर्दछौं जहाँबाट तपाईलाई विशेष सहयोग प्रदान गरिनेछ।",
                 },
                 2: {
                     'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
-                    'ne': "तपाईंले कुनै फाइल अपलोड गरिएन। तपाईं अभी भी फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
+                    'ne': "तपाईले कुनै पनि फाइल संलग्न गर्नुभएको छैन। तलको संलग्न बटन प्रयोग  गरेर तपाई अझै पनि फाइल संलग्न गर्न सक्नुहुन्छ। ",
                 },
                 3: {
                     'en': "You can still attach more files to your grievance  by clicking on the attachment button below.",
-                    'ne': "तपाईं अभी भी तपाईंको गुनासोको लागि अधिक फाइलहरू अपलोड गर्न फाइल बटन पर्खन गर्न सक्नुहुन्छ।"
+                    'ne': "तलको संलग्न बटन प्रयोग गरेर तपाईले आफ्नो गुनासोका थप फाइलहरू संलग्न गर्न सक्नुहुन्छ।",
                 }
             },
             'buttons': {
@@ -731,11 +730,11 @@ UTTERANCE_MAPPING = {
                 },
                 2: {
                     'en': "✅ A recap of your grievance has been sent to your email : {complainant_email}.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको इमेलमा पठाइएको छ। {complainant_email}"
+                    'ne': "✅ तपाईको गुनासोको सारांश तपाईको इमेलमा पठाइएको छ। {complainant_email}",
                 },
                 3: {
                     'en': "✅ A recap of your grievance has been sent to your phone : {complainant_phone}.",
-                    'ne': "✅ तपाईंको गुनासोको सारांश तपाईंको फोनमा पठाइएको छ। {complainant_phone}"
+                    'ne': "✅ तपाईको गुनासोको सारांश तपाईको फोनमा पठाइएको छ। {complainant_phone}",
                 },
                 4: {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
@@ -769,23 +768,23 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted. Your reference number is available in this chat.",
-                    'ne': "धन्यवाद। तपाईंको SEAH फोकल-पोइन्ट रिपोर्ट दर्ता भयो। तपाईंले पुष्टि गर्नुभएको माध्यमबाट मात्र सम्पर्क हुन सक्छ।",
+                    'ne': "रिपोर्ट गर्नुभएकोमा धन्यवाद। तपाईको गोप्य SEAH रिपोर्ट पेश गरिएको छ। तपाईको सन्दर्भ नम्बर यस च्याटमा उपलब्ध छ।",
                 },
                 2: {
                     'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted. Here are support services that may help victim-survivors: [list to be provided].",
-                    'ne': "धन्यवाद। तपाईंको रिपोर्ट गोप्य छ। सुरक्षाका लागि नजिकको SEAH सहयोग बिन्दुमा सम्पर्क गर्न सक्नुहुन्छ (विवरण तल)।",
+                    'ne': "रिपोर्ट गर्नुभएकोमा धन्यवाद। तपाईको गोप्य SEAH रिपोर्ट पेश गरिएको छ। मद्दतका लागि सहायता सेवाहरू यहाँ छन्: [list to be provided]।",
                 },
                 3: {
                     'en': "Thank you. We may contact you using the phone number you provided, if needed for follow-up.",
-                    'ne': "धन्यवाद। आवश्यक परेमा तपाईंले दिनुभएको फोन नम्बरमार्फत सम्पर्क गर्न सकिन्छ।",
+                    'ne': "धन्यवाद। फलो-अपको लागि आवश्यक परेमा, हामी तपाईले प्रदान गर्नुभएको फोन नम्बरमा  तपाईलाई सम्पर्क गर्न सक्छौं।",
                 },
                 4: {
                     'en': "Thank you. Your report is confidential. If you did not share contact details, please reach a SEAH support point (below) if you need help.",
-                    'ne': "धन्यवाद। तपाईंले सम्पर्क विवरण नदिएमा, सहयोग चाहिएमा तलको SEAH बिन्दुमा सम्पर्क गर्नुहोस्।",
+                    'ne': "धन्यवाद। तपाईको रिपोर्ट गोप्य छ।  तपाईले सम्पर्क विवरणहरू साझा गर्नुभएको छैन भने र तपाईलाई मद्दत चाहिएमा  कृपया तलको  SEAH सहायता बिन्दुमा (तल) सम्पर्क गर्नुहोस्।",
                 },
                 5: {
                     'en': "Thank you. Your report is confidential. We may use the contact details you provided as agreed.",
-                    'ne': "धन्यवाद। तपाईंले सहमति अनुसार दिनुभएको सम्पर्क विवरण प्रयोग गर्न सकिन्छ।",
+                    'ne': "धन्यवाद। तपाईले सहमति अनुसार प्रदान गर्नुभएको सम्पर्क विवरणहरू हामी  प्रयोग गर्न सक्छौं। ",
                 },
             },
             'buttons': {
@@ -798,7 +797,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "No category selected. skipping this step.",
-                    'ne': "कुनै श्रेणी चयन गरिएको छैन। यस चरण छोड्नुहोस्।"
+                    'ne': "कुनै समूह चयन गरिएको छैन। यस चरण छोड्नुहोस्।",
                 }
             }
         },
@@ -806,7 +805,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "We have generated categories and summary for your grievance. They will help our officer to treat your grievance faster. Do you want to review if they are correct and possibly answer one more question?",
-                    'ne': "हामीले तपाईंको गुनासोको लागि श्रेणी व सारांश उत्पन्न गरिएको छ। यी श्रेणीहरू व सारांश हामीले तपाईंको गुनासो जल्दी सेवाउन मद्दत गर्नेछ। के यो सही छ वा अधिक एक प्रश्न जाँच गर्न चाहनुहुन्छ?"
+                    'ne': "हामीले तपाईको गुनासोको लागि समुहहरू र सारांश उत्पन्न गरिएको छ। यसले  हाम्रा अधिकारीलाई तपाईंको गुनासो छिटो सम्बोधन गर्न मद्दत गर्नेछन्। के तपाई यो सही छ कि छैन भनेर समीक्षा गर्न चाहनुहुन्छ र अर्को एक प्रश्न जाँच गर्न चाहनुहुन्छ? ",
                 }
             },
             'buttons': {
@@ -818,20 +817,23 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': """
                     Here are the categories suggested by our classification:\n{category_text}\nDoes this seem correct?""",
-                    'ne': """हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।
-                    यहाँ सुझाव गरिएका श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"""
+                    'ne': """हाम्रो वर्गीकरणद्वारा सुझाव गरिएका समूहहरु यहाँ छन्: 
+      {category_text}
+के यो सही देखिन्छ?""",
                 },
                 2: {
                     'en': "We have not identified any categories for your grievance.",
-                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन।"
+                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै पनि समूह पहिचान गरेका छैनौं। ",
                 },
                 3: {
                     'en': "Here is the list of modified categories:\n{category_text}\nDoes this seem correct?",
-                    'ne': "यहाँ संशोधित श्रेणीहरू छन्:\n{category_text}\nके यो सही लाग्दैन?"
+                    'ne': """यहाँ संशोधित श्रेणीहरू छन्:
+{category_text}
+के यो सही देखिन्छ?""",
                 },
                 4: {
                     'en': "You have removed all the categories, is it correct",
-                    'ne': "तपाईंले सबै श्रेणीहरू हटाएको छ, के यो सही छ?"
+                    'ne': "तपाईले सबै समूहहरू हटाउनुभएको छ, के यो सही छ?",
                 }
             },
             'buttons': {
@@ -870,11 +872,11 @@ UTTERANCE_MAPPING = {
                 },
                 2: {
                     'en': "Which category would you like to delete? Skip if you don't want to delete any category.",
-                    'ne': "तपाईं कुन श्रेणी हटाउन चाहनुहुन्छ? छोड्नुहोस् यदि तपाईं कुनै श्रेणी हटाउन चाहनुहुन्छ।"
+                    'ne': "तपाई कुन समुह हटाउन चाहनुहुन्छ?  यदि तपाईं कुनै पनि समुह हटाउन चाहनुहुन्न भने स्किप गर्नुहोस्।",
                 },
                 3: {
                     'en': "Select the category you want to add from the list below, Skip if you don't want to add any category.",
-                    'ne': "निम्न सूचीमा तपाईं थप्न चाहनुहुन्छ श्रेणी चयन गर्नुहोस् , छोड्नुहोस् यदि तपाईं कुनै श्रेणी थप्न चाहनुहुन्छ।"
+                    'ne': "तलको सूचीबाट तपाईले थप्न चाहनुभएको समुह चयन गर्नुहोस्, यदि तपाई कुनै पनि समुह थप्न चाहनुहुन्न भने स्किप गर्नुहोस्।",
                 }
             }
         },
@@ -924,11 +926,11 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Categorization of your grievance is available.",
-                    'ne': "हामीले तपाईंको गुनासोको लागि श्रेणीहरू उत्पन्न गरिएको छ।"
+                    'ne': "तपाईको गुनासोको लागि समुहहरु उपलब्ध गरिएको छ। ",
                 },
                 2: {
                     'en': "Categorization of your grievance is not available. Our officer will review your grievance and contact you soon.",
-                    'ne': "हामीले तपाईंको गुनासोको लागि कुनै श्रेणी छैन। हामी तपाईंको गुनासो मानिसाले सारांशित गर्नेछौं।"
+                    'ne': "तपाईको गुनासोको समूह उपलब्ध छैन।  हाम्रा अधिकारीले तपाईको गुनासोको समीक्षा गर्नेछन् र चाँडै तपाईलाई सम्पर्क गर्नेछन्। ",
                 }
             }
         },
@@ -961,7 +963,9 @@ UTTERANCE_MAPPING = {
                 },
                 3: {
                     'en': "Hello! Welcome to the Grievance Management Chatbot.\nYou are reaching out from {package_label}, {district} District.\nI am here to help you file a grievance or check its status. What would you like to do?",
-                    'ne': "नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।\nतपाईं {package_label}, {district} जिल्लाबाट सम्पर्क गर्दै हुनुहुन्छ।\nम तपाईंलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न यहाँ छु। तपाईं के गर्न चाहनुहुन्छ?"
+                    'ne': """नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।
+तपाईं {package_label}, {district} जिल्लाबाट सम्पर्क गर्दै हुनुहुन्छ।
+म तपाईलाई गुनासो दर्ता गर्न वा यसको स्थिति जाँच गर्न मद्दत गर्न तयार छु। तपाईं के गर्न चाहनुहुन्छ? """,
                 }
             },
             'buttons': {
@@ -985,7 +989,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Thank you for using the Grievance Management Chatbot. Have a great day!",
-                    'ne': "गुनासो व्यवस्थापन च्याटबटमा धन्यवाद। एक अच्छा दिन राखौं!"
+                    'ne': "गुनासो व्यवस्थापन च्याटबट प्रयोग गर्नुभएकोमा धन्यवाद। तपाईंको दिन शुभ रहोस्!",
                 }
             }
         },
@@ -993,7 +997,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "You are currently in the process of {story_current}.",
-                    'ne': "तपाईं हाल {story_current} को प्रक्रियामा हुनुहुन्छ।"
+                    'ne': "तपाई हाल निम्न प्रक्रियामा हुनुहुन्छ {story_current} ",
                 }
             }
         },
@@ -1020,7 +1024,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "You are currently in the {story_current} process.",
-                    'ne': "तपाईं हाल {story_current} प्रक्रियामा हुनुहुन्छ।"
+                    'ne': "तपाई हाल {story_current} प्रक्रियामा हुनुहुन्छ।",
                 },
                 2: {
                     'en': "I don't know which process you're currently in.",
@@ -1140,7 +1144,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "In order to attach files, please click the attachment button.",
-                    'ne': "फाइलहरू संलग्न गर्न चाहनुहुन्छ भने, कृपया एट्याचमेन्ट बटन प्रयोग गर्नुहोस्।"
+                    'ne': "फाइलहरू संलग्न गर्न, कृपया संलग्नक बटनमा क्लिक गर्नुहोस्।",
                 }
             }
         }
@@ -1156,7 +1160,7 @@ UTTERANCE_MAPPING = {
                 # 2: Status-check flow – OTP mandatory to access grievance
                 2: {
                     'en': "You must verify your phone number to access your grievance and make changes. Without verification, you can only request a follow-up.",
-                    'ne': "तपाईंको गुनासो पहुँच गर्न र परिवर्तन गर्न फोन नम्बर सत्यापन गर्नुपर्छ। सत्यापन बिना तपाईं अनुवर्तन अनुरोध मात्र गर्न सक्नुहुन्छ।",
+                    'ne': "तपाईको गुनासो पहुँच र परिवर्तन गर्न तपाईंले आफ्नो फोन नम्बर प्रमाणित गर्नुपर्छ।  फोन नम्बर  प्रमाणीकरण बिना, तपाईंले केवल फलो-अप अनुरोध मात्र गर्न सक्नुहुन्छ। ",
                 }
             },
             'buttons': {
@@ -1169,7 +1173,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "The phone number you provided is not valid. Please enter a valid 10-digit Nepali mobile number starting with 9, or type 'skip' to continue without it.",
-                    'ne': "तपाईंले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको वैध नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्।"
+                    'ne': "तपाईले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको मान्य नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा  बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्। ",
                 }
             }
         },
@@ -1177,7 +1181,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "OTP verified successfully",
-                    'ne': "OTP सुनिश्चित गर्न गरिएको छ।"
+                    'ne': "OTP सफलतापूर्वक प्रमाणित भयो।",
                 }
             }
         },
@@ -1222,11 +1226,11 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Would you like to file this report anonymously or with contact details?",
-                    'ne': "यो उजुरी गुमनाम रूपमा दर्ता गर्न चाहनुहुन्छ कि सम्पर्क विवरणसहित?"
+                    'ne': "तपाई यो गुनासो बेनामी रूपमा दर्ता गर्न चाहनुहुन्छ वा सम्पर्क विवरणहरू सहित? ",
                 },
                 2: {
                     'en': "Please choose anonymous grievance or grievance with contact details.",
-                    'ne': "कृपया गुमनाम उजुरी वा सम्पर्क विवरण सहित उजुरी छान्नुहोस्।"
+                    'ne': "कृपया बेनामी गुनासो वा सम्पर्क विवरण सहितको गुनासो छनौट गर्नुहोस्।",
                 }
             },
             'buttons': {
@@ -1234,14 +1238,14 @@ UTTERANCE_MAPPING = {
             }
         },
         'action_ask_form_seah_1_seah_victim_survivor_role': {
-            'utterances': {1: {'en': "Are you:", 'ne': "तपाईं कुन भूमिका हुनुहुन्छ?"}},
+            'utterances': {1: {'en': "Are you:", 'ne': "तपाई कुन भूमिकामा हुनुहुन्छ?"}},
             'buttons': {1: BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE}
         },
         'action_ask_form_seah_1_seah_witness_victim_consent_to_file': {
             'utterances': {
                 1: {
                     'en': "Did the victim-survivor agree that you file this complaint?",
-                    'ne': "के पीडित/उत्तरजीवीले तपाईंलाई यो उजुरी दर्ता गर्न सहमति दिनुभएको छ?"
+                    'ne': "के पीडित व्यक्तिले तपाईलाई यो उजुरी दर्ता गर्न सहमति दिनुभएको छ?",
                 }
             },
             'buttons': {1: BUTTONS_SEAH_YES_NO}
@@ -1250,7 +1254,7 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Is there an immediate danger to the life of the victim-survivor?",
-                    'ne': "के पीडित/उत्तरजीवीको ज्यानमा तत्काल खतरा छ?"
+                    'ne': "के पीडित व्यक्तिको जीवनमा तत्काल खतरा छ?",
                 }
             },
             'buttons': {1: BUTTONS_SEAH_YES_NO}
@@ -1261,17 +1265,17 @@ UTTERANCE_MAPPING = {
             'utterances': {
                 1: {
                     'en': "Please provide a brief summary of the incident.",
-                    'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्न सक्नुहुन्छ।"
+                    'ne': "कृपया घटनाको संक्षिप्त विवरण प्रदान गर्नुहोस्। ",
                 },
                 2: {
                     'en': """Thank you for your entry: "{grievance_description}".
 Do you want to add more details before submission?""",
-                    'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
-के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
+                    'ne': """तपाईको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
+के तपाई पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
                 },
                 3: {
                     'en': "Please add more details.",
-                    'ne': "कृपया थप विवरण थप्नुहोस्।"
+                    'ne': "कृपया थप विवरणहरू थप्नुहोस्।",
                 }
             },
             'buttons': {
@@ -1280,66 +1284,66 @@ Do you want to add more details before submission?""",
             }
         },
         'action_ask_form_seah_2_seah_project_identification': {
-            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति ADB आयोजनामा कार्यरत छन्?"}},
+            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत छन्? "}},
             'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_ask_form_seah_2_seah_contact_consent_channel': {
-            'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "फलो-अपका लागि सम्पर्क गर्न सहमति छ? एक च्यानल छान्नुहोस्।"}},
+            'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "के तपाई फलो-अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ? एउटा च्यानल छान्नुहोस्। "}},
             'buttons': {1: BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL}
         },
     },
     'form_seah_focal_point': {
         'action_ask_form_seah_focal_point_1_seah_focal_learned_when': {
-            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईंले यो घटना कहिले थाहा पाउनुभयो?"}},
+            'utterances': {1: {'en': "When did you learn about this incident?", 'ne': "तपाईले यो घटनाको बारेमा कहिले थाहा पाउनुभयो? "}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_LEARNED_WHEN}
         },
         'action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report': {
-            'utterances': {1: {'en': "Did the complainant consent to you reporting this here?", 'ne': "के उजुरीकर्ताले तपाईंलाई यहाँ रिपोर्ट गर्न सहमति दिनुभयो?"}},
+            'utterances': {1: {'en': "Did the complainant consent to you reporting this here?", 'ne': "के उजुरीकर्ताले तपाईलाई यहाँ यो रिपोर्ट गर्न सहमति दिनुभयो?"}},
             'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_ask_form_seah_focal_point_1_sensitive_issues_follow_up': {
-            'utterances': {1: {'en': "Did the complainant agree to be identified or anonymous?", 'ne': "के उजुरीकर्ता पहिचान सहित वा गुमनाम रहन सहमत हुनुहुन्छ?"}},
+            'utterances': {1: {'en': "Did the complainant agree to be identified or anonymous?", 'ne': "के उजुरीकर्ता पहिचान सहित वा बेनाम रहन सहमत हुनुहुन्छ?"}},
             'buttons': {1: BUTTONS_SEAH_IDENTITY_MODE}
         },
         'action_ask_form_seah_focal_point_2_seah_project_identification': {
-            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति ADB आयोजनामा कार्यरत छन्?"}},
+            'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत छन्? "}},
             'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_survivor_risks': {
-            'utterances': {1: {'en': "What additional risks to health, safety, or wellbeing are present? Choose an option below, or type your own response.", 'ne': "स्वास्थ्य, सुरक्षा वा कल्याणमा के थप जोखिमहरू छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'utterances': {1: {'en': "What additional risks to health, safety, or wellbeing are present? Choose an option below, or type your own response.", 'ne': "स्वास्थ्य, सुरक्षा, वा कल्याणको लागि कस्ता थप जोखिमहरू छन्? तलको एउटा विकल्प छान्नुहोस्, वा आफ्नो प्रतिक्रिया टाइप गर्नुहोस्। "}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures': {
-            'utterances': {1: {'en': "In what way have you mitigated these risks? Choose an option below, or type your own response.", 'ne': "यी जोखिमहरूलाई तपाईंले कसरी न्यूनीकरण गर्नुभयो? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'utterances': {1: {'en': "In what way have you mitigated these risks? Choose an option below, or type your own response.", 'ne': "तपाईंले यी जोखिमहरूलाई कसरी कम गर्नुभएको छ? तलको एउटा विकल्प छान्नुहोस्, वा आफ्नो प्रतिक्रिया टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_MITIGATION_MEASURES}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties': {
-            'utterances': {1: {'en': "Aside from the survivor, who else is at risk? Choose an option below, or type your own response.", 'ne': "पीडित बाहेक, अरू को जोखिममा छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'utterances': {1: {'en': "Aside from the survivor, who else is at risk? Choose an option below, or type your own response.", 'ne': "पीडित बाहेक, अरू को जोखिममा छन्? तलको विकल्प छान्नुहोस्, वा आफ्नो प्रतिक्रिया टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_project_risk': {
-            'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के ADB आयोजनामा जोखिम छ? तलको विकल्प छान्नुहोस्, वा आफ्नो उत्तर टाइप गर्नुहोस्।"}},
+            'utterances': {1: {'en': "Is there a risk to the ADB project? Choose an option below, or type your own response.", 'ne': "के एडीबी आयोजनामा ​​कुनै जोखिम छ?  तलको विकल्प छान्नुहोस्, वा आफ्नो प्रतिक्रिया टाइप गर्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_FOCAL_PROJECT_RISK}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_reputational_risk': {
-            'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के ADB को प्रतिष्ठामा जोखिम छ?"}},
+            'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के एडीबी को प्रतिष्ठामा कुनै जोखिम छ?"}},
             'buttons': {1: BUTTONS_SEAH_YES_NO},
         },
         'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
             'utterances': {
                 1: {
                     'en': "Please provide a brief summary of the incident.",
-                    'ne': "कृपया घटनाको छोटो विवरण दिनुहोस्। तपाईंले विवरण नदिन चाहनुहुन्छ भने 'skipped' लेख्नुहोस्।"
+                    'ne': "कृपया घटनाको संक्षिप्त विवरण प्रदान गर्नुहोस्। ",
                 },
                 2: {
                     'en': """Thank you for your entry: "{grievance_description}".
 Do you want to add more details before submission?""",
-                    'ne': """तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
-के तपाईं पेस गर्नु अघि थप विवरण थप्न चाहनुहुन्छ?"""
+                    'ne': """तपाईको प्रविष्टिको लागि धन्यवाद: "{grievance_description}"।
+के तपाई पेश गर्नु अघि थप विवरणहरू थप्न चाहनुहुन्छ?"""
                 },
                 3: {
                     'en': "Please add more details.",
-                    'ne': "कृपया थप विवरण थप्नुहोस्।"
+                    'ne': "कृपया थप विवरणहरू थप्नुहोस्।",
                 }
             },
             'buttons': {
@@ -1348,22 +1352,22 @@ Do you want to add more details before submission?""",
             }
         },
         'action_ask_form_seah_focal_point_2_seah_contact_consent_channel': {
-            'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "फलो-अपका लागि सम्पर्क गर्न सहमति छ? एक च्यानल छान्नुहोस्।"}},
+            'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "के तपाई फलो-अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ?  एक च्यानल छान्नुहोस्।"}},
             'buttons': {1: BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL}
         },
         'action_ask_form_seah_focal_point_2_seah_focal_referred_to_support': {
-            'utterances': {1: {'en': "Did you refer the complainant to proper support?", 'ne': "के तपाईंले उजुरीकर्तालाई उचित सहयोगमा रेफर गर्नुभयो?"}},
+            'utterances': {1: {'en': "Did you refer the complainant to proper support?", 'ne': "के तपाईले उजुरीकर्तालाई उचित सहयोगको लागि सिफारिस गर्नुभयो? "}},
             'buttons': {1: BUTTONS_SEAH_YES_NO}
         },
         'action_outro_sensitive_issues': {
             'utterances': {
                 1: {
                     'en': "Thank you for reporting this incident. This confidential SEAH report has been submitted.",
-                    'ne': "REPLACE_ME: धन्यवाद। तपाईंको गोप्य SEAH दर्ता रेकर्ड गरिएको छ। तोकिएको SEAH केस ह्यान्डलरले तपाईंले अनुमति दिएको च्यानलबाट मात्र सम्पर्क गर्न सक्छ।"
+                    'ne': "यो घटना रिपोर्ट गर्नुभएकोमा धन्यवाद। तपाईको गोप्य SEAH रिपोर्ट पेश गरिएको छ। ",
                 },
                 2: {
                     'en': "Thank you. This does not appear to be an ADB project. We will still handle your report confidentially and share referral/support contacts.",
-                    'ne': "REPLACE_ME: धन्यवाद। यो ADB आयोजना जस्तो देखिँदैन। हामी तपाईंको रिपोर्ट गोप्य रूपमा व्यवस्थापन गर्नेछौं र बाह्य रेफरल/सहयोग सम्पर्क उपलब्ध गराउनेछौं।"
+                    'ne': "धन्यवाद। यो एडीबीको आयोजना जस्तो देखिँदैन। हामी तपाईको रिपोर्टलाई गोप्य रूपमा व्यवस्थापन गर्नेछौं र सिफारिस/सहयोग सम्पर्कहरू उपलब्ध गराउनेछौं।",
                 }
             },
             'buttons': {
@@ -1386,8 +1390,8 @@ Do you want to add more details before submission?""",
                                 {"title": "No, let me enter a value", "payload": "/deny_skip"}
                             ],
                     "ne": [
-                                {"title": "Yes, skip it", "payload": "/affirm_skip"},
-                                {"title": "No, let me enter a value", "payload": "/deny_skip"}
+                                {"title": "हो", "payload": "/affirm_skip"},
+                                {"title": "होइन", "payload": "/deny_skip"}
                             ]
                 }
             }
@@ -1398,7 +1402,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "The phone number you provided is not valid. Please enter a valid 10-digit Nepali mobile number starting with 9, or type 'skip' to continue without it.",
-                    'ne': "तपाईंले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको वैध नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्।"
+                    'ne': "तपाईले प्रदान गर्नुभएको फोन नम्बर मान्य छैन। कृपया ९ बाट सुरु हुने १० अङ्कको मान्य नेपाली मोबाइल नम्बर प्रविष्ट गर्नुहोस्, वा  बिना नम्बर अघि बढ्न 'skip' टाइप गर्नुहोस्। ",
                 }
             }
         },
@@ -1406,7 +1410,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Our bot cannot provide you with the status of your grievance. Please contact directly the officer in charge at {officer_in_charge_phone} or visit the office in person. {office_name_and_address}",
-                    'ne': "हामीलाई तपाईंको गुनासो स्थिति जाँच गर्न मद्दत गर्न सकिनौं। कृपया अधिकारीको फोन नम्बर {officer_in_charge_phone} वा अनुसरण गर्नु होस्। {office_name_and_address}"
+                    'ne': "हाम्रो बटले तपाईको गुनासोको स्थिति प्रदान गर्न सक्दैन। कृपया अधिकारीको फोन नम्बर {officer_in_charge_phone} मा सम्पर्क गर्नुहोस् वा व्यक्तिगत रूपमा कार्यालयमा उपस्थित भई भेट गर्नुहोस। {office_name_and_address} ",
                 }
             }
         },
@@ -1414,19 +1418,19 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "We have matched your full name with the grievance ID {grievance_id}",
-                    'ne': "हामी तपाईंको नामलाई {grievance_id} गुनासो ID सँग मिलाउन सकिनौं"
+                    'ne': "हामीले तपाईंको पूरा नाम गुनासो परिचय {grievance_id} सँग मिलाएका छौं। ",
                 },
                 2: {
                     'en': "We have found several grievances of closed grievances, we selected the latest one {grievance_id}",
-                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                    'ne': "हामीले बन्द गरिएका गुनासोहरूमध्ये धेरै गुनासोहरू फेला पारेका छौं, हामीले पछिल्लो एउटा गुनासो  छनौट गरेका छौं {grievance_id}।",
                 },
                 3: {
                     'en': "We have found one grievance with the status {status} and one or several already closed, we selected the latest one {grievance_id}",
-                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                    'ne': "हामीले एउटा गुनासोको अवस्था {status}  सहित  फेला पारेका छौं र एउटा वा धेरै पहिले नै बन्द भइसकेका छन्, हामीले पछिल्लो एउटा  छनौट गरेका छौं  {grievance_id}।    ",
                 },
                 4: {
                     'en': "We have found several grievances, we selected the latest one {grievance_id}",
-                    'ne': "हामी बहुवचन गुनासो भेट्टाउन सकिनौं, हामी अगाडिलाई चुनेको छ {grievance_id}"
+                    'ne': "हामीले धेरै गुनासोहरू फेला पारेका छौं, हामीले पछिल्लो एउटा गुनासो  छनौट गरेका छौं {grievance_id}। ",
                 }
             }
         },
@@ -1434,7 +1438,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "You can retrieve your grievance by using your grievance ID or the phone number provided during the filing process.",
-                    'ne': "तपाईं आफ्नो गुनासो गुनासो ID वा फोन नम्बर प्रयोग गरेर पुनः प्राप्त गर्न सक्नुहुन्छ। यो गुनासो दर्ता गर्न दुई तरिका छ।",
+                    'ne': "तपाईंले आफ्नो गुनासो परिचय वा  फोन नम्बर प्रयोग गरेर आफ्नो गुनासो पुन: प्राप्त गर्न सक्नुहुन्छ। ",
                 }
             },
             'buttons': {
@@ -1456,11 +1460,11 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please provide your grievance ID? Alternatively, you can exit by skipping or search by phone number instead.",
-                    'ne': "कृपया तपाईंको गुनासो ID प्रदान गर्नुहोस्? वा अर्को तरिका छोड्न वा फोन नम्बर सेव्नु सक्नुहुन्छ।"
+                    'ne': "कृपया तपाईको गुनासो परिचय प्रदान गर्नुहोस्? वा वैकल्पिक रूपमा, तपाई स्किप गरेर बाहिर निस्कन सक्नुहुन्छ वा फोन नम्बरद्वारा खोजी गर्न सक्नुहुन्छ। ",
                 },
                 2: {
                     'en': "We cannot find any grievance associated with this grievance ID. You can try providing another ID or choose to search by phone number or skip to exit",
-                    'ne': "हामी यो गुनासो IDसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को ID प्रदान गर्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न वा छोड्न बाहिर निस्क्न सक्नुहुन्छ"
+                    'ne': " हामीले यो गुनासो परिचय  सँग सम्बन्धित कुनै पनि गुनासो फेला पार्न सकेनौं।  तपाईं अर्को परिचय  प्रदान गर्ने प्रयास गर्न सक्नुहुन्छ वा फोन नम्बरद्वारा खोजी गर्न सक्नुहुन्छ वा स्किप  गरेर बाहिर निस्क्न सक्नुहुन्छ। ",
                 }
             },
             'buttons': {
@@ -1480,15 +1484,15 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please provide the phone number associated with your grievance - it should start by 9 and be 10 digits long",
-                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                    'ne': "कृपया तपाईंको गुनासोसँग सम्बन्धित फोन नम्बर प्रदान गर्नुहोस् - यो ९ बाट सुरु हुनुपर्छ र १० अंकको हुनुपर्छ। ",
                 },
                 2: {
                     'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
-                    'ne': "कृपया तपाईंको फोन नम्बर प्रदान गर्नुहोस् - यो 9 देखि सुरु हुनुपर्छ र 10 अंकको हुनुपर्छ"
+                    'ne': "पाईंले प्रदान गर्नुभएको नम्बर मान्य छैन। कृपया एउटा मान्य नम्बर प्रदान गर्नुहोस् - यो ९ बाट सुरु हुनुपर्छ र १० अङ्कको हुनुपर्छ। ",
                 },
                 3: {
                     'en': "We cannot find any grievance associated with this phone number. You can try providing another number or skip to exit",
-                    'ne': "हामी यो फोन नम्बरसँग कुनै गुनासो भेट्टाउन सकिनौं। तपाईं अर्को नम्बर प्रदान गर्न सक्नुहुन्छ वा छोड्न बाहिर निस्क्न सक्नुहुन्छ"
+                    'ne': "हामीले यो फोन नम्बरसँग सम्बन्धित कुनै पनि गुनासो फेला पार्न सकेनौं। तपाईं अर्को नम्बर प्रदान गर्ने प्रयास गर्न सक्नुहुन्छ वा स्किप गरेर बाहिर निस्कन सक्नुहुन्छ",
                 }
             },
             'buttons': {
@@ -1499,11 +1503,11 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "We have found multiple grievances associated with this phone number. Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?",
-                    'ne': "हामी यो फोन नम्बरसँग बहुवचन गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+                    'ne': "हामीले यस फोन नम्बरसँग सम्बन्धित धेरै गुनासोहरू फेला पारेका छौं।  कृपया आफ्नो पूरा नाम थर प्रदान गर्नुहोस् - यदि तपाईले आफ्नो पूरा नामको साथ पहिलो नाम, बिचको नाम र थर प्रदान गर्नुभयो भने मिल्ने सम्भावना बढी हुन्छ। ",
                 },
                 2: {
                     'en': "We didn't find any grievance associated with your full name. Please provide your complete full name again?",
-                    'ne': "हामी तपाईंको पूरा नामसँग कुनै गुनासो भेट्टाउन सकिनौं। कृपया तपाईंको पूरा नाम पुनः प्रदान गर्नुहोस्?"
+                    'ne': "हामीले तपाईको पूरा नामसँग सम्बन्धित कुनै गुनासो फेला पारेनौं। कृपया पुनः आफ्नो पूरा नाम थर प्रदान गर्नुहोस्। ",
                 }
             },
             'buttons': {
@@ -1514,7 +1518,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please provide your full name - you will have better chance of matching if you provide your full name with first name, middle name and last name?",
-                    'ne': "कृपया तपाईंको पूरा नाम प्रदान गर्नुहोस् - तपाईं अगाडि मिल्ने अधिक अधिक हुन्छ यदि तपाईं आफ्नो नाम प्रथम नाम, मध्य नाम र अन्तिम नाम प्रदान गर्नुहुन्छ?"
+                    'ne': "कृपया आफ्नो पूरा नाम थर प्रदान गर्नुहोस् - यदि तपाईले आफ्नो पूरा नामको साथ पहिलो नाम, बिचको नाम र थर प्रदान गर्नुभयो भने मिल्ने सम्भावना बढी हुन्छ। ",
                 }
             }
         },
@@ -1522,19 +1526,19 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "We will ask you questions about your location, so we can provide you the contact information of the officer in charge of your grievance.",
-                    'ne': "हामी तपाईंको स्थानको बारेमा प्रश्न प्रदान गर्नेछौं, तसर्थ हामी तपाईंको गुनासोको लागि अधिकारीको सम्पर्क जानकारी प्रदान गर्न सक्नुहुन्छ।"
+                    'ne': "हामी तपाईंको स्थानको बारेमा प्रश्नहरू सोध्नेछौं, ताकि हामी तपाईंको गुनासो हेर्ने अधिकारीको सम्पर्क जानकारी प्रदान गर्न सकौं। ",
                 },
                 2: {
                     'en': "Are you in {province}, {district}?",
-                    'ne': "के {province}, {district} मा हुनुहुन्छ?"
+                    'ne': "के तपाई {province}, {district} मा हुनुहुन्छ?",
                 },
                 3: {
                     'en': "Are you in {province}?",
-                    'ne': "के {province} मा हुनुहुन्छ?"
+                    'ne': "के तपाई {province} मा हुनुहुन्छ?",
                 },
                 4: {
                     'en': "Are you in {district}?",
-                    'ne': "के {district} मा हुनुहुन्छ?"
+                    'ne': "के तपाई {district} मा हुनुहुन्छ?",
                 }
             },
             'buttons': {
@@ -1589,23 +1593,23 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please enter the last 6 characters of the grievance ID without the dash like this: JH7707",
-                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश छोड्नु होला"
+                    'ne': "कृपया गुनासो परिचय को अन्तिम ६ अक्षरहरू ड्यास बिना यसरी प्रविष्ट गर्नुहोस्: JH7707 ",
                 },
                 2: {
                     'en': "You have not provided enough characters. Please enter the last 6 characters of the grievance ID without the dash like this: JH7707",
-                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित"
+                    'ne': "तपाईले पर्याप्त वर्णहरू प्रदान गर्नुभएको छैन। कृपया गुनासो परिचय को अन्तिम ६ अक्षरहरू ड्यास बिना यसरी प्रविष्ट गर्नुहोस्: JH7707",
                 },
                 3: {
                     'en': "We have not found any grievance with that ID. Please try again or choose to search by phone number instead or skip to exit.",
-                    'ne': "कृपया गुनासो IDको अन्तिम 6 अक्षर प्रविष्ट गर्नुहोस् डैश सहित यो जैसे: JH7707। तपाईं छोड्न बाहिर निस्क्न सक्नुहुन्छ वा फोन नम्बर सेव्नु चुन्न सक्नुहुन्छ"
+                    'ne': "हामीले त्यो परिचय मा कुनै गुनासो फेला पारेका छैनौं।  कृपया फेरि प्रयास गर्नुहोस् वा फोन नम्बरद्वारा खोजी गर्नुहोस् वा स्किप  गरेर बाहिर निस्क्न सक्नुहुन्छ।",
                 },
                 4: {
                     'en': "Select any of the grievances if you want to check or amend the details",
-                    'ne': "यदि तपाईं विवरण जाँच वा सम्पादन गर्न चाहनुहुन्छ भने, कृपया कुनै एक गुनासो चुन्नुहोस्"
+                    'ne': "यदि तपाई विवरणहरू जाँच गर्न वा संशोधन गर्न चाहनुहुन्छ भने कुनै पनि गुनासो चयन गर्नुहोस्। ",
                 },
                 5: {
                     'en': "We have not found any grievance, do you want to try again?",
-                    'ne': "हामी कुनै गुनासो भेट्टाउन सकिनौं। के तपाईं पुनः प्रयास गर्न चाहनुहुन्छ?"
+                    'ne': "हामीले कुनै पनि गुनासो फेला पारेका छैनौं, के तपाईं फेरि प्रयास गर्न चाहनुहुन्छ?",
                 }
             },
             'buttons': {
@@ -1628,19 +1632,19 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "We have received your request for follow up.",
-                    'ne': "हामी तपाईंको फलोअप अनुरोध ग्रहण गरेको छौं।"
+                    'ne': "हामीले तपाईको फलोअप अनुरोध प्राप्त गरेका छौं।",
                 },
                 2: {
                     'en': "Our officer will follow up on your grievance (ID: {grievance_id}) and contact you shortly on this number: {complainant_phone}.",
-                    'ne': "हामीको कर्मचारी तपाईंको गुनासो (ID: {grievance_id}) को फलोअप गर्नेछ र तपाईंको लागि यो नम्बरमा जस्तै सम्पर्क गर्नेछ: {complainant_phone}।"
+                    'ne': "हाम्रो अधिकारीले तपाईंको गुनासो  (ID: {grievance_id}) को बारेमा फलोअप गर्नेछन् र चाँडै नै तपाईको नम्बरमा सम्पर्क गर्नेछन्:  {complainant_phone} ।",
                 },
                 3: {
                     'en': "We do not have a phone number for this grievance, so we cannot send you a follow-up by SMS. You can add or update your contact details and try again.",
-                    'ne': "हामीसँग यो गुनासोको लागि फोन नम्बर छैन, त्यसैले हामी एसएमएस द्वारा फलोअप पठाउन सक्दैनौं। तपाईंले सम्पर्क विवरण थप्न वा अपडेट गर्न सक्नुहुन्छ र पुन: प्रयास गर्न सक्नुहुन्छ।"
+                    'ne': "हामीसँग यो गुनासोको लागि  फोन नम्बर छैन, त्यसैले हामी तपाईंलाई SMS मार्फत फलो-अप पठाउन सक्दैनौं।  तपाईले आफ्नो सम्पर्क विवरणहरू थप्न वा अद्यावधिक गर्न सक्नुहुन्छ र फेरि प्रयास गर्न सक्नुहुन्छ।",
                 },
                 4: {
                     'en': "The phone number we have has not been verified yet. Please verify your number first so we can contact you for follow-up.",
-                    'ne': "हामीसँग भएको फोन नम्बर अहिले सम्म सत्यापन भएको छैन। कृपया पहिले तपाईंको नम्बर सत्यापन गर्नुहोस् ताकि हामी फलोअपको लागि तपाईंलाई सम्पर्क गर्न सकौं।"
+                    'ne': "हामीसँग भएको फोन नम्बर अझै प्रमाणित भएको छैन। कृपया पहिले आफ्नो नम्बर प्रमाणित गर्नुहोस् ताकि हामी तपाईलाई फलो-अपको लागि सम्पर्क गर्न सकौं। ",
                 }
             },
             'buttons': {
@@ -1662,7 +1666,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "You can add documents, add more to your grievance text, or fill in contact or location details you skipped. What would you like to do?",
-                    'ne': "तपाईंले कागजात थप्न सक्नुहुन्छ, गुनासोको लेख थप्न सक्नुहुन्छ, वा छोडेको सम्पर्क वा ठेगाना भर्न सक्नुहुन्छ। तपाईं के गर्न चाहनुहुन्छ?"
+                    'ne': "तपाईले कागजातहरू थप्न सक्नुहुन्छ, आफ्नो गुनासो लेख  थप्न सक्नुहुन्छ, वा तपाईले छुटाउनुभएको सम्पर्क वा स्थान विवरणहरू भर्न सक्नुहुन्छ। तपाई के गर्न चाहनुहुन्छ?",
                 }
             },
             'buttons': {
@@ -1686,7 +1690,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "To get more information about your grievance, please contact our nearest office:",
-                    'ne': "तपाईंको गुनासोको लागि अधिक जानकारी प्राप्त गर्न, कृपया हाम्रो सबैभन्दा निर्धारित कार्यालयमा सम्पर्क गर्नुहोस्:"
+                    'ne': "तपाईको गुनासोको बारेमा थप जानकारी प्राप्त गर्न, कृपया हाम्रो नजिकको कार्यालयमा सम्पर्क गर्नुहोस्: ",
                 },
                 2: {
                     'en': "Name: {office_name}",
@@ -1702,15 +1706,15 @@ Do you want to add more details before submission?""",
                 },
                 5: {
                     'en': "PIC Name: {office_pic_name}",
-                    'ne': "पिए नाम: {office_pic_name}"
+                    'ne': "पिआईसी नाम: {office_pic_name}",
                 },
                 6: {
                     'en': "Thank you for contacting us. We will get back to you soon.",
-                    'ne': "तपाईंको सम्पर्क गर्नुभएकोमा धन्यवाद. हामी थिच्ने छौं।"
+                    'ne': "हामीलाई सम्पर्क गर्नुभएकोमा धन्यवाद। हामी चाँडै नै तपाईलाई सम्पर्क गर्नेछौं। ",
                 },
                 7: {
                     'en': "You have not provided any location information. We cannot provide you the contact information of the officer in charge of your grievance. You can restart the conversation or end the conversation and walk into the nearest KL-road office.",
-                    'ne': "तपाईंले कुनै स्थान जानकारी प्रदान गरिएन। हामी तपाईंको गुनासोको लागि कुनै अधिकारी भेट्टाउन सकिनौं। कृपया पुनः प्रयास गर्नुहोस् वा बाहिर निस्क्नुहोस् र सबैभन्दा निर्धारित कार्यालयमा जानुहोस्।"
+                    'ne': "तपाईले कुनै पनि स्थान जानकारी प्रदान गर्नुभएको छैन। हामी तपाईको गुनासो हेर्ने अधिकारीको सम्पर्क जानकारी प्रदान गर्न सक्दैनौं। तपाई कुराकानी पुनः सुरु गर्न सक्नुहुन्छ वा  कुराकानी अन्त्य गरेर नजिकैको सडक कार्यालयमा जान सक्नुहुन्छ।  ",
                 }
             },
             'buttons': {
@@ -1732,7 +1736,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please provide your phone number for this grievance. You can skip to move to the next field or click I'm done when finished.",
-                    'ne': "कृपया यो गुनासोको लागि तपाईंको फोन नम्बर प्रदान गर्नुहोस्। तपाईं अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।"
+                    'ne': "कृपया यस गुनासोको लागि आफ्नो फोन नम्बर प्रदान गर्नुहोस्। तपाई अर्को फिल्डमा  जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ। ",
                 }
             },
             'buttons': {
@@ -1752,7 +1756,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "All contact and location info is already complete.",
-                    'ne': "सम्पर्क र स्थान जानकारी पहिले नै पूर्ण छ।"
+                    'ne': "सबै सम्पर्क र स्थान जानकारी पहिले नै पूर्ण भइसकेको छ। ",
                 }
             }
         },
@@ -1760,7 +1764,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please provide {field_label}. You can skip to move to the next field or click I'm done when finished.",
-                    'ne': "कृपया {field_label} प्रदान गर्नुहोस्। तपाईं अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।"
+                    'ne': "कृपया {field_label} प्रदान गर्नुहोस्। तपाई अर्को क्षेत्रमा जान छोड्न सक्नुहुन्छ वा समाप्त भएपछि म समाप्त गर्छु क्लिक गर्न सक्नुहुन्छ।",
                 }
             },
             'buttons': {
@@ -1782,7 +1786,7 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Please answer the following question about your grievance: {question}",
-                    'ne': "कृपया तपाईंको गुनासोको बारेमा निम्न प्रश्नको उत्तर दिनुहोस्: {question}"
+                    'ne': "कृपया तपाईको गुनासोको बारेमा निम्न प्रश्नको उत्तर दिनुहोस्: {question}",
                 }
             },
             'buttons': {
@@ -1796,11 +1800,11 @@ Do you want to add more details before submission?""",
             'utterances': {
                 1: {
                     'en': "Add more details to your grievance. You can type your additional information below, or use the buttons to save or cancel.",
-                    'ne': "तपाईंको गुनासोमा थप विवरण थप्नुहोस्। तपाईं तल अतिरिक्त जानकारी टाइप गर्न सक्नुहुन्छ वा बटन प्रयोग गरेर बचत गर्न वा रद्द गर्न सक्नुहुन्छ।"
+                    'ne': "तपाईको गुनासोमा थप विवरण थप्नुहोस्। तपाई तल अतिरिक्त जानकारी टाइप गर्न सक्नुहुन्छ वा बटन प्रयोग गरेर सेभ गर्न वा रद्द गर्न सक्नुहुन्छ।",
                 },
                 2: {
                     'en': "Your text has been added. Add more details below or save and continue.",
-                    'ne': "तपाईंको पाठ थपिएको छ। तल थप विवरण थप्नुहोस् वा बचत गर्नुहोस् र जारी राख्नुहोस्।"
+                    'ne': "तपाईको पाठ थपिएको छ। तल थप विवरण थप्नुहोस् वा सेभ गर्नुहोस् र जारी राख्नुहोस्।",
                 }
             },
             'buttons': {
@@ -2098,15 +2102,15 @@ Do you want to add more details before submission?""",
             "utterances": {
                 1: {
                     "en": "Files uploaded. You can add more files or go back to the chat.",
-                    "ne": "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।"
+                    'ne': "फाइलहरू अपलोड गरियो। तपाई थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
                 },
                 2: {
                     "en": "Your files are uploaded. Here's where we left off.",
-                    "ne": "तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।"
+                    'ne': "तपाईको फाइलहरू सेभ भयो। यहाँ हामी रोक्यौ।",
                 },
                 3: {
                     "en": "One or more files could not be saved. You can try adding files again or go back to the chat.",
-                    "ne": "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।"
+                    'ne': "एक वा बढी फाइलहरू सेभ गर्न सकिएन। तपाई फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
                 }
             },
             "buttons": {

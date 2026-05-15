@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { X } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addScope,
   deleteOfficer,
@@ -18,6 +17,28 @@ import {
 } from "@/components/settings/OfficerJurisdictionForm";
 
 type RoleChoice = { key: string; label: string };
+
+function scopeLabel(
+  s: {
+    organization_id: string;
+    project_code?: string | null;
+    package_id?: string | null;
+    location_code?: string | null;
+    includes_children?: boolean;
+    role_key: string;
+  },
+  orgName?: string,
+  packageCode?: string,
+) {
+  const parts = [
+    orgName ?? s.organization_id,
+    s.project_code ?? null,
+    packageCode ?? (s.package_id ? "package" : null),
+    s.location_code ?? null,
+    s.includes_children ? "+sub-locations" : null,
+  ].filter(Boolean);
+  return `${parts.join(" · ")} (${s.role_key})`;
+}
 
 export function InviteOfficerModal({
   roleChoices,
@@ -135,17 +156,29 @@ export function EditOfficerModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [scopes, setScopes] = useState<OfficerScope[]>([]);
+  const [savedScopes, setSavedScopes] = useState<OfficerScope[]>([]);
+  const [pendingRemoves, setPendingRemoves] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [roleKey, setRoleKey] = useState(officer.role_keys[0] ?? "");
   const j = useOfficerJurisdictionState();
 
+  const orgNameById = useMemo(
+    () => Object.fromEntries(j.orgs.map((o) => [o.organization_id, o.name])),
+    [j.orgs],
+  );
+
+  const hasFormDraft = Boolean(j.orgId && j.hasJurisdiction());
+
+  const keptCount = savedScopes.filter((s) => !pendingRemoves.has(s.scope_id)).length;
+  const totalAfterSave = keptCount + (hasFormDraft ? 1 : 0);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setScopes(await listScopes(officer.user_id));
+      setSavedScopes(await listScopes(officer.user_id));
+      setPendingRemoves(new Set());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load scopes");
     } finally {
@@ -157,46 +190,45 @@ export function EditOfficerModal({
     load();
   }, [load]);
 
-  async function handleAddScope() {
-    if (!j.hasJurisdiction() || !j.orgId) {
-      setError("Organization and at least one of project, package, or location required.");
-      return;
-    }
-    setError(null);
-    try {
-      const p = j.toPayload(roleKey);
-      const created = await addScope(officer.user_id, {
-        role_key: p.role_key,
-        organization_id: p.organization_id,
-        location_code: p.location_code,
-        project_id: p.project_id,
-        package_id: p.package_id,
-        includes_children: p.includes_children,
-      });
-      setScopes((prev) => [...prev, created]);
-      j.reset();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to add scope");
-    }
-  }
-
-  async function handleRemoveScope(scopeId: string) {
-    try {
-      await deleteScope(officer.user_id, scopeId);
-      setScopes((prev) => prev.filter((s) => s.scope_id !== scopeId));
-    } catch {
-      setError("Failed to remove scope");
-    }
+  function toggleRemove(scopeId: string) {
+    setPendingRemoves((prev) => {
+      const next = new Set(prev);
+      if (next.has(scopeId)) next.delete(scopeId);
+      else next.add(scopeId);
+      return next;
+    });
   }
 
   async function handleSave() {
-    setSaving(true);
     setError(null);
+
+    if (totalAfterSave === 0) {
+      setError("Add at least one jurisdiction (project, package, or location) before saving.");
+      return;
+    }
+
+    setSaving(true);
     try {
+      for (const scopeId of pendingRemoves) {
+        await deleteScope(officer.user_id, scopeId);
+      }
+      if (hasFormDraft) {
+        const p = j.toPayload(roleKey);
+        await addScope(officer.user_id, {
+          role_key: p.role_key,
+          organization_id: p.organization_id,
+          location_code: p.location_code,
+          project_id: p.project_id,
+          package_id: p.package_id,
+          includes_children: p.includes_children,
+        });
+      }
+      const kept = savedScopes.filter((s) => !pendingRemoves.has(s.scope_id));
+      const primaryOrg = hasFormDraft ? j.orgId : kept[0]?.organization_id ?? j.orgId;
       await updateOfficerKeycloak(officer.user_id, {
         role_keys: officer.role_keys,
-        organization_id: officer.organization_ids[0] ?? j.orgId,
-        location_code: officer.location_codes[0] ?? null,
+        organization_id: primaryOrg,
+        location_code: hasFormDraft ? j.selLoc?.code ?? null : kept[0]?.location_code ?? null,
         sync_keycloak: true,
       });
       onSaved();
@@ -219,89 +251,140 @@ export function EditOfficerModal({
     }
   }
 
+  const draftProj = j.filteredProjects.find((p) => p.project_id === j.selProject);
+  const draftPkg = j.filteredPackages.find((p) => p.package_id === j.selPkg);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="bg-slate-700 text-white px-6 py-4 flex justify-between shrink-0">
           <div>
-            <div className="font-semibold">Edit Officer</div>
+            <div className="font-semibold">Manage officer</div>
             <div className="text-xs text-slate-300 font-mono">{officer.email ?? officer.user_id}</div>
           </div>
           <button type="button" onClick={onClose} className="text-slate-300 hover:text-white text-xl">×</button>
         </div>
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
           {loading ? (
             <p className="text-sm text-gray-400">Loading…</p>
           ) : (
             <>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Jurisdiction scopes</p>
-                {scopes.length === 0 ? (
-                  <p className="text-xs text-amber-600">No scopes — officer will not receive auto-assigned tickets.</p>
+              <section>
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Current scopes
+                  </h3>
+                  <span className="text-xs text-gray-400">
+                    {totalAfterSave === 0 ? "None" : `${totalAfterSave} after save`}
+                  </span>
+                </div>
+
+                {savedScopes.length === 0 && !hasFormDraft ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    No scopes yet. Fill in jurisdiction below, then save.
+                  </p>
                 ) : (
-                  <ul className="text-xs space-y-0 border border-gray-200 rounded divide-y max-h-40 overflow-y-auto">
-                    {scopes.map((s) => (
-                      <li key={s.scope_id} className="flex items-center justify-between px-3 py-2">
-                        <span className="text-gray-700 pr-2">
-                          {s.organization_id}
-                          {s.project_code ? ` · ${s.project_code}` : ""}
-                          {s.package_id ? ` · pkg` : ""}
-                          {s.location_code ? ` · ${s.location_code}` : ""}
-                          {s.includes_children ? " (+sub)" : ""}
-                          <span className="text-gray-400 ml-1">({s.role_key})</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveScope(s.scope_id)}
-                          className="text-red-500 hover:text-red-700 shrink-0"
-                          aria-label="Remove scope"
+                  <ul className="border border-gray-200 rounded-lg divide-y text-sm overflow-hidden">
+                    {savedScopes.map((s) => {
+                      const removed = pendingRemoves.has(s.scope_id);
+                      return (
+                        <li
+                          key={s.scope_id}
+                          className={`flex items-center justify-between gap-2 px-3 py-2.5 ${
+                            removed ? "bg-red-50 line-through opacity-60" : "bg-white"
+                          }`}
                         >
-                          <X size={14} />
-                        </button>
+                          <span className="text-gray-800 min-w-0 truncate">
+                            {scopeLabel(s, orgNameById[s.organization_id])}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleRemove(s.scope_id)}
+                            className="text-xs text-red-600 hover:text-red-800 shrink-0 font-medium"
+                          >
+                            {removed ? "Undo" : "Remove"}
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {hasFormDraft && (
+                      <li className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50">
+                        <span className="text-emerald-700 text-xs font-semibold shrink-0">+ New</span>
+                        <span className="text-gray-800 min-w-0 truncate">
+                          {scopeLabel(
+                            {
+                              organization_id: j.orgId,
+                              project_code: draftProj?.short_code ?? null,
+                              package_id: j.selPkg || null,
+                              location_code: j.selLoc?.code ?? null,
+                              includes_children: j.inclChildren,
+                              role_key: roleKey,
+                            },
+                            orgNameById[j.orgId],
+                            draftPkg?.package_code,
+                          )}
+                        </span>
                       </li>
-                    ))}
+                    )}
                   </ul>
                 )}
-              </div>
-              <div className="border-t pt-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Add scope</p>
-                <select
-                  value={roleKey}
-                  onChange={(e) => setRoleKey(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1 mb-2"
-                >
-                  {roleChoices.map((r) => (
-                    <option key={r.key} value={r.key}>{r.label}</option>
-                  ))}
-                </select>
+              </section>
+
+              <section className="border border-gray-200 rounded-lg p-4 bg-gray-50/80 space-y-3">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  {keptCount === 0 && !hasFormDraft ? "Jurisdiction" : "Change or add jurisdiction"}
+                </h3>
+                <p className="text-xs text-gray-500 -mt-1">
+                  Updates apply when you click <strong>Save changes</strong> — nothing is written until then.
+                </p>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Role for this scope</label>
+                  <select
+                    value={roleKey}
+                    onChange={(e) => setRoleKey(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 bg-white"
+                  >
+                    {roleChoices.map((r) => (
+                      <option key={r.key} value={r.key}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <OfficerJurisdictionFields {...j} />
-                <button
-                  type="button"
-                  onClick={handleAddScope}
-                  className="mt-2 text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                >
-                  Add scope
-                </button>
-              </div>
+              </section>
             </>
           )}
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
+          )}
         </div>
-        <div className="px-6 py-4 border-t flex justify-between shrink-0 bg-gray-50">
-          <button type="button" onClick={handleDeleteOfficer} className="text-sm text-red-600 hover:text-red-800">
-            Delete officer
-          </button>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="text-sm text-gray-500 px-4 py-1.5">Cancel</button>
+
+        <div className="px-6 py-4 border-t shrink-0 bg-gray-50">
+          <div className="flex justify-between items-center gap-3">
             <button
               type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium disabled:opacity-50"
+              onClick={handleDeleteOfficer}
+              className="text-sm text-red-600 hover:text-red-800 font-medium"
             >
-              {saving ? "Saving…" : "Save & sync Keycloak"}
+              Delete officer
             </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="text-sm text-gray-600 px-4 py-2">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || loading || totalAfterSave === 0}
+                className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 min-w-[9rem]"
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
           </div>
+          <p className="text-xs text-gray-400 text-center mt-3">
+            Applies scope changes and syncs Keycloak on the auth stack.
+          </p>
         </div>
       </div>
     </div>

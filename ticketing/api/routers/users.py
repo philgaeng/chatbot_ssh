@@ -10,7 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, require_admin
@@ -27,6 +27,7 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.user import Role, UserRole
+from ticketing.models.workflow import WorkflowStep
 
 router = APIRouter()
 
@@ -87,6 +88,58 @@ def update_role(
     db.commit()
     db.refresh(role)
     return role
+
+
+@router.delete(
+    "/roles/{role_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete role from catalog (admin)",
+)
+def delete_role(
+    role_id: str,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> None:
+    role = db.get(Role, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+
+    ur_count = db.scalar(
+        select(func.count()).select_from(UserRole).where(UserRole.role_id == role_id)
+    ) or 0
+    if ur_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {ur_count} officer(s) still have this role. Remove assignments first.",
+        )
+
+    scope_count = db.scalar(
+        select(func.count())
+        .select_from(OfficerScope)
+        .where(OfficerScope.role_key == role.role_key)
+    ) or 0
+    if scope_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {scope_count} jurisdiction scope(s) use this role.",
+        )
+
+    step_count = db.scalar(
+        select(func.count())
+        .select_from(WorkflowStep)
+        .where(
+            WorkflowStep.assigned_role_key == role.role_key,
+            WorkflowStep.is_deleted.is_(False),
+        )
+    ) or 0
+    if step_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {step_count} workflow step(s) assign this role.",
+        )
+
+    db.delete(role)
+    db.commit()
 
 
 # ── User roles ─────────────────────────────────────────────────────────────────
@@ -252,13 +305,16 @@ def list_officer_roster(
                 OfficerScope.user_id,
                 OfficerScope.project_code,
                 OfficerScope.package_id,
+                OfficerScope.location_code,
             ).where(OfficerScope.user_id.in_(order))
         ).all()
-        for uid, pcode, pkg_id in scope_rows:
+        for uid, pcode, pkg_id, scope_loc in scope_rows:
             if pcode:
                 proj_by[uid].add(pcode)
             if pkg_id:
                 pkg_by[uid].add(pkg_id)
+            if scope_loc:
+                locs_by[uid].add(scope_loc)
 
     return [
         OfficerRosterEntry(
@@ -422,6 +478,7 @@ def add_user_scope(
         includes_children=payload.includes_children,
     )
     db.add(scope)
+    db.flush()  # assign scope_id before audit row references it
     from ticketing.services.officer_admin import log_admin_audit
 
     log_admin_audit(

@@ -36,7 +36,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import CurrentUser, require_admin
@@ -47,8 +47,12 @@ from ticketing.utils.organization_identifier import (
     allocate_unique_organization_id,
     suggested_organization_id,
 )
+from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, ProjectPackage
 from ticketing.models.project import Project, ProjectLocation, ProjectOrganization
+from ticketing.models.ticket import Ticket
+from ticketing.models.user import UserRole
+from ticketing.models.workflow import WorkflowAssignment
 
 router = APIRouter()
 
@@ -237,6 +241,75 @@ def update_organization(
     db.commit()
     db.refresh(org)
     return org
+
+
+@router.delete(
+    "/organizations/{organization_id}",
+    status_code=204,
+    summary="Delete organization (admin)",
+)
+def delete_organization(
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+) -> None:
+    org = db.get(Organization, organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    ticket_count = db.scalar(
+        select(func.count()).select_from(Ticket).where(Ticket.organization_id == organization_id)
+    ) or 0
+    if ticket_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {ticket_count} ticket(s) reference this organization.",
+        )
+
+    role_count = db.scalar(
+        select(func.count()).select_from(UserRole).where(UserRole.organization_id == organization_id)
+    ) or 0
+    if role_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {role_count} officer role assignment(s) use this organization.",
+        )
+
+    scope_count = db.scalar(
+        select(func.count())
+        .select_from(OfficerScope)
+        .where(OfficerScope.organization_id == organization_id)
+    ) or 0
+    if scope_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {scope_count} officer scope(s) use this organization.",
+        )
+
+    assign_count = db.scalar(
+        select(func.count())
+        .select_from(WorkflowAssignment)
+        .where(WorkflowAssignment.organization_id == organization_id)
+    ) or 0
+    if assign_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {assign_count} workflow assignment(s) use this organization.",
+        )
+
+    pkg_count = db.scalar(
+        select(func.count())
+        .select_from(ProjectPackage)
+        .where(ProjectPackage.contractor_org_id == organization_id)
+    ) or 0
+    if pkg_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {pkg_count} package(s) list this organization as contractor.",
+        )
+
+    db.delete(org)
+    db.commit()
 
 
 # ── Countries ─────────────────────────────────────────────────────────────────
@@ -618,6 +691,29 @@ def update_project(
     db.commit()
     db.refresh(p)
     return _project_to_response(p)
+
+
+@router.delete("/projects/{project_id}", status_code=204, summary="Delete project (admin)")
+def delete_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+) -> None:
+    p = db.get(Project, project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ticket_count = db.scalar(
+        select(func.count()).select_from(Ticket).where(Ticket.project_id == project_id)
+    ) or 0
+    if ticket_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {ticket_count} ticket(s) reference this project.",
+        )
+
+    db.delete(p)
+    db.commit()
 
 
 # ── Project ↔ Organizations ───────────────────────────────────────────────────

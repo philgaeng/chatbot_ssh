@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
 import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
 
 // ── Demo / dev bypass (NEXT_PUBLIC_BYPASS_AUTH=true) ─────────────────────────
@@ -252,11 +253,23 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     }
 
     if (client) {
+      const token = client.getAccessToken();
       const existing = client.getCurrentUser();
-      if (existing) {
-        setUser(existing);
-        setAccessToken(client.getAccessToken());
-        setIsAuthenticated(true);
+      if (existing && token) {
+        if (isAccessTokenExpired(token)) {
+          clearAuthTokens();
+          setUser(null);
+          setAccessToken(null);
+          setIsAuthenticated(false);
+          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+            window.location.replace("/login?reason=session_expired");
+            return;
+          }
+        } else {
+          setUser(existing);
+          setAccessToken(token);
+          setIsAuthenticated(true);
+        }
       }
     }
     setIsLoading(false);

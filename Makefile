@@ -4,7 +4,7 @@
 # Quick reference:
 #   make help
 #
-#   WSL:  wsl-up | wsl-chatbot | wsl-ticketing | wsl-nginx | wsl-down
+#   WSL:  wsl-up | wsl-demo-bypass | wsl-auth | wsl-chatbot | wsl-nginx | wsl-down
 #   AWS:  aws-up | aws-deploy
 #
 #   Also: migrate_all, wsl-auth, wsl-auth-ps, wsl-keycloak-ps, keycloak-setup, wsl-seed
@@ -34,9 +34,10 @@ COMPOSE_AWS = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml 
 
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
+AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 
 .PHONY: help \
-	wsl-up wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
+	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
 	aws-up aws-deploy \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -49,11 +50,13 @@ TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
 	@echo "WSL (local Docker):"
-	@echo "  make wsl-up         chatbot + GRM demo stack (:8080 webchat, :3001 GRM UI, :5002 API)"
-	@echo "  make wsl-chatbot    chatbot only (db, redis, backend, orchestrator, celery, nginx)"
-	@echo "  make wsl-ticketing  GRM only (db, redis, ticketing_api, celery, grm_ui)"
-	@echo "  make wsl-nginx      recreate nginx after editing deployment/nginx/*.conf"
-	@echo "  make wsl-down       stop all containers (base + GRM + auth profile)"
+	@echo "  make wsl-up           chatbot + GRM :3001 demo bypass + :3002 Keycloak auth"
+	@echo "  make wsl-demo-bypass  GRM demo only — :3001 UI, :5002 API (no Keycloak)"
+	@echo "  make wsl-auth         GRM auth only — :3002 UI, :5003 API, Keycloak :18080"
+	@echo "  make wsl-chatbot      chatbot only (db, redis, backend, orchestrator, celery, nginx)"
+	@echo "  make wsl-ticketing    alias for wsl-demo-bypass"
+	@echo "  make wsl-nginx        recreate nginx after editing deployment/nginx/*.conf"
+	@echo "  make wsl-down         stop all containers (base + GRM + auth profile)"
 	@echo ""
 	@echo "AWS (EC2):"
 	@echo "  make aws-up         rebuild & up on this host (aws + GRM compose files)"
@@ -62,21 +65,29 @@ help:
 	@echo "DB / optional:"
 	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
 	@echo "  make wsl-seed       re-seed GRM demo tickets (first-time / reset)"
-	@echo "  make wsl-auth         Keycloak + auth UI on :3002 / :18080 (--profile auth)"
 	@echo "  make wsl-keycloak-ps  show Keycloak container status (after wsl-auth)"
 	@echo "  make wsl-auth-ps      show Keycloak + grm_ui_auth + ticketing_api_auth"
 	@echo "  make keycloak-setup   bootstrap GRM realm (once, after Keycloak is healthy)"
 
 # ── WSL ────────────────────────────────────────────────────────────────────────
-# Full stack: chatbot + GRM demo UI (bypass auth on :3001). REST webchat: http://localhost:8080/
+# Full stack: chatbot + GRM demo (:3001) + GRM auth (:3002). REST webchat: http://localhost:8080/
 wsl-up:
-	$(COMPOSE_WSL) up -d --build
+	$(COMPOSE_WSL_AUTH) up -d --build
+	@echo ""
+	@echo "GRM demo (bypass): http://localhost:3001  → ticketing_api :5002"
+	@echo "GRM auth (OIDC):   http://localhost:3002  → ticketing_api_auth :5003"
+	@echo "Keycloak admin:    http://localhost:18080"
+
+# Demo bypass only — :3001 UI + :5002 API (no Keycloak / :3002).
+wsl-demo-bypass:
+	$(COMPOSE_WSL) up -d --build $(TICKETING_SERVICES)
+	@echo ""
+	@echo "GRM demo (bypass): http://localhost:3001  → ticketing_api :5002"
 
 wsl-chatbot:
 	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --build $(CHATBOT_SERVICES)
 
-wsl-ticketing:
-	$(COMPOSE_WSL) up -d --build $(TICKETING_SERVICES)
+wsl-ticketing: wsl-demo-bypass
 
 wsl-nginx:
 	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --force-recreate nginx
@@ -153,9 +164,12 @@ reset_public_dev:
 	$(MAKE) wsl-up
 
 # ── Optional stacks / one-shot setup ───────────────────────────────────────────
-# Keycloak OIDC (:18080) + auth UI (:3002). Not started by wsl-up.
+# Auth stack only — :3002 UI, :5003 API, Keycloak :18080 (starts db/redis via depends_on).
 wsl-auth:
-	$(COMPOSE_WSL_AUTH) up -d --build
+	$(COMPOSE_WSL_AUTH) up -d --build $(AUTH_SERVICES)
+	@echo ""
+	@echo "GRM auth (OIDC): http://localhost:3002  → ticketing_api_auth :5003"
+	@echo "Keycloak admin:  http://localhost:18080"
 
 # Auth stack status (requires `make wsl-auth` first).
 wsl-keycloak-ps:
@@ -183,9 +197,10 @@ check_grm_ports:
 	echo "GRM port check passed: grm_ui=$$ui_port ticketing_api=$$api_port"
 
 # ── Back-compat aliases (old target names) ───────────────────────────────────────
-compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_grm_demo: wsl-up
+compose_docker_wsl compose_docker_wsl_full: wsl-up
+compose_docker_wsl_grm_demo: wsl-demo-bypass
 chatbot-local compose_docker_wsl_chatbot: wsl-chatbot
-compose_docker_wsl_ticketing: wsl-ticketing
+compose_docker_wsl_ticketing: wsl-demo-bypass
 compose_docker_wsl_nginx: wsl-nginx
 compose_docker_wsl_down compose-down-all stop-all: wsl-down
 compose_docker_wsl_grm_auth: wsl-auth
