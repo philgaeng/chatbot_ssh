@@ -59,11 +59,12 @@ import {
   type OrgRole,
   type PackageItem,
   type PackageCreate,
-  inviteOfficer,
   listRoles,
   updateRole,
   type GrmRole,
 } from "@/lib/api";
+import { InviteOfficerModal, EditOfficerModal } from "@/components/settings/OfficerModals";
+import { LocationSearch } from "@/components/LocationSearch";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
@@ -272,122 +273,6 @@ function generateOrgId(name: string, country: string, existingIds: Set<string>):
     n += 1;
   }
   return base;
-}
-
-// ── Location search autocomplete ─────────────────────────────────────────────
-
-const LOC_LEVEL_LABELS: Record<number, string> = {
-  1: "Province",
-  2: "District",
-  3: "Municipality",
-};
-const LOC_LEVEL_COLORS: Record<number, string> = {
-  1: "bg-purple-100 text-purple-700",
-  2: "bg-blue-100 text-blue-700",
-  3: "bg-green-100 text-green-700",
-};
-
-/**
- * Autocomplete that searches the location tree (province / district / municipality).
- * Calls GET /api/v1/locations?q=<text> with a 220 ms debounce.
- * Also matches on location_code so admins can type "NP_D004" and still find the result.
- */
-function LocationSearch({
-  country = "NP",
-  placeholder,
-  excludeCodes = [],
-  onSelect,
-}: {
-  country?: string;
-  placeholder?: string;
-  excludeCodes?: string[];
-  onSelect: (code: string, name: string) => void;
-}) {
-  const [q, setQ]           = useState("");
-  const [hits, setHits]     = useState<LocationNode[]>([]);
-  const [open, setOpen]     = useState(false);
-  const [loading, setLoading] = useState(false);
-  const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // stable string for excludeCodes dep
-  const excludeKey = excludeCodes.join(",");
-
-  function getName(node: LocationNode) {
-    return node.translations.find((t) => t.lang_code === "en")?.name ?? node.location_code;
-  }
-
-  useEffect(() => {
-    if (q.trim().length < 2) { setHits([]); setOpen(false); return; }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await listLocations({ country, q: q.trim(), limit: 8, active_only: true });
-        setHits(res.filter((n) => !excludeCodes.includes(n.location_code)));
-        setOpen(true);
-      } catch {
-        setHits([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 220);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, country, excludeKey]);
-
-  function handleSelect(node: LocationNode) {
-    onSelect(node.location_code, getName(node));
-    setQ(""); setHits([]); setOpen(false);
-  }
-
-  return (
-    <div className="relative">
-      {/* Input */}
-      <div className="flex items-center gap-1.5 border border-gray-300 rounded px-2.5 py-1.5 focus-within:ring-1 focus-within:ring-blue-400 bg-white">
-        <span className="text-gray-400 text-xs shrink-0 select-none">⌕</span>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onBlur={() => setTimeout(() => setOpen(false), 180)}
-          onFocus={() => hits.length > 0 && setOpen(true)}
-          placeholder={placeholder ?? "Search province, district or municipality…"}
-          className="flex-1 text-sm bg-transparent outline-none min-w-0"
-        />
-        {loading && <span className="text-xs text-gray-300 animate-pulse shrink-0">…</span>}
-        {q && (
-          <button
-            onClick={() => { setQ(""); setHits([]); setOpen(false); }}
-            className="text-gray-300 hover:text-gray-500 text-base leading-none shrink-0"
-          >×</button>
-        )}
-      </div>
-
-      {/* Dropdown */}
-      {open && hits.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-          {hits.map((node) => (
-            <button
-              key={node.location_code}
-              onMouseDown={() => handleSelect(node)}
-              className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2 border-t border-gray-50 first:border-t-0 transition-colors"
-            >
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${LOC_LEVEL_COLORS[node.level_number] ?? "bg-gray-100 text-gray-600"}`}>
-                {LOC_LEVEL_LABELS[node.level_number] ?? `L${node.level_number}`}
-              </span>
-              <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{getName(node)}</span>
-              <span className="text-xs font-mono text-gray-400 shrink-0">{node.location_code}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* No results */}
-      {open && q.trim().length >= 2 && !loading && hits.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2.5">
-          <span className="text-sm text-gray-400 italic">No locations match &ldquo;{q}&rdquo;</span>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -681,126 +566,6 @@ function OfficerScopePanel({ userId, roleKey }: { userId: string; roleKey: strin
   );
 }
 
-// ── InviteOfficerModal ────────────────────────────────────────────────────────
-
-function InviteOfficerModal({ roleChoices, onClose, onSuccess }: {
-  roleChoices: RoleEntry[];
-  onClose: () => void;
-  onSuccess: (email: string) => void;
-}) {
-  const [email, setEmail]         = useState("");
-  const [roleKey, setRoleKey]     = useState(roleChoices[0]?.key ?? "");
-  const [orgId, setOrgId]         = useState("");
-  const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-
-  useEffect(() => {
-    listOrganizations().then(setOrgs).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (roleChoices.length === 0) return;
-    if (!roleChoices.some((r) => r.key === roleKey)) {
-      setRoleKey(roleChoices[0].key);
-    }
-  }, [roleChoices, roleKey]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !orgId) { setError("Email and organization are required."); return; }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await inviteOfficer({ email: email.trim(), role_key: roleKey, organization_id: orgId });
-      onSuccess(email.trim());
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg.includes("409") ? `${email} already exists.` : msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div className="font-semibold">Invite Officer</div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Email address *</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="officer@example.com"
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Role *</label>
-            <select
-              value={roleKey}
-              onChange={(e) => setRoleKey(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              {roleChoices.map((r) => (
-                <option key={r.key} value={r.key}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
-            <select
-              value={orgId}
-              onChange={(e) => setOrgId(e.target.value)}
-              required
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              <option value="">Select organization…</option>
-              {orgs.map((o) => (
-                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            The officer will receive a temporary password and be required to change it on first login.
-            SMTP must be configured in Keycloak for email delivery; otherwise share the password manually.
-          </div>
-
-          {error && <p className="text-xs text-red-500">{error}</p>}
-
-          <div className="flex justify-end gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || roleChoices.length === 0}
-              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-            >
-              {submitting ? "Inviting…" : "Send invite"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 // ── Officers tab ──────────────────────────────────────────────────────────────
 
@@ -810,6 +575,7 @@ function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [expandedId, setExpandedId]     = useState<string | null>(null);
   const [showInvite, setShowInvite]     = useState(false);
+  const [editOfficer, setEditOfficer]   = useState<OfficerRosterEntry | null>(null);
   const [successMsg, setSuccessMsg]     = useState<string | null>(null);
   const [searchQ, setSearchQ]           = useState("");
   const [roleFilter, setRoleFilter]     = useState("");
@@ -860,6 +626,15 @@ function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
           roleChoices={roleCatalog}
           onClose={() => setShowInvite(false)}
           onSuccess={handleInviteSuccess}
+        />
+      )}
+
+      {editOfficer && (
+        <EditOfficerModal
+          officer={editOfficer}
+          roleChoices={roleCatalog}
+          onClose={() => setEditOfficer(null)}
+          onSaved={loadRoster}
         />
       )}
 
@@ -929,6 +704,7 @@ function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
                 <th className="px-4 py-2.5 font-medium">Organization</th>
                 <th className="px-4 py-2.5 font-medium">Location codes</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium w-24">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -964,10 +740,19 @@ function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
                           {(o.onboarding_status ?? "active") === "invited" ? "Invited" : "Active"}
                         </span>
                       </td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditOfficer(o)}
+                          className="text-xs text-blue-600 hover:underline mr-2"
+                        >
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                     {isOpen && primaryRoleForScope && (
                       <tr key={`${o.user_id}-scopes`}>
-                        <td colSpan={7} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <OfficerScopePanel userId={o.user_id} roleKey={primaryRoleForScope} />
                         </td>
                       </tr>
@@ -980,7 +765,8 @@ function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
         </div>
       )}
       <p className="text-xs text-gray-400 mt-3">
-        Jurisdiction scopes (▶) use the officer&apos;s <span className="font-mono">user_id</span>. Edit / Remove from this table is not implemented — use role assignment APIs or seeds.
+        Expand a row (▶) for quick scope edits, or use <strong>Edit</strong> for the full officer modal (scopes, Keycloak sync, delete).
+        Invite requires at least one of project, package, or location per spec §10.
       </p>
     </div>
   );

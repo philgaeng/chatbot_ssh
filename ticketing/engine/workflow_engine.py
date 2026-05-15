@@ -249,30 +249,17 @@ def _scope_candidates(
     location_code: Optional[str],
     project_code: Optional[str],
     db: Session,
+    ticket_package_id: Optional[str] = None,
 ) -> list[str]:
     """
-    Return all user_ids whose scopes cover the given (role, org, location, project).
+    Return user_ids whose scopes cover (role, org, location, project, package).
 
-    Matching rules (union of all three):
-      A. Exact / wildcard location match (non-package scopes only):
-         scope.package_id    IS NULL  (package-scoped officers handled by C)
-         scope.location_code == location_code (or IS NULL for "all locations")
-         scope.project_code  == project_code  (or IS NULL for "all projects")
-
-      B. includes_children cascade (non-package scopes only):
-         scope.package_id    IS NULL
-         scope.includes_children IS TRUE
-         scope.location_code IS an ancestor of location_code
-         scope.project_code  == project_code  (or IS NULL)
-
-      C. Package-scoped officers:
-         Find packages whose PackageLocation rows cover location_code (or any ancestor).
-         Match officers whose scope.package_id is one of those packages.
-
-    Both A, B, and C require role_key + organization_id to match exactly.
+    Priority when ticket_package_id is set: package-exact + parent project (all packages).
+    Otherwise: location/project wildcards, includes_children, and package-via-location (C).
     """
     from ticketing.models.officer_scope import OfficerScope
-    from ticketing.models.package import PackageLocation
+    from ticketing.models.package import PackageLocation, ProjectPackage
+    from ticketing.models.project import Project
 
     seen: set[str] = set()
     result: list[str] = []
@@ -283,42 +270,66 @@ def _scope_candidates(
                 seen.add(uid)
                 result.append(uid)
 
+    base = (
+        OfficerScope.role_key == role_key,
+        OfficerScope.organization_id == organization_id,
+    )
+
+    # ── D. Ticket has explicit package_id (spec §4.4) ─────────────────────────
+    if ticket_package_id:
+        pkg = db.get(ProjectPackage, ticket_package_id)
+        rows = db.execute(
+            select(OfficerScope.user_id).where(
+                *base,
+                OfficerScope.package_id == ticket_package_id,
+            )
+        ).scalars().all()
+        _add(rows)
+        if pkg:
+            rows = db.execute(
+                select(OfficerScope.user_id).where(
+                    *base,
+                    OfficerScope.package_id.is_(None),
+                    OfficerScope.project_id == pkg.project_id,
+                )
+            ).scalars().all()
+            _add(rows)
+            proj = db.get(Project, pkg.project_id)
+            if proj and proj.short_code:
+                project_code = project_code or proj.short_code
+        return result
+
     # ── A. Exact / wildcard match (non-package scopes only) ───────────────────
     for loc in ([location_code, None] if location_code else [None]):
         for proj in ([project_code, None] if project_code else [None]):
             rows = db.execute(
                 select(OfficerScope.user_id).where(
-                    OfficerScope.role_key        == role_key,
-                    OfficerScope.organization_id == organization_id,
-                    OfficerScope.location_code   == loc,
-                    OfficerScope.project_code    == proj,
-                    OfficerScope.package_id.is_(None),   # exclude package-scoped officers
+                    *base,
+                    OfficerScope.location_code == loc,
+                    OfficerScope.project_code == proj,
+                    OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
             _add(rows)
 
-    # ── B. includes_children: scope covers an ancestor (non-package scopes only)
+    # ── B. includes_children: ancestor location covers descendants ─────────────
     if location_code:
         ancestors = _location_and_ancestors(location_code, db)
-        # Exclude the exact location itself (already covered by A)
         ancestor_only = [a for a in ancestors if a != location_code]
         if ancestor_only:
             for proj in ([project_code, None] if project_code else [None]):
                 rows = db.execute(
                     select(OfficerScope.user_id).where(
-                        OfficerScope.role_key          == role_key,
-                        OfficerScope.organization_id   == organization_id,
+                        *base,
                         OfficerScope.location_code.in_(ancestor_only),
                         OfficerScope.includes_children.is_(True),
-                        OfficerScope.project_code      == proj,
-                        OfficerScope.package_id.is_(None),   # exclude package-scoped officers
+                        OfficerScope.project_code == proj,
+                        OfficerScope.package_id.is_(None),
                     )
                 ).scalars().all()
                 _add(rows)
 
-    # ── C. Package-scoped officers: match via PackageLocation coverage ─────────
-    # An officer scoped to package P covers any ticket whose location is in P's
-    # PackageLocation rows (or any ancestor of the ticket's location).
+    # ── C. Package-scoped via location (no ticket package_id) ─────────────────
     if location_code:
         all_locs = _location_and_ancestors(location_code, db)
         covering_pkg_ids = db.execute(
@@ -329,9 +340,23 @@ def _scope_candidates(
         if covering_pkg_ids:
             rows = db.execute(
                 select(OfficerScope.user_id).where(
-                    OfficerScope.role_key        == role_key,
-                    OfficerScope.organization_id == organization_id,
+                    *base,
                     OfficerScope.package_id.in_(covering_pkg_ids),
+                )
+            ).scalars().all()
+            _add(rows)
+
+    # ── E. Project-wide scope (all packages under project) ────────────────────
+    if project_code:
+        proj = db.execute(
+            select(Project).where(Project.short_code == project_code)
+        ).scalar_one_or_none()
+        if proj:
+            rows = db.execute(
+                select(OfficerScope.user_id).where(
+                    *base,
+                    OfficerScope.project_id == proj.project_id,
+                    OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
             _add(rows)
@@ -347,21 +372,22 @@ def auto_assign_officer(
     location_code: Optional[str],
     project_code: Optional[str],
     db: Session,
+    ticket_package_id: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Find the best officer to assign a ticket to.
-
-    Candidate scope rules (see _scope_candidates):
-      - Exact match on (role, org, location, project)
-      - Wildcard: location=None covers all, project=None covers all
-      - includes_children: officer scoped to an ancestor location covers descendants
-
-    Among candidates, picks the least-loaded (fewest non-resolved assigned tickets).
-    Returns user_id or None if no officer is configured for this scope.
+    Find the best officer to assign a ticket to (least-loaded among scoped candidates).
+    See _scope_candidates for package-first / project / location rules.
     """
     from sqlalchemy import func as sqlfunc
 
-    candidates = _scope_candidates(role_key, organization_id, location_code, project_code, db)
+    candidates = _scope_candidates(
+        role_key,
+        organization_id,
+        location_code,
+        project_code,
+        db,
+        ticket_package_id=ticket_package_id,
+    )
     if not candidates:
         return None
 
@@ -388,11 +414,15 @@ def get_teammates(
     project_code: Optional[str],
     exclude_user_id: Optional[str],
     db: Session,
+    ticket_package_id: Optional[str] = None,
 ) -> list[str]:
-    """
-    Return all officers with the same role + scope as the given ticket.
-    Used to populate the reassign dropdown. Excludes the currently assigned officer.
-    Respects includes_children cascade same as auto_assign_officer.
-    """
-    candidates = _scope_candidates(role_key, organization_id, location_code, project_code, db)
+    """Officers eligible for manual reassignment (same pool as auto_assign_officer)."""
+    candidates = _scope_candidates(
+        role_key,
+        organization_id,
+        location_code,
+        project_code,
+        db,
+        ticket_package_id=ticket_package_id,
+    )
     return [uid for uid in candidates if uid != exclude_user_id]

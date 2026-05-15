@@ -135,6 +135,15 @@ def assign_role(
         location_code=payload.location_code,
     )
     db.add(user_role)
+    from ticketing.services.officer_admin import log_admin_audit
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.role.assign",
+        target_user_id=user_id,
+        payload={"role_id": str(payload.role_id), "organization_id": payload.organization_id},
+    )
     db.commit()
     db.refresh(user_role)
     return user_role
@@ -156,6 +165,15 @@ def remove_role(
     user_role = db.get(UserRole, user_role_id)
     if not user_role or user_role.user_id != user_id:
         raise HTTPException(status_code=404, detail="Role assignment not found")
+    from ticketing.services.officer_admin import log_admin_audit
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.role.remove",
+        target_user_id=user_id,
+        payload={"user_role_id": user_role_id, "role_id": str(user_role.role_id)},
+    )
     db.delete(user_role)
     db.commit()
 
@@ -178,6 +196,8 @@ class OfficerRosterEntry(BaseModel):
     role_keys: list[str]
     organization_ids: list[str]
     location_codes: list[str]
+    project_codes: list[str] = []
+    package_ids: list[str] = []
     onboarding_status: str = "active"  # invited | active
 
 
@@ -224,6 +244,22 @@ def list_officer_roster(
         ).scalars().all()
         onboard_map = {o.user_id: o.status for o in ob_rows}
 
+    proj_by: dict[str, set[str]] = defaultdict(set)
+    pkg_by: dict[str, set[str]] = defaultdict(set)
+    if order:
+        scope_rows = db.execute(
+            select(
+                OfficerScope.user_id,
+                OfficerScope.project_code,
+                OfficerScope.package_id,
+            ).where(OfficerScope.user_id.in_(order))
+        ).all()
+        for uid, pcode, pkg_id in scope_rows:
+            if pcode:
+                proj_by[uid].add(pcode)
+            if pkg_id:
+                pkg_by[uid].add(pkg_id)
+
     return [
         OfficerRosterEntry(
             user_id=uid,
@@ -232,6 +268,8 @@ def list_officer_roster(
             role_keys=role_keys_by[uid],
             organization_ids=sorted(orgs_by[uid]),
             location_codes=sorted(locs_by[uid]),
+            project_codes=sorted(proj_by.get(uid, set())),
+            package_ids=sorted(pkg_by.get(uid, set())),
             onboarding_status=onboard_map.get(uid, "active"),
         )
         for uid in order
@@ -349,8 +387,8 @@ def add_user_scope(
 
     # Validate package_id if supplied
     if payload.package_id:
-        from ticketing.models.package import Package
-        if not db.get(Package, payload.package_id):
+        from ticketing.models.package import ProjectPackage
+        if not db.get(ProjectPackage, payload.package_id):
             raise HTTPException(status_code=422, detail=f"Package '{payload.package_id}' not found")
 
     # Prevent duplicate entries for the same (user, role, org, location, project, package)
@@ -384,6 +422,22 @@ def add_user_scope(
         includes_children=payload.includes_children,
     )
     db.add(scope)
+    from ticketing.services.officer_admin import log_admin_audit
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.scope.add",
+        target_user_id=user_id,
+        payload={
+            "scope_id": str(scope.scope_id),
+            "role_key": payload.role_key,
+            "organization_id": payload.organization_id,
+            "project_id": payload.project_id,
+            "package_id": payload.package_id,
+            "location_code": payload.location_code,
+        },
+    )
     db.commit()
     db.refresh(scope)
     return scope
@@ -405,6 +459,15 @@ def remove_user_scope(
     scope = db.get(OfficerScope, scope_id)
     if not scope or scope.user_id != user_id:
         raise HTTPException(status_code=404, detail="Scope not found")
+    from ticketing.services.officer_admin import log_admin_audit
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.scope.remove",
+        target_user_id=user_id,
+        payload={"scope_id": scope_id, "role_key": scope.role_key},
+    )
     db.delete(scope)
     db.commit()
 
@@ -502,12 +565,17 @@ def patch_my_preferences(
     )
 
 
-# ── Officer invite (Keycloak Admin API) ──────────────────────────────────────
+# ── Officer invite / update / delete ───────────────────────────────────────────
 
 class OfficerInviteRequest(BaseModel):
     email: str
     role_key: str
     organization_id: str
+    location_code: Optional[str] = None
+    project_id: Optional[str] = None
+    project_code: Optional[str] = None
+    package_id: Optional[str] = None
+    includes_children: bool = False
     temp_password: Optional[str] = None
 
 
@@ -517,111 +585,162 @@ class OfficerInviteResponse(BaseModel):
     message: str
 
 
+class OfficerUpdateRequest(BaseModel):
+    """Sync Keycloak claims from roster; jurisdiction rows managed via scope APIs."""
+    role_keys: list[str]
+    organization_id: str
+    location_code: Optional[str] = None
+    sync_keycloak: bool = True
+
+
+class OfficerUpdateResponse(BaseModel):
+    ok: bool
+    user_id: str
+
+
 @router.post(
     "/users/invite",
     response_model=OfficerInviteResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Invite a new officer (admin only) — creates user in Keycloak",
+    summary="Invite officer — Keycloak (if configured) + user_roles + officer_scopes",
 )
 def invite_officer(
     body: OfficerInviteRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ) -> OfficerInviteResponse:
-    """
-    Creates the user in Keycloak with a temporary password and UPDATE_PASSWORD
-    required action. Keycloak sends the verification email if SMTP is configured.
-    For proto, the temp password is set to the value in the request (or a default).
-    """
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    from ticketing.services.officer_admin import (
+        JurisdictionInput,
+        create_scope_row,
+        keycloak_configured,
+        keycloak_create_user,
+        log_admin_audit,
+        upsert_user_role_row,
+        validate_jurisdiction,
+    )
 
-    from ticketing.config.settings import get_settings
-    settings = get_settings()
-    if not settings.keycloak_admin_url:
-        raise HTTPException(
-            status_code=503,
-            detail="Keycloak not configured — set KEYCLOAK_ADMIN_URL to enable officer invite",
-        )
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Valid email is required")
 
-    email = body.email.strip()
+    juris = JurisdictionInput(
+        organization_id=body.organization_id,
+        role_key=body.role_key,
+        location_code=body.location_code,
+        project_id=body.project_id,
+        project_code=body.project_code,
+        package_id=body.package_id,
+        includes_children=body.includes_children,
+    )
+    resolved_pc = validate_jurisdiction(db, juris, require_jurisdiction=True)
     role = db.execute(select(Role).where(Role.role_key == body.role_key)).scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {body.role_key}")
 
-    try:
-        from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
+    if keycloak_configured():
+        keycloak_create_user(email, body.role_key, body.organization_id, body.temp_password)
+        onboarding_status = "invited"
+    else:
+        onboarding_status = "active"
 
-        conn = KeycloakOpenIDConnection(
-            server_url=settings.keycloak_admin_url.rstrip("/") + "/",
-            username="admin",
-            password=settings.keycloak_admin_password,
-            realm_name="grm",
-            user_realm_name="master",
-            verify=True,
-        )
-        admin = KeycloakAdmin(connection=conn)
-        admin.create_user({
-            "username": email,
-            "email": email,
-            "enabled": True,
-            "attributes": {
-                "grm_roles": body.role_key,
-                "organization_id": body.organization_id,
-            },
-            "credentials": [{
-                "type": "password",
-                "value": body.temp_password or "ChangeMe123!",
-                "temporary": True,
-            }],
-            "requiredActions": ["UPDATE_PASSWORD"],
-        })
-    except Exception as exc:
-        err = str(exc)
-        if "409" in err or "already exists" in err.lower():
-            raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
-        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
-
-    existing_ur = db.execute(
-        select(UserRole).where(
-            UserRole.user_id == email,
-            UserRole.role_id == role.role_id,
-            UserRole.organization_id == body.organization_id,
-        )
-    ).scalar_one_or_none()
-    if not existing_ur:
-        db.add(
-            UserRole(
-                user_id=email,
-                role_id=role.role_id,
-                organization_id=body.organization_id,
-                location_code=None,
-            )
-        )
+    loc = (body.location_code or "").strip() or None
+    upsert_user_role_row(db, email, role, body.organization_id, loc)
+    create_scope_row(db, email, juris, resolved_pc)
 
     ob = db.get(OfficerOnboarding, email)
     if ob:
-        if ob.status != "active":
-            ob.status = "invited"
-            ob.updated_at = datetime.now(timezone.utc)
+        ob.status = onboarding_status
+        ob.updated_at = datetime.now(timezone.utc)
     else:
-        db.add(
-            OfficerOnboarding(
-                user_id=email,
-                status="invited",
-                updated_at=datetime.now(timezone.utc),
-            )
-        )
+        db.add(OfficerOnboarding(user_id=email, status=onboarding_status))
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.invite",
+        target_user_id=email,
+        payload=juris.model_dump(),
+    )
     db.commit()
 
-    return OfficerInviteResponse(
-        ok=True,
-        email=email,
-        message=(
-            "Officer created in Keycloak and roster seeded in ticketing. "
-            "Status becomes Active when Keycloak emits UPDATE_PASSWORD (webhook) after first password change."
-        ),
+    msg = (
+        "Officer created with jurisdiction scope."
+        if not keycloak_configured()
+        else "Officer invited in Keycloak with jurisdiction scope. "
+        "Status becomes Active after first password change (webhook)."
     )
+    return OfficerInviteResponse(ok=True, email=email, message=msg)
+
+
+@router.patch(
+    "/users/{user_id}",
+    response_model=OfficerUpdateResponse,
+    summary="Update officer Keycloak attributes from roster (auth stack)",
+)
+def update_officer(
+    user_id: str,
+    body: OfficerUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerUpdateResponse:
+    from ticketing.services.officer_admin import keycloak_update_user_attributes, log_admin_audit
+
+    if not db.execute(select(UserRole.user_id).where(UserRole.user_id == user_id).limit(1)).scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    if body.sync_keycloak:
+        keycloak_update_user_attributes(
+            user_id,
+            body.role_keys,
+            body.organization_id,
+            body.location_code,
+        )
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.update",
+        target_user_id=user_id,
+        payload=body.model_dump(),
+    )
+    db.commit()
+    return OfficerUpdateResponse(ok=True, user_id=user_id)
+
+
+@router.delete(
+    "/users/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove officer — all roles/scopes; disable Keycloak user",
+)
+def delete_officer(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> None:
+    from ticketing.services.officer_admin import keycloak_disable_user, log_admin_audit
+
+    roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
+    scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
+    if not roles and not scopes:
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    for s in scopes:
+        db.delete(s)
+    for r in roles:
+        db.delete(r)
+    ob = db.get(OfficerOnboarding, user_id)
+    if ob:
+        db.delete(ob)
+
+    keycloak_disable_user(user_id)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.disable",
+        target_user_id=user_id,
+        payload={"roles_removed": len(roles), "scopes_removed": len(scopes)},
+    )
+    db.commit()
 
 
 # ── Notification badge ────────────────────────────────────────────────────────

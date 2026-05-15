@@ -12,6 +12,7 @@ from .package import ProjectPackage, PackageLocation
 from .settings import Settings
 from .ticket_context_cache import TicketContextCache
 from .ticket_viewer import TicketViewer
+from .admin_audit_log import AdminAuditLog
 
 __all__ = [
     "Base",
@@ -38,4 +39,5 @@ __all__ = [
     "Settings",
     "TicketContextCache",
     "TicketViewer",
+    "AdminAuditLog",
 ]

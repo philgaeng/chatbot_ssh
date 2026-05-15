@@ -125,7 +125,7 @@ function SummaryTile({
 
 // ── Ticket row ────────────────────────────────────────────────────────────────
 
-function TicketRow({ ticket }: { ticket: TicketListItem }) {
+function TicketRow({ ticket, showAdminHints }: { ticket: TicketListItem; showAdminHints?: boolean }) {
   const now   = Date.now();
   const in24h = now + 24 * 60 * 60 * 1000;
   const cat   = ticketCategory(ticket, now, in24h);
@@ -145,6 +145,14 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-600 font-mono">{ticket.grievance_id}</span>
           {ticket.is_seah && <SeahBadge />}
+          {showAdminHints && ticket.needs_assignment && (
+            <span
+              className="text-xs font-medium text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded"
+              title="No officer matched auto-assign rules — check jurisdiction scopes"
+            >
+              Needs assignment
+            </span>
+          )}
           <StatusBadge code={ticket.status_code} />
           <PriorityBadge priority={ticket.priority} />
         </div>
@@ -176,7 +184,7 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function QueuePage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [activeTab, setActiveTab]     = useState<Tab>("actor");
   const [tileFilter, setTileFilter]   = useState<TileFilter>("all");
   const [tickets, setTickets]         = useState<TicketListItem[]>([]);
@@ -368,7 +376,9 @@ export default function QueuePage() {
               <div className="shrink-0 w-6" />
               <div className="shrink-0 w-4" />
             </div>
-            {displayedTickets.map((t) => <TicketRow key={t.ticket_id} ticket={t} />)}
+            {displayedTickets.map((t) => (
+              <TicketRow key={t.ticket_id} ticket={t} showAdminHints={isAdmin} />
+            ))}
           </div>
         )}
       </div>

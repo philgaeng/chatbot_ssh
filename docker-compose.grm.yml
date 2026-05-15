@@ -1,11 +1,11 @@
 # GRM Ticketing — Docker Compose overlay
 #
 # ── Demo stack (default — bypass auth, no Keycloak required) ─────────────────
-#   make compose_docker_wsl_grm_demo
+#   make wsl-up   (or wsl-ticketing for GRM services only)
 #   → grm_ui      :3001  BYPASS_AUTH=true  → ticketing_api:5002 (mock super-admin)
 #
 # ── Auth stack (requires --profile auth) ─────────────────────────────────────
-#   make compose_docker_wsl_grm_auth
+#   make wsl-auth
 #   → grm_ui_auth :3002  BYPASS_AUTH=false → ticketing_api_auth:5003 (Keycloak JWT)
 #   → keycloak    :18080 admin UI (admin / ${KEYCLOAK_ADMIN_PASSWORD})
 #                        Host port configurable via KEYCLOAK_HOST_PORT.
@@ -126,13 +126,14 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      # Keycloak (leave empty to keep dev bypass / mock-super-admin)
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketing-api}
-      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
+      # Demo API (:5002): always dev bypass — do not inherit env.local Keycloak URLs.
+      # Auth stack uses ticketing_api_auth (:5003) with real JWT validation.
+      KEYCLOAK_ISSUER: ""
+      KEYCLOAK_JWKS_URL: ""
+      KEYCLOAK_CLIENT_ID: ticketing-api
+      KEYCLOAK_ADMIN_URL: ""
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      # POST /api/v1/webhooks/keycloak — set the same value on Keycloak HTTP event listener
-      KEYCLOAK_WEBHOOK_SECRET: ${KEYCLOAK_WEBHOOK_SECRET:-}
+      KEYCLOAK_WEBHOOK_SECRET: ""
     ports:
       - "5002:5002"
     depends_on:
@@ -214,11 +215,12 @@ services:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_BYPASS_AUTH: ${NEXT_PUBLIC_BYPASS_AUTH:-true}
-        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-}
-        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
-        NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
-        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
+        # Always demo/bypass on :3001 — do not inherit env.local OIDC vars (those apply to grm_ui_auth).
+        NEXT_PUBLIC_BYPASS_AUTH: "true"
+        NEXT_PUBLIC_OIDC_ISSUER: ""
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ticketing-ui
+        NEXT_PUBLIC_REDIRECT_SIGN_IN: ""
+        NEXT_PUBLIC_REDIRECT_SIGN_OUT: ""
     environment:
       # Server-side proxy target — uses Docker service name (not localhost)
       TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}

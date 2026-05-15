@@ -28,6 +28,7 @@ export interface TicketListItem {
   /** Earliest pending task due date assigned to me on this ticket. Null if none. */
   my_earliest_task_due_at: string | null;
   unseen_event_count: number;
+  needs_assignment?: boolean;
 }
 
 export interface TicketListResponse {
@@ -502,6 +503,8 @@ export interface OfficerRosterEntry {
   role_keys: string[];
   organization_ids: string[];
   location_codes: string[];
+  project_codes?: string[];
+  package_ids?: string[];
   /** invited until Keycloak webhook confirms password update */
   onboarding_status?: string;
 }
@@ -1074,6 +1077,11 @@ export interface OfficerInvitePayload {
   email: string;
   role_key: string;
   organization_id: string;
+  location_code?: string | null;
+  project_id?: string | null;
+  project_code?: string | null;
+  package_id?: string | null;
+  includes_children?: boolean;
   temp_password?: string;
 }
 
@@ -1088,6 +1096,45 @@ export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInv
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function deleteOfficer(userId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+}
+
+export function updateOfficerKeycloak(
+  userId: string,
+  payload: {
+    role_keys: string[];
+    organization_id: string;
+    location_code?: string | null;
+    sync_keycloak?: boolean;
+  },
+): Promise<{ ok: boolean; user_id: string }> {
+  return apiFetch(`/api/v1/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface UserRoleRow {
+  user_role_id: string;
+  user_id: string;
+  role_id: string;
+  organization_id: string;
+  location_code: string | null;
+  created_at: string;
+}
+
+export function listUserRoles(userId: string): Promise<UserRoleRow[]> {
+  return apiFetch<UserRoleRow[]>(`/api/v1/users/${encodeURIComponent(userId)}/roles`);
+}
+
+export function deleteUserRole(userId: string, userRoleId: string): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(userRoleId)}`,
+    { method: "DELETE" },
+  );
 }
 
 // ── Language preferences ──────────────────────────────────────────────────────
