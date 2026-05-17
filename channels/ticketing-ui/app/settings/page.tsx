@@ -17,8 +17,6 @@ import {
   updateStep,
   deleteStep,
   reorderSteps,
-  addAssignment,
-  removeAssignment,
   listScopes,
   addScope,
   deleteScope,
@@ -623,107 +621,60 @@ function StepForm({
   );
 }
 
-// ── Assignment panel ──────────────────────────────────────────────────────────
+// ── Project workflow picker (Settings → Projects) ─────────────────────────────
 
-function AssignmentPanel({
-  workflowId,
-  assignments,
+function ProjectWorkflowSelect({
+  label,
+  hint,
+  workflowType,
+  value,
+  workflows,
+  disabled,
   onChange,
+  onCreateNew,
 }: {
-  workflowId: string;
-  assignments: WorkflowAssignmentItem[];
-  onChange: (updated: WorkflowAssignmentItem[]) => void;
+  label: string;
+  hint: string;
+  workflowType: "standard" | "seah";
+  value: string | null | undefined;
+  workflows: WorkflowDefinition[];
+  disabled?: boolean;
+  onChange: (workflowId: string | null) => void;
+  onCreateNew: () => void;
 }) {
-  const [org, setOrg]       = useState("");
-  const [loc, setLoc]       = useState("");
-  const [proj, setProj]     = useState("");
-  const [priority, setPri]  = useState("");
-  const [adding, setAdding] = useState(false);
-  const [err, setErr]       = useState("");
-
-  async function handleAdd() {
-    if (!org.trim()) { setErr("Organization ID is required."); return; }
-    setAdding(true); setErr("");
-    try {
-      const row = await addAssignment(workflowId, {
-        organization_id: org.trim(),
-        location_code:   loc.trim()  || null,
-        project_code:    proj.trim() || null,
-        priority:        priority.trim() || null,
-      });
-      onChange([...assignments, row]);
-      setOrg(""); setLoc(""); setProj(""); setPri("");
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to add");
-    } finally { setAdding(false); }
-  }
-
-  async function handleRemove(assignmentId: string) {
-    try {
-      await removeAssignment(workflowId, assignmentId);
-      onChange(assignments.filter(a => a.assignment_id !== assignmentId));
-    } catch { /* ignore */ }
-  }
-
-  function fmt(a: WorkflowAssignmentItem) {
-    const parts = [a.organization_id, a.location_code, a.project_code, a.priority ?? "(all priorities)"].filter(Boolean);
-    return parts.join(" · ");
-  }
+  const options = workflows.filter(
+    (w) => !w.is_template && w.status !== "archived" && w.workflow_type.toLowerCase() === workflowType,
+  );
+  const selected = value ? options.find((w) => w.workflow_id === value) : undefined;
 
   return (
-    <div className="mt-6 border-t border-gray-200 pt-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Assigned to</h3>
-      {assignments.length === 0 && (
-        <p className="text-xs text-gray-400 mb-3 italic">No assignments — workflow won&apos;t be used for new tickets until assigned.</p>
-      )}
-      <div className="space-y-1.5 mb-3">
-        {assignments.map(a => (
-          <div key={a.assignment_id} className="flex items-center justify-between text-xs bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
-            <span className="text-gray-700 font-mono">{fmt(a)}</span>
-            <button onClick={() => handleRemove(a.assignment_id)} className="text-gray-400 hover:text-red-500 ml-3 leading-none text-sm">×</button>
-          </div>
+    <div>
+      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
+      <p className="text-xs text-gray-400 mb-2">{hint}</p>
+      <select
+        value={value ?? ""}
+        disabled={disabled}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "__new__") {
+            onCreateNew();
+            return;
+          }
+          onChange(v ? v : null);
+        }}
+        className="w-full max-w-lg text-sm border border-gray-300 rounded px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+      >
+        <option value="">— Not set —</option>
+        {options.map((w) => (
+          <option key={w.workflow_id} value={w.workflow_id}>
+            {w.display_name} ({w.status})
+          </option>
         ))}
-      </div>
-
-      {/* Add form */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
-        <p className="text-xs font-medium text-gray-500">+ Add assignment</p>
-        {err && <p className="text-xs text-red-600">{err}</p>}
-        <div className="grid grid-cols-4 gap-2">
-          <div>
-            <label className="text-xs text-gray-400 block mb-0.5">Org ID *</label>
-            <input value={org} onChange={e => setOrg(e.target.value)} placeholder="DOR"
-              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-0.5">Location</label>
-            <input value={loc} onChange={e => setLoc(e.target.value)} placeholder="JHAPA"
-              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-0.5">Project</label>
-            <input value={proj} onChange={e => setProj(e.target.value)} placeholder="KL_ROAD"
-              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-0.5">Priority</label>
-            <select value={priority} onChange={e => setPri(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">All</option>
-              <option value="LOW">LOW</option>
-              <option value="NORMAL">NORMAL</option>
-              <option value="HIGH">HIGH</option>
-              <option value="CRITICAL">CRITICAL</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button onClick={handleAdd} disabled={adding || !org.trim()}
-            className="text-xs bg-blue-600 text-white hover:bg-blue-700 px-3 py-1.5 rounded font-medium disabled:opacity-50 transition">
-            {adding ? "Adding…" : "Add"}
-          </button>
-        </div>
-      </div>
+        <option value="__new__">+ Create new workflow…</option>
+      </select>
+      {selected && (
+        <p className="text-xs text-gray-500 mt-1 font-mono">{selected.workflow_key}</p>
+      )}
     </div>
   );
 }
@@ -967,13 +918,14 @@ function WorkflowEditor({
         {addingStep ? "Adding…" : "+ Add step"}
       </button>
 
-      {/* Assignments — operational workflows only */}
       {!isTemplate && (
-        <AssignmentPanel
-          workflowId={wf.workflow_id}
-          assignments={wf.assignments}
-          onChange={updated => setWf(prev => ({ ...prev, assignments: updated }))}
-        />
+        <div className="mt-6 border-t border-gray-200 pt-5">
+          <p className="text-xs text-gray-500">
+            Link this workflow to a project under{" "}
+            <span className="font-medium">Settings → Organizations &amp; Locations → Projects</span>
+            {" "}            (Standard / SEAH dropdowns). New tickets use the workflow selected on their project.
+          </p>
+        </div>
       )}
 
       {/* Notification rules (Spec 12 §4) */}
@@ -1134,6 +1086,7 @@ function NewWorkflowModal({
   templates,
   canSeeSeah,
   initialCloneFrom,
+  fixedWorkflowType,
   onCreated,
   onClose,
 }: {
@@ -1141,12 +1094,14 @@ function NewWorkflowModal({
   templates: WorkflowDefinition[];
   canSeeSeah: boolean;
   initialCloneFrom?: string;
+  /** When set (e.g. from Project editor), lock workflow type to standard or seah. */
+  fixedWorkflowType?: "standard" | "seah";
   onCreated: (w: WorkflowDefinition) => void;
   onClose: () => void;
 }) {
   const isTemplateMode = mode === "template";
   const [name, setName]             = useState("");
-  const [wfType, setWfType]         = useState("standard");
+  const [wfType, setWfType]         = useState<string>(fixedWorkflowType ?? "standard");
   const [cloneFrom, setCloneFrom]   = useState(initialCloneFrom ?? "__builtin_default_grm");
   const [creating, setCreating]     = useState(false);
   const [error, setError]           = useState("");
@@ -1200,16 +1155,21 @@ function NewWorkflowModal({
 
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Type</label>
-            <div className="flex gap-3">
-              {["standard", ...(canSeeSeah ? ["seah"] : [])].map(t => (
-                <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" value={t} checked={wfType === t} onChange={() => { setWfType(t); if (t === "seah") setCloneFrom("__builtin_default_seah"); else setCloneFrom("__builtin_default_grm"); }} />
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadge(t)}`}>{t.toUpperCase()}</span>
-                </label>
-              ))}
-            </div>
+            {fixedWorkflowType ? (
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${typeBadge(fixedWorkflowType)}`}>
+                {fixedWorkflowType.toUpperCase()}
+              </span>
+            ) : (
+              <div className="flex gap-3">
+                {["standard", ...(canSeeSeah ? ["seah"] : [])].map(t => (
+                  <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="radio" value={t} checked={wfType === t} onChange={() => { setWfType(t); if (t === "seah") setCloneFrom("__builtin_default_seah"); else setCloneFrom("__builtin_default_grm"); }} />
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadge(t)}`}>{t.toUpperCase()}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
-
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-2">Start from template</label>
             <div className="space-y-1.5">
@@ -2069,7 +2029,7 @@ function LocationsSection() {
             <input
               value={parent}
               onChange={(e) => setParent(e.target.value)}
-              placeholder="e.g. NP_P1"
+              placeholder="e.g. P1"
               className="text-sm border border-gray-300 rounded px-2 py-1.5 w-32 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
@@ -2439,6 +2399,33 @@ function ProjectEditor({
   const [addingOrgRole, setAddingOrgRole] = useState("");
   const [working, setWorking] = useState(false);
   const [locError, setLocError] = useState("");
+  const { canSeeSeah } = useAuth();
+  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
+  const [wfTemplates, setWfTemplates] = useState<WorkflowDefinition[]>([]);
+  const [wfModal, setWfModal] = useState<null | "standard" | "seah">(null);
+  const [wfSaving, setWfSaving] = useState(false);
+
+  useEffect(() => {
+    listWorkflows().then((r) => setWorkflows(r.items)).catch(() => {});
+    listTemplates().then((r) => setWfTemplates(r.items)).catch(() => {});
+  }, []);
+
+  async function saveProjectWorkflow(
+    field: "standard_workflow_id" | "seah_workflow_id",
+    workflowId: string | null,
+  ) {
+    setWfSaving(true);
+    try {
+      const updated = await updateProject(p.project_id, { [field]: workflowId });
+      setP(updated);
+      onUpdated(updated);
+      flash("Workflow saved ✓");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Failed to save workflow");
+    } finally {
+      setWfSaving(false);
+    }
+  }
 
   function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 2500); }
 
@@ -2582,6 +2569,58 @@ function ProjectEditor({
           placeholder="Project description…"
           className="w-full max-w-lg text-sm border border-gray-200 rounded px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400" />
       </div>
+
+      {/* Grievance workflows */}
+      <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Grievance workflows</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            New tickets for project <span className="font-mono">{p.short_code}</span> use these workflows.
+            Configure steps under Settings → Workflows.
+          </p>
+        </div>
+        <ProjectWorkflowSelect
+          label="Standard GRM workflow"
+          hint="Used for normal grievances on this project."
+          workflowType="standard"
+          value={p.standard_workflow_id ?? null}
+          workflows={workflows}
+          disabled={wfSaving}
+          onChange={(id) => void saveProjectWorkflow("standard_workflow_id", id)}
+          onCreateNew={() => setWfModal("standard")}
+        />
+        {canSeeSeah && (
+          <ProjectWorkflowSelect
+            label="SEAH workflow"
+            hint="Used when the grievance is marked SEAH-sensitive."
+            workflowType="seah"
+            value={p.seah_workflow_id ?? null}
+            workflows={workflows}
+            disabled={wfSaving}
+            onChange={(id) => void saveProjectWorkflow("seah_workflow_id", id)}
+            onCreateNew={() => setWfModal("seah")}
+          />
+        )}
+      </div>
+
+      {wfModal && (
+        <NewWorkflowModal
+          templates={wfTemplates}
+          canSeeSeah={!!canSeeSeah}
+          fixedWorkflowType={wfModal}
+          onCreated={(w) => {
+            setWorkflows((prev) =>
+              prev.some((x) => x.workflow_id === w.workflow_id) ? prev : [...prev, w],
+            );
+            void saveProjectWorkflow(
+              wfModal === "seah" ? "seah_workflow_id" : "standard_workflow_id",
+              w.workflow_id,
+            );
+            setWfModal(null);
+          }}
+          onClose={() => setWfModal(null)}
+        />
+      )}
 
       {/* Organizations */}
       <div className="mb-6">
@@ -2776,11 +2815,14 @@ function PackageRow({
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-lg">
+      {/* Note: no overflow-hidden — LocationSearch uses a dropdown that must paint outside this card */}
       {/* Collapsed header — always visible; click to expand/collapse edit form */}
       <button
         onClick={onToggle}
-        className="group w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors cursor-pointer"
+        className={`group w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors cursor-pointer ${
+          expanded ? "rounded-t-lg" : "rounded-lg"
+        }`}
         title={expanded ? "Collapse" : "Click to edit"}
       >
         {/* Rotating chevron — right when collapsed, down when expanded */}
@@ -2816,7 +2858,7 @@ function PackageRow({
 
       {/* Expanded edit form */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 py-4 bg-gray-50 space-y-4">
+        <div className="border-t border-gray-100 px-4 py-4 bg-gray-50 space-y-4 rounded-b-lg">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Name</label>

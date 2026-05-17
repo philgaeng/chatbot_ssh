@@ -103,7 +103,13 @@ class ActionAskOtpInput(BaseOtpAction):
                 message_bot = message_bot + " " + message_bot_retry
             
             try:
-                self.messaging.send_sms(phone_number, message_sms)
+                from backend.clients.messaging_api import send_sms as send_sms_via_api
+
+                send_sms_via_api(
+                    phone_number,
+                    message_sms,
+                    context={"source_system": "chatbot", "purpose": "otp", "channel": "sms"},
+                )
                 self.logger.info(f"{self.name()} - SMS sent successfully")
                 dispatcher.utter_message(
                     text= message_bot,

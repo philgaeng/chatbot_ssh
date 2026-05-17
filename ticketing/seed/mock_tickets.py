@@ -385,7 +385,7 @@ def seed_mock_tickets(db: Session) -> None:
     # ── Supporting tickets: realistic queue ───────────────────────────────────
 
     # T3: L1 new, unacknowledged (shows red NEW badge)
-    # Location = Morang (NP_D006) so it falls within Site L1's scope
+    # Location = Morang district (P1_MOR) — within Site L1's scope
     t3 = _make_ticket(
         grievance_id="GRV-2025-003",
         workflow_id=WORKFLOW_STANDARD_ID,
@@ -460,7 +460,7 @@ def seed_mock_tickets(db: Session) -> None:
                   note="Contractor removed stockpile within 24 hours. Complainant confirmed access restored."))
 
     # T6: SLA breached at L1 — shows overdue indicator
-    # Location = Morang (NP_D006) so it falls within Site L1's scope and appears in their queue
+    # Location = Morang district (P1_MOR) — within Site L1's scope and appears in their queue
     t6 = _make_ticket(
         grievance_id="GRV-2025-005",
         workflow_id=WORKFLOW_STANDARD_ID,

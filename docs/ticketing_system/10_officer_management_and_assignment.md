@@ -1,7 +1,7 @@
 # Officer management and ticket assignment
 
 **Status:** Locked (2026-05-15)  
-**Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
+**Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
 
 ---
 
@@ -133,8 +133,9 @@ Given ticket `T` and workflow step role `R`:
 1. Resolve effective **package_id** (on ticket, or derived per §4.3).
 2. Build candidate set = officers with scope matching `(R, T.organization_id, T.location_code, T.project_code, effective package)` per engine rules, including project inheritance and package location coverage.
 3. If `T.package_id` set: **restrict** to scopes covering that package or parent project (locked).
-4. Choose **min open ticket count** among candidates.
-5. If empty at L1 create: **no assignee** + admin-visible flag (misconfiguration); do not assign to admin roles by default.
+4. **Province fallback (implemented):** if step 2 yields no candidates and `T.location_code` is set, widen to the ticket’s **level-1 province** (e.g. `P1` for Koshi): any officer scoped **anywhere under that province** (any district/municipality in the subtree) with matching role/org/project is eligible. Example: Jhapa ticket with no Jhapa L1 → Morang L1 under the same province may be assigned (least-loaded).
+5. Choose **min open ticket count** among candidates from steps 2–4.
+6. If still empty at L1 create: **no assignee** + admin-visible flag (misconfiguration); do not assign to admin roles by default.
 
 ### 4.5 Multiple roles per person
 

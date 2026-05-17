@@ -10,7 +10,10 @@ This makes it easy later to:
 - Move ticketing to a **separate database** by copying only the ticketing schema and changing the connection string, and
 - Keep the chatbot working if ticketing is offline or removed.
 
+**Nepal location identifiers:** Canonical rules for `location_code` (and hierarchy keys) in `ticketing.locations`, tickets, packages, and scopes: **[LOCATION_CODES.md](LOCATION_CODES.md)**.
+
 ---
+
 
 ## 1. Schema and naming
 
@@ -131,6 +134,8 @@ CREATE TABLE ticketing.organizations (
 ### 2.4 `ticketing.locations`
 
 We keep it simple and province-oriented to match existing data (can evolve later).
+
+**Canonical codes (Nepal):** see [LOCATION_CODES.md](LOCATION_CODES.md) — CAPS mnemonics (e.g. `P1`–`P7` for provinces, `P1_MOR` for districts); all `location_code` / parent keys should follow that spec after migration.
 
 ```sql
 CREATE TABLE ticketing.locations (

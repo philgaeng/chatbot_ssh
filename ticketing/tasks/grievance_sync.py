@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from ticketing.models.base import SessionLocal
 from ticketing.models.ticket import Ticket, TicketEvent
-from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
 
@@ -63,28 +63,17 @@ def _lookup_workflow(
     is_seah: bool,
     priority: str,
 ) -> Optional[WorkflowDefinition]:
-    """
-    Resolve the best-matching workflow for this ticket.
-    Returns None if no assignment found (logged as warning, ticket skipped).
-    """
-    lookup_priority = "SEAH" if is_seah else priority
+    """Resolve workflow (project-linked first, then legacy assignments)."""
+    from ticketing.engine.workflow_engine import resolve_workflow
 
-    for loc in ([location_code, None] if location_code else [None]):
-        for proj in ([project_code, None] if project_code else [None]):
-            for pri in ([lookup_priority, None]):
-                assignment = db.execute(
-                    select(WorkflowAssignment).where(
-                        WorkflowAssignment.organization_id == organization_id,
-                        WorkflowAssignment.location_code == loc,
-                        WorkflowAssignment.project_code == proj,
-                        WorkflowAssignment.priority == pri,
-                    )
-                ).scalar_one_or_none()
-                if assignment:
-                    wf = db.get(WorkflowDefinition, assignment.workflow_id)
-                    if wf:
-                        return wf
-    return None
+    return resolve_workflow(
+        organization_id=organization_id,
+        location_code=location_code,
+        project_code=project_code,
+        is_seah=is_seah,
+        priority=priority,
+        db=db,
+    )
 
 
 def _first_step(db: Session, workflow_id: str) -> Optional[WorkflowStep]:

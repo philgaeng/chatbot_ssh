@@ -47,11 +47,12 @@ def _id() -> str:
 ORG_DOR_ID = "DOR"
 ORG_ADB_ID = "ADB"
 
-# Real Nepal location codes matching the imported geodata (ticketing.locations)
-LOC_PROVINCE1_CODE = "NP_P1"    # Koshi Province (Province 1)
-LOC_MORANG_CODE    = "NP_D006"  # Morang District
-LOC_SUNSARI_CODE   = "NP_D011"  # Sunsari District
-LOC_JHAPA_CODE     = "NP_D004"  # Jhapa District
+# Canonical Nepal location PKs (docs/ticketing_system/LOCATION_CODES.md).
+# Seeds + workflow assignment rely on ticketing.locations after import OR Alembic q9r7s1u3.
+LOC_PROVINCE1_CODE = "P1"       # Koshi Province
+LOC_JHAPA_CODE     = "P1_JHA"   # Jhapa (stable vs legacy NP_D004 when remap runs by old-code order)
+LOC_MORANG_CODE    = "P1_MOR"   # Morang
+LOC_SUNSARI_CODE   = "P1_SUN"   # Sunsari
 
 WORKFLOW_STANDARD_ID = "00000000-0000-0000-0001-000000000001"
 
@@ -61,7 +62,7 @@ STEP_L3_ID = "00000000-0000-0000-0001-000000000013"
 STEP_L4_ID = "00000000-0000-0000-0001-000000000014"
 
 ASSIGNMENT_STANDARD_ID          = "00000000-0000-0000-0001-000000000021"
-# Fallback: location=None catches district-level tickets (NP_D006 etc.) that
+# Fallback: location=None catches district-level tickets (P1_MOR etc.) that
 # don't match the province-scoped assignment. resolve_workflow() tries None
 # after the specific location code, so this fires for all DOR/KL_ROAD tickets.
 ASSIGNMENT_STANDARD_FALLBACK_ID = "00000000-0000-0000-0001-000000000022"
@@ -243,9 +244,9 @@ def seed_standard_workflow(db: Session) -> None:
 def seed_workflow_assignment(db: Session) -> None:
     """Map DOR + KL_ROAD + NORMAL → standard workflow (two rows for coverage).
 
-    Row 1: province-scoped (NP_P1) — preferred match for province-level tickets.
+    Row 1: province-scoped (P1) — preferred match for province-level tickets.
     Row 2: location=None fallback — catches district/municipality-level tickets
-           (NP_D006, NP_D011, NP_D004 etc.) that don't match the province row.
+           (P1_MOR, P1_SUN, P1_JHA, …) that don't match the province row.
            resolve_workflow() tries None after the specific location code.
     """
     existing = db.get(WorkflowAssignment, ASSIGNMENT_STANDARD_ID)
@@ -258,9 +259,9 @@ def seed_workflow_assignment(db: Session) -> None:
             priority="NORMAL",
             workflow_id=WORKFLOW_STANDARD_ID,
         ))
-        logger.info("  + workflow assignment: DOR + NP_P1 + KL_ROAD + NORMAL → KL_ROAD_STANDARD")
+        logger.info("  + workflow assignment: DOR + P1 + KL_ROAD + NORMAL → KL_ROAD_STANDARD")
     else:
-        logger.info("  = workflow assignment already exists (standard NP_P1)")
+        logger.info("  = workflow assignment already exists (standard P1)")
 
     existing_fb = db.get(WorkflowAssignment, ASSIGNMENT_STANDARD_FALLBACK_ID)
     if not existing_fb:
@@ -347,11 +348,22 @@ def seed_project(db: Session) -> None:
         select(Project).where(Project.short_code == "KL_ROAD")
     ).scalar_one_or_none()
 
+    seah_wf_id = "00000000-0000-0000-0002-000000000001"
+    seah_id = seah_wf_id if db.get(WorkflowDefinition, seah_wf_id) else None
+
     if existing:
-        # Backfill chatbot_base_url if it was seeded before this field existed
+        changed = False
         if not existing.chatbot_base_url:
             existing.chatbot_base_url = "http://backend:5001"
-            logger.info("  ~ project KL_ROAD: backfilled chatbot_base_url")
+            changed = True
+        if not existing.standard_workflow_id and db.get(WorkflowDefinition, WORKFLOW_STANDARD_ID):
+            existing.standard_workflow_id = WORKFLOW_STANDARD_ID
+            changed = True
+        if not existing.seah_workflow_id and seah_id:
+            existing.seah_workflow_id = seah_id
+            changed = True
+        if changed:
+            logger.info("  ~ project KL_ROAD: backfilled fields")
         else:
             logger.info("  = project already exists: KL_ROAD")
     else:
@@ -361,6 +373,8 @@ def seed_project(db: Session) -> None:
             name="Kakarbhitta–Laukahi Road (ADB 52097-003)",
             description="KL Road GRM project — Province 1, Nepal",
             chatbot_base_url="http://backend:5001",
+            standard_workflow_id=WORKFLOW_STANDARD_ID,
+            seah_workflow_id=seah_id,
             is_active=True,
         ))
         logger.info("  + project: KL_ROAD")

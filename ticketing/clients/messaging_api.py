@@ -39,9 +39,9 @@ def send_sms(phone_number: str, body: str, template_id: str | None = None) -> di
     Use this as fallback when session_id is expired / unavailable.
     Phone number must include country code (e.g. +977XXXXXXXXXX for Nepal).
     """
-    payload: dict = {"recipient": phone_number, "body": body}
+    payload: dict = {"to": phone_number, "text": body}
     if template_id:
-        payload["template_id"] = template_id
+        payload.setdefault("context", {})["template_id"] = template_id
 
     with _client() as client:
         try:
@@ -68,10 +68,10 @@ def send_email(
     payload: dict = {
         "to": [to] if isinstance(to, str) else to,
         "subject": subject,
-        "body": body,
+        "html_body": body,
     }
     if attachments:
-        payload["attachments"] = attachments
+        payload.setdefault("context", {})["attachments"] = attachments
 
     with _client() as client:
         try:

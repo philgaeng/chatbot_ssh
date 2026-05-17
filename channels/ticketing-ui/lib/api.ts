@@ -677,6 +677,10 @@ export interface ProjectItem {
   name: string;
   description: string | null;
   is_active: boolean;
+  /** Workflow used for standard (non-SEAH) grievances on this project. */
+  standard_workflow_id: string | null;
+  /** Workflow used when case_sensitivity is SEAH. */
+  seah_workflow_id: string | null;
   created_at: string;
   updated_at: string;
   /** Organizations linked to this project, each with an optional role. */
@@ -789,7 +793,16 @@ export function createProject(payload: ProjectCreate): Promise<ProjectItem> {
   });
 }
 
-export function updateProject(projectId: string, payload: { name?: string; description?: string | null; is_active?: boolean }): Promise<ProjectItem> {
+export function updateProject(
+  projectId: string,
+  payload: {
+    name?: string;
+    description?: string | null;
+    is_active?: boolean;
+    standard_workflow_id?: string | null;
+    seah_workflow_id?: string | null;
+  },
+): Promise<ProjectItem> {
   return apiFetch<ProjectItem>(`/api/v1/projects/${projectId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),

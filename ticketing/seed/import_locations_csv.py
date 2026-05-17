@@ -14,12 +14,17 @@ Usage (from repo root, with ticketing DB env vars set):
         [--max-level 3]                  # skip rows with level_number > max (default: no limit)
         [--dry-run]
 
-CSV format example:
+CSV format example (NP may use legacy NP_* columns; they are rewritten to P1 / P1_* on import):
 
     location_code,level_number,parent_location_code,source_id,name_en,name_ne
+    P1,1,,1,Koshi Province,कोशी
+    P1_BHO,2,P1,1,Bhojpur,भोजपुर
+    P1_BHO_SHA,3,P1_BHO,1,Shadanand Municipality,शदानन्द नगरपालिका
+
+Or legacy CSV rows (automatically canonicalized):
+
     NP_P1,1,,1,Koshi Province,कोशी
     NP_D001,2,NP_P1,1,Bhojpur,भोजपुर
-    NP_M0001,3,NP_D001,1,Shadanand Municipality,शदानन्द नगरपालिका
 
 Language columns are auto-detected by the 'name_' prefix.
 Download a pre-formatted template from GET /api/v1/locations/import/template.csv

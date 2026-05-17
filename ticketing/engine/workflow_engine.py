@@ -154,11 +154,25 @@ def resolve_workflow(
     db: Session,
 ) -> Optional[WorkflowDefinition]:
     """
-    Find the best-matching WorkflowDefinition for the given ticket parameters.
+    Resolve the workflow for a new ticket.
 
-    For SEAH tickets, priority is treated as 'SEAH' for lookup purposes.
-    Falls back through: exact match → no location → no project → no priority.
+    1. Project-linked workflow (Settings → Projects): standard_workflow_id or
+       seah_workflow_id on ticketing.projects when project_code is set.
+    2. Legacy ticketing.workflow_assignments (org / location / project / priority).
     """
+    from ticketing.models.project import Project
+
+    if project_code:
+        project = db.execute(
+            select(Project).where(Project.short_code == project_code)
+        ).scalar_one_or_none()
+        if project:
+            wf_id = project.seah_workflow_id if is_seah else project.standard_workflow_id
+            if wf_id:
+                wf = db.get(WorkflowDefinition, wf_id)
+                if wf:
+                    return wf
+
     lookup_priority = "SEAH" if is_seah else priority
 
     for loc in ([location_code, None] if location_code else [None]):
@@ -243,6 +257,87 @@ def _location_and_ancestors(location_code: str, db: Session) -> list[str]:
     return list(rows)
 
 
+def _province_code_for_location(location_code: str, db: Session) -> Optional[str]:
+    """Return the level-1 (province) ancestor for *location_code*, or None."""
+    from ticketing.models.country import Location
+
+    for code in _location_and_ancestors(location_code, db):
+        loc = db.get(Location, code)
+        if loc is not None and loc.level_number == 1:
+            return code
+    return None
+
+
+def _location_codes_in_province(province_code: str, db: Session) -> list[str]:
+    """All location_code values in the province subtree (province + districts + munis, …)."""
+    import sqlalchemy as sa
+
+    rows = db.execute(
+        sa.text("""
+            WITH RECURSIVE subtree AS (
+                SELECT location_code
+                FROM ticketing.locations
+                WHERE location_code = :prov
+                UNION ALL
+                SELECT l.location_code
+                FROM ticketing.locations l
+                JOIN subtree s ON l.parent_location_code = s.location_code
+            )
+            SELECT location_code FROM subtree
+        """),
+        {"prov": province_code},
+    ).scalars().all()
+    return list(rows)
+
+
+def _add_province_level_fallback(
+    result: list[str],
+    seen: set[str],
+    *,
+    role_key: str,
+    organization_id: str,
+    location_code: str,
+    project_code: Optional[str],
+    db: Session,
+) -> None:
+    """
+    When no officer matched the ticket's exact area, widen to the whole province (level 1).
+
+    Example: ticket in Jhapa (P1_JHA / P1_JHA_BIR) with no Jhapa-scoped L1 → any L1 scoped
+    anywhere under Koshi (P1), e.g. Morang (P1_MOR), is eligible (least-loaded wins).
+    """
+    from ticketing.models.officer_scope import OfficerScope
+
+    def _add(uids: list[str]) -> None:
+        for uid in uids:
+            if uid not in seen:
+                seen.add(uid)
+                result.append(uid)
+
+    province = _province_code_for_location(location_code, db)
+    if not province:
+        return
+
+    pool = _location_codes_in_province(province, db)
+    if not pool:
+        return
+
+    base = (
+        OfficerScope.role_key == role_key,
+        OfficerScope.organization_id == organization_id,
+        OfficerScope.package_id.is_(None),
+    )
+    for proj in ([project_code, None] if project_code else [None]):
+        rows = db.execute(
+            select(OfficerScope.user_id).where(
+                *base,
+                OfficerScope.location_code.in_(pool),
+                OfficerScope.project_code == proj,
+            )
+        ).scalars().all()
+        _add(rows)
+
+
 def _scope_candidates(
     role_key: str,
     organization_id: str,
@@ -256,6 +351,10 @@ def _scope_candidates(
 
     Priority when ticket_package_id is set: package-exact + parent project (all packages).
     Otherwise: location/project wildcards, includes_children, and package-via-location (C).
+
+    If still no candidates and the ticket has a location, fall back to the ticket's
+    province (level 1): any officer scoped anywhere under that province (e.g. Morang L1
+    for a Jhapa ticket when no Jhapa officer exists).
     """
     from ticketing.models.officer_scope import OfficerScope
     from ticketing.models.package import PackageLocation, ProjectPackage
@@ -297,6 +396,16 @@ def _scope_candidates(
             proj = db.get(Project, pkg.project_id)
             if proj and proj.short_code:
                 project_code = project_code or proj.short_code
+        if not result and location_code:
+            _add_province_level_fallback(
+                result,
+                seen,
+                role_key=role_key,
+                organization_id=organization_id,
+                location_code=location_code,
+                project_code=project_code,
+                db=db,
+            )
         return result
 
     # ── A. Exact / wildcard match (non-package scopes only) ───────────────────
@@ -360,6 +469,17 @@ def _scope_candidates(
                 )
             ).scalars().all()
             _add(rows)
+
+    if not result and location_code:
+        _add_province_level_fallback(
+            result,
+            seen,
+            role_key=role_key,
+            organization_id=organization_id,
+            location_code=location_code,
+            project_code=project_code,
+            db=db,
+        )
 
     return result
 

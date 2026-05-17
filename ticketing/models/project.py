@@ -43,6 +43,17 @@ class Project(Base):
     # Used to proxy complainant-info edits back to the chatbot's DB.
     # NULL = fall back to settings.backend_grievance_base_url (single-instance deploy).
     chatbot_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Grievance routing: which workflow definition applies to tickets for this project.
+    standard_workflow_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ticketing.workflow_definitions.workflow_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    seah_workflow_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ticketing.workflow_definitions.workflow_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

@@ -51,7 +51,6 @@ from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
 from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
 from backend.services.database_services.postgres_services import db_manager
-from backend.services.messaging import messaging
 from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
 from .task_manager import TaskManager, DatabaseTaskManager
@@ -273,7 +272,13 @@ def send_sms_task(self, phone_number: str, message: str, grievance_id: str = Non
             extra_data={'phone_number': phone_number}
         )
     try:
-        result = messaging.send_sms(phone_number, message)
+        from backend.clients.messaging_api import send_sms as send_sms_via_api
+
+        ctx = {"source_system": "chatbot", "purpose": "celery_send_sms_task"}
+        if grievance_id:
+            ctx["grievance_id"] = grievance_id
+        send_sms_via_api(phone_number, message, context=ctx)
+        result = True
         if grievance_id:
             task_mgr.complete_task(
                 result=result, 
@@ -316,7 +321,13 @@ def send_email_task(self, to_emails, subject, body, grievance_id: str = None):
             extra_data={'to_emails': to_emails}
         )
     try:
-        result = messaging.send_email(to_emails, subject, body)
+        from backend.clients.messaging_api import send_email as send_email_via_api
+
+        ctx = {"source_system": "chatbot", "purpose": "celery_send_email_task"}
+        if grievance_id:
+            ctx["grievance_id"] = grievance_id
+        send_email_via_api(to_emails, subject, body, context=ctx)
+        result = True
         if grievance_id:
             task_mgr.complete_task(
                 result=result,

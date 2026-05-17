@@ -6,7 +6,7 @@ Endpoints:
     POST   /organizations                      create organization (admin)
     PATCH  /organizations/{id}                 update organization (admin)
     GET  /countries                           list countries
-    GET  /locations?country=NP&level=2&parent=NP_P1&q=bira   browse tree
+    GET  /locations?country=NP&level=2&parent=P1&q=bira   browse tree
     GET  /locations/{location_code}           single node + translations
 
     GET  /locations/import/template.csv       download blank CSV template (super_admin)
@@ -104,6 +104,8 @@ class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     is_active: bool | None = None
+    standard_workflow_id: str | None = None
+    seah_workflow_id: str | None = None
 
 
 class ProjectOrgItem(BaseModel):
@@ -121,6 +123,8 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None
     is_active: bool
+    standard_workflow_id: str | None = None
+    seah_workflow_id: str | None = None
     created_at: datetime
     updated_at: datetime
     organizations: list[ProjectOrgItem] = []
@@ -351,7 +355,7 @@ def download_csv_template():
     Fill in the rows and upload via POST /locations/import.
 
     Columns:
-      - location_code        unique code, e.g. NP_P1 / NP_D001 / NP_M0001
+      - location_code        unique code, e.g. P1 / P1_JHA / P1_JHA_BIR (see LOCATION_CODES.md)
       - level_number         1=Province, 2=District, 3=Municipality
       - parent_location_code code of the parent node (blank for level-1 nodes)
       - source_id            optional original numeric ID from your dataset
@@ -418,8 +422,8 @@ async def import_locations(
     **CSV format** — flat rows, one location per line:
     ```
     location_code,level_number,parent_location_code,source_id,name_en,name_ne
-    NP_P1,1,,1,Koshi Province,कोशी
-    NP_D004,2,NP_P1,4,Jhapa,झापा
+    P1,1,,1,Koshi Province,कोशी
+    P1_JHA,2,P1,4,Jhapa,झापा
     ```
     Download the template from `GET /locations/import/template.csv`.
 
@@ -566,6 +570,29 @@ def get_location(location_code: str, db: Session = Depends(get_db)):
 
 # ── Projects ──────────────────────────────────────────────────────────────────
 
+def _validate_project_workflow(
+    db: Session,
+    workflow_id: str | None,
+    *,
+    expected_type: str,
+) -> None:
+    if workflow_id is None:
+        return
+    from ticketing.models.workflow import WorkflowDefinition
+
+    wf = db.get(WorkflowDefinition, workflow_id)
+    if not wf:
+        raise HTTPException(status_code=422, detail=f"Workflow '{workflow_id}' not found")
+    if wf.is_template:
+        raise HTTPException(status_code=422, detail="Templates cannot be assigned to a project")
+    actual = (wf.workflow_type or "").lower()
+    if actual != expected_type.lower():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Workflow must be type '{expected_type}', got '{wf.workflow_type}'",
+        )
+
+
 def _project_to_response(p: Project) -> dict:
     return {
         "project_id":    p.project_id,
@@ -574,6 +601,8 @@ def _project_to_response(p: Project) -> dict:
         "name":          p.name,
         "description":   p.description,
         "is_active":     p.is_active,
+        "standard_workflow_id": p.standard_workflow_id,
+        "seah_workflow_id": p.seah_workflow_id,
         "created_at":    p.created_at,
         "updated_at":    p.updated_at,
         "organizations": [
@@ -686,6 +715,12 @@ def update_project(
         p.description = body.description
     if body.is_active is not None:
         p.is_active = body.is_active
+    if "standard_workflow_id" in body.model_fields_set:
+        _validate_project_workflow(db, body.standard_workflow_id, expected_type="standard")
+        p.standard_workflow_id = body.standard_workflow_id
+    if "seah_workflow_id" in body.model_fields_set:
+        _validate_project_workflow(db, body.seah_workflow_id, expected_type="seah")
+        p.seah_workflow_id = body.seah_workflow_id
     p.updated_at = _now()
 
     db.commit()

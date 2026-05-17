@@ -11,10 +11,12 @@ Usage (from repo root, with ticketing DB env vars set):
 
 Idempotent: uses ON CONFLICT DO UPDATE so safe to re-run.
 
-Location code scheme (deterministic from source IDs):
-    Province     → NP_P{province_id}           e.g. NP_P1
-    District     → NP_D{district_id:03d}       e.g. NP_D001
-    Municipality → NP_M{municipality_id:04d}   e.g. NP_M0001
+Location code scheme for country **NP** (see docs/ticketing_system/LOCATION_CODES.md):
+    Province     → P{province_id}              e.g. P1 (Koshi)
+    District     → {province}_{NAME3}           e.g. P1_JHA (first 3+ letters unique per province)
+    Municipality → {district}_{NAME3}
+
+Other countries continue to use: {country}_P{id}, {country}_D{nnn}, {country}_M{nnnn}.
 
 Core parsing/upsert logic lives in location_import_core.py.
 To add a new country: supply your own en/local JSON files and set --country XX.

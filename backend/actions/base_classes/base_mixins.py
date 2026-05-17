@@ -9,12 +9,13 @@ from rapidfuzz import fuzz
 import re
 import traceback
 import json
+import asyncio
 import inspect
 import logging
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
 from backend.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY, BUTTONS_SEAH_PROJECT_IDENTIFICATION
 from backend.shared_functions.helpers_repo import helpers_repo
-from backend.services.messaging import Messaging
+from backend.clients.messaging_api import send_sms as send_sms_via_api
 from backend.config.constants import DEFAULT_VALUES, LLM_CLASSIFICATION, USER_FIELDS, GRIEVANCE_FIELDS, CLASSIFICATION_DATA, EMAIL_TEMPLATES, DIC_SMS_TEMPLATES, ADMIN_EMAILS
 from backend.config.database_constants import TASK_STATUS, GRIEVANCE_CLASSIFICATION_STATUS, GRIEVANCE_STATUS, GRIEVANCE_STATUS_DICT
 from backend.services.database_services.postgres_services import db_manager
@@ -35,7 +36,6 @@ class ActionCommonMixin(Action, ABC):
         self.logger = logging.getLogger(__name__)
         self.file_name = self.__class__.__module__.split(".")[-1]
         self.helpers = helpers_repo
-        self.messaging = Messaging()
         self.db_manager = db_manager
         self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS
         self.SKIP_VALUE = SKIP_VALUE
@@ -1280,7 +1280,7 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
                                                          grievance_data: Dict[str, Any],
                                                          body_name: str
                                                          ) -> None:
-        """Prepare and enqueue a recap email task so it runs via Celery."""
+        """Send recap email via POST /api/messaging/send-email (non-blocking thread)."""
         try:
             body, subject = self.prepare_recap_email(
                 to_emails,
@@ -1295,21 +1295,24 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
                 return
 
             grievance_id = grievance_data.get("grievance_id")
+            context = {
+                "source_system": "chatbot",
+                "purpose": body_name,
+                "grievance_id": grievance_id,
+                "channel": "email",
+            }
 
-            try:
-                # Prefer Celery-based delivery so email failures/latency never block the chatbot flow.
-                from backend.task_queue.registered_tasks import send_email_task
+            from backend.clients.messaging_api import send_email as send_email_via_api
 
-                send_email_task.delay(to_emails, subject, body, grievance_id=grievance_id)
-                self.logger.debug(
-                    f"Enqueued send_email_task via Celery for grievance_id={grievance_id}"
-                )
-            except Exception as celery_error:
-                # If Celery is unavailable for any reason, fall back to direct send.
-                self.logger.error(
-                    f"Celery send_email_task unavailable, falling back to direct send: {celery_error}"
-                )
-                self.messaging.send_email(to_emails, subject=subject, body=body)
+            def _deliver() -> None:
+                send_email_via_api(to_emails, subject, body, context=context)
+
+            await asyncio.to_thread(_deliver)
+            self.logger.debug(
+                "Recap email sent via Messaging API for grievance_id=%s template=%s",
+                grievance_id,
+                body_name,
+            )
         except Exception as e:
             self.logger.error(f"Failed to send system notification email: {e}")
             
@@ -1351,12 +1354,18 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
 
 
     def send_sms(self, sms_data: Dict[str, Any], body_name: str) -> None:
-        """Send a SMS to the user."""
+        """Send SMS via POST /api/messaging/send-sms."""
         try:
             complainant_phone = sms_data["complainant_phone"]
             sms_body = DIC_SMS_TEMPLATES[body_name][self.language_code]
             sms_body = sms_body.format(**sms_data)
-            self.messaging.send_sms(complainant_phone, sms_body)
+            context = {
+                "source_system": "chatbot",
+                "purpose": body_name,
+                "grievance_id": sms_data.get("grievance_id"),
+                "channel": "sms",
+            }
+            send_sms_via_api(complainant_phone, sms_body, context=context)
         except Exception as e:
             self.logger.error(f"Failed to send SMS: {e}")
             self.logger.error(f"SMS error details: {traceback.format_exc()}")

@@ -68,7 +68,7 @@ from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_file import TicketFile
 from ticketing.models.ticket_task import TicketTask
 from ticketing.models.ticket_viewer import TicketViewer
-from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,38 +92,28 @@ def _lookup_workflow(
     is_seah: bool,
     priority: str,
 ) -> WorkflowDefinition:
-    """
-    Find the best-matching workflow for this ticket.
+    """Resolve workflow via project links, then legacy workflow_assignments."""
+    from ticketing.engine.workflow_engine import resolve_workflow
 
-    Lookup key for SEAH tickets: priority overridden to 'SEAH'.
-    Fallback cascade: exact → (org, None, project, priority) → (org, None, None, priority)
-    → (org, None, None, None) to handle sparse assignment table.
-    """
-    lookup_priority = "SEAH" if is_seah else priority
-
-    for loc in ([location_code, None] if location_code else [None]):
-        for proj in ([project_code, None] if project_code else [None]):
-            for pri in ([lookup_priority, None]):
-                assignment = db.execute(
-                    select(WorkflowAssignment).where(
-                        WorkflowAssignment.organization_id == organization_id,
-                        WorkflowAssignment.location_code == loc,
-                        WorkflowAssignment.project_code == proj,
-                        WorkflowAssignment.priority == pri,
-                    )
-                ).scalar_one_or_none()
-                if assignment:
-                    workflow = db.get(WorkflowDefinition, assignment.workflow_id)
-                    if workflow:
-                        return workflow
+    workflow = resolve_workflow(
+        organization_id=organization_id,
+        location_code=location_code,
+        project_code=project_code,
+        is_seah=is_seah,
+        priority=priority,
+        db=db,
+    )
+    if workflow:
+        return workflow
 
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail=(
-            f"No workflow assignment found for org={organization_id} "
+            f"No workflow found for org={organization_id} "
             f"location={location_code} project={project_code} "
             f"is_seah={is_seah} priority={priority}. "
-            "Seed the workflow_assignments table first."
+            "Set Standard/SEAH workflows on the project in Settings → Projects, "
+            "or add a legacy workflow assignment."
         ),
     )
 
@@ -384,8 +374,8 @@ def list_tickets(
                 parts: list = [Ticket.organization_id == scope.organization_id]
                 if scope.location_code:
                     # Hierarchical match: exact location OR any direct child location
-                    # (e.g. province-scope NP_P1 matches district-level ticket NP_D006
-                    #  because NP_D006.parent_location_code = NP_P1)
+                    # (e.g. province-scope P1 matches district-level ticket P1_JHA
+                    #  because P1_JHA.parent_location_code = P1)
                     child_locs = select(Location.location_code).where(
                         Location.parent_location_code == scope.location_code
                     )
@@ -575,7 +565,7 @@ def get_ticket(
 
             if not has_pending_task:
                 # Fall back to scope check — mirrors the hierarchical list-endpoint logic:
-                # a province-scoped officer (NP_P1) can access district-level tickets (NP_D006).
+                # a province-scoped officer (P1) can access district-level tickets (P1_JHA).
                 from ticketing.models.officer_scope import OfficerScope as _OfficerScope
                 scopes = db.execute(
                     select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
