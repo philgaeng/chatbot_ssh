@@ -5,7 +5,11 @@ export function isDonorAllProjectsOrg(orgId: string): boolean {
   return orgId === "ADB" || orgId.toUpperCase() === "ADB";
 }
 
-/** Projects an org may scope officers to (project_organizations link or contractor packages). */
+function orgOnPackage(pkg: PackageItem, orgId: string): boolean {
+  return (pkg.organizations ?? []).some((o) => o.organization_id === orgId);
+}
+
+/** Projects an org may scope officers to (project_organizations link or package actors). */
 export function projectsForOrganization(
   orgId: string,
   projects: ProjectItem[],
@@ -15,10 +19,8 @@ export function projectsForOrganization(
   if (isDonorAllProjectsOrg(orgId)) return projects;
   return projects.filter((p) => {
     const orgLinked = p.organizations.some((o) => o.organization_id === orgId);
-    const contractorOnProject = (packagesByProject[p.project_id] ?? []).some(
-      (pkg) => pkg.contractor_org_id === orgId,
-    );
-    return orgLinked || contractorOnProject;
+    const onPackage = (packagesByProject[p.project_id] ?? []).some((pkg) => orgOnPackage(pkg, orgId));
+    return orgLinked || onPackage;
   });
 }
 
@@ -30,8 +32,8 @@ export function packagesForOrganizationOnProject(
 ): PackageItem[] {
   if (!orgId || !project) return [];
   if (isDonorAllProjectsOrg(orgId)) return allPackages;
-  const contractorPkgs = allPackages.filter((pkg) => pkg.contractor_org_id === orgId);
-  if (contractorPkgs.length > 0) return contractorPkgs;
+  const actorPkgs = allPackages.filter((pkg) => orgOnPackage(pkg, orgId));
+  if (actorPkgs.length > 0) return actorPkgs;
   const orgLinked = project.organizations.some((o) => o.organization_id === orgId);
   if (orgLinked) return allPackages;
   return [];

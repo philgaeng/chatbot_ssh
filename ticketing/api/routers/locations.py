@@ -39,7 +39,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from ticketing.api.dependencies import CurrentUser, require_admin
+from ticketing.api.dependencies import CurrentUser, require_admin, require_super_admin
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
@@ -48,8 +48,11 @@ from ticketing.utils.organization_identifier import (
     suggested_organization_id,
 )
 from ticketing.models.officer_scope import OfficerScope
-from ticketing.models.package import PackageLocation, ProjectPackage
-from ticketing.models.project import Project, ProjectLocation, ProjectOrganization
+from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
+from ticketing.models.project import Project, ProjectActorRole, ProjectLocation, ProjectOrganization
+from ticketing.services import project_actor_roles as actor_roles_svc
+from ticketing.services import project_go_live as go_live_svc
+from ticketing.services import project_types as types_svc
 from ticketing.models.ticket import Ticket
 from ticketing.models.user import UserRole
 from ticketing.models.workflow import WorkflowAssignment
@@ -97,7 +100,11 @@ class ProjectCreate(BaseModel):
     short_code: str   = Field(..., max_length=64)
     name: str
     description: str | None = None
-    is_active: bool = True
+    is_active: bool | None = None
+    project_type_key: str | None = Field(
+        None,
+        description="Archetype to instantiate (e.g. construction_road). Defaults workflows and actor roles.",
+    )
 
 
 class ProjectUpdate(BaseModel):
@@ -123,6 +130,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None
     is_active: bool
+    project_type_key: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
     created_at: datetime
@@ -131,6 +139,23 @@ class ProjectResponse(BaseModel):
     location_codes: list[str] = []
 
     model_config = {"from_attributes": True}
+
+
+class GoLiveCheckResponse(BaseModel):
+    id: str
+    label: str
+    group: str
+    severity: str
+    status: str
+    message: str
+    section: str | None = None
+
+
+class GoLiveReportResponse(BaseModel):
+    checks: list[GoLiveCheckResponse]
+    can_activate: bool
+    can_accept_tickets: bool
+    summary: dict[str, int]
 
 
 # ── Organizations ─────────────────────────────────────────────────────────────
@@ -303,13 +328,13 @@ def delete_organization(
 
     pkg_count = db.scalar(
         select(func.count())
-        .select_from(ProjectPackage)
-        .where(ProjectPackage.contractor_org_id == organization_id)
+        .select_from(PackageOrganization)
+        .where(PackageOrganization.organization_id == organization_id)
     ) or 0
     if pkg_count:
         raise HTTPException(
             status_code=409,
-            detail=f"Cannot delete: {pkg_count} package(s) list this organization as contractor.",
+            detail=f"Cannot delete: {pkg_count} package actor assignment(s) use this organization.",
         )
 
     db.delete(org)
@@ -601,6 +626,7 @@ def _project_to_response(p: Project) -> dict:
         "name":          p.name,
         "description":   p.description,
         "is_active":     p.is_active,
+        "project_type_key": p.project_type_key,
         "standard_workflow_id": p.standard_workflow_id,
         "seah_workflow_id": p.seah_workflow_id,
         "created_at":    p.created_at,
@@ -655,6 +681,10 @@ def create_project(
     if existing:
         raise HTTPException(status_code=409, detail=f"Project short_code '{body.short_code}' already exists")
 
+    typed = bool(body.project_type_key)
+    default_active = False if typed else True
+    is_active = body.is_active if body.is_active is not None else default_active
+
     now = _now()
     project = Project(
         project_id=str(uuid.uuid4()),
@@ -662,11 +692,29 @@ def create_project(
         short_code=body.short_code,
         name=body.name,
         description=body.description,
-        is_active=body.is_active,
+        is_active=is_active,
         created_at=now,
         updated_at=now,
     )
     db.add(project)
+    db.flush()
+
+    if body.project_type_key:
+        try:
+            types_svc.instantiate_project_from_type(db, project, body.project_type_key)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    else:
+        actor_roles_svc.seed_project_actor_roles(db, project.project_id)
+
+    if is_active:
+        report = go_live_svc.evaluate_go_live(db, project.project_id)
+        if not report.can_activate:
+            raise HTTPException(
+                status_code=422,
+                detail=go_live_svc.activation_block_message(report) or "Cannot activate project yet",
+            )
+
     db.commit()
     db.refresh(project)
 
@@ -677,6 +725,31 @@ def create_project(
         .where(Project.project_id == project.project_id)
     ).scalar_one()
     return _project_to_response(p)
+
+
+@router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse)
+def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
+    """Go-live readiness checklist for a project."""
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    report = go_live_svc.evaluate_go_live(db, project_id)
+    return GoLiveReportResponse(
+        checks=[
+            GoLiveCheckResponse(
+                id=c.id,
+                label=c.label,
+                group=c.group,
+                severity=c.severity,
+                status=c.status,
+                message=c.message,
+                section=c.section,
+            )
+            for c in report.checks
+        ],
+        can_activate=report.can_activate,
+        can_accept_tickets=report.can_accept_tickets,
+        summary=report.summary,
+    )
 
 
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
@@ -714,6 +787,13 @@ def update_project(
     if body.description is not None:
         p.description = body.description
     if body.is_active is not None:
+        if body.is_active and not p.is_active:
+            report = go_live_svc.evaluate_go_live(db, project_id)
+            if not report.can_activate:
+                raise HTTPException(
+                    status_code=422,
+                    detail=go_live_svc.activation_block_message(report) or "Cannot activate project yet",
+                )
         p.is_active = body.is_active
     if "standard_workflow_id" in body.model_fields_set:
         _validate_project_workflow(db, body.standard_workflow_id, expected_type="standard")
@@ -790,6 +870,11 @@ def add_project_organization(
             ProjectOrganization.organization_id == organization_id,
         )
     ).scalar_one_or_none()
+    try:
+        actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if existing:
         # Allow updating the role on an existing link
         existing.org_role = body.org_role
@@ -825,9 +910,66 @@ def update_project_organization_role(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Organization not linked to this project")
+    try:
+        actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     row.org_role = body.org_role
     db.commit()
     return {"organization_id": organization_id, "org_role": row.org_role}
+
+
+# ── Project actor role vocabulary ─────────────────────────────────────────────
+
+class ActorRoleItem(BaseModel):
+    key: str
+    label: str
+    description: str = ""
+    sort_order: int = 0
+
+
+class ActorRolesReplace(BaseModel):
+    roles: list[ActorRoleItem]
+
+
+@router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
+def list_project_actor_roles(project_id: str, db: Session = Depends(get_db)):
+    """Role vocabulary for this project (donor, CSC, contractor, etc.)."""
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    rows = actor_roles_svc.list_project_actor_roles(db, project_id)
+    if not rows:
+        rows = actor_roles_svc.seed_project_actor_roles(db, project_id)
+        db.commit()
+    return actor_roles_svc.actor_roles_to_api(rows)
+
+
+@router.put("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
+def replace_project_actor_roles(
+    project_id: str,
+    body: ActorRolesReplace,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin),
+):
+    """Replace the full role vocabulary for a project. Super admin only when project has a type."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.project_type_key and "super_admin" not in admin.role_keys:
+        raise HTTPException(
+            status_code=403,
+            detail="Actor role keys are defined by the project type; super admin only",
+        )
+    try:
+        rows = actor_roles_svc.replace_project_actor_roles(
+            db,
+            project_id,
+            [r.model_dump() for r in body.roles],
+        )
+        db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return actor_roles_svc.actor_roles_to_api(rows)
 
 
 @router.delete("/projects/{project_id}/organizations/{organization_id}", status_code=204)
@@ -934,13 +1076,18 @@ def remove_project_location(
 
 # ── Project packages ──────────────────────────────────────────────────────────
 
+class PackageOrgItem(BaseModel):
+    organization_id: str
+    org_role: str
+
+
 class PackageResponse(BaseModel):
     package_id:        str
     project_id:        str
     package_code:      str
     name:              str
     description:       str | None
-    contractor_org_id: str | None
+    organizations:     list[PackageOrgItem] = []
     is_active:         bool
     location_codes:    list[str] = []
     created_at:        datetime
@@ -953,14 +1100,12 @@ class PackageCreate(BaseModel):
     package_code:      str = Field(..., max_length=128)
     name:              str
     description:       str | None = None
-    contractor_org_id: str | None = None
     is_active:         bool = True
 
 
 class PackageUpdate(BaseModel):
     name:              str | None = None
     description:       str | None = None
-    contractor_org_id: str | None = None
     is_active:         bool | None = None
 
 
@@ -971,12 +1116,32 @@ def _package_to_dict(pkg: ProjectPackage) -> dict:
         "package_code":      pkg.package_code,
         "name":              pkg.name,
         "description":       pkg.description,
-        "contractor_org_id": pkg.contractor_org_id,
+        "organizations":     [
+            {"organization_id": po.organization_id, "org_role": po.org_role}
+            for po in (pkg.organizations or [])
+        ],
         "is_active":         pkg.is_active,
         "location_codes":    [pl.location_code for pl in pkg.locations],
         "created_at":        pkg.created_at,
         "updated_at":        pkg.updated_at,
     }
+
+
+def _get_package_or_404(db: Session, project_id: str, package_id: str) -> ProjectPackage:
+    pkg = db.execute(
+        select(ProjectPackage)
+        .options(
+            selectinload(ProjectPackage.locations),
+            selectinload(ProjectPackage.organizations),
+        )
+        .where(
+            ProjectPackage.package_id == package_id,
+            ProjectPackage.project_id == project_id,
+        )
+    ).scalar_one_or_none()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    return pkg
 
 
 @router.get("/projects/{project_id}/packages", response_model=list[PackageResponse])
@@ -986,7 +1151,10 @@ def list_packages(project_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
     pkgs = db.execute(
         select(ProjectPackage)
-        .options(selectinload(ProjectPackage.locations))
+        .options(
+            selectinload(ProjectPackage.locations),
+            selectinload(ProjectPackage.organizations),
+        )
         .where(ProjectPackage.project_id == project_id)
         .order_by(ProjectPackage.package_code)
     ).scalars().all()
@@ -1003,8 +1171,6 @@ def create_package(
     """Create a package within a project. Admin only."""
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    if body.contractor_org_id and not db.get(Organization, body.contractor_org_id):
-        raise HTTPException(status_code=404, detail=f"Organization '{body.contractor_org_id}' not found")
 
     existing = db.execute(
         select(ProjectPackage).where(
@@ -1020,12 +1186,11 @@ def create_package(
         package_code=body.package_code,
         name=body.name,
         description=body.description,
-        contractor_org_id=body.contractor_org_id,
         is_active=body.is_active,
     )
     db.add(pkg)
     db.flush()
-    db.refresh(pkg, ["locations"])
+    db.refresh(pkg, ["locations", "organizations"])
     db.commit()
     return _package_to_dict(pkg)
 
@@ -1039,21 +1204,10 @@ def update_package(
     _admin: CurrentUser = Depends(require_admin),
 ):
     """Update package metadata. Admin only."""
-    pkg = db.execute(
-        select(ProjectPackage)
-        .options(selectinload(ProjectPackage.locations))
-        .where(ProjectPackage.package_id == package_id,
-               ProjectPackage.project_id == project_id)
-    ).scalar_one_or_none()
-    if not pkg:
-        raise HTTPException(status_code=404, detail="Package not found")
+    pkg = _get_package_or_404(db, project_id, package_id)
 
     if body.name              is not None: pkg.name              = body.name
     if body.description       is not None: pkg.description       = body.description
-    if body.contractor_org_id is not None:
-        if body.contractor_org_id and not db.get(Organization, body.contractor_org_id):
-            raise HTTPException(status_code=404, detail=f"Organization '{body.contractor_org_id}' not found")
-        pkg.contractor_org_id = body.contractor_org_id
     if body.is_active         is not None: pkg.is_active         = body.is_active
     pkg.updated_at = _now()
     db.commit()
@@ -1114,5 +1268,80 @@ def remove_package_location(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Package location link not found")
+    db.delete(row)
+    db.commit()
+
+
+# ── Package ↔ Organizations (package-level actors) ───────────────────────────
+
+class PackageOrgRoleBody(BaseModel):
+    org_role: str = Field(..., min_length=1, max_length=64)
+
+
+@router.post(
+    "/projects/{project_id}/packages/{package_id}/organizations/{organization_id}",
+    response_model=PackageOrgItem,
+    status_code=201,
+)
+def add_package_organization(
+    project_id: str,
+    package_id: str,
+    organization_id: str,
+    body: PackageOrgRoleBody,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
+    """Assign an organization + role to a package (overrides project-wide for this lot)."""
+    _get_package_or_404(db, project_id, package_id)
+    if not db.get(Organization, organization_id):
+        raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
+    try:
+        actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    existing = db.execute(
+        select(PackageOrganization).where(
+            PackageOrganization.package_id == package_id,
+            PackageOrganization.organization_id == organization_id,
+            PackageOrganization.org_role == body.org_role,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return {"organization_id": organization_id, "org_role": body.org_role}
+
+    row = PackageOrganization(
+        package_id=package_id,
+        organization_id=organization_id,
+        org_role=body.org_role,
+    )
+    db.add(row)
+    db.commit()
+    return {"organization_id": organization_id, "org_role": body.org_role}
+
+
+@router.delete(
+    "/projects/{project_id}/packages/{package_id}/organizations/{organization_id}/{org_role}",
+    status_code=204,
+)
+def remove_package_organization(
+    project_id: str,
+    package_id: str,
+    organization_id: str,
+    org_role: str,
+    db: Session = Depends(get_db),
+    _admin: CurrentUser = Depends(require_admin),
+):
+    """Remove a package-level actor assignment."""
+    _get_package_or_404(db, project_id, package_id)
+    row = db.execute(
+        select(PackageOrganization).where(
+            PackageOrganization.package_id == package_id,
+            PackageOrganization.organization_id == organization_id,
+            PackageOrganization.org_role == org_role,
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Package actor not found")
     db.delete(row)
     db.commit()

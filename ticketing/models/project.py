@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, PrimaryKeyConstraint, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -54,6 +54,11 @@ class Project(Base):
         ForeignKey("ticketing.workflow_definitions.workflow_id", ondelete="SET NULL"),
         nullable=True,
     )
+    project_type_key: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.project_types.type_key", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
@@ -64,13 +69,40 @@ class Project(Base):
     locations: Mapped[list["ProjectLocation"]] = relationship(
         "ProjectLocation", back_populates="project", cascade="all, delete-orphan"
     )
+    actor_roles: Mapped[list["ProjectActorRole"]] = relationship(
+        "ProjectActorRole", back_populates="project", cascade="all, delete-orphan"
+    )
+
+
+class ProjectActorRole(Base):
+    """
+    Per-project vocabulary of organization roles (donor, CSC, contractor, etc.).
+    Seeded from global settings org_roles when the project is created; editable per project.
+    """
+    __tablename__ = "project_actor_roles"
+    __table_args__ = (
+        PrimaryKeyConstraint("project_id", "role_key"),
+        {"schema": "ticketing"},
+    )
+
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.projects.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="actor_roles")
 
 
 class ProjectOrganization(Base):
     """
     Many-to-many: multiple organizations can co-own a project.
     e.g. KL Road → DOR (implementing_agency) + ADB (donor)
-    org_role references the vocabulary stored in ticketing.settings key 'org_roles'.
+    org_role references ticketing.project_actor_roles.role_key for this project.
     """
     __tablename__ = "project_organizations"
     __table_args__ = (

@@ -38,7 +38,6 @@ class ProjectPackage(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "package_code", name="uq_project_packages_code"),
         Index("idx_project_packages_project", "project_id"),
-        Index("idx_project_packages_contractor", "contractor_org_id"),
         {"schema": "ticketing"},
     )
 
@@ -53,15 +52,6 @@ class ProjectPackage(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Main contractor for this package (nullable — assigned later or unknown)
-    # org_role on project_organizations determines the role; here we store the specific
-    # contractor entity directly for fast L1 routing.
-    contractor_org_id: Mapped[str | None] = mapped_column(
-        String(64),
-        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
-        nullable=True,
-    )
-
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
@@ -69,6 +59,36 @@ class ProjectPackage(Base):
     locations: Mapped[list["PackageLocation"]] = relationship(
         "PackageLocation", back_populates="package", cascade="all, delete-orphan"
     )
+    organizations: Mapped[list["PackageOrganization"]] = relationship(
+        "PackageOrganization", back_populates="package", cascade="all, delete-orphan"
+    )
+
+
+class PackageOrganization(Base):
+    """
+    Organization + role on a specific package (lot). Overrides project-wide actor
+    with the same role for this package only.
+    """
+    __tablename__ = "package_organizations"
+    __table_args__ = (
+        PrimaryKeyConstraint("package_id", "organization_id", "org_role"),
+        Index("idx_package_organizations_org", "organization_id"),
+        {"schema": "ticketing"},
+    )
+
+    package_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ticketing.project_packages.package_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    org_role: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    package: Mapped["ProjectPackage"] = relationship("ProjectPackage", back_populates="organizations")
 
 
 class PackageLocation(Base):

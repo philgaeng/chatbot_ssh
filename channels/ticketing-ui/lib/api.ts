@@ -677,6 +677,7 @@ export interface ProjectItem {
   name: string;
   description: string | null;
   is_active: boolean;
+  project_type_key: string | null;
   /** Workflow used for standard (non-SEAH) grievances on this project. */
   standard_workflow_id: string | null;
   /** Workflow used when case_sensitivity is SEAH. */
@@ -694,6 +695,45 @@ export interface ProjectCreate {
   name: string;
   description?: string | null;
   is_active?: boolean;
+  project_type_key?: string | null;
+}
+
+export interface TypeActorRoleDef {
+  key: string;
+  label: string;
+  description?: string;
+  required?: boolean;
+  required_package?: boolean;
+  scope?: string;
+}
+
+export interface ProjectTypeItem {
+  type_key: string;
+  label: string;
+  description: string | null;
+  standard_workflow_id: string | null;
+  seah_workflow_id: string | null;
+  routing_org_role: string;
+  actor_roles: TypeActorRoleDef[];
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface GoLiveCheck {
+  id: string;
+  label: string;
+  group: string;
+  severity: string;
+  status: string;
+  message: string;
+  section: string | null;
+}
+
+export interface GoLiveReport {
+  checks: GoLiveCheck[];
+  can_activate: boolean;
+  can_accept_tickets: boolean;
+  summary: Record<string, number>;
 }
 
 export interface ImportResult {
@@ -793,6 +833,24 @@ export function createProject(payload: ProjectCreate): Promise<ProjectItem> {
   });
 }
 
+export function getProjectGoLive(projectId: string): Promise<GoLiveReport> {
+  return apiFetch<GoLiveReport>(`/api/v1/projects/${projectId}/go-live`);
+}
+
+export function listProjectTypes(activeOnly = true): Promise<ProjectTypeItem[]> {
+  return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?active_only=${activeOnly}`);
+}
+
+export function updateProjectType(
+  typeKey: string,
+  payload: Partial<Omit<ProjectTypeItem, "type_key" | "actor_roles">>,
+): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function updateProject(
   projectId: string,
   payload: {
@@ -849,6 +907,18 @@ export function setOrgRoles(roles: OrgRole[]): Promise<void> {
   });
 }
 
+/** Per-project actor role vocabulary (editable; seeded from global defaults). */
+export function getProjectActorRoles(projectId: string): Promise<OrgRole[]> {
+  return apiFetch<OrgRole[]>(`/api/v1/projects/${projectId}/actor-roles`);
+}
+
+export function setProjectActorRoles(projectId: string, roles: OrgRole[]): Promise<OrgRole[]> {
+  return apiFetch<OrgRole[]>(`/api/v1/projects/${projectId}/actor-roles`, {
+    method: "PUT",
+    body: JSON.stringify({ roles }),
+  });
+}
+
 export function removeProjectOrg(projectId: string, orgId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/projects/${projectId}/organizations/${orgId}`, { method: "DELETE" });
 }
@@ -863,13 +933,18 @@ export function removeProjectLocation(projectId: string, locationCode: string): 
 
 // ── Packages ──────────────────────────────────────────────────────────────────
 
+export interface PackageOrgItem {
+  organization_id: string;
+  org_role: string;
+}
+
 export interface PackageItem {
   package_id:        string;
   project_id:        string;
   package_code:      string;
   name:              string;
   description:       string | null;
-  contractor_org_id: string | null;
+  organizations:     PackageOrgItem[];
   is_active:         boolean;
   /** District/municipality codes this package covers. */
   location_codes:    string[];
@@ -881,14 +956,12 @@ export interface PackageCreate {
   package_code:      string;
   name:              string;
   description?:      string | null;
-  contractor_org_id?: string | null;
   is_active?:        boolean;
 }
 
 export interface PackageUpdate {
   name?:              string;
   description?:       string | null;
-  contractor_org_id?: string | null;
   is_active?:         boolean;
 }
 
@@ -932,6 +1005,30 @@ export function removePackageLocation(
 ): Promise<void> {
   return apiFetch<void>(
     `/api/v1/projects/${projectId}/packages/${packageId}/locations/${locationCode}`,
+    { method: "DELETE" },
+  );
+}
+
+export function addPackageOrg(
+  projectId: string,
+  packageId: string,
+  organizationId: string,
+  orgRole: string,
+): Promise<PackageOrgItem> {
+  return apiFetch<PackageOrgItem>(
+    `/api/v1/projects/${projectId}/packages/${packageId}/organizations/${organizationId}`,
+    { method: "POST", body: JSON.stringify({ org_role: orgRole }) },
+  );
+}
+
+export function removePackageOrg(
+  projectId: string,
+  packageId: string,
+  organizationId: string,
+  orgRole: string,
+): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/projects/${projectId}/packages/${packageId}/organizations/${organizationId}/${encodeURIComponent(orgRole)}`,
     { method: "DELETE" },
   );
 }

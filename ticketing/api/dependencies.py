@@ -164,3 +164,13 @@ def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> Curr
             detail="Admin role required",
         )
     return current_user
+
+
+def require_super_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Raises 403 unless the user is super_admin."""
+    if "super_admin" not in current_user.role_keys:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin role required",
+        )
+    return current_user

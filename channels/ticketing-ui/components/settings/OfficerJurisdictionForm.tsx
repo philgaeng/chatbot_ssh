@@ -24,11 +24,19 @@ export type JurisdictionFormValue = {
   includes_children: boolean;
 };
 
-export function useOfficerJurisdictionState() {
-  const [orgId, setOrgId] = useState("");
-  const [selProject, setSelProject] = useState("");
+export type JurisdictionDefaults = {
+  organizationId?: string;
+  projectId?: string;
+  packageId?: string;
+  lockOrganization?: boolean;
+  lockProject?: boolean;
+};
+
+export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
+  const [orgId, setOrgId] = useState(defaults?.organizationId ?? "");
+  const [selProject, setSelProject] = useState(defaults?.projectId ?? "");
   const [selLoc, setSelLoc] = useState<{ code: string; name: string } | null>(null);
-  const [selPkg, setSelPkg] = useState("");
+  const [selPkg, setSelPkg] = useState(defaults?.packageId ?? "");
   const [inclChildren, setInclChildren] = useState(false);
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -139,6 +147,8 @@ export function useOfficerJurisdictionState() {
     filteredPackages,
     catalogLoading,
     isDonorOrg: isDonorAllProjectsOrg(orgId),
+    lockOrganization: Boolean(defaults?.lockOrganization),
+    lockProject: Boolean(defaults?.lockProject),
     reset,
     hasJurisdiction,
     toPayload,
@@ -161,6 +171,8 @@ type FieldsProps = {
   filteredPackages: PackageItem[];
   catalogLoading?: boolean;
   isDonorOrg?: boolean;
+  lockOrganization?: boolean;
+  lockProject?: boolean;
 };
 
 export function OfficerJurisdictionFields(props: FieldsProps) {
@@ -168,9 +180,11 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     orgId, setOrgId, selProject, setSelProject, selLoc, setSelLoc,
     selPkg, setSelPkg, inclChildren, setInclChildren,
     orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
+    lockOrganization, lockProject,
   } = props;
 
-  const projectDisabled = !orgId || catalogLoading || filteredProjects.length === 0;
+  const projectDisabled =
+    Boolean(lockProject) || !orgId || catalogLoading || filteredProjects.length === 0;
 
   return (
     <div className="space-y-3">
@@ -179,7 +193,8 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
           value={orgId}
           onChange={(e) => setOrgId(e.target.value)}
           required
-          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          disabled={lockOrganization}
+          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
         >
           <option value="">Organization *</option>
           {orgs.map((o) => (

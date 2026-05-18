@@ -238,6 +238,26 @@ def create_ticket(
             detail=f"Ticket already exists for grievance_id={payload.grievance_id} (ticket_id={existing.ticket_id})",
         )
 
+    if payload.project_code:
+        from ticketing.models.project import Project
+        from ticketing.services import project_go_live as go_live_svc
+
+        proj = db.execute(
+            select(Project).where(Project.short_code == payload.project_code)
+        ).scalar_one_or_none()
+        if proj:
+            if not proj.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Project '{payload.project_code}' is not active",
+                )
+            block = go_live_svc.ticket_intake_block_message(db, proj.project_id)
+            if block:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=block,
+                )
+
     # Workflow lookup
     workflow = _lookup_workflow(
         db,

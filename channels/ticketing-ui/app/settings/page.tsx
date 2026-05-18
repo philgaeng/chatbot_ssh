@@ -24,6 +24,7 @@ import {
   listCountries,
   listLocations,
   listProjects,
+  listProjectTypes,
   createProject,
   updateProject,
   deleteProject,
@@ -37,6 +38,10 @@ import {
   updateProjectOrgRole,
   getOrgRoles,
   setOrgRoles,
+  getProjectActorRoles,
+  setProjectActorRoles,
+  addPackageOrg,
+  removePackageOrg,
   createOrganization,
   updateOrganization,
   deleteOrganization,
@@ -66,6 +71,10 @@ import {
   type GrmRole,
 } from "@/lib/api";
 import { OfficersTab } from "@/components/settings/OfficersTab";
+import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
+import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
+import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
+import { ProjectTypesTab } from "@/components/settings/ProjectTypesTab";
 import { LocationSearch } from "@/components/LocationSearch";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
@@ -194,15 +203,16 @@ function RoleEditModal({ role, onSaved, onClose }: {
   );
 }
 
-type Tab = "officers" | "roles" | "workflows" | "organizations" | "report_schedule" | "system_config";
+type MainTab = "org_officers" | "workflows_roles" | "projects" | "platform";
+type OrgOfficersSub = "organizations" | "officers";
+type WorkflowsRolesSub = "workflows" | "roles";
+type PlatformSub = "locations" | "reports" | "project_types" | "system_config";
 
-const TABS: { id: Tab; label: string; superAdminOnly?: boolean }[] = [
-  { id: "officers",        label: "Officers"                  },
-  { id: "roles",           label: "Roles & Permissions"       },
-  { id: "workflows",       label: "Workflows"                 },
-  { id: "organizations",   label: "Organizations & Locations" },
-  { id: "report_schedule", label: "Report Schedule"           },
-  { id: "system_config",   label: "System Config",             superAdminOnly: true },
+const MAIN_TABS: { id: MainTab; label: string }[] = [
+  { id: "org_officers",      label: "Organizations & officers" },
+  { id: "workflows_roles",   label: "Workflows, roles & permissions" },
+  { id: "projects",          label: "Projects & packages" },
+  { id: "platform",          label: "Settings" },
 ];
 
 // Color classes for org role badges (keyed by role.key)
@@ -921,9 +931,9 @@ function WorkflowEditor({
       {!isTemplate && (
         <div className="mt-6 border-t border-gray-200 pt-5">
           <p className="text-xs text-gray-500">
-            Link this workflow to a project under{" "}
-            <span className="font-medium">Settings → Organizations &amp; Locations → Projects</span>
-            {" "}            (Standard / SEAH dropdowns). New tickets use the workflow selected on their project.
+            Assign this workflow on a project under{" "}
+            <span className="font-medium">Settings → Projects &amp; packages</span>
+            {" "}(Standard / SEAH). New tickets use the workflows selected on their project.
           </p>
         </div>
       )}
@@ -1344,7 +1354,6 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
               </div>
               <div className="text-xs text-gray-400 mt-0.5">
                 {wf.steps.filter(s => s && !s.is_deleted).length} steps
-                {wf.assignments.length > 0 && ` · assigned to ${wf.assignments.map(a => [a.organization_id, a.location_code, a.project_code].filter(Boolean).join("/")).join(", ")}`}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -1430,48 +1439,6 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
         </p>
       )}
       </div>
-    </div>
-  );
-}
-
-// ── Organizations & Locations Tab ─────────────────────────────────────────────
-
-type OrgLocSubTab = "organizations" | "locations" | "projects";
-
-function OrganizationsTab() {
-  const [sub, setSub] = useState<OrgLocSubTab>("organizations");
-  // When set, ProjectsSection will auto-open this project on mount
-  const [jumpProjectId, setJumpProjectId] = useState<string | null>(null);
-
-  function handleSubChange(id: OrgLocSubTab) {
-    if (id !== "projects") setJumpProjectId(null); // clear jump when leaving projects
-    setSub(id);
-  }
-
-  function navigateToProject(projectId: string) {
-    setJumpProjectId(projectId);
-    setSub("projects");
-  }
-
-  return (
-    <div>
-      {/* Sub-tabs */}
-      <div className="flex gap-0 border-b border-gray-200 mb-6">
-        {(["organizations", "locations", "projects"] as OrgLocSubTab[]).map((id) => (
-          <button
-            key={id}
-            onClick={() => handleSubChange(id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
-              sub === id ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {id.charAt(0).toUpperCase() + id.slice(1)}
-          </button>
-        ))}
-      </div>
-      {sub === "organizations" && <OrgsSection onNavigateToProject={navigateToProject} />}
-      {sub === "locations"     && <LocationsSection />}
-      {sub === "projects"      && <ProjectsSection initialEditId={jumpProjectId} />}
     </div>
   );
 }
@@ -1756,7 +1723,9 @@ function OrgEditor({
         listPackages(proj.project_id)
           .then((pkgs) => [
             proj.project_id,
-            pkgs.filter((pkg) => pkg.contractor_org_id === org.organization_id),
+            pkgs.filter((pkg) =>
+              (pkg.organizations ?? []).some((o) => o.organization_id === org.organization_id),
+            ),
           ] as [string, PackageItem[]])
           .catch(() => [proj.project_id, []] as [string, PackageItem[]])
       )
@@ -1851,7 +1820,7 @@ function OrgEditor({
               onClick={() => onNavigateToProject("")}
               className="text-blue-500 hover:underline"
             >
-              Go to Projects tab →
+              Go to Projects &amp; packages →
             </button>
           </p>
         ) : (
@@ -2182,7 +2151,15 @@ function LocationsSection() {
 
 // ── Projects section ──────────────────────────────────────────────────────────
 
-function ProjectsSection({ initialEditId = null }: { initialEditId?: string | null }) {
+function ProjectsSection({
+  initialEditId = null,
+  grmRoleChoices,
+  isSuperAdmin,
+}: {
+  initialEditId?: string | null;
+  grmRoleChoices: { key: string; label: string }[];
+  isSuperAdmin: boolean;
+}) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
   const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
@@ -2233,6 +2210,8 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
         project={editing}
         orgs={orgs}
         orgRoles={orgRoles}
+        grmRoleChoices={grmRoleChoices}
+        isSuperAdmin={isSuperAdmin}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={(p) => setEditing(p)}
       />
@@ -2253,7 +2232,6 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
 
       {showCreate && (
         <ProjectCreateModal
-          orgs={orgs}
           onCreated={(p) => { setShowCreate(false); setProjects((prev) => [...prev, p]); setEditing(p); }}
           onClose={() => setShowCreate(false)}
         />
@@ -2281,7 +2259,7 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
                     {!p.is_active && <span className="text-xs text-gray-400">(inactive)</span>}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
-                    <span>Orgs: {orgSummary.length > 0 ? orgSummary.join(", ") : <em>none</em>}</span>
+                    <span>Actors: {orgSummary.length > 0 ? orgSummary.join(", ") : <em>none</em>}</span>
                     <span>·</span>
                     <span>Locations: {p.location_codes.length > 0 ? `${p.location_codes.length} linked` : <em>none</em>}</span>
                   </div>
@@ -2302,11 +2280,9 @@ function ProjectsSection({ initialEditId = null }: { initialEditId?: string | nu
 }
 
 function ProjectCreateModal({
-  orgs,
   onCreated,
   onClose,
 }: {
-  orgs: OrganizationItem[];
   onCreated: (p: ProjectItem) => void;
   onClose: () => void;
 }) {
@@ -2314,14 +2290,35 @@ function ProjectCreateModal({
   const [shortCode, setShortCode] = useState("");
   const [country, setCountry]   = useState("NP");
   const [desc, setDesc]         = useState("");
+  const [typeKey, setTypeKey]   = useState("construction_road");
+  const [types, setTypes]       = useState<{ type_key: string; label: string }[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
 
+  useEffect(() => {
+    listProjectTypes(true)
+      .then((rows) => {
+        setTypes(rows.map((t) => ({ type_key: t.type_key, label: t.label })));
+        if (rows.length && !rows.some((t) => t.type_key === "construction_road")) {
+          setTypeKey(rows[0].type_key);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   async function handleCreate() {
     if (!name.trim() || !shortCode.trim()) { setError("Name and short code are required."); return; }
+    if (!typeKey) { setError("Select a project type."); return; }
     setCreating(true); setError("");
     try {
-      const p = await createProject({ name: name.trim(), short_code: shortCode.trim().toUpperCase(), country_code: country, description: desc.trim() || null });
+      const p = await createProject({
+        name: name.trim(),
+        short_code: shortCode.trim().toUpperCase(),
+        country_code: country,
+        description: desc.trim() || null,
+        project_type_key: typeKey,
+        is_active: false,
+      });
       onCreated(p);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Create failed");
@@ -2339,6 +2336,25 @@ function ProjectCreateModal({
         <div className="p-6 space-y-4">
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
           <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-gray-500 block mb-1">Project type *</label>
+              <select
+                value={typeKey}
+                onChange={(e) => setTypeKey(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              >
+                {types.length === 0 ? (
+                  <option value="construction_road">Construction (road)</option>
+                ) : (
+                  types.map((t) => (
+                    <option key={t.type_key} value={t.type_key}>{t.label}</option>
+                  ))
+                )}
+              </select>
+              <p className="text-xs text-gray-400 mb-2">
+                Workflows and actor roles come from the type. Project starts inactive until go-live checks pass.
+              </p>
+            </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Project name *</label>
               <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
@@ -2381,12 +2397,16 @@ function ProjectEditor({
   project: initial,
   orgs,
   orgRoles,
+  grmRoleChoices,
+  isSuperAdmin,
   onBack,
   onUpdated,
 }: {
   project: ProjectItem;
   orgs: OrganizationItem[];
   orgRoles: OrgRole[];
+  grmRoleChoices: { key: string; label: string }[];
+  isSuperAdmin: boolean;
   onBack: () => void;
   onUpdated: (p: ProjectItem) => void;
 }) {
@@ -2400,15 +2420,44 @@ function ProjectEditor({
   const [working, setWorking] = useState(false);
   const [locError, setLocError] = useState("");
   const { canSeeSeah } = useAuth();
+  const [projectActorRoles, setProjectActorRolesState] = useState<OrgRole[]>(orgRoles);
+  const [rolesSaving, setRolesSaving] = useState(false);
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
   const [wfTemplates, setWfTemplates] = useState<WorkflowDefinition[]>([]);
   const [wfModal, setWfModal] = useState<null | "standard" | "seah">(null);
   const [wfSaving, setWfSaving] = useState(false);
+  const [goLiveKey, setGoLiveKey] = useState(0);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const typedProject = Boolean(p.project_type_key);
+  const lockTypeConfig = typedProject && !isSuperAdmin;
+
+  function jumpToSection(section: string) {
+    sectionRefs.current[section]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function toggleActive() {
+    try {
+      const updated = await updateProject(p.project_id, { is_active: !p.is_active });
+      setP(updated);
+      onUpdated(updated);
+      setGoLiveKey((k) => k + 1);
+      flash(updated.is_active ? "Project activated ✓" : "Project deactivated");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Could not update status");
+    }
+  }
 
   useEffect(() => {
     listWorkflows().then((r) => setWorkflows(r.items)).catch(() => {});
     listTemplates().then((r) => setWfTemplates(r.items)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    getProjectActorRoles(p.project_id)
+      .then(setProjectActorRolesState)
+      .catch(() => setProjectActorRolesState(orgRoles));
+  }, [p.project_id, orgRoles]);
 
   async function saveProjectWorkflow(
     field: "standard_workflow_id" | "seah_workflow_id",
@@ -2443,7 +2492,7 @@ function ProjectEditor({
     try {
       const item = await addProjectOrg(p.project_id, addingOrg, addingOrgRole || null);
       setP({ ...p, organizations: [...p.organizations, item] });
-      setAddingOrg(""); setAddingOrgRole(""); flash("Organization linked ✓");
+      setAddingOrg(""); setAddingOrgRole(""); flash("Project actor added ✓");
     } catch { flash("Failed"); }
     setWorking(false);
   }
@@ -2494,6 +2543,8 @@ function ProjectEditor({
   const [pkgLoading, setPkgLoading]       = useState(true);
   const [showCreatePkg, setShowCreatePkg] = useState(false);
   const [expandedPkg, setExpandedPkg]     = useState<string | null>(null);
+  const [officerModalOrg, setOfficerModalOrg] = useState<{ id: string; name: string } | null>(null);
+  const [staffingTick, setStaffingTick] = useState(0);
 
   useEffect(() => {
     listPackages(p.project_id)
@@ -2558,8 +2609,25 @@ function ProjectEditor({
           </h2>
         )}
         <span className="font-mono text-sm text-gray-400">{p.short_code}</span>
+        {p.project_type_key && (
+          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{p.project_type_key}</span>
+        )}
+        {!p.is_active && <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Inactive</span>}
+        <button
+          type="button"
+          onClick={() => void toggleActive()}
+          className="text-xs text-blue-600 hover:underline ml-1"
+        >
+          {p.is_active ? "Deactivate" : "Activate project"}
+        </button>
         {msg && <span className="text-xs text-green-600 font-medium ml-2">{msg}</span>}
       </div>
+
+      <ProjectGoLivePanel
+        key={goLiveKey}
+        projectId={p.project_id}
+        onJumpSection={jumpToSection}
+      />
 
       {/* Description */}
       <div className="mb-6">
@@ -2571,12 +2639,17 @@ function ProjectEditor({
       </div>
 
       {/* Grievance workflows */}
-      <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4">
+      <div
+        ref={(el) => { sectionRefs.current.workflows = el; }}
+        className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
+      >
         <div>
           <h3 className="text-sm font-semibold text-gray-700">Grievance workflows</h3>
           <p className="text-xs text-gray-500 mt-1">
             New tickets for project <span className="font-mono">{p.short_code}</span> use these workflows.
-            Configure steps under Settings → Workflows.
+            {lockTypeConfig
+              ? " Set by project type (super admin edits the type under Settings → Project types)."
+              : " Configure steps under Settings → Workflows."}
           </p>
         </div>
         <ProjectWorkflowSelect
@@ -2585,7 +2658,7 @@ function ProjectEditor({
           workflowType="standard"
           value={p.standard_workflow_id ?? null}
           workflows={workflows}
-          disabled={wfSaving}
+          disabled={wfSaving || lockTypeConfig}
           onChange={(id) => void saveProjectWorkflow("standard_workflow_id", id)}
           onCreateNew={() => setWfModal("standard")}
         />
@@ -2596,7 +2669,7 @@ function ProjectEditor({
             workflowType="seah"
             value={p.seah_workflow_id ?? null}
             workflows={workflows}
-            disabled={wfSaving}
+            disabled={wfSaving || lockTypeConfig}
             onChange={(id) => void saveProjectWorkflow("seah_workflow_id", id)}
             onCreateNew={() => setWfModal("seah")}
           />
@@ -2622,27 +2695,54 @@ function ProjectEditor({
         />
       )}
 
-      {/* Organizations */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Organizations</h3>
+      <ProjectActorRolesEditor
+        roles={projectActorRoles}
+        saving={rolesSaving}
+        readOnly={lockTypeConfig}
+        onChange={setProjectActorRolesState}
+        onSave={async (roles) => {
+          setRolesSaving(true);
+          try {
+            const saved = await setProjectActorRoles(p.project_id, roles);
+            setProjectActorRolesState(saved);
+            flash("Actor roles saved ✓");
+          } catch (e: unknown) {
+            flash(e instanceof Error ? e.message : "Failed to save roles");
+          } finally {
+            setRolesSaving(false);
+          }
+        }}
+      />
 
-        {/* Linked orgs table */}
+      {/* Project actors (project-wide org + role) */}
+      <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Project actors</h3>
+          <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
+            Organizations and their roles for the whole project (donor, CSC, engineering team, contractor, etc.).
+          </p>
+        </div>
+        <p className="text-xs text-gray-500 mb-3 max-w-2xl">
+          Use <span className="font-medium">Add officer</span> on a row to invite or scope someone for that organization on this project.
+        </p>
+
         {p.organizations.length === 0 ? (
-          <p className="text-xs text-gray-400 italic mb-3">No organizations linked</p>
+          <p className="text-xs text-gray-400 italic mb-3">No project actors yet</p>
         ) : (
           <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-w-xl">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left border-b border-gray-200">
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 w-1/2">Organization</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Role in this project</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Role on project</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 w-24">Officer</th>
                   <th className="px-3 py-2 w-8" />
                 </tr>
               </thead>
               <tbody>
                 {p.organizations.map((po) => {
                   const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
-                  const roleDef = orgRoles.find((r) => r.key === po.org_role);
+                  const roleDef = projectActorRoles.find((r) => r.key === po.org_role);
                   const roleColor = po.org_role ? (ORG_ROLE_COLORS[po.org_role] ?? "bg-gray-100 text-gray-600 border-gray-200") : "";
                   return (
                     <tr key={po.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -2657,10 +2757,22 @@ function ProjectEditor({
                           }`}
                         >
                           <option value="">— no role —</option>
-                          {orgRoles.map((r) => (
+                          {projectActorRoles.map((r) => (
                             <option key={r.key} value={r.key}>{r.label}</option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setOfficerModalOrg({
+                            id: po.organization_id,
+                            name: orgName,
+                          })}
+                          className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                        >
+                          Add officer
+                        </button>
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <button onClick={() => handleRemoveOrg(po.organization_id)} disabled={working}
@@ -2685,18 +2797,40 @@ function ProjectEditor({
             <select value={addingOrgRole} onChange={(e) => setAddingOrgRole(e.target.value)}
               className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
               <option value="">— role (optional) —</option>
-              {orgRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {projectActorRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
             <button onClick={handleAddOrg} disabled={!addingOrg || working}
               className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50 transition">
-              Link
+              Add
             </button>
           </div>
         )}
       </div>
 
+      <div ref={(el) => { sectionRefs.current.staffing = el; }}>
+        <ProjectStaffingSection
+          key={staffingTick}
+          project={p}
+          projectActors={p.organizations}
+          orgs={orgs}
+          grmRoleChoices={grmRoleChoices}
+          packages={packages}
+        />
+      </div>
+
+      {officerModalOrg && (
+        <ProjectOfficerModal
+          project={p}
+          organizationId={officerModalOrg.id}
+          organizationName={officerModalOrg.name}
+          roleChoices={grmRoleChoices}
+          onClose={() => setOfficerModalOrg(null)}
+          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); setStaffingTick((n) => n + 1); }}
+        />
+      )}
+
       {/* Locations */}
-      <div>
+      <div ref={(el) => { sectionRefs.current.locations = el; }}>
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Linked locations</h3>
         <p className="text-xs text-gray-400 mb-3">
           Search for the provinces, districts or municipalities this project covers.
@@ -2722,14 +2856,14 @@ function ProjectEditor({
         </div>
       </div>
 
-      {/* Civil-works packages */}
-      <div className="mt-8 pt-6 border-t border-gray-100">
+      {/* Packages (lot-level actors + locations) */}
+      <div ref={(el) => { sectionRefs.current.packages = el; }} className="mt-8 pt-6 border-t border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Packages</h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Lots or contracts within this project. Each package has one contractor and covers specific locations.
-              L1 officers are scoped to a package.
+            <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
+              Lots, contracts, or work packages within this project. Assign organizations and roles per package
+              when they apply to one lot only (e.g. a CSC or engineering team on a single package).
             </p>
           </div>
           <button
@@ -2740,10 +2874,16 @@ function ProjectEditor({
           </button>
         </div>
 
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 max-w-2xl" role="note">
+          <span className="font-medium">Package overrides project:</span>{" "}
+          An actor assigned on a package applies only to that lot and replaces the project-wide actor
+          with the <em>same role</em> on that package only. Example: CSC&nbsp;A project-wide and CSC&nbsp;B on
+          package&nbsp;3 → CSC&nbsp;A on every package except package&nbsp;3, where CSC&nbsp;B applies.
+        </div>
+
         {showCreatePkg && (
           <PackageCreateModal
             projectId={p.project_id}
-            orgs={orgs}
             onCreated={(pkg) => { setPackages((prev) => [...prev, pkg]); setShowCreatePkg(false); setExpandedPkg(pkg.package_id); }}
             onClose={() => setShowCreatePkg(false)}
           />
@@ -2756,17 +2896,22 @@ function ProjectEditor({
         ) : (
           <div className="space-y-2">
             {packages.map((pkg) => {
-              const contractor = orgs.find((o) => o.organization_id === pkg.contractor_org_id);
               const expanded = expandedPkg === pkg.package_id;
               return (
                 <PackageRow
                   key={pkg.package_id}
+                  projectId={p.project_id}
                   pkg={pkg}
                   orgs={orgs}
-                  contractor={contractor}
+                  actorRoles={projectActorRoles}
                   expanded={expanded}
                   onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
                   onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
+                  onActorsChange={(organizations) =>
+                    setPackages((prev) =>
+                      prev.map((pk) => (pk.package_id === pkg.package_id ? { ...pk, organizations } : pk)),
+                    )
+                  }
                   onAddLoc={(code) => handleAddPkgLoc(pkg.package_id, code)}
                   onRemoveLoc={(code) => handleRemovePkgLoc(pkg.package_id, code)}
                 />
@@ -2779,40 +2924,199 @@ function ProjectEditor({
   );
 }
 
+// ── Project actor role vocabulary (per project) ─────────────────────────────
+
+function ProjectActorRolesEditor({
+  roles,
+  saving,
+  readOnly = false,
+  onChange,
+  onSave,
+}: {
+  roles: OrgRole[];
+  saving: boolean;
+  readOnly?: boolean;
+  onChange: (roles: OrgRole[]) => void;
+  onSave: (roles: OrgRole[]) => Promise<void>;
+}) {
+  const [dirty, setDirty] = useState(false);
+
+  function updateRow(index: number, patch: Partial<OrgRole>) {
+    onChange(roles.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    setDirty(true);
+  }
+
+  function addRow() {
+    onChange([...roles, { key: "", label: "", description: "" }]);
+    setDirty(true);
+  }
+
+  function removeRow(index: number) {
+    onChange(roles.filter((_, i) => i !== index));
+    setDirty(true);
+  }
+
+  return (
+    <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-white max-w-2xl">
+      <h3 className="text-sm font-semibold text-gray-700 mb-1">Actor roles</h3>
+      <p className="text-xs text-gray-500 mb-3">
+        {readOnly
+          ? "Role keys are defined by the project type. Assign organizations to these roles below."
+          : "Role types for project and package actors. Seeded from system defaults; customize per project."}
+      </p>
+      <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-left border-b border-gray-200">
+              <th className="px-3 py-2 text-xs font-medium text-gray-500">Key</th>
+              <th className="px-3 py-2 text-xs font-medium text-gray-500">Label</th>
+              <th className="px-3 py-2 text-xs font-medium text-gray-500">Description</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((r, i) => (
+              <tr key={i} className="border-t border-gray-100">
+                <td className="px-2 py-1.5">
+                  <input
+                    value={r.key}
+                    readOnly={readOnly}
+                    onChange={(e) => updateRow(i, { key: e.target.value })}
+                    placeholder="e.g. main_contractor"
+                    className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1"
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    value={r.label}
+                    readOnly={readOnly}
+                    onChange={(e) => updateRow(i, { label: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded px-2 py-1"
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    value={r.description ?? ""}
+                    readOnly={readOnly}
+                    onChange={(e) => updateRow(i, { description: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded px-2 py-1"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  {!readOnly && (
+                    <button type="button" onClick={() => removeRow(i)}
+                      className="text-gray-300 hover:text-red-500 text-lg leading-none">×</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={addRow} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+            + Add role
+          </button>
+          {dirty && (
+            <button
+              type="button"
+              onClick={() => { void onSave(roles).then(() => setDirty(false)); }}
+              disabled={saving}
+              className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50 ml-auto"
+            >
+              {saving ? "Saving…" : "Save roles"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Package row (collapsed + expanded editor) ─────────────────────────────────
 
 function PackageRow({
-  pkg, orgs, contractor, expanded, onToggle, onUpdate, onAddLoc, onRemoveLoc,
+  projectId,
+  pkg,
+  orgs,
+  actorRoles,
+  expanded,
+  onToggle,
+  onUpdate,
+  onActorsChange,
+  onAddLoc,
+  onRemoveLoc,
 }: {
+  projectId:    string;
   pkg:          PackageItem;
   orgs:         OrganizationItem[];
-  contractor:   OrganizationItem | undefined;
+  actorRoles:   OrgRole[];
   expanded:     boolean;
   onToggle:     () => void;
   onUpdate:     (payload: Partial<PackageItem>) => Promise<void>;
+  onActorsChange: (organizations: PackageItem["organizations"]) => void;
   onAddLoc:     (code: string) => Promise<void>;
   onRemoveLoc:  (code: string) => Promise<void>;
 }) {
   const [nameVal, setNameVal]       = useState(pkg.name);
   const [descVal, setDescVal]       = useState(pkg.description ?? "");
-  const [contractorVal, setContractorVal] = useState(pkg.contractor_org_id ?? "");
+  const [addingOrg, setAddingOrg]   = useState("");
+  const [addingRole, setAddingRole] = useState(actorRoles[0]?.key ?? "");
+  const [actorWorking, setActorWorking] = useState(false);
   const [saving, setSaving]         = useState(false);
   const [dirty, setDirty]           = useState(false);
 
-  // Sync local state if pkg prop changes (e.g. after parent reload)
+  const organizations = pkg.organizations ?? [];
+
   React.useEffect(() => {
     setNameVal(pkg.name);
     setDescVal(pkg.description ?? "");
-    setContractorVal(pkg.contractor_org_id ?? "");
     setDirty(false);
-  }, [pkg.package_id, pkg.name, pkg.description, pkg.contractor_org_id]);
+  }, [pkg.package_id, pkg.name, pkg.description]);
+
+  React.useEffect(() => {
+    if (actorRoles.length && !actorRoles.some((r) => r.key === addingRole)) {
+      setAddingRole(actorRoles[0].key);
+    }
+  }, [actorRoles, addingRole]);
 
   async function handleSave() {
     setSaving(true);
-    await onUpdate({ name: nameVal.trim(), description: descVal.trim() || null, contractor_org_id: contractorVal || null });
+    await onUpdate({ name: nameVal.trim(), description: descVal.trim() || null });
     setDirty(false);
     setSaving(false);
   }
+
+  async function handleAddActor() {
+    if (!addingOrg || !addingRole) return;
+    setActorWorking(true);
+    try {
+      const item = await addPackageOrg(projectId, pkg.package_id, addingOrg, addingRole);
+      onActorsChange([...organizations, item]);
+      setAddingOrg("");
+    } catch { /* */ }
+    setActorWorking(false);
+  }
+
+  async function handleRemoveActor(organizationId: string, orgRole: string) {
+    setActorWorking(true);
+    try {
+      await removePackageOrg(projectId, pkg.package_id, organizationId, orgRole);
+      onActorsChange(organizations.filter(
+        (o) => !(o.organization_id === organizationId && o.org_role === orgRole),
+      ));
+    } catch { /* */ }
+    setActorWorking(false);
+  }
+
+  const actorSummary = organizations.length === 0
+    ? <em className="text-gray-500">No actors</em>
+    : organizations.map((po) => {
+        const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
+        const roleLabel = actorRoles.find((r) => r.key === po.org_role)?.label ?? po.org_role;
+        return `${orgName} (${roleLabel})`;
+      }).join(", ");
 
   return (
     <div className="border border-gray-200 rounded-lg">
@@ -2835,8 +3139,8 @@ function PackageRow({
         <span className={`font-medium text-sm flex-1 min-w-0 truncate ${expanded ? "text-blue-700" : "text-gray-800"}`}>
           {pkg.name}
         </span>
-        <span className="text-xs text-gray-600 shrink-0">
-          {contractor ? contractor.name : <em className="text-gray-500">No contractor</em>}
+        <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={typeof actorSummary === "string" ? actorSummary : undefined}>
+          {actorSummary}
         </span>
         {pkg.location_codes.length > 0 && (
           <div className="flex gap-1 shrink-0">
@@ -2877,16 +3181,57 @@ function PackageRow({
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Contractor</label>
-              <select
-                value={contractorVal}
-                onChange={(e) => { setContractorVal(e.target.value); setDirty(true); }}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                <option value="">— not assigned —</option>
-                {orgs.map((o) => <option key={o.organization_id} value={o.organization_id}>{o.name}</option>)}
-              </select>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-gray-500 block mb-2">Package actors</label>
+              <p className="text-xs text-gray-400 mb-2">Overrides project-wide actor with the same role on this lot only.</p>
+              {organizations.length === 0 ? (
+                <p className="text-xs text-gray-400 italic mb-2">No package actors yet</p>
+              ) : (
+                <div className="border border-gray-200 rounded-lg overflow-hidden mb-2 max-w-xl bg-white">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-left border-b border-gray-200">
+                        <th className="px-3 py-2 text-xs font-medium text-gray-500">Organization</th>
+                        <th className="px-3 py-2 text-xs font-medium text-gray-500">Role</th>
+                        <th className="w-8" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {organizations.map((po) => {
+                        const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
+                        const roleLabel = actorRoles.find((r) => r.key === po.org_role)?.label ?? po.org_role;
+                        return (
+                          <tr key={`${po.organization_id}-${po.org_role}`} className="border-t border-gray-100">
+                            <td className="px-3 py-2 font-medium text-gray-800">{orgName}</td>
+                            <td className="px-3 py-2 text-xs text-gray-600">{roleLabel}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button type="button" disabled={actorWorking}
+                                onClick={() => void handleRemoveActor(po.organization_id, po.org_role)}
+                                className="text-gray-300 hover:text-red-500 text-lg leading-none disabled:opacity-40">×</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={addingOrg} onChange={(e) => setAddingOrg(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5">
+                  <option value="">— organization —</option>
+                  {orgs.map((o) => <option key={o.organization_id} value={o.organization_id}>{o.name}</option>)}
+                </select>
+                <select value={addingRole} onChange={(e) => setAddingRole(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5">
+                  {actorRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                </select>
+                <button type="button" onClick={() => void handleAddActor()}
+                  disabled={!addingOrg || !addingRole || actorWorking}
+                  className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
+                  Add
+                </button>
+              </div>
             </div>
             <div className="flex items-end pb-1">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -2943,17 +3288,15 @@ function PackageRow({
 // ── Package create modal ──────────────────────────────────────────────────────
 
 function PackageCreateModal({
-  projectId, orgs, onCreated, onClose,
+  projectId, onCreated, onClose,
 }: {
   projectId: string;
-  orgs: OrganizationItem[];
   onCreated: (pkg: PackageItem) => void;
   onClose: () => void;
 }) {
   const [code, setCode]       = useState("");
   const [name, setName]       = useState("");
   const [desc, setDesc]       = useState("");
-  const [contractor, setContractor] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError]     = useState("");
 
@@ -2965,8 +3308,7 @@ function PackageCreateModal({
         package_code: code.trim(),
         name: name.trim(),
         description: desc.trim() || null,
-        contractor_org_id: contractor || null,
-      } as PackageCreate);
+      });
       onCreated(pkg);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Create failed";
@@ -3002,14 +3344,7 @@ function PackageCreateModal({
               placeholder="e.g. Km 0+000 to Km 45+000"
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           </div>
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Contractor <span className="font-normal text-gray-400">(optional, can assign later)</span></label>
-            <select value={contractor} onChange={(e) => setContractor(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">— not assigned —</option>
-              {orgs.map((o) => <option key={o.organization_id} value={o.organization_id}>{o.name}</option>)}
-            </select>
-          </div>
+          <p className="text-xs text-gray-500">Assign package actors after creating the lot.</p>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
@@ -3140,12 +3475,50 @@ function ComingSoon({ label }: { label: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function SettingsSubTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { id: T; label: string }[];
+  active: T;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className="flex gap-0 border-b border-gray-200 mb-6">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            active === tab.id
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { isAdmin, roleKeys } = useAuth();
   const isSuperAdmin = roleKeys.includes("super_admin");
-  const [activeTab, setActiveTab] = useState<Tab>("officers");
+  const [activeMain, setActiveMain] = useState<MainTab>("org_officers");
+  const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
+  const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
+  const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
+  const [jumpProjectId, setJumpProjectId] = useState<string | null>(null);
   const [roleCatalog, setRoleCatalog]     = useState<RoleEntry[]>([]);
-  const [rolesLoading, setRolesLoading]     = useState(true);
+  const [rolesLoading, setRolesLoading] = useState(true);
+
+  const grmRoleChoices = useMemo(
+    () => roleCatalog.map((r) => ({ key: r.key, label: r.label })),
+    [roleCatalog],
+  );
 
   const loadRoleCatalog = useCallback(async () => {
     setRolesLoading(true);
@@ -3163,6 +3536,11 @@ export default function SettingsPage() {
     loadRoleCatalog();
   }, [loadRoleCatalog]);
 
+  function navigateToProject(projectId: string) {
+    setJumpProjectId(projectId);
+    setActiveMain("projects");
+  }
+
   if (!isAdmin) {
     return (
       <div className="p-8 text-center">
@@ -3172,23 +3550,28 @@ export default function SettingsPage() {
     );
   }
 
-  const visibleTabs = TABS.filter((t) => !t.superAdminOnly || isSuperAdmin);
+  const platformTabs: { id: PlatformSub; label: string }[] = [
+    { id: "locations", label: "Locations" },
+    { id: "reports", label: "Reports" },
+    ...(isSuperAdmin ? [{ id: "project_types" as const, label: "Project types" }] : []),
+    ...(isSuperAdmin ? [{ id: "system_config" as const, label: "System config" }] : []),
+  ];
 
   return (
     <div className="p-6">
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-800">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">System configuration — admin access only</p>
+        <p className="text-sm text-gray-500 mt-0.5">Admin configuration — organizations, projects, workflows, and platform data</p>
       </div>
 
-      {/* Horizontal tabs */}
-      <div className="flex gap-0 border-b border-gray-200 mb-6">
-        {visibleTabs.map((tab) => (
+      <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
+        {MAIN_TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.id
+            type="button"
+            onClick={() => setActiveMain(tab.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeMain === tab.id
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
@@ -3198,15 +3581,51 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {/* Tab content */}
-      {activeTab === "officers"        && <OfficersTab roleCatalog={roleCatalog} />}
-      {activeTab === "roles"           && (
-        <RolesTab catalog={roleCatalog} loading={rolesLoading} onReload={loadRoleCatalog} />
+      {activeMain === "org_officers" && (
+        <>
+          <SettingsSubTabs
+            tabs={[
+              { id: "organizations", label: "Organizations" },
+              { id: "officers", label: "Officers" },
+            ]}
+            active={orgSub}
+            onChange={setOrgSub}
+          />
+          {orgSub === "organizations" && <OrgsSection onNavigateToProject={navigateToProject} />}
+          {orgSub === "officers" && <OfficersTab roleCatalog={roleCatalog} />}
+        </>
       )}
-      {activeTab === "workflows"       && <WorkflowsTab roleCatalog={roleCatalog} />}
-      {activeTab === "organizations"   && <OrganizationsTab />}
-      {activeTab === "report_schedule" && <ComingSoon label="Report Schedule" />}
-      {activeTab === "system_config"   && isSuperAdmin && <SystemConfigTab />}
+
+      {activeMain === "workflows_roles" && (
+        <>
+          <SettingsSubTabs
+            tabs={[
+              { id: "workflows", label: "Workflows" },
+              { id: "roles", label: "Roles & permissions" },
+            ]}
+            active={wfSub}
+            onChange={setWfSub}
+          />
+          {wfSub === "workflows" && <WorkflowsTab roleCatalog={roleCatalog} />}
+          {wfSub === "roles" && (
+            <RolesTab catalog={roleCatalog} loading={rolesLoading} onReload={loadRoleCatalog} />
+          )}
+        </>
+      )}
+
+      {activeMain === "projects" && (
+        <ProjectsSection initialEditId={jumpProjectId} grmRoleChoices={grmRoleChoices} isSuperAdmin={isSuperAdmin} />
+      )}
+
+      {activeMain === "platform" && (
+        <>
+          <SettingsSubTabs tabs={platformTabs} active={platformSub} onChange={setPlatformSub} />
+          {platformSub === "locations" && <LocationsSection />}
+          {platformSub === "reports" && <ComingSoon label="Report schedule" />}
+          {platformSub === "project_types" && isSuperAdmin && <ProjectTypesTab />}
+          {platformSub === "system_config" && isSuperAdmin && <SystemConfigTab />}
+        </>
+      )}
     </div>
   );
 }
