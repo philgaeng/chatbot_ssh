@@ -78,36 +78,58 @@ export function ProjectOfficerModal({
     setSubmitting(true);
     setError(null);
     try {
-      const p = j.toPayload(roleKey);
+      const payloads = j.toPayloads(roleKey);
+      if (payloads.length === 0) {
+        setError(
+          j.countryRole
+            ? "Organization is required for this role."
+            : "Select a project, package, or location for this officer.",
+        );
+        setSubmitting(false);
+        return;
+      }
       if (mode === "invite") {
         if (!email.trim()) {
           setError("Email is required.");
           setSubmitting(false);
           return;
         }
+        const [first, ...rest] = payloads;
         await inviteOfficer({
           email: email.trim(),
-          role_key: p.role_key,
-          organization_id: p.organization_id,
-          location_code: p.location_code,
-          project_id: p.project_id,
-          package_id: p.package_id,
-          includes_children: p.includes_children,
+          role_key: first.role_key,
+          organization_id: first.organization_id,
+          location_code: first.location_code,
+          project_id: first.project_id,
+          package_id: first.package_id,
+          includes_children: first.includes_children,
         });
+        for (const p of rest) {
+          await addScope(email.trim(), {
+            role_key: p.role_key,
+            organization_id: p.organization_id,
+            location_code: p.location_code,
+            project_id: p.project_id,
+            package_id: p.package_id,
+            includes_children: p.includes_children,
+          });
+        }
       } else {
         if (!existingUserId) {
           setError("Select an officer.");
           setSubmitting(false);
           return;
         }
-        await addScope(existingUserId, {
-          role_key: p.role_key,
-          organization_id: p.organization_id,
-          location_code: p.location_code,
-          project_id: p.project_id,
-          package_id: p.package_id,
-          includes_children: p.includes_children,
-        });
+        for (const p of payloads) {
+          await addScope(existingUserId, {
+            role_key: p.role_key,
+            organization_id: p.organization_id,
+            location_code: p.location_code,
+            project_id: p.project_id,
+            package_id: p.package_id,
+            includes_children: p.includes_children,
+          });
+        }
       }
       onSuccess();
       onClose();

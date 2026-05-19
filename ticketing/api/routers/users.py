@@ -479,6 +479,22 @@ def add_user_scope(
     )
     resolved_project_code = validate_jurisdiction(db, juris, require_jurisdiction=True) or None
 
+    existing_orgs = {
+        row
+        for row in db.execute(
+            select(OfficerScope.organization_id).where(OfficerScope.user_id == user_id)
+        ).scalars().all()
+    }
+    if existing_orgs and payload.organization_id not in existing_orgs:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Officers may only belong to one organization. "
+                f"Existing scopes use {sorted(existing_orgs)[0]!r}; "
+                "remove other scopes before adding a different organization."
+            ),
+        )
+
     # Prevent duplicate entries for the same (user, role, org, location, project, package)
     existing = db.execute(
         select(OfficerScope).where(

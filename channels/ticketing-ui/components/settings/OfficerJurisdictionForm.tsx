@@ -45,7 +45,7 @@ export function useOfficerJurisdictionState(
   const countryRole = isCountryJurisdictionRole(roleKey);
   const [orgId, setOrgId] = useState(defaults?.organizationId ?? "");
   const [selProject, setSelProject] = useState(defaults?.projectId ?? "");
-  const [selLoc, setSelLoc] = useState<{ code: string; name: string } | null>(null);
+  const [selLocs, setSelLocs] = useState<{ code: string; name: string }[]>([]);
   const [selPkg, setSelPkg] = useState(defaults?.packageId ?? "");
   const [inclChildren, setInclChildren] = useState(false);
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
@@ -93,6 +93,12 @@ export function useOfficerJurisdictionState(
   }, []);
 
   useEffect(() => {
+    if (defaults?.organizationId) {
+      setOrgId(defaults.organizationId);
+    }
+  }, [defaults?.organizationId]);
+
+  useEffect(() => {
     if (projectFirst) {
       if (!lockOrganization) setOrgId("");
       setSelPkg("");
@@ -106,6 +112,7 @@ export function useOfficerJurisdictionState(
 
   useEffect(() => {
     setSelPkg("");
+    setSelLocs([]);
   }, [selProject]);
 
   useEffect(() => {
@@ -140,28 +147,68 @@ export function useOfficerJurisdictionState(
     [orgId, selectedProject, selProject, packagesByProject],
   );
 
+  const singlePackage = filteredPackages.length === 1 ? filteredPackages[0] : null;
+
+  useEffect(() => {
+    if (singlePackage) {
+      setSelPkg(singlePackage.package_id);
+    }
+  }, [singlePackage?.package_id]);
+
   function reset() {
     setOrgId("");
     setSelProject("");
-    setSelLoc(null);
+    setSelLocs([]);
     setSelPkg("");
     setInclChildren(false);
   }
 
-  function hasJurisdiction(): boolean {
-    if (countryRole && orgId) return true;
-    return Boolean(selProject || selPkg || selLoc);
+  function addLocation(code: string, name: string) {
+    setSelLocs((prev) => (prev.some((l) => l.code === code) ? prev : [...prev, { code, name }]));
   }
 
-  function toPayload(roleKey: string): JurisdictionFormValue & { role_key: string } {
-    return {
-      role_key: roleKey,
+  function removeLocation(code: string) {
+    setSelLocs((prev) => prev.filter((l) => l.code !== code));
+  }
+
+  function hasJurisdiction(): boolean {
+    return toPayloads("").length > 0;
+  }
+
+  function toPayloads(roleKey: string): (JurisdictionFormValue & { role_key: string })[] {
+    if (!orgId) return [];
+    const base = {
       organization_id: orgId,
-      location_code: selLoc?.code ?? null,
       project_id: selProject || null,
       package_id: selPkg || null,
       includes_children: inclChildren,
     };
+    if (selLocs.length > 0) {
+      return selLocs.map((loc) => ({
+        role_key: roleKey,
+        ...base,
+        location_code: loc.code,
+      }));
+    }
+    if (countryRole || selProject || selPkg) {
+      return [{ role_key: roleKey, ...base, location_code: null }];
+    }
+    return [];
+  }
+
+  /** @deprecated use toPayloads — returns first payload for single-scope callers */
+  function toPayload(roleKey: string): JurisdictionFormValue & { role_key: string } {
+    const rows = toPayloads(roleKey);
+    return (
+      rows[0] ?? {
+        role_key: roleKey,
+        organization_id: orgId,
+        location_code: null,
+        project_id: null,
+        package_id: null,
+        includes_children: inclChildren,
+      }
+    );
   }
 
   return {
@@ -169,8 +216,10 @@ export function useOfficerJurisdictionState(
     setOrgId,
     selProject,
     setSelProject,
-    selLoc,
-    setSelLoc,
+    selLocs,
+    setSelLocs,
+    addLocation,
+    removeLocation,
     selPkg,
     setSelPkg,
     inclChildren,
@@ -189,6 +238,8 @@ export function useOfficerJurisdictionState(
     reset,
     hasJurisdiction,
     toPayload,
+    toPayloads,
+    singlePackage,
   };
 }
 
@@ -197,8 +248,10 @@ type FieldsProps = {
   setOrgId: (v: string) => void;
   selProject: string;
   setSelProject: (v: string) => void;
-  selLoc: { code: string; name: string } | null;
-  setSelLoc: (v: { code: string; name: string } | null) => void;
+  selLocs: { code: string; name: string }[];
+  addLocation: (code: string, name: string) => void;
+  removeLocation: (code: string) => void;
+  singlePackage?: PackageItem | null;
   selPkg: string;
   setSelPkg: (v: string) => void;
   inclChildren: boolean;
@@ -218,14 +271,17 @@ type FieldsProps = {
 
 export function OfficerJurisdictionFields(props: FieldsProps) {
   const {
-    orgId, setOrgId, selProject, setSelProject, selLoc, setSelLoc,
+    orgId, setOrgId, selProject, setSelProject, selLocs, addLocation, removeLocation,
     selPkg, setSelPkg, inclChildren, setInclChildren,
     orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
     lockOrganization, lockProject, countryRole = false,
     projectFirst = false,
     orgsOnProject = [],
     allProjects = [],
+    singlePackage = null,
   } = props;
+
+  const lockedOrgName = orgs.find((o) => o.organization_id === orgId)?.name ?? orgId;
 
   const projectDisabled =
     Boolean(lockProject) || (!projectFirst && (!orgId || catalogLoading || filteredProjects.length === 0));
@@ -244,13 +300,25 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         <p className="text-xs text-blue-600">ADB may scope officers to any project on the system.</p>
       )}
 
-      {selLoc ? (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs">
-            {selLoc.name}
-            <span className="font-mono text-blue-400">{selLoc.code}</span>
-            <button type="button" onClick={() => setSelLoc(null)} className="text-blue-300 hover:text-blue-600">×</button>
-          </span>
+      {selLocs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {selLocs.map((loc) => (
+            <span
+              key={loc.code}
+              className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs"
+            >
+              {loc.name}
+              <span className="font-mono text-blue-400">{loc.code}</span>
+              <button
+                type="button"
+                onClick={() => removeLocation(loc.code)}
+                className="text-blue-300 hover:text-blue-600 leading-none"
+                aria-label={`Remove ${loc.name}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
           <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
             <input
               type="checkbox"
@@ -261,14 +329,23 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             include sub-locations
           </label>
         </div>
-      ) : (
-        <LocationSearch
-          placeholder="Location (province, district, …)"
-          onSelect={(code, name) => setSelLoc({ code, name })}
-        />
       )}
 
-      {selProject && (
+      <LocationSearch
+        placeholder={
+          selLocs.length > 0
+            ? "Add another location…"
+            : "Location (province, district, …)"
+        }
+        onSelect={(code, name) => addLocation(code, name)}
+      />
+
+      {selProject && singlePackage ? (
+        <p className="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+          <span className="font-medium">Package:</span> {singlePackage.package_code} — {singlePackage.name}
+          <span className="text-gray-400 ml-1">(only package for this organization)</span>
+        </p>
+      ) : selProject ? (
         <select
           value={selPkg}
           onChange={(e) => setSelPkg(e.target.value)}
@@ -285,7 +362,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             </option>
           ))}
         </select>
-      )}
+      ) : null}
     </>
   );
 
@@ -306,24 +383,30 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
               <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
             ))}
           </select>
-          <select
-            value={orgId}
-            onChange={(e) => setOrgId(e.target.value)}
-            required
-            disabled={orgDisabled}
-            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-          >
-            <option value="">
-              {!selProject
-                ? "Select project first"
-                : orgsOnProject.length === 0
-                  ? "No orgs on project — add under Project actors"
-                  : "Organization *"}
-            </option>
-            {orgsOnProject.map((o) => (
-              <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-            ))}
-          </select>
+          {lockOrganization && orgId ? (
+            <div className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 bg-gray-50 text-gray-700">
+              {lockedOrgName}
+            </div>
+          ) : (
+            <select
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              required
+              disabled={orgDisabled}
+              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+            >
+              <option value="">
+                {!selProject
+                  ? "Select project first"
+                  : orgsOnProject.length === 0
+                    ? "No orgs on project — add under Project actors"
+                    : "Organization *"}
+              </option>
+              {orgsOnProject.map((o) => (
+                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+              ))}
+            </select>
+          )}
         </div>
         {selProject && orgsOnProject.length === 0 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
@@ -341,18 +424,24 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <select
-          value={orgId}
-          onChange={(e) => setOrgId(e.target.value)}
-          required
-          disabled={lockOrganization}
-          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-        >
-          <option value="">Organization *</option>
-          {orgs.map((o) => (
-            <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-          ))}
-        </select>
+        {lockOrganization && orgId ? (
+          <div className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 bg-gray-50 text-gray-700">
+            {lockedOrgName}
+          </div>
+        ) : (
+          <select
+            value={orgId}
+            onChange={(e) => setOrgId(e.target.value)}
+            required
+            disabled={lockOrganization}
+            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+          >
+            <option value="">Organization *</option>
+            {orgs.map((o) => (
+              <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+            ))}
+          </select>
+        )}
         <select
           value={selProject}
           onChange={(e) => setSelProject(e.target.value)}
