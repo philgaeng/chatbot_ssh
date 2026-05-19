@@ -12,8 +12,14 @@ from typing import Optional
 # ── Canonical emails (import these instead of hardcoding strings) ─────────────
 
 OFFICER_ADMIN = "admin@grm.local"
+OFFICER_LOCAL_ADMIN = "local-admin@grm.local"
 OFFICER_SITE_L1 = "l1-officer@grm.local"
+OFFICER_SITE_L1_2 = "l1-officer-2@grm.local"
+OFFICER_SITE_L1_3 = "l1-officer-3@grm.local"
+OFFICER_SITE_L1_4 = "l1-officer-4@grm.local"
 OFFICER_PIU_L2 = "l2-piu@grm.local"
+OFFICER_PIU_L2_2 = "l2-piu-2@grm.local"
+OFFICER_PIU_L2_3 = "l2-piu-3@grm.local"
 OFFICER_GRC_CHAIR = "grc-chair@grm.local"
 OFFICER_GRC_MEMBER_1 = "grc-member-1@grm.local"
 OFFICER_GRC_MEMBER_2 = "grc-member-2@grm.local"
@@ -36,6 +42,7 @@ LEGACY_OFFICER_ID_MAP: dict[str, str] = {
     "mock-officer-seah-national": OFFICER_SEAH_NATIONAL,
     "mock-officer-seah-hq": OFFICER_SEAH_HQ,
     "mock-officer-adb-observer": OFFICER_ADB,
+    "local_admin_mock_1@grm.local": OFFICER_LOCAL_ADMIN,
 }
 
 
@@ -59,11 +66,35 @@ DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
         OFFICER_ADMIN, "GRM", "Admin", "super_admin", "DOR",
     ),
     DemoOfficerSpec(
+        OFFICER_LOCAL_ADMIN, "Local", "Admin", "local_admin", "DOR",
+        user_role_location="P1", keycloak_location="P1",
+    ),
+    DemoOfficerSpec(
         OFFICER_SITE_L1, "Site", "Officer L1", "site_safeguards_focal_person", "DOR",
         user_role_location="P1_MOR", keycloak_location="P1_MOR",
     ),
     DemoOfficerSpec(
+        OFFICER_SITE_L1_2, "Site", "Officer L1-2", "site_safeguards_focal_person", "DOR",
+        user_role_location="P1_JHA", keycloak_location="P1_JHA",
+    ),
+    DemoOfficerSpec(
+        OFFICER_SITE_L1_3, "Site", "Officer L1-3", "site_safeguards_focal_person", "DOR",
+        user_role_location="P1_SUN", keycloak_location="P1_SUN",
+    ),
+    DemoOfficerSpec(
+        OFFICER_SITE_L1_4, "Site", "Officer L1-4", "site_safeguards_focal_person", "DOR",
+        user_role_location="P1_MOR", keycloak_location="P1_MOR",
+    ),
+    DemoOfficerSpec(
         OFFICER_PIU_L2, "PIU", "Officer L2", "pd_piu_safeguards_focal", "DOR",
+        user_role_location="P1",
+    ),
+    DemoOfficerSpec(
+        OFFICER_PIU_L2_2, "PIU", "Officer L2-2", "pd_piu_safeguards_focal", "DOR",
+        user_role_location="P1",
+    ),
+    DemoOfficerSpec(
+        OFFICER_PIU_L2_3, "PIU", "Officer L2-3", "pd_piu_safeguards_focal", "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
