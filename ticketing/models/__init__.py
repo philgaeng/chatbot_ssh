@@ -7,8 +7,9 @@ from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
 from .ticket import Ticket, TicketEvent
 from .ticket_file import TicketFile
 from .officer_scope import OfficerScope
-from .project import Project, ProjectOrganization, ProjectLocation
-from .package import ProjectPackage, PackageLocation
+from .project import Project, ProjectActorRole, ProjectOrganization, ProjectLocation
+from .project_type import ProjectType
+from .package import ProjectPackage, PackageOrganization, PackageLocation
 from .settings import Settings
 from .ticket_context_cache import TicketContextCache
 from .ticket_viewer import TicketViewer
@@ -32,9 +33,12 @@ __all__ = [
     "TicketFile",
     "OfficerScope",
     "Project",
+    "ProjectActorRole",
     "ProjectOrganization",
     "ProjectLocation",
+    "ProjectType",
     "ProjectPackage",
+    "PackageOrganization",
     "PackageLocation",
     "Settings",
     "TicketContextCache",

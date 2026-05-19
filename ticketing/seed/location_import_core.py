@@ -17,6 +17,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from ticketing.constants.nepal_canonical_locations import (
+    apply_location_rename_map,
+    district_code_for_np,
+    municipality_code_for_np,
+    plan_np_legacy_to_canonical_renames,
+    province_code_for_np_json,
+)
+
 log = logging.getLogger(__name__)
 
 UTC = timezone.utc
@@ -75,7 +83,12 @@ def parse_json(
     for prov in en_data:
         if max_level < 1:
             break
-        p_code = loc_code(country, 1, prov["id"])
+        if country.upper() == "NP":
+            p_code = province_code_for_np_json(int(prov["id"]))
+            used_district_mnemonics: set[str] = set()
+        else:
+            p_code = loc_code(country, 1, prov["id"])
+            used_district_mnemonics = set()  # unused for non-NP
         locations.append({
             "location_code": p_code, "country_code": country,
             "level_number": 1, "parent_location_code": None,
@@ -90,7 +103,13 @@ def parse_json(
         if max_level < 2:
             continue
         for dist in prov.get("districts", []):
-            d_code = loc_code(country, 2, dist["id"])
+            if country.upper() == "NP":
+                d_name = dist.get("name") or ""
+                d_code = district_code_for_np(p_code, d_name, used_district_mnemonics)
+                used_muni: set[str] = set()
+            else:
+                d_code = loc_code(country, 2, dist["id"])
+                used_muni = set()
             locations.append({
                 "location_code": d_code, "country_code": country,
                 "level_number": 2, "parent_location_code": p_code,
@@ -105,7 +124,11 @@ def parse_json(
             if max_level < 3:
                 continue
             for muni in dist.get("municipalities", []):
-                m_code = loc_code(country, 3, muni["id"])
+                if country.upper() == "NP":
+                    m_name = muni.get("name") or ""
+                    m_code = municipality_code_for_np(d_code, m_name, used_muni)
+                else:
+                    m_code = loc_code(country, 3, muni["id"])
                 locations.append({
                     "location_code": m_code, "country_code": country,
                     "level_number": 3, "parent_location_code": d_code,
@@ -220,6 +243,11 @@ def parse_csv(
     if skipped:
         log.info("Skipped %d row(s) (level filter or missing data)", skipped)
 
+    rename = plan_np_legacy_to_canonical_renames(locations, trans)
+    if any(o != n for o, n in rename.items()):
+        apply_location_rename_map(locations, trans, rename)
+        log.info("Rewrote NP location_code values to canonical P1/P1_* form (%d remap keys)", len(rename))
+
     return locations, trans
 
 
@@ -281,9 +309,9 @@ def upsert_locations(
 
 CSV_TEMPLATE = """\
 location_code,level_number,parent_location_code,source_id,name_en,name_local
-XX_P1,1,,1,Province Name,स्थानीय नाम
-XX_D001,2,XX_P1,1,District Name,जिल्लाको नाम
-XX_M0001,3,XX_D001,1,Municipality Name,नगरपालिकाको नाम
+P1,1,,1,Koshi Province,कोशी
+P1_JHA,2,P1,4,Jhapa,झापा
+P1_JHA_BIR,3,P1_JHA,1,Birtamod Municipality,स्थानीय नाम
 """
 
 # Minimal nested JSON matching the Nepal source format (en_cleaned.json)

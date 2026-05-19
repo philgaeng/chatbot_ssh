@@ -14,6 +14,7 @@ class RoleResponse(BaseModel):
     display_name: str
     description: str | None = None
     workflow_scope: str | None = None
+    jurisdiction_mode: str | None = None
     permissions: Any
     created_at: datetime
     updated_at: datetime
@@ -26,6 +27,7 @@ class RoleUpdate(BaseModel):
     display_name: str | None = None
     description: str | None = None
     workflow_scope: str | None = None
+    jurisdiction_mode: str | None = None
 
 
 class UserRoleCreate(BaseModel):

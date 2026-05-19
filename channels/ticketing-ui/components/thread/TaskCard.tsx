@@ -31,7 +31,7 @@ export function TaskCard({
   const description = (event.payload?.description as string) ?? "";
   const dueDate = event.payload?.due_date as string | undefined;
   const typeInfo = TASK_TYPES.find((t) => t.key === taskType);
-  const isAssignedToMe = assignedTo === currentUserId || assignedTo === "mock-super-admin";
+  const isAssignedToMe = assignedTo === currentUserId || assignedTo === "admin@grm.local";
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (

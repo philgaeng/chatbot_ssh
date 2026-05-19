@@ -4,7 +4,9 @@ import React, { createContext, useContext, useEffect, useState, Suspense, useCal
 import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
-import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
+import { getUserPreferences, getMyProfile, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
+
+const BYPASS_DEFAULT_EMAIL = "admin@grm.local";
 
 // ── Demo / dev bypass (NEXT_PUBLIC_BYPASS_AUTH=true) ─────────────────────────
 // No OIDC: the Next.js proxy reads `grm_bypass_user` and forwards internal
@@ -14,14 +16,11 @@ import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "
 const BYPASS_COOKIE = "grm_bypass_user";
 const LEGACY_MOCK_COOKIE = "grm_mock_user";
 
-/** Matches ticketing `get_current_user` when no cookie is sent. */
-const DEFAULT_BYPASS_USER_ID = "mock-super-admin";
-
 function fallbackBypassToken(): TokenPayload {
   return {
-    sub: DEFAULT_BYPASS_USER_ID,
-    email: "admin@grm.local",
-    name: "Super Admin",
+    sub: BYPASS_DEFAULT_EMAIL,
+    email: BYPASS_DEFAULT_EMAIL,
+    name: "GRM Admin",
     email_verified: true,
     "custom:grm_roles": "super_admin",
     "custom:organization_id": "DOR",
@@ -117,6 +116,8 @@ export interface AuthContextValue {
   roleKeys: string[];
   canSeeSeah: boolean;
   isAdmin: boolean;
+  /** Full Settings (orgs, workflows, platform). False for local_admin-only users. */
+  isSuperAdmin: boolean;
   signIn: () => void;
   signOut: () => void;
   /** Bearer token for API calls (null in bypass mode) */
@@ -132,6 +133,8 @@ export interface AuthContextValue {
    * Sets cookie + reloads queue so API calls use the new identity.
    */
   switchBypassUser: (entry: OfficerRosterEntry) => void;
+  /** Refresh header display name from Keycloak profile (after account save). */
+  refreshDisplayName: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -308,11 +311,46 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     window.location.href = "/queue";
   }, []);
 
+  const refreshDisplayName = useCallback(async () => {
+    try {
+      const p = await getMyProfile();
+      const name = `${p.first_name} ${p.last_name}`.trim() || p.email;
+      setUser((prev) => (prev ? { ...prev, name, email: p.email } : prev));
+      if (bypass && typeof window !== "undefined") {
+        const raw = readBypassCookieRaw();
+        const parsed = raw ? parseBypassCookie(raw) : null;
+        if (parsed) {
+          setBypassRoster((prev) =>
+            (prev ?? []).map((r) =>
+              r.user_id === parsed.user_id
+                ? { ...r, display_name: name, email: p.email, phone_number: p.phone_number }
+                : r,
+            ),
+          );
+        }
+      }
+      if (!bypass && typeof window !== "undefined") {
+        const stored = localStorage.getItem("grm_user");
+        if (stored) {
+          try {
+            const u = JSON.parse(stored) as TokenPayload;
+            localStorage.setItem("grm_user", JSON.stringify({ ...u, name, email: p.email }));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch {
+      /* profile API unavailable (e.g. demo bypass without Keycloak) */
+    }
+  }, [bypass]);
+
   const roleKeys = ((user?.["custom:grm_roles"] as string | undefined) ?? "")
     .split(",")
     .map((r) => r.trim())
     .filter(Boolean);
   const { canSeeSeah, isAdmin } = derivePermissions(roleKeys);
+  const isSuperAdmin = roleKeys.includes("super_admin");
 
   return (
     <AuthContext.Provider
@@ -324,6 +362,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         roleKeys,
         canSeeSeah,
         isAdmin,
+        isSuperAdmin,
         signIn,
         signOut,
         accessToken,
@@ -331,6 +370,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         bypassRoster,
         bypassRosterError,
         switchBypassUser,
+        refreshDisplayName,
       }}
     >
       {children}

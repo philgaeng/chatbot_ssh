@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -62,8 +63,11 @@ def _get_logger():
 
 
 def _auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
-    # Minimal placeholder for now; wire to real auth later.
-    expected = None  # e.g. os.getenv("MESSAGING_API_KEY")
+    expected = (
+        os.getenv("MESSAGING_API_KEY")
+        or os.getenv("TICKETING_SECRET_KEY")
+        or ""
+    ).strip() or None
     if expected and x_api_key != expected:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

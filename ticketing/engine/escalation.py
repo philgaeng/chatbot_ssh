@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ticketing.engine.workflow_engine import (
-    auto_assign_officer,
+    auto_assign_for_workflow_step,
     get_current_step,
     get_grc_member_user_ids,
     get_next_step,
@@ -250,8 +250,8 @@ def escalate_ticket(
     _apply_step_tier_roles(db, ticket, next_step)
 
     # Auto-assign to the least-loaded officer at the next step's role
-    new_assigned = auto_assign_officer(
-        role_key=next_step.assigned_role_key,
+    new_assigned = auto_assign_for_workflow_step(
+        step_role_key=next_step.assigned_role_key,
         organization_id=ticket.organization_id,
         location_code=ticket.location_code,
         project_code=ticket.project_code,

@@ -76,7 +76,7 @@ class Location(Base):
     One row per administrative node at any level.
     Names are NOT stored here — use location_translations for multilingual names.
 
-    location_code: human-readable PK, e.g. NP_P1, NP_D001, NP_M0001
+    location_code: human-readable PK, e.g. P1, P1_JHA, P1_JHA_BIR (Nepal — see LOCATION_CODES.md)
     level_number:  matches location_level_defs for the same country_code
     parent_location_code: NULL for root nodes (level 1)
     source_id:     original numeric ID from the import dataset (for re-sync)

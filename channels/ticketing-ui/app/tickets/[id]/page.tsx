@@ -696,7 +696,7 @@ function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
       <div className="space-y-2">
         {pending.map((task) => {
           const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
-          const isAssignedToMe = task.assigned_to_user_id === currentUserId || task.assigned_to_user_id === "mock-super-admin";
+          const isAssignedToMe = task.assigned_to_user_id === currentUserId || task.assigned_to_user_id === "admin@grm.local";
           return (
             <div key={task.task_id} className="flex items-start gap-3 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
               <TaskTypeIcon name={typeInfo?.icon ?? "ClipboardList"} size={15} strokeWidth={2} className="shrink-0 text-amber-600" />
@@ -831,7 +831,7 @@ export default function TicketDetailPage() {
   }, [showAssign]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const currentUserId = user?.sub ?? "mock-super-admin";
+  const currentUserId = user?.sub ?? "admin@grm.local";
   const isAssigned    = isAdmin || !ticket?.assigned_to_user_id || ticket?.assigned_to_user_id === user?.sub;
 
   const status       = ticket?.status_code ?? "";

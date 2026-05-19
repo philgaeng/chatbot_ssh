@@ -118,7 +118,7 @@ def seed_seah_workflow(db: Session) -> None:
 def seed_seah_assignment(db: Session) -> None:
     """Map DOR + KL_ROAD + SEAH priority → SEAH workflow (two rows for coverage).
 
-    Row 1: province-scoped (NP_P1) — preferred match for province-level tickets.
+    Row 1: province-scoped (P1) — preferred match for province-level tickets.
     Row 2: location=None fallback — catches tickets from the sync task which
            passes location_code=None (public.grievances has no location column).
     """
@@ -132,9 +132,9 @@ def seed_seah_assignment(db: Session) -> None:
             priority="SEAH",
             workflow_id=WORKFLOW_SEAH_ID,
         ))
-        logger.info("  + workflow assignment: DOR + NP_P1 + KL_ROAD + SEAH → KL_ROAD_SEAH")
+        logger.info("  + workflow assignment: DOR + P1 + KL_ROAD + SEAH → KL_ROAD_SEAH")
     else:
-        logger.info("  = workflow assignment already exists (SEAH NP_P1)")
+        logger.info("  = workflow assignment already exists (SEAH P1)")
 
     existing_fb = db.get(WorkflowAssignment, ASSIGNMENT_SEAH_FALLBACK_ID)
     if not existing_fb:

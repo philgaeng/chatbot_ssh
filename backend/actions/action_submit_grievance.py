@@ -257,7 +257,18 @@ class BaseActionSubmit(BaseAction):
                 #send sms
                 complainant_phone = grievance_data.get('complainant_phone')
                 if complainant_phone != self.NOT_PROVIDED:
-                    self.messaging.send_sms(phone_number=str(complainant_phone), message=confirmation_message)
+                    from backend.clients.messaging_api import send_sms as send_sms_via_api
+
+                    send_sms_via_api(
+                        str(complainant_phone),
+                        confirmation_message,
+                        context={
+                            "source_system": "chatbot",
+                            "purpose": "grievance_submit_confirmation",
+                            "grievance_id": grievance_data.get("grievance_id"),
+                            "channel": "sms",
+                        },
+                    )
                     #utter sms confirmation message
                     utterance = self.get_utterance(2)
                     utterance = utterance.format(complainant_phone=complainant_phone)

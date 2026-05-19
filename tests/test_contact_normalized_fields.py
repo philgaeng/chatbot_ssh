@@ -34,10 +34,10 @@ def test_base_manager_routes_normalized_contact_fields_to_complainant():
         "complainant_full_name": "Name",
         "contact_id": "contact-1",
         "country_code": "NP",
-        "location_code": "NP_M0001",
+        "location_code": "P1_BHO_BHM",
         "location_resolution_status": "mapped_full",
         "level_1_name": "Koshi",
-        "level_1_code": "NP_P1",
+        "level_1_code": "P1",
         "grievance_description": "Some grievance",
     }
 
@@ -48,8 +48,8 @@ def test_base_manager_routes_normalized_contact_fields_to_complainant():
 
     assert complainant_fields["contact_id"] == "contact-1"
     assert complainant_fields["country_code"] == "NP"
-    assert complainant_fields["location_code"] == "NP_M0001"
-    assert complainant_fields["level_1_code"] == "NP_P1"
+    assert complainant_fields["location_code"] == "P1_BHO_BHM"
+    assert complainant_fields["level_1_code"] == "P1"
     assert "contact_id" not in grievance_fields
     assert grievance_fields["grievance_id"] == "GR-1"
 
@@ -85,15 +85,15 @@ def test_create_complainant_accepts_normalized_columns():
         "complainant_phone": "+9779800000000",
         "contact_id": "contact-22",
         "country_code": "NP",
-        "location_code": "NP_M0001",
+        "location_code": "P1_BHO_BHM",
         "location_resolution_status": "mapped_partial",
         "level_3_name": "Bhojpur Municipality",
-        "level_3_code": "NP_M0001",
+        "level_3_code": "P1_BHO_BHM",
     }
     assert manager.create_complainant(payload) is True
     assert captured["table_name"] == "complainants"
     assert captured["input_data"]["contact_id"] == "contact-22"
-    assert captured["input_data"]["location_code"] == "NP_M0001"
+    assert captured["input_data"]["location_code"] == "P1_BHO_BHM"
     assert "contact_id" in captured["input_data"]
     assert "level_3_code" in captured["input_data"]
 
@@ -114,8 +114,8 @@ def test_update_complainant_accepts_normalized_columns():
         {
             "contact_id": "contact-99",
             "country_code": "NP",
-            "location_code": "NP_D001",
-            "level_2_code": "NP_D001",
+            "location_code": "P1_BHO",
+            "level_2_code": "P1_BHO",
         },
     )
     assert affected == 1

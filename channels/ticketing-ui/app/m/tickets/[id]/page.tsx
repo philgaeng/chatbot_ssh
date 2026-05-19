@@ -561,7 +561,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const { id: ticketId } = use(params);
   const router           = useRouter();
   const { user }         = useAuth();
-  const currentUserId    = user?.sub ?? "mock-super-admin";
+  const currentUserId    = user?.sub ?? "admin@grm.local";
 
   const [ticket, setTicket]               = useState<TicketDetail | null>(null);
   const [sla, setSla]                     = useState<SlaStatus | null>(null);
@@ -634,7 +634,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const pendingTaskCount = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const myPendingTasks   = useMemo(
     () => tasks.filter((t) => t.status === "PENDING" &&
-      (t.assigned_to_user_id === currentUserId || t.assigned_to_user_id === "mock-super-admin")),
+      (t.assigned_to_user_id === currentUserId || t.assigned_to_user_id === "admin@grm.local")),
     [tasks, currentUserId],
   );
   const canManageViewers = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);

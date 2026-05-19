@@ -9,36 +9,21 @@ import {
   listScopes,
   updateOfficerKeycloak,
   type OfficerRosterEntry,
-  type OfficerScope,
 } from "@/lib/api";
 import {
   OfficerJurisdictionFields,
   useOfficerJurisdictionState,
 } from "@/components/settings/OfficerJurisdictionForm";
+import {
+  activeScopeRows,
+  OfficerScopeTable,
+  scopeRowsToCreate,
+  scopeRowsToDelete,
+  scopeToDraftRow,
+  type ScopeDraftRow,
+} from "@/components/settings/OfficerScopeTable";
 
 type RoleChoice = { key: string; label: string };
-
-function scopeLabel(
-  s: {
-    organization_id: string;
-    project_code?: string | null;
-    package_id?: string | null;
-    location_code?: string | null;
-    includes_children?: boolean;
-    role_key: string;
-  },
-  orgName?: string,
-  packageCode?: string,
-) {
-  const parts = [
-    orgName ?? s.organization_id,
-    s.project_code ?? null,
-    packageCode ?? (s.package_id ? "package" : null),
-    s.location_code ?? null,
-    s.includes_children ? "+sub-locations" : null,
-  ].filter(Boolean);
-  return `${parts.join(" · ")} (${s.role_key})`;
-}
 
 export function InviteOfficerModal({
   roleChoices,
@@ -53,7 +38,7 @@ export function InviteOfficerModal({
   const [roleKey, setRoleKey] = useState(roleChoices[0]?.key ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const j = useOfficerJurisdictionState();
+  const j = useOfficerJurisdictionState({ fieldOrder: "project-first" }, roleKey);
 
   useEffect(() => {
     if (roleChoices.length && !roleChoices.some((r) => r.key === roleKey)) {
@@ -63,27 +48,47 @@ export function InviteOfficerModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !j.orgId) {
-      setError("Email and organization are required.");
+    if (!email.trim() || !j.orgId || !j.selProject) {
+      setError("Email, project, and organization are required.");
       return;
     }
     if (!j.hasJurisdiction()) {
-      setError("Select at least one of project, package, or location.");
+      setError(
+        j.countryRole
+          ? "Select an organization (country-wide), or narrow with project, package, or location."
+          : "Select at least one of project, package, or location.",
+      );
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const p = j.toPayload(roleKey);
+      const payloads = j.toPayloads(roleKey);
+      if (payloads.length === 0) {
+        setError("Select at least one of project, package, or location.");
+        setSubmitting(false);
+        return;
+      }
+      const [first, ...rest] = payloads;
       await inviteOfficer({
         email: email.trim(),
-        role_key: p.role_key,
-        organization_id: p.organization_id,
-        location_code: p.location_code,
-        project_id: p.project_id,
-        package_id: p.package_id,
-        includes_children: p.includes_children,
+        role_key: first.role_key,
+        organization_id: first.organization_id,
+        location_code: first.location_code,
+        project_id: first.project_id,
+        package_id: first.package_id,
+        includes_children: first.includes_children,
       });
+      for (const p of rest) {
+        await addScope(email.trim(), {
+          role_key: p.role_key,
+          organization_id: p.organization_id,
+          location_code: p.location_code,
+          project_id: p.project_id,
+          package_id: p.package_id,
+          includes_children: p.includes_children,
+        });
+      }
       onSuccess(email.trim());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -156,29 +161,31 @@ export function EditOfficerModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [savedScopes, setSavedScopes] = useState<OfficerScope[]>([]);
-  const [pendingRemoves, setPendingRemoves] = useState<Set<string>>(new Set());
+  const [rows, setRows] = useState<ScopeDraftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [roleKey, setRoleKey] = useState(officer.role_keys[0] ?? "");
-  const j = useOfficerJurisdictionState();
+  const [rowEditing, setRowEditing] = useState(false);
+  const defaultRoleKey = officer.role_keys[0] ?? roleChoices[0]?.key ?? "";
 
-  const orgNameById = useMemo(
-    () => Object.fromEntries(j.orgs.map((o) => [o.organization_id, o.name])),
-    [j.orgs],
-  );
+  const officerOrgId = useMemo(() => {
+    if (officer.organization_ids.length >= 1) return officer.organization_ids[0];
+    const active = activeScopeRows(rows);
+    const fromScopes = [...new Set(active.map((s) => s.organization_id))];
+    return fromScopes[0] ?? "";
+  }, [officer.organization_ids, rows]);
 
-  const hasFormDraft = Boolean(j.orgId && j.hasJurisdiction());
+  const officerHasMultipleOrgs =
+    officer.organization_ids.length > 1 ||
+    new Set(activeScopeRows(rows).map((s) => s.organization_id)).size > 1;
 
-  const keptCount = savedScopes.filter((s) => !pendingRemoves.has(s.scope_id)).length;
-  const totalAfterSave = keptCount + (hasFormDraft ? 1 : 0);
+  const activeRows = activeScopeRows(rows);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setSavedScopes(await listScopes(officer.user_id));
-      setPendingRemoves(new Set());
+      const scopes = await listScopes(officer.user_id);
+      setRows(scopes.map(scopeToDraftRow));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load scopes");
     } finally {
@@ -190,45 +197,47 @@ export function EditOfficerModal({
     load();
   }, [load]);
 
-  function toggleRemove(scopeId: string) {
-    setPendingRemoves((prev) => {
-      const next = new Set(prev);
-      if (next.has(scopeId)) next.delete(scopeId);
-      else next.add(scopeId);
-      return next;
-    });
-  }
-
   async function handleSave() {
     setError(null);
 
-    if (totalAfterSave === 0) {
-      setError("Add at least one jurisdiction (project, package, or location) before saving.");
+    if (rowEditing) {
+      setError("Finish or cancel the scope row you are editing before saving.");
+      return;
+    }
+
+    if (activeRows.length === 0) {
+      setError("Add at least one scope before saving.");
+      return;
+    }
+
+    const keptForeignOrg = activeRows.filter(
+      (s) => officerOrgId && s.organization_id !== officerOrgId,
+    );
+    if (keptForeignOrg.length > 0) {
+      setError("Remove scopes from other organizations before saving.");
       return;
     }
 
     setSaving(true);
     try {
-      for (const scopeId of pendingRemoves) {
+      for (const scopeId of scopeRowsToDelete(rows)) {
         await deleteScope(officer.user_id, scopeId);
       }
-      if (hasFormDraft) {
-        const p = j.toPayload(roleKey);
+      for (const row of scopeRowsToCreate(rows)) {
         await addScope(officer.user_id, {
-          role_key: p.role_key,
-          organization_id: p.organization_id,
-          location_code: p.location_code,
-          project_id: p.project_id,
-          package_id: p.package_id,
-          includes_children: p.includes_children,
+          role_key: row.role_key,
+          organization_id: row.organization_id,
+          location_code: row.location_code,
+          project_id: row.project_id,
+          package_id: row.package_id,
+          includes_children: row.includes_children,
         });
       }
-      const kept = savedScopes.filter((s) => !pendingRemoves.has(s.scope_id));
-      const primaryOrg = hasFormDraft ? j.orgId : kept[0]?.organization_id ?? j.orgId;
+      const primaryOrg = officerOrgId || activeRows[0]?.organization_id || "";
       await updateOfficerKeycloak(officer.user_id, {
         role_keys: officer.role_keys,
         organization_id: primaryOrg,
-        location_code: hasFormDraft ? j.selLoc?.code ?? null : kept[0]?.location_code ?? null,
+        location_code: activeRows[0]?.location_code ?? null,
         sync_keycloak: true,
       });
       onSaved();
@@ -251,12 +260,9 @@ export function EditOfficerModal({
     }
   }
 
-  const draftProj = j.filteredProjects.find((p) => p.project_id === j.selProject);
-  const draftPkg = j.filteredPackages.find((p) => p.package_id === j.selPkg);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="bg-slate-700 text-white px-6 py-4 flex justify-between shrink-0">
           <div>
             <div className="font-semibold">Manage officer</div>
@@ -265,93 +271,29 @@ export function EditOfficerModal({
           <button type="button" onClick={onClose} className="text-slate-300 hover:text-white text-xl">×</button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+        <div className="p-6 overflow-y-auto space-y-4 flex-1">
           {loading ? (
             <p className="text-sm text-gray-400">Loading…</p>
           ) : (
             <>
-              <section>
-                <div className="flex items-baseline justify-between gap-2 mb-2">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Current scopes
-                  </h3>
-                  <span className="text-xs text-gray-400">
-                    {totalAfterSave === 0 ? "None" : `${totalAfterSave} after save`}
-                  </span>
-                </div>
-
-                {savedScopes.length === 0 && !hasFormDraft ? (
-                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    No scopes yet. Fill in jurisdiction below, then save.
-                  </p>
-                ) : (
-                  <ul className="border border-gray-200 rounded-lg divide-y text-sm overflow-hidden">
-                    {savedScopes.map((s) => {
-                      const removed = pendingRemoves.has(s.scope_id);
-                      return (
-                        <li
-                          key={s.scope_id}
-                          className={`flex items-center justify-between gap-2 px-3 py-2.5 ${
-                            removed ? "bg-red-50 line-through opacity-60" : "bg-white"
-                          }`}
-                        >
-                          <span className="text-gray-800 min-w-0 truncate">
-                            {scopeLabel(s, orgNameById[s.organization_id])}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => toggleRemove(s.scope_id)}
-                            className="text-xs text-red-600 hover:text-red-800 shrink-0 font-medium"
-                          >
-                            {removed ? "Undo" : "Remove"}
-                          </button>
-                        </li>
-                      );
-                    })}
-                    {hasFormDraft && (
-                      <li className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50">
-                        <span className="text-emerald-700 text-xs font-semibold shrink-0">+ New</span>
-                        <span className="text-gray-800 min-w-0 truncate">
-                          {scopeLabel(
-                            {
-                              organization_id: j.orgId,
-                              project_code: draftProj?.short_code ?? null,
-                              package_id: j.selPkg || null,
-                              location_code: j.selLoc?.code ?? null,
-                              includes_children: j.inclChildren,
-                              role_key: roleKey,
-                            },
-                            orgNameById[j.orgId],
-                            draftPkg?.package_code,
-                          )}
-                        </span>
-                      </li>
-                    )}
-                  </ul>
-                )}
-              </section>
-
-              <section className="border border-gray-200 rounded-lg p-4 bg-gray-50/80 space-y-3">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  {keptCount === 0 && !hasFormDraft ? "Jurisdiction" : "Change or add jurisdiction"}
-                </h3>
-                <p className="text-xs text-gray-500 -mt-1">
-                  Updates apply when you click <strong>Save changes</strong> — nothing is written until then.
+              {officerHasMultipleOrgs && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  This officer has scopes in more than one organization. Each officer belongs to one organization
+                  only — delete scopes from other organizations before saving.
                 </p>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Role for this scope</label>
-                  <select
-                    value={roleKey}
-                    onChange={(e) => setRoleKey(e.target.value)}
-                    className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 bg-white"
-                  >
-                    {roleChoices.map((r) => (
-                      <option key={r.key} value={r.key}>{r.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <OfficerJurisdictionFields {...j} />
-              </section>
+              )}
+              <p className="text-xs text-gray-500">
+                Each row is one jurisdiction scope. Edit or delete a row inline, or add a new row. Changes apply when
+                you click <strong>Save changes</strong>.
+              </p>
+              <OfficerScopeTable
+                rows={rows}
+                onChange={setRows}
+                roleChoices={roleChoices}
+                officerOrgId={officerOrgId}
+                defaultRoleKey={defaultRoleKey}
+                onEditingChange={setRowEditing}
+              />
             </>
           )}
           {error && (
@@ -375,7 +317,7 @@ export function EditOfficerModal({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || loading || totalAfterSave === 0}
+                disabled={saving || loading || activeRows.length === 0}
                 className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 min-w-[9rem]"
               >
                 {saving ? "Saving…" : "Save changes"}

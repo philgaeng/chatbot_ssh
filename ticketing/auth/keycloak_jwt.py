@@ -33,6 +33,15 @@ def _get_jwks() -> dict[str, Any]:
     return _jwks_cache
 
 
+def user_id_from_keycloak_claims(claims: dict) -> str:
+    """Map JWT to ticketing.user_id — canonical key is Keycloak email."""
+    for key in ("email", "preferred_username"):
+        val = claims.get(key)
+        if isinstance(val, str) and "@" in val:
+            return val.lower()
+    return claims["sub"]
+
+
 def verify_keycloak_token(token: str) -> dict[str, Any]:
     """Decode and verify a Keycloak-issued JWT. Raises jose.JWTError on failure."""
     settings = get_settings()

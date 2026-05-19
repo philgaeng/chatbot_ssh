@@ -11,6 +11,7 @@ import {
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
   IconBell, IconSignOut, IconLock,
 } from "@/lib/icons";
+import { UserMenu } from "@/components/UserMenu";
 
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ function NotificationPanel({
 function DesktopShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin } = useAuth();
+  const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin, isSuperAdmin } = useAuth();
   const [unseenCount, setUnseenCount] = useState(0);
   const [bellOpen, setBellOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -293,7 +294,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <Icon size={16} strokeWidth={1.75} className="shrink-0" />
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">
+                  {item.href === "/settings" && isAdmin && !isSuperAdmin ? "Project setup" : item.label}
+                </span>
                 {badgeCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
                     {badgeCount > 99 ? "99+" : badgeCount}
@@ -349,7 +352,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
               <BypassRoleSwitcher />
             ) : (
-              <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+              <UserMenu />
             )}
           </div>
         </header>

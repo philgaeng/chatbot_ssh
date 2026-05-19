@@ -102,11 +102,16 @@ class ActionGrievanceOutro(BaseActionSubmit):
                 f"action_grievance_outro - grievance data saved to the database: {grievance_data}"
             )
 
-            await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)
+            await self.send_recap_email_to_admin(
+                grievance_data, "GRIEVANCE_RECAP_ADMIN_BODY", dispatcher
+            )
             complainant_email = grievance_data.get("complainant_email")
             if complainant_email and self.is_valid_email(complainant_email):
-                await self._send_grievance_recap_email_to_complainant(
-                    complainant_email, grievance_data, dispatcher
+                await self.send_recap_email_to_complainant(
+                    complainant_email,
+                    "GRIEVANCE_RECAP_COMPLAINANT_BODY",
+                    grievance_data,
+                    dispatcher,
                 )
             return []
         except Exception as e:

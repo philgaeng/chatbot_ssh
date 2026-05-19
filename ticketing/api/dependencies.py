@@ -20,6 +20,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
+from ticketing.constants.demo_officers import BYPASS_DEFAULT_OFFICER
 from ticketing.models.base import SessionLocal
 from ticketing.models.user import SEAH_ROLES
 
@@ -113,7 +114,7 @@ def get_current_user(
     if not settings.keycloak_issuer:
         org = (x_internal_organization_id or "").strip() or "DOR"
         return CurrentUser(
-            user_id=x_internal_user_id or "mock-super-admin",
+            user_id=x_internal_user_id or BYPASS_DEFAULT_OFFICER,
             role_keys=(x_internal_role or "super_admin").split(","),
             organization_id=org,
         )
@@ -138,15 +139,18 @@ def get_current_user(
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    from ticketing.auth.keycloak_jwt import verify_keycloak_token
+    from ticketing.auth.keycloak_jwt import user_id_from_keycloak_claims, verify_keycloak_token
     try:
         claims = verify_keycloak_token(credentials.credentials)
     except JWTError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}")
 
+    user_id = user_id_from_keycloak_claims(claims)
+    role_raw = claims.get("custom:grm_roles", "")
+    role_keys = [r.strip() for r in role_raw.split(",") if r.strip()]
     return CurrentUser(
-        user_id=claims["sub"],
-        role_keys=claims.get("custom:grm_roles", "").split(","),
+        user_id=user_id,
+        role_keys=role_keys,
         organization_id=claims.get("custom:organization_id", ""),
         location_code=claims.get("custom:location_code"),
     )
@@ -162,5 +166,15 @@ def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> Curr
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin role required",
+        )
+    return current_user
+
+
+def require_super_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Raises 403 unless the user is super_admin."""
+    if "super_admin" not in current_user.role_keys:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin role required",
         )
     return current_user

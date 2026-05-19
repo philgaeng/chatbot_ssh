@@ -6,7 +6,7 @@ import { exportReport } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 
 export default function ReportsPage() {
-  const { isAdmin } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const quarterStart = (() => {
     const d = new Date();
@@ -117,7 +117,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Scheduled reports — admin only */}
-      {isAdmin && (
+      {isSuperAdmin && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Automatic quarterly reports</h2>
           <p className="text-xs text-gray-500 mb-4">

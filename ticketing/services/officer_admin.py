@@ -19,6 +19,7 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.user import Role, UserRole
+from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
 
 
 class JurisdictionInput(BaseModel):
@@ -50,10 +51,11 @@ def validate_jurisdiction(
     has_pkg = bool(data.package_id)
 
     if require_jurisdiction and not (has_loc or has_proj or has_pkg):
-        raise HTTPException(
-            status_code=422,
-            detail="At least one of project, package, or location is required",
-        )
+        if scope_requires_field_jurisdiction(db, data.role_key):
+            raise HTTPException(
+                status_code=422,
+                detail="At least one of project, package, or location is required",
+            )
 
     resolved_project_code: Optional[str] = (data.project_code or "").strip() or None
     if data.project_id:
@@ -183,21 +185,28 @@ def keycloak_create_user(
     temp_password: Optional[str] = None,
 ) -> None:
     admin = _keycloak_admin()
+    local = email.split("@", 1)[0]
+    name_parts = local.replace(".", " ").replace("-", " ").split()
+    first_name = name_parts[0].title() if name_parts else local
+    last_name = name_parts[-1].title() if len(name_parts) > 1 else "Officer"
     try:
         admin.create_user({
             "username": email,
             "email": email,
+            "firstName": first_name,
+            "lastName": last_name,
             "enabled": True,
+            "emailVerified": True,
             "attributes": {
-                "grm_roles": role_key,
-                "organization_id": organization_id,
+                "grm_roles": [role_key],
+                "organization_id": [organization_id],
             },
             "credentials": [{
                 "type": "password",
                 "value": temp_password or "GrmDemo2026!",
                 "temporary": True,
             }],
-            "requiredActions": ["UPDATE_PASSWORD"],
+            "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
         })
     except Exception as exc:
         err = str(exc)

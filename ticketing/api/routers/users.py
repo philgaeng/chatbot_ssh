@@ -84,6 +84,16 @@ def update_role(
                 detail="workflow_scope must be Standard, SEAH, Both, or empty",
             )
         role.workflow_scope = v or None
+    if body.jurisdiction_mode is not None:
+        from ticketing.constants.jurisdiction import VALID_JURISDICTION_MODES
+
+        v = body.jurisdiction_mode.strip().lower()
+        if v and v not in VALID_JURISDICTION_MODES:
+            raise HTTPException(
+                status_code=422,
+                detail="jurisdiction_mode must be field, country, global, or empty",
+            )
+        role.jurisdiction_mode = v or None
     role.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(role)
@@ -246,6 +256,7 @@ class OfficerRosterEntry(BaseModel):
     user_id: str
     display_name: str
     email: str | None = None
+    phone_number: str | None = None
     role_keys: list[str]
     organization_ids: list[str]
     location_codes: list[str]
@@ -257,16 +268,19 @@ class OfficerRosterEntry(BaseModel):
 @router.get(
     "/users/roster",
     response_model=list[OfficerRosterEntry],
-    summary="List officers for Settings UI (admin) — from ticketing.user_roles",
+    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
 )
 def list_officer_roster(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_admin),
 ) -> list[OfficerRosterEntry]:
     """
-    Admin roster: distinct user_ids from user_roles with merged roles and org/locations.
-    No Keycloak call — identities are opaque user_id strings (email or sub).
+    Admin roster: merge Keycloak officer accounts with ticketing.user_roles /
+    officer_scopes. user_id is always the Keycloak email when auth is enabled.
     """
+    from ticketing.services.keycloak_users import list_grm_officer_profiles
+
+    kc_profiles = list_grm_officer_profiles()
     rows = db.execute(
         select(UserRole.user_id, Role.role_key, UserRole.organization_id, UserRole.location_code)
         .join(Role, Role.role_id == UserRole.role_id)
@@ -316,11 +330,21 @@ def list_officer_roster(
             if scope_loc:
                 locs_by[uid].add(scope_loc)
 
-    return [
-        OfficerRosterEntry(
+    # Include Keycloak officers not yet in user_roles (invited, pending DB sync).
+    for email, profile in kc_profiles.items():
+        if email not in role_keys_by:
+            role_keys_by[email] = list(profile.role_keys)
+            order.append(email)
+            if profile.organization_id:
+                orgs_by[email].add(profile.organization_id)
+
+    def _entry(uid: str) -> OfficerRosterEntry:
+        kc = kc_profiles.get(uid.lower()) if "@" in uid else None
+        return OfficerRosterEntry(
             user_id=uid,
-            display_name=_display_name_from_user_id(uid),
-            email=_email_hint(uid),
+            display_name=kc.display_name if kc else _display_name_from_user_id(uid),
+            email=kc.email if kc else _email_hint(uid),
+            phone_number=(kc.phone_number if kc and kc.phone_number else None),
             role_keys=role_keys_by[uid],
             organization_ids=sorted(orgs_by[uid]),
             location_codes=sorted(locs_by[uid]),
@@ -328,8 +352,19 @@ def list_officer_roster(
             package_ids=sorted(pkg_by.get(uid, set())),
             onboarding_status=onboard_map.get(uid, "active"),
         )
-        for uid in order
-    ]
+
+    # Keycloak order first (alphabetic by display name), then legacy non-email ids.
+    email_ids = [uid for uid in order if "@" in uid]
+    other_ids = [uid for uid in order if "@" not in uid]
+    email_ids.sort(
+        key=lambda uid: (
+            kc_profiles.get(uid.lower()).display_name if uid.lower() in kc_profiles
+            else _display_name_from_user_id(uid)
+        ).lower()
+    )
+    other_ids.sort()
+
+    return [_entry(uid) for uid in email_ids + other_ids]
 
 
 @router.get(
@@ -431,21 +466,34 @@ def add_user_scope(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Validate project_id if supplied; backfill project_code from short_code so that
-    # _scope_candidates (which queries by project_code) keeps working for new scopes.
-    resolved_project_code: Optional[str] = payload.project_code
-    if payload.project_id:
-        from ticketing.models.project import Project
-        project = db.get(Project, payload.project_id)
-        if not project:
-            raise HTTPException(status_code=422, detail=f"Project '{payload.project_id}' not found")
-        resolved_project_code = project.short_code  # canonical key used by routing engine
+    from ticketing.services.officer_admin import JurisdictionInput, validate_jurisdiction
 
-    # Validate package_id if supplied
-    if payload.package_id:
-        from ticketing.models.package import ProjectPackage
-        if not db.get(ProjectPackage, payload.package_id):
-            raise HTTPException(status_code=422, detail=f"Package '{payload.package_id}' not found")
+    juris = JurisdictionInput(
+        organization_id=payload.organization_id,
+        role_key=payload.role_key,
+        location_code=payload.location_code,
+        project_id=payload.project_id,
+        project_code=payload.project_code,
+        package_id=payload.package_id,
+        includes_children=payload.includes_children,
+    )
+    resolved_project_code = validate_jurisdiction(db, juris, require_jurisdiction=True) or None
+
+    existing_orgs = {
+        row
+        for row in db.execute(
+            select(OfficerScope.organization_id).where(OfficerScope.user_id == user_id)
+        ).scalars().all()
+    }
+    if existing_orgs and payload.organization_id not in existing_orgs:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Officers may only belong to one organization. "
+                f"Existing scopes use {sorted(existing_orgs)[0]!r}; "
+                "remove other scopes before adding a different organization."
+            ),
+        )
 
     # Prevent duplicate entries for the same (user, role, org, location, project, package)
     existing = db.execute(
@@ -620,6 +668,41 @@ def patch_my_preferences(
         org_default_language=org_default,
         effective_language=effective,
     )
+
+
+# ── Officer self-service profile (Keycloak) ───────────────────────────────────
+
+from ticketing.services.officer_profile import (
+    OfficerProfilePatch,
+    OfficerProfileResponse,
+    get_officer_profile,
+    update_officer_profile,
+)
+
+
+@router.get(
+    "/users/me/profile",
+    response_model=OfficerProfileResponse,
+    summary="Current officer profile (name, phone, position)",
+)
+def get_my_profile(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerProfileResponse:
+    return get_officer_profile(db, current_user.user_id)
+
+
+@router.patch(
+    "/users/me/profile",
+    response_model=OfficerProfileResponse,
+    summary="Update current officer profile in Keycloak",
+)
+def patch_my_profile(
+    body: OfficerProfilePatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerProfileResponse:
+    return update_officer_profile(db, current_user.user_id, body)
 
 
 # ── Officer invite / update / delete ───────────────────────────────────────────

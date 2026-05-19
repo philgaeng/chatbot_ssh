@@ -2,6 +2,7 @@
 Grievance API router. Same URL surface and behaviour as Flask backend.
 """
 
+import logging
 import os
 from typing import Any, Dict, Optional
 
@@ -10,14 +11,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from psycopg2 import sql
 
-from backend.services.database_services.grievance_manager import GrievanceDbManager
-from backend.services.messaging import Messaging
+from backend.clients.messaging_api import send_email as send_email_via_api
+from backend.clients.messaging_api import send_sms as send_sms_via_api
 from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
+from backend.services.database_services.grievance_manager import GrievanceDbManager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 grievance_manager = GrievanceDbManager()
-messaging_service = Messaging()
 
 
 # --- Request/response models (preserve Flask response structure) ---
@@ -51,15 +53,22 @@ def _send_status_update_notifications(
     notes: Optional[str],
     created_by: Optional[str],
 ) -> None:
-    """Send email and SMS when grievance status is updated. In-process Messaging."""
+    """Send email and SMS when grievance status is updated via Messaging API."""
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
-            print(f"Grievance {grievance_id} not found for notifications")
+            logger.warning("Grievance %s not found for status notifications", grievance_id)
             return
 
         complainant_phone = grievance.get("complainant_phone")
         office_emails = grievance_manager.get_office_emails_for_grievance(grievance_id)
+        base_context: Dict[str, Any] = {
+            "source_system": "backend",
+            "purpose": "grievance_status_update",
+            "grievance_id": grievance_id,
+        }
+        if created_by:
+            base_context["office_user"] = created_by
 
         email_data: Dict[str, Any] = {
             "grievance_id": grievance_id,
@@ -80,15 +89,20 @@ def _send_status_update_notifications(
         if office_emails:
             email_subject = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_SUBJECT"]["en"].format(**email_data)
             email_body = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_BODY"]["en"].format(**email_data)
-            email_success = messaging_service.send_email(
-                to_emails=office_emails,
-                subject=email_subject,
-                body=email_body,
-            )
-            if email_success:
-                print(f"Status update email sent to {len(office_emails)} office staff")
-            else:
-                print("Failed to send status update email")
+            try:
+                send_email_via_api(
+                    office_emails,
+                    email_subject,
+                    email_body,
+                    context={**base_context, "channel": "email"},
+                )
+                logger.info(
+                    "Status update email sent to %d office staff for %s",
+                    len(office_emails),
+                    grievance_id,
+                )
+            except Exception as email_err:
+                logger.error("Failed to send status update email for %s: %s", grievance_id, email_err)
 
         if complainant_phone:
             sms_data = {
@@ -97,13 +111,17 @@ def _send_status_update_notifications(
                 "grievance_timeline": grievance.get("grievance_timeline", "N/A"),
             }
             sms_message = DIC_SMS_TEMPLATES["GRIEVANCE_STATUS_UPDATE"]["en"].format(**sms_data)
-            sms_success = messaging_service.send_sms(phone_number=complainant_phone, message=sms_message)
-            if sms_success:
-                print(f"Status update SMS sent to complainant: {complainant_phone}")
-            else:
-                print(f"Failed to send status update SMS to {complainant_phone}")
+            try:
+                send_sms_via_api(
+                    complainant_phone,
+                    sms_message,
+                    context={**base_context, "channel": "sms"},
+                )
+                logger.info("Status update SMS sent for grievance %s", grievance_id)
+            except Exception as sms_err:
+                logger.error("Failed to send status update SMS for %s: %s", grievance_id, sms_err)
     except Exception as e:
-        print(f"Error in send_status_update_notifications: {str(e)}")
+        logger.exception("Error in send_status_update_notifications: %s", e)
 
 
 # --- Endpoints (paths include /api/grievance; no router prefix) ---

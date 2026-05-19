@@ -36,6 +36,7 @@ Tickets are created when the chatbot (or backend) notifies the ticketing system 
 - Geographic or logical place (district, office, region).
 - Used together with organization to scope access and workflows (e.g. “Nepal / Kathmandu / Org A”).
 - Can be hierarchical (e.g. country → region → district) if needed; v1 can be flat.
+- **Canonical codes (Nepal):** Human-readable CAPS identifiers (provinces `P1`–`P7`, district mnemonics, stable hierarchy keys in DB). Prefer this scheme over CBS-style numeric geo codes for tickets, scopes, and UI. Full rules, migration notes, seeds, and **QR/regeneration checklist:** **[LOCATION_CODES.md](LOCATION_CODES.md)**.
 
 ### Workflow
 
@@ -61,7 +62,7 @@ All of the following should be **manageable through settings** (API and/or admin
 |--------------|--------------------|---------|
 | **Access levels** | Role names and permissions | Viewer: [view_ticket]; Agent: [view_ticket, edit_ticket, assign_ticket]; Approver: [view_ticket, approve_ticket]; Admin: all |
 | **Organizations** | List of organizations, optional parent/country | Nepal / Ministry X, Nepal / Office Y |
-| **Locations** | List of locations, optional hierarchy | Kathmandu, Lalitpur, … |
+| **Locations** | List of locations, optional hierarchy; **canonical codes** for Nepal | See [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. `P1_MOR`); display names may differ |
 | **User–role mapping** | Which user has which role in which org/location | user_123 → Approver in Org A, Viewer in Org B |
 | **Workflow definitions** | Steps, transitions, conditions | “default”: [submit → assign → approve → close]; “high_priority”: [submit → assign → approve_1 → approve_2 → close] |
 | **Workflow assignment** | Which workflow applies to which (org, location, ticket type/priority) | Org A + Kathmandu + high_priority → workflow “high_priority” |

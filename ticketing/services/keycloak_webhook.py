@@ -13,8 +13,12 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def should_activate_onboarding(payload: dict[str, Any]) -> bool:
-    """Return True when the event indicates mandatory onboarding (password) completed."""
+def should_activate_onboarding(
+    payload: dict[str, Any],
+    admin: Any = None,
+    ticketing_user_id: str | None = None,
+) -> bool:
+    """Return True when onboarding is complete (password + profile/phone when required)."""
     if payload.get("mark_active") is True:
         return True
     if payload.get("ignored") is True:
@@ -27,9 +31,27 @@ def should_activate_onboarding(payload: dict[str, Any]) -> bool:
         or ""
     )
     t = str(t).upper()
-    if t == "UPDATE_PASSWORD" and not payload.get("error"):
+    if payload.get("error"):
+        return False
+
+    if t == "UPDATE_PROFILE":
         return True
-    # VERIFY_EMAIL etc. — not used for password-first flow
+
+    if t == "UPDATE_PASSWORD":
+        # Defer until phone/profile step when invite added UPDATE_PROFILE required action.
+        if admin is not None and ticketing_user_id:
+            try:
+                found = admin.get_users({"username": ticketing_user_id, "exact": True})
+                if not found:
+                    found = admin.get_users({"email": ticketing_user_id, "exact": True})
+                if found:
+                    pending = found[0].get("requiredActions") or []
+                    if "UPDATE_PROFILE" in pending:
+                        return False
+            except Exception as exc:
+                logger.warning("Could not read requiredActions for %s: %s", ticketing_user_id, exc)
+        return True
+
     return False
 
 

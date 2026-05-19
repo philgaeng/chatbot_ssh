@@ -32,7 +32,7 @@ def test_fetch_qr_scan_returns_parsed_payload_on_200():
     payload = {
         "project_code": "KL_ROAD",
         "package_id": "SHEP-OCB-KL-01",
-        "location_code": "NP_D004",
+        "location_code": "P1_JHA",
         "label": "Lot 1 — Kakarbhitta to Sitapur",
     }
     with patch(
@@ -83,7 +83,7 @@ def test_fetch_qr_scan_normalizes_sentinel_values():
     payload = {
         "project_code": "",
         "package_id": "NOT_PROVIDED",
-        "location_code": "NP_D004",
+        "location_code": "P1_JHA",
         "label": "Lot 1",
     }
     with patch(
@@ -94,7 +94,7 @@ def test_fetch_qr_scan_normalizes_sentinel_values():
     assert result == {
         "project_code": None,
         "package_id": None,
-        "location_code": "NP_D004",
+        "location_code": "P1_JHA",
         "label": "Lot 1",
     }
 
@@ -114,19 +114,19 @@ class _LocationDb:
 def test_resolve_location_code_to_names_district_and_province():
     db = _LocationDb([
         {
-            "location_code": "NP_D004",
-            "parent_location_code": "NP_P1",
+            "location_code": "P1_JHA",
+            "parent_location_code": "P1",
             "level_number": 2,
             "name": "Jhapa",
             "parent_name": "Koshi",
-            "parent_code": "NP_P1",
+            "parent_code": "P1",
         }
     ])
-    out = resolve_location_code_to_names(db, "NP_D004")
+    out = resolve_location_code_to_names(db, "P1_JHA")
     assert out == {
-        "district_code": "NP_D004",
+        "district_code": "P1_JHA",
         "district_name": "Jhapa",
-        "province_code": "NP_P1",
+        "province_code": "P1",
         "province_name": "Koshi",
     }
 
@@ -134,7 +134,7 @@ def test_resolve_location_code_to_names_district_and_province():
 def test_resolve_location_code_to_names_province_only():
     db = _LocationDb([
         {
-            "location_code": "NP_P1",
+            "location_code": "P1",
             "parent_location_code": None,
             "level_number": 1,
             "name": "Koshi",
@@ -142,8 +142,8 @@ def test_resolve_location_code_to_names_province_only():
             "parent_code": None,
         }
     ])
-    out = resolve_location_code_to_names(db, "NP_P1")
-    assert out["province_code"] == "NP_P1"
+    out = resolve_location_code_to_names(db, "P1")
+    assert out["province_code"] == "P1"
     assert out["province_name"] == "Koshi"
     assert out["district_code"] is None
     assert out["district_name"] is None
@@ -165,7 +165,7 @@ def test_resolve_location_code_to_names_swallows_db_errors():
         def execute_query(self, *args, **kwargs):
             raise RuntimeError("db down")
 
-    out = resolve_location_code_to_names(_Boom(), "NP_D004")
+    out = resolve_location_code_to_names(_Boom(), "P1_JHA")
     assert out["district_code"] is None
     assert out["province_code"] is None
 
@@ -192,7 +192,7 @@ def test_dispatch_ticket_forwards_package_id():
             session_id="S1",
             is_seah=False,
             priority="NORMAL",
-            location_code="NP_D004",
+            location_code="P1_JHA",
             project_code="KL_ROAD",
             grievance_summary="dust",
             package_id="SHEP-OCB-KL-01",
@@ -202,7 +202,7 @@ def test_dispatch_ticket_forwards_package_id():
     body = mock_post.call_args.kwargs["json"]
     assert body["package_id"] == "SHEP-OCB-KL-01"
     assert body["project_code"] == "KL_ROAD"
-    assert body["location_code"] == "NP_D004"
+    assert body["location_code"] == "P1_JHA"
 
 
 def test_dispatch_ticket_omits_package_id_when_absent():

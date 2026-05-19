@@ -246,7 +246,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_BYPASS_AUTH: "false"
-        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-http://localhost/keycloak/realms/grm}
+        # Default: Keycloak on :18080 (Pattern A). Use localhost/keycloak only when nginx proxies KC.
+        NEXT_PUBLIC_OIDC_ISSUER: ${NEXT_PUBLIC_OIDC_ISSUER:-http://localhost:18080/realms/grm}
         NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}
         NEXT_PUBLIC_REDIRECT_SIGN_IN: ${NEXT_PUBLIC_REDIRECT_SIGN_IN:-}
         NEXT_PUBLIC_REDIRECT_SIGN_OUT: ${NEXT_PUBLIC_REDIRECT_SIGN_OUT:-}
