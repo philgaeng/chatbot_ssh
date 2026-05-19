@@ -6,6 +6,8 @@ import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
 import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
 
+const BYPASS_DEFAULT_EMAIL = "admin@grm.local";
+
 // ── Demo / dev bypass (NEXT_PUBLIC_BYPASS_AUTH=true) ─────────────────────────
 // No OIDC: the Next.js proxy reads `grm_bypass_user` and forwards internal
 // identity headers. Officer choices come from GET /api/v1/users/roster (DB),
@@ -14,14 +16,11 @@ import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "
 const BYPASS_COOKIE = "grm_bypass_user";
 const LEGACY_MOCK_COOKIE = "grm_mock_user";
 
-/** Matches ticketing `get_current_user` when no cookie is sent. */
-const DEFAULT_BYPASS_USER_ID = "mock-super-admin";
-
 function fallbackBypassToken(): TokenPayload {
   return {
-    sub: DEFAULT_BYPASS_USER_ID,
-    email: "admin@grm.local",
-    name: "Super Admin",
+    sub: BYPASS_DEFAULT_EMAIL,
+    email: BYPASS_DEFAULT_EMAIL,
+    name: "GRM Admin",
     email_verified: true,
     "custom:grm_roles": "super_admin",
     "custom:organization_id": "DOR",

@@ -185,14 +185,21 @@ def keycloak_create_user(
     temp_password: Optional[str] = None,
 ) -> None:
     admin = _keycloak_admin()
+    local = email.split("@", 1)[0]
+    name_parts = local.replace(".", " ").replace("-", " ").split()
+    first_name = name_parts[0].title() if name_parts else local
+    last_name = name_parts[-1].title() if len(name_parts) > 1 else "Officer"
     try:
         admin.create_user({
             "username": email,
             "email": email,
+            "firstName": first_name,
+            "lastName": last_name,
             "enabled": True,
+            "emailVerified": True,
             "attributes": {
-                "grm_roles": role_key,
-                "organization_id": organization_id,
+                "grm_roles": [role_key],
+                "organization_id": [organization_id],
             },
             "credentials": [{
                 "type": "password",

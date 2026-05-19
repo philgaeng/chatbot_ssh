@@ -40,10 +40,9 @@ from tests.ticketing.conftest import (
     _uid,
 )
 
+SEEDED_SITE_L1 = "l1-officer@grm.local"
+
 pytestmark = pytest.mark.integration
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _first_step(db, workflow_key: str) -> WorkflowStep:
@@ -125,10 +124,10 @@ class TestGeographicScoping:
         candidates = _scope_candidates(
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, db
         )
-        assert "mock-officer-site-l1" in candidates
+        assert SEEDED_SITE_L1 in candidates
         assert auto_assign_officer(
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, db
-        ) == "mock-officer-site-l1"
+        ) == SEEDED_SITE_L1
 
     def test_district_officer_covers_municipality_via_includes_children(self, ctx):
         """Officer at P1_JHA + includes_children matches P1_JHA_BIR (ancestor path)."""
@@ -142,7 +141,7 @@ class TestGeographicScoping:
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, ctx.db
         )
         assert jhapa_officer in candidates
-        assert "mock-officer-site-l1" not in candidates
+        assert SEEDED_SITE_L1 not in candidates
 
     def test_local_district_excludes_cross_district_province_fallback(self, ctx):
         """
@@ -324,7 +323,7 @@ class TestPackageRouting:
             ctx.db,
             ticket_package_id=jhapa_lot_package_id,
         )
-        assert assigned == "mock-officer-site-l1"
+        assert assigned == SEEDED_SITE_L1
 
     def test_location_linked_package_officer_without_ticket_package_id(self, ctx, jhapa_lot_package_id):
         """
@@ -390,7 +389,7 @@ class TestCountryFallback:
         assigned = auto_assign_for_workflow_step(
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, ctx.db
         )
-        assert assigned == "mock-officer-site-l1"
+        assert assigned == SEEDED_SITE_L1
         assert assigned != national
 
     def test_country_fallback_not_used_when_local_district_exists(self, ctx):
@@ -431,7 +430,7 @@ class TestEndToEndSimulation:
     def test_full_standard_intake_jhapa_birtamod(self, db):
         """Regression anchor for B-GR-20260519-KOJH-F6D0 allocation path."""
         assigned = _simulate_create_assignment(db, location_code=LOC_P1_JHA_BIR)
-        assert assigned == "mock-officer-site-l1"
+        assert assigned == SEEDED_SITE_L1
 
     def test_full_intake_with_local_jhapa_officer(self, ctx):
         jhapa_officer = _uid("jhapa-e2e")

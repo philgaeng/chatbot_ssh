@@ -28,6 +28,19 @@ from ticketing.models.base import SessionLocal
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.user import UserRole
+from ticketing.constants.demo_officers import (
+    DEMO_OFFICER_SPECS,
+    LEGACY_OFFICER_ID_MAP,
+    OFFICER_ADMIN,
+    OFFICER_ADB,
+    OFFICER_GRC_CHAIR,
+    OFFICER_GRC_MEMBER_1,
+    OFFICER_GRC_MEMBER_2,
+    OFFICER_PIU_L2,
+    OFFICER_SEAH_HQ,
+    OFFICER_SEAH_NATIONAL,
+    OFFICER_SITE_L1,
+)
 from ticketing.seed.kl_road_seah import (
     STEP_SEAH_L1_ID,
     STEP_SEAH_L2_ID,
@@ -64,21 +77,84 @@ def _id() -> str:
     return str(uuid.uuid4())
 
 
-# ── Mock officer user IDs (will be replaced by Cognito subs in production) ────
+# ── Officer user IDs = Keycloak emails (see ticketing.constants.demo_officers) ─
 
-OFFICER_SITE_L1 = "mock-officer-site-l1"
-OFFICER_PIU_L2 = "mock-officer-piu-l2"
-OFFICER_GRC_CHAIR = "mock-officer-grc-chair"
-OFFICER_GRC_MEMBER_1 = "mock-officer-grc-member-1"
-OFFICER_GRC_MEMBER_2 = "mock-officer-grc-member-2"
-OFFICER_SEAH_NATIONAL = "mock-officer-seah-national"
-OFFICER_SEAH_HQ = "mock-officer-seah-hq"
-OFFICER_ADB_OBSERVER = "mock-officer-adb-observer"
-OFFICER_SUPER_ADMIN = "mock-super-admin"
+
+def migrate_legacy_officer_user_ids(db: Session) -> None:
+    """Rename legacy mock-* user_ids to @grm.local emails (idempotent)."""
+    for old_id, new_id in LEGACY_OFFICER_ID_MAP.items():
+        _migrate_one_officer_user_id(db, old_id, new_id)
+    db.flush()
+
+
+def _migrate_one_officer_user_id(db: Session, old_id: str, new_id: str) -> None:
+    if old_id == new_id:
+        return
+    from sqlalchemy import delete, select, update
+
+    has_old = db.execute(
+        select(UserRole.user_id).where(UserRole.user_id == old_id).limit(1)
+    ).scalar_one_or_none()
+    has_new = db.execute(
+        select(UserRole.user_id).where(UserRole.user_id == new_id).limit(1)
+    ).scalar_one_or_none()
+    if not has_old and not has_new:
+        return
+
+    if has_old and has_new:
+        db.execute(delete(UserRole).where(UserRole.user_id == old_id))
+        db.execute(delete(OfficerScope).where(OfficerScope.user_id == old_id))
+        from ticketing.models.officer_onboarding import OfficerOnboarding
+        db.execute(delete(OfficerOnboarding).where(OfficerOnboarding.user_id == old_id))
+    elif has_old:
+        db.execute(update(UserRole).where(UserRole.user_id == old_id).values(user_id=new_id))
+        db.execute(update(OfficerScope).where(OfficerScope.user_id == old_id).values(user_id=new_id))
+
+    if not has_old:
+        return
+
+    for col_name in (
+        "assigned_to_user_id",
+        "complainant_reply_owner_id",
+        "created_by_user_id",
+        "updated_by_user_id",
+    ):
+        db.execute(
+            update(Ticket)
+            .where(getattr(Ticket, col_name) == old_id)
+            .values(**{col_name: new_id})
+        )
+
+    for col_name in (
+        "assigned_to_user_id",
+        "created_by_user_id",
+        "old_assigned_to",
+        "new_assigned_to",
+    ):
+        db.execute(
+            update(TicketEvent)
+            .where(getattr(TicketEvent, col_name) == old_id)
+            .values(**{col_name: new_id})
+        )
+
+    from ticketing.models.ticket_viewer import TicketViewer
+    from ticketing.models.ticket_task import TicketTask
+    from ticketing.models.officer_onboarding import OfficerOnboarding
+
+    db.execute(update(TicketViewer).where(TicketViewer.user_id == old_id).values(user_id=new_id))
+    db.execute(update(TicketViewer).where(TicketViewer.added_by_user_id == old_id).values(added_by_user_id=new_id))
+    db.execute(update(TicketTask).where(TicketTask.assigned_to_user_id == old_id).values(assigned_to_user_id=new_id))
+    db.execute(update(TicketTask).where(TicketTask.assigned_by_user_id == old_id).values(assigned_by_user_id=new_id))
+    db.execute(update(TicketTask).where(TicketTask.completed_by_user_id == old_id).values(completed_by_user_id=new_id))
+    if not (has_old and has_new):
+        db.execute(update(OfficerOnboarding).where(OfficerOnboarding.user_id == old_id).values(user_id=new_id))
+
+    logger.info("Migrated officer user_id %s → %s", old_id, new_id)
 
 
 def seed_mock_officers(db: Session) -> None:
-    """Assign GRM roles to mock officer user IDs."""
+    """Assign GRM roles — user_id matches Keycloak login email."""
+    migrate_legacy_officer_user_ids(db)
     from sqlalchemy import select
     from ticketing.models.user import Role as RoleModel
 
@@ -89,15 +165,8 @@ def seed_mock_officers(db: Session) -> None:
         return r.role_id if r else None
 
     assignments = [
-        (OFFICER_SUPER_ADMIN,    "super_admin",                 ORG_DOR_ID, None),
-        (OFFICER_SITE_L1,        "site_safeguards_focal_person", ORG_DOR_ID, LOC_MORANG_CODE),
-        (OFFICER_PIU_L2,         "pd_piu_safeguards_focal",      ORG_DOR_ID, LOC_PROVINCE1_CODE),
-        (OFFICER_GRC_CHAIR,      "grc_chair",                   ORG_DOR_ID, LOC_PROVINCE1_CODE),
-        (OFFICER_GRC_MEMBER_1,   "grc_member",                  ORG_DOR_ID, LOC_PROVINCE1_CODE),
-        (OFFICER_GRC_MEMBER_2,   "grc_member",                  ORG_DOR_ID, LOC_PROVINCE1_CODE),
-        (OFFICER_SEAH_NATIONAL,  "seah_national_officer",       ORG_DOR_ID, LOC_PROVINCE1_CODE),
-        (OFFICER_SEAH_HQ,        "seah_hq_officer",             ORG_ADB_ID, None),
-        (OFFICER_ADB_OBSERVER,   "adb_hq_safeguards",           ORG_ADB_ID, None),
+        (spec.email, spec.role_key, spec.organization_id, spec.user_role_location)
+        for spec in DEMO_OFFICER_SPECS
     ]
 
     for user_id, role_key, org_id, loc_code in assignments:
@@ -176,12 +245,12 @@ def seed_mock_officer_scopes(db: Session) -> None:
 
         # ADB observer: no location = observes all DOR standard tickets
         # (organization_id=DOR because tickets belong to the executing agency, not the donor)
-        dict(user_id=OFFICER_ADB_OBSERVER, role_key="adb_hq_safeguards",
+        dict(user_id=OFFICER_ADB, role_key="adb_hq_safeguards",
              organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
         # Super admin: no location, no project = global scope
-        dict(user_id=OFFICER_SUPER_ADMIN, role_key="super_admin",
+        dict(user_id=OFFICER_ADMIN, role_key="super_admin",
              organization_id=ORG_DOR_ID, location_code=None,
              project_code=None, includes_children=False),
     ]
@@ -319,7 +388,7 @@ def seed_mock_tickets(db: Session) -> None:
         _event(t_dust, "CREATED", 14, new_status="OPEN", step_id=STEP_L1_ID,
                created_by="system", note="Ticket created from grievance GRV-2025-001"),
         _event(t_dust, "ASSIGNED", 14, new_assigned=OFFICER_SITE_L1, step_id=STEP_L1_ID,
-               created_by=OFFICER_SUPER_ADMIN, notify_user_id=OFFICER_SITE_L1, seen=False),
+               created_by=OFFICER_ADMIN, notify_user_id=OFFICER_SITE_L1, seen=False),
         _event(t_dust, "ACKNOWLEDGED", 13, old_status="OPEN", new_status="IN_PROGRESS",
                step_id=STEP_L1_ID, created_by=OFFICER_SITE_L1,
                note="Visited site. Confirmed dust issue. Notified contractor CSC."),
@@ -369,7 +438,7 @@ def seed_mock_tickets(db: Session) -> None:
         _event(t_seah, "CREATED", 5, new_status="OPEN", step_id=STEP_SEAH_L1_ID,
                created_by="system", note="SEAH ticket created — restricted access"),
         _event(t_seah, "ASSIGNED", 5, new_assigned=OFFICER_SEAH_NATIONAL,
-               step_id=STEP_SEAH_L1_ID, created_by=OFFICER_SUPER_ADMIN,
+               step_id=STEP_SEAH_L1_ID, created_by=OFFICER_ADMIN,
                notify_user_id=OFFICER_SEAH_NATIONAL, seen=False),
         _event(t_seah, "ACKNOWLEDGED", 4, old_status="OPEN", new_status="IN_PROGRESS",
                step_id=STEP_SEAH_L1_ID, created_by=OFFICER_SEAH_NATIONAL,

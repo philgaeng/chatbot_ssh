@@ -17,6 +17,7 @@ from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakGetError, KeycloakPostError
 
 from ticketing.config.settings import get_settings
+from ticketing.constants.demo_officers import keycloak_demo_officers
 
 logger = logging.getLogger(__name__)
 
@@ -24,56 +25,7 @@ REALM = "grm"
 CLIENT_UI = "ticketing-ui"   # public, PKCE, browser
 CLIENT_API = "ticketing-api"  # confidential, for JWKS endpoint + service account
 
-DEMO_OFFICERS: list[dict[str, str]] = [
-    {
-        "username": "admin@grm.local",
-        "email": "admin@grm.local",
-        "firstName": "GRM",
-        "lastName": "Admin",
-        "grm_roles": "super_admin",
-        "organization_id": "DOR",
-    },
-    {
-        "username": "l1-officer@grm.local",
-        "email": "l1-officer@grm.local",
-        "firstName": "Site",
-        "lastName": "Officer L1",
-        "grm_roles": "site_safeguards_focal_person",
-        "organization_id": "DOR",
-    },
-    {
-        "username": "l2-piu@grm.local",
-        "email": "l2-piu@grm.local",
-        "firstName": "PIU",
-        "lastName": "Officer L2",
-        "grm_roles": "pd_piu_safeguards_focal",
-        "organization_id": "DOR",
-    },
-    {
-        "username": "grc-chair@grm.local",
-        "email": "grc-chair@grm.local",
-        "firstName": "GRC",
-        "lastName": "Chair",
-        "grm_roles": "grc_chair",
-        "organization_id": "DOR",
-    },
-    {
-        "username": "seah@grm.local",
-        "email": "seah@grm.local",
-        "firstName": "SEAH",
-        "lastName": "Officer",
-        "grm_roles": "seah_national_officer",
-        "organization_id": "DOR",
-    },
-    {
-        "username": "adb@grm.local",
-        "email": "adb@grm.local",
-        "firstName": "ADB",
-        "lastName": "Safeguards",
-        "grm_roles": "adb_hq_safeguards",
-        "organization_id": "ADB",
-    },
-]
+DEMO_OFFICERS: list[dict[str, str]] = keycloak_demo_officers()
 
 # Token mappers: emit Cognito-compatible claim names so the rest of the code
 # (frontend TokenPayload, backend get_current_user) requires zero changes.
@@ -302,34 +254,45 @@ def setup_token_mappers(admin: KeycloakAdmin, ui_uuid: str) -> None:
             logger.info("Created mapper '%s'", mapper["name"])
 
 
+def _demo_user_payload(officer: dict[str, str], attributes: dict[str, list[str]]) -> dict[str, Any]:
+    return {
+        "username": officer["username"],
+        "email": officer["email"],
+        "firstName": officer["firstName"],
+        "lastName": officer["lastName"],
+        "enabled": True,
+        "emailVerified": True,
+        "attributes": attributes,
+        "requiredActions": [],
+    }
+
+
 def setup_demo_users(admin: KeycloakAdmin) -> None:
+    canonical = {o["username"] for o in DEMO_OFFICERS}
+    for legacy_username in ("mock-officer-site-l1@grm.local",):
+        if legacy_username in canonical:
+            continue
+        found = admin.get_users({"username": legacy_username, "exact": "true"})
+        if found:
+            admin.delete_user(found[0]["id"])
+            logger.info("Removed legacy Keycloak user '%s'", legacy_username)
+
     for officer in DEMO_OFFICERS:
-        # Keycloak's REST API stores attributes as list[str] per key. Passing
-        # bare strings silently sets attributes=None — which then leaves the
-        # token mappers with nothing to emit (no custom:grm_roles claim).
         attributes = {
             "grm_roles":       [officer["grm_roles"]],
             "organization_id": [officer["organization_id"]],
         }
-        # python-keycloak's get_users takes a positional dict, not query= kw.
+        if officer.get("location_code"):
+            attributes["location_code"] = [officer["location_code"]]
         found = admin.get_users({"username": officer["username"], "exact": "true"})
         if found:
-            # Update the attributes on every run — earlier runs of this script
-            # may have created users with attributes=None. This re-attaches
-            # them so the token mappers can populate the claims.
             user_id = found[0]["id"]
-            admin.update_user(user_id, {"attributes": attributes})
-            logger.info("User '%s' attributes refreshed", officer["username"])
+            admin.update_user(user_id, _demo_user_payload(officer, attributes))
+            logger.info("User '%s' profile and attributes refreshed", officer["username"])
             continue
         try:
             admin.create_user({
-                "username": officer["username"],
-                "email": officer["email"],
-                "firstName": officer["firstName"],
-                "lastName": officer["lastName"],
-                "enabled": True,
-                "emailVerified": True,
-                "attributes": attributes,
+                **_demo_user_payload(officer, attributes),
                 "credentials": [{"type": "password", "value": "GrmDemo2026!", "temporary": True}],
                 "requiredActions": ["UPDATE_PASSWORD"],
             })

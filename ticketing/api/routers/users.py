@@ -267,16 +267,19 @@ class OfficerRosterEntry(BaseModel):
 @router.get(
     "/users/roster",
     response_model=list[OfficerRosterEntry],
-    summary="List officers for Settings UI (admin) — from ticketing.user_roles",
+    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
 )
 def list_officer_roster(
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(require_admin),
 ) -> list[OfficerRosterEntry]:
     """
-    Admin roster: distinct user_ids from user_roles with merged roles and org/locations.
-    No Keycloak call — identities are opaque user_id strings (email or sub).
+    Admin roster: merge Keycloak officer accounts with ticketing.user_roles /
+    officer_scopes. user_id is always the Keycloak email when auth is enabled.
     """
+    from ticketing.services.keycloak_users import list_grm_officer_profiles
+
+    kc_profiles = list_grm_officer_profiles()
     rows = db.execute(
         select(UserRole.user_id, Role.role_key, UserRole.organization_id, UserRole.location_code)
         .join(Role, Role.role_id == UserRole.role_id)
@@ -326,11 +329,20 @@ def list_officer_roster(
             if scope_loc:
                 locs_by[uid].add(scope_loc)
 
-    return [
-        OfficerRosterEntry(
+    # Include Keycloak officers not yet in user_roles (invited, pending DB sync).
+    for email, profile in kc_profiles.items():
+        if email not in role_keys_by:
+            role_keys_by[email] = list(profile.role_keys)
+            order.append(email)
+            if profile.organization_id:
+                orgs_by[email].add(profile.organization_id)
+
+    def _entry(uid: str) -> OfficerRosterEntry:
+        kc = kc_profiles.get(uid.lower()) if "@" in uid else None
+        return OfficerRosterEntry(
             user_id=uid,
-            display_name=_display_name_from_user_id(uid),
-            email=_email_hint(uid),
+            display_name=kc.display_name if kc else _display_name_from_user_id(uid),
+            email=kc.email if kc else _email_hint(uid),
             role_keys=role_keys_by[uid],
             organization_ids=sorted(orgs_by[uid]),
             location_codes=sorted(locs_by[uid]),
@@ -338,8 +350,19 @@ def list_officer_roster(
             package_ids=sorted(pkg_by.get(uid, set())),
             onboarding_status=onboard_map.get(uid, "active"),
         )
-        for uid in order
-    ]
+
+    # Keycloak order first (alphabetic by display name), then legacy non-email ids.
+    email_ids = [uid for uid in order if "@" in uid]
+    other_ids = [uid for uid in order if "@" not in uid]
+    email_ids.sort(
+        key=lambda uid: (
+            kc_profiles.get(uid.lower()).display_name if uid.lower() in kc_profiles
+            else _display_name_from_user_id(uid)
+        ).lower()
+    )
+    other_ids.sort()
+
+    return [_entry(uid) for uid in email_ids + other_ids]
 
 
 @router.get(
