@@ -256,6 +256,7 @@ class OfficerRosterEntry(BaseModel):
     user_id: str
     display_name: str
     email: str | None = None
+    phone_number: str | None = None
     role_keys: list[str]
     organization_ids: list[str]
     location_codes: list[str]
@@ -343,6 +344,7 @@ def list_officer_roster(
             user_id=uid,
             display_name=kc.display_name if kc else _display_name_from_user_id(uid),
             email=kc.email if kc else _email_hint(uid),
+            phone_number=(kc.phone_number if kc and kc.phone_number else None),
             role_keys=role_keys_by[uid],
             organization_ids=sorted(orgs_by[uid]),
             location_codes=sorted(locs_by[uid]),
@@ -650,6 +652,41 @@ def patch_my_preferences(
         org_default_language=org_default,
         effective_language=effective,
     )
+
+
+# ── Officer self-service profile (Keycloak) ───────────────────────────────────
+
+from ticketing.services.officer_profile import (
+    OfficerProfilePatch,
+    OfficerProfileResponse,
+    get_officer_profile,
+    update_officer_profile,
+)
+
+
+@router.get(
+    "/users/me/profile",
+    response_model=OfficerProfileResponse,
+    summary="Current officer profile (name, phone, position)",
+)
+def get_my_profile(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerProfileResponse:
+    return get_officer_profile(db, current_user.user_id)
+
+
+@router.patch(
+    "/users/me/profile",
+    response_model=OfficerProfileResponse,
+    summary="Update current officer profile in Keycloak",
+)
+def patch_my_profile(
+    body: OfficerProfilePatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> OfficerProfileResponse:
+    return update_officer_profile(db, current_user.user_id, body)
 
 
 # ── Officer invite / update / delete ───────────────────────────────────────────

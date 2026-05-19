@@ -121,6 +121,7 @@ export function OfficersTab({
         o.display_name,
         o.user_id,
         o.email ?? "",
+        o.phone_number ?? "",
         ...o.role_keys,
         ...o.organization_ids,
         ...o.location_codes,
@@ -280,11 +281,12 @@ export function OfficersTab({
 
       {!loading && !loadError && filtered.length > 0 && (
         <div className="border border-gray-200 rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[720px]">
+          <table className="w-full text-sm min-w-[820px]">
             <thead>
               <tr className="bg-slate-700 text-slate-100 text-left text-sm">
                 <th className="px-3 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Email</th>
+                <th className="px-3 py-2.5 font-medium">Phone</th>
                 <th className="px-3 py-2.5 font-medium">Role</th>
                 <th className="px-3 py-2.5 font-medium">Area covered</th>
                 <th className="px-3 py-2.5 font-medium w-24">Status</th>
@@ -306,6 +308,9 @@ export function OfficersTab({
                     </td>
                     <td className="px-3 py-2.5 text-gray-600 truncate max-w-[14rem]" title={o.email ?? o.user_id}>
                       {o.email ?? o.user_id}
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-600 font-mono text-xs">
+                      {o.phone_number ?? "—"}
                     </td>
                     <td className="px-3 py-2.5 text-gray-700 max-w-[12rem]" title={officerRoleLabels(o.role_keys, roleCatalog)}>
                       {officerRoleLabels(o.role_keys, roleCatalog)}

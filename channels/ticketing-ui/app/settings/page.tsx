@@ -2685,17 +2685,6 @@ function ProjectEditor({
         />
       </div>
 
-      <div ref={(el) => { sectionRefs.current.staffing = el; }}>
-        <ProjectStaffingSection
-          key={staffingTick}
-          project={p}
-          projectActors={p.organizations}
-          orgs={orgs}
-          grmRoleChoices={grmRoleChoices}
-          packages={packages}
-        />
-      </div>
-
       {officerModalOrg && (
         <ProjectOfficerModal
           project={p}
@@ -2797,6 +2786,17 @@ function ProjectEditor({
             })}
           </div>
         )}
+      </div>
+
+      <div ref={(el) => { sectionRefs.current.staffing = el; }}>
+        <ProjectStaffingSection
+          key={staffingTick}
+          project={p}
+          projectActors={p.organizations}
+          orgs={orgs}
+          grmRoleChoices={grmRoleChoices}
+          packages={packages}
+        />
       </div>
     </div>
   );

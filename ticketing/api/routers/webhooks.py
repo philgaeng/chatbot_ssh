@@ -54,7 +54,7 @@ async def keycloak_event_webhook(request: Request, db: Session = Depends(get_db)
     """
     Accepts JSON event bodies from a Keycloak HTTP event-listener extension.
 
-    When Keycloak emits a successful UPDATE_PASSWORD (or mark_active test payload),
+    When Keycloak emits a successful UPDATE_PASSWORD or UPDATE_PROFILE (after phone),
     sets ticketing.officer_onboarding.status to active for the resolved user_id.
     """
     _verify_webhook_secret(request)
@@ -76,14 +76,15 @@ async def keycloak_event_webhook(request: Request, db: Session = Depends(get_db)
     admin = None
 
     for payload in payloads:
-        if not should_activate_onboarding(payload):
-            processed.append({"ignored": True, "hint": payload.get("type")})
-            continue
-
         if admin is None:
             admin = keycloak_admin_from_settings()
 
         tid = resolve_ticketing_user_id(payload, admin)
+
+        if not should_activate_onboarding(payload, admin, tid):
+            processed.append({"ignored": True, "hint": payload.get("type")})
+            continue
+
         if not tid:
             logger.warning("Could not resolve ticketing user_id from payload keys=%s", list(payload.keys()))
             processed.append({"ignored": True, "reason": "unresolved_identity"})

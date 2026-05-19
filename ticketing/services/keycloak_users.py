@@ -16,6 +16,7 @@ class KeycloakUserProfile:
     enabled: bool
     role_keys: tuple[str, ...] = ()
     organization_id: str = ""
+    phone_number: str = ""
 
 
 def keycloak_configured() -> bool:
@@ -60,12 +61,14 @@ def list_grm_officer_profiles() -> dict[str, KeycloakUserProfile]:
             last = (user.get("lastName") or "").strip()
             display = f"{first} {last}".strip() or email.split("@", 1)[0]
             org = (attrs.get("organization_id") or [""])[0]
+            phone = (attrs.get("phone_number") or [""])[0].strip()
             profiles[email] = KeycloakUserProfile(
                 email=email,
                 display_name=display,
                 enabled=bool(user.get("enabled", True)),
                 role_keys=role_keys,
                 organization_id=org,
+                phone_number=phone,
             )
         return profiles
     except Exception as exc:

@@ -11,6 +11,7 @@ import {
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
   IconBell, IconSignOut, IconLock,
 } from "@/lib/icons";
+import { UserMenu } from "@/components/UserMenu";
 
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
@@ -351,7 +352,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
               <BypassRoleSwitcher />
             ) : (
-              <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+              <UserMenu />
             )}
           </div>
         </header>

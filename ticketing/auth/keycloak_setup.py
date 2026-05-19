@@ -89,6 +89,21 @@ MAPPERS: list[dict[str, Any]] = [
             "multivalued": "false",
         },
     },
+    {
+        "name": "phone_number",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-usermodel-attribute-mapper",
+        "consentRequired": False,
+        "config": {
+            "user.attribute": "phone_number",
+            "claim.name": "custom:phone_number",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+        },
+    },
 ]
 
 
@@ -166,6 +181,55 @@ def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
     if resp.status_code >= 300:
         raise RuntimeError(f"Failed to update user profile policy: {resp.status_code} {resp.text}")
     logger.info("User profile unmanagedAttributePolicy set to ENABLED")
+
+
+def setup_officer_phone_profile(admin: KeycloakAdmin) -> None:
+    """Declare officer-editable attributes on the Keycloak user profile."""
+    import json
+
+    profile = admin.connection.raw_get(f"admin/realms/{REALM}/users/profile").json()
+    attrs: list[dict[str, Any]] = list(profile.get("attributes") or [])
+
+    declarations: list[dict[str, Any]] = [
+        {
+            "name": "phone_number",
+            "displayName": "Phone number",
+            "validations": {"length": {"min": 8, "max": 20}},
+            "permissions": {"view": ["admin", "user"], "edit": ["admin", "user"]},
+            "multivalued": False,
+            "required": {"roles": ["user"]},
+        },
+        {
+            "name": "job_title",
+            "displayName": "Job title / position",
+            "validations": {"length": {"max": 120}},
+            "permissions": {"view": ["admin", "user"], "edit": ["admin", "user"]},
+            "multivalued": False,
+        },
+    ]
+
+    changed = False
+    existing_names = {a.get("name") for a in attrs}
+    for decl in declarations:
+        if decl["name"] in existing_names:
+            logger.info("User profile %s attribute already declared", decl["name"])
+            continue
+        attrs.append(decl)
+        changed = True
+        logger.info("User profile %s attribute added", decl["name"])
+
+    if not changed:
+        return
+
+    profile["attributes"] = attrs
+    resp = admin.connection.raw_put(
+        f"admin/realms/{REALM}/users/profile",
+        data=json.dumps(profile),
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(
+            f"Failed to update user profile attributes: {resp.status_code} {resp.text}"
+        )
 
 
 def _get_client_uuid(admin: KeycloakAdmin, client_id: str) -> str | None:
@@ -319,6 +383,7 @@ def main() -> None:
 
     grm = _realm_admin()
     setup_user_profile_policy(grm)
+    setup_officer_phone_profile(grm)
     ui_uuid = setup_clients(grm)
     setup_token_mappers(grm, ui_uuid)
     setup_demo_users(grm)

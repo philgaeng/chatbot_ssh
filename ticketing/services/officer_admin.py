@@ -206,7 +206,7 @@ def keycloak_create_user(
                 "value": temp_password or "GrmDemo2026!",
                 "temporary": True,
             }],
-            "requiredActions": ["UPDATE_PASSWORD"],
+            "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
         })
     except Exception as exc:
         err = str(exc)

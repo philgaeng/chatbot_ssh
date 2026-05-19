@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, Suspense, useCal
 import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
-import { getUserPreferences, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
+import { getUserPreferences, getMyProfile, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
 
 const BYPASS_DEFAULT_EMAIL = "admin@grm.local";
 
@@ -133,6 +133,8 @@ export interface AuthContextValue {
    * Sets cookie + reloads queue so API calls use the new identity.
    */
   switchBypassUser: (entry: OfficerRosterEntry) => void;
+  /** Refresh header display name from Keycloak profile (after account save). */
+  refreshDisplayName: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -309,6 +311,40 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     window.location.href = "/queue";
   }, []);
 
+  const refreshDisplayName = useCallback(async () => {
+    try {
+      const p = await getMyProfile();
+      const name = `${p.first_name} ${p.last_name}`.trim() || p.email;
+      setUser((prev) => (prev ? { ...prev, name, email: p.email } : prev));
+      if (bypass && typeof window !== "undefined") {
+        const raw = readBypassCookieRaw();
+        const parsed = raw ? parseBypassCookie(raw) : null;
+        if (parsed) {
+          setBypassRoster((prev) =>
+            (prev ?? []).map((r) =>
+              r.user_id === parsed.user_id
+                ? { ...r, display_name: name, email: p.email, phone_number: p.phone_number }
+                : r,
+            ),
+          );
+        }
+      }
+      if (!bypass && typeof window !== "undefined") {
+        const stored = localStorage.getItem("grm_user");
+        if (stored) {
+          try {
+            const u = JSON.parse(stored) as TokenPayload;
+            localStorage.setItem("grm_user", JSON.stringify({ ...u, name, email: p.email }));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch {
+      /* profile API unavailable (e.g. demo bypass without Keycloak) */
+    }
+  }, [bypass]);
+
   const roleKeys = ((user?.["custom:grm_roles"] as string | undefined) ?? "")
     .split(",")
     .map((r) => r.trim())
@@ -334,6 +370,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         bypassRoster,
         bypassRosterError,
         switchBypassUser,
+        refreshDisplayName,
       }}
     >
       {children}

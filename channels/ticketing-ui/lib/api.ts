@@ -531,6 +531,7 @@ export interface OfficerRosterEntry {
   user_id: string;
   display_name: string;
   email: string | null;
+  phone_number?: string | null;
   role_keys: string[];
   organization_ids: string[];
   location_codes: string[];
@@ -1319,6 +1320,35 @@ export function patchUserPreferences(preferred_language: "en" | "ne" | null): Pr
   return apiFetch<UserPreferences>("/api/v1/users/me/preferences", {
     method: "PATCH",
     body: JSON.stringify({ preferred_language }),
+  });
+}
+
+// ── Officer profile (Keycloak) ──────────────────────────────────────────────
+
+export interface OfficerProfile {
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  job_title: string;
+  role_keys: string[];
+  role_labels: string[];
+}
+
+export function getMyProfile(): Promise<OfficerProfile> {
+  return apiFetch<OfficerProfile>("/api/v1/users/me/profile");
+}
+
+export function updateMyProfile(payload: {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  job_title: string;
+}): Promise<OfficerProfile> {
+  return apiFetch<OfficerProfile>("/api/v1/users/me/profile", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 
