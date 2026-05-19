@@ -36,10 +36,16 @@ from ticketing.constants.demo_officers import (
     OFFICER_GRC_CHAIR,
     OFFICER_GRC_MEMBER_1,
     OFFICER_GRC_MEMBER_2,
+    OFFICER_LOCAL_ADMIN,
     OFFICER_PIU_L2,
+    OFFICER_PIU_L2_2,
+    OFFICER_PIU_L2_3,
     OFFICER_SEAH_HQ,
     OFFICER_SEAH_NATIONAL,
     OFFICER_SITE_L1,
+    OFFICER_SITE_L1_2,
+    OFFICER_SITE_L1_3,
+    OFFICER_SITE_L1_4,
 )
 from ticketing.seed.kl_road_seah import (
     STEP_SEAH_L1_ID,
@@ -209,13 +215,33 @@ def seed_mock_officer_scopes(db: Session) -> None:
     from sqlalchemy import select
 
     scopes = [
-        # L1 site officer: Morang district + all children (covers Urlabari etc.)
+        # Local admin: KL Road project setup (province-wide)
+        dict(user_id=OFFICER_LOCAL_ADMIN, role_key="local_admin",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+
+        # L1 site officers — one primary district each (+ L1-4 also Morang for load balance)
         dict(user_id=OFFICER_SITE_L1, role_key="site_safeguards_focal_person",
              organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
              project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_SITE_L1_2, role_key="site_safeguards_focal_person",
+             organization_id=ORG_DOR_ID, location_code=LOC_JHAPA_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_SITE_L1_3, role_key="site_safeguards_focal_person",
+             organization_id=ORG_DOR_ID, location_code=LOC_SUNSARI_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_SITE_L1_4, role_key="site_safeguards_focal_person",
+             organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
+             project_code="KL_ROAD", includes_children=True),
 
-        # L2 PIU: Province 1 + all children (covers all districts along KL Road)
+        # L2 PIU: Province 1 + all children (three officers for load balancing)
         dict(user_id=OFFICER_PIU_L2, role_key="pd_piu_safeguards_focal",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_2, role_key="pd_piu_safeguards_focal",
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_3, role_key="pd_piu_safeguards_focal",
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
@@ -635,7 +661,28 @@ def seed_all(reset: bool = False) -> None:
         db.close()
 
 
+def seed_officers_only() -> None:
+    """Upsert demo officer roles + scopes without touching tickets or workflows."""
+    db = SessionLocal()
+    try:
+        logger.info("Seeding mock officers (roles only)...")
+        seed_mock_officers(db)
+        logger.info("Seeding mock officer scopes...")
+        seed_mock_officer_scopes(db)
+        db.commit()
+        logger.info("Officer seed committed successfully.")
+    except Exception:
+        db.rollback()
+        logger.exception("Officer seed FAILED — rolled back")
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    reset = "--reset" in sys.argv
-    seed_all(reset=reset)
+    if "--officers-only" in sys.argv:
+        seed_officers_only()
+    else:
+        reset = "--reset" in sys.argv
+        seed_all(reset=reset)
