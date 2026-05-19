@@ -349,7 +349,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         missing_qr = []
         for pkg in packages:
             has_qr = db.execute(
-                select(QrToken.token_id).where(QrToken.package_id == pkg.package_id).limit(1)
+                select(QrToken.token).where(QrToken.package_id == pkg.package_id).limit(1)
             ).scalar_one_or_none()
             if not has_qr:
                 missing_qr.append(pkg.package_code or pkg.package_id[:8])

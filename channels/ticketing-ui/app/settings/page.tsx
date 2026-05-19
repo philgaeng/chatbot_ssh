@@ -42,7 +42,6 @@ import {
   setProjectActorRoles,
   addPackageOrg,
   removePackageOrg,
-  createOrganization,
   updateOrganization,
   deleteOrganization,
   listProjectsForOrg,
@@ -57,7 +56,6 @@ import {
   type StepPayload,
   type OfficerScope,
   type OrganizationItem,
-  type OrganizationCreate,
   type CountryItem,
   type LocationNode,
   type ProjectItem,
@@ -75,6 +73,8 @@ import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSec
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectTypesTab } from "@/components/settings/ProjectTypesTab";
+import { OrgCreateModal } from "@/components/settings/OrgCreateModal";
+import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { LocationSearch } from "@/components/LocationSearch";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
@@ -227,61 +227,6 @@ const ORG_ROLE_COLORS: Record<string, string> = {
   supervision_consultant:  "bg-teal-100 text-teal-700 border-teal-200",
   specialized_consultant:  "bg-green-100 text-green-700 border-green-200",
 };
-
-/** Same token rules as ticketing/utils/organization_identifier.py */
-const ORG_NAME_TOKEN_RE = /[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|\d+/g;
-
-function splitOrgNameTokens(name: string): string[] {
-  const parts = name.trim().split(/[\s_\-/]+/).filter(Boolean);
-  const tokens: string[] = [];
-  for (const p of parts) {
-    const found = p.match(ORG_NAME_TOKEN_RE);
-    if (!found || found.length === 0) {
-      const alnum = p.replace(/[^a-zA-Z0-9]/g, "");
-      if (alnum) tokens.push(alnum);
-      continue;
-    }
-    for (const s of found) {
-      const alnum = s.replace(/[^a-zA-Z0-9]/g, "");
-      if (alnum) tokens.push(alnum);
-    }
-  }
-  return tokens;
-}
-
-function slugCoreFromOrgName(name: string): string {
-  const tokens = splitOrgNameTokens(name);
-  if (tokens.length === 0) return "";
-  if (tokens.length === 1) {
-    const t = tokens[0];
-    if (/^\d+$/.test(t)) return t;
-    if (t.length <= 3) return t.toUpperCase();
-    return t.slice(0, 6).toUpperCase();
-  }
-  let core = tokens.map((t) => (/^\d+$/.test(t) ? t : t[0].toUpperCase())).join("");
-  if (core.length > 12) core = core.slice(0, 12);
-  return core;
-}
-
-/**
- * Preview of the id the API will use (first free candidate).
- * Keep logic aligned with suggested_organization_id + allocate_unique_organization_id.
- */
-function generateOrgId(name: string, country: string, existingIds: Set<string>): string {
-  const core = slugCoreFromOrgName(name);
-  if (!core) return "";
-  const base = !country || core === "ADB" ? core : `${country}_${core}`;
-  if (!existingIds.has(base)) return base;
-  let n = 2;
-  while (n < 100000) {
-    const suffix = `_${n}`;
-    const prefixLen = Math.max(0, 64 - suffix.length);
-    const cand = base.slice(0, prefixLen) + suffix;
-    if (!existingIds.has(cand)) return cand;
-    n += 1;
-  }
-  return base;
-}
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
@@ -1559,118 +1504,6 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
   );
 }
 
-// ── Create org modal ──────────────────────────────────────────────────────────
-
-function OrgCreateModal({
-  countries,
-  existingOrganizationIds,
-  onCreated,
-  onClose,
-}: {
-  countries: CountryItem[];
-  existingOrganizationIds: Set<string>;
-  onCreated: (org: OrganizationItem) => void;
-  onClose: () => void;
-}) {
-  const [name, setName]         = useState("");
-  const [country, setCountry]   = useState("NP");
-  const [isActive, setIsActive] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [error, setError]       = useState("");
-
-  const generatedId = generateOrgId(name, country, existingOrganizationIds);
-
-  async function handleCreate() {
-    if (!name.trim()) { setError("Name is required."); return; }
-    setCreating(true); setError("");
-    try {
-      const org = await createOrganization({
-        name: name.trim(),
-        country_code: country || null,
-        is_active: isActive,
-      } as OrganizationCreate);
-      onCreated(org);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Create failed";
-      setError(msg);
-      setCreating(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
-          <div className="font-semibold">New organization</div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
-
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Full name *</label>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Department of Roads"
-              className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Country</label>
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                <option value="">— none (multi-country) —</option>
-                {countries.map((c) => <option key={c.country_code} value={c.country_code}>{c.name} ({c.country_code})</option>)}
-              </select>
-            </div>
-            <div className="flex items-end pb-1">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="text-sm text-gray-700">Active</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Auto-generated ID preview */}
-          {generatedId ? (
-            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-              Will be created as: <span className="font-mono font-semibold text-gray-700">{generatedId}</span>
-              <span className="block mt-1 text-gray-400">The server uses the same rules and picks the next free id if another admin creates an org at the same time.</span>
-            </p>
-          ) : (
-            name.trim() && (
-              <p className="text-xs text-amber-600">Enter a valid name to generate the ID.</p>
-            )
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
-          <button
-            onClick={handleCreate}
-            disabled={creating || !name.trim() || !generatedId}
-            className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition"
-          >
-            {creating ? "Creating…" : "Create organization"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Org editor ────────────────────────────────────────────────────────────────
 
@@ -2193,6 +2026,12 @@ function ProjectsSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEditId, projects]);
 
+  // Local admins: land directly on their project when there is only one
+  useEffect(() => {
+    if (isSuperAdmin || loading || editing || projects.length !== 1) return;
+    setEditing(projects[0]);
+  }, [isSuperAdmin, loading, editing, projects]);
+
   async function handleRemoveProject(p: ProjectItem) {
     if (!confirm(`Remove project "${p.name}" (${p.short_code})? Packages and links will be deleted.`)) return;
     try {
@@ -2212,8 +2051,10 @@ function ProjectsSection({
         orgRoles={orgRoles}
         grmRoleChoices={grmRoleChoices}
         isSuperAdmin={isSuperAdmin}
+        showBack={isSuperAdmin || projects.length > 1}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={(p) => setEditing(p)}
+        onOrganizationCreated={(org) => setOrgs((prev) => (prev.some((o) => o.organization_id === org.organization_id) ? prev : [...prev, org]))}
       />
     );
   }
@@ -2222,15 +2063,17 @@ function ProjectsSection({
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
-        >
-          + New Project
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
+          >
+            + New Project
+          </button>
+        )}
       </div>
 
-      {showCreate && (
+      {isSuperAdmin && showCreate && (
         <ProjectCreateModal
           onCreated={(p) => { setShowCreate(false); setProjects((prev) => [...prev, p]); setEditing(p); }}
           onClose={() => setShowCreate(false)}
@@ -2265,11 +2108,13 @@ function ProjectsSection({
                   </div>
                 </div>
                 <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">
-                  Edit
+                  {isSuperAdmin ? "Edit" : "Set up"}
                 </button>
-                <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
-                  Remove
-                </button>
+                {isSuperAdmin && (
+                  <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
+                    Remove
+                  </button>
+                )}
               </div>
             );
           })}
@@ -2399,24 +2244,26 @@ function ProjectEditor({
   orgRoles,
   grmRoleChoices,
   isSuperAdmin,
+  showBack = true,
   onBack,
   onUpdated,
+  onOrganizationCreated,
 }: {
   project: ProjectItem;
   orgs: OrganizationItem[];
   orgRoles: OrgRole[];
   grmRoleChoices: { key: string; label: string }[];
   isSuperAdmin: boolean;
+  showBack?: boolean;
   onBack: () => void;
   onUpdated: (p: ProjectItem) => void;
+  onOrganizationCreated: (org: OrganizationItem) => void;
 }) {
   const [p, setP]             = useState<ProjectItem>(initial);
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(p.name);
   const [descVal, setDescVal] = useState(p.description ?? "");
   const [msg, setMsg]         = useState("");
-  const [addingOrg, setAddingOrg]     = useState("");
-  const [addingOrgRole, setAddingOrgRole] = useState("");
   const [working, setWorking] = useState(false);
   const [locError, setLocError] = useState("");
   const { canSeeSeah } = useAuth();
@@ -2486,15 +2333,18 @@ function ProjectEditor({
     setEditingName(false);
   }
 
-  async function handleAddOrg() {
-    if (!addingOrg) return;
+  async function linkProjectActor(organizationId: string, orgRole: string) {
     setWorking(true);
     try {
-      const item = await addProjectOrg(p.project_id, addingOrg, addingOrgRole || null);
+      const item = await addProjectOrg(p.project_id, organizationId, orgRole || null);
       setP({ ...p, organizations: [...p.organizations, item] });
-      setAddingOrg(""); setAddingOrgRole(""); flash("Project actor added ✓");
-    } catch { flash("Failed"); }
-    setWorking(false);
+      flash("Project actor added ✓");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Failed");
+      throw e;
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function handleRemoveOrg(orgId: string) {
@@ -2589,22 +2439,31 @@ function ProjectEditor({
   }
 
   const linkedOrgIds = new Set(p.organizations.map((o) => o.organization_id));
-  const availableOrgs = orgs.filter((o) => !linkedOrgIds.has(o.organization_id));
 
   return (
     <div>
       {/* Back + header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">← Projects</button>
-        <span className="text-gray-300">/</span>
-        {editingName ? (
+        {showBack && (
+          <>
+            <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">
+              {isSuperAdmin ? "← Projects" : "← All projects"}
+            </button>
+            <span className="text-gray-300">/</span>
+          </>
+        )}
+        {isSuperAdmin && editingName ? (
           <div className="flex items-center gap-2">
             <input autoFocus value={nameVal} onChange={(e) => setNameVal(e.target.value)}
               onBlur={saveMeta} onKeyDown={(e) => e.key === "Enter" && saveMeta()}
               className="text-lg font-semibold text-gray-800 border-b-2 border-blue-400 bg-transparent focus:outline-none" />
           </div>
         ) : (
-          <h2 className="text-lg font-semibold text-gray-800 cursor-pointer hover:text-blue-600" onClick={() => setEditingName(true)} title="Click to rename">
+          <h2
+            className={`text-lg font-semibold text-gray-800${isSuperAdmin ? " cursor-pointer hover:text-blue-600" : ""}`}
+            onClick={isSuperAdmin ? () => setEditingName(true) : undefined}
+            title={isSuperAdmin ? "Click to rename" : undefined}
+          >
             {p.name}
           </h2>
         )}
@@ -2613,13 +2472,15 @@ function ProjectEditor({
           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{p.project_type_key}</span>
         )}
         {!p.is_active && <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Inactive</span>}
-        <button
-          type="button"
-          onClick={() => void toggleActive()}
-          className="text-xs text-blue-600 hover:underline ml-1"
-        >
-          {p.is_active ? "Deactivate" : "Activate project"}
-        </button>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            onClick={() => void toggleActive()}
+            className="text-xs text-blue-600 hover:underline ml-1"
+          >
+            {p.is_active ? "Deactivate" : "Activate project"}
+          </button>
+        )}
         {msg && <span className="text-xs text-green-600 font-medium ml-2">{msg}</span>}
       </div>
 
@@ -2638,7 +2499,8 @@ function ProjectEditor({
           className="w-full max-w-lg text-sm border border-gray-200 rounded px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400" />
       </div>
 
-      {/* Grievance workflows */}
+      {/* Grievance workflows — super admin only */}
+      {isSuperAdmin && (
       <div
         ref={(el) => { sectionRefs.current.workflows = el; }}
         className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
@@ -2675,8 +2537,9 @@ function ProjectEditor({
           />
         )}
       </div>
+      )}
 
-      {wfModal && (
+      {isSuperAdmin && wfModal && (
         <NewWorkflowModal
           templates={wfTemplates}
           canSeeSeah={!!canSeeSeah}
@@ -2695,6 +2558,7 @@ function ProjectEditor({
         />
       )}
 
+      {isSuperAdmin && (
       <ProjectActorRolesEditor
         roles={projectActorRoles}
         saving={rolesSaving}
@@ -2713,17 +2577,18 @@ function ProjectEditor({
           }
         }}
       />
+      )}
 
       {/* Project actors (project-wide org + role) */}
       <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
         <div>
           <h3 className="text-sm font-semibold text-gray-700">Project actors</h3>
           <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
-            Organizations and their roles for the whole project (donor, CSC, engineering team, contractor, etc.).
+            Add each partner organization and its role on this project. Use <span className="font-medium">+ New organization</span> if it is not in the list yet.
           </p>
         </div>
         <p className="text-xs text-gray-500 mb-3 max-w-2xl">
-          Use <span className="font-medium">Add officer</span> on a row to invite or scope someone for that organization on this project.
+          Then use <span className="font-medium">Add officer</span> on a row to invite or scope someone for that organization.
         </p>
 
         {p.organizations.length === 0 ? (
@@ -2786,25 +2651,15 @@ function ProjectEditor({
           </div>
         )}
 
-        {/* Add org row */}
-        {availableOrgs.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <select value={addingOrg} onChange={(e) => setAddingOrg(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">— select organization —</option>
-              {availableOrgs.map((o) => <option key={o.organization_id} value={o.organization_id}>{o.name}</option>)}
-            </select>
-            <select value={addingOrgRole} onChange={(e) => setAddingOrgRole(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">— role (optional) —</option>
-              {projectActorRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-            <button onClick={handleAddOrg} disabled={!addingOrg || working}
-              className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50 transition">
-              Add
-            </button>
-          </div>
-        )}
+        <ProjectActorAddRow
+          actorRoles={projectActorRoles}
+          orgs={orgs}
+          defaultCountryCode={p.country_code || "NP"}
+          excludeOrganizationIds={linkedOrgIds}
+          working={working}
+          onOrganizationCreated={onOrganizationCreated}
+          onAdd={linkProjectActor}
+        />
       </div>
 
       <div ref={(el) => { sectionRefs.current.staffing = el; }}>
@@ -3505,9 +3360,12 @@ function SettingsSubTabs<T extends string>({
 }
 
 export default function SettingsPage() {
-  const { isAdmin, roleKeys } = useAuth();
-  const isSuperAdmin = roleKeys.includes("super_admin");
-  const [activeMain, setActiveMain] = useState<MainTab>("org_officers");
+  const { isAdmin, isSuperAdmin } = useAuth();
+  const mainTabs = useMemo(
+    () => (isSuperAdmin ? MAIN_TABS : MAIN_TABS.filter((t) => t.id === "projects")),
+    [isSuperAdmin],
+  );
+  const [activeMain, setActiveMain] = useState<MainTab>("projects");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
   const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
   const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
@@ -3536,6 +3394,12 @@ export default function SettingsPage() {
     loadRoleCatalog();
   }, [loadRoleCatalog]);
 
+  useEffect(() => {
+    if (!mainTabs.some((t) => t.id === activeMain)) {
+      setActiveMain(mainTabs[0]?.id ?? "projects");
+    }
+  }, [mainTabs, activeMain]);
+
   function navigateToProject(projectId: string) {
     setJumpProjectId(projectId);
     setActiveMain("projects");
@@ -3560,12 +3424,17 @@ export default function SettingsPage() {
   return (
     <div className="p-6">
       <div className="mb-5">
-        <h1 className="text-xl font-semibold text-gray-800">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Admin configuration — organizations, projects, workflows, and platform data</p>
+        <h1 className="text-xl font-semibold text-gray-800">{isSuperAdmin ? "Settings" : "Project setup"}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {isSuperAdmin
+            ? "Admin configuration — organizations, projects, workflows, and platform data"
+            : "Add partner organizations, invite officers, link locations, and complete go-live checks."}
+        </p>
       </div>
 
+      {mainTabs.length > 1 && (
       <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
-        {MAIN_TABS.map((tab) => (
+        {mainTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -3580,6 +3449,7 @@ export default function SettingsPage() {
           </button>
         ))}
       </div>
+      )}
 
       {activeMain === "org_officers" && (
         <>
@@ -3592,7 +3462,9 @@ export default function SettingsPage() {
             onChange={setOrgSub}
           />
           {orgSub === "organizations" && <OrgsSection onNavigateToProject={navigateToProject} />}
-          {orgSub === "officers" && <OfficersTab roleCatalog={roleCatalog} />}
+          {orgSub === "officers" && (
+            <OfficersTab roleCatalog={roleCatalog} allowGlobalInvite={isSuperAdmin} />
+          )}
         </>
       )}
 

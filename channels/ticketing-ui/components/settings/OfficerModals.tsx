@@ -53,7 +53,7 @@ export function InviteOfficerModal({
   const [roleKey, setRoleKey] = useState(roleChoices[0]?.key ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const j = useOfficerJurisdictionState();
+  const j = useOfficerJurisdictionState({ fieldOrder: "project-first" });
 
   useEffect(() => {
     if (roleChoices.length && !roleChoices.some((r) => r.key === roleKey)) {
@@ -63,8 +63,8 @@ export function InviteOfficerModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !j.orgId) {
-      setError("Email and organization are required.");
+    if (!email.trim() || !j.orgId || !j.selProject) {
+      setError("Email, project, and organization are required.");
       return;
     }
     if (!j.hasJurisdiction()) {

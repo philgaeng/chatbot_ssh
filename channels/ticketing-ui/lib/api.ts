@@ -821,9 +821,11 @@ export function listLocations(params: {
   return apiFetch<LocationNode[]>(`/api/v1/locations?${p}`);
 }
 
-export function listProjects(country?: string): Promise<ProjectItem[]> {
-  const qs = country ? `?country=${country}` : "";
-  return apiFetch<ProjectItem[]>(`/api/v1/projects${qs}`);
+export function listProjects(country?: string, activeOnly = true): Promise<ProjectItem[]> {
+  const p = new URLSearchParams();
+  if (country) p.set("country", country);
+  p.set("active_only", String(activeOnly));
+  return apiFetch<ProjectItem[]>(`/api/v1/projects?${p}`);
 }
 
 export function createProject(payload: ProjectCreate): Promise<ProjectItem> {

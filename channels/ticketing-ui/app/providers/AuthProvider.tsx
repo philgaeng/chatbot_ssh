@@ -117,6 +117,8 @@ export interface AuthContextValue {
   roleKeys: string[];
   canSeeSeah: boolean;
   isAdmin: boolean;
+  /** Full Settings (orgs, workflows, platform). False for local_admin-only users. */
+  isSuperAdmin: boolean;
   signIn: () => void;
   signOut: () => void;
   /** Bearer token for API calls (null in bypass mode) */
@@ -313,6 +315,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     .map((r) => r.trim())
     .filter(Boolean);
   const { canSeeSeah, isAdmin } = derivePermissions(roleKeys);
+  const isSuperAdmin = roleKeys.includes("super_admin");
 
   return (
     <AuthContext.Provider
@@ -324,6 +327,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         roleKeys,
         canSeeSeah,
         isAdmin,
+        isSuperAdmin,
         signIn,
         signOut,
         accessToken,

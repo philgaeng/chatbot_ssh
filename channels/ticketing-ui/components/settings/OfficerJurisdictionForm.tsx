@@ -30,9 +30,12 @@ export type JurisdictionDefaults = {
   packageId?: string;
   lockOrganization?: boolean;
   lockProject?: boolean;
+  /** Project-first: pick project, then orgs linked on that project (setup flow). */
+  fieldOrder?: "org-first" | "project-first";
 };
 
 export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
+  const projectFirst = defaults?.fieldOrder === "project-first";
   const [orgId, setOrgId] = useState(defaults?.organizationId ?? "");
   const [selProject, setSelProject] = useState(defaults?.projectId ?? "");
   const [selLoc, setSelLoc] = useState<{ code: string; name: string } | null>(null);
@@ -48,7 +51,10 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
     setCatalogLoading(true);
     (async () => {
       try {
-        const [orgRows, projectRows] = await Promise.all([listOrganizations(), listProjects()]);
+        const [orgRows, projectRows] = await Promise.all([
+          listOrganizations(),
+          listProjects(undefined, false),
+        ]);
         if (cancelled) return;
         setOrgs(orgRows);
         setProjects(projectRows);
@@ -80,13 +86,24 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
   }, []);
 
   useEffect(() => {
-    setSelProject("");
-    setSelPkg("");
-  }, [orgId]);
+    if (projectFirst) {
+      setOrgId("");
+      setSelPkg("");
+    } else {
+      setSelProject("");
+      setSelPkg("");
+    }
+  }, [projectFirst, projectFirst ? selProject : orgId]);
 
   useEffect(() => {
     setSelPkg("");
   }, [selProject]);
+
+  useEffect(() => {
+    if (!projectFirst) {
+      setSelPkg("");
+    }
+  }, [projectFirst, orgId]);
 
   const filteredProjects = useMemo(
     () => projectsForOrganization(orgId, projects, packagesByProject),
@@ -97,6 +114,12 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
     () => projects.find((p) => p.project_id === selProject),
     [projects, selProject],
   );
+
+  const orgsOnProject = useMemo(() => {
+    if (!selectedProject) return [];
+    const linked = new Set(selectedProject.organizations.map((o) => o.organization_id));
+    return orgs.filter((o) => linked.has(o.organization_id));
+  }, [selectedProject, orgs]);
 
   const filteredPackages = useMemo(
     () =>
@@ -149,6 +172,9 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
     isDonorOrg: isDonorAllProjectsOrg(orgId),
     lockOrganization: Boolean(defaults?.lockOrganization),
     lockProject: Boolean(defaults?.lockProject),
+    projectFirst,
+    orgsOnProject,
+    allProjects: projects,
     reset,
     hasJurisdiction,
     toPayload,
@@ -173,6 +199,9 @@ type FieldsProps = {
   isDonorOrg?: boolean;
   lockOrganization?: boolean;
   lockProject?: boolean;
+  projectFirst?: boolean;
+  orgsOnProject?: OrganizationItem[];
+  allProjects?: ProjectItem[];
 };
 
 export function OfficerJurisdictionFields(props: FieldsProps) {
@@ -181,47 +210,18 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     selPkg, setSelPkg, inclChildren, setInclChildren,
     orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
     lockOrganization, lockProject,
+    projectFirst = false,
+    orgsOnProject = [],
+    allProjects = [],
   } = props;
 
   const projectDisabled =
-    Boolean(lockProject) || !orgId || catalogLoading || filteredProjects.length === 0;
+    Boolean(lockProject) || (!projectFirst && (!orgId || catalogLoading || filteredProjects.length === 0));
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <select
-          value={orgId}
-          onChange={(e) => setOrgId(e.target.value)}
-          required
-          disabled={lockOrganization}
-          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-        >
-          <option value="">Organization *</option>
-          {orgs.map((o) => (
-            <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-          ))}
-        </select>
-        <select
-          value={selProject}
-          onChange={(e) => setSelProject(e.target.value)}
-          disabled={projectDisabled}
-          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-        >
-          <option value="">
-            {catalogLoading
-              ? "Loading projects…"
-              : !orgId
-                ? "Select organization first"
-                : filteredProjects.length === 0
-                  ? "No projects for this organization"
-                  : "Project (optional)"}
-          </option>
-          {filteredProjects.map((p) => (
-            <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
-          ))}
-        </select>
-      </div>
+  const orgDisabled = Boolean(lockOrganization) || (projectFirst && !selProject);
 
+  const locationAndPackage = (
+    <>
       {isDonorOrg && orgId && (
         <p className="text-xs text-blue-600">ADB may scope officers to any project on the system.</p>
       )}
@@ -268,6 +268,95 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
           ))}
         </select>
       )}
+    </>
+  );
+
+  if (projectFirst) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <select
+            value={selProject}
+            onChange={(e) => setSelProject(e.target.value)}
+            disabled={Boolean(lockProject) || catalogLoading}
+            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+          >
+            <option value="">
+              {catalogLoading ? "Loading projects…" : "Project *"}
+            </option>
+            {allProjects.map((p) => (
+              <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
+            ))}
+          </select>
+          <select
+            value={orgId}
+            onChange={(e) => setOrgId(e.target.value)}
+            required
+            disabled={orgDisabled}
+            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+          >
+            <option value="">
+              {!selProject
+                ? "Select project first"
+                : orgsOnProject.length === 0
+                  ? "No orgs on project — add under Project actors"
+                  : "Organization *"}
+            </option>
+            {orgsOnProject.map((o) => (
+              <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+        {selProject && orgsOnProject.length === 0 && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            Link organizations to this project first (Projects & packages → Project actors), then invite officers.
+          </p>
+        )}
+        {locationAndPackage}
+        <p className="text-xs text-gray-500">
+          Flow: <strong>project</strong> → <strong>organization on that project</strong> → optional <strong>package</strong> or <strong>location</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <select
+          value={orgId}
+          onChange={(e) => setOrgId(e.target.value)}
+          required
+          disabled={lockOrganization}
+          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+        >
+          <option value="">Organization *</option>
+          {orgs.map((o) => (
+            <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+          ))}
+        </select>
+        <select
+          value={selProject}
+          onChange={(e) => setSelProject(e.target.value)}
+          disabled={projectDisabled}
+          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+        >
+          <option value="">
+            {catalogLoading
+              ? "Loading projects…"
+              : !orgId
+                ? "Select organization first"
+                : filteredProjects.length === 0
+                  ? "No projects for this organization"
+                  : "Project (optional)"}
+          </option>
+          {filteredProjects.map((p) => (
+            <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {locationAndPackage}
 
       <p className="text-xs text-gray-500">
         At least one of <strong>project</strong>, <strong>package</strong>, or <strong>location</strong> is required.

@@ -44,7 +44,14 @@ function coverageSummary(o: OfficerRosterEntry, pkgById: Record<string, PackageI
   return compactList(parts, 3) || parts[0];
 }
 
-export function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
+export function OfficersTab({
+  roleCatalog,
+  allowGlobalInvite = true,
+}: {
+  roleCatalog: RoleEntry[];
+  /** Local admins invite from Projects → Project actors / Staffing only. */
+  allowGlobalInvite?: boolean;
+}) {
   const [officerList, setOfficerList] = useState<OfficerRosterEntry[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [pkgById, setPkgById] = useState<Record<string, PackageItem>>({});
@@ -74,7 +81,7 @@ export function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
 
   useEffect(() => {
     loadRoster();
-    listProjects()
+    listProjects(undefined, false)
       .then(async (projs) => {
         setProjects(projs);
         const entries = await Promise.all(
@@ -183,6 +190,17 @@ export function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
         Use <strong>Manage</strong> to edit roles, work areas, and account settings. Filters match project, package, or location on each officer&apos;s record.
       </p>
 
+      {!allowGlobalInvite && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-medium mb-1">Invite officers from the project</p>
+          <p className="text-blue-800 text-xs">
+            Open <strong>Projects & packages</strong> → your project → add organizations under <strong>Project actors</strong>,
+            then use <strong>Add officer</strong> on a row or the <strong>Staffing</strong> section.
+            Organizations must be on the project before officers can be scoped there.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <input
           type="text"
@@ -242,13 +260,15 @@ export function OfficersTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
         <button type="button" onClick={() => loadRoster()} className="text-sm text-blue-600 hover:underline py-1.5">
           Refresh
         </button>
-        <button
-          type="button"
-          onClick={() => setShowInvite(true)}
-          className="ml-auto bg-blue-600 text-white text-sm px-4 py-2 rounded hover:bg-blue-700 font-medium"
-        >
-          + Invite officer
-        </button>
+        {allowGlobalInvite && (
+          <button
+            type="button"
+            onClick={() => setShowInvite(true)}
+            className="ml-auto bg-blue-600 text-white text-sm px-4 py-2 rounded hover:bg-blue-700 font-medium"
+          >
+            + Invite officer
+          </button>
+        )}
       </div>
 
       {loading && <p className="text-sm text-gray-400 mb-3">Loading roster…</p>}
