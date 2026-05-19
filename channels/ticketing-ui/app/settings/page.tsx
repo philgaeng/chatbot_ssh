@@ -76,6 +76,7 @@ import { ProjectTypesTab } from "@/components/settings/ProjectTypesTab";
 import { OrgCreateModal } from "@/components/settings/OrgCreateModal";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { LocationSearch } from "@/components/LocationSearch";
+import { JURISDICTION_MODE_LABELS, type JurisdictionMode } from "@/lib/jurisdiction";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ type RoleEntry = {
   key: string;
   label: string;
   workflow: string;
+  jurisdiction: string;
   description: string;
 };
 
@@ -93,6 +95,7 @@ function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
     key: r.role_key,
     label: r.display_name,
     workflow: r.workflow_scope ?? "Standard",
+    jurisdiction: r.jurisdiction_mode ?? "field",
     description: r.description ?? "",
   };
 }
@@ -106,6 +109,9 @@ function RoleEditModal({ role, onSaved, onClose }: {
 }) {
   const [label, setLabel]               = useState(role.label);
   const [workflow, setWorkflow]         = useState(role.workflow || "Standard");
+  const [jurisdiction, setJurisdiction] = useState<JurisdictionMode>(
+    (role.jurisdiction as JurisdictionMode) || "field",
+  );
   const [description, setDescription] = useState(role.description);
   const [saved, setSaved]               = useState(false);
   const [saving, setSaving]             = useState(false);
@@ -119,6 +125,7 @@ function RoleEditModal({ role, onSaved, onClose }: {
         display_name: label.trim(),
         description: description.trim() || null,
         workflow_scope: workflow.trim() || null,
+        jurisdiction_mode: jurisdiction,
       });
       onSaved(mapGrmRoleToEntry(raw));
       setSaved(true);
@@ -164,6 +171,22 @@ function RoleEditModal({ role, onSaved, onClose }: {
                 <option value="Both">Both</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Default jurisdiction</label>
+            <select
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value as JurisdictionMode)}
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              {(Object.keys(JURISDICTION_MODE_LABELS) as JurisdictionMode[]).map((mode) => (
+                <option key={mode} value={mode}>{JURISDICTION_MODE_LABELS[mode]}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Controls whether new officer scopes need a project, package, or location. Observer roles typically use country-wide.
+            </p>
           </div>
 
           <div>

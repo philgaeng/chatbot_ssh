@@ -14,6 +14,7 @@ import {
   packagesForOrganizationOnProject,
   projectsForOrganization,
 } from "@/lib/officerJurisdiction";
+import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 import { LocationSearch } from "@/components/LocationSearch";
 
 export type JurisdictionFormValue = {
@@ -34,8 +35,14 @@ export type JurisdictionDefaults = {
   fieldOrder?: "org-first" | "project-first";
 };
 
-export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
+export function useOfficerJurisdictionState(
+  defaults?: JurisdictionDefaults,
+  roleKey = "",
+) {
   const projectFirst = defaults?.fieldOrder === "project-first";
+  const lockProject = Boolean(defaults?.lockProject);
+  const lockOrganization = Boolean(defaults?.lockOrganization);
+  const countryRole = isCountryJurisdictionRole(roleKey);
   const [orgId, setOrgId] = useState(defaults?.organizationId ?? "");
   const [selProject, setSelProject] = useState(defaults?.projectId ?? "");
   const [selLoc, setSelLoc] = useState<{ code: string; name: string } | null>(null);
@@ -87,13 +94,15 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
 
   useEffect(() => {
     if (projectFirst) {
-      setOrgId("");
+      if (!lockOrganization) setOrgId("");
       setSelPkg("");
-    } else {
+    } else if (!lockProject) {
       setSelProject("");
       setSelPkg("");
+    } else if (!lockOrganization) {
+      setSelPkg("");
     }
-  }, [projectFirst, projectFirst ? selProject : orgId]);
+  }, [projectFirst, projectFirst ? selProject : orgId, lockProject, lockOrganization]);
 
   useEffect(() => {
     setSelPkg("");
@@ -140,6 +149,7 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
   }
 
   function hasJurisdiction(): boolean {
+    if (countryRole && orgId) return true;
     return Boolean(selProject || selPkg || selLoc);
   }
 
@@ -170,8 +180,9 @@ export function useOfficerJurisdictionState(defaults?: JurisdictionDefaults) {
     filteredPackages,
     catalogLoading,
     isDonorOrg: isDonorAllProjectsOrg(orgId),
-    lockOrganization: Boolean(defaults?.lockOrganization),
-    lockProject: Boolean(defaults?.lockProject),
+    lockOrganization,
+    lockProject,
+    countryRole,
     projectFirst,
     orgsOnProject,
     allProjects: projects,
@@ -199,6 +210,7 @@ type FieldsProps = {
   isDonorOrg?: boolean;
   lockOrganization?: boolean;
   lockProject?: boolean;
+  countryRole?: boolean;
   projectFirst?: boolean;
   orgsOnProject?: OrganizationItem[];
   allProjects?: ProjectItem[];
@@ -209,7 +221,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     orgId, setOrgId, selProject, setSelProject, selLoc, setSelLoc,
     selPkg, setSelPkg, inclChildren, setInclChildren,
     orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
-    lockOrganization, lockProject,
+    lockOrganization, lockProject, countryRole = false,
     projectFirst = false,
     orgsOnProject = [],
     allProjects = [],
@@ -222,7 +234,13 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
 
   const locationAndPackage = (
     <>
-      {isDonorOrg && orgId && (
+      {countryRole && orgId && (
+        <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+          <span className="font-medium">Country-wide role:</span> this officer sees all projects where{" "}
+          <span className="font-mono">{orgId}</span> is a project actor. Optionally pick one project below to narrow.
+        </p>
+      )}
+      {isDonorOrg && orgId && !countryRole && (
         <p className="text-xs text-blue-600">ADB may scope officers to any project on the system.</p>
       )}
 
@@ -359,8 +377,17 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
       {locationAndPackage}
 
       <p className="text-xs text-gray-500">
-        At least one of <strong>project</strong>, <strong>package</strong>, or <strong>location</strong> is required.
-        Contractors see projects via their awarded packages; ADB may select any project.
+        {countryRole ? (
+          <>
+            For this role, <strong>organization</strong> is enough for country-wide access. Add a project, package, or
+            location only if you want to narrow coverage.
+          </>
+        ) : (
+          <>
+            At least one of <strong>project</strong>, <strong>package</strong>, or <strong>location</strong> is required.
+            Contractors see projects via their awarded packages; donor orgs may select any project.
+          </>
+        )}
       </p>
     </div>
   );

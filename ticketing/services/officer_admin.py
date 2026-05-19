@@ -19,6 +19,7 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.user import Role, UserRole
+from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
 
 
 class JurisdictionInput(BaseModel):
@@ -50,10 +51,11 @@ def validate_jurisdiction(
     has_pkg = bool(data.package_id)
 
     if require_jurisdiction and not (has_loc or has_proj or has_pkg):
-        raise HTTPException(
-            status_code=422,
-            detail="At least one of project, package, or location is required",
-        )
+        if scope_requires_field_jurisdiction(db, data.role_key):
+            raise HTTPException(
+                status_code=422,
+                detail="At least one of project, package, or location is required",
+            )
 
     resolved_project_code: Optional[str] = (data.project_code or "").strip() or None
     if data.project_id:

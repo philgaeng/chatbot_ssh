@@ -38,12 +38,15 @@ export function ProjectOfficerModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const j = useOfficerJurisdictionState({
-    organizationId,
-    projectId: project.project_id,
-    lockOrganization: true,
-    lockProject: true,
-  });
+  const j = useOfficerJurisdictionState(
+    {
+      organizationId,
+      projectId: project.project_id,
+      lockOrganization: true,
+      lockProject: true,
+    },
+    roleKey,
+  );
 
   useEffect(() => {
     if (roleChoices.length && !roleChoices.some((r) => r.key === roleKey)) {
@@ -65,7 +68,11 @@ export function ProjectOfficerModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!j.hasJurisdiction()) {
-      setError("Select at least one of package or location for this officer.");
+      setError(
+        j.countryRole
+          ? "Organization is required for this role."
+          : "Select a project, package, or location for this officer.",
+      );
       return;
     }
     setSubmitting(true);

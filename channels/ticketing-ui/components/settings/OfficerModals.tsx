@@ -53,7 +53,7 @@ export function InviteOfficerModal({
   const [roleKey, setRoleKey] = useState(roleChoices[0]?.key ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const j = useOfficerJurisdictionState({ fieldOrder: "project-first" });
+  const j = useOfficerJurisdictionState({ fieldOrder: "project-first" }, roleKey);
 
   useEffect(() => {
     if (roleChoices.length && !roleChoices.some((r) => r.key === roleKey)) {
@@ -68,7 +68,11 @@ export function InviteOfficerModal({
       return;
     }
     if (!j.hasJurisdiction()) {
-      setError("Select at least one of project, package, or location.");
+      setError(
+        j.countryRole
+          ? "Select an organization (country-wide), or narrow with project, package, or location."
+          : "Select at least one of project, package, or location.",
+      );
       return;
     }
     setSubmitting(true);
@@ -162,7 +166,7 @@ export function EditOfficerModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [roleKey, setRoleKey] = useState(officer.role_keys[0] ?? "");
-  const j = useOfficerJurisdictionState();
+  const j = useOfficerJurisdictionState(undefined, roleKey);
 
   const orgNameById = useMemo(
     () => Object.fromEntries(j.orgs.map((o) => [o.organization_id, o.name])),

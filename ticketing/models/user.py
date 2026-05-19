@@ -27,6 +27,7 @@ ROLE_KEYS = [
     "super_admin",
     "local_admin",
     "site_safeguards_focal_person",
+    "country_l1_fallback",
     "pd_piu_safeguards_focal",
     "grc_chair",
     "grc_member",
@@ -55,6 +56,8 @@ class Role(Base):
     # Admin UI / docs — seeded from ticketing.constants.grm_role_catalog
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     workflow_scope: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # field | country | global — how officer_scopes are validated and matched (see jurisdiction.py)
+    jurisdiction_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now

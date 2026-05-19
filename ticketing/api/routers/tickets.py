@@ -60,7 +60,7 @@ from ticketing.engine.escalation import (
 )
 from ticketing.tasks.notifications import notify_complainant
 from ticketing.tasks.llm import generate_findings, translate_note
-from ticketing.engine.workflow_engine import auto_assign_officer, get_current_step, get_teammates, sla_status
+from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status
 from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
@@ -272,8 +272,8 @@ def create_ticket(
     # Auto-assign to least-loaded officer for the first workflow step
     auto_assigned_id: Optional[str] = None
     if first_step:
-        auto_assigned_id = auto_assign_officer(
-            role_key=first_step.assigned_role_key,
+        auto_assigned_id = auto_assign_for_workflow_step(
+            step_role_key=first_step.assigned_role_key,
             organization_id=payload.organization_id,
             location_code=payload.location_code,
             project_code=payload.project_code,
@@ -389,23 +389,9 @@ def list_tickets(
                 Ticket.ticket_id.in_(viewed_ticket_ids),
             ))
         else:
-            scope_conditions = []
-            for scope in scopes:
-                parts: list = [Ticket.organization_id == scope.organization_id]
-                if scope.location_code:
-                    # Hierarchical match: exact location OR any direct child location
-                    # (e.g. province-scope P1 matches district-level ticket P1_JHA
-                    #  because P1_JHA.parent_location_code = P1)
-                    child_locs = select(Location.location_code).where(
-                        Location.parent_location_code == scope.location_code
-                    )
-                    parts.append(or_(
-                        Ticket.location_code == scope.location_code,
-                        Ticket.location_code.in_(child_locs),
-                    ))
-                if scope.project_code:
-                    parts.append(Ticket.project_code == scope.project_code)
-                scope_conditions.append(and_(*parts))
+            from ticketing.services.officer_jurisdiction import scope_ticket_filter
+
+            scope_conditions = [scope_ticket_filter(db, scope) for scope in scopes]
             # Also include viewed tickets outside the normal scope
             if viewed_ticket_ids:
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))

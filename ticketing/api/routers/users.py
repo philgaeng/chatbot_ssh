@@ -84,6 +84,16 @@ def update_role(
                 detail="workflow_scope must be Standard, SEAH, Both, or empty",
             )
         role.workflow_scope = v or None
+    if body.jurisdiction_mode is not None:
+        from ticketing.constants.jurisdiction import VALID_JURISDICTION_MODES
+
+        v = body.jurisdiction_mode.strip().lower()
+        if v and v not in VALID_JURISDICTION_MODES:
+            raise HTTPException(
+                status_code=422,
+                detail="jurisdiction_mode must be field, country, global, or empty",
+            )
+        role.jurisdiction_mode = v or None
     role.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(role)
@@ -431,21 +441,18 @@ def add_user_scope(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Validate project_id if supplied; backfill project_code from short_code so that
-    # _scope_candidates (which queries by project_code) keeps working for new scopes.
-    resolved_project_code: Optional[str] = payload.project_code
-    if payload.project_id:
-        from ticketing.models.project import Project
-        project = db.get(Project, payload.project_id)
-        if not project:
-            raise HTTPException(status_code=422, detail=f"Project '{payload.project_id}' not found")
-        resolved_project_code = project.short_code  # canonical key used by routing engine
+    from ticketing.services.officer_admin import JurisdictionInput, validate_jurisdiction
 
-    # Validate package_id if supplied
-    if payload.package_id:
-        from ticketing.models.package import ProjectPackage
-        if not db.get(ProjectPackage, payload.package_id):
-            raise HTTPException(status_code=422, detail=f"Package '{payload.package_id}' not found")
+    juris = JurisdictionInput(
+        organization_id=payload.organization_id,
+        role_key=payload.role_key,
+        location_code=payload.location_code,
+        project_id=payload.project_id,
+        project_code=payload.project_code,
+        package_id=payload.package_id,
+        includes_children=payload.includes_children,
+    )
+    resolved_project_code = validate_jurisdiction(db, juris, require_jurisdiction=True) or None
 
     # Prevent duplicate entries for the same (user, role, org, location, project, package)
     existing = db.execute(

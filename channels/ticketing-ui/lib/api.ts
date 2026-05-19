@@ -497,6 +497,7 @@ export interface GrmRole {
   display_name: string;
   description: string | null;
   workflow_scope: string | null;
+  jurisdiction_mode: string | null;
   permissions: unknown;
   created_at: string;
   updated_at: string;
@@ -512,6 +513,7 @@ export function updateRole(
     display_name?: string | null;
     description?: string | null;
     workflow_scope?: string | null;
+    jurisdiction_mode?: string | null;
   }
 ): Promise<GrmRole> {
   return apiFetch<GrmRole>(`/api/v1/roles/${roleId}`, {

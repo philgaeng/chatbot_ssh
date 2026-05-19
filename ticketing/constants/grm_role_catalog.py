@@ -14,6 +14,7 @@ class GrmRoleCatalogEntry(TypedDict, total=False):
     role_key: str
     display_name: str
     workflow_scope: str
+    jurisdiction_mode: str
     description: str
     permissions: list[str]
 
@@ -24,6 +25,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "super_admin",
         "display_name": "Super Admin",
         "workflow_scope": "Both",
+        "jurisdiction_mode": "global",
         "description": (
             "Full system access. Can manage all settings, users, and tickets."
         ),
@@ -33,6 +35,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "country_admin",
         "display_name": "Country Administrator",
         "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
         "description": "Country-level administration (legacy seed role).",
         "permissions": [
             "tickets:read",
@@ -70,6 +73,23 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "workflow_scope": "Standard",
         "description": (
             "Level 1 officer — first point of contact for standard grievances."
+        ),
+        "permissions": [
+            "tickets:read",
+            "tickets:acknowledge",
+            "tickets:note",
+            "tickets:resolve",
+        ],
+    },
+    {
+        "role_key": "country_l1_fallback",
+        "display_name": "Country L1 Fallback Officer",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Last-resort L1 assignee when no district- or province-scoped site "
+            "safeguards officer matches. Scoped country-wide; never competes in "
+            "the normal geographic pool."
         ),
         "permissions": [
             "tickets:read",
@@ -121,6 +141,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "adb_national_project_director",
         "display_name": "ADB National Project Director",
         "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
         "description": "Observer — read-only oversight of standard GRM cases.",
         "permissions": ["tickets:read", "reports:read"],
     },
@@ -128,6 +149,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "adb_hq_safeguards",
         "display_name": "ADB HQ Safeguards",
         "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
         "description": "Observer — read-only oversight of standard GRM cases.",
         "permissions": ["tickets:read", "reports:read"],
     },
@@ -135,6 +157,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "adb_hq_project",
         "display_name": "ADB HQ Project",
         "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
         "description": "Observer — project oversight.",
         "permissions": ["tickets:read", "reports:read"],
     },
@@ -172,6 +195,7 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "adb_hq_exec",
         "display_name": "ADB HQ Executive",
         "workflow_scope": "Both",
+        "jurisdiction_mode": "country",
         "description": "Senior oversight — read-only access to both standard and SEAH cases.",
         "permissions": ["tickets:read", "reports:read", "seah:access"],
     },
