@@ -12,6 +12,7 @@ import {
   type ComplainantPatchPayload,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
 
@@ -26,6 +27,7 @@ import { isSiteVisitTask }                    from "@/lib/field-visit";
 import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
+  isThreadTaskEvent,
   type HashCommand,
 } from "@/lib/mobile-constants";
 import {
