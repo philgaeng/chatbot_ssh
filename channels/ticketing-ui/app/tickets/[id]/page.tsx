@@ -23,7 +23,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
-import { isSiteVisitTask, type FieldVisitFormData } from "@/lib/field-visit";
+import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
 import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
@@ -565,7 +565,7 @@ function FieldReportsCard({ ticket }: { ticket: TicketDetail }) {
       </div>
       {reports.length === 0 ? (
         <p className="text-xs text-gray-400 italic">
-          No field reports yet. Use the <span className="font-semibold text-amber-800">field report</span> button below the thread or <span className="font-mono bg-gray-100 px-1 rounded">#report</span>.
+          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar.
         </p>
       ) : (
         <div className="space-y-3">
@@ -689,7 +689,7 @@ function TasksCard({ tasks, user, onComplete, onAddTask }: {
         )}
       </div>
       {tasks.length === 0 && (
-        <p className="text-xs text-gray-400 italic">No tasks yet. Use <span className="font-mono bg-gray-100 px-1 rounded">#inspect</span> or <span className="font-mono bg-gray-100 px-1 rounded">#call</span> to assign one.</p>
+        <p className="text-xs text-gray-400 italic">No tasks yet. Use <span className="font-mono bg-gray-100 px-1 rounded">#inspect @me</span> or <span className="font-mono bg-gray-100 px-1 rounded">#call</span> to assign one.</p>
       )}
 
       <div className="space-y-2">
@@ -1052,10 +1052,17 @@ export default function TicketDetailPage() {
 
     // Check for #assign @userId pattern
     const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+    const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
     try {
-      if (assignMatch) {
+      if (inspectAssignee !== undefined) {
+        const assignee = inspectAssignee ?? currentUserId;
+        await createTask(id, {
+          task_type: "SITE_VISIT",
+          assigned_to_user_id: assignee,
+        });
+      } else if (assignMatch) {
         await patchTicket(id, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
@@ -1389,7 +1396,6 @@ export default function TicketDetailPage() {
               onHashCommand={handleHashCommand}
               onFileSelected={handleAttachFile}
               attachUploading={attachUploading}
-              onFieldReport={() => openFieldReport(null)}
               fieldReportOpen={fieldReportOpen}
               disabled={submitting || fieldReportSubmitting}
               participants={mentionParticipants}

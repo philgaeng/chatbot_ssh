@@ -42,7 +42,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
-import { isSiteVisitTask, type FieldVisitFormData } from "@/lib/field-visit";
+import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
 import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
@@ -278,7 +278,7 @@ function FieldReportsSheet({
           <Flag size={32} strokeWidth={1.5} />
           <p className="text-sm">No field reports yet.</p>
           <p className="text-xs text-center px-8">
-            Use the field report button below the thread or <code className="bg-gray-100 px-1 rounded">#report</code>.
+            Type <code className="bg-gray-100 px-1 rounded">#report</code> or <code className="bg-gray-100 px-1 rounded">#inspect @me</code> in the compose bar.
           </p>
         </div>
       ) : (
@@ -756,7 +756,14 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     setNoteText("");
     try {
       const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
-      if (assignMatch) {
+      const inspectAssignee = parseInspectAssignCommand(text);
+      if (inspectAssignee !== undefined) {
+        const assignee = inspectAssignee ?? currentUserId;
+        await createTask(ticketId, {
+          task_type: "SITE_VISIT",
+          assigned_to_user_id: assignee,
+        });
+      } else if (assignMatch) {
         await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
@@ -981,7 +988,6 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onFileSelected={handleAttachFile}
           attachUploading={attachUploading}
           onHashCommand={handleHashCommand}
-          onFieldReport={() => openFieldReport(null)}
           fieldReportOpen={fieldReportOpen}
           disabled={submitting || fieldReportSubmitting}
           participants={mentionParticipants}

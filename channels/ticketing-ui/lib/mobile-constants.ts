@@ -76,7 +76,7 @@ export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
 //   "action" — performs an immediate ticket action (ESCALATE)
 //   "assign" — triggers @mention autocomplete to pick the assignee
 
-export type HashCommandKind = "task" | "report" | "action" | "assign";
+export type HashCommandKind = "task" | "task_assign" | "report" | "action" | "assign";
 
 export interface HashCommand {
   hash: string;
@@ -90,13 +90,14 @@ export interface HashCommand {
 }
 
 export const HASH_COMMANDS: HashCommand[] = [
+  // ── Field / inspection (#inspect @me default; #inspect @officer for others) ──
+  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task_assign", taskKey: "SITE_VISIT" },
+  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report" },
   // ── Task shortcuts (creates TicketTask assigned to self) ──
-  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task",   taskKey: "SITE_VISIT"        },
   { hash: "photo",    label: "Site photo required",  icon: "Camera",        kind: "task",   taskKey: "DOCUMENT_PHOTO"    },
   { hash: "call",     label: "Call complainant",     icon: "Phone",         kind: "task",   taskKey: "FOLLOW_UP_CALL"    },
   { hash: "review",   label: "Escalation review",    icon: "ClipboardList", kind: "task",   taskKey: "ESCALATION_REVIEW" },
   // ── Direct actions ────────────────────────────────────────
-  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report"                              },
   { hash: "escalate", label: "Escalate ticket",       icon: "ArrowUpCircle", kind: "action", action: "ESCALATE"           },
   { hash: "assign",   label: "Assign ticket to…",     icon: "UserCheck",     kind: "assign"                              },
 ];

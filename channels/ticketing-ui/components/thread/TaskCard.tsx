@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, ClipboardList } from "lucide-react";
 import { TASK_TYPES } from "@/lib/mobile-constants";
-import { isSiteVisitTask } from "@/lib/field-visit";
+import { FIELD_WORK_AMBER, isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { createTask } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -53,13 +53,16 @@ export function TaskCard({
   const assigneeLabel =
     assigneeIsCurrentUser(assignedTo, authUser) ? "You" : assignedTo;
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const isFieldWork = isSiteVisitTask(taskType);
+  const pendingCardCls = isFieldWork ? FIELD_WORK_AMBER.cardPending : "border-amber-200 bg-amber-50";
+  const pendingHeaderCls = isFieldWork ? FIELD_WORK_AMBER.cardPendingHeader : "text-amber-800";
 
   return (
     <div className={`mx-4 my-2 rounded-xl border text-sm ${
-      isCompleted ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"
+      isCompleted ? "border-green-200 bg-green-50" : pendingCardCls
     }`}>
       <div className={`px-3 py-2 rounded-t-xl font-semibold flex items-center gap-1.5 ${
-        isCompleted ? "text-green-700" : "text-amber-800"
+        isCompleted ? "text-green-700" : pendingHeaderCls
       }`}>
         <TaskTypeIcon name={typeInfo?.icon ?? "ClipboardList"} size={15} strokeWidth={2} />
         <span>{typeInfo?.label ?? taskType.replace(/_/g, " ")}</span>

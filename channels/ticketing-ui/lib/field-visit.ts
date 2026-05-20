@@ -1,3 +1,11 @@
+/** Shared amber styling for field reports and inspection visits in the thread UI. */
+export const FIELD_WORK_AMBER = {
+  paletteRow: "text-amber-800 hover:bg-amber-50",
+  paletteIcon: "text-amber-600",
+  cardPending: "border-amber-200 bg-amber-50",
+  cardPendingHeader: "text-amber-800",
+} as const;
+
 /** Structured field visit / inspection report note formatting. */
 
 export interface FieldVisitFormData {
@@ -27,6 +35,18 @@ export function formatFieldVisitNote(data: FieldVisitFormData): string {
 export function isSiteVisitTask(taskType: string): boolean {
   return taskType === "SITE_VISIT";
 }
+
+/** `#inspect`, `#inspect @me` → self; `#inspect @officer` → that assignee. */
+export function parseInspectAssignCommand(text: string): string | null | undefined {
+  const trimmed = text.trim();
+  const m = trimmed.match(/^#inspect(?:\s+@([\w.-]+))?\s*$/i);
+  if (!m) return undefined;
+  const mention = m[1];
+  if (!mention || /^me$/i.test(mention)) return null;
+  return mention;
+}
+
+export const INSPECT_SELF_MENTION = "@me";
 
 export function isFieldReportEvent(event: {
   event_type: string;
