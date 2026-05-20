@@ -36,13 +36,18 @@ export function FieldVisitReportModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     if (!visitDate) {
       setError("Visit date is required.");
       return;
     }
     setError(null);
     const payload: FieldVisitFormData = { visitDate, location, personMet, notes };
-    await onSubmit(formatFieldVisitNote(payload));
+    try {
+      await onSubmit(formatFieldVisitNote(payload));
+    } catch {
+      // Parent shows alert; keep modal open for retry
+    }
   }
 
   const panel = (
@@ -144,7 +149,10 @@ export function FieldVisitReportModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      onClick={() => { if (!submitting) onClose(); }}
+    >
       <div className="w-full sm:max-w-md" onClick={(e) => e.stopPropagation()}>
         {panel}
       </div>

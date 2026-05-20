@@ -64,6 +64,17 @@ class CurrentUser:
     role_keys: list[str] = field(default_factory=list)
     organization_id: str = ""
     location_code: str | None = None
+    keycloak_sub: str | None = None
+
+    def matches_assignee(self, assignee_id: str | None) -> bool:
+        """True when assignee_id is this officer (email or Keycloak sub)."""
+        if not assignee_id:
+            return False
+        if assignee_id == self.user_id:
+            return True
+        if self.keycloak_sub and assignee_id == self.keycloak_sub:
+            return True
+        return False
 
     @property
     def is_seah_officer(self) -> bool:
@@ -113,10 +124,12 @@ def get_current_user(
     # Dev bypass: no Keycloak configured
     if not settings.keycloak_issuer:
         org = (x_internal_organization_id or "").strip() or "DOR"
+        uid = x_internal_user_id or BYPASS_DEFAULT_OFFICER
         return CurrentUser(
-            user_id=x_internal_user_id or BYPASS_DEFAULT_OFFICER,
+            user_id=uid,
             role_keys=(x_internal_role or "super_admin").split(","),
             organization_id=org,
+            keycloak_sub=uid,
         )
 
     # Internal service-to-service call: only honored when paired with the
@@ -127,6 +140,7 @@ def get_current_user(
                 user_id=x_internal_user_id,
                 role_keys=(x_internal_role or "super_admin").split(","),
                 organization_id="DOR",
+                keycloak_sub=x_internal_user_id,
             )
         # Header present but api-key missing/wrong → reject explicitly so a
         # caller doesn't silently fall through to anonymous JWT path.
@@ -148,11 +162,13 @@ def get_current_user(
     user_id = user_id_from_keycloak_claims(claims)
     role_raw = claims.get("custom:grm_roles", "")
     role_keys = [r.strip() for r in role_raw.split(",") if r.strip()]
+    sub = claims.get("sub")
     return CurrentUser(
         user_id=user_id,
         role_keys=role_keys,
         organization_id=claims.get("custom:organization_id", ""),
         location_code=claims.get("custom:location_code"),
+        keycloak_sub=sub if isinstance(sub, str) else None,
     )
 
 

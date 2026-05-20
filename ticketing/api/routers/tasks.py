@@ -126,11 +126,15 @@ def create_task(
         except ValueError:
             raise HTTPException(status_code=422, detail="due_date must be YYYY-MM-DD")
 
+    assignee = body.assigned_to_user_id
+    if current_user.matches_assignee(assignee):
+        assignee = current_user.user_id
+
     task = TicketTask(
         task_id=_new_id(),
         ticket_id=ticket_id,
         task_type=task_type,
-        assigned_to_user_id=body.assigned_to_user_id,
+        assigned_to_user_id=assignee,
         assigned_by_user_id=current_user.user_id,
         description=body.description,
         due_date=due,
@@ -141,7 +145,7 @@ def create_task(
     _add_task_event(
         db, ticket, "TASK_ASSIGNED", task,
         created_by=current_user.user_id,
-        note=f"Task assigned: {task_type.replace('_', ' ').title()} → {body.assigned_to_user_id}",
+        note=f"Task assigned: {task_type.replace('_', ' ').title()} → {assignee}",
     )
 
     db.commit()
@@ -180,7 +184,7 @@ def complete_task(
         raise HTTPException(status_code=422, detail=f"Task is already {task.status}")
 
     # Only the assigned officer or an admin may complete the task
-    if not current_user.is_admin and task.assigned_to_user_id != current_user.user_id:
+    if not current_user.is_admin and not current_user.matches_assignee(task.assigned_to_user_id):
         raise HTTPException(
             status_code=403,
             detail="Only the assigned officer can complete this task.",

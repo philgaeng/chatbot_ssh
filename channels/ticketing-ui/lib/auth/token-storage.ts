@@ -58,6 +58,30 @@ export function clearAuthStorage(): void {
   });
 }
 
+/** Ticketing user_id (email) — matches backend user_id_from_keycloak_claims. */
+export function canonicalUserId(
+  user: TokenPayload | null | undefined,
+  fallback = "admin@grm.local",
+): string {
+  if (!user) return fallback;
+  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  if (email.includes("@")) return email;
+  const sub = typeof user.sub === "string" ? user.sub.trim() : "";
+  return sub || fallback;
+}
+
+/** Whether a task/ticket assignee field refers to the signed-in officer. */
+export function assigneeIsCurrentUser(
+  assigneeId: string | null | undefined,
+  user: TokenPayload | null | undefined,
+): boolean {
+  if (!assigneeId || !user) return false;
+  if (assigneeId === "admin@grm.local") return true;
+  const email = canonicalUserId(user, "");
+  const sub = typeof user.sub === "string" ? user.sub.trim() : "";
+  return assigneeId === email || (!!sub && assigneeId === sub);
+}
+
 export function rememberLoginEmail(email: string): void {
   localStorage.setItem(TOKEN_STORAGE.LOGIN_EMAIL, email.trim().toLowerCase());
 }

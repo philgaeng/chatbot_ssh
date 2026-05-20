@@ -116,6 +116,13 @@ export const SYSTEM_EVENT_TYPES = new Set([
 /** Events that render as a task card in-thread. */
 export const TASK_EVENT_TYPES = new Set(["TASK_ASSIGNED", "TASK_COMPLETED", "TASK_DISMISSED"]);
 
+/** Task events shown as cards in the thread (TASK_COMPLETED is omitted — the assignment card updates in place). */
+export const THREAD_TASK_EVENT_TYPES = new Set(["TASK_ASSIGNED", "TASK_DISMISSED"]);
+
+export function isThreadTaskEvent(eventType: string): boolean {
+  return THREAD_TASK_EVENT_TYPES.has(eventType);
+}
+
 /**
  * Notification-only events: counted for unread badge but NOT rendered in the thread.
  * (MENTION events are stored in ticket_events but are purely notification signals.)

@@ -24,8 +24,9 @@ import {
   type TicketFile, type OfficerAttachment,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, isThreadTaskEvent,
   COMPLAINANT_EVENT_TYPES, AUTHORITY_ROLES, type HashCommand,
 } from "@/lib/mobile-constants";
 import {
@@ -595,7 +596,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const router           = useRouter();
   const searchParams     = useSearchParams();
   const { user }         = useAuth();
-  const currentUserId    = user?.sub ?? "admin@grm.local";
+  const currentUserId    = canonicalUserId(user);
+  const fieldVisitSubmitLock = useRef(false);
 
   const [ticket, setTicket]               = useState<TicketDetail | null>(null);
   const [sla, setSla]                     = useState<SlaStatus | null>(null);
@@ -668,7 +670,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       case "owner":      return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
       case "supervisor": return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
       case "observers":  return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
-      case "tasks":      return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
+      case "tasks":      return ticket.events.filter((e) => isThreadTaskEvent(e.event_type));
       case "complainant":return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
       default:           return ticket.events;
     }
@@ -676,9 +678,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   const pendingTaskCount = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const myPendingTasks   = useMemo(
-    () => tasks.filter((t) => t.status === "PENDING" &&
-      (t.assigned_to_user_id === currentUserId || t.assigned_to_user_id === "admin@grm.local")),
-    [tasks, currentUserId],
+    () => tasks.filter((t) => t.status === "PENDING" && assigneeIsCurrentUser(t.assigned_to_user_id, user)),
+    [tasks, user],
   );
   const canManageViewers = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
   const mentionParticipants = useMemo(() => {
@@ -759,11 +760,19 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   }, [ticket, ticketId, loadTicket]);
 
   const submitFieldVisitReport = useCallback(async (note: string) => {
-    if (!fieldVisitTask) return;
+    if (!fieldVisitTask || fieldVisitSubmitLock.current) return;
+    fieldVisitSubmitLock.current = true;
     setFieldVisitSubmitting(true);
+    const taskId = fieldVisitTask.task_id;
     try {
       await performAction(ticketId, { action_type: "FIELD_REPORT", note });
-      await completeTask(ticketId, fieldVisitTask.task_id);
+      try {
+        await completeTask(ticketId, taskId);
+      } catch (completeErr) {
+        const refreshed = await listTicketTasks(ticketId).catch(() => [] as TicketTask[]);
+        const t = refreshed.find((x) => x.task_id === taskId);
+        if (t?.status !== "DONE") throw completeErr;
+      }
       setFieldVisitTask(null);
       await loadTicket();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -772,6 +781,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       alert("Could not save the field visit report. Please try again.");
       throw e;
     } finally {
+      fieldVisitSubmitLock.current = false;
       setFieldVisitSubmitting(false);
     }
   }, [fieldVisitTask, ticketId, loadTicket]);
@@ -896,7 +906,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
               const isMine = event.created_by_user_id === currentUserId;
               if (SYSTEM_EVENT_TYPES.has(event.event_type))
                 return <SystemPill key={event.event_id} event={event} />;
-              if (TASK_EVENT_TYPES.has(event.event_type))
+              if (isThreadTaskEvent(event.event_type))
                 return (
                   <TaskCard
                     key={event.event_id}
