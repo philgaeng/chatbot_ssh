@@ -40,6 +40,7 @@ class TicketingSettings(BaseSettings):
     # dev with KC on a host port) — point this at the Docker-internal Keycloak URL.
     keycloak_jwks_url: str = ""         # e.g. http://keycloak:8080/realms/grm/protocol/openid-connect/certs
     keycloak_client_id: str = "ticketing-api"   # confidential client for JWT audience check
+    keycloak_client_secret: str = ""    # optional; fetched from Keycloak admin if empty
     keycloak_admin_url: str = ""        # e.g. http://keycloak:8080 (no trailing slash)
     keycloak_admin_password: str = ""   # KEYCLOAK_ADMIN_PASSWORD
     # Shared secret for POST /api/v1/webhooks/keycloak (Keycloak HTTP event listener)

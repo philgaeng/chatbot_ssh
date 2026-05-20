@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from ticketing.api.routers import auth as auth_router
 from ticketing.api.routers import tickets, workflows, users
 from ticketing.api.routers import settings as settings_router
 from ticketing.api.routers import reports
@@ -68,6 +69,7 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth_router.router,       prefix="/api/v1", tags=["Auth"])
 app.include_router(tickets.router,          prefix="/api/v1", tags=["Tickets"])
 app.include_router(workflows.router,        prefix="/api/v1", tags=["Workflows"])
 app.include_router(users.router,            prefix="/api/v1", tags=["Users & Roles"])
