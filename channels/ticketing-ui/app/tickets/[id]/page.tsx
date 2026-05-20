@@ -23,6 +23,7 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
 import { isSiteVisitTask }                    from "@/lib/field-visit";
+import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
   type HashCommand,
@@ -370,8 +371,6 @@ function ComplainantCard({
   const [pii, setPii]               = useState<GrievancePii | null>(null);
   const [piiLoading, setPiiLoading] = useState(false);
   const [piiError, setPiiError]     = useState<string | null>(null);
-  const [phoneRevealed, setPhoneRevealed]   = useState(false);
-  const [phoneRevealing, setPhoneRevealing] = useState(false);
   const [editOpen, setEditOpen]     = useState(false);
 
   function loadPii() {
@@ -384,13 +383,6 @@ function ComplainantCard({
   }
 
   useEffect(() => { loadPii(); }, [ticket.ticket_id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handlePhoneReveal() {
-    setPhoneRevealing(true);
-    await performAction(ticket.ticket_id, { action_type: "REVEAL_CONTACT" }).catch(() => {});
-    setPhoneRevealed(true);
-    setPhoneRevealing(false);
-  }
 
   function handleSaved() {
     loadPii();
@@ -426,25 +418,23 @@ function ComplainantCard({
           </div>
         ) : (
           <div className="text-xs space-y-1.5 text-gray-700">
-            {pii?.complainant_name && <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>}
-            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-400">Phone:</span>
-              {phoneRevealed && pii?.phone_number ? (
-                <span className="font-mono">{pii.phone_number}</span>
-              ) : (
-                <>
-                  <span className="text-gray-300 font-mono">••••••••</span>
-                  <button onClick={handlePhoneReveal} disabled={phoneRevealing}
-                    className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
-                  >
-                    {phoneRevealing ? "…" : "Reveal"}
-                  </button>
-                </>
-              )}
+            <div>
+              <span className="text-gray-400">Name:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
             </div>
-            {pii?.email && <div><span className="text-gray-400">Email:</span> {pii.email}</div>}
-            {pii?.address && <div><span className="text-gray-400">Address:</span> {pii.address}</div>}
+            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+            <div>
+              <span className="text-gray-400">Phone:</span>{" "}
+              <span className="text-gray-300 tracking-wide font-mono">{PII_MASK}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Email:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Address:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
+            </div>
             {(pii as GrievancePii & { municipality?: string })?.municipality && (
               <div><span className="text-gray-400">Municipality:</span> {(pii as GrievancePii & { municipality?: string }).municipality}</div>
             )}

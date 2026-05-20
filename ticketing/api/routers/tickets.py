@@ -1671,22 +1671,13 @@ def get_ticket_pii(
     # Unwrap to the grievance dict where PII fields live.
     grievance = (raw.get("data") or {}).get("grievance") or raw  # raw fallback for any future shape change
 
-    # Return the safe PII subset (name + contact + location).
-    # Phone is included here; the UI gates its display behind the "Reveal contact" button.
-    # The full grievance narrative requires a vault reveal session (POST /tickets/{id}/reveal).
+    from ticketing.services.pii_vault import grievance_pii_masked
+
+    # Never return pgcrypto ciphertext to the browser — UI shows standard masks instead.
+    # Full plaintext is only available via POST /tickets/{id}/reveal (audited, time-limited).
     return {
         "grievance_id": ticket.grievance_id,
-        # Identity
-        "complainant_name": grievance.get("complainant_full_name"),
-        "phone_number":     grievance.get("complainant_phone"),
-        "email":            grievance.get("complainant_email"),
-        # Location (used by complainant edit form pre-fill)
-        "address":          grievance.get("complainant_address"),
-        "village":          grievance.get("complainant_village"),
-        "ward":             grievance.get("complainant_ward"),
-        "municipality":     grievance.get("complainant_municipality"),
-        "district":         grievance.get("complainant_district"),
-        "province":         grievance.get("complainant_province"),
+        **grievance_pii_masked(grievance),
     }
 
 
@@ -1779,6 +1770,7 @@ def begin_reveal(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     from ticketing.clients.grievance_api import begin_reveal_session
+    from ticketing.services.demo_reveal import ticket_reveal_fallback_grievance
 
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1797,6 +1789,7 @@ def begin_reveal(
         reason_text=body.reason_text,
         actor_id=current_user.user_id,
         case_sensitivity=case_sensitivity,
+        fallback_grievance=ticket_reveal_fallback_grievance(ticket),
     )
 
     # Log REVEAL_ORIGINAL audit event regardless of grant/deny
