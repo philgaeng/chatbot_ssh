@@ -946,6 +946,12 @@ export default function TicketDetailPage() {
     }
   }, [noteText, submitting, id, load]);
 
+  // ── Report mode + field visit + attach ─────────────────────────────────
+  const [reportMode, setReportMode] = useState(false);
+  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
+  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [attachUploading, setAttachUploading] = useState(false);
+
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
       setFieldVisitTask(task);
@@ -991,12 +997,6 @@ export default function TicketDetailPage() {
       setAttachUploading(false);
     }
   }, [ensureAcknowledged, id, load]);
-
-  // ── Report mode (# command palette) ────────────────────────────────────
-  const [reportMode, setReportMode] = useState(false);
-  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
-  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
-  const [attachUploading, setAttachUploading] = useState(false);
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "report") {
