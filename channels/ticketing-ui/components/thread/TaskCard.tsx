@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ClipboardList } from "lucide-react";
 import { TASK_TYPES } from "@/lib/mobile-constants";
+import { isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { createTask } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -21,11 +22,26 @@ export function TaskCard({
   tasks: TicketTask[];
   currentUserId: string;
   ticketId: string;
-  onComplete: (taskId: string) => void;
+  onComplete: (task: TicketTask) => void;
 }) {
   const taskId = event.payload?.task_id as string | undefined;
   const task = tasks.find((t) => t.task_id === taskId);
   const isCompleted = event.event_type === "TASK_COMPLETED" || task?.status === "DONE";
+  const resolvedTask: TicketTask | undefined = task ?? (taskId
+    ? {
+        task_id: taskId,
+        ticket_id: ticketId,
+        task_type: (event.payload?.task_type as string) ?? "TASK",
+        assigned_to_user_id: (event.payload?.assigned_to_user_id as string) ?? "",
+        assigned_by_user_id: (event.payload?.assigned_by_user_id as string) ?? "",
+        description: (event.payload?.description as string) ?? null,
+        due_date: (event.payload?.due_date as string) ?? null,
+        status: isCompleted ? "DONE" : "PENDING",
+        completed_at: null,
+        completed_by_user_id: null,
+        created_at: event.created_at,
+      }
+    : undefined);
   const taskType = (event.payload?.task_type as string) ?? "TASK";
   const assignedTo = (event.payload?.assigned_to_user_id as string) ?? "—";
   const description = (event.payload?.description as string) ?? "";
@@ -62,13 +78,14 @@ export function TaskCard({
             ? ` · Done ${new Date(task.completed_at).toLocaleDateString()}`
             : ""}
         </div>
-        {!isCompleted && isAssignedToMe && taskId && (
+        {!isCompleted && isAssignedToMe && resolvedTask && (
           <button
-            onClick={() => onComplete(taskId)}
+            type="button"
+            onClick={() => onComplete(resolvedTask)}
             className="mt-2 w-full bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
           >
             <Check size={13} strokeWidth={2.5} className="inline mr-1" />
-            Mark Complete
+            {isSiteVisitTask(resolvedTask.task_type) ? "Complete visit" : "Mark complete"}
           </button>
         )}
       </div>

@@ -21,6 +21,8 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
+import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
+import { isSiteVisitTask }                    from "@/lib/field-visit";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
   type HashCommand,
@@ -662,7 +664,7 @@ function WorkflowCard({ currentStepKey, displayName }: {
 function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
   tasks: TicketTask[];
   currentUserId: string;
-  onComplete: (taskId: string) => void;
+  onComplete: (task: TicketTask) => void;
   onAddTask?: () => void;
 }) {
   const pending   = tasks.filter((t) => t.status === "PENDING");
@@ -714,10 +716,12 @@ function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
               </div>
               {isAssignedToMe && (
                 <button
-                  onClick={() => onComplete(task.task_id)}
+                  type="button"
+                  onClick={() => onComplete(task)}
                   className="shrink-0 text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 hover:bg-green-100 transition font-medium"
                 >
-                  <Check size={11} strokeWidth={2.5} className="inline mr-0.5" />Done
+                  <Check size={11} strokeWidth={2.5} className="inline mr-0.5" />
+                  {isSiteVisitTask(task.task_type) ? "Complete" : "Done"}
                 </button>
               )}
             </div>
@@ -942,13 +946,57 @@ export default function TicketDetailPage() {
     }
   }, [noteText, submitting, id, load]);
 
-  const handleCompleteTask = useCallback(async (taskId: string) => {
-    try { await completeTask(id, taskId); await load(); }
-    catch (e) { console.error("Complete task failed", e); }
+  const handleCompleteTask = useCallback(async (task: TicketTask) => {
+    if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
+      setFieldVisitTask(task);
+      return;
+    }
+    try {
+      await completeTask(id, task.task_id);
+      await load();
+    } catch (e) {
+      console.error("Complete task failed", e);
+      alert("Could not complete the task. Please try again.");
+    }
   }, [id, load]);
+
+  const submitFieldVisitReport = useCallback(async (note: string) => {
+    if (!fieldVisitTask) return;
+    setFieldVisitSubmitting(true);
+    try {
+      await performAction(id, { action_type: "FIELD_REPORT", note });
+      await completeTask(id, fieldVisitTask.task_id);
+      setFieldVisitTask(null);
+      await load();
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      console.error("Field visit report failed", e);
+      alert("Could not save the field visit report. Please try again.");
+      throw e;
+    } finally {
+      setFieldVisitSubmitting(false);
+    }
+  }, [fieldVisitTask, id, load]);
+
+  const handleAttachFile = useCallback(async (file: File) => {
+    setAttachUploading(true);
+    try {
+      await ensureAcknowledged();
+      await uploadOfficerAttachment(id, file, "");
+      await load();
+    } catch (e) {
+      console.error("Upload failed", e);
+      alert("Could not upload the file. Please try again.");
+    } finally {
+      setAttachUploading(false);
+    }
+  }, [ensureAcknowledged, id, load]);
 
   // ── Report mode (# command palette) ────────────────────────────────────
   const [reportMode, setReportMode] = useState(false);
+  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
+  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [attachUploading, setAttachUploading] = useState(false);
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "report") {
@@ -1303,6 +1351,8 @@ export default function TicketDetailPage() {
               onChange={setNoteText}
               onSubmit={handleNoteOrReport}
               onHashCommand={handleHashCommand}
+              onFileSelected={handleAttachFile}
+              attachUploading={attachUploading}
               reportMode={reportMode}
               onExitReportMode={() => setReportMode(false)}
               disabled={submitting}
@@ -1409,6 +1459,14 @@ export default function TicketDetailPage() {
           onAssigned={() => { setShowAssignTask(false); load(); }}
         />
       )}
+
+      <FieldVisitReportModal
+        open={!!fieldVisitTask}
+        defaultLocation={ticket.grievance_location}
+        submitting={fieldVisitSubmitting}
+        onClose={() => setFieldVisitTask(null)}
+        onSubmit={submitFieldVisitReport}
+      />
     </div>
   );
 }

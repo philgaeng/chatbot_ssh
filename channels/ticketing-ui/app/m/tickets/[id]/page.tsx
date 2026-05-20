@@ -16,10 +16,10 @@
  */
 
 import React, { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
-  listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl,
+  listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl, uploadOfficerAttachment,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
   type TicketFile, type OfficerAttachment,
 } from "@/lib/api";
@@ -40,6 +40,8 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
+import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
+import { isSiteVisitTask }                    from "@/lib/field-visit";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
 
 // ── Reusable bottom sheet shell ───────────────────────────────────────────────
@@ -172,7 +174,7 @@ function TasksSheet({
   tasks: TicketTask[];
   currentUserId: string;
   onClose: () => void;
-  onComplete: (taskId: string) => void;
+  onComplete: (task: TicketTask) => void;
   onAssignNew: () => void;
 }) {
   const pending   = tasks.filter((t) => t.status === "PENDING");
@@ -185,8 +187,9 @@ function TasksSheet({
       <div className={`px-5 py-4 border-b border-gray-50 ${isDone ? "opacity-50" : ""}`}>
         <div className="flex items-start gap-3">
           <button
+            type="button"
             disabled={isDone || !isMine}
-            onClick={() => !isDone && isMine && onComplete(task.task_id)}
+            onClick={() => !isDone && isMine && onComplete(task)}
             className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition ${
               isDone
                 ? "bg-green-500 border-green-500"
@@ -373,10 +376,19 @@ function ComplainantSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: 
 
 // ── Attachments sheet ─────────────────────────────────────────────────────────
 
-function AttachmentsSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: () => void }) {
+function AttachmentsSheet({
+  ticket,
+  onClose,
+  onUploaded,
+}: {
+  ticket: TicketDetail;
+  onClose: () => void;
+  onUploaded?: () => void;
+}) {
   const [chatbotFiles, setChatbotFiles] = useState<TicketFile[]>([]);
   const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
   const [loading, setLoading]           = useState(true);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -444,10 +456,31 @@ function AttachmentsSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: 
           )}
           <div className="px-5 py-4">
             <input ref={fileInputRef} type="file" className="hidden"
-              onChange={() => { /* wire uploadOfficerAttachment in follow-up */ }} />
-            <button onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 active:bg-gray-50">
-              <Paperclip size={16} strokeWidth={2} />Upload a file
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setUploading(true);
+                try {
+                  await uploadOfficerAttachment(ticket.ticket_id, file, "");
+                  const [cf, of] = await Promise.all([
+                    listTicketFiles(ticket.ticket_id).catch(() => [] as TicketFile[]),
+                    listOfficerAttachments(ticket.ticket_id).catch(() => [] as OfficerAttachment[]),
+                  ]);
+                  setChatbotFiles(cf);
+                  setOfficerFiles(of);
+                  onUploaded?.();
+                } catch (err) {
+                  console.error("Upload failed", err);
+                  alert("Could not upload the file.");
+                } finally {
+                  setUploading(false);
+                }
+              }} />
+            <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 active:bg-gray-50 disabled:opacity-50">
+              <Paperclip size={16} strokeWidth={2} />{uploading ? "Uploading…" : "Upload a file"}
             </button>
           </div>
         </div>
@@ -560,6 +593,7 @@ function PrimaryCtaBar({
 export default function MobileThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: ticketId } = use(params);
   const router           = useRouter();
+  const searchParams     = useSearchParams();
   const { user }         = useAuth();
   const currentUserId    = user?.sub ?? "admin@grm.local";
 
@@ -571,6 +605,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [noteText, setNoteText]           = useState("");
   const [submitting, setSubmitting]       = useState(false);
   const [reportMode, setReportMode]       = useState(false);
+  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
+  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [attachUploading, setAttachUploading] = useState(false);
 
   // Sheet visibility
   const [showInfoMenu, setShowInfoMenu]   = useState(false);
@@ -601,6 +638,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => { loadTicket(); }, [loadTicket]);
   useEffect(() => { markSeen(ticketId).catch(() => {}); }, [ticketId]);
+  useEffect(() => {
+    const openId = searchParams.get("openFieldVisit");
+    if (!openId || tasks.length === 0) return;
+    const pending = tasks.find((t) => t.task_id === openId && t.status === "PENDING");
+    if (pending) setFieldVisitTask(pending);
+  }, [searchParams, tasks]);
   useEffect(() => {
     if (ticket && !loading) threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [ticket, loading]);
@@ -700,13 +743,51 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     }
   }, [noteText, submitting, reportMode, ticketId, loadTicket]);
 
-  const handleCompleteTask = useCallback(async (taskId: string) => {
+  const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (!ticket) return;
+    if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
+      setFieldVisitTask(task);
+      return;
+    }
     try {
-      await completeTask(ticketId, taskId);
+      await completeTask(ticketId, task.task_id);
       await loadTicket();
-    } catch (e) { console.error("Complete task failed", e); }
+    } catch (e) {
+      console.error("Complete task failed", e);
+      alert("Could not complete the task. Please try again.");
+    }
   }, [ticket, ticketId, loadTicket]);
+
+  const submitFieldVisitReport = useCallback(async (note: string) => {
+    if (!fieldVisitTask) return;
+    setFieldVisitSubmitting(true);
+    try {
+      await performAction(ticketId, { action_type: "FIELD_REPORT", note });
+      await completeTask(ticketId, fieldVisitTask.task_id);
+      setFieldVisitTask(null);
+      await loadTicket();
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      console.error("Field visit report failed", e);
+      alert("Could not save the field visit report. Please try again.");
+      throw e;
+    } finally {
+      setFieldVisitSubmitting(false);
+    }
+  }, [fieldVisitTask, ticketId, loadTicket]);
+
+  const handleAttachFile = useCallback(async (file: File) => {
+    setAttachUploading(true);
+    try {
+      await uploadOfficerAttachment(ticketId, file, "");
+      await loadTicket();
+    } catch (e) {
+      console.error("Upload failed", e);
+      alert("Could not upload the file. Please try again.");
+    } finally {
+      setAttachUploading(false);
+    }
+  }, [ticketId, loadTicket]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -848,7 +929,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           value={noteText}
           onChange={setNoteText}
           onSubmit={handleNoteOrReport}
-          onAttach={() => setInfoPanel("attachments")}
+          onFileSelected={handleAttachFile}
+          attachUploading={attachUploading}
           onHashCommand={handleHashCommand}
           reportMode={reportMode}
           onExitReportMode={() => setReportMode(false)}
@@ -890,7 +972,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <ComplainantSheet ticket={ticket} onClose={() => setInfoPanel(null)} />
       )}
       {infoPanel === "attachments" && (
-        <AttachmentsSheet ticket={ticket} onClose={() => setInfoPanel(null)} />
+        <AttachmentsSheet ticket={ticket} onClose={() => setInfoPanel(null)} onUploaded={loadTicket} />
       )}
 
       {/* More actions (Escalate / Close) */}
@@ -912,6 +994,14 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onAssigned={async () => { setShowAssignTask(false); await loadTicket(); }}
         />
       )}
+
+      <FieldVisitReportModal
+        open={!!fieldVisitTask}
+        defaultLocation={ticket.grievance_location}
+        submitting={fieldVisitSubmitting}
+        onClose={() => setFieldVisitTask(null)}
+        onSubmit={submitFieldVisitReport}
+      />
     </div>
   );
 }

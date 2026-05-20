@@ -7,8 +7,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { listMyTasks, completeTask, type TicketTask } from "@/lib/api";
 import { TASK_TYPES } from "@/lib/mobile-constants";
+import { isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { Check, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -18,11 +20,16 @@ function taskTypeInfo(key: string) {
 }
 
 function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: TicketTask) => void }) {
+  const router = useRouter();
   const [completing, setCompleting] = useState(false);
   const info = taskTypeInfo(task.task_type);
   const overdue = task.due_date && new Date(task.due_date) < new Date();
 
   const handleComplete = async () => {
+    if (isSiteVisitTask(task.task_type)) {
+      router.push(`/m/tickets/${task.ticket_id}?openFieldVisit=${task.task_id}`);
+      return;
+    }
     setCompleting(true);
     try {
       await completeTask(task.ticket_id, task.task_id);
@@ -66,7 +73,12 @@ function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: Tick
               : "bg-amber-500 active:bg-amber-600 text-white"
           }`}
         >
-          {completing ? "Completing…" : <><Check size={14} strokeWidth={2.5} className="inline mr-1" />Mark Complete</>}
+          {completing ? "Completing…" : (
+            <>
+              <Check size={14} strokeWidth={2.5} className="inline mr-1" />
+              {isSiteVisitTask(task.task_type) ? "Complete visit" : "Mark complete"}
+            </>
+          )}
         </button>
       </div>
     </div>
