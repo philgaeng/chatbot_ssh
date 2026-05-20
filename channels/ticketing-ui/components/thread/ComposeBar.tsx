@@ -14,8 +14,11 @@ export interface ComposeBarProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  /** Called when the paperclip button is tapped */
+  /** Legacy: open attachments panel or similar */
   onAttach?: () => void;
+  /** Direct file pick + upload from paperclip */
+  onFileSelected?: (file: File) => void;
+  attachUploading?: boolean;
   /** Called when a # command is selected from the palette */
   onHashCommand?: (cmd: HashCommand) => void;
   /** True when compose bar is in field-report mode (amber styling) */
@@ -55,6 +58,8 @@ export function ComposeBar({
   onChange,
   onSubmit,
   onAttach,
+  onFileSelected,
+  attachUploading = false,
   onHashCommand,
   reportMode = false,
   onExitReportMode,
@@ -66,6 +71,15 @@ export function ComposeBar({
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [hashQuery,    setHashQuery]    = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachClick = useCallback(() => {
+    if (onFileSelected) {
+      fileInputRef.current?.click();
+      return;
+    }
+    onAttach?.();
+  }, [onAttach, onFileSelected]);
 
   const resolvedPlaceholder = placeholder ?? (
     reportMode
@@ -115,8 +129,23 @@ export function ComposeBar({
     <div className={`flex items-end gap-2 px-3 py-2 ${className}`}>
 
       {/* Paperclip */}
-      <button onClick={onAttach} tabIndex={-1}
-        className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-blue-500 rounded-full active:bg-gray-100 flex-shrink-0 mb-0.5"
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && onFileSelected) onFileSelected(file);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={handleAttachClick}
+        disabled={attachUploading || (!onFileSelected && !onAttach)}
+        tabIndex={-1}
+        className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-blue-500 hover:text-blue-500 rounded-full active:bg-gray-100 hover:bg-gray-100 flex-shrink-0 mb-0.5 disabled:opacity-40"
         aria-label="Attach file">
         <Paperclip size={20} strokeWidth={2} />
       </button>
