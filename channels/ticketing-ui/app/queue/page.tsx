@@ -18,16 +18,18 @@ interface TabDef {
   label: string;
   redBadge: boolean;
   showBadge: boolean;
+  /** When false, tab is hidden unless the tab has at least one ticket. */
+  alwaysVisible: boolean;
   description: string;
 }
 
 const TABS: TabDef[] = [
-  { id: "actor",         label: "Actor",         redBadge: true,  showBadge: true,  description: "Tickets where I'm the action owner or have a pending task" },
-  { id: "supervisor",    label: "Supervisor",     redBadge: false, showBadge: true,  description: "Tickets I'm supervising at the next level" },
-  { id: "informed",      label: "Informed",       redBadge: false, showBadge: true,  description: "Tickets I've been added to as an informed member" },
-  { id: "observer",      label: "Observer",       redBadge: false, showBadge: false, description: "Tickets I'm watching in read-only mode" },
-  { id: "high_priority", label: "High Priority",  redBadge: true,  showBadge: true,  description: "HIGH / CRITICAL priority or SLA-breached tickets" },
-  { id: "all",           label: "All Tickets",    redBadge: false, showBadge: false, description: "All tickets visible to my role" },
+  { id: "actor",         label: "Actor",         redBadge: true,  showBadge: true,  alwaysVisible: true,  description: "Tickets where I'm the action owner or have a pending task" },
+  { id: "supervisor",    label: "Supervisor",     redBadge: false, showBadge: true,  alwaysVisible: false, description: "Tickets I'm supervising at the next level" },
+  { id: "informed",      label: "Informed",       redBadge: false, showBadge: true,  alwaysVisible: false, description: "Tickets I've been added to as an informed member" },
+  { id: "observer",      label: "Observer",       redBadge: false, showBadge: false, alwaysVisible: false, description: "Tickets I'm watching in read-only mode" },
+  { id: "high_priority", label: "High Priority",  redBadge: true,  showBadge: true,  alwaysVisible: true,  description: "HIGH / CRITICAL priority or SLA-breached tickets" },
+  { id: "all",           label: "All Tickets",    redBadge: false, showBadge: false, alwaysVisible: true,  description: "All tickets visible to my role" },
 ];
 
 // ── Deadline helpers ──────────────────────────────────────────────────────────
@@ -227,15 +229,26 @@ export default function QueuePage() {
     return { actionNeeded, dueToday, overdue };
   }, [actorTickets]);
 
-  // ── Independent badge counts for non-actor tabs ───────────────────────────
+  // ── Tab totals (role tabs: hide when zero; badges when showBadge) ─────────
   useEffect(() => {
     if (!isAuthenticated) return;
-    (["supervisor", "informed", "high_priority"] as Tab[]).forEach((tab) => {
+    (["supervisor", "informed", "observer", "high_priority"] as Tab[]).forEach((tab) => {
       listTickets({ tab, page_size: 1 })
         .then((r) => setTabCounts((prev) => ({ ...prev, [tab]: r.total })))
         .catch(() => {});
     });
   }, [isAuthenticated]);
+
+  const visibleTabs = useMemo(
+    () => TABS.filter((t) => t.alwaysVisible || (tabCounts[t.id] ?? 0) > 0),
+    [tabCounts],
+  );
+
+  useEffect(() => {
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab("actor");
+    }
+  }, [visibleTabs, activeTab]);
 
   // ── Active tab ticket list ────────────────────────────────────────────────
   useEffect(() => {
@@ -264,7 +277,7 @@ export default function QueuePage() {
     return sorted;
   }, [tickets, tileFilter]);
 
-  const activeTabDef = TABS.find((t) => t.id === activeTab)!;
+  const activeTabDef = visibleTabs.find((t) => t.id === activeTab) ?? TABS[0]!;
 
   const tileCount = tileFilter !== "all"
     ? displayedTickets.length
@@ -317,7 +330,7 @@ export default function QueuePage() {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const count    = tabCounts[tab.id] ?? 0;
           return (
