@@ -79,7 +79,12 @@ export function assigneeIsCurrentUser(
   if (assigneeId === "admin@grm.local") return true;
   const email = canonicalUserId(user, "");
   const sub = typeof user.sub === "string" ? user.sub.trim() : "";
-  return assigneeId === email || (!!sub && assigneeId === sub);
+  const aid = assigneeId.trim();
+  if (aid === email || (!!sub && aid === sub)) return true;
+  if (email.includes("@") && aid.includes("@") && aid.toLowerCase() === email.toLowerCase()) {
+    return true;
+  }
+  return false;
 }
 
 export function rememberLoginEmail(email: string): void {

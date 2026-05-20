@@ -20,7 +20,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
-from ticketing.constants.demo_officers import BYPASS_DEFAULT_OFFICER
+from ticketing.constants.demo_officers import BYPASS_DEFAULT_OFFICER, LEGACY_OFFICER_ID_MAP
 from ticketing.models.base import SessionLocal
 from ticketing.models.user import SEAH_ROLES
 
@@ -67,13 +67,33 @@ class CurrentUser:
     keycloak_sub: str | None = None
 
     def matches_assignee(self, assignee_id: str | None) -> bool:
-        """True when assignee_id is this officer (email or Keycloak sub)."""
+        """True when assignee_id is this officer (email, Keycloak sub, or legacy mock id)."""
         if not assignee_id:
             return False
-        if assignee_id == self.user_id:
-            return True
-        if self.keycloak_sub and assignee_id == self.keycloak_sub:
-            return True
+
+        def _same_officer(a: str, b: str) -> bool:
+            if a == b:
+                return True
+            if "@" in a and "@" in b and a.lower() == b.lower():
+                return True
+            return False
+
+        assignee_aliases = {assignee_id.strip()}
+        mapped = LEGACY_OFFICER_ID_MAP.get(assignee_id)
+        if mapped:
+            assignee_aliases.add(mapped)
+        for legacy, canonical in LEGACY_OFFICER_ID_MAP.items():
+            if canonical == assignee_id or canonical == mapped:
+                assignee_aliases.add(legacy)
+
+        officer_ids = {self.user_id}
+        if self.keycloak_sub:
+            officer_ids.add(self.keycloak_sub)
+
+        for aid in assignee_aliases:
+            for oid in officer_ids:
+                if _same_officer(aid, oid):
+                    return True
         return False
 
     @property

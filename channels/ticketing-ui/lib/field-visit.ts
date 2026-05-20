@@ -27,3 +27,24 @@ export function formatFieldVisitNote(data: FieldVisitFormData): string {
 export function isSiteVisitTask(taskType: string): boolean {
   return taskType === "SITE_VISIT";
 }
+
+/** User-facing message when field visit save fails (includes API detail when present). */
+export function fieldVisitSaveErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (raw.includes("Only the assigned officer")) {
+    return (
+      "Only the officer assigned to this inspection can complete it. " +
+      "If this is your task, ask an admin to reassign it to your login email."
+    );
+  }
+  if (raw.includes("/complete") && raw.includes("403")) {
+    return (
+      "Permission denied when completing the inspection task. " +
+      "Refresh the page — if the report already appears on the timeline, the visit may be saved."
+    );
+  }
+  const detail = raw.replace(/^API \d+ \S+: /, "").trim();
+  return detail
+    ? `Could not save the field visit report.\n\n${detail.slice(0, 320)}`
+    : "Could not save the field visit report. Please try again.";
+}

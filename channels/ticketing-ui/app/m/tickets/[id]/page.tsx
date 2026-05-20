@@ -42,7 +42,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
-import { isSiteVisitTask }                    from "@/lib/field-visit";
+import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
 
 // ── Reusable bottom sheet shell ───────────────────────────────────────────────
@@ -778,7 +778,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       console.error("Field visit report failed", e);
-      alert("Could not save the field visit report. Please try again.");
+      alert(fieldVisitSaveErrorMessage(e));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;

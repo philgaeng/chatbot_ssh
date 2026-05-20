@@ -71,6 +71,14 @@ from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
 
 logger = logging.getLogger(__name__)
+
+
+def _enqueue_celery(task, *args, **kwargs) -> None:
+    """Queue a Celery job without failing the HTTP response if Redis is down."""
+    try:
+        task.delay(*args, **kwargs)
+    except Exception as exc:
+        logger.warning("Celery enqueue failed (non-fatal): %s", exc)
 router = APIRouter()
 
 
@@ -994,7 +1002,8 @@ def perform_action(
 
     # Fire async complainant notification after commit so the task sees the updated ticket
     if _notify_complainant_text:
-        notify_complainant.delay(
+        _enqueue_celery(
+            notify_complainant,
             ticket.ticket_id,
             _notify_complainant_text,
             action,  # event_type label in the notification log
@@ -1002,11 +1011,11 @@ def perform_action(
 
     # Fire LLM translation task for NOTE events (7a — translate to English for supervisors)
     if _translate_note_event_id:
-        translate_note.delay(_translate_note_event_id)
+        _enqueue_celery(translate_note, _translate_note_event_id)
 
     # Fire findings generation on RESOLVE (7b — AI summary for GRC/supervisors)
     if _generate_findings:
-        generate_findings.delay(ticket.ticket_id)
+        _enqueue_celery(generate_findings, ticket.ticket_id)
 
     return TicketActionResponse(
         ticket_id=ticket.ticket_id,
@@ -1159,7 +1168,7 @@ def inbound_complainant_message(
     db.commit()
 
     # Fire translation if message looks non-English (translate_note handles skip-if-English)
-    translate_note.delay(event.event_id)
+    _enqueue_celery(translate_note, event.event_id)
 
     logger.info(
         "inbound_complainant_message: ticket_id=%s intent=%s event_id=%s",
@@ -1726,7 +1735,7 @@ def trigger_findings(
             ),
         )
 
-    generate_findings.delay(ticket_id)
+    _enqueue_celery(generate_findings, ticket_id)
     logger.info(
         "Findings generation queued: ticket_id=%s requested_by=%s",
         ticket_id, current_user.user_id,

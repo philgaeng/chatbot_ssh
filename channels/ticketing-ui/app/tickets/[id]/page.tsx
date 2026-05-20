@@ -23,7 +23,7 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
-import { isSiteVisitTask }                    from "@/lib/field-visit";
+import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
 import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
@@ -991,7 +991,7 @@ export default function TicketDetailPage() {
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       console.error("Field visit report failed", e);
-      alert("Could not save the field visit report. Please try again.");
+      alert(fieldVisitSaveErrorMessage(e));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
