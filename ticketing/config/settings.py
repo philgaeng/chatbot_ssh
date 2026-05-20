@@ -39,6 +39,9 @@ class TicketingSettings(BaseSettings):
     # the browser-facing issuer is unreachable from the backend container (e.g. local
     # dev with KC on a host port) — point this at the Docker-internal Keycloak URL.
     keycloak_jwks_url: str = ""         # e.g. http://keycloak:8080/realms/grm/protocol/openid-connect/certs
+    # Server-side token endpoint base (Docker-internal). When empty, derived from
+    # keycloak_jwks_url or keycloak_admin_url — not from keycloak_issuer (browser URL).
+    keycloak_token_issuer: str = ""
     keycloak_client_id: str = "ticketing-api"   # confidential client for JWT audience check
     keycloak_client_secret: str = ""    # optional; fetched from Keycloak admin if empty
     keycloak_admin_url: str = ""        # e.g. http://keycloak:8080 (no trailing slash)
