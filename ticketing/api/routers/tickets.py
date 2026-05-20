@@ -175,6 +175,37 @@ def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
     return [v.user_id for v in viewers]
 
 
+def _auto_acknowledge_if_assigned_actor(
+    db: Session,
+    ticket: Ticket,
+    current_user: CurrentUser,
+) -> Optional[TicketEvent]:
+    """Assigned actor engaging (note, field report, reply) starts the case without a separate ack."""
+    if ticket.status_code not in ("OPEN", "ESCALATED"):
+        return None
+    if not ticket.assigned_to_user_id:
+        return None
+    if not current_user.is_admin and not current_user.matches_assignee(
+        ticket.assigned_to_user_id
+    ):
+        return None
+    old_status = ticket.status_code
+    ticket.status_code = "IN_PROGRESS"
+    ticket.step_started_at = _now()
+    ticket.updated_by_user_id = current_user.user_id
+    return _add_event(
+        db,
+        ticket,
+        "ACKNOWLEDGED",
+        old_status=old_status,
+        new_status="IN_PROGRESS",
+        step_id=ticket.current_step_id,
+        created_by=current_user.user_id,
+        seen=True,
+        actor_role=_actor_role(current_user),
+        summary_regen_required=True,
+    )
+
 
 def _add_event(
     db: Session,
@@ -914,6 +945,7 @@ def perform_action(
     elif action == "NOTE":
         if not payload.note:
             raise HTTPException(status_code=422, detail="note is required for action_type=NOTE")
+        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
         # Internal note — no status change, not visible to complainant
         event = _add_event(
             db, ticket, "NOTE_ADDED",
@@ -960,6 +992,7 @@ def perform_action(
     elif action == "FIELD_REPORT":
         if not payload.note:
             raise HTTPException(status_code=422, detail="note is required for action_type=FIELD_REPORT")
+        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
         # Officer field report — structured finding, no status change, not visible to complainant.
         # Stored as NOTE_ADDED with is_field_report=True so the UI can render it distinctly
         # and the AI findings pipeline picks it up (NOTE_ADDED is already in _FINDINGS_EVENT_TYPES).
@@ -1052,6 +1085,8 @@ def reply_to_complainant(
                 status_code=403,
                 detail="Only the assigned officer can reply to the complainant.",
             )
+
+    _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
 
     delivered = False
     detail = None

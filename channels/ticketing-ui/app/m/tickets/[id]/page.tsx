@@ -43,6 +43,8 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
 import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
+import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
+import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
 
 // ── Reusable bottom sheet shell ───────────────────────────────────────────────
@@ -682,6 +684,17 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     [tasks, user],
   );
   const canManageViewers = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
+  const isAssignedActor = useMemo(
+    () =>
+      !!ticket &&
+      (!ticket.assigned_to_user_id ||
+        assigneeIsCurrentUser(ticket.assigned_to_user_id, user)),
+    [ticket, user],
+  );
+
+  const ensureAcknowledged = useCallback(async () => {
+    await ensureTicketAcknowledged(ticket, isAssignedActor, ticketId, loadTicket);
+  }, [ticket, isAssignedActor, ticketId, loadTicket]);
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];
     const ids = new Set<string>();
@@ -729,10 +742,13 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
       if (assignMatch) {
         await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
-      } else if (reportMode) {
-        await performAction(ticketId, { action_type: "FIELD_REPORT", note: text });
       } else {
-        await performAction(ticketId, { action_type: "NOTE", note: text });
+        await ensureAcknowledged();
+        if (reportMode) {
+          await performAction(ticketId, { action_type: "FIELD_REPORT", note: text });
+        } else {
+          await performAction(ticketId, { action_type: "NOTE", note: text });
+        }
       }
       await loadTicket();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -742,7 +758,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, reportMode, ticketId, loadTicket]);
+  }, [noteText, submitting, reportMode, ticketId, loadTicket, ensureAcknowledged]);
 
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (!ticket) return;
@@ -765,6 +781,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     setFieldVisitSubmitting(true);
     const taskId = fieldVisitTask.task_id;
     try {
+      await ensureAcknowledged();
       await performAction(ticketId, { action_type: "FIELD_REPORT", note });
       try {
         await completeTask(ticketId, taskId);
@@ -784,11 +801,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       fieldVisitSubmitLock.current = false;
       setFieldVisitSubmitting(false);
     }
-  }, [fieldVisitTask, ticketId, loadTicket]);
+  }, [fieldVisitTask, ticketId, loadTicket, ensureAcknowledged]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
     try {
+      await ensureAcknowledged();
       await uploadOfficerAttachment(ticketId, file, "");
       await loadTicket();
     } catch (e) {
@@ -797,7 +815,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } finally {
       setAttachUploading(false);
     }
-  }, [ticketId, loadTicket]);
+  }, [ticketId, loadTicket, ensureAcknowledged]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -902,6 +920,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         ) : (
           filteredEvents
             .filter((e: TicketEvent) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
+            .filter(
+              (e: TicketEvent) =>
+                !isThreadTaskEvent(e.event_type) ||
+                shouldRenderTaskCardInThread(e, ticket.events, tasks),
+            )
             .map((event: TicketEvent) => {
               const isMine = event.created_by_user_id === currentUserId;
               if (SYSTEM_EVENT_TYPES.has(event.event_type))

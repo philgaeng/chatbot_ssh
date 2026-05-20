@@ -24,6 +24,8 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
 import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
+import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
+import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
@@ -895,10 +897,7 @@ export default function TicketDetailPage() {
 
   // ── Actions ────────────────────────────────────────────────────────────
   const ensureAcknowledged = useCallback(async () => {
-    if (!ticket || !["OPEN", "ESCALATED"].includes(ticket.status_code)) return;
-    if (!isAssigned) return;
-    await performAction(id, { action_type: "ACKNOWLEDGE" });
-    await load();
+    await ensureTicketAcknowledged(ticket, isAssigned, id, load);
   }, [ticket, isAssigned, id, load]);
 
   async function act(action_type: string, extra?: Record<string, string>) {
@@ -941,6 +940,7 @@ export default function TicketDetailPage() {
     const text = noteText.trim();
     setNoteText("");
     try {
+      await ensureAcknowledged();
       await performAction(id, { action_type: "NOTE", note: text });
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -950,7 +950,7 @@ export default function TicketDetailPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, id, load]);
+  }, [noteText, submitting, id, load, ensureAcknowledged]);
 
   // ── Report mode + field visit + attach ─────────────────────────────────
   const [reportMode, setReportMode] = useState(false);
@@ -978,6 +978,7 @@ export default function TicketDetailPage() {
     setFieldVisitSubmitting(true);
     const taskId = fieldVisitTask.task_id;
     try {
+      await ensureAcknowledged();
       await performAction(id, { action_type: "FIELD_REPORT", note });
       try {
         await completeTask(id, taskId);
@@ -997,7 +998,7 @@ export default function TicketDetailPage() {
       fieldVisitSubmitLock.current = false;
       setFieldVisitSubmitting(false);
     }
-  }, [fieldVisitTask, id, load]);
+  }, [fieldVisitTask, id, load, ensureAcknowledged]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
@@ -1047,10 +1048,13 @@ export default function TicketDetailPage() {
     try {
       if (assignMatch) {
         await patchTicket(id, { assign_to_user_id: assignMatch[1] });
-      } else if (reportMode) {
-        await performAction(id, { action_type: "FIELD_REPORT", note: text });
       } else {
-        await performAction(id, { action_type: "NOTE", note: text });
+        await ensureAcknowledged();
+        if (reportMode) {
+          await performAction(id, { action_type: "FIELD_REPORT", note: text });
+        } else {
+          await performAction(id, { action_type: "NOTE", note: text });
+        }
       }
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1061,7 +1065,7 @@ export default function TicketDetailPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, reportMode, id, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noteText, submitting, reportMode, id, load, ensureAcknowledged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1339,6 +1343,11 @@ export default function TicketDetailPage() {
             ) : (
               filteredEvents
                 .filter((e: TicketEvent) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
+                .filter(
+                  (e: TicketEvent) =>
+                    !isThreadTaskEvent(e.event_type) ||
+                    shouldRenderTaskCardInThread(e, ticket.events, tasks),
+                )
                 .map((event: TicketEvent) => {
                   const isMine = event.created_by_user_id === currentUserId;
                   if (SYSTEM_EVENT_TYPES.has(event.event_type))

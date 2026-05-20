@@ -27,7 +27,7 @@ export function TaskCard({
 }) {
   const taskId = event.payload?.task_id as string | undefined;
   const task = tasks.find((t) => t.task_id === taskId);
-  const isCompleted = event.event_type === "TASK_COMPLETED" || task?.status === "DONE";
+  const isCompleted = task?.status === "DONE";
   const resolvedTask: TicketTask | undefined = task ?? (taskId
     ? {
         task_id: taskId,

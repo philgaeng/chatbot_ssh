@@ -134,6 +134,18 @@ def create_task(
     if current_user.matches_assignee(assignee):
         assignee = current_user.user_id
 
+    if task_type == "SITE_VISIT":
+        existing = db.execute(
+            select(TicketTask).where(
+                TicketTask.ticket_id == ticket_id,
+                TicketTask.task_type == "SITE_VISIT",
+                TicketTask.status == "PENDING",
+                TicketTask.assigned_to_user_id == assignee,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return _task_to_dict(existing)
+
     task = TicketTask(
         task_id=_new_id(),
         ticket_id=ticket_id,

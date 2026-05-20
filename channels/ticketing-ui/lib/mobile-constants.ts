@@ -127,7 +127,8 @@ export function isThreadTaskEvent(eventType: string): boolean {
  * Notification-only events: counted for unread badge but NOT rendered in the thread.
  * (MENTION events are stored in ticket_events but are purely notification signals.)
  */
-export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION"]);
+/** Hidden from thread UI — badge/audit only (task card shows completion in place). */
+export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION", "TASK_COMPLETED"]);
 
 /** Inbound complainant messages — rendered as a distinct emerald bubble. */
 export const COMPLAINANT_EVENT_TYPES = new Set(["COMPLAINANT_MESSAGE"]);

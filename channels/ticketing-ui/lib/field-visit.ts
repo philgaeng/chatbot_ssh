@@ -28,6 +28,16 @@ export function isSiteVisitTask(taskType: string): boolean {
   return taskType === "SITE_VISIT";
 }
 
+export function isFieldReportEvent(event: {
+  event_type: string;
+  payload?: Record<string, unknown> | null;
+}): boolean {
+  return (
+    event.event_type === "NOTE_ADDED" &&
+    (event.payload as Record<string, unknown> | null)?.is_field_report === true
+  );
+}
+
 /** User-facing message when field visit save fails (includes API detail when present). */
 export function fieldVisitSaveErrorMessage(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
