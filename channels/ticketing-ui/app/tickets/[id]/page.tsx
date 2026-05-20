@@ -22,8 +22,9 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
-import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
-import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
+import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
+import { isSiteVisitTask, type FieldVisitFormData } from "@/lib/field-visit";
+import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { PII_MASK } from "@/lib/pii-display";
@@ -564,7 +565,7 @@ function FieldReportsCard({ ticket }: { ticket: TicketDetail }) {
       </div>
       {reports.length === 0 ? (
         <p className="text-xs text-gray-400 italic">
-          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar to add one.
+          No field reports yet. Use the <span className="font-semibold text-amber-800">field report</span> button below the thread or <span className="font-mono bg-gray-100 px-1 rounded">#report</span>.
         </p>
       ) : (
         <div className="space-y-3">
@@ -953,14 +954,27 @@ export default function TicketDetailPage() {
   }, [noteText, submitting, id, load, ensureAcknowledged]);
 
   // ── Report mode + field visit + attach ─────────────────────────────────
-  const [reportMode, setReportMode] = useState(false);
-  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
-  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [fieldReportOpen, setFieldReportOpen] = useState(false);
+  const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
+  const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
+
+  const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
+    setFieldReportLinkedTask(linkedTask ?? null);
+    setFieldReportOpen(true);
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  }, []);
+
+  const closeFieldReport = useCallback(() => {
+    setFieldReportOpen(false);
+    setFieldReportLinkedTask(null);
+  }, []);
 
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
-      setFieldVisitTask(task);
+      openFieldReport(task);
       return;
     }
     try {
@@ -970,35 +984,31 @@ export default function TicketDetailPage() {
       console.error("Complete task failed", e);
       alert("Could not complete the task. Please try again.");
     }
-  }, [id, load]);
+  }, [id, load, openFieldReport]);
 
-  const submitFieldVisitReport = useCallback(async (note: string) => {
-    if (!fieldVisitTask || fieldVisitSubmitLock.current) return;
+  const submitFieldReportForm = useCallback(async (data: FieldVisitFormData) => {
+    if (fieldVisitSubmitLock.current) return;
     fieldVisitSubmitLock.current = true;
-    setFieldVisitSubmitting(true);
-    const taskId = fieldVisitTask.task_id;
+    setFieldReportSubmitting(true);
     try {
-      await ensureAcknowledged();
-      await performAction(id, { action_type: "FIELD_REPORT", note });
-      try {
-        await completeTask(id, taskId);
-      } catch (completeErr) {
-        const refreshed = await listTicketTasks(id).catch(() => [] as TicketTask[]);
-        const t = refreshed.find((x) => x.task_id === taskId);
-        if (t?.status !== "DONE") throw completeErr;
-      }
-      setFieldVisitTask(null);
+      await submitStructuredFieldReport({
+        ticketId: id,
+        data,
+        linkedTask: fieldReportLinkedTask,
+        ensureAcknowledged,
+      });
+      closeFieldReport();
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-      console.error("Field visit report failed", e);
+      console.error("Field report failed", e);
       alert(fieldVisitSaveErrorMessage(e));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
-      setFieldVisitSubmitting(false);
+      setFieldReportSubmitting(false);
     }
-  }, [fieldVisitTask, id, load, ensureAcknowledged]);
+  }, [id, fieldReportLinkedTask, load, ensureAcknowledged, closeFieldReport]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
@@ -1016,7 +1026,7 @@ export default function TicketDetailPage() {
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "report") {
-      setReportMode(true);
+      openFieldReport(null);
       return;
     }
     if (cmd.kind === "action" && cmd.action) {
@@ -1033,7 +1043,7 @@ export default function TicketDetailPage() {
       return;
     }
     // #assign is handled inline in ComposeBar (text becomes "#assign @…")
-  }, [id, currentUserId, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, currentUserId, load, openFieldReport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNoteOrReport = useCallback(async () => {
     const text = noteText.trim();
@@ -1044,28 +1054,22 @@ export default function TicketDetailPage() {
     const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
 
     setNoteText("");
-    setReportMode(false);
     try {
       if (assignMatch) {
         await patchTicket(id, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
-        if (reportMode) {
-          await performAction(id, { action_type: "FIELD_REPORT", note: text });
-        } else {
-          await performAction(id, { action_type: "NOTE", note: text });
-        }
+        await performAction(id, { action_type: "NOTE", note: text });
       }
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       console.error("Submit failed", e);
       setNoteText(text);
-      if (reportMode) setReportMode(true);
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, reportMode, id, load, ensureAcknowledged]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noteText, submitting, id, load, ensureAcknowledged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1369,7 +1373,15 @@ export default function TicketDetailPage() {
             <div ref={threadEndRef} />
           </div>
 
-          <div className={`flex-shrink-0 border-t ${reportMode ? "border-amber-200" : "border-gray-100"}`}>
+          <div className={`flex-shrink-0 border-t ${fieldReportOpen ? "border-amber-200" : "border-gray-100"}`}>
+            <FieldReportComposeCard
+              open={fieldReportOpen}
+              defaultLocation={ticket.grievance_location}
+              completeVisit={!!fieldReportLinkedTask}
+              submitting={fieldReportSubmitting}
+              onClose={closeFieldReport}
+              onSubmit={submitFieldReportForm}
+            />
             <ComposeBar
               value={noteText}
               onChange={setNoteText}
@@ -1377,9 +1389,9 @@ export default function TicketDetailPage() {
               onHashCommand={handleHashCommand}
               onFileSelected={handleAttachFile}
               attachUploading={attachUploading}
-              reportMode={reportMode}
-              onExitReportMode={() => setReportMode(false)}
-              disabled={submitting}
+              onFieldReport={() => openFieldReport(null)}
+              fieldReportOpen={fieldReportOpen}
+              disabled={submitting || fieldReportSubmitting}
               participants={mentionParticipants}
             />
           </div>
@@ -1485,13 +1497,6 @@ export default function TicketDetailPage() {
         />
       )}
 
-      <FieldVisitReportModal
-        open={!!fieldVisitTask}
-        defaultLocation={ticket.grievance_location}
-        submitting={fieldVisitSubmitting}
-        onClose={() => setFieldVisitTask(null)}
-        onSubmit={submitFieldVisitReport}
-      />
     </div>
   );
 }

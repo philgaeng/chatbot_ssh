@@ -41,8 +41,9 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
-import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
-import { fieldVisitSaveErrorMessage, isSiteVisitTask } from "@/lib/field-visit";
+import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
+import { isSiteVisitTask, type FieldVisitFormData } from "@/lib/field-visit";
+import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
@@ -277,7 +278,7 @@ function FieldReportsSheet({
           <Flag size={32} strokeWidth={1.5} />
           <p className="text-sm">No field reports yet.</p>
           <p className="text-xs text-center px-8">
-            Type <code className="bg-gray-100 px-1 rounded">#report</code> in the compose bar to add one.
+            Use the field report button below the thread or <code className="bg-gray-100 px-1 rounded">#report</code>.
           </p>
         </div>
       ) : (
@@ -608,9 +609,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [activeFilter, setActiveFilter]   = useState<FilterChip>("all");
   const [noteText, setNoteText]           = useState("");
   const [submitting, setSubmitting]       = useState(false);
-  const [reportMode, setReportMode]       = useState(false);
-  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
-  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [fieldReportOpen, setFieldReportOpen] = useState(false);
+  const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
+  const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
 
   // Sheet visibility
@@ -646,7 +647,10 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     const openId = searchParams.get("openFieldVisit");
     if (!openId || tasks.length === 0) return;
     const pending = tasks.find((t) => t.task_id === openId && t.status === "PENDING");
-    if (pending) setFieldVisitTask(pending);
+    if (pending) {
+      setFieldReportLinkedTask(pending);
+      setFieldReportOpen(true);
+    }
   }, [searchParams, tasks]);
   useEffect(() => {
     if (ticket && !loading) threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -721,8 +725,21 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     }
   }, [ticket, ticketId, loadTicket]);
 
+  const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
+    setFieldReportLinkedTask(linkedTask ?? null);
+    setFieldReportOpen(true);
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  }, []);
+
+  const closeFieldReport = useCallback(() => {
+    setFieldReportOpen(false);
+    setFieldReportLinkedTask(null);
+  }, []);
+
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
-    if (cmd.kind === "report")                          { setReportMode(true); return; }
+    if (cmd.kind === "report")                          { openFieldReport(null); return; }
     if (cmd.kind === "action" && cmd.action)            { await handleAction(cmd.action); return; }
     if (cmd.kind === "task" && cmd.taskKey) {
       try {
@@ -730,25 +747,20 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         await loadTicket();
       } catch (e) { console.error("Create task failed", e); }
     }
-  }, [ticketId, currentUserId, loadTicket, handleAction]);
+  }, [ticketId, currentUserId, loadTicket, handleAction, openFieldReport]);
 
   const handleNoteOrReport = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
     setSubmitting(true);
     const text = noteText.trim();
     setNoteText("");
-    setReportMode(false);
     try {
       const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
       if (assignMatch) {
         await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
-        if (reportMode) {
-          await performAction(ticketId, { action_type: "FIELD_REPORT", note: text });
-        } else {
-          await performAction(ticketId, { action_type: "NOTE", note: text });
-        }
+        await performAction(ticketId, { action_type: "NOTE", note: text });
       }
       await loadTicket();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -758,12 +770,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, reportMode, ticketId, loadTicket, ensureAcknowledged]);
+  }, [noteText, submitting, ticketId, loadTicket, ensureAcknowledged]);
 
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (!ticket) return;
     if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
-      setFieldVisitTask(task);
+      openFieldReport(task);
       return;
     }
     try {
@@ -773,35 +785,31 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       console.error("Complete task failed", e);
       alert("Could not complete the task. Please try again.");
     }
-  }, [ticket, ticketId, loadTicket]);
+  }, [ticket, ticketId, loadTicket, openFieldReport]);
 
-  const submitFieldVisitReport = useCallback(async (note: string) => {
-    if (!fieldVisitTask || fieldVisitSubmitLock.current) return;
+  const submitFieldReportForm = useCallback(async (data: FieldVisitFormData) => {
+    if (fieldVisitSubmitLock.current) return;
     fieldVisitSubmitLock.current = true;
-    setFieldVisitSubmitting(true);
-    const taskId = fieldVisitTask.task_id;
+    setFieldReportSubmitting(true);
     try {
-      await ensureAcknowledged();
-      await performAction(ticketId, { action_type: "FIELD_REPORT", note });
-      try {
-        await completeTask(ticketId, taskId);
-      } catch (completeErr) {
-        const refreshed = await listTicketTasks(ticketId).catch(() => [] as TicketTask[]);
-        const t = refreshed.find((x) => x.task_id === taskId);
-        if (t?.status !== "DONE") throw completeErr;
-      }
-      setFieldVisitTask(null);
+      await submitStructuredFieldReport({
+        ticketId,
+        data,
+        linkedTask: fieldReportLinkedTask,
+        ensureAcknowledged,
+      });
+      closeFieldReport();
       await loadTicket();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-      console.error("Field visit report failed", e);
+      console.error("Field report failed", e);
       alert(fieldVisitSaveErrorMessage(e));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
-      setFieldVisitSubmitting(false);
+      setFieldReportSubmitting(false);
     }
-  }, [fieldVisitTask, ticketId, loadTicket, ensureAcknowledged]);
+  }, [ticketId, fieldReportLinkedTask, loadTicket, ensureAcknowledged, closeFieldReport]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
@@ -956,8 +964,16 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* ── Fixed bottom bar ──────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 pb-safe-bottom">
+      <div className={`flex-shrink-0 bg-white border-t pb-safe-bottom ${fieldReportOpen ? "border-amber-200" : "border-gray-200"}`}>
         <PrimaryCtaBar ticket={ticket} onAction={handleAction} onMore={() => setShowMore(true)} />
+        <FieldReportComposeCard
+          open={fieldReportOpen}
+          defaultLocation={ticket.grievance_location}
+          completeVisit={!!fieldReportLinkedTask}
+          submitting={fieldReportSubmitting}
+          onClose={closeFieldReport}
+          onSubmit={submitFieldReportForm}
+        />
         <ComposeBar
           value={noteText}
           onChange={setNoteText}
@@ -965,9 +981,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onFileSelected={handleAttachFile}
           attachUploading={attachUploading}
           onHashCommand={handleHashCommand}
-          reportMode={reportMode}
-          onExitReportMode={() => setReportMode(false)}
-          disabled={submitting}
+          onFieldReport={() => openFieldReport(null)}
+          fieldReportOpen={fieldReportOpen}
+          disabled={submitting || fieldReportSubmitting}
           participants={mentionParticipants}
         />
       </div>
@@ -1028,13 +1044,6 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         />
       )}
 
-      <FieldVisitReportModal
-        open={!!fieldVisitTask}
-        defaultLocation={ticket.grievance_location}
-        submitting={fieldVisitSubmitting}
-        onClose={() => setFieldVisitTask(null)}
-        onSubmit={submitFieldVisitReport}
-      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Paperclip, Mic, Send } from "lucide-react";
+import { ClipboardList, Paperclip, Mic, Send } from "lucide-react";
 import { HASH_COMMANDS, type HashCommand } from "@/lib/mobile-constants";
 import { TaskTypeIcon } from "@/lib/icons";
 
@@ -21,10 +21,10 @@ export interface ComposeBarProps {
   attachUploading?: boolean;
   /** Called when a # command is selected from the palette */
   onHashCommand?: (cmd: HashCommand) => void;
-  /** True when compose bar is in field-report mode (amber styling) */
-  reportMode?: boolean;
-  /** Called to exit report mode (Escape or ✕ chip) */
-  onExitReportMode?: () => void;
+  /** Opens the inline field report form above compose */
+  onFieldReport?: () => void;
+  /** When true, dims compose (field report card is open) */
+  fieldReportOpen?: boolean;
   disabled?: boolean;
   participants?: MentionParticipant[];
   placeholder?: string;
@@ -61,8 +61,8 @@ export function ComposeBar({
   onFileSelected,
   attachUploading = false,
   onHashCommand,
-  reportMode = false,
-  onExitReportMode,
+  onFieldReport,
+  fieldReportOpen = false,
   disabled,
   participants = [],
   placeholder,
@@ -81,11 +81,7 @@ export function ComposeBar({
     onAttach?.();
   }, [onAttach, onFileSelected]);
 
-  const resolvedPlaceholder = placeholder ?? (
-    reportMode
-      ? "Describe your site findings… (Enter to submit)"
-      : "Add a note… (@ to mention · # for commands)"
-  );
+  const resolvedPlaceholder = placeholder ?? "Add a note… (@ to mention · # for commands)";
 
   // Detect @ and # triggers on every keystroke
   const handleChange = useCallback((v: string) => {
@@ -140,6 +136,23 @@ export function ComposeBar({
           e.target.value = "";
         }}
       />
+      {onFieldReport && (
+        <button
+          type="button"
+          onClick={onFieldReport}
+          disabled={fieldReportOpen}
+          tabIndex={-1}
+          className={`w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 mb-0.5 transition-colors ${
+            fieldReportOpen
+              ? "text-amber-600 bg-amber-100"
+              : "text-amber-700 hover:text-amber-800 hover:bg-amber-50 active:bg-amber-100"
+          }`}
+          aria-label="Field report"
+          title="Field report"
+        >
+          <ClipboardList size={20} strokeWidth={2} />
+        </button>
+      )}
       <button
         type="button"
         onClick={handleAttachClick}
@@ -214,23 +227,9 @@ export function ComposeBar({
           </div>
         )}
 
-        {/* Report mode badge */}
-        {reportMode && (
-          <div className="absolute -top-7 left-0 flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-              📋 Field Report
-            </span>
-            {onExitReportMode && (
-              <button onClick={onExitReportMode} className="text-[11px] text-gray-400 hover:text-gray-600" aria-label="Exit report mode">
-                ✕
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Textarea bubble */}
-        <div className={`rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center transition-colors ${
-          reportMode ? "bg-amber-50 border border-amber-200" : "bg-gray-100"
+        <div className={`rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center transition-colors bg-gray-100 ${
+          fieldReportOpen ? "opacity-60" : ""
         }`}>
           <textarea
             ref={textareaRef}
@@ -238,18 +237,17 @@ export function ComposeBar({
             onChange={(e) => handleChange(e.target.value)}
             placeholder={resolvedPlaceholder}
             rows={1}
-            className={`w-full bg-transparent text-sm placeholder-gray-400 resize-none focus:outline-none ${
-              reportMode ? "text-amber-900" : "text-gray-800"
-            }`}
+            className="w-full bg-transparent text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none"
             style={{ maxHeight: "120px" }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
-                setMentionQuery(null); setHashQuery(null);
-                if (reportMode) onExitReportMode?.();
+                setMentionQuery(null);
+                setHashQuery(null);
                 return;
               }
               if (e.key === "Enter" && !e.shiftKey && mentionQuery === null && hashQuery === null) {
-                e.preventDefault(); onSubmit();
+                e.preventDefault();
+                onSubmit();
               }
             }}
           />
@@ -259,10 +257,8 @@ export function ComposeBar({
       {/* Mic / Send toggle */}
       {hasText ? (
         <button onClick={onSubmit} disabled={disabled}
-          className={`w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 transition-colors ${
-            reportMode ? "bg-amber-500 active:bg-amber-600" : "bg-blue-600 active:bg-blue-700"
-          }`}
-          aria-label={reportMode ? "Submit report" : "Send"}>
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 transition-colors bg-blue-600 active:bg-blue-700"
+          aria-label="Send">
           <Send size={18} strokeWidth={2} />
         </button>
       ) : (
