@@ -27,6 +27,11 @@ const NAV = [
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login", "/auth/callback"];
+const PUBLIC_ROUTE_PREFIXES = ["/login/"];
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.includes(pathname) || PUBLIC_ROUTE_PREFIXES.some((p) => pathname.startsWith(p));
+}
 
 // ── Mobile bottom tab nav ─────────────────────────────────────────────────────
 
@@ -229,7 +234,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!isAuthenticated && !PUBLIC_ROUTES.includes(pathname)) {
+    if (!isAuthenticated && !isPublicRoute(pathname)) {
       router.replace("/login");
     }
   }, [isAuthenticated, isLoading, pathname, router]);
@@ -372,7 +377,7 @@ function MobileShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!isAuthenticated && !PUBLIC_ROUTES.includes(pathname)) {
+    if (!isAuthenticated && !isPublicRoute(pathname)) {
       router.replace("/login");
     }
   }, [isAuthenticated, isLoading, pathname, router]);

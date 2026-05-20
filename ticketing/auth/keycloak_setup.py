@@ -290,19 +290,22 @@ def setup_clients(admin: KeycloakAdmin) -> str:
         ui_uuid = _get_client_uuid(admin, CLIENT_UI)
         logger.info("Created client '%s' (uuid=%s)", CLIENT_UI, ui_uuid)
 
-    # ticketing-api — confidential, service account for JWKS
+    # ticketing-api — confidential; ROPC for in-app login + service account for JWKS
+    api_payload = {
+        "clientId": CLIENT_API,
+        "publicClient": False,
+        "standardFlowEnabled": False,
+        "directAccessGrantsEnabled": True,
+        "serviceAccountsEnabled": True,
+        "clientAuthenticatorType": "client-secret",
+    }
     api_uuid = _get_client_uuid(admin, CLIENT_API)
     if api_uuid:
-        logger.info("Client '%s' already exists", CLIENT_API)
+        admin.update_client(api_uuid, api_payload)
+        logger.info("Client '%s' updated (direct access grants enabled)", CLIENT_API)
     else:
-        admin.create_client({
-            "clientId": CLIENT_API,
-            "publicClient": False,
-            "standardFlowEnabled": False,
-            "directAccessGrantsEnabled": False,
-            "serviceAccountsEnabled": True,
-            "clientAuthenticatorType": "client-secret",
-        })
+        admin.create_client(api_payload)
+        api_uuid = _get_client_uuid(admin, CLIENT_API)
         logger.info("Created client '%s'", CLIENT_API)
 
     return ui_uuid  # type: ignore[return-value]
@@ -345,6 +348,8 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
         attributes = {
             "grm_roles":       [officer["grm_roles"]],
             "organization_id": [officer["organization_id"]],
+            "phone_number":    ["9800000001"],
+            "job_title":       ["Demo Officer"],
         }
         if officer.get("location_code"):
             attributes["location_code"] = [officer["location_code"]]
@@ -386,6 +391,9 @@ def main() -> None:
     setup_officer_phone_profile(grm)
     ui_uuid = setup_clients(grm)
     setup_token_mappers(grm, ui_uuid)
+    api_uuid = _get_client_uuid(grm, CLIENT_API)
+    if api_uuid:
+        setup_token_mappers(grm, api_uuid)
     setup_demo_users(grm)
     logger.info("Keycloak realm setup complete.")
 

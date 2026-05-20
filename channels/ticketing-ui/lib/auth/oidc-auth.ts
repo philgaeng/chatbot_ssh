@@ -1,33 +1,17 @@
 // PKCE-enabled OIDC client for Keycloak (drop-in replacement for CognitoAuthClient).
-// Same public interface — only endpoint URLs and PKCE handling change.
 
-export interface TokenPayload {
-  sub: string;
-  email: string;
-  email_verified: boolean;
-  name?: string;
-  "custom:grm_roles"?: string;       // comma-separated role keys
-  "custom:organization_id"?: string;
-  "custom:location_code"?: string;
-  [key: string]: unknown;
-}
+import {
+  TOKEN_STORAGE,
+  persistAuthTokens,
+  type AuthTokens,
+  type TokenPayload,
+} from "./token-storage";
 
-interface TokenResponse {
-  access_token: string;
-  id_token: string;
-  refresh_token?: string;
-  expires_in: number;
+export type { TokenPayload };
+
+interface TokenResponse extends AuthTokens {
   token_type: string;
 }
-
-const STORAGE = {
-  ACCESS_TOKEN:  "grm_access_token",
-  ID_TOKEN:      "grm_id_token",
-  REFRESH_TOKEN: "grm_refresh_token",
-  USER:          "grm_user",
-  STATE:         "grm_oauth_state",
-  CODE_VERIFIER: "grm_pkce_verifier",  // sessionStorage — ephemeral
-} as const;
 
 function rand(len: number): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -52,18 +36,9 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64urlEncode(new Uint8Array(digest));
 }
 
-function decodeJwt(token: string): TokenPayload | null {
-  try {
-    const payload = token.split(".")[1];
-    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-  } catch {
-    return null;
-  }
-}
-
 export class OIDCAuthClient {
   constructor(
-    private issuer: string,        // e.g. http://localhost:8080/realms/grm
+    private issuer: string,
     private clientId: string,
     private redirectUri: string,
     private scopes = ["email", "openid", "profile"],
@@ -71,10 +46,10 @@ export class OIDCAuthClient {
 
   async getAuthorizationUrl(): Promise<string> {
     const state = rand(32);
-    localStorage.setItem(STORAGE.STATE, state);
+    localStorage.setItem(TOKEN_STORAGE.STATE, state);
 
     const verifier = generateCodeVerifier();
-    sessionStorage.setItem(STORAGE.CODE_VERIFIER, verifier);
+    sessionStorage.setItem(TOKEN_STORAGE.CODE_VERIFIER, verifier);
     const challenge = await generateCodeChallenge(verifier);
 
     const p = new URLSearchParams({
@@ -93,12 +68,12 @@ export class OIDCAuthClient {
     code: string,
     state: string,
   ): Promise<{ user: TokenPayload; tokens: TokenResponse }> {
-    const stored = localStorage.getItem(STORAGE.STATE);
-    localStorage.removeItem(STORAGE.STATE);
-    if (state !== stored) throw new Error("State mismatch — possible CSRF attack");
+    const stored = localStorage.getItem(TOKEN_STORAGE.STATE);
+    localStorage.removeItem(TOKEN_STORAGE.STATE);
+    if (state !== stored) throw new Error("Sign-in session expired. Please try again from the sign-in page.");
 
-    const verifier = sessionStorage.getItem(STORAGE.CODE_VERIFIER) ?? "";
-    sessionStorage.removeItem(STORAGE.CODE_VERIFIER);
+    const verifier = sessionStorage.getItem(TOKEN_STORAGE.CODE_VERIFIER) ?? "";
+    sessionStorage.removeItem(TOKEN_STORAGE.CODE_VERIFIER);
 
     const resp = await fetch(`${this.issuer}/protocol/openid-connect/token`, {
       method: "POST",
@@ -113,36 +88,29 @@ export class OIDCAuthClient {
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error((err as Record<string, string>).error_description ?? "Token exchange failed");
+      throw new Error((err as Record<string, string>).error_description ?? "Token exchange failed. Please sign in again.");
     }
     const tokens: TokenResponse = await resp.json();
-    // Use id_token for user claims (access_token for API calls)
-    const user = decodeJwt(tokens.id_token);
-    if (!user) throw new Error("Failed to decode id_token");
-
-    localStorage.setItem(STORAGE.ACCESS_TOKEN, tokens.access_token);
-    localStorage.setItem(STORAGE.ID_TOKEN, tokens.id_token);
-    if (tokens.refresh_token) localStorage.setItem(STORAGE.REFRESH_TOKEN, tokens.refresh_token);
-    localStorage.setItem(STORAGE.USER, JSON.stringify(user));
+    const user = persistAuthTokens(tokens);
     return { user, tokens };
   }
 
   getCurrentUser(): TokenPayload | null {
-    const json = localStorage.getItem(STORAGE.USER);
+    const json = localStorage.getItem(TOKEN_STORAGE.USER);
     return json ? JSON.parse(json) : null;
   }
 
   getAccessToken(): string | null {
-    return localStorage.getItem(STORAGE.ACCESS_TOKEN);
+    return localStorage.getItem(TOKEN_STORAGE.ACCESS_TOKEN);
   }
 
   isAuthenticated(): boolean {
-    return !!localStorage.getItem(STORAGE.ACCESS_TOKEN);
+    return !!localStorage.getItem(TOKEN_STORAGE.ACCESS_TOKEN);
   }
 
   signOut(): void {
-    const idToken = localStorage.getItem(STORAGE.ID_TOKEN);
-    Object.values(STORAGE).forEach((k) => {
+    const idToken = localStorage.getItem(TOKEN_STORAGE.ID_TOKEN);
+    Object.values(TOKEN_STORAGE).forEach((k) => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });

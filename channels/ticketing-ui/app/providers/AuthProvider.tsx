@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { loginWithPasswordApi } from "@/lib/auth/auth-api";
+import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
 import { getUserPreferences, getMyProfile, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
 
@@ -120,6 +122,8 @@ export interface AuthContextValue {
   isSuperAdmin: boolean;
   signIn: () => void;
   signOut: () => void;
+  /** Email + password login (auth stack). Stores tokens and updates React state. */
+  loginWithPassword: (email: string, password: string) => Promise<void>;
   /** Bearer token for API calls (null in bypass mode) */
   accessToken: string | null;
   effectiveLang: "en" | "ne" | null;
@@ -290,9 +294,19 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(true);
       window.location.href = "/queue";
     } else {
-      window.location.href = await client!.getAuthorizationUrl();
+      window.location.href = "/login";
     }
   };
+
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    const tokens = await loginWithPasswordApi(email, password);
+    const u = persistAuthTokens(tokens);
+    rememberLoginEmail(email);
+    setUser(u);
+    setAccessToken(tokens.access_token);
+    setIsAuthenticated(true);
+    setError(null);
+  }, []);
 
   const signOut = () => {
     if (bypass) {
@@ -365,6 +379,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         isSuperAdmin,
         signIn,
         signOut,
+        loginWithPassword,
         accessToken,
         effectiveLang,
         bypassRoster,
