@@ -7,6 +7,7 @@ import { isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { createTask } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import type { TicketEvent, TicketTask, TaskCreateRequest } from "@/lib/api";
 
 // ── Task card ─────────────────────────────────────────────────────────────────
@@ -47,7 +48,10 @@ export function TaskCard({
   const description = (event.payload?.description as string) ?? "";
   const dueDate = event.payload?.due_date as string | undefined;
   const typeInfo = TASK_TYPES.find((t) => t.key === taskType);
-  const isAssignedToMe = assignedTo === currentUserId || assignedTo === "admin@grm.local";
+  const { user: authUser } = useAuth();
+  const isAssignedToMe = assigneeIsCurrentUser(assignedTo, authUser);
+  const assigneeLabel =
+    assigneeIsCurrentUser(assignedTo, authUser) ? "You" : assignedTo;
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
@@ -68,7 +72,7 @@ export function TaskCard({
       </div>
       <div className="px-3 pb-3 space-y-1">
         <div className="text-gray-600">
-          → <span className="font-medium">{assignedTo === currentUserId ? "You" : assignedTo}</span>
+          → <span className="font-medium">{assigneeLabel}</span>
         </div>
         {description && <div className="text-gray-700 italic">&ldquo;{description}&rdquo;</div>}
         <div className="text-xs text-gray-400">
@@ -78,13 +82,18 @@ export function TaskCard({
             ? ` · Done ${new Date(task.completed_at).toLocaleDateString()}`
             : ""}
         </div>
+        {isCompleted && isAssignedToMe && (
+          <div className="mt-2 w-full flex items-center justify-center gap-1 rounded-lg border border-green-200 bg-green-50 py-2 text-sm font-medium text-green-700">
+            <Check size={13} strokeWidth={2.5} />
+            Completed
+          </div>
+        )}
         {!isCompleted && isAssignedToMe && resolvedTask && (
           <button
             type="button"
             onClick={() => onComplete(resolvedTask)}
             className="mt-2 w-full bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
           >
-            <Check size={13} strokeWidth={2.5} className="inline mr-1" />
             {isSiteVisitTask(resolvedTask.task_type) ? "Complete visit" : "Mark complete"}
           </button>
         )}
@@ -111,7 +120,7 @@ export function AssignTaskSheet({
 }) {
   const { user } = useAuth();
   const [taskType, setTaskType] = useState("");
-  const [assignTo, setAssignTo] = useState(user?.sub ?? "");
+  const [assignTo, setAssignTo] = useState(canonicalUserId(user));
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
 

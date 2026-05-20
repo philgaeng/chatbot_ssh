@@ -23,6 +23,7 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
 import { isSiteVisitTask }                    from "@/lib/field-visit";
+import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
   type HashCommand,
@@ -128,11 +129,13 @@ function TranslationPanel({
 
 function FilesPanel({
   ticketId,
+  refreshKey,
   onBeforeDownload,
   isAssigned,
   onUpload,
 }: {
   ticketId: string;
+  refreshKey: number;
   onBeforeDownload: () => Promise<void>;
   isAssigned: boolean;
   onUpload: () => void;
@@ -157,7 +160,7 @@ function FilesPanel({
       setLoading(false);
     }
   }
-  useEffect(() => { loadFiles(); }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFiles(); }, [ticketId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmt = (bytes: number) =>
     bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -370,8 +373,6 @@ function ComplainantCard({
   const [pii, setPii]               = useState<GrievancePii | null>(null);
   const [piiLoading, setPiiLoading] = useState(false);
   const [piiError, setPiiError]     = useState<string | null>(null);
-  const [phoneRevealed, setPhoneRevealed]   = useState(false);
-  const [phoneRevealing, setPhoneRevealing] = useState(false);
   const [editOpen, setEditOpen]     = useState(false);
 
   function loadPii() {
@@ -384,13 +385,6 @@ function ComplainantCard({
   }
 
   useEffect(() => { loadPii(); }, [ticket.ticket_id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handlePhoneReveal() {
-    setPhoneRevealing(true);
-    await performAction(ticket.ticket_id, { action_type: "REVEAL_CONTACT" }).catch(() => {});
-    setPhoneRevealed(true);
-    setPhoneRevealing(false);
-  }
 
   function handleSaved() {
     loadPii();
@@ -426,25 +420,23 @@ function ComplainantCard({
           </div>
         ) : (
           <div className="text-xs space-y-1.5 text-gray-700">
-            {pii?.complainant_name && <div><span className="text-gray-400">Name:</span> {pii.complainant_name}</div>}
-            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-400">Phone:</span>
-              {phoneRevealed && pii?.phone_number ? (
-                <span className="font-mono">{pii.phone_number}</span>
-              ) : (
-                <>
-                  <span className="text-gray-300 font-mono">••••••••</span>
-                  <button onClick={handlePhoneReveal} disabled={phoneRevealing}
-                    className="text-blue-500 hover:text-blue-700 underline text-xs ml-0.5 disabled:opacity-50"
-                  >
-                    {phoneRevealing ? "…" : "Reveal"}
-                  </button>
-                </>
-              )}
+            <div>
+              <span className="text-gray-400">Name:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
             </div>
-            {pii?.email && <div><span className="text-gray-400">Email:</span> {pii.email}</div>}
-            {pii?.address && <div><span className="text-gray-400">Address:</span> {pii.address}</div>}
+            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
+            <div>
+              <span className="text-gray-400">Phone:</span>{" "}
+              <span className="text-gray-300 tracking-wide font-mono">{PII_MASK}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Email:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Address:</span>{" "}
+              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
+            </div>
             {(pii as GrievancePii & { municipality?: string })?.municipality && (
               <div><span className="text-gray-400">Municipality:</span> {(pii as GrievancePii & { municipality?: string }).municipality}</div>
             )}
@@ -661,9 +653,9 @@ function WorkflowCard({ currentStepKey, displayName }: {
 
 // ── Open tasks card ───────────────────────────────────────────────────────────
 
-function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
+function TasksCard({ tasks, user, onComplete, onAddTask }: {
   tasks: TicketTask[];
-  currentUserId: string;
+  user: ReturnType<typeof useAuth>["user"];
   onComplete: (task: TicketTask) => void;
   onAddTask?: () => void;
 }) {
@@ -698,7 +690,11 @@ function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
       <div className="space-y-2">
         {pending.map((task) => {
           const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
-          const isAssignedToMe = task.assigned_to_user_id === currentUserId || task.assigned_to_user_id === "admin@grm.local";
+          const isAssignedToMe = assigneeIsCurrentUser(task.assigned_to_user_id, user);
+          const assigneeLabel = assigneeIsCurrentUser(task.assigned_to_user_id, user)
+            ? "You"
+            : task.assigned_to_user_id;
+          const siteVisit = isSiteVisitTask(task.task_type);
           return (
             <div key={task.task_id} className="flex items-start gap-3 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
               <TaskTypeIcon name={typeInfo?.icon ?? "ClipboardList"} size={15} strokeWidth={2} className="shrink-0 text-amber-600" />
@@ -710,7 +706,7 @@ function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
                   <div className="text-xs text-gray-500 mt-0.5 truncate italic">&ldquo;{task.description}&rdquo;</div>
                 )}
                 <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-                  <span>→ {task.assigned_to_user_id === currentUserId ? "You" : task.assigned_to_user_id}</span>
+                  <span>→ {assigneeLabel}</span>
                   {task.due_date && <><span>·</span><span>Due {new Date(task.due_date).toLocaleDateString()}</span></>}
                 </div>
               </div>
@@ -718,10 +714,14 @@ function TasksCard({ tasks, currentUserId, onComplete, onAddTask }: {
                 <button
                   type="button"
                   onClick={() => onComplete(task)}
-                  className="shrink-0 text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 hover:bg-green-100 transition font-medium"
+                  className={
+                    siteVisit
+                      ? "shrink-0 text-[11px] text-white bg-amber-500 hover:bg-amber-600 rounded-lg px-2.5 py-1 transition font-medium"
+                      : "shrink-0 text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 hover:bg-green-100 transition font-medium"
+                  }
                 >
-                  <Check size={11} strokeWidth={2.5} className="inline mr-0.5" />
-                  {isSiteVisitTask(task.task_type) ? "Complete" : "Done"}
+                  {!siteVisit && <Check size={11} strokeWidth={2.5} className="inline mr-0.5" />}
+                  {siteVisit ? "Complete visit" : "Done"}
                 </button>
               )}
             </div>
@@ -769,6 +769,8 @@ export default function TicketDetailPage() {
   const [noteText, setNoteText]         = useState("");
   const [submitting, setSubmitting]     = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const [filesRefreshKey, setFilesRefreshKey] = useState(0);
+  const fieldVisitSubmitLock = useRef(false);
 
   // ── Top bar actions ────────────────────────────────────────────────────
   const [actLoading, setActLoading]     = useState(false);
@@ -818,6 +820,7 @@ export default function TicketDetailPage() {
       setSla(s);
       setTasks(tk);
       setAssignSelected(t.assigned_to_user_id ?? "");
+      setFilesRefreshKey((k) => k + 1);
       markSeen(id).catch(() => {});
     } catch (e) {
       setError(String(e));
@@ -835,8 +838,9 @@ export default function TicketDetailPage() {
   }, [showAssign]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const currentUserId = user?.sub ?? "admin@grm.local";
-  const isAssigned    = isAdmin || !ticket?.assigned_to_user_id || ticket?.assigned_to_user_id === user?.sub;
+  const currentUserId = canonicalUserId(user);
+  const isAssigned    = isAdmin || !ticket?.assigned_to_user_id
+    || assigneeIsCurrentUser(ticket.assigned_to_user_id, user);
 
   const status       = ticket?.status_code ?? "";
   const isClosed     = ["RESOLVED", "CLOSED"].includes(status);
@@ -866,7 +870,7 @@ export default function TicketDetailPage() {
       case "owner":       return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
       case "supervisor":  return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
       case "observers":   return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
-      case "tasks":       return ticket.events.filter((e) => TASK_EVENT_TYPES.has(e.event_type));
+      case "tasks":       return ticket.events.filter((e) => isThreadTaskEvent(e.event_type));
       case "complainant": return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
       case "system":      return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
       default:            return ticket.events;
@@ -967,11 +971,19 @@ export default function TicketDetailPage() {
   }, [id, load]);
 
   const submitFieldVisitReport = useCallback(async (note: string) => {
-    if (!fieldVisitTask) return;
+    if (!fieldVisitTask || fieldVisitSubmitLock.current) return;
+    fieldVisitSubmitLock.current = true;
     setFieldVisitSubmitting(true);
+    const taskId = fieldVisitTask.task_id;
     try {
       await performAction(id, { action_type: "FIELD_REPORT", note });
-      await completeTask(id, fieldVisitTask.task_id);
+      try {
+        await completeTask(id, taskId);
+      } catch (completeErr) {
+        const refreshed = await listTicketTasks(id).catch(() => [] as TicketTask[]);
+        const t = refreshed.find((x) => x.task_id === taskId);
+        if (t?.status !== "DONE") throw completeErr;
+      }
       setFieldVisitTask(null);
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -980,6 +992,7 @@ export default function TicketDetailPage() {
       alert("Could not save the field visit report. Please try again.");
       throw e;
     } finally {
+      fieldVisitSubmitLock.current = false;
       setFieldVisitSubmitting(false);
     }
   }, [fieldVisitTask, id, load]);
@@ -1328,7 +1341,7 @@ export default function TicketDetailPage() {
                   const isMine = event.created_by_user_id === currentUserId;
                   if (SYSTEM_EVENT_TYPES.has(event.event_type))
                     return <SystemPill key={event.event_id} event={event} />;
-                  if (TASK_EVENT_TYPES.has(event.event_type))
+                  if (isThreadTaskEvent(event.event_type))
                     return (
                       <TaskCard
                         key={event.event_id}
@@ -1378,7 +1391,7 @@ export default function TicketDetailPage() {
             )}
             <TasksCard
               tasks={tasks}
-              currentUserId={currentUserId}
+              user={user}
               onComplete={handleCompleteTask}
               onAddTask={() => setShowAssignTask(true)}
             />
@@ -1415,6 +1428,7 @@ export default function TicketDetailPage() {
             <ComplainantCard ticket={ticket} onRevealOriginal={() => setRevealModalOpen(true)} onComplainantUpdated={load} />
             <FilesPanel
               ticketId={ticket.ticket_id}
+              refreshKey={filesRefreshKey}
               onBeforeDownload={ensureAcknowledged}
               isAssigned={isAssigned}
               onUpload={load}

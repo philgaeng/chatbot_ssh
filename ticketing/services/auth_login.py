@@ -55,6 +55,28 @@ def _issuer() -> str:
     return issuer
 
 
+def _keycloak_realm_base() -> str:
+    """
+    Keycloak realm URL reachable from the ticketing API container.
+
+    JWT verification uses `keycloak_issuer` (browser-facing `iss` claim). Token
+    exchange must use Docker-internal DNS — same pattern as KEYCLOAK_JWKS_URL.
+    """
+    settings = get_settings()
+    if settings.keycloak_token_issuer:
+        return settings.keycloak_token_issuer.rstrip("/")
+
+    jwks = (settings.keycloak_jwks_url or "").strip()
+    if jwks and "/protocol/openid-connect/" in jwks:
+        return jwks.split("/protocol/openid-connect/", 1)[0].rstrip("/")
+
+    admin = (settings.keycloak_admin_url or "").rstrip("/")
+    if admin:
+        return f"{admin}/realms/grm"
+
+    return _issuer()
+
+
 def _api_client_secret() -> str:
     settings = get_settings()
     if settings.keycloak_client_secret:
@@ -92,9 +114,9 @@ def login_with_password(email: str, password: str) -> dict[str, Any]:
     if not normalized or "@" not in normalized:
         raise AuthLoginError("invalid_email", "Enter a valid email address.", 422)
 
-    issuer = _issuer()
+    realm_base = _keycloak_realm_base()
     settings = get_settings()
-    token_url = f"{issuer}/protocol/openid-connect/token"
+    token_url = f"{realm_base}/protocol/openid-connect/token"
 
     try:
         resp = httpx.post(

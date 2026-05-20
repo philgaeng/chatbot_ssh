@@ -158,8 +158,13 @@ services:
     ports:
       # Host :80 is often taken by another stack; use 8080 for local REST webchat.
       - "8080:80"
+    # Mount as a named conf file (not default.conf) — Docker Desktop WSL can cache a
+    # stale directory at the default.conf bind target if the source was missing once.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - rm -f /etc/nginx/conf.d/default.conf && exec /docker-entrypoint.sh nginx -g 'daemon off;'
     volumes:
-      - ./deployment/nginx/webchat_rest_compose_wsl.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deployment/nginx/webchat_rest_compose_wsl.conf:/etc/nginx/conf.d/webchat_rest_compose_wsl.conf:ro
       - ./channels/REST_webchat:/app/channels/REST_webchat:ro
       - ./channels/shared:/app/channels/shared:ro
     depends_on:

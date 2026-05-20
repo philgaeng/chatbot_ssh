@@ -27,6 +27,8 @@ class TicketingSettings(BaseSettings):
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
     messaging_api_key: str = ""
+    # Same key as chatbot backend — used only to decrypt vault fields for reveal broker.
+    db_encryption_key: str = ""
     # User-facing webchat URL — embedded in QR codes so complainants reach the chatbot.
     # Override via CHATBOT_WEBCHAT_URL env var in production.
     chatbot_webchat_url: str = "https://grm.facets-ai.com/chat"
@@ -39,6 +41,9 @@ class TicketingSettings(BaseSettings):
     # the browser-facing issuer is unreachable from the backend container (e.g. local
     # dev with KC on a host port) — point this at the Docker-internal Keycloak URL.
     keycloak_jwks_url: str = ""         # e.g. http://keycloak:8080/realms/grm/protocol/openid-connect/certs
+    # Server-side token endpoint base (Docker-internal). When empty, derived from
+    # keycloak_jwks_url or keycloak_admin_url — not from keycloak_issuer (browser URL).
+    keycloak_token_issuer: str = ""
     keycloak_client_id: str = "ticketing-api"   # confidential client for JWT audience check
     keycloak_client_secret: str = ""    # optional; fetched from Keycloak admin if empty
     keycloak_admin_url: str = ""        # e.g. http://keycloak:8080 (no trailing slash)

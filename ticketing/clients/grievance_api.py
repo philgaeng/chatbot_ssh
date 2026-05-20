@@ -141,6 +141,7 @@ def begin_reveal_session(
     reason_text: str = "",
     actor_id: str = "",
     case_sensitivity: str = "standard",
+    fallback_grievance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Open a short-lived vault reveal session for a grievance.
@@ -161,11 +162,25 @@ def begin_reveal_session(
     import uuid as _uuid
     from datetime import datetime, timezone, timedelta
 
+    grievance: dict[str, Any] | None = None
     try:
         detail = get_grievance_detail(grievance_id)
+        grievance = (detail.get("data") or {}).get("grievance") or {}
     except Exception as exc:
         logger.warning("begin_reveal_session: backend unavailable — %s", exc)
-        return {"granted": False, "deny_code": f"backend_unavailable: {exc}"}
+
+    if not grievance and fallback_grievance:
+        logger.info(
+            "begin_reveal_session: using ticket demo fallback for %s",
+            grievance_id,
+        )
+        grievance = fallback_grievance
+
+    if not grievance:
+        return {
+            "granted": False,
+            "deny_code": "backend_unavailable: grievance not found and no fallback",
+        }
 
     ttl = _REVEAL_TTL.get(case_sensitivity, 120)
     session_id = str(_uuid.uuid4())
@@ -173,24 +188,15 @@ def begin_reveal_session(
     ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     watermark_text = f"{actor_id} · {ts_str} · case:{grievance_id}"
 
-    # Unwrap the API envelope:
-    #   detail = {"status": "SUCCESS", "data": {"grievance": {...}, ...}}
-    # The real reveal API will return a content_token instead; for proto we embed
-    # the content directly with field names mapped to what VaultReveal.tsx expects.
-    grievance = (detail.get("data") or {}).get("grievance") or {}
+    # Unwrap the API envelope when loaded from backend; demo fallback is already flat.
+    from ticketing.services.pii_vault import grievance_reveal_content
 
     return {
         "granted": True,
         "reveal_session_id": session_id,
         "expires_at_utc": expires_at.isoformat(),
         "ttl_seconds": ttl,
-        "content": {
-            "grievance_description": grievance.get("grievance_description"),
-            "complainant_name":      grievance.get("complainant_full_name"),
-            "phone_number":          grievance.get("complainant_phone"),
-            "email":                 grievance.get("complainant_email"),
-            "address":               grievance.get("complainant_address"),
-        },
+        "content": grievance_reveal_content(grievance),
         "watermark_text": watermark_text,
         "_proto_mode": True,
     }

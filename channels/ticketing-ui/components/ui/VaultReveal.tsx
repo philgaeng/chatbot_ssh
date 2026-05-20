@@ -24,6 +24,7 @@ import {
   type RevealSession,
 } from "@/lib/api";
 import { IconLock, IconReveal, IconClose, IconEscalated } from "@/lib/icons";
+import { displayRevealedPii } from "@/lib/pii-display";
 
 // ── RevealModal ───────────────────────────────────────────────────────────────
 
@@ -320,7 +321,7 @@ export function RevealOverlay({
                 Original Statement
               </div>
               <div className="text-sm text-gray-800 leading-relaxed bg-gray-50 rounded-lg p-4 border border-gray-200">
-                {String(content.grievance_description)}
+                {displayRevealedPii(content.grievance_description)}
               </div>
             </div>
           ) : (
@@ -339,25 +340,25 @@ export function RevealOverlay({
                 {content.complainant_name && (
                   <div>
                     <span className="text-gray-400">Name: </span>
-                    <span className="text-gray-800">{String(content.complainant_name)}</span>
+                    <span className="text-gray-800">{displayRevealedPii(content.complainant_name)}</span>
                   </div>
                 )}
                 {content.phone_number && (
                   <div>
                     <span className="text-gray-400">Phone: </span>
-                    <span className="text-gray-800 font-mono">{String(content.phone_number)}</span>
+                    <span className="text-gray-800 font-mono">{displayRevealedPii(content.phone_number)}</span>
                   </div>
                 )}
                 {content.email && (
                   <div>
                     <span className="text-gray-400">Email: </span>
-                    <span className="text-gray-800">{String(content.email)}</span>
+                    <span className="text-gray-800">{displayRevealedPii(content.email)}</span>
                   </div>
                 )}
                 {content.address && (
                   <div>
                     <span className="text-gray-400">Address: </span>
-                    <span className="text-gray-800">{String(content.address)}</span>
+                    <span className="text-gray-800">{displayRevealedPii(content.address)}</span>
                   </div>
                 )}
               </div>
