@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { defaultQueuePath } from "@/lib/mobile-routes";
 
 function AuthCallbackContent() {
   const { isLoading, error, isAuthenticated } = useAuth();
@@ -14,7 +15,7 @@ function AuthCallbackContent() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace("/queue");
+      router.replace(defaultQueuePath());
     }
   }, [isAuthenticated, router]);
 

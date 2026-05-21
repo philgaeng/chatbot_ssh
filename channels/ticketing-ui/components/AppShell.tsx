@@ -12,6 +12,14 @@ import {
   IconBell, IconSignOut, IconLock,
 } from "@/lib/icons";
 import { UserMenu } from "@/components/UserMenu";
+import {
+  defaultQueuePath,
+  isMobileViewport,
+  isPublicRoute,
+  ticketDetailPath,
+  toDesktopPath,
+  toMobilePath,
+} from "@/lib/mobile-routes";
 
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
@@ -24,14 +32,6 @@ const NAV = [
   { href: "/settings",  label: "Settings",    Icon: IconSettings,   badge: null, adminOnly: true },
   { href: "/help",      label: "Help",        Icon: IconHelp,       badge: null        },
 ] as const;
-
-// Routes that don't require authentication
-const PUBLIC_ROUTES = ["/login", "/auth/callback"];
-const PUBLIC_ROUTE_PREFIXES = ["/login/"];
-
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.includes(pathname) || PUBLIC_ROUTE_PREFIXES.some((p) => pathname.startsWith(p));
-}
 
 // ── Mobile bottom tab nav ─────────────────────────────────────────────────────
 
@@ -154,7 +154,7 @@ function NotificationPanel({
 
   function go(ticketId: string) {
     onClose();
-    router.push(`/tickets/${ticketId}`);
+    router.push(ticketDetailPath(ticketId));
   }
 
   return (
@@ -209,7 +209,7 @@ function NotificationPanel({
       {total > items.length && (
         <div className="border-t border-gray-100 px-4 py-2 text-center">
           <button
-            onClick={() => { onClose(); router.push("/queue"); }}
+            onClick={() => { onClose(); router.push(defaultQueuePath()); }}
             className="text-xs text-blue-600 hover:underline"
           >
             + {total - items.length} more — go to queue
@@ -441,15 +441,46 @@ function MobileShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Viewport sync — desktop ↔ mobile route pairs ─────────────────────────────
+
+function ViewportRouteSync() {
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isPublicRoute(pathname)) return;
+
+    function sync() {
+      const search = window.location.search;
+      const mobile = isMobileViewport();
+      const target = mobile ? toMobilePath(pathname, search) : toDesktopPath(pathname, search);
+      if (!target) return;
+      const current = pathname + search;
+      if (target !== current) router.replace(target);
+    }
+
+    sync();
+    const mq = window.matchMedia(`(max-width: 767px)`);
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, [pathname, router]);
+
+  return null;
+}
+
 // ── Root shell — routes to mobile or desktop ──────────────────────────────────
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // All /m/* routes use the mobile shell
-  if (pathname.startsWith("/m")) {
-    return <MobileShell>{children}</MobileShell>;
-  }
-
-  return <DesktopShell>{children}</DesktopShell>;
+  return (
+    <>
+      <ViewportRouteSync />
+      {pathname.startsWith("/m") ? (
+        <MobileShell>{children}</MobileShell>
+      ) : (
+        <DesktopShell>{children}</DesktopShell>
+      )}
+    </>
+  );
 }

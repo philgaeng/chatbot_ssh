@@ -8,6 +8,7 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { AuthApiError, requestPasswordResetApi } from "@/lib/auth/auth-api";
 import { SESSION_EXPIRED_QUERY } from "@/lib/auth/session-expired";
 import { readRememberedLoginEmail, rememberLoginEmail } from "@/lib/auth/token-storage";
+import { defaultQueuePath } from "@/lib/mobile-routes";
 
 type Step = "email" | "password" | "forgot" | "forgot-sent";
 
@@ -40,7 +41,7 @@ function LoginContent() {
   const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace("/queue");
+    if (isAuthenticated) router.replace(defaultQueuePath());
   }, [isAuthenticated, router]);
 
   useEffect(() => {
@@ -76,7 +77,7 @@ function LoginContent() {
     setError(null);
     try {
       await loginWithPassword(normalizeEmail(email), password);
-      router.replace("/queue");
+      router.replace(defaultQueuePath());
     } catch (err) {
       if (err instanceof AuthApiError) {
         setError(err.message);
