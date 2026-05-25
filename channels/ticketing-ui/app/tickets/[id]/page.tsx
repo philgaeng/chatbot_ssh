@@ -23,6 +23,8 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
+import { ResolutionSheet }                    from "@/components/ResolutionSheet";
+import type { ResolutionCategoryCode }        from "@/lib/resolution";
 import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
 import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
@@ -34,7 +36,7 @@ import {
   type HashCommand,
 } from "@/lib/mobile-constants";
 import {
-  IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene, IconGrcDecide,
+  IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene,
   IconReply, IconTask, IconAssign, IconTranslations,
   IconEdit, IconActiveSession, IconExpiredSession, IconRevealStatement,
   IconFileImage, IconFilePdf, IconFileOther, IconUpload,
@@ -779,6 +781,7 @@ export default function TicketDetailPage() {
 
   // ── Top bar actions ────────────────────────────────────────────────────
   const [actLoading, setActLoading]     = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
   const [showReply, setShowReply]       = useState(false);
   const [replyText, setReplyText]       = useState("");
   const [showAssign, setShowAssign]     = useState(false);
@@ -787,7 +790,6 @@ export default function TicketDetailPage() {
   const [savingAssign, setSavingAssign] = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
   const [grcHearingDate, setGrcHearingDate] = useState("");
-  const [grcDecision, setGrcDecision]   = useState<"RESOLVED" | "ESCALATE_TO_LEGAL">("RESOLVED");
 
   // ── Translation panel ──────────────────────────────────────────────────
   const PANEL_KEY = "grm_translation_panel_open";
@@ -906,6 +908,21 @@ export default function TicketDetailPage() {
     try {
       if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
       await performAction(id, { action_type, ...extra });
+      await load();
+    } catch (e) { alert(String(e)); }
+    finally { setActLoading(false); }
+  }
+
+  async function submitResolve(category: ResolutionCategoryCode, note: string) {
+    setActLoading(true);
+    try {
+      await ensureAcknowledged();
+      await performAction(id, {
+        action_type: "RESOLVE",
+        resolution_category: category,
+        note,
+      });
+      setResolutionOpen(false);
       await load();
     } catch (e) { alert(String(e)); }
     finally { setActLoading(false); }
@@ -1126,35 +1143,17 @@ export default function TicketDetailPage() {
                   Acknowledge
                 </button>
               )}
-              {!isOpen && !isEscalated && !isGrcHearing && (
+              {!isOpen && !isEscalated && (
                 <>
                   <button onClick={() => act("ESCALATE")} disabled={actLoading}
                     className={`${btnBase} inline-flex items-center gap-1.5 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
                     <IconEscalateAction size={15} strokeWidth={2} />
                     Escalate
                   </button>
-                  <button onClick={() => act("RESOLVE")} disabled={actLoading}
-                    className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
+                  <button onClick={() => setResolutionOpen(true)} disabled={actLoading}
+                    className={`${btnBase} inline-flex items-center gap-1.5 bg-green-600 text-white hover:bg-green-700`}>
                     <IconResolve size={15} strokeWidth={2} />
                     Resolve
-                  </button>
-                  <button onClick={() => act("CLOSE")} disabled={actLoading}
-                    className={`${btnBase} border border-red-200 text-red-600 hover:bg-red-50`}>
-                    Close
-                  </button>
-                </>
-              )}
-              {isGrcChair && isGrcHearing && (
-                <>
-                  <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
-                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400">
-                    <option value="RESOLVED">Decision: Resolved</option>
-                    <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
-                  </select>
-                  <button onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })} disabled={actLoading}
-                    className={`${btnBase} inline-flex items-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700`}>
-                    <IconGrcDecide size={15} strokeWidth={2} />
-                    GRC Decide
                   </button>
                 </>
               )}
@@ -1502,6 +1501,13 @@ export default function TicketDetailPage() {
           onAssigned={() => { setShowAssignTask(false); load(); }}
         />
       )}
+
+      <ResolutionSheet
+        open={resolutionOpen}
+        onClose={() => setResolutionOpen(false)}
+        onSubmit={submitResolve}
+        submitting={actLoading}
+      />
 
     </div>
   );

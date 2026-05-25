@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
+import { ResolutionSheet }                   from "@/components/ResolutionSheet";
+import type { ResolutionCategoryCode }       from "@/lib/resolution";
 import { SystemPill }                         from "@/components/thread/SystemPill";
 import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard";
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
@@ -117,7 +119,6 @@ function InfoMenuSheet({
   const fieldReportCount   = (ticket.events ?? []).filter(
     (e) => e.payload && (e.payload as Record<string, unknown>).is_field_report
   ).length;
-
   const items: Array<{ key: InfoPanel; label: string; Icon: React.ElementType; badge?: number }> = [
     { key: "tasks",        label: "Tasks",               Icon: ClipboardCheck, badge: pendingTaskCount || undefined },
     { key: "grievance",    label: "Original Grievance",  Icon: BookOpen },
@@ -527,13 +528,6 @@ function MoreActionsSheet({
             <ClipboardList size={22} strokeWidth={1.8} className="text-blue-500 shrink-0" />
             <span className="text-base text-gray-800">Assign a task</span>
           </button>
-          {canEscalate && (
-            <button onClick={() => { onAction("CLOSE"); onClose(); }}
-              className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
-              <Lock size={22} strokeWidth={1.8} className="text-red-400 shrink-0" />
-              <span className="text-base text-red-600">Close without resolve</span>
-            </button>
-          )}
         </div>
         <div className="border-t border-gray-100 px-6 py-4">
           <button onClick={onClose} className="w-full text-sm font-medium text-gray-500 text-center">Cancel</button>
@@ -549,10 +543,12 @@ function PrimaryCtaBar({
   ticket,
   onAction,
   onMore,
+  onOpenResolve,
 }: {
   ticket: TicketDetail;
   onAction: (type: string) => void;
   onMore: () => void;
+  onOpenResolve: () => void;
 }) {
   const { status_code } = ticket;
 
@@ -580,7 +576,7 @@ function PrimaryCtaBar({
 
   return (
     <div className="flex gap-2 px-4 py-2">
-      <button onClick={() => onAction("RESOLVE")}
+      <button onClick={onOpenResolve}
         className="flex-1 bg-green-600 active:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm">
         <Flag size={15} strokeWidth={2} className="inline mr-1.5" />Resolve
       </button>
@@ -619,6 +615,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [infoPanel, setInfoPanel]         = useState<InfoPanel | null>(null);
   const [showMore, setShowMore]           = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -724,6 +721,26 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       setSubmitting(false);
     }
   }, [ticket, ticketId, loadTicket]);
+
+  const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
+    if (!ticket) return;
+    setSubmitting(true);
+    try {
+      await ensureAcknowledged();
+      await performAction(ticketId, {
+        action_type: "RESOLVE",
+        resolution_category: category,
+        note,
+      });
+      setResolutionOpen(false);
+      await loadTicket();
+    } catch (e) {
+      console.error("Resolve failed", e);
+      alert(String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ticket, ticketId, loadTicket, ensureAcknowledged]);
 
   const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
     setFieldReportLinkedTask(linkedTask ?? null);
@@ -972,7 +989,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
       {/* ── Fixed bottom bar ──────────────────────────────────────────────── */}
       <div className={`flex-shrink-0 bg-white border-t pb-safe-bottom ${fieldReportOpen ? "border-amber-200" : "border-gray-200"}`}>
-        <PrimaryCtaBar ticket={ticket} onAction={handleAction} onMore={() => setShowMore(true)} />
+        <PrimaryCtaBar
+          ticket={ticket}
+          onAction={handleAction}
+          onMore={() => setShowMore(true)}
+          onOpenResolve={() => setResolutionOpen(true)}
+        />
         <FieldReportComposeCard
           open={fieldReportOpen}
           defaultLocation={ticket.grievance_location}
@@ -1049,6 +1071,13 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onAssigned={async () => { setShowAssignTask(false); await loadTicket(); }}
         />
       )}
+
+      <ResolutionSheet
+        open={resolutionOpen}
+        onClose={() => setResolutionOpen(false)}
+        onSubmit={submitResolve}
+        submitting={submitting}
+      />
 
     </div>
   );

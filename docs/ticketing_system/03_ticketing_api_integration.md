@@ -19,6 +19,8 @@ The chatbot (or its backend) calls the **Ticketing API** to create and update ti
 
 The ticketing system may store a copy of key grievance fields or only the reference; when details are needed (e.g. for approval UI), it can fetch from the Backend Grievance API (see below) if that is the chosen design.
 
+**Officer actions on an existing ticket:** `POST /api/v1/tickets/{ticket_id}/actions` — see [11_ticket_resolution_and_case_summary.md](11_ticket_resolution_and_case_summary.md) for the planned **resolution record** (`RESOLVE` + `is_resolution_record`) and **resolved case summary** (`GET …/resolved-summary`).
+
 ### 1.2 Update ticket (optional)
 
 - **When**: Grievance updated (e.g. status change, additional details).

@@ -12,6 +12,7 @@ from .project_type import ProjectType
 from .package import ProjectPackage, PackageOrganization, PackageLocation
 from .settings import Settings
 from .ticket_context_cache import TicketContextCache
+from .ticket_resolved_summary import TicketResolvedSummary
 from .ticket_viewer import TicketViewer
 from .admin_audit_log import AdminAuditLog
 
@@ -42,6 +43,7 @@ __all__ = [
     "PackageLocation",
     "Settings",
     "TicketContextCache",
+    "TicketResolvedSummary",
     "TicketViewer",
     "AdminAuditLog",
 ]

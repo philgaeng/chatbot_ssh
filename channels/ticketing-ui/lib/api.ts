@@ -269,9 +269,23 @@ export function markSeen(id: string): Promise<void> {
 export interface ActionPayload {
   action_type: string;
   note?: string;
+  resolution_category?: string;
   assign_to_user_id?: string;
   grc_hearing_date?: string;
-  grc_decision?: string;
+}
+
+export interface ResolvedSummaryResponse {
+  ticket_id: string;
+  grievance_id: string;
+  generation_status: string;
+  closure_public_url: string | null;
+  summary_json: Record<string, unknown>;
+  summary_public_json: Record<string, unknown> | null;
+  primary_language: string;
+}
+
+export function getResolvedSummary(ticketId: string): Promise<ResolvedSummaryResponse> {
+  return apiFetch<ResolvedSummaryResponse>(`/api/v1/tickets/${ticketId}/resolved-summary`);
 }
 
 export function performAction(id: string, payload: ActionPayload): Promise<ActionResponse> {

@@ -8,8 +8,8 @@ Officer UI (JWT auth — stub for proto):
   GET    /api/v1/tickets                      — list tickets (filtered)
   GET    /api/v1/tickets/{ticket_id}          — ticket detail + event history
   PATCH  /api/v1/tickets/{ticket_id}          — assign / change priority
-  POST   /api/v1/tickets/{ticket_id}/actions  — acknowledge / escalate / resolve / close /
-                                               note / grc_convene / grc_decide
+  POST   /api/v1/tickets/{ticket_id}/actions  — acknowledge / escalate / resolve /
+                                               note / field_report / grc_convene
   POST   /api/v1/tickets/{ticket_id}/reply    — send message to complainant
   POST   /api/v1/tickets/{ticket_id}/seen     — mark unseen events as read (badge)
   GET    /api/v1/tickets/{ticket_id}/sla      — SLA status for UI countdown
@@ -52,14 +52,25 @@ from ticketing.api.schemas.ticket import (
     AddInformedResponse,
     ReplyOwnerRequest,
 )
-from ticketing.clients.grievance_api import patch_complainant
+from ticketing.clients.grievance_api import patch_complainant, update_grievance_status
+from ticketing.constants.resolution import (
+    format_resolution_note,
+    resolution_category_label,
+    validate_resolution_category,
+    validate_resolution_note,
+)
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.engine.escalation import (
-    convene_grc, escalate_ticket, grc_decide,
+    convene_grc, escalate_ticket,
     _apply_step_tier_roles, _ensure_viewer,
 )
 from ticketing.tasks.notifications import notify_complainant
-from ticketing.tasks.llm import generate_findings, translate_note
+from ticketing.tasks.llm import (
+    generate_findings,
+    generate_resolved_case_summary,
+    translate_note,
+)
+from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
 from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status
 from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
@@ -173,6 +184,18 @@ def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
         select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
     ).scalars().all()
     return [v.user_id for v in viewers]
+
+
+def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
+    """Assignee, admin, or current step supervisor may resolve (spec §2.1 Q1-b)."""
+    if current_user.is_admin:
+        return True
+    if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
+        return True
+    step = get_current_step(ticket, db)
+    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
+        return True
+    return False
 
 
 def _auto_acknowledge_if_assigned_actor(
@@ -803,8 +826,8 @@ def patch_ticket_complainant(
 # ─── POST /tickets/{ticket_id}/actions — officer actions ─────────────────────
 
 VALID_ACTIONS = {
-    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "NOTE", "FIELD_REPORT",
-    "GRC_CONVENE", "GRC_DECIDE",
+    "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "NOTE", "FIELD_REPORT",
+    "GRC_CONVENE",
 }
 
 @router.post(
@@ -815,11 +838,9 @@ VALID_ACTIONS = {
         "**action_type** values:\n"
         "- `ACKNOWLEDGE` — officer takes ownership, starts SLA clock\n"
         "- `ESCALATE` — manual escalation to next workflow step\n"
-        "- `RESOLVE` — mark ticket resolved\n"
-        "- `CLOSE` — close without resolution\n"
+        "- `RESOLVE` — mark ticket resolved (resolution record — see spec §2)\n"
         "- `NOTE` — add internal officer note (invisible to complainant)\n"
         "- `GRC_CONVENE` — GRC chair schedules hearing, notifies all GRC members\n"
-        "- `GRC_DECIDE` — GRC chair records decision (`payload.decision`: RESOLVED | ESCALATE_TO_LEGAL)\n"
     ),
 )
 def perform_action(
@@ -843,9 +864,20 @@ def perform_action(
 
     # Assignment guard — only the assigned officer (or admin) may change ticket status.
     # NOTE is always allowed so any officer can add internal notes.
-    ASSIGNMENT_REQUIRED = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "CLOSE", "GRC_CONVENE", "GRC_DECIDE"}
+    ASSIGNMENT_REQUIRED = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "GRC_CONVENE"}
     if action in ASSIGNMENT_REQUIRED and not current_user.is_admin:
-        if ticket.assigned_to_user_id and ticket.assigned_to_user_id != current_user.user_id:
+        if action == "RESOLVE":
+            if not _can_resolve_ticket(db, ticket, current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only the assigned officer, step supervisor, or an admin "
+                        "can resolve this ticket."
+                    ),
+                )
+        elif ticket.assigned_to_user_id and not current_user.matches_assignee(
+            ticket.assigned_to_user_id
+        ):
             raise HTTPException(
                 status_code=403,
                 detail=(
@@ -856,7 +888,7 @@ def perform_action(
 
     # Status guard — once ESCALATED only ACKNOWLEDGE or NOTE are allowed until
     # the next-level officer acknowledges and takes ownership.
-    ESCALATED_BLOCKED = {"ESCALATE", "RESOLVE", "CLOSE", "GRC_CONVENE", "GRC_DECIDE"}
+    ESCALATED_BLOCKED = {"ESCALATE", "RESOLVE", "GRC_CONVENE"}
     if ticket.status_code == "ESCALATED" and action in ESCALATED_BLOCKED:
         raise HTTPException(
             status_code=422,
@@ -871,7 +903,9 @@ def perform_action(
     event = None
     _notify_complainant_text: Optional[str] = None  # set below to trigger async notification
     _translate_note_event_id: Optional[str] = None  # set for NOTE action → translate_note task
-    _generate_findings: bool = False                 # set for RESOLVE → generate_findings task
+    _generate_findings: bool = False
+    _generate_resolved_summary: bool = False
+    _translate_resolution_event_id: Optional[str] = None
 
     if action == "ACKNOWLEDGE":
         ticket.status_code = "IN_PROGRESS"
@@ -909,38 +943,71 @@ def perform_action(
         )
 
     elif action == "RESOLVE":
+        if ticket.status_code in ("RESOLVED", "CLOSED"):
+            raise HTTPException(status_code=422, detail="Ticket is already resolved.")
+        try:
+            category = validate_resolution_category(payload.resolution_category)
+            officer_text = validate_resolution_note(payload.note)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
+        formatted_note = format_resolution_note(category, officer_text)
+        resolution_event = _add_event(
+            db,
+            ticket,
+            "NOTE_ADDED",
+            step_id=event_step_id,
+            note=formatted_note,
+            payload={
+                "internal": True,
+                "is_resolution_record": True,
+                "resolution_category": category,
+            },
+            created_by=current_user.user_id,
+            seen=True,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
+        )
+        _translate_resolution_event_id = resolution_event.event_id
+
         ticket.status_code = "RESOLVED"
         ticket.updated_by_user_id = current_user.user_id
+        cat_label = resolution_category_label(category)
         event = _add_event(
-            db, ticket, "RESOLVED",
-            old_status=old_status, new_status="RESOLVED",
+            db,
+            ticket,
+            "RESOLVED",
+            old_status=old_status,
+            new_status="RESOLVED",
             step_id=event_step_id,
-            note=payload.note,
+            note=f"Case resolved — {cat_label}",
+            payload={
+                "resolution_category": category,
+                "resolution_event_id": resolution_event.event_id,
+            },
             created_by=current_user.user_id,
             seen=True,
             actor_role=_actor_role(current_user),
             summary_regen_required=True,
         )
+        try:
+            update_grievance_status(
+                ticket.grievance_id,
+                "RESOLVED",
+                note=officer_text[:500],
+            )
+        except Exception as exc:
+            logger.warning(
+                "update_grievance_status failed ticket_id=%s: %s", ticket_id, exc
+            )
         _notify_complainant_text = (
             "Your grievance has been resolved. "
-            "Thank you for bringing this to our attention."
+            "Thank you for bringing this to our attention. "
+            "A detailed outcome letter will be sent shortly."
         )
-        # Fire findings generation after commit (7b — AI summary for supervisors/GRC)
         _generate_findings = True
-
-    elif action == "CLOSE":
-        ticket.status_code = "CLOSED"
-        ticket.updated_by_user_id = current_user.user_id
-        event = _add_event(
-            db, ticket, "CLOSED",
-            old_status=old_status, new_status="CLOSED",
-            step_id=event_step_id,
-            note=payload.note,
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
+        _generate_resolved_summary = True
 
     elif action == "NOTE":
         if not payload.note:
@@ -1020,16 +1087,6 @@ def perform_action(
         )
         event = events[0]  # first event is the CONVENED event
 
-    elif action == "GRC_DECIDE":
-        decision = getattr(payload, "grc_decision", None) or "RESOLVED"
-        event = grc_decide(
-            ticket, db,
-            decision=decision.upper(),
-            note=payload.note,
-            decided_by_user_id=current_user.user_id,
-            actor_role=_actor_role(current_user),
-        )
-
     db.commit()
     db.refresh(ticket)
 
@@ -1049,6 +1106,10 @@ def perform_action(
     # Fire findings generation on RESOLVE (7b — AI summary for GRC/supervisors)
     if _generate_findings:
         _enqueue_celery(generate_findings, ticket.ticket_id)
+    if _translate_resolution_event_id:
+        _enqueue_celery(translate_note, _translate_resolution_event_id)
+    if _generate_resolved_summary:
+        _enqueue_celery(generate_resolved_case_summary, ticket.ticket_id)
 
     return TicketActionResponse(
         ticket_id=ticket.ticket_id,
@@ -1723,6 +1784,60 @@ def get_ticket_pii(
         "grievance_id": ticket.grievance_id,
         **grievance_pii_masked(grievance),
     }
+
+
+# ─── Resolved case summary (closure document) ─────────────────────────────────
+
+@router.get("/tickets/{ticket_id}/resolved-summary")
+def get_resolved_summary(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    row = db.get(TicketResolvedSummary, ticket_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Resolved summary not found")
+    return {
+        "ticket_id": ticket_id,
+        "grievance_id": row.grievance_id,
+        "generation_status": row.generation_status,
+        "generation_model": row.generation_model,
+        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+        "closure_public_url": row.closure_public_url,
+        "summary_json": row.summary_json,
+        "summary_public_json": row.summary_public_json,
+        "summary_text_primary": row.summary_text_primary,
+        "primary_language": row.primary_language,
+    }
+
+
+@router.post(
+    "/tickets/{ticket_id}/resolved-summary",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def trigger_resolved_summary(
+    ticket_id: str,
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+    has_findings_role = current_user.is_admin or bool(
+        set(current_user.role_keys) & _FINDINGS_ROLES
+    )
+    if not has_findings_role:
+        raise HTTPException(status_code=403, detail="Supervisor role required")
+    _enqueue_celery(generate_resolved_case_summary, ticket_id, force=force)
+    return {"ticket_id": ticket_id, "status": "queued"}
 
 
 # ─── POST /tickets/{ticket_id}/findings — regenerate AI findings ──────────────

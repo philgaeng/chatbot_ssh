@@ -88,6 +88,8 @@ CREATE INDEX idx_tickets_current_workflow   ON ticketing.tickets (current_workfl
 
 Immutable log of all changes (status, assignment, escalation, comments). Used for audit trail and UI “history”.
 
+**Thread note types (via `payload` flags on `NOTE_ADDED`):** see [11_ticket_resolution_and_case_summary.md](11_ticket_resolution_and_case_summary.md) — `is_field_report`, planned `is_resolution_record`.
+
 ```sql
 CREATE TABLE ticketing.ticket_events (
     event_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

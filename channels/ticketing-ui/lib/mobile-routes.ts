@@ -2,7 +2,7 @@
 export const MOBILE_MAX_WIDTH_PX = 767;
 
 export const PUBLIC_ROUTES = ["/login", "/auth/callback"];
-export const PUBLIC_ROUTE_PREFIXES = ["/login/"];
+export const PUBLIC_ROUTE_PREFIXES = ["/login/", "/closure/"];
 
 export function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.includes(pathname) || PUBLIC_ROUTE_PREFIXES.some((p) => pathname.startsWith(p));

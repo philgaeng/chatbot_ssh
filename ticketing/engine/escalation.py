@@ -376,8 +376,10 @@ def grc_decide(
     actor_role: Optional[str] = None,
 ) -> TicketEvent:
     """
-    GRC Chair records the committee's decision and optionally advances to L4
-    (if unresolved) or marks ticket resolved.
+    Legacy GRC decision path — **no longer exposed via API** (use RESOLVE / ESCALATE).
+
+    Kept for historical event replay and tests. GRC chairs close cases with RESOLVE
+    + resolution record per docs/ticketing_system/11_ticket_resolution_and_case_summary.md.
 
     decision: "RESOLVED" | "ESCALATE_TO_LEGAL"
     """

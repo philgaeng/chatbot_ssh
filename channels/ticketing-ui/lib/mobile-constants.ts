@@ -142,7 +142,20 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "ESCALATED":             return `Escalated${payload?.to_step_key ? ` → ${payload.to_step_key}` : ""}`;
     case "ASSIGNED":              return `Assigned to ${payload?.new_assigned ?? "officer"}`;
     case "PRIORITY_CHANGED":      return `Priority changed to ${payload?.new_priority ?? "—"}`;
-    case "RESOLVED":              return "Case resolved";
+    case "RESOLVED": {
+      const cat = payload?.resolution_category as string | undefined;
+      if (cat) {
+        const labels: Record<string, string> = {
+          CLASSIFIED: "Grievance classified",
+          DEMAND_REJECTED: "Complainant demand rejected",
+          ACCEPTED_MONETARY: "Grievance accepted — monetary compensation",
+          ACCEPTED_RELOCATION: "Grievance accepted — relocation",
+          ACCEPTED_OTHER: "Grievance accepted — other remedy",
+        };
+        return `Case resolved — ${labels[cat] ?? cat}`;
+      }
+      return "Case resolved";
+    }
     case "CLOSED":                return "Case closed";
     case "GRC_CONVENED":          return `GRC hearing convened${payload?.hearing_date ? ` — ${payload.hearing_date}` : ""}`;
     case "GRC_DECIDED":           return `GRC decision: ${payload?.decision ?? "recorded"}`;

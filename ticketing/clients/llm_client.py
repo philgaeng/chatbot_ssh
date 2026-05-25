@@ -206,3 +206,79 @@ def generate_case_findings(
     except Exception as exc:
         logger.error("generate_case_findings failed: %s", exc, exc_info=True)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Resolved case summary (closure document — spec §3.6)
+# ---------------------------------------------------------------------------
+
+_RESOLVED_SUMMARY_SYSTEM = """\
+You are an impartial GRM case analyst for ADB infrastructure projects in Nepal.
+
+Analyse the JSON case bundle. Return ONLY valid JSON with these keys (all required):
+{
+  "field_reports_digest_en": "<1-3 paragraphs>",
+  "other_notes_digest_en": "<1-2 paragraphs>",
+  "combined_digest_en": "<2-6 paragraphs — investigation narrative>",
+  "resolution_text_public": "<plain-language outcome for complainant>",
+  "findings_summary_public": "<1-2 paragraphs max for complainant>"
+}
+
+Rules:
+- Base every sentence on field_reports, other_officer_notes, original_complaint, resolution.
+- Never invent visits, payments, or outcomes not in the input.
+- combined_digest_en must not repeat resolution.text verbatim.
+- resolution_text_public and findings_summary_public: write in the language indicated by
+  primary_language ("ne" = Nepali, "en" = English). Other digests stay in English.
+- No phone numbers, emails, or officer names in public fields.
+- SEAH cases: minimal public findings; no third-party names or investigation tactics.
+- If field reports conflict with notes, state the discrepancy.
+- If insufficient documentation, say so briefly in combined_digest_en.
+"""
+
+
+def generate_resolved_case_summary_llm(
+    bundle: dict,
+    *,
+    is_seah: bool = False,
+    primary_language: str = "en",
+) -> Optional[dict]:
+    """LLM digests + complainant-facing narrative (spec §3.6.2, §3.9.2)."""
+    if not bundle:
+        return None
+
+    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
+    payload = {**bundle, "primary_language": primary_language}
+    user_content = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+
+    client = _get_client()
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": _RESOLVED_SUMMARY_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.0,
+            max_tokens=1200,
+            response_format={"type": "json_object"},
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        if not raw:
+            return None
+        out = json.loads(raw)
+        for key in (
+            "field_reports_digest_en",
+            "other_notes_digest_en",
+            "combined_digest_en",
+            "resolution_text_public",
+            "findings_summary_public",
+        ):
+            out.setdefault(key, "")
+        return out
+    except json.JSONDecodeError as exc:
+        logger.error("generate_resolved_case_summary_llm: invalid JSON: %s", exc)
+        return None
+    except Exception as exc:
+        logger.error("generate_resolved_case_summary_llm failed: %s", exc, exc_info=True)
+        return None
