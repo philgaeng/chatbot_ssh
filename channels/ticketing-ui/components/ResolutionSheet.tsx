@@ -19,7 +19,7 @@ export function ResolutionSheet({
   submitting: boolean;
 }) {
   const [category, setCategory] = useState<ResolutionCategoryCode>("ACCEPTED_OTHER");
-  const [note, setNote] = useState(RESOLUTION_CATEGORIES[4].defaultWording);
+  const [note, setNote] = useState<string>(RESOLUTION_CATEGORIES[4].defaultWording);
 
   useEffect(() => {
     if (!open) return;
