@@ -105,6 +105,10 @@ class CurrentUser:
         return any(r in ("super_admin", "local_admin") for r in self.role_keys)
 
     @property
+    def is_super_admin(self) -> bool:
+        return "super_admin" in self.role_keys
+
+    @property
     def can_see_seah(self) -> bool:
         """super_admin and adb_hq_exec can see both queues."""
         return self.is_seah_officer or any(

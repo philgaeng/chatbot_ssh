@@ -14,6 +14,9 @@ from ticketing.models.settings import Settings
 
 router = APIRouter()
 
+# Only super_admin may write these keys (IT / advanced settings).
+SUPER_ADMIN_ONLY_KEYS = frozenset({"org_roles", "report_limits"})
+
 
 class SettingsUpsert(BaseModel):
     value: Any
@@ -61,15 +64,33 @@ def upsert_setting(
 ) -> Settings:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
+    if key in SUPER_ADMIN_ONLY_KEYS and not current_user.is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Super-admin access required for this setting",
+        )
+
+    value = payload.value
+    if key == "report_limits":
+        from ticketing.services.report_limits import save_report_limits
+
+        merged = save_report_limits(
+            db,
+            value if isinstance(value, dict) else {},
+            current_user.user_id,
+        )
+        setting = db.get(Settings, key)
+        assert setting is not None
+        return setting
 
     setting = db.get(Settings, key)
     if setting:
-        setting.value = payload.value
+        setting.value = value
         setting.updated_by_user_id = current_user.user_id
     else:
         setting = Settings(
             key=key,
-            value=payload.value,
+            value=value,
             updated_by_user_id=current_user.user_id,
         )
         db.add(setting)
@@ -90,6 +111,11 @@ def delete_setting(
 ) -> None:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
+    if key in SUPER_ADMIN_ONLY_KEYS and not current_user.is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Super-admin access required for this setting",
+        )
     setting = db.get(Settings, key)
     if not setting:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")

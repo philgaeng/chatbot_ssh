@@ -213,7 +213,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
     ...authHeaders(),
     ...((opts?.headers as Record<string, string> | undefined) ?? {}),
   };
-  const resp = await fetch(`${BASE}${path}`, { ...opts, headers });
+  const resp = await fetch(`${BASE}${path}`, { ...opts, headers, credentials: "include" });
   if (!resp.ok) {
     const body = await resp.text();
     if (isSessionExpiredResponse(resp.status, body)) {
@@ -624,16 +624,314 @@ export async function uploadOfficerAttachment(
 
 // ── Reports ───────────────────────────────────────────────────────────────────
 
-export function exportReport(params: {
+export type ReportBucket = "resolved" | "high" | "overdue" | "other";
+
+export interface ReportRow {
+  ticket_id?: string;
+  complaint_date?: string;
+  grievance_id?: string;
+  high_yn?: string;
+  escalated_yn?: string;
+  overdue_yn?: string;
+  stage?: string;
+  complaint_category?: string;
+  days_in_stage?: number | null;
+  total_days?: number | null;
+  resolution_category?: string;
+  status_code?: string;
+  project_name?: string;
+  package_label?: string;
+  location_display?: string;
+  grievance_summary?: string;
+  [key: string]: string | number | null | undefined;
+}
+
+export interface ReportSectionBlock {
+  items: ReportRow[];
+  total: number;
+}
+
+export interface ReportQueryResponse {
+  filters: Record<string, unknown>;
+  summary: { total: number; resolved: number; high: number; overdue: number; other: number };
+  columns: string[];
+  column_labels: Record<string, string>;
+  sections: Record<ReportBucket, ReportSectionBlock>;
+  field_catalog: { key: string; label: string }[];
+}
+
+export type PivotAgg = "count" | "sum" | "avg" | "max" | "min";
+
+export interface PivotValueSpec {
+  field: string;
+  agg: PivotAgg;
+}
+
+export interface PivotConfig {
+  rows: string[];
+  columns: string[];
+  values: PivotValueSpec[];
+  filters: Record<string, string[]>;
+}
+
+export interface ReportFieldsResponse {
+  fields: { key: string; label: string }[];
+  dimensions: { key: string; label: string }[];
+  measures: { key: string; label: string }[];
+  group_by_options: string[];
+  aggregates: string[];
+  default_columns: string[];
+  default_pivot?: PivotConfig;
+}
+
+export interface PivotHeaderCell {
+  text: string;
+  row_span?: number;
+  col_span?: number;
+  kind?: string;
+}
+
+export interface ReportBuildResult {
+  columns: string[];
+  column_labels?: Record<string, string>;
+  rows: Record<string, unknown>[];
+  total: number;
+  grouped?: boolean;
+  pivot?: boolean;
+  row_dims?: string[];
+  col_dims?: string[];
+  row_dim_labels?: string[];
+  col_dim_labels?: string[];
+  column_groups?: { title: string; col_key: string[]; value_headers: string[]; col_span: number }[];
+  header_rows?: PivotHeaderCell[][];
+}
+
+export function exportReportUrl(params: {
   date_from?: string;
   date_to?: string;
   organization_id?: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
 }): string {
   const p = new URLSearchParams();
   if (params.date_from) p.set("date_from", params.date_from);
   if (params.date_to) p.set("date_to", params.date_to);
   if (params.organization_id) p.set("organization_id", params.organization_id);
+  if (params.project_ids?.length) p.set("project_ids", params.project_ids.join(","));
+  if (params.package_ids?.length) p.set("package_ids", params.package_ids.join(","));
+  if (params.location_codes?.length) p.set("location_codes", params.location_codes.join(","));
+  if (params.include_seah) p.set("include_seah", "true");
   return `${BASE}/api/v1/reports/export?${p}`;
+}
+
+/** @deprecated Use exportReportUrl */
+export const exportReport = exportReportUrl;
+
+/** Download binary export with auth cookie + Bearer token (anchor href cannot send these). */
+async function downloadApiFile(path: string, filename: string, init?: RequestInit): Promise<void> {
+  const extraHeaders = (init?.headers as Record<string, string> | undefined) ?? {};
+  const resp = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream",
+      ...authHeaders(),
+      ...extraHeaders,
+    },
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    if (isSessionExpiredResponse(resp.status, text)) {
+      handleSessionExpired();
+    }
+    let message = text || `Export failed (${resp.status})`;
+    try {
+      const parsed = JSON.parse(text) as { detail?: string };
+      if (parsed.detail) message = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail);
+    } catch {
+      /* plain text error */
+    }
+    throw new Error(message);
+  }
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const text = await resp.text();
+    throw new Error(text || "Server returned JSON instead of a file");
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadExportReportXlsx(params: {
+  date_from?: string;
+  date_to?: string;
+  organization_id?: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
+}): Promise<void> {
+  const from = params.date_from ?? "start";
+  const to = params.date_to ?? "end";
+  const path = exportReportUrl(params).replace(BASE, "");
+  await downloadApiFile(path, `grm-report-${from}-to-${to}.xlsx`);
+}
+
+export function queryReport(params: {
+  date_from: string;
+  date_to: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
+  page?: number;
+  page_size?: number;
+}): Promise<ReportQueryResponse> {
+  const p = new URLSearchParams();
+  p.set("date_from", params.date_from);
+  p.set("date_to", params.date_to);
+  if (params.project_ids?.length) p.set("project_ids", params.project_ids.join(","));
+  if (params.package_ids?.length) p.set("package_ids", params.package_ids.join(","));
+  if (params.location_codes?.length) p.set("location_codes", params.location_codes.join(","));
+  if (params.include_seah) p.set("include_seah", "true");
+  if (params.page) p.set("page", String(params.page));
+  if (params.page_size) p.set("page_size", String(params.page_size));
+  return apiFetch<ReportQueryResponse>(`/api/v1/reports/query?${p}`);
+}
+
+export function fetchReportFields(): Promise<ReportFieldsResponse> {
+  return apiFetch<ReportFieldsResponse>("/api/v1/reports/fields");
+}
+
+export type ReportBuildBody = {
+  date_from: string;
+  date_to: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
+  pivot?: PivotConfig;
+  columns?: string[];
+  group_by?: string | null;
+  aggregate?: "none" | "count" | "avg_total_days" | "sum_total_days";
+  page?: number;
+  page_size?: number;
+};
+
+export function buildReportJson(body: ReportBuildBody): Promise<ReportBuildResult> {
+  return apiFetch<ReportBuildResult>("/api/v1/reports/build", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, format: "json" }),
+  });
+}
+
+export async function downloadBuildReportXlsx(body: ReportBuildBody): Promise<void> {
+  await downloadApiFile(
+    "/api/v1/reports/build",
+    `grm-pivot-report-${body.date_from}-${body.date_to}.xlsx`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, format: "xlsx", page: 1, page_size: 500 }),
+    },
+  );
+}
+
+export interface QuarterlyReportSchedule {
+  frequency: "quarterly";
+  day_of_month: number;
+}
+
+export type QuarterlyReportKind = "overview" | "pivot";
+
+export interface QuarterlyReportTemplate {
+  name: string;
+  kind: QuarterlyReportKind;
+  include_seah: boolean;
+  project_ids: string[];
+  package_ids: string[];
+  location_codes: string[];
+  pivot: PivotConfig | null;
+}
+
+export interface ReportLimitsInfo {
+  max_export_rows: number;
+  max_exports_per_user_per_hour: number;
+  max_reports_per_role_per_quarter: number;
+  quarterly_email_enabled: boolean;
+  allowed_recipient_roles: string[] | null;
+}
+
+export interface QuarterlyAssignment {
+  id: string;
+  quarter_key: string;
+  role_key: string;
+  name: string;
+  template: QuarterlyReportTemplate;
+  active: boolean;
+}
+
+export interface QuarterlyRolePlan {
+  role_key: string;
+  count: number;
+  max: number;
+  assignments: QuarterlyAssignment[];
+}
+
+export interface QuarterlyPlanResponse {
+  quarter_key: string;
+  max_per_role: number;
+  schedule: QuarterlyReportSchedule;
+  limits: ReportLimitsInfo;
+  roles: QuarterlyRolePlan[];
+}
+
+export function getQuarterlyPlan(quarterKey?: string): Promise<QuarterlyPlanResponse> {
+  const q = quarterKey ? `?quarter_key=${encodeURIComponent(quarterKey)}` : "";
+  return apiFetch<QuarterlyPlanResponse>(`/api/v1/reports/quarterly-plan${q}`);
+}
+
+export function saveQuarterlySchedule(dayOfMonth: number): Promise<QuarterlyReportSchedule> {
+  return apiFetch<QuarterlyReportSchedule>("/api/v1/reports/quarterly-schedule", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ day_of_month: dayOfMonth }),
+  });
+}
+
+export function createQuarterlyAssignments(body: {
+  quarter_key: string;
+  role_keys: string[];
+  name: string;
+  template: QuarterlyReportTemplate;
+}): Promise<QuarterlyAssignment[]> {
+  return apiFetch<QuarterlyAssignment[]>("/api/v1/reports/quarterly-assignments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteQuarterlyAssignment(assignmentId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/reports/quarterly-assignments/${assignmentId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Current calendar quarter key, e.g. 2026-Q2 */
+export function currentQuarterKey(d = new Date()): string {
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${d.getFullYear()}-Q${q}`;
 }
 
 // ── Organizations / Countries / Locations / Projects ─────────────────────────
@@ -923,6 +1221,20 @@ export function setOrgRoles(roles: OrgRole[]): Promise<void> {
   return apiFetch<void>("/api/v1/settings/org_roles", {
     method: "PUT",
     body: JSON.stringify({ value: roles }),
+  });
+}
+
+/** Super-admin: report export / quarterly email caps (ticketing.settings.report_limits). */
+export function getReportLimits(): Promise<ReportLimitsInfo> {
+  return apiFetch<{ key: string; value: ReportLimitsInfo }>("/api/v1/settings/report_limits").then(
+    (r) => r.value,
+  );
+}
+
+export function setReportLimits(limits: ReportLimitsInfo): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/report_limits", {
+    method: "PUT",
+    body: JSON.stringify({ value: limits }),
   });
 }
 
