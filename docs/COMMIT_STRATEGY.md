@@ -107,6 +107,30 @@ If this fails, fix DB/container networking first before running Alembic.
 
 If this project has script wrappers (for example `make test`, `just test`, or npm scripts), prefer those wrappers inside Docker.
 
+## Staging Deploy (EC2)
+
+Use the Make target below for standard staging deployment:
+
+- `make aws-deploy`
+
+What it does (remote host):
+
+1. Syncs `.dockerignore` to the server.
+2. SSHes into the EC2 host and runs:
+   - `git fetch origin`
+   - `git checkout main`
+   - `git pull --ff-only origin main`
+3. Rebuilds `grm_ui` with latest base layers.
+4. Brings up full stack with AWS + GRM compose overlays.
+5. Runs migrations in order:
+   - `ticketing/migrations/alembic.ini upgrade head`
+   - `migrations/public/alembic.ini upgrade head`
+6. Verifies required ports are exposed:
+   - `grm_ui` on host `:3001`
+   - `ticketing_api` on host `:5002`
+
+If SSH auth fails (`Permission denied (publickey)`), confirm the key configured in `Makefile` (`KEY_NAME_RUNNING`) is present and authorized on the server.
+
 ### Local Frontend Testing (Nginx HTTP Override)
 
 When testing the webchat locally, use the dev-only nginx override so `http://localhost` works without browser TLS/certificate issues.

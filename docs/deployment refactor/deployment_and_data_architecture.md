@@ -5,7 +5,7 @@
 
 Progressive ops plan: start with a **single EC2** and **Docker** (including Postgres and Redis), add **S3** and optional **RDS** when scaling. Edge traffic uses **Nginx** only (see [`deployment/nginx/webchat_rest_aws.conf`](../../deployment/nginx/webchat_rest_aws.conf)). Per-environment URLs and paths live in [`../deployment_environment_urls.md`](../deployment_environment_urls.md).
 
-**Related:** [`../OPERATIONS.md`](../OPERATIONS.md), [`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`../internal_dental_system_strategy.md`](../internal_dental_system_strategy.md) (optional product context for Phase 2 crawler-style features). **Agents:** [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md).
+**Related:** [`../PRODUCTION_SERVER_SPEC.md`](../PRODUCTION_SERVER_SPEC.md) (procurement sizing: compute, disk, attachment object storage), [`../OPERATIONS.md`](../OPERATIONS.md), [`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`../internal_dental_system_strategy.md`](../internal_dental_system_strategy.md) (optional product context for Phase 2 crawler-style features). **Agents:** [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md).
 
 ---
 
