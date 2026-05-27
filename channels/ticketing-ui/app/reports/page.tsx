@@ -18,12 +18,9 @@ import {
   downloadBuildReportXlsx,
   buildReportJson,
   downloadExportReportXlsx,
-  createQuarterlyAssignments,
-  currentQuarterKey,
   fetchReportFields,
-  getQuarterlyPlan,
-  listRoles,
   queryReport,
+  saveToQuarterlyLibrary,
   type PivotConfig,
   type ReportBucket,
   type ReportBuildResult,
@@ -32,6 +29,7 @@ import {
 } from "@/lib/api";
 import { PivotBuilder } from "@/components/reports/PivotBuilder";
 import { PivotPreviewTable } from "@/components/reports/PivotPreviewTable";
+import { QuarterlyPlanTab } from "@/components/reports/QuarterlyPlanTab";
 import {
   listLocations,
   listProjects,
@@ -315,7 +313,7 @@ function ReportTable({
 
 export default function ReportsPage() {
   const { isAdmin, canSeeSeah } = useAuth();
-  const [tab, setTab] = useState<"overview" | "builder">("overview");
+  const [tab, setTab] = useState<"overview" | "builder" | "quarterly">("overview");
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("this_quarter");
   const [dateFrom, setDateFrom] = useState(quarterStart());
   const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
@@ -348,12 +346,8 @@ export default function ReportsPage() {
   const [builderLoading, setBuilderLoading] = useState(false);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
-  const [quarterlyQuarter, setQuarterlyQuarter] = useState(currentQuarterKey());
-  const [quarterlyRoles, setQuarterlyRoles] = useState<string[]>([]);
-  const [roleChoices, setRoleChoices] = useState<{ key: string; label: string }[]>([]);
-  const [maxPerRole, setMaxPerRole] = useState(3);
-  const [savingQuarterly, setSavingQuarterly] = useState(false);
-  const [quarterlySaved, setQuarterlySaved] = useState(false);
+  const [savingLibrary, setSavingLibrary] = useState(false);
+  const [librarySaved, setLibrarySaved] = useState(false);
 
   const filterParams = useMemo(
     () => ({
@@ -376,21 +370,8 @@ export default function ReportsPage() {
       if (f.default_pivot) setPivotConfig(f.default_pivot);
     }).catch(() => {});
     setTemplates(loadTemplates());
-    if (isAdmin) {
-      Promise.all([getQuarterlyPlan().catch(() => null), listRoles().catch(() => [])]).then(
-        ([plan, roles]) => {
-          if (plan) {
-            setMaxPerRole(plan.max_per_role);
-            const allowed = plan.limits.allowed_recipient_roles;
-            const choices = roles
-              .map((r) => ({ key: r.role_key, label: r.display_name || r.role_key }))
-              .filter((r) => !allowed?.length || allowed.includes(r.key));
-            setRoleChoices(choices);
-          }
-        },
-      );
-    }
-  }, [isAdmin]);
+
+  }, []);
 
   useEffect(() => {
     if (selectedProjectIds.length === 0) {
@@ -504,37 +485,25 @@ export default function ReportsPage() {
     };
   }
 
-  function toggleQuarterlyRole(roleKey: string) {
-    setQuarterlyRoles((prev) =>
-      prev.includes(roleKey) ? prev.filter((k) => k !== roleKey) : [...prev, roleKey],
-    );
-  }
-
-  async function saveForQuarterlySend(kind: "overview" | "pivot") {
-    if (quarterlyRoles.length === 0) {
-      setError("Select at least one recipient role for the quarterly plan.");
-      return;
-    }
+  async function saveReportToLibrary(kind: "overview" | "pivot") {
     if (kind === "pivot" && pivotConfig.values.length === 0) {
       setError("Add at least one value to the pivot before saving.");
       return;
     }
-    setSavingQuarterly(true);
+    setSavingLibrary(true);
     setError(null);
-    setQuarterlySaved(false);
+    setLibrarySaved(false);
     try {
-      await createQuarterlyAssignments({
-        quarter_key: quarterlyQuarter,
-        role_keys: quarterlyRoles,
+      await saveToQuarterlyLibrary({
         name: buildQuarterlyTemplate(kind).name,
         template: buildQuarterlyTemplate(kind),
       });
-      setQuarterlySaved(true);
-      setTimeout(() => setQuarterlySaved(false), 4000);
+      setLibrarySaved(true);
+      setTimeout(() => setLibrarySaved(false), 4000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save for quarterly send");
+      setError(e instanceof Error ? e.message : "Failed to save report");
     } finally {
-      setSavingQuarterly(false);
+      setSavingLibrary(false);
     }
   }
 
@@ -571,34 +540,42 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleExportAll}
-            disabled={downloading || !dateFrom || !dateTo}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
-          >
-            {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Export all (XLSX)
-          </button>
+          {tab !== "quarterly" && (
+            <button
+              type="button"
+              onClick={handleExportAll}
+              disabled={downloading || !dateFrom || !dateTo}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              Export all (XLSX)
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-gray-200">
-        {(["overview", "builder"] as const).map((t) => (
+        {(
+          [
+            { id: "overview" as const, label: "Overview" },
+            { id: "builder" as const, label: "Pivot table" },
+            ...(isAdmin ? [{ id: "quarterly" as const, label: "Quarterly email" }] : []),
+          ] as const
+        ).map((t) => (
           <button
-            key={t}
+            key={t.id}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === t ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+              tab === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t === "overview" ? "Overview" : "Pivot table"}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {sharedFilters}
+      {tab !== "quarterly" && sharedFilters}
 
       {error && (
         <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
@@ -606,6 +583,21 @@ export default function ReportsPage() {
 
       {tab === "overview" && (
         <>
+          {isAdmin && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={savingLibrary}
+                onClick={() => saveReportToLibrary("overview")}
+                className="text-sm border border-gray-300 rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {savingLibrary ? "Saving…" : "Save overview to report library"}
+              </button>
+              {librarySaved && (
+                <span className="text-xs text-green-600">✓ Saved — assign roles in Quarterly email tab</span>
+              )}
+            </div>
+          )}
           {loading && (
             <div className="flex items-center gap-2 text-sm text-gray-500 mt-4">
               <Loader2 size={16} className="animate-spin" /> Loading…
@@ -658,6 +650,8 @@ export default function ReportsPage() {
           </div>
         </>
       )}
+
+      {tab === "quarterly" && isAdmin && <QuarterlyPlanTab onError={setError} />}
 
       {tab === "builder" && (
         <div className="mt-4 space-y-4">
@@ -716,8 +710,22 @@ export default function ReportsPage() {
               {(builderLoading || downloadingPivot) ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
               Export pivot XLSX
             </button>
-            {quarterlySaved && (
-              <span className="text-xs text-green-600 font-medium self-center">✓ Saved to quarterly plan</span>
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  disabled={savingLibrary || pivotConfig.values.length === 0}
+                  onClick={() => saveReportToLibrary("pivot")}
+                  className="border border-gray-400 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+                >
+                  {savingLibrary ? "Saving…" : "Save to report library"}
+                </button>
+                {librarySaved && (
+                  <span className="text-xs text-green-600 font-medium self-center">
+                    ✓ Saved — assign roles in Quarterly email tab
+                  </span>
+                )}
+              </>
             )}
           </div>
 
@@ -744,71 +752,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {isAdmin && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mt-6 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Save for quarterly email</h2>
-          <p className="text-xs text-gray-500">
-            Up to <strong>{maxPerRole}</strong> saved reports per role per quarter. Each report is
-            one email on the scheduled day. Filters on this page are stored with the report.
-          </p>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Quarter</label>
-              <input
-                type="text"
-                value={quarterlyQuarter}
-                onChange={(e) => setQuarterlyQuarter(e.target.value)}
-                placeholder="2026-Q2"
-                className="text-sm border border-gray-300 rounded px-2 py-1.5 w-28 font-mono"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 block mb-2">Recipient roles (one slot each)</label>
-            <div className="flex flex-wrap gap-2">
-              {roleChoices.map((r) => (
-                <label
-                  key={r.key}
-                  className={`inline-flex items-center gap-1.5 text-xs border rounded-full px-3 py-1 cursor-pointer ${
-                    quarterlyRoles.includes(r.key)
-                      ? "bg-blue-50 border-blue-300 text-blue-800"
-                      : "bg-gray-50 border-gray-200 text-gray-600"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={quarterlyRoles.includes(r.key)}
-                    onChange={() => toggleQuarterlyRole(r.key)}
-                  />
-                  {r.label}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={savingQuarterly}
-              onClick={() => saveForQuarterlySend("overview")}
-              className="text-sm border border-gray-300 rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Save overview for selected roles
-            </button>
-            <button
-              type="button"
-              disabled={savingQuarterly || pivotConfig.values.length === 0}
-              onClick={() => saveForQuarterlySend("pivot")}
-              className="text-sm bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50"
-            >
-              {savingQuarterly ? "Saving…" : "Save current pivot for selected roles"}
-            </button>
-            <Link href="/settings" className="text-xs text-blue-600 hover:underline self-center">
-              View quarterly plan →
-            </Link>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

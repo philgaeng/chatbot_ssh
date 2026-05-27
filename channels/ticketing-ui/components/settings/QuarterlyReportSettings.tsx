@@ -225,8 +225,9 @@ export function QuarterlyReportSettings() {
 
       <p className="text-xs text-gray-500">
         <Link href="/reports" className="text-blue-600 hover:underline">
-          Add reports from the Reports page
-        </Link>
+          Open Reports → Quarterly email
+        </Link>{" "}
+        to schedule saved reports and assign roles.
       </p>
     </div>
   );

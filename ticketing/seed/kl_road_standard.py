@@ -381,6 +381,21 @@ def _seed_quarterly_assignments(db: Session) -> None:
     db.add(Settings(key="quarterly_report_assignments", value=assignments))
     logger.info("  + quarterly_report_assignments (%d roles for %s)", len(assignments), qk)
 
+    if not db.get(Settings, "quarterly_report_library"):
+        db.add(
+            Settings(
+                key="quarterly_report_library",
+                value=[
+                    {
+                        "id": str(uuid.uuid4()),
+                        "name": "GRM quarterly overview",
+                        "template": template,
+                    }
+                ],
+            )
+        )
+        logger.info("  + quarterly_report_library (1 definition)")
+
 
 def seed_project(db: Session) -> None:
     """

@@ -909,17 +909,43 @@ export function saveQuarterlySchedule(dayOfMonth: number): Promise<QuarterlyRepo
   });
 }
 
+export interface QuarterlyReportLibraryItem {
+  id: string;
+  name: string;
+  template: QuarterlyReportTemplate;
+}
+
 export function createQuarterlyAssignments(body: {
   quarter_key: string;
   role_keys: string[];
-  name: string;
-  template: QuarterlyReportTemplate;
+  library_id?: string;
+  name?: string;
+  template?: QuarterlyReportTemplate;
 }): Promise<QuarterlyAssignment[]> {
   return apiFetch<QuarterlyAssignment[]>("/api/v1/reports/quarterly-assignments", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export function getQuarterlyLibrary(): Promise<QuarterlyReportLibraryItem[]> {
+  return apiFetch<QuarterlyReportLibraryItem[]>("/api/v1/reports/quarterly-library");
+}
+
+export function saveToQuarterlyLibrary(body: {
+  name: string;
+  template: QuarterlyReportTemplate;
+}): Promise<QuarterlyReportLibraryItem> {
+  return apiFetch<QuarterlyReportLibraryItem>("/api/v1/reports/quarterly-library", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteQuarterlyLibraryItem(itemId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/reports/quarterly-library/${itemId}`, { method: "DELETE" });
 }
 
 export function deleteQuarterlyAssignment(assignmentId: string): Promise<void> {

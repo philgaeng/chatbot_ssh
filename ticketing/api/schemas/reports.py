@@ -70,11 +70,23 @@ class QuarterlyAssignmentOut(BaseModel):
     active: bool = True
 
 
+class QuarterlyReportLibraryItem(BaseModel):
+    id: str
+    name: str
+    template: QuarterlyReportTemplate
+
+
+class QuarterlyReportLibraryCreate(BaseModel):
+    name: str
+    template: QuarterlyReportTemplate
+
+
 class QuarterlyAssignmentCreate(BaseModel):
     quarter_key: str
     role_keys: list[str] = Field(..., min_length=1)
-    name: str
-    template: QuarterlyReportTemplate
+    library_id: Optional[str] = None
+    name: Optional[str] = None
+    template: Optional[QuarterlyReportTemplate] = None
 
 
 class QuarterlyAssignmentUpdate(BaseModel):

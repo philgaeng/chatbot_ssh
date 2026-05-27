@@ -15,6 +15,8 @@ from ticketing.api.schemas.reports import (
     QuarterlyAssignmentOut,
     QuarterlyAssignmentUpdate,
     QuarterlyPlanResponse,
+    QuarterlyReportLibraryCreate,
+    QuarterlyReportLibraryItem,
     QuarterlyReportSchedule,
     QuarterlyReportTemplate,
     QuarterlyRolePlan,
@@ -23,6 +25,12 @@ from ticketing.api.schemas.reports import (
     ReportLimitsInfo,
     ReportQueryResponse,
     ReportSectionBlock,
+)
+from ticketing.services.quarterly_library import (
+    create_library_item,
+    delete_library_item,
+    get_library_item,
+    list_library,
 )
 from ticketing.services.quarterly_assignments import (
     create_assignments_for_roles,
@@ -443,18 +451,96 @@ def post_quarterly_assignments(
 ) -> list[QuarterlyAssignmentOut]:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
+
+    if body.library_id:
+        item = get_library_item(db, body.library_id)
+        if not item:
+            raise HTTPException(404, detail="Saved report not found")
+        name = item.get("name") or "Quarterly report"
+        template = item.get("template") or {}
+    elif body.template and body.name:
+        name = body.name
+        template = body.template.model_dump()
+    else:
+        raise HTTPException(
+            400,
+            detail="Provide library_id or both name and template",
+        )
+
     try:
         created = create_assignments_for_roles(
             db,
             quarter_key=body.quarter_key,
             role_keys=body.role_keys,
-            name=body.name,
-            template=body.template.model_dump(),
+            name=name,
+            template=template,
             updated_by=current_user.user_id,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return [_assignment_out(a) for a in created]
+
+
+def _library_out(raw: dict) -> QuarterlyReportLibraryItem:
+    tmpl = raw.get("template") or {}
+    return QuarterlyReportLibraryItem(
+        id=raw["id"],
+        name=raw.get("name") or "Untitled report",
+        template=QuarterlyReportTemplate(**tmpl),
+    )
+
+
+@router.get(
+    "/reports/quarterly-library",
+    response_model=list[QuarterlyReportLibraryItem],
+    summary="Saved report definitions for quarterly planning (admin)",
+)
+def get_quarterly_library(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[QuarterlyReportLibraryItem]:
+    if not current_user.is_admin:
+        raise HTTPException(403, detail="Admin access required")
+    return [_library_out(x) for x in list_library(db)]
+
+
+@router.post(
+    "/reports/quarterly-library",
+    response_model=QuarterlyReportLibraryItem,
+    summary="Save a named report definition (admin)",
+)
+def post_quarterly_library(
+    body: QuarterlyReportLibraryCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> QuarterlyReportLibraryItem:
+    if not current_user.is_admin:
+        raise HTTPException(403, detail="Admin access required")
+    item = create_library_item(
+        db,
+        name=body.name,
+        template=body.template.model_dump(),
+        updated_by=current_user.user_id,
+    )
+    return _library_out(item)
+
+
+@router.delete(
+    "/reports/quarterly-library/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a saved report definition (admin)",
+)
+def remove_quarterly_library_item(
+    item_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    if not current_user.is_admin:
+        raise HTTPException(403, detail="Admin access required")
+    try:
+        delete_library_item(db, item_id, current_user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.patch(
