@@ -852,7 +852,7 @@ export interface QuarterlyReportSchedule {
   day_of_month: number;
 }
 
-export type QuarterlyReportKind = "overview" | "pivot";
+export type QuarterlyReportKind = "overview" | "pivot" | "summary";
 
 export interface QuarterlyReportTemplate {
   name: string;
@@ -862,6 +862,90 @@ export interface QuarterlyReportTemplate {
   package_ids: string[];
   location_codes: string[];
   pivot: PivotConfig | null;
+  summary_quarter_keys?: string[];
+  summary_province_code?: string | null;
+}
+
+export interface ReportSummaryPieSlice {
+  label: string;
+  value: number;
+  percent: number;
+}
+
+export interface ReportSummaryResponse {
+  filters: Record<string, unknown>;
+  matrix: {
+    column_groups: { id: string; label: string; children: { key: string; label: string }[] }[];
+    rows: {
+      project_id: string;
+      project_name: string;
+      package_id: string | null;
+      package_name: string;
+      cells: Record<string, number>;
+    }[];
+  };
+  charts: {
+    resolved_by_month: { month: string; packages: { package_id: string | null; package_name: string; count: number }[] }[];
+    pies: {
+      overdue_vs_ontime: ReportSummaryPieSlice[];
+      escalated: ReportSummaryPieSlice[];
+      max_level: ReportSummaryPieSlice[];
+      resolution_category: ReportSummaryPieSlice[];
+    };
+  };
+  definitions: Record<string, string>;
+}
+
+export function fetchReportSummary(params: {
+  project_id: string;
+  province_code?: string;
+  quarter_keys?: string[];
+  years?: number[];
+  chart_package_ids?: string[];
+  include_seah?: boolean;
+}): Promise<ReportSummaryResponse> {
+  const p = new URLSearchParams();
+  p.set("project_id", params.project_id);
+  if (params.province_code) p.set("province_code", params.province_code);
+  if (params.quarter_keys?.length) p.set("quarter_keys", params.quarter_keys.join(","));
+  if (params.years?.length) p.set("years", params.years.join(","));
+  if (params.chart_package_ids?.length) p.set("chart_package_ids", params.chart_package_ids.join(","));
+  if (params.include_seah) p.set("include_seah", "true");
+  return apiFetch<ReportSummaryResponse>(`/api/v1/reports/summary?${p}`);
+}
+
+export function summaryExportUrl(params: {
+  project_id: string;
+  province_code?: string;
+  quarter_keys?: string[];
+  years?: number[];
+  chart_package_ids?: string[];
+  include_seah?: boolean;
+}): string {
+  const p = new URLSearchParams();
+  p.set("project_id", params.project_id);
+  if (params.province_code) p.set("province_code", params.province_code);
+  if (params.quarter_keys?.length) p.set("quarter_keys", params.quarter_keys.join(","));
+  if (params.years?.length) p.set("years", params.years.join(","));
+  if (params.chart_package_ids?.length) p.set("chart_package_ids", params.chart_package_ids.join(","));
+  if (params.include_seah) p.set("include_seah", "true");
+  return `${BASE}/api/v1/reports/summary/export?${p}`;
+}
+
+export async function downloadSummaryReportXlsx(params: {
+  project_id: string;
+  province_code?: string;
+  quarter_keys?: string[];
+  years?: number[];
+  chart_package_ids?: string[];
+  include_seah?: boolean;
+  project_name?: string;
+}): Promise<void> {
+  const qpart = params.quarter_keys?.length ? params.quarter_keys.join("-") : "summary";
+  const project =
+    (params.project_name || "project").replace(/[^\w\-]+/g, "_").slice(0, 40) || "project";
+  const path = summaryExportUrl(params).replace(BASE, "");
+  await downloadApiFile(path, `grm-summary_${project}_${qpart}.xlsx`);
 }
 
 export interface ReportLimitsInfo {

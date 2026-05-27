@@ -30,6 +30,7 @@ import {
 import { PivotBuilder } from "@/components/reports/PivotBuilder";
 import { PivotPreviewTable } from "@/components/reports/PivotPreviewTable";
 import { QuarterlyPlanTab } from "@/components/reports/QuarterlyPlanTab";
+import { SummaryTab } from "@/components/reports/SummaryTab";
 import {
   listLocations,
   listProjects,
@@ -313,7 +314,7 @@ function ReportTable({
 
 export default function ReportsPage() {
   const { isAdmin, canSeeSeah } = useAuth();
-  const [tab, setTab] = useState<"overview" | "builder" | "quarterly">("overview");
+  const [tab, setTab] = useState<"overview" | "summary" | "builder" | "quarterly">("overview");
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("this_quarter");
   const [dateFrom, setDateFrom] = useState(quarterStart());
   const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
@@ -421,7 +422,7 @@ export default function ReportsPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (tab === "overview") loadOverview();
-      else loadBuilder();
+      else if (tab === "builder") loadBuilder();
     }, 400);
     return () => clearTimeout(t);
   }, [tab, loadOverview, loadBuilder, dateFrom, dateTo, selectedProjectIds, selectedPackageIds, selectedLocationCodes, includeSeah, pivotConfig]);
@@ -540,7 +541,7 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {tab !== "quarterly" && (
+          {tab !== "quarterly" && tab !== "summary" && (
             <button
               type="button"
               onClick={handleExportAll}
@@ -558,6 +559,7 @@ export default function ReportsPage() {
         {(
           [
             { id: "overview" as const, label: "Overview" },
+            { id: "summary" as const, label: "Summary" },
             { id: "builder" as const, label: "Pivot table" },
             ...(isAdmin ? [{ id: "quarterly" as const, label: "Quarterly email" }] : []),
           ] as const
@@ -575,10 +577,19 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {tab !== "quarterly" && sharedFilters}
+      {tab !== "quarterly" && tab !== "summary" && sharedFilters}
 
       {error && (
         <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+      )}
+
+      {tab === "summary" && (
+        <SummaryTab
+          projects={projects}
+          locations={locations}
+          canSeeSeah={canSeeSeah}
+          onError={setError}
+        />
       )}
 
       {tab === "overview" && (

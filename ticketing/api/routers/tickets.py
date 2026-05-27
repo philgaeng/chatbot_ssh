@@ -60,6 +60,8 @@ from ticketing.constants.resolution import (
     validate_resolution_note,
 )
 from ticketing.clients.orchestrator import send_message_to_complainant
+from ticketing.models.ticket_overdue_episode import TicketOverdueEpisode
+from ticketing.services.overdue_episodes import close_open_episode, overdue_days_display
 from ticketing.engine.escalation import (
     convene_grc, escalate_ticket,
     _apply_step_tier_roles, _ensure_viewer,
@@ -558,8 +560,17 @@ def list_tickets(
         ).all()
         earliest_task_due = {row[0]: row[1] for row in task_rows}
 
+    episode_by_id: dict[str, TicketOverdueEpisode] = {}
+    ep_ids = [t.current_overdue_episode_id for t in tickets if t.current_overdue_episode_id]
+    if ep_ids:
+        for ep in db.execute(
+            select(TicketOverdueEpisode).where(TicketOverdueEpisode.episode_id.in_(ep_ids))
+        ).scalars():
+            episode_by_id[ep.episode_id] = ep
+
     items = []
     for t in tickets:
+        open_ep = episode_by_id.get(t.current_overdue_episode_id) if t.current_overdue_episode_id else None
         item = TicketListItem(
             ticket_id=t.ticket_id,
             grievance_id=t.grievance_id,
@@ -571,7 +582,8 @@ def list_tickets(
             location_code=t.location_code,
             project_code=t.project_code,
             assigned_to_user_id=t.assigned_to_user_id,
-            sla_breached=t.sla_breached,
+            sla_breached=bool(t.current_overdue_episode_id or t.sla_breached),
+            overdue_days_display=overdue_days_display(open_ep),
             step_started_at=t.step_started_at,
             created_at=t.created_at,
             sla_deadline_at=sla_deadlines.get(t.ticket_id),
@@ -908,6 +920,7 @@ def perform_action(
     _translate_resolution_event_id: Optional[str] = None
 
     if action == "ACKNOWLEDGE":
+        close_open_episode(db, ticket, "ACKNOWLEDGED")
         ticket.status_code = "IN_PROGRESS"
         ticket.step_started_at = _now()
         ticket.updated_by_user_id = current_user.user_id
@@ -952,6 +965,7 @@ def perform_action(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
+        close_open_episode(db, ticket, "RESOLVED")
         formatted_note = format_resolution_note(category, officer_text)
         resolution_event = _add_event(
             db,

@@ -5,6 +5,7 @@ from .user import Role, UserRole
 from .officer_onboarding import OfficerOnboarding
 from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
 from .ticket import Ticket, TicketEvent
+from .ticket_overdue_episode import TicketOverdueEpisode
 from .ticket_file import TicketFile
 from .officer_scope import OfficerScope
 from .project import Project, ProjectActorRole, ProjectOrganization, ProjectLocation
@@ -31,6 +32,7 @@ __all__ = [
     "WorkflowAssignment",
     "Ticket",
     "TicketEvent",
+    "TicketOverdueEpisode",
     "TicketFile",
     "OfficerScope",
     "Project",

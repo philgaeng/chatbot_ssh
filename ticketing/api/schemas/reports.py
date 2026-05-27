@@ -45,12 +45,14 @@ class QuarterlyReportSchedule(BaseModel):
 
 class QuarterlyReportTemplate(BaseModel):
     name: str = "GRM quarterly overview"
-    kind: Literal["overview", "pivot"] = "overview"
+    kind: Literal["overview", "pivot", "summary"] = "overview"
     include_seah: bool = False
     project_ids: list[str] = Field(default_factory=list)
     package_ids: list[str] = Field(default_factory=list)
     location_codes: list[str] = Field(default_factory=list)
     pivot: Optional[PivotConfig] = None
+    summary_quarter_keys: Optional[list[str]] = None
+    summary_province_code: Optional[str] = None
 
 
 class ReportLimitsInfo(BaseModel):
@@ -112,6 +114,13 @@ class QuarterlyPlanResponse(BaseModel):
 
 class QuarterlyScheduleUpdate(BaseModel):
     day_of_month: int = Field(5, ge=1, le=28)
+
+
+class ReportSummaryResponse(BaseModel):
+    filters: dict[str, Any]
+    matrix: dict[str, Any]
+    charts: dict[str, Any]
+    definitions: dict[str, str] = Field(default_factory=dict)
 
 
 class ReportBuildRequest(BaseModel):

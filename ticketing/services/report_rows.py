@@ -286,6 +286,8 @@ def _fetch_auxiliary_maps(
 
 
 def _is_overdue_now(ticket: Ticket, step: WorkflowStep | None, now: datetime) -> bool:
+    if ticket.current_overdue_episode_id:
+        return True
     if ticket.sla_breached:
         return True
     deadline = compute_sla_deadline(ticket, step)

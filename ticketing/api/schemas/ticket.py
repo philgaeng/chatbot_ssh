@@ -102,6 +102,7 @@ class TicketListItem(BaseModel):
     project_code: Optional[str]
     assigned_to_user_id: Optional[str]
     sla_breached: bool
+    overdue_days_display: Optional[int] = None
     step_started_at: Optional[datetime]
     created_at: datetime
     # Computed SLA deadline: step_started_at + step.resolution_time_days

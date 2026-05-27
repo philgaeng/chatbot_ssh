@@ -25,7 +25,9 @@ from ticketing.api.schemas.reports import (
     ReportLimitsInfo,
     ReportQueryResponse,
     ReportSectionBlock,
+    ReportSummaryResponse,
 )
+from ticketing.services.report_summary import build_report_summary
 from ticketing.services.quarterly_library import (
     create_library_item,
     delete_library_item,
@@ -51,6 +53,11 @@ from ticketing.services.pivot_table import (
     DIMENSION_FIELDS,
     MEASURE_FIELDS,
     build_pivot_table,
+)
+from ticketing.services.report_export import (
+    summary_export_filename,
+    summary_export_row_count,
+    summary_workbook_bytes,
 )
 from ticketing.services.report_rows import (
     DEFAULT_REPORT_COLUMNS,
@@ -175,6 +182,104 @@ def query_report(
         column_labels={c: FIELD_LABELS.get(c, c) for c in columns},
         sections=sections_out,
         field_catalog=_field_catalog(),
+    )
+
+
+def _summary_query_years(years: Optional[str]) -> list[int] | None:
+    if not years:
+        return None
+    return [int(y.strip()) for y in years.split(",") if y.strip().isdigit()]
+
+
+def _load_summary_payload(
+    db: Session,
+    current_user: CurrentUser,
+    *,
+    project_id: str,
+    province_code: Optional[str],
+    quarter_keys: Optional[str],
+    years: Optional[str],
+    chart_package_ids: Optional[str],
+    include_seah: bool,
+) -> dict:
+    if include_seah and not current_user.can_see_seah:
+        include_seah = False
+    try:
+        return build_report_summary(
+            db,
+            current_user,
+            project_id=project_id,
+            province_code=province_code,
+            quarter_keys=_parse_id_list(quarter_keys),
+            years=_summary_query_years(years),
+            chart_package_ids=_parse_id_list(chart_package_ids),
+            include_seah=include_seah,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get(
+    "/reports/summary",
+    response_model=ReportSummaryResponse,
+    summary="Executive summary matrix + charts (ADB quarterly view)",
+)
+def report_summary(
+    project_id: str = Query(..., description="Single project_id"),
+    province_code: Optional[str] = Query(None),
+    quarter_keys: Optional[str] = Query(None, description="Comma-separated e.g. 2026-Q1,2026-Q2"),
+    years: Optional[str] = Query(None, description="Comma-separated years e.g. 2025,2026"),
+    chart_package_ids: Optional[str] = Query(None, description="Optional package filter for charts"),
+    include_seah: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ReportSummaryResponse:
+    payload = _load_summary_payload(
+        db,
+        current_user,
+        project_id=project_id,
+        province_code=province_code,
+        quarter_keys=quarter_keys,
+        years=years,
+        chart_package_ids=chart_package_ids,
+        include_seah=include_seah,
+    )
+    return ReportSummaryResponse(**payload)
+
+
+@router.get(
+    "/reports/summary/export",
+    summary="Download executive Summary report as XLSX (matrix + charts)",
+    response_class=StreamingResponse,
+)
+def export_summary_report(
+    project_id: str = Query(..., description="Single project_id"),
+    province_code: Optional[str] = Query(None),
+    quarter_keys: Optional[str] = Query(None, description="Comma-separated e.g. 2026-Q1,2026-Q2"),
+    years: Optional[str] = Query(None, description="Comma-separated years e.g. 2025,2026"),
+    chart_package_ids: Optional[str] = Query(None, description="Optional package filter for charts"),
+    include_seah: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> StreamingResponse:
+    payload = _load_summary_payload(
+        db,
+        current_user,
+        project_id=project_id,
+        province_code=province_code,
+        quarter_keys=quarter_keys,
+        years=years,
+        chart_package_ids=chart_package_ids,
+        include_seah=include_seah,
+    )
+    row_count = summary_export_row_count(payload)
+    _guard_export(db, current_user, "export_summary", row_count)
+    xlsx_bytes = summary_workbook_bytes(payload)
+    filename = summary_export_filename(payload)
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

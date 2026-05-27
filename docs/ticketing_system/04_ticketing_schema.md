@@ -82,6 +82,24 @@ CREATE INDEX idx_tickets_assigned_to        ON ticketing.tickets (assigned_to_us
 CREATE INDEX idx_tickets_current_workflow   ON ticketing.tickets (current_workflow_id, current_step_id);
 ```
 
+**Planned (locked spec — not in DB yet):** see [12_reports_and_report_builder.md](12_reports_and_report_builder.md) §14.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `current_overdue_episode_id` | UUID NULL FK → `ticket_overdue_episodes` | Open overdue stint; NULL if not overdue. Queue filter + display days from episode `started_at`. |
+
+### 2.1a `ticketing.ticket_overdue_episodes` (planned)
+
+One row per overdue stint at a workflow step. **Source of truth** for Summary and “closed on time”. Full column list and writer rules: [12_reports_and_report_builder.md §14](12_reports_and_report_builder.md).
+
+| Column | Notes |
+|--------|--------|
+| `episode_id` | PK |
+| `ticket_id`, `workflow_step_id`, `step_order` | Step context at breach |
+| `assigned_to_user_id`, `assigned_role_id` | Officer at breach |
+| `started_at`, `ended_at`, `end_reason`, `triggered_by` | Episode lifecycle |
+| `days_overdue` | Set **only when** `ended_at` is set; NULL while open |
+
 ---
 
 ### 2.2 `ticketing.ticket_events`
