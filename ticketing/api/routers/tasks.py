@@ -126,9 +126,25 @@ def create_task(
         except ValueError:
             raise HTTPException(status_code=422, detail="due_date must be YYYY-MM-DD")
 
-    assignee = body.assigned_to_user_id
+    from ticketing.constants.demo_officers import LEGACY_OFFICER_ID_MAP
+
+    assignee = LEGACY_OFFICER_ID_MAP.get(
+        body.assigned_to_user_id, body.assigned_to_user_id
+    )
     if current_user.matches_assignee(assignee):
         assignee = current_user.user_id
+
+    if task_type == "SITE_VISIT":
+        existing = db.execute(
+            select(TicketTask).where(
+                TicketTask.ticket_id == ticket_id,
+                TicketTask.task_type == "SITE_VISIT",
+                TicketTask.status == "PENDING",
+                TicketTask.assigned_to_user_id == assignee,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return _task_to_dict(existing)
 
     task = TicketTask(
         task_id=_new_id(),

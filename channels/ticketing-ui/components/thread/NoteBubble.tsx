@@ -1,6 +1,8 @@
 "use client";
 
 import { getRoleBubbleStyle } from "@/lib/mobile-constants";
+import { isFieldReportEvent } from "@/lib/field-visit";
+import { isResolutionRecordEvent } from "@/lib/resolution";
 import type { TicketEvent } from "@/lib/api";
 import { NoteText } from "./NoteText";
 import { MessageCircle, AlertTriangle, FilePen } from "lucide-react";
@@ -86,6 +88,46 @@ export function NoteBubble({
   viewerTiers?:      Map<string, "informed" | "observer">;
 }) {
   const time = new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const fieldReport = isFieldReportEvent(event);
+  const resolutionRecord = isResolutionRecordEvent(event);
+
+  // ── Resolution record (green) ─────────────────────────────────────────────
+  if (resolutionRecord) {
+    const alignEnd = isMine;
+    return (
+      <div className={`flex flex-col px-4 my-1.5 ${alignEnd ? "items-end" : "items-start"}`}>
+        <div
+          className={`max-w-[80%] bg-green-50 border-l-4 border-green-600 text-gray-800 rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+            alignEnd ? "rounded-br-sm" : "rounded-bl-sm"
+          }`}
+        >
+          <NoteText text={event.note ?? ""} />
+        </div>
+        <div className={`text-[11px] text-green-800 mt-0.5 ${alignEnd ? "text-right" : ""}`}>
+          {isMine ? "You" : event.created_by_user_id ?? "Officer"} · Resolution record · {time}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Field report (amber — matches Field Reports panel liner) ───────────────
+  if (fieldReport) {
+    const alignEnd = isMine;
+    return (
+      <div className={`flex flex-col px-4 my-1.5 ${alignEnd ? "items-end" : "items-start"}`}>
+        <div
+          className={`max-w-[80%] bg-amber-50 border-l-4 border-amber-400 text-gray-800 rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+            alignEnd ? "rounded-br-sm" : "rounded-bl-sm"
+          }`}
+        >
+          <NoteText text={event.note ?? ""} />
+        </div>
+        <div className={`text-[11px] text-amber-700 mt-0.5 ${alignEnd ? "text-right" : ""}`}>
+          {isMine ? "You" : event.created_by_user_id ?? "Officer"} · Field report · {time}
+        </div>
+      </div>
+    );
+  }
 
   // ── Complainant message bubble ─────────────────────────────────────────────
   if (event.event_type === "COMPLAINANT_MESSAGE") {

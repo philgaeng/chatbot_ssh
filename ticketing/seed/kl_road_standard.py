@@ -291,10 +291,18 @@ def seed_settings(db: Session) -> None:
         "report_schedule": {
             "frequency": "quarterly",
             "day_of_month": 5,
-            "recipients_by_role": [
+        },
+        "report_limits": {
+            "max_export_rows": 100,
+            "max_exports_per_user_per_hour": 10,
+            "max_reports_per_role_per_quarter": 3,
+            "quarterly_email_enabled": True,
+            "allowed_recipient_roles": [
                 "adb_national_project_director",
                 "adb_hq_safeguards",
                 "adb_hq_project",
+                "mopit_rep",
+                "dor_rep",
             ],
         },
         "sla_watchdog_interval_minutes": {"value": 15},
@@ -331,7 +339,62 @@ def seed_settings(db: Session) -> None:
             logger.info("  + setting: %s", key)
         else:
             logger.info("  = setting already exists: %s", key)
+    _seed_quarterly_assignments(db)
     db.flush()
+
+
+def _seed_quarterly_assignments(db: Session) -> None:
+    """Demo: one overview report per senior role for the current calendar quarter."""
+    import uuid
+
+    from ticketing.services.quarterly_assignments import quarter_key_from_date
+
+    if db.get(Settings, "quarterly_report_assignments"):
+        logger.info("  = quarterly_report_assignments already exists")
+        return
+    qk = quarter_key_from_date()
+    template = {
+        "name": "GRM quarterly overview",
+        "kind": "overview",
+        "include_seah": False,
+        "project_ids": [],
+        "package_ids": [],
+        "location_codes": [],
+        "pivot": None,
+    }
+    roles = [
+        "adb_national_project_director",
+        "adb_hq_safeguards",
+        "adb_hq_project",
+    ]
+    assignments = [
+        {
+            "id": str(uuid.uuid4()),
+            "quarter_key": qk,
+            "role_key": role,
+            "name": "GRM quarterly overview",
+            "template": template,
+            "active": True,
+        }
+        for role in roles
+    ]
+    db.add(Settings(key="quarterly_report_assignments", value=assignments))
+    logger.info("  + quarterly_report_assignments (%d roles for %s)", len(assignments), qk)
+
+    if not db.get(Settings, "quarterly_report_library"):
+        db.add(
+            Settings(
+                key="quarterly_report_library",
+                value=[
+                    {
+                        "id": str(uuid.uuid4()),
+                        "name": "GRM quarterly overview",
+                        "template": template,
+                    }
+                ],
+            )
+        )
+        logger.info("  + quarterly_report_library (1 definition)")
 
 
 def seed_project(db: Session) -> None:

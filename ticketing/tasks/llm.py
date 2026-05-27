@@ -176,3 +176,121 @@ def generate_findings(self, ticket_id: str) -> dict:
         raise self.retry(exc=exc)
     finally:
         db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# generate_resolved_case_summary
+# ─────────────────────────────────────────────────────────────────────────────
+
+@celery_app.task(
+    name="ticketing.tasks.llm.generate_resolved_case_summary",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    acks_late=True,
+)
+def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) -> dict:
+    """Build officer + public closure documents (spec §3). Waits up to 30s for findings."""
+    import time
+
+    from ticketing.clients.llm_client import generate_resolved_case_summary_llm
+    from ticketing.clients import llm_client as _llm
+    from ticketing.models.base import SessionLocal
+    from ticketing.models.ticket import Ticket
+    from ticketing.models.ticket_context_cache import TicketContextCache
+    from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
+    from ticketing.services.resolved_summary_builder import (
+        assemble_llm_bundle,
+        assemble_summary_input,
+        build_flat_narrative,
+        build_public_summary_json,
+        build_summary_json,
+        upsert_resolved_summary,
+    )
+    from ticketing.tasks.notifications import notify_complainant
+
+    db = SessionLocal()
+    try:
+        ticket = db.get(Ticket, ticket_id)
+        if not ticket:
+            return {"ticket_id": ticket_id, "status": "not_found"}
+
+        data = assemble_summary_input(db, ticket_id)
+        resolution_ev = data.get("resolution_ev")
+        if not resolution_ev:
+            return {"ticket_id": ticket_id, "status": "no_resolution_record"}
+
+        source_id = resolution_ev.event_id
+        existing = db.get(TicketResolvedSummary, ticket_id)
+        if (
+            existing
+            and existing.source_resolution_event_id == source_id
+            and existing.generation_status == "complete"
+            and not force
+        ):
+            return {"ticket_id": ticket_id, "status": "skipped"}
+
+        prior_findings = None
+        for _ in range(6):
+            cache = db.get(TicketContextCache, ticket_id)
+            if cache and cache.findings_json:
+                prior_findings = cache.findings_json
+                break
+            time.sleep(5)
+
+        bundle = assemble_llm_bundle(data, prior_findings)
+        llm_out = generate_resolved_case_summary_llm(
+            bundle,
+            is_seah=ticket.is_seah,
+            primary_language=data["primary_language"],
+        )
+        model = _llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD
+        status = "complete" if llm_out else "llm_failed"
+
+        summary_json = build_summary_json(db, data, llm_out)
+        if llm_out:
+            fs = summary_json.setdefault("findings_summary", {})
+            fs["field_reports_digest_en"] = llm_out.get("field_reports_digest_en", "")
+            fs["other_notes_digest_en"] = llm_out.get("other_notes_digest_en", "")
+            fs["combined_digest_en"] = llm_out.get("combined_digest_en", "")
+        summary_json["findings_summary"]["ai_summary_en"] = (
+            (prior_findings or {}).get("summary_en") or ticket.ai_summary_en
+        )
+
+        public_json = build_public_summary_json(data, summary_json, llm_out)
+        narrative = build_flat_narrative(public_json)
+
+        row = upsert_resolved_summary(
+            db,
+            ticket_id,
+            source_resolution_event_id=source_id,
+            summary_json=summary_json,
+            summary_public_json=public_json,
+            summary_text_primary=narrative,
+            primary_language=data["primary_language"],
+            generation_model=model,
+            generation_status=status,
+        )
+        row.summary_text_en = summary_json.get("findings_summary", {}).get("combined_digest_en")
+        db.commit()
+
+        if status == "complete" and row.closure_public_url:
+            notify_complainant.delay(
+                ticket_id,
+                (
+                    "Your grievance has been resolved. "
+                    f"Read the outcome here: {row.closure_public_url}"
+                ),
+                "RESOLVED_CLOSURE",
+            )
+
+        return {"ticket_id": ticket_id, "status": status, "token": row.closure_public_token}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "generate_resolved_case_summary error ticket_id=%s: %s", ticket_id, exc
+        )
+        raise self.retry(exc=exc)
+    finally:
+        db.close()

@@ -29,6 +29,11 @@ from ticketing.engine.workflow_engine import (
 )
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_viewer import TicketViewer
+from ticketing.models.workflow import WorkflowStep
+from ticketing.services.overdue_episodes import (
+    close_open_episode,
+    ensure_breach_episode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +230,13 @@ def escalate_ticket(
     old_step_id = ticket.current_step_id
     old_assigned = ticket.assigned_to_user_id
 
+    close_open_episode(
+        db,
+        ticket,
+        "ESCALATED",
+        ended_at=_now(),
+    )
+
     # ── Move previous Actor to Informed (tier lifecycle, spec 12 §2) ─────────
     if old_assigned:
         _ensure_viewer(db, ticket.ticket_id, old_assigned, "informed", "system")
@@ -242,7 +254,7 @@ def escalate_ticket(
 
     ticket.current_step_id = next_step.step_id
     ticket.status_code = "ESCALATED"
-    ticket.sla_breached = (triggered_by == "SLA_AUTO")
+    ticket.sla_breached = False
     ticket.step_started_at = None  # clock resets at new step; starts on ACKNOWLEDGE
     ticket.updated_by_user_id = created_by_user_id or "system"
 
@@ -376,8 +388,10 @@ def grc_decide(
     actor_role: Optional[str] = None,
 ) -> TicketEvent:
     """
-    GRC Chair records the committee's decision and optionally advances to L4
-    (if unresolved) or marks ticket resolved.
+    Legacy GRC decision path — **no longer exposed via API** (use RESOLVE / ESCALATE).
+
+    Kept for historical event replay and tests. GRC chairs close cases with RESOLVE
+    + resolution record per docs/ticketing_system/11_ticket_resolution_and_case_summary.md.
 
     decision: "RESOLVED" | "ESCALATE_TO_LEGAL"
     """
@@ -475,6 +489,8 @@ def run_sla_check(db: Session) -> dict:
 
     for ticket in tickets:
         try:
+            step = db.get(WorkflowStep, ticket.current_step_id) if ticket.current_step_id else None
+            ensure_breach_episode(db, ticket, step, triggered_by="SLA_AUTO_ESCALATE")
             result = escalate_ticket(
                 ticket, db,
                 triggered_by="SLA_AUTO",
@@ -482,7 +498,7 @@ def run_sla_check(db: Session) -> dict:
             )
             if result is None:
                 # Ticket is at final step — mark breached but don't escalate
-                ticket.sla_breached = True
+                ensure_breach_episode(db, ticket, step, triggered_by="SLA_WATCHDOG")
                 ticket.updated_by_user_id = "system"
                 _add_event(
                     db, ticket, "SLA_BREACH_FINAL_STEP",

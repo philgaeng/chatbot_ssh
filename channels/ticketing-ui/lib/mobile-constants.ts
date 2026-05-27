@@ -76,7 +76,7 @@ export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
 //   "action" — performs an immediate ticket action (ESCALATE)
 //   "assign" — triggers @mention autocomplete to pick the assignee
 
-export type HashCommandKind = "task" | "report" | "action" | "assign";
+export type HashCommandKind = "task" | "task_assign" | "report" | "action" | "assign";
 
 export interface HashCommand {
   hash: string;
@@ -90,13 +90,14 @@ export interface HashCommand {
 }
 
 export const HASH_COMMANDS: HashCommand[] = [
+  // ── Field / inspection (#inspect @me default; #inspect @officer for others) ──
+  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task_assign", taskKey: "SITE_VISIT" },
+  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report" },
   // ── Task shortcuts (creates TicketTask assigned to self) ──
-  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task",   taskKey: "SITE_VISIT"        },
   { hash: "photo",    label: "Site photo required",  icon: "Camera",        kind: "task",   taskKey: "DOCUMENT_PHOTO"    },
   { hash: "call",     label: "Call complainant",     icon: "Phone",         kind: "task",   taskKey: "FOLLOW_UP_CALL"    },
   { hash: "review",   label: "Escalation review",    icon: "ClipboardList", kind: "task",   taskKey: "ESCALATION_REVIEW" },
   // ── Direct actions ────────────────────────────────────────
-  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report"                              },
   { hash: "escalate", label: "Escalate ticket",       icon: "ArrowUpCircle", kind: "action", action: "ESCALATE"           },
   { hash: "assign",   label: "Assign ticket to…",     icon: "UserCheck",     kind: "assign"                              },
 ];
@@ -127,7 +128,8 @@ export function isThreadTaskEvent(eventType: string): boolean {
  * Notification-only events: counted for unread badge but NOT rendered in the thread.
  * (MENTION events are stored in ticket_events but are purely notification signals.)
  */
-export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION"]);
+/** Hidden from thread UI — badge/audit only (task card shows completion in place). */
+export const NOTIFICATION_ONLY_EVENT_TYPES = new Set(["MENTION", "TASK_COMPLETED"]);
 
 /** Inbound complainant messages — rendered as a distinct emerald bubble. */
 export const COMPLAINANT_EVENT_TYPES = new Set(["COMPLAINANT_MESSAGE"]);
@@ -140,7 +142,20 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "ESCALATED":             return `Escalated${payload?.to_step_key ? ` → ${payload.to_step_key}` : ""}`;
     case "ASSIGNED":              return `Assigned to ${payload?.new_assigned ?? "officer"}`;
     case "PRIORITY_CHANGED":      return `Priority changed to ${payload?.new_priority ?? "—"}`;
-    case "RESOLVED":              return "Case resolved";
+    case "RESOLVED": {
+      const cat = payload?.resolution_category as string | undefined;
+      if (cat) {
+        const labels: Record<string, string> = {
+          CLASSIFIED: "Grievance classified",
+          DEMAND_REJECTED: "Complainant demand rejected",
+          ACCEPTED_MONETARY: "Grievance accepted — monetary compensation",
+          ACCEPTED_RELOCATION: "Grievance accepted — relocation",
+          ACCEPTED_OTHER: "Grievance accepted — other remedy",
+        };
+        return `Case resolved — ${labels[cat] ?? cat}`;
+      }
+      return "Case resolved";
+    }
     case "CLOSED":                return "Case closed";
     case "GRC_CONVENED":          return `GRC hearing convened${payload?.hearing_date ? ` — ${payload.hearing_date}` : ""}`;
     case "GRC_DECIDED":           return `GRC decision: ${payload?.decision ?? "recorded"}`;

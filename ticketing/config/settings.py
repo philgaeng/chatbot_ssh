@@ -32,6 +32,8 @@ class TicketingSettings(BaseSettings):
     # User-facing webchat URL — embedded in QR codes so complainants reach the chatbot.
     # Override via CHATBOT_WEBCHAT_URL env var in production.
     chatbot_webchat_url: str = "https://grm.facets-ai.com/chat"
+    # Public base for complainant closure page (no trailing slash)
+    ticketing_public_base_url: str = "https://nepal-gms-chatbot.facets-ai.com"
 
     # ── Keycloak (replaces AWS Cognito for self-hosted deployments) ──
     # Leave keycloak_issuer empty to keep the dev bypass (returns mock-super-admin).

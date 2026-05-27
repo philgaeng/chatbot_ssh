@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AlertTriangle, X, Lock, ClipboardList, Construction } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { QuarterlyReportSettings } from "@/components/settings/QuarterlyReportSettings";
 import {
   listWorkflows,
   listTemplates,
@@ -38,6 +39,8 @@ import {
   updateProjectOrgRole,
   getOrgRoles,
   setOrgRoles,
+  getReportLimits,
+  setReportLimits,
   getProjectActorRoles,
   setProjectActorRoles,
   addPackageOrg,
@@ -3238,28 +3241,55 @@ function PackageCreateModal({
 
 // ── System Config tab (super_admin only) ─────────────────────────────────────
 
+const DEFAULT_REPORT_LIMITS_JSON = {
+  max_export_rows: 100,
+  max_exports_per_user_per_hour: 10,
+  max_reports_per_role_per_quarter: 3,
+  quarterly_email_enabled: true,
+  allowed_recipient_roles: [
+    "adb_national_project_director",
+    "adb_hq_safeguards",
+    "adb_hq_project",
+    "mopit_rep",
+    "dor_rep",
+  ],
+};
+
 function SystemConfigTab() {
   const [jsonText, setJsonText] = useState("");
+  const [limitsJson, setLimitsJson] = useState("");
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
+  const [savingLimits, setSavingLimits] = useState(false);
   const [error, setError]       = useState("");
+  const [limitsError, setLimitsError] = useState("");
   const [saved, setSaved]       = useState(false);
+  const [limitsSaved, setLimitsSaved] = useState(false);
 
   useEffect(() => {
-    getOrgRoles()
-      .then((roles) => setJsonText(JSON.stringify(roles, null, 2)))
-      .catch(() => {
-        // Seed not yet run — show the defaults inline
-        setJsonText(JSON.stringify([
-          { key: "donor",                  label: "Donor",                   description: "Financing institution (e.g. ADB, World Bank)" },
-          { key: "executing_agency",       label: "Executing Agency",        description: "Government project owner (maître d'ouvrage)" },
-          { key: "implementing_agency",    label: "Implementing Agency",     description: "Government implementation arm (maître d'œuvre)" },
-          { key: "main_contractor",        label: "Main Contractor",         description: "Primary civil-works contractor" },
-          { key: "subcontractor_t1",       label: "Subcontractor (Tier 1)",  description: "First-tier subcontractor" },
-          { key: "subcontractor_t2",       label: "Subcontractor (Tier 2)",  description: "Second-tier or specialist subcontractor" },
-          { key: "supervision_consultant", label: "Supervision Consultant",  description: "Engineer's Representative / contract administrator" },
-          { key: "specialized_consultant", label: "Specialized Consultant",  description: "Environmental, social safeguards, resettlement, etc." },
-        ], null, 2));
+    Promise.all([getOrgRoles().catch(() => null), getReportLimits().catch(() => null)])
+      .then(([roles, limits]) => {
+        if (roles) {
+          setJsonText(JSON.stringify(roles, null, 2));
+        } else {
+          setJsonText(
+            JSON.stringify(
+              [
+                { key: "donor", label: "Donor", description: "Financing institution (e.g. ADB, World Bank)" },
+                { key: "executing_agency", label: "Executing Agency", description: "Government project owner" },
+                { key: "implementing_agency", label: "Implementing Agency", description: "Government implementation arm" },
+                { key: "main_contractor", label: "Main Contractor", description: "Primary civil-works contractor" },
+                { key: "subcontractor_t1", label: "Subcontractor (Tier 1)", description: "First-tier subcontractor" },
+                { key: "subcontractor_t2", label: "Subcontractor (Tier 2)", description: "Second-tier subcontractor" },
+                { key: "supervision_consultant", label: "Supervision Consultant", description: "Engineer's Representative" },
+                { key: "specialized_consultant", label: "Specialized Consultant", description: "Safeguards, resettlement, etc." },
+              ],
+              null,
+              2,
+            ),
+          );
+        }
+        setLimitsJson(JSON.stringify(limits ?? DEFAULT_REPORT_LIMITS_JSON, null, 2));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -3278,6 +3308,24 @@ function SystemConfigTab() {
       setError(e instanceof Error ? e.message : "Invalid JSON");
     }
     setSaving(false);
+  }
+
+  async function handleSaveLimits() {
+    setSavingLimits(true);
+    setLimitsError("");
+    setLimitsSaved(false);
+    try {
+      const parsed = JSON.parse(limitsJson);
+      if (typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Must be a JSON object");
+      }
+      await setReportLimits(parsed);
+      setLimitsSaved(true);
+      setTimeout(() => setLimitsSaved(false), 2500);
+    } catch (e: unknown) {
+      setLimitsError(e instanceof Error ? e.message : "Invalid JSON");
+    }
+    setSavingLimits(false);
   }
 
   return (
@@ -3333,6 +3381,45 @@ function SystemConfigTab() {
           </span>
         </div>
       </section>
+
+      <section className="bg-gray-50 border border-gray-200 rounded-lg p-5 mt-6">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Report dispatch limits</h3>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Caps exports and quarterly emails for all projects. Local admins configure templates
+            within these limits. Keys:{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">max_export_rows</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">max_exports_per_user_per_hour</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">max_reports_per_role_per_quarter</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">quarterly_email_enabled</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">allowed_recipient_roles</code>.
+          </p>
+        </div>
+        <textarea
+          value={limitsJson}
+          onChange={(e) => setLimitsJson(e.target.value)}
+          rows={16}
+          spellCheck={false}
+          disabled={loading}
+          className="w-full font-mono text-xs bg-white border border-gray-300 rounded px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y"
+        />
+        {limitsError && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {limitsError}
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveLimits}
+            disabled={savingLimits || loading}
+            className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {savingLimits ? "Saving…" : "Save report limits"}
+          </button>
+          {limitsSaved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
+        </div>
+      </section>
     </div>
   );
 }
@@ -3384,10 +3471,11 @@ function SettingsSubTabs<T extends string>({
 
 export default function SettingsPage() {
   const { isAdmin, isSuperAdmin } = useAuth();
-  const mainTabs = useMemo(
-    () => (isSuperAdmin ? MAIN_TABS : MAIN_TABS.filter((t) => t.id === "projects")),
-    [isSuperAdmin],
-  );
+  const mainTabs = useMemo(() => {
+    if (isSuperAdmin) return MAIN_TABS;
+    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "projects" || t.id === "platform");
+    return MAIN_TABS.filter((t) => t.id === "projects");
+  }, [isSuperAdmin, isAdmin]);
   const [activeMain, setActiveMain] = useState<MainTab>("projects");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
   const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
@@ -3437,12 +3525,26 @@ export default function SettingsPage() {
     );
   }
 
-  const platformTabs: { id: PlatformSub; label: string }[] = [
-    { id: "locations", label: "Locations" },
-    { id: "reports", label: "Reports" },
-    ...(isSuperAdmin ? [{ id: "project_types" as const, label: "Project types" }] : []),
-    ...(isSuperAdmin ? [{ id: "system_config" as const, label: "System config" }] : []),
-  ];
+  const platformTabs: { id: PlatformSub; label: string }[] = useMemo(() => {
+    if (isSuperAdmin) {
+      return [
+        { id: "locations", label: "Locations" },
+        { id: "reports", label: "Quarterly reports" },
+        { id: "project_types", label: "Project types" },
+        { id: "system_config", label: "Advanced (JSON)" },
+      ];
+    }
+    if (isAdmin) {
+      return [{ id: "reports", label: "Quarterly reports" }];
+    }
+    return [];
+  }, [isSuperAdmin, isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin && !isSuperAdmin && platformSub !== "reports") {
+      setPlatformSub("reports");
+    }
+  }, [isAdmin, isSuperAdmin, platformSub]);
 
   return (
     <div className="p-6">
@@ -3516,7 +3618,7 @@ export default function SettingsPage() {
         <>
           <SettingsSubTabs tabs={platformTabs} active={platformSub} onChange={setPlatformSub} />
           {platformSub === "locations" && <LocationsSection />}
-          {platformSub === "reports" && <ComingSoon label="Report schedule" />}
+          {platformSub === "reports" && <QuarterlyReportSettings />}
           {platformSub === "project_types" && isSuperAdmin && <ProjectTypesTab />}
           {platformSub === "system_config" && isSuperAdmin && <SystemConfigTab />}
         </>

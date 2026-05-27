@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: 2026-05-12 — roles catalog, officer onboarding, Keycloak webhook, Settings UI, PROGRESS sync
+> Last updated: 2026-05-26 — operational reports, pivot, quarterly email plan; Summary tab spec §12 (not built)
 
 ---
 
@@ -70,10 +70,19 @@
   - **Compose:** `KEYCLOAK_WEBHOOK_SECRET` passed into `ticketing_api` and `ticketing_api_auth` (`docker-compose.grm.yml`).
   - **ticketing-ui:** Settings — role catalog editor (`PATCH /api/v1/roles/{id}`), officers roster Invited/Active badges, invite copy; `lib/api.ts` — `GrmRole`, `listRoles`, `updateRole`, optional `organization_id` on org create.
 
-**Restore / revert this batch:** `git revert 578ef24` (UI), then `git revert c60d8ee` (backend). After reverting the backend commit, roll back DB with Alembic if needed: `alembic downgrade o5p7q9r1` then step before `n4p6r8t0` per your head revision (see `DOCKER.md`).
+- ✅ **Reports — Overview, Pivot, Quarterly email** (2026-05-26, `b871b75` + `840cbea` on `integration/seah-claude`):
+  - **Spec:** `docs/ticketing_system/12_reports_and_report_builder.md` — §2–§11 implemented; **§12 Summary** specified; §13 answered; **§14 overdue episodes locked** (`ticket_overdue_episodes` + `tickets.current_overdue_episode_id`; `days_overdue` at end; display days on read).
+  - **Backend:** `report_rows.py`, `pivot_table.py`, `report_export.py`, `report_limits.py`, `quarterly_assignments.py`, `quarterly_library.py`; `ticketing/api/routers/reports.py` — query, build, export, quarterly-plan/library/assignments.
+  - **UI:** `channels/ticketing-ui/app/reports/page.tsx` — tabs: Overview | Pivot | Quarterly email (`local_admin`); `QuarterlyPlanTab.tsx`; auth-safe XLSX download via `downloadApiFile`.
+  - **Quarterly model:** Report **library** (named templates) + **assignments** (max 3 per role per calendar quarter); Celery sends one email per assignment; caps in `report_limits` (super_admin JSON).
+  - **Auth stack:** `grm_ui_auth` :3002 → `ticketing_api_auth` :5003.
+
+**Restore / revert roles batch:** `git revert 578ef24` (UI), then `git revert c60d8ee` (backend). After reverting the backend commit, roll back DB with Alembic if needed: `alembic downgrade o5p7q9r1` then step before `n4p6r8t0` per your head revision (see `DOCKER.md`).
 
 ### In progress / next
-- 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3001)
+- ✅ **SLA overdue episodes (§14)** — migration `x9y1z3a5`, writers in escalation/tickets, backfill script
+- ✅ **Reports Summary tab (§12–§13)** — `GET /api/v1/reports/summary` + UI tab
+- 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3002 auth / :3001 bypass)
 - 🔲 **Staging deploy** — Docker deploy to grm.stage.facets-ai.com
 
 ### Active containers
@@ -158,6 +167,8 @@ mock-officer-adb-observer   → adb_hq_safeguards @ ADB
 
 | Hash | Date | What changed |
 |------|------|-------------|
+| `840cbea` | 2026-05-26 | **feat(reports)** Quarterly email tab: report library + role assignments (3/quarter/role); `QuarterlyPlanTab.tsx` |
+| `b871b75` | 2026-05-26 | **feat(reports)** Overview four-section query, pivot builder, export, report_limits, Celery per-assignment dispatch |
 | `71de359` | 2026-05-12 | **docs** PROGRESS: document `c60d8ee` + `578ef24`, migrations, revert / Alembic downgrade notes |
 | `578ef24` | 2026-05-12 | **feat(ticketing-ui)** Settings roles editor + roster onboarding UI + org create optional id; api client `GrmRole` / `listRoles` / `updateRole` |
 | `c60d8ee` | 2026-05-12 | **feat(ticketing)** Migrations `n4p6r8t0` + `o5p7q9r1`; Keycloak webhook; invite/onboarding; `grm_role_catalog` + seed; org id allocator; compose webhook secret |

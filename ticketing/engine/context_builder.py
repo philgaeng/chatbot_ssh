@@ -99,6 +99,7 @@ def build_ticket_context(ticket_id: str, db: Session) -> dict:
     for i, ev in enumerate(events, 1):
         payload = ev.payload or {}
         is_field_report = bool(payload.get("is_field_report"))
+        is_resolution_record = bool(payload.get("is_resolution_record"))
 
         # Prefer English translation if translator task has run
         note = payload.get("translation_en") or ev.note
@@ -121,6 +122,9 @@ def build_ticket_context(ticket_id: str, db: Session) -> dict:
             entry["intent"] = payload.get("intent", "OTHER")
         elif is_field_report:
             entry["is_field_report"] = True
+        elif is_resolution_record:
+            entry["is_resolution_record"] = True
+            entry["resolution_category"] = payload.get("resolution_category")
 
         timeline.append(entry)
 

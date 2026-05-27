@@ -22,8 +22,13 @@ import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
-import { FieldVisitReportModal }              from "@/components/thread/FieldVisitReportModal";
-import { isSiteVisitTask }                    from "@/lib/field-visit";
+import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
+import { ResolutionSheet }                    from "@/components/ResolutionSheet";
+import type { ResolutionCategoryCode }        from "@/lib/resolution";
+import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
+import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
+import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { PII_MASK } from "@/lib/pii-display";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
@@ -31,7 +36,7 @@ import {
   type HashCommand,
 } from "@/lib/mobile-constants";
 import {
-  IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene, IconGrcDecide,
+  IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene,
   IconReply, IconTask, IconAssign, IconTranslations,
   IconEdit, IconActiveSession, IconExpiredSession, IconRevealStatement,
   IconFileImage, IconFilePdf, IconFileOther, IconUpload,
@@ -562,7 +567,7 @@ function FieldReportsCard({ ticket }: { ticket: TicketDetail }) {
       </div>
       {reports.length === 0 ? (
         <p className="text-xs text-gray-400 italic">
-          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar to add one.
+          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar.
         </p>
       ) : (
         <div className="space-y-3">
@@ -686,7 +691,7 @@ function TasksCard({ tasks, user, onComplete, onAddTask }: {
         )}
       </div>
       {tasks.length === 0 && (
-        <p className="text-xs text-gray-400 italic">No tasks yet. Use <span className="font-mono bg-gray-100 px-1 rounded">#inspect</span> or <span className="font-mono bg-gray-100 px-1 rounded">#call</span> to assign one.</p>
+        <p className="text-xs text-gray-400 italic">No tasks yet. Use <span className="font-mono bg-gray-100 px-1 rounded">#inspect @me</span> or <span className="font-mono bg-gray-100 px-1 rounded">#call</span> to assign one.</p>
       )}
 
       <div className="space-y-2">
@@ -776,6 +781,7 @@ export default function TicketDetailPage() {
 
   // ── Top bar actions ────────────────────────────────────────────────────
   const [actLoading, setActLoading]     = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
   const [showReply, setShowReply]       = useState(false);
   const [replyText, setReplyText]       = useState("");
   const [showAssign, setShowAssign]     = useState(false);
@@ -784,7 +790,6 @@ export default function TicketDetailPage() {
   const [savingAssign, setSavingAssign] = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
   const [grcHearingDate, setGrcHearingDate] = useState("");
-  const [grcDecision, setGrcDecision]   = useState<"RESOLVED" | "ESCALATE_TO_LEGAL">("RESOLVED");
 
   // ── Translation panel ──────────────────────────────────────────────────
   const PANEL_KEY = "grm_translation_panel_open";
@@ -895,10 +900,7 @@ export default function TicketDetailPage() {
 
   // ── Actions ────────────────────────────────────────────────────────────
   const ensureAcknowledged = useCallback(async () => {
-    if (!ticket || !["OPEN", "ESCALATED"].includes(ticket.status_code)) return;
-    if (!isAssigned) return;
-    await performAction(id, { action_type: "ACKNOWLEDGE" });
-    await load();
+    await ensureTicketAcknowledged(ticket, isAssigned, id, load);
   }, [ticket, isAssigned, id, load]);
 
   async function act(action_type: string, extra?: Record<string, string>) {
@@ -906,6 +908,21 @@ export default function TicketDetailPage() {
     try {
       if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
       await performAction(id, { action_type, ...extra });
+      await load();
+    } catch (e) { alert(String(e)); }
+    finally { setActLoading(false); }
+  }
+
+  async function submitResolve(category: ResolutionCategoryCode, note: string) {
+    setActLoading(true);
+    try {
+      await ensureAcknowledged();
+      await performAction(id, {
+        action_type: "RESOLVE",
+        resolution_category: category,
+        note,
+      });
+      setResolutionOpen(false);
       await load();
     } catch (e) { alert(String(e)); }
     finally { setActLoading(false); }
@@ -941,6 +958,7 @@ export default function TicketDetailPage() {
     const text = noteText.trim();
     setNoteText("");
     try {
+      await ensureAcknowledged();
       await performAction(id, { action_type: "NOTE", note: text });
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -950,17 +968,30 @@ export default function TicketDetailPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, id, load]);
+  }, [noteText, submitting, id, load, ensureAcknowledged]);
 
   // ── Report mode + field visit + attach ─────────────────────────────────
-  const [reportMode, setReportMode] = useState(false);
-  const [fieldVisitTask, setFieldVisitTask] = useState<TicketTask | null>(null);
-  const [fieldVisitSubmitting, setFieldVisitSubmitting] = useState(false);
+  const [fieldReportOpen, setFieldReportOpen] = useState(false);
+  const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
+  const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
+
+  const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
+    setFieldReportLinkedTask(linkedTask ?? null);
+    setFieldReportOpen(true);
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  }, []);
+
+  const closeFieldReport = useCallback(() => {
+    setFieldReportOpen(false);
+    setFieldReportLinkedTask(null);
+  }, []);
 
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
-      setFieldVisitTask(task);
+      openFieldReport(task);
       return;
     }
     try {
@@ -970,34 +1001,31 @@ export default function TicketDetailPage() {
       console.error("Complete task failed", e);
       alert("Could not complete the task. Please try again.");
     }
-  }, [id, load]);
+  }, [id, load, openFieldReport]);
 
-  const submitFieldVisitReport = useCallback(async (note: string) => {
-    if (!fieldVisitTask || fieldVisitSubmitLock.current) return;
+  const submitFieldReportForm = useCallback(async (data: FieldVisitFormData) => {
+    if (fieldVisitSubmitLock.current) return;
     fieldVisitSubmitLock.current = true;
-    setFieldVisitSubmitting(true);
-    const taskId = fieldVisitTask.task_id;
+    setFieldReportSubmitting(true);
     try {
-      await performAction(id, { action_type: "FIELD_REPORT", note });
-      try {
-        await completeTask(id, taskId);
-      } catch (completeErr) {
-        const refreshed = await listTicketTasks(id).catch(() => [] as TicketTask[]);
-        const t = refreshed.find((x) => x.task_id === taskId);
-        if (t?.status !== "DONE") throw completeErr;
-      }
-      setFieldVisitTask(null);
+      await submitStructuredFieldReport({
+        ticketId: id,
+        data,
+        linkedTask: fieldReportLinkedTask,
+        ensureAcknowledged,
+      });
+      closeFieldReport();
       await load();
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-      console.error("Field visit report failed", e);
-      alert("Could not save the field visit report. Please try again.");
+      console.error("Field report failed", e);
+      alert(fieldVisitSaveErrorMessage(e));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
-      setFieldVisitSubmitting(false);
+      setFieldReportSubmitting(false);
     }
-  }, [fieldVisitTask, id, load]);
+  }, [id, fieldReportLinkedTask, load, ensureAcknowledged, closeFieldReport]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
@@ -1015,7 +1043,7 @@ export default function TicketDetailPage() {
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "report") {
-      setReportMode(true);
+      openFieldReport(null);
       return;
     }
     if (cmd.kind === "action" && cmd.action) {
@@ -1032,7 +1060,7 @@ export default function TicketDetailPage() {
       return;
     }
     // #assign is handled inline in ComposeBar (text becomes "#assign @…")
-  }, [id, currentUserId, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, currentUserId, load, openFieldReport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNoteOrReport = useCallback(async () => {
     const text = noteText.trim();
@@ -1041,15 +1069,20 @@ export default function TicketDetailPage() {
 
     // Check for #assign @userId pattern
     const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+    const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
-    setReportMode(false);
     try {
-      if (assignMatch) {
+      if (inspectAssignee !== undefined) {
+        const assignee = inspectAssignee ?? currentUserId;
+        await createTask(id, {
+          task_type: "SITE_VISIT",
+          assigned_to_user_id: assignee,
+        });
+      } else if (assignMatch) {
         await patchTicket(id, { assign_to_user_id: assignMatch[1] });
-      } else if (reportMode) {
-        await performAction(id, { action_type: "FIELD_REPORT", note: text });
       } else {
+        await ensureAcknowledged();
         await performAction(id, { action_type: "NOTE", note: text });
       }
       await load();
@@ -1057,11 +1090,10 @@ export default function TicketDetailPage() {
     } catch (e) {
       console.error("Submit failed", e);
       setNoteText(text);
-      if (reportMode) setReportMode(true);
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, reportMode, id, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noteText, submitting, id, load, ensureAcknowledged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1111,35 +1143,17 @@ export default function TicketDetailPage() {
                   Acknowledge
                 </button>
               )}
-              {!isOpen && !isEscalated && !isGrcHearing && (
+              {!isOpen && !isEscalated && (
                 <>
                   <button onClick={() => act("ESCALATE")} disabled={actLoading}
                     className={`${btnBase} inline-flex items-center gap-1.5 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
                     <IconEscalateAction size={15} strokeWidth={2} />
                     Escalate
                   </button>
-                  <button onClick={() => act("RESOLVE")} disabled={actLoading}
-                    className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
+                  <button onClick={() => setResolutionOpen(true)} disabled={actLoading}
+                    className={`${btnBase} inline-flex items-center gap-1.5 bg-green-600 text-white hover:bg-green-700`}>
                     <IconResolve size={15} strokeWidth={2} />
                     Resolve
-                  </button>
-                  <button onClick={() => act("CLOSE")} disabled={actLoading}
-                    className={`${btnBase} border border-red-200 text-red-600 hover:bg-red-50`}>
-                    Close
-                  </button>
-                </>
-              )}
-              {isGrcChair && isGrcHearing && (
-                <>
-                  <select value={grcDecision} onChange={(e) => setGrcDecision(e.target.value as typeof grcDecision)}
-                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400">
-                    <option value="RESOLVED">Decision: Resolved</option>
-                    <option value="ESCALATE_TO_LEGAL">Decision: Escalate to Legal</option>
-                  </select>
-                  <button onClick={() => act("GRC_DECIDE", { grc_decision: grcDecision })} disabled={actLoading}
-                    className={`${btnBase} inline-flex items-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700`}>
-                    <IconGrcDecide size={15} strokeWidth={2} />
-                    GRC Decide
                   </button>
                 </>
               )}
@@ -1339,6 +1353,11 @@ export default function TicketDetailPage() {
             ) : (
               filteredEvents
                 .filter((e: TicketEvent) => !NOTIFICATION_ONLY_EVENT_TYPES.has(e.event_type))
+                .filter(
+                  (e: TicketEvent) =>
+                    !isThreadTaskEvent(e.event_type) ||
+                    shouldRenderTaskCardInThread(e, ticket.events, tasks),
+                )
                 .map((event: TicketEvent) => {
                   const isMine = event.created_by_user_id === currentUserId;
                   if (SYSTEM_EVENT_TYPES.has(event.event_type))
@@ -1360,7 +1379,15 @@ export default function TicketDetailPage() {
             <div ref={threadEndRef} />
           </div>
 
-          <div className={`flex-shrink-0 border-t ${reportMode ? "border-amber-200" : "border-gray-100"}`}>
+          <div className={`flex-shrink-0 border-t ${fieldReportOpen ? "border-amber-200" : "border-gray-100"}`}>
+            <FieldReportComposeCard
+              open={fieldReportOpen}
+              defaultLocation={ticket.grievance_location}
+              completeVisit={!!fieldReportLinkedTask}
+              submitting={fieldReportSubmitting}
+              onClose={closeFieldReport}
+              onSubmit={submitFieldReportForm}
+            />
             <ComposeBar
               value={noteText}
               onChange={setNoteText}
@@ -1368,9 +1395,8 @@ export default function TicketDetailPage() {
               onHashCommand={handleHashCommand}
               onFileSelected={handleAttachFile}
               attachUploading={attachUploading}
-              reportMode={reportMode}
-              onExitReportMode={() => setReportMode(false)}
-              disabled={submitting}
+              fieldReportOpen={fieldReportOpen}
+              disabled={submitting || fieldReportSubmitting}
               participants={mentionParticipants}
             />
           </div>
@@ -1476,13 +1502,13 @@ export default function TicketDetailPage() {
         />
       )}
 
-      <FieldVisitReportModal
-        open={!!fieldVisitTask}
-        defaultLocation={ticket.grievance_location}
-        submitting={fieldVisitSubmitting}
-        onClose={() => setFieldVisitTask(null)}
-        onSubmit={submitFieldVisitReport}
+      <ResolutionSheet
+        open={resolutionOpen}
+        onClose={() => setResolutionOpen(false)}
+        onSubmit={submitResolve}
+        submitting={actLoading}
       />
+
     </div>
   );
 }

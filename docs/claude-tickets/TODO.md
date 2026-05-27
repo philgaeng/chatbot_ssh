@@ -78,7 +78,7 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 - Open http://localhost:3001, switch roles via MockRoleSwitcher, verify each screen
 - GRC convene → decide flow visual check (date picker + purple button)
 - Mobile shell (/m/ routes) quick pass on narrow viewport
-- Reports page — already implemented (date range picker + XLSX download + scheduled reports section)
+- Reports — Overview / **Summary** / Pivot / Quarterly ✅; run `alembic upgrade head` + `python -m ticketing.seed.backfill_overdue_episodes` on existing DBs
 
 ### 6. Staging deploy to grm.stage.facets-ai.com
 **What:** Docker deploy to staging EC2, Nginx config, SSL.  

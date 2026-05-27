@@ -102,6 +102,7 @@ class TicketListItem(BaseModel):
     project_code: Optional[str]
     assigned_to_user_id: Optional[str]
     sla_breached: bool
+    overdue_days_display: Optional[int] = None
     step_started_at: Optional[datetime]
     created_at: datetime
     # Computed SLA deadline: step_started_at + step.resolution_time_days
@@ -204,17 +205,19 @@ class ReplyOwnerRequest(BaseModel):
 class TicketActionRequest(BaseModel):
     """
     POST /api/v1/tickets/{ticket_id}/actions
-    action_type: ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE | GRC_CONVENE | GRC_DECIDE
+    action_type: ACKNOWLEDGE | ESCALATE | RESOLVE | NOTE | FIELD_REPORT | GRC_CONVENE
     """
     action_type: str = Field(
         ...,
-        description="ACKNOWLEDGE | ESCALATE | RESOLVE | CLOSE | NOTE | GRC_CONVENE | GRC_DECIDE",
+        description="ACKNOWLEDGE | ESCALATE | RESOLVE | NOTE | FIELD_REPORT | GRC_CONVENE",
     )
     note: Optional[str] = None
+    resolution_category: Optional[str] = Field(
+        None,
+        description="Required for RESOLVE — CLASSIFIED | DEMAND_REJECTED | ACCEPTED_*",
+    )
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
-    # GRC-specific fields
-    grc_hearing_date: Optional[str] = Field(None, description="ISO date string e.g. 2026-05-03")
-    grc_decision: Optional[str] = Field(None, description="RESOLVED | ESCALATE_TO_LEGAL")
+    grc_hearing_date: Optional[str] = Field(None, description="ISO date for GRC_CONVENE e.g. 2026-05-03")
 
 
 class TicketActionResponse(BaseModel):
