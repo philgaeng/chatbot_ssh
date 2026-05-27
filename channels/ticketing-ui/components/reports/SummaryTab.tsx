@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Info, Loader2 } from "lucide-react";
+import { Check, Copy, Download, Info, Loader2 } from "lucide-react";
 import {
   downloadSummaryReportXlsx,
   fetchReportSummary,
@@ -12,6 +12,12 @@ import {
   type ReportSummaryResponse,
   type LocationNode,
 } from "@/lib/api";
+import {
+  CHART_COLORS,
+  copyBarChart,
+  copyPieChart,
+  type PieSlice,
+} from "@/lib/chart-clipboard";
 
 function recentQuarterOptions(count = 8): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];
@@ -29,19 +35,78 @@ function recentQuarterOptions(count = 8): { key: string; label: string }[] {
   return out;
 }
 
-function PieBlock({
-  title,
-  slices,
+function CopyChartButton({
+  onCopy,
+  disabled,
 }: {
-  title: string;
-  slices: { label: string; value: number; percent: number }[];
+  onCopy: () => Promise<void>;
+  disabled?: boolean;
 }) {
+  const [status, setStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const [hint, setHint] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    if (disabled || status === "copying") return;
+    setStatus("copying");
+    setHint(null);
+    try {
+      await onCopy();
+      setStatus("copied");
+      setHint("Copied");
+      window.setTimeout(() => {
+        setStatus("idle");
+        setHint(null);
+      }, 2000);
+    } catch (err) {
+      setStatus("error");
+      setHint(err instanceof Error ? err.message : "Copy failed");
+      window.setTimeout(() => {
+        setStatus("idle");
+        setHint(null);
+      }, 3500);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {hint ? (
+        <span
+          className={`text-[10px] max-w-[120px] truncate ${status === "error" ? "text-red-600" : "text-gray-500"}`}
+        >
+          {hint}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void handleClick()}
+        disabled={disabled || status === "copying"}
+        title="Copy chart as image (paste into Word, PowerPoint, etc.)"
+        className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+        aria-label="Copy chart as image"
+      >
+        {status === "copied" ? (
+          <Check className="w-3.5 h-3.5 text-green-600" />
+        ) : (
+          <Copy className="w-3.5 h-3.5" />
+        )}
+      </button>
+    </div>
+  );
+}
+
+function PieBlock({ title, slices }: { title: string; slices: PieSlice[] }) {
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
+  const hasData = slices.some((s) => s.value > 0);
   let acc = 0;
-  const colors = ["#2563eb", "#dc2626", "#f59e0b", "#10b981", "#8b5cf6", "#64748b"];
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <h4 className="text-xs font-semibold text-gray-700 mb-2">{title}</h4>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h4 className="text-xs font-semibold text-gray-700">{title}</h4>
+        <CopyChartButton
+          disabled={!hasData}
+          onCopy={() => copyPieChart(title, slices)}
+        />
+      </div>
       <div className="flex items-center gap-3">
         <div
           className="w-28 h-28 rounded-full shrink-0"
@@ -51,7 +116,7 @@ function PieBlock({
                 const start = (acc / total) * 100;
                 acc += sl.value;
                 const end = (acc / total) * 100;
-                return `${colors[i % colors.length]} ${start}% ${end}%`;
+                return `${CHART_COLORS[i % CHART_COLORS.length]} ${start}% ${end}%`;
               })
               .join(", ")})`,
           }}
@@ -62,7 +127,7 @@ function PieBlock({
             <li key={s.label} className="flex gap-2 truncate">
               <span
                 className="w-2 h-2 rounded-full shrink-0 mt-1"
-                style={{ background: colors[i % colors.length] }}
+                style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
               />
               <span>
                 {s.label}: <strong>{s.value}</strong>
@@ -412,7 +477,15 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Bar chart */}
             <div className="rounded-lg border border-gray-200 bg-white p-3">
-              <h4 className="text-xs font-semibold text-gray-700 mb-2">Resolved by month (12 mo)</h4>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <h4 className="text-xs font-semibold text-gray-700">Resolved by month (12 mo)</h4>
+                <CopyChartButton
+                  disabled={data.charts.resolved_by_month.length === 0}
+                  onCopy={() =>
+                    copyBarChart("Resolved by month (12 mo)", data.charts.resolved_by_month)
+                  }
+                />
+              </div>
               {data.charts.resolved_by_month.length === 0 ? (
                 <p className="text-xs text-gray-400 py-4 text-center">No resolved tickets in window</p>
               ) : (
