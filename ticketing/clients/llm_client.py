@@ -227,6 +227,8 @@ Analyse the JSON case bundle. Return ONLY valid JSON with these keys (all requir
 Rules:
 - Base every sentence on field_reports, other_officer_notes, original_complaint, resolution.
 - Never invent visits, payments, or outcomes not in the input.
+- Use investigation_facts counts explicitly where provided (e.g., "3 field visits").
+- Present chronology in order: complaint signal -> investigation activities -> observed evidence.
 - combined_digest_en must not repeat resolution.text verbatim.
 - resolution_text_public and findings_summary_public: write in the language indicated by
   primary_language ("ne" = Nepali, "en" = English). Other digests stay in English.

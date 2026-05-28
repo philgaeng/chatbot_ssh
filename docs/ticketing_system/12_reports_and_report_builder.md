@@ -76,7 +76,7 @@ Each section is a **collapsible card** with:
 - Title + count badge  
 - Sortable table (default sort: complaint date descending)  
 - “Export this section” (XLSX sheet or filtered CSV)  
-- Row click → ticket detail (`/tickets/{ticket_id}`)
+- Row click → **Resolved** section: case closure summary (`/tickets/{ticket_id}/closure`, §11). Other sections: ticket detail (`/tickets/{ticket_id}`).
 
 | Section | Intended meaning (proposed) | Row inclusion rule |
 |---------|----------------------------|-------------------|

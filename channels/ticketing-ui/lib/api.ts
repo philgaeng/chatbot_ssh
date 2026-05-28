@@ -288,6 +288,13 @@ export function getResolvedSummary(ticketId: string): Promise<ResolvedSummaryRes
   return apiFetch<ResolvedSummaryResponse>(`/api/v1/tickets/${ticketId}/resolved-summary`);
 }
 
+export function triggerResolvedSummary(ticketId: string, force = false): Promise<{ ticket_id: string; status: string }> {
+  const q = force ? "?force=true" : "";
+  return apiFetch<{ ticket_id: string; status: string }>(`/api/v1/tickets/${ticketId}/resolved-summary${q}`, {
+    method: "POST",
+  });
+}
+
 export function performAction(id: string, payload: ActionPayload): Promise<ActionResponse> {
   return apiFetch<ActionResponse>(`/api/v1/tickets/${id}/actions`, {
     method: "POST",

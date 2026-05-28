@@ -886,6 +886,19 @@ export default function TicketDetailPage() {
 
   const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
+  const hasResolutionRecord = useMemo(() => {
+    if (!ticket) return false;
+    return ticket.events.some((event) => {
+      if (event.event_type === "RESOLUTION_RECORDED") return true;
+      if (event.event_type === "NOTE_ADDED") {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        if (payload.is_resolution_record === true) return true;
+      }
+      if (event.event_type !== "RESOLVED") return false;
+      const payload = (event.payload ?? {}) as Record<string, unknown>;
+      return typeof payload.resolution_category === "string" && payload.resolution_category.trim().length > 0;
+    });
+  }, [ticket]);
 
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];
@@ -1068,7 +1081,7 @@ export default function TicketDetailPage() {
     setSubmitting(true);
 
     // Check for #assign @userId pattern
-    const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+    const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
     const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
@@ -1322,6 +1335,40 @@ export default function TicketDetailPage() {
           </div>
         )}
       </div>
+
+      {isClosed && !hasResolutionRecord && (
+        <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <p className="font-medium">Resolution record missing for this closed ticket.</p>
+          <p className="mt-1 text-red-800">
+            Closure summary generation is blocked until resolution details are saved.
+          </p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setResolutionOpen(true)}
+              disabled={!isAssigned}
+              className="rounded border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Add resolution details
+            </button>
+          </div>
+        </div>
+      )}
+      {isClosed && hasResolutionRecord && (
+        <div className="mx-4 mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <p className="font-medium">Resolution details are saved.</p>
+          <p className="mt-1 text-green-800">You can now open the case closure summary.</p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => router.push(`/tickets/${id}/closure`)}
+              className="rounded border border-green-300 bg-white px-3 py-1.5 text-green-700 hover:bg-green-100"
+            >
+              Open closure summary
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main: thread (2/5) + info (3/5) ─────────────────────────── */}
       <div className="flex-1 min-h-0 grid grid-cols-5 gap-4 p-4">

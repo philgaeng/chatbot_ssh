@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Mic, Send } from "lucide-react";
 import { HASH_COMMANDS, type HashCommand } from "@/lib/mobile-constants";
 import { FIELD_WORK_AMBER, INSPECT_SELF_MENTION } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
+
+const MENTION_QUERY_REGEX = /@([A-Za-z0-9._@-]*)$/;
+const MENTION_REPLACE_REGEX = /@[A-Za-z0-9._@-]*$/;
+const HASH_QUERY_REGEX = /#([\w]*)$/;
 
 export interface MentionParticipant {
   user_id: string;
@@ -94,12 +98,21 @@ export function ComposeBar({
 
   const handleChange = useCallback((v: string) => {
     onChange(v);
-    setMentionQuery(v.match(/@([\w.-]*)$/) ? v.match(/@([\w.-]*)$/)![1] : null);
-    setHashQuery(v.match(/#([\w]*)$/) ? v.match(/#([\w]*)$/)![1] : null);
+    const mentionMatch = v.match(MENTION_QUERY_REGEX);
+    const hashMatch = v.match(HASH_QUERY_REGEX);
+    setMentionQuery(mentionMatch ? mentionMatch[1] : null);
+    setHashQuery(hashMatch ? hashMatch[1] : null);
   }, [onChange]);
 
+  useEffect(() => {
+    const mentionMatch = value.match(MENTION_QUERY_REGEX);
+    const hashMatch = value.match(HASH_QUERY_REGEX);
+    setMentionQuery(mentionMatch ? mentionMatch[1] : null);
+    setHashQuery(hashMatch ? hashMatch[1] : null);
+  }, [value]);
+
   const insertMention = useCallback((userId: string) => {
-    onChange(value.replace(/@[\w.-]*$/, `@${userId} `));
+    onChange(value.replace(MENTION_REPLACE_REGEX, `@${userId} `));
     setMentionQuery(null);
     textareaRef.current?.focus();
   }, [value, onChange]);
@@ -244,7 +257,17 @@ export function ComposeBar({
                 setHashQuery(null);
                 return;
               }
-              if (e.key === "Enter" && !e.shiftKey && mentionQuery === null && hashQuery === null) {
+              if (e.key === "Enter" && !e.shiftKey) {
+                if (mentionQuery !== null && filteredMentions.length > 0) {
+                  e.preventDefault();
+                  insertMention(filteredMentions[0].user_id);
+                  return;
+                }
+                if (hashQuery !== null && filteredHash.length > 0) {
+                  e.preventDefault();
+                  selectHashCmd(filteredHash[0]);
+                  return;
+                }
                 e.preventDefault();
                 onSubmit();
               }

@@ -264,14 +264,40 @@ function ReportFilters({
   );
 }
 
+function isResolvedRow(row: ReportRow, bucket: ReportBucket): boolean {
+  const status = String(row.status_code ?? "").toUpperCase();
+  const bucketValue = String(row.report_bucket ?? "").toLowerCase();
+  return (
+    bucket === "resolved" ||
+    bucketValue.includes("resolved") ||
+    status === "RESOLVED" ||
+    status === "CLOSED"
+  );
+}
+
+function hasResolutionRecordHint(row: ReportRow): boolean {
+  const category = String(row.resolution_category ?? "").trim();
+  return category.length > 0;
+}
+
+function reportRowHref(row: ReportRow, bucket: ReportBucket): string | null {
+  if (!row.ticket_id) return null;
+  if (isResolvedRow(row, bucket) && hasResolutionRecordHint(row)) {
+    return `/tickets/${row.ticket_id}/closure`;
+  }
+  return `/tickets/${row.ticket_id}`;
+}
+
 function ReportTable({
   columns,
   labels,
   rows,
+  bucket,
 }: {
   columns: string[];
   labels: Record<string, string>;
   rows: ReportRow[];
+  bucket: ReportBucket;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-gray-500 py-4">No complaints in this section.</p>;
@@ -289,12 +315,14 @@ function ReportTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const href = reportRowHref(row, bucket);
+            return (
             <tr key={row.ticket_id ?? row.grievance_id} className="border-b border-gray-100 hover:bg-gray-50">
               {columns.map((c) => (
                 <td key={c} className="py-2 pr-3 text-gray-800 max-w-[200px] truncate">
-                  {c === "grievance_id" && row.ticket_id ? (
-                    <Link href={`/tickets/${row.ticket_id}`} className="text-blue-600 hover:underline">
+                  {c === "grievance_id" && href ? (
+                    <Link href={href} className="text-blue-600 hover:underline">
                       {row.grievance_id}
                     </Link>
                   ) : (
@@ -303,7 +331,8 @@ function ReportTable({
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -647,6 +676,7 @@ export default function ReportsPage() {
                         columns={data.columns}
                         labels={data.column_labels}
                         rows={block?.items ?? []}
+                        bucket={key}
                       />
                       {(block?.total ?? 0) > (block?.items?.length ?? 0) && (
                         <p className="text-xs text-gray-500 mt-2">

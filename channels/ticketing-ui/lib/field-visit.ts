@@ -39,7 +39,7 @@ export function isSiteVisitTask(taskType: string): boolean {
 /** `#inspect`, `#inspect @me` → self; `#inspect @officer` → that assignee. */
 export function parseInspectAssignCommand(text: string): string | null | undefined {
   const trimmed = text.trim();
-  const m = trimmed.match(/^#inspect(?:\s+@([\w.-]+))?\s*$/i);
+  const m = trimmed.match(/^#inspect(?:\s+@([A-Za-z0-9][A-Za-z0-9._@-]*))?\s*$/i);
   if (!m) return undefined;
   const mention = m[1];
   if (!mention || /^me$/i.test(mention)) return null;

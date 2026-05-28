@@ -167,7 +167,8 @@ def _actor_role(current_user: CurrentUser) -> Optional[str]:
 
 def _extract_mentions(text: str) -> list[str]:
     """Return list of @mention targets from note text (e.g. ['piu-l2', 'all'])."""
-    return re.findall(r"@([\w][\w.-]*)", text)
+    # Supports ids with dots/hyphens and email-style ids like admin@grm.local.
+    return re.findall(r"(?<![\w@])@([A-Za-z0-9][A-Za-z0-9._-]*(?:@[A-Za-z0-9][A-Za-z0-9._-]*)?)", text)
 
 
 def _is_viewer(db: "Session", ticket_id: str, user_id: str) -> bool:
@@ -956,72 +957,99 @@ def perform_action(
         )
 
     elif action == "RESOLVE":
-        if ticket.status_code in ("RESOLVED", "CLOSED"):
-            raise HTTPException(status_code=422, detail="Ticket is already resolved.")
         try:
             category = validate_resolution_category(payload.resolution_category)
             officer_text = validate_resolution_note(payload.note)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
-        close_open_episode(db, ticket, "RESOLVED")
-        formatted_note = format_resolution_note(category, officer_text)
-        resolution_event = _add_event(
-            db,
-            ticket,
-            "NOTE_ADDED",
-            step_id=event_step_id,
-            note=formatted_note,
-            payload={
-                "internal": True,
-                "is_resolution_record": True,
-                "resolution_category": category,
-            },
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
-        _translate_resolution_event_id = resolution_event.event_id
+        # Backfill path: allow officers to add missing resolution details
+        # on already resolved/closed tickets (needed for closure summary generation).
+        if ticket.status_code in ("RESOLVED", "CLOSED"):
+            if _has_resolution_record_event(db, ticket.ticket_id):
+                raise HTTPException(status_code=422, detail="Ticket is already resolved.")
+            formatted_note = format_resolution_note(category, officer_text)
+            resolution_event = _add_event(
+                db,
+                ticket,
+                "NOTE_ADDED",
+                step_id=event_step_id,
+                note=formatted_note,
+                payload={
+                    "internal": True,
+                    "is_resolution_record": True,
+                    "resolution_category": category,
+                    "resolution_backfilled": True,
+                },
+                created_by=current_user.user_id,
+                seen=True,
+                actor_role=_actor_role(current_user),
+                summary_regen_required=True,
+            )
+            _translate_resolution_event_id = resolution_event.event_id
+            ticket.updated_by_user_id = current_user.user_id
+            event = resolution_event
+            _generate_findings = True
+            _generate_resolved_summary = True
+        else:
+            _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
+            close_open_episode(db, ticket, "RESOLVED")
+            formatted_note = format_resolution_note(category, officer_text)
+            resolution_event = _add_event(
+                db,
+                ticket,
+                "NOTE_ADDED",
+                step_id=event_step_id,
+                note=formatted_note,
+                payload={
+                    "internal": True,
+                    "is_resolution_record": True,
+                    "resolution_category": category,
+                },
+                created_by=current_user.user_id,
+                seen=True,
+                actor_role=_actor_role(current_user),
+                summary_regen_required=True,
+            )
+            _translate_resolution_event_id = resolution_event.event_id
 
-        ticket.status_code = "RESOLVED"
-        ticket.updated_by_user_id = current_user.user_id
-        cat_label = resolution_category_label(category)
-        event = _add_event(
-            db,
-            ticket,
-            "RESOLVED",
-            old_status=old_status,
-            new_status="RESOLVED",
-            step_id=event_step_id,
-            note=f"Case resolved — {cat_label}",
-            payload={
-                "resolution_category": category,
-                "resolution_event_id": resolution_event.event_id,
-            },
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
-        try:
-            update_grievance_status(
-                ticket.grievance_id,
+            ticket.status_code = "RESOLVED"
+            ticket.updated_by_user_id = current_user.user_id
+            cat_label = resolution_category_label(category)
+            event = _add_event(
+                db,
+                ticket,
                 "RESOLVED",
-                note=officer_text[:500],
+                old_status=old_status,
+                new_status="RESOLVED",
+                step_id=event_step_id,
+                note=f"Case resolved — {cat_label}",
+                payload={
+                    "resolution_category": category,
+                    "resolution_event_id": resolution_event.event_id,
+                },
+                created_by=current_user.user_id,
+                seen=True,
+                actor_role=_actor_role(current_user),
+                summary_regen_required=True,
             )
-        except Exception as exc:
-            logger.warning(
-                "update_grievance_status failed ticket_id=%s: %s", ticket_id, exc
+            try:
+                update_grievance_status(
+                    ticket.grievance_id,
+                    "RESOLVED",
+                    note=officer_text[:500],
+                )
+            except Exception as exc:
+                logger.warning(
+                    "update_grievance_status failed ticket_id=%s: %s", ticket_id, exc
+                )
+            _notify_complainant_text = (
+                "Your grievance has been resolved. "
+                "Thank you for bringing this to our attention. "
+                "A detailed outcome letter will be sent shortly."
             )
-        _notify_complainant_text = (
-            "Your grievance has been resolved. "
-            "Thank you for bringing this to our attention. "
-            "A detailed outcome letter will be sent shortly."
-        )
-        _generate_findings = True
-        _generate_resolved_summary = True
+            _generate_findings = True
+            _generate_resolved_summary = True
 
     elif action == "NOTE":
         if not payload.note:
@@ -1802,6 +1830,21 @@ def get_ticket_pii(
 
 # ─── Resolved case summary (closure document) ─────────────────────────────────
 
+def _has_resolution_record_event(db: Session, ticket_id: str) -> bool:
+    events = db.execute(
+        select(TicketEvent)
+        .where(
+            TicketEvent.ticket_id == ticket_id,
+            TicketEvent.event_type == "NOTE_ADDED",
+        )
+        .order_by(TicketEvent.created_at.desc())
+    ).scalars().all()
+    for ev in events:
+        payload = ev.payload or {}
+        if payload.get("is_resolution_record"):
+            return True
+    return False
+
 @router.get("/tickets/{ticket_id}/resolved-summary")
 def get_resolved_summary(
     ticket_id: str,
@@ -1815,6 +1858,14 @@ def get_resolved_summary(
         raise HTTPException(status_code=403, detail="Access denied")
     row = db.get(TicketResolvedSummary, ticket_id)
     if not row:
+        if ticket.status_code in ("RESOLVED", "CLOSED") and not _has_resolution_record_event(db, ticket_id):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Resolved summary cannot be generated because this ticket has no "
+                    "resolution record event."
+                ),
+            )
         raise HTTPException(status_code=404, detail="Resolved summary not found")
     return {
         "ticket_id": ticket_id,
@@ -1850,6 +1901,14 @@ def trigger_resolved_summary(
     )
     if not has_findings_role:
         raise HTTPException(status_code=403, detail="Supervisor role required")
+    if ticket.status_code in ("RESOLVED", "CLOSED") and not _has_resolution_record_event(db, ticket_id):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot generate summary: no resolution record is saved for this ticket. "
+                "Add or redo resolution details in the case thread first."
+            ),
+        )
     _enqueue_celery(generate_resolved_case_summary, ticket_id, force=force)
     return {"ticket_id": ticket_id, "status": "queued"}
 

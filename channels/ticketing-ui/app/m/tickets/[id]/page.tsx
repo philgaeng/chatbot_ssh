@@ -772,7 +772,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     const text = noteText.trim();
     setNoteText("");
     try {
-      const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+      const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
       const inspectAssignee = parseInspectAssignCommand(text);
       if (inspectAssignee !== undefined) {
         const assignee = inspectAssignee ?? currentUserId;

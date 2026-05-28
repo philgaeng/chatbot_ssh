@@ -12,6 +12,9 @@ interface PublicClosure {
     resolution_category_label?: string;
     resolution_text_public?: string;
     findings_summary_public?: string;
+    complaint_filed_at?: string;
+    resolved_duration_days?: number;
+    resolved_by_display_name?: string;
     resolved_at?: string;
   };
 }
@@ -60,8 +63,17 @@ export default function PublicClosurePage({ params }: { params: Promise<{ token:
         <p className="text-xs text-gray-500 uppercase tracking-wide">GRM case closure</p>
         <h1 className="text-xl font-bold text-gray-900 mt-1">{pub.project_name ?? "Project"}</h1>
         <p className="text-sm text-gray-600 mt-1">Reference: {data.grievance_id}</p>
+        {pub.complaint_filed_at && (
+          <p className="text-sm text-gray-500">Date of complaint: {pub.complaint_filed_at.slice(0, 10)}</p>
+        )}
         {pub.resolved_at && (
           <p className="text-sm text-gray-500">Resolved {pub.resolved_at.slice(0, 10)}</p>
+        )}
+        {typeof pub.resolved_duration_days === "number" && (
+          <p className="text-sm text-gray-500">Resolution duration: {pub.resolved_duration_days} day{pub.resolved_duration_days === 1 ? "" : "s"}</p>
+        )}
+        {pub.resolved_by_display_name && (
+          <p className="text-sm text-gray-500">Resolved by: {pub.resolved_by_display_name}</p>
         )}
       </header>
 
