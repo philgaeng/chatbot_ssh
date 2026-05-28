@@ -4,7 +4,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deployment/nginx/webchat_rest_compose_aws.conf:/etc/nginx/conf.d/default.conf:ro
+      # Named conf file (not default.conf) — base compose entrypoint removes default.conf;
+      # binding AWS config as default.conf makes rm fail and nginx crash-loops.
+      - ./deployment/nginx/webchat_rest_compose_aws.conf:/etc/nginx/conf.d/webchat_rest_compose_aws.conf:ro
       - ./channels/REST_webchat:/app/channels/REST_webchat:ro
       - ./channels/shared:/app/channels/shared:ro
       - ./deployment/certbot/www:/var/www/certbot:ro
