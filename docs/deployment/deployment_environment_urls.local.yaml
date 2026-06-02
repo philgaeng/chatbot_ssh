@@ -1,0 +1,57 @@
+# docs/deployment_environment_urls.local.yaml — do not commit secrets
+meta:
+  project: nepal_chatbot
+  purpose: >-
+    Public URLs, server names, host filesystem paths, and upstream targets
+    for dev / stage / prod. Keep in sync with deployment/nginx/*.conf.
+
+nginx_location_prefixes:
+  rest_webchat: /rest-webchat/
+  shared_assets: /shared/
+  orchestrator_message: /message
+  orchestrator_health: /health
+  accessible_socketio: /accessible-socket.io
+  upload_files: /upload-files
+  files_api: /files/
+  file_status: /file-status/
+  task_status: /task-status/
+  gsheet_get_grievances: /gsheet-get-grievances
+
+environments:
+  dev_wsl:
+    label: "Local dev (WSL)"
+    public:
+      base_url: "http://localhost"
+      server_name: "localhost"
+    tls:
+      terminated_at: none
+    nginx:
+      listen_port: 80
+    host_paths:
+      repo_root: "/home/philg/projects/nepal_chatbot_seah"
+      rest_webchat_dir: "/home/philg/projects/nepal_chatbot_seah/channels/REST_webchat"
+      shared_dir: "/home/philg/projects/nepal_chatbot_seah/channels/shared"
+    upstreams:
+      orchestrator: "http://127.0.0.1:8000"
+      fastapi_backend: "http://127.0.0.1:5001"
+    notes:
+      - "Host-run upstreams for local non-containerized nginx."
+
+  dev_wsl_compose:
+    label: "Local dev (WSL + Docker Compose)"
+    public:
+      base_url: "http://localhost"
+      server_name: "localhost"
+    tls:
+      terminated_at: none
+    nginx:
+      listen_port: 80
+    host_paths:
+      repo_root: "/home/philg/projects/nepal_chatbot_seah"
+      rest_webchat_dir: "/home/philg/projects/nepal_chatbot_seah/channels/REST_webchat"
+      shared_dir: "/home/philg/projects/nepal_chatbot_seah/channels/shared"
+    upstreams:
+      orchestrator: "http://orchestrator:8000"
+      fastapi_backend: "http://backend:5001"
+    notes:
+      - "Compose variant uses service names for upstreams."

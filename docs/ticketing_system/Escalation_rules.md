@@ -1,6 +1,23 @@
 # Ticketing System – SLA and Escalation Rules
 
-This document specifies how **SLAs** and **escalation rules** work in the ticketing system. All roles, levels, timelines, and actions are **configurable through settings** (see [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md)). Concrete roles are described in **TOR GRMS** (Terms of Reference – Grievance Redress System); the system must support 100% configuration of access levels and escalation behaviour.
+> **Status (June 2026):** Fully implemented. Auto-escalation Celery watchdog runs every 15 min. Manual escalation available via ESCALATE action. Auto-assign on escalation wired. Complainant notification fires automatically on RESOLVE and ESCALATE. Overdue episodes tracked in `ticket_overdue_episodes`.
+
+This document specifies how **SLAs** and **escalation rules** work in the ticketing system. All roles, levels, timelines, and actions are **configurable through settings** (see [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md)). Concrete roles are described in **TOR GRMS** (Terms of Reference – Grievance Redress System); the system supports 100% configuration of access levels and escalation behaviour.
+
+---
+
+## As-implemented summary
+
+| Mechanism | Implementation |
+|---|---|
+| SLA timer | `step_started_at` on ticket; compared against `resolution_time_days` on workflow step |
+| Auto-escalation | Celery Beat task every 15 min (`ticketing/tasks/escalation.py`) |
+| Manual escalation | `ESCALATE` action in action panel; any Actor or Supervisor |
+| Auto-assign on escalation | `auto_assign_officer()` in `escalation.py`; uses `OfficerScope` to find eligible officer at next step |
+| Notification on escalation | `notify_complainant.delay()` fires after reassign |
+| Overdue tracking | `ticket_overdue_episodes` table; `current_overdue_episode_id` on ticket; `days_overdue` at closure |
+| GRC (L3) special flow | GRC_CONVENE → GRC_DECIDE two-step; notifies all GRC members on convene |
+| L4 (legal) | No auto-escalation; no resolution time; manual action only |
 
 ---
 

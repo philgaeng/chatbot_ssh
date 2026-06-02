@@ -46,7 +46,7 @@ This document describes the **current** gsheet monitoring setup and the **additi
 3. **Escalation rules in a settings sheet** – Optional second sheet (or same workbook) with rules encoded as rows (e.g. workflow_type, current_status, escalate_after_hours, escalate_to). Backend or script applies these on refresh/schedule.
 4. **Screenshot/attachment required for escalate/resolve** – When staff escalate or resolve, require at least one attachment (e.g. screenshot of chat). Store in shared folder; link stored on ticket. Backend reject escalate/resolve if no attachment (or enforce in UI).
 5. **Persist status from sheet** – Either: (a) onEdit (or explicit "Save status") calls backend to PATCH grievance status and notes, or (b) backend remains source of truth and sheet is read-only for status (staff change status via backend/API only). If (a), need backend endpoint to accept status updates from gsheet (with auth).
-6. **Shared folder for attachments** – One folder per resolution center (or one shared folder with subfolders per grievance/ticket). Links only in sheet or in ticket record; no raw images in WhatsApp groups (see [08_messaging_rules_whatsapp_sms.md](08_messaging_rules_whatsapp_sms.md)).
+6. **Shared folder for attachments** – One folder per resolution center (or one shared folder with subfolders per grievance/ticket). Links only in sheet or in ticket record; no raw images in WhatsApp groups (see [06_messaging_rules_whatsapp_sms.md](../06_messaging_rules_whatsapp_sms.md)).
 
 ---
 
@@ -109,7 +109,7 @@ This document describes the **current** gsheet monitoring setup and the **additi
 
 - Attachments (screenshots, documents) are stored in a shared folder (per resolution center or per project).  
 - In WhatsApp groups: **no pictures/files**; only links to the folder (or to specific files).  
-- See [08_messaging_rules_whatsapp_sms.md](08_messaging_rules_whatsapp_sms.md) for messaging rules.
+- See [06_messaging_rules_whatsapp_sms.md](../06_messaging_rules_whatsapp_sms.md) for messaging rules.
 
 ---
 
@@ -127,5 +127,5 @@ This document describes the **current** gsheet monitoring setup and the **additi
 
 - Current Apps Script: `channels/monitoring-gsheet/gsheet-appscript.js`
 - Backend: `backend/api/routers/gsheet.py`, `backend/services/database_services/gsheet_query_manager.py`
-- Escalation concepts: [Escalation_rules.md](Escalation_rules.md), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md)
-- Messaging: [08_messaging_rules_whatsapp_sms.md](08_messaging_rules_whatsapp_sms.md)
+- Escalation concepts: [Escalation_rules.md](../Escalation_rules.md), [02_ticketing_domain_and_settings.md](../02_ticketing_domain_and_settings.md)
+- Messaging: [06_messaging_rules_whatsapp_sms.md](../06_messaging_rules_whatsapp_sms.md)

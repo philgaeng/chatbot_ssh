@@ -1,7 +1,7 @@
 # GRM canonical location codes (Nepal)
 
-**Status:** Locked for migration (preferred over CBS numeric-only geo codes).  
-**Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), `ticketing.locations`, `ticketing.package_locations`, officer scopes, QR scan flow (`docs/COMMIT_STRATEGY.md`).
+**Status (June 2026):** Implemented. Canonical codes seeded via Alembic migration `q9r7s1u3`. Used in `ticketing.locations`, `ticketing.package_locations`, officer scopes, QR scan flow.  
+**Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), QR scan flow (`docs/deployment/08_commit_strategy.md`).
 
 ---
 
@@ -66,7 +66,7 @@ Exact composition for municipalities and wards can follow the same **CAPS + unde
   3. **Regenerate** printable QR assets from Settings if **URLs, labels, or printed text** embed human-readable place strings that must match the new scheme (token strings may be unchanged, but field teams often re-print for clarity).
   4. Smoke-test: `GET /api/v1/scan/{token}` returns expected `location_code`; chatbot submit → `POST /api/v1/tickets` → auto-assign sees matching `officer_scopes`.
 
-See **QR Token Scan Flow** in `docs/COMMIT_STRATEGY.md`.
+See **QR Token Scan Flow** in `docs/deployment/08_commit_strategy.md`.
 
 ---
 

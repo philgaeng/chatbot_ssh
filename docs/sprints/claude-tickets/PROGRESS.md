@@ -71,7 +71,7 @@
   - **ticketing-ui:** Settings — role catalog editor (`PATCH /api/v1/roles/{id}`), officers roster Invited/Active badges, invite copy; `lib/api.ts` — `GrmRole`, `listRoles`, `updateRole`, optional `organization_id` on org create.
 
 - ✅ **Reports — Overview, Pivot, Quarterly email** (2026-05-26, `b871b75` + `840cbea` on `integration/seah-claude`):
-  - **Spec:** `docs/ticketing_system/12_reports_and_report_builder.md` — §2–§11 implemented; **§12 Summary** specified; §13 answered; **§14 overdue episodes locked** (`ticket_overdue_episodes` + `tickets.current_overdue_episode_id`; `days_overdue` at end; display days on read).
+  - **Spec:** `docs/ticketing_system/09_reports_and_report_builder.md` — §2–§11 implemented; **§12 Summary** specified; §13 answered; **§14 overdue episodes locked** (`ticket_overdue_episodes` + `tickets.current_overdue_episode_id`; `days_overdue` at end; display days on read).
   - **Backend:** `report_rows.py`, `pivot_table.py`, `report_export.py`, `report_limits.py`, `quarterly_assignments.py`, `quarterly_library.py`; `ticketing/api/routers/reports.py` — query, build, export, quarterly-plan/library/assignments.
   - **UI:** `channels/ticketing-ui/app/reports/page.tsx` — tabs: Overview | Pivot | Quarterly email (`local_admin`); `QuarterlyPlanTab.tsx`; auth-safe XLSX download via `downloadApiFile`.
   - **Quarterly model:** Report **library** (named templates) + **assignments** (max 3 per role per calendar quarter); Celery sends one email per assignment; caps in `report_limits` (super_admin JSON).

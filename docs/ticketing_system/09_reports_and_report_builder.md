@@ -1,7 +1,7 @@
 # Reports — operational dashboard, summary, pivot, and quarterly plan
 
 **Status:** Overview + Pivot + Quarterly email **implemented** (2026-05-26). **Summary tab (ADB Project Director)** — specified §12, not yet built.  
-**Related:** [00_ticketing_decisions.md](00_ticketing_decisions.md) (quarterly XLSX), [04_ticketing_schema.md](04_ticketing_schema.md), [11_ticket_resolution_and_case_summary.md](11_ticket_resolution_and_case_summary.md) (`resolution_category`), [Escalation_rules.md](Escalation_rules.md)  
+**Related:** [00_ticketing_decisions.md](00_ticketing_decisions.md) (quarterly XLSX), [04_ticketing_schema.md](04_ticketing_schema.md), [08_ticket_resolution_and_case_summary.md](08_ticket_resolution_and_case_summary.md) (`resolution_category`), [Escalation_rules.md](Escalation_rules.md)  
 **UI:** `channels/ticketing-ui/app/reports/page.tsx`  
 **Backend:** `ticketing/services/report_rows.py`, `pivot_table.py`, `quarterly_assignments.py`, `quarterly_library.py`, `report_limits.py`  
 **API:** `ticketing/api/routers/reports.py`
@@ -339,7 +339,7 @@ Please answer by number (copy/paste is fine). Implementation should not start un
 ### 8.11 Categories and resolution
 
 26. **`complaint_category`:** use raw `grievance_categories` string, or split/normalize to first category code?  we need to normalize
-27. If resolution record spec ([11](11_ticket_resolution_and_case_summary.md)) is **not merged yet**, show `resolution_category` from `RESOLVED` event payload only?
+27. If resolution record spec ([11](08_ticket_resolution_and_case_summary.md)) is **not merged yet**, show `resolution_category` from `RESOLVED` event payload only?
 
 ### 8.12 Quarterly export
 

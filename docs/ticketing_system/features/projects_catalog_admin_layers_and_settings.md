@@ -30,7 +30,7 @@ Store geography on each project using **neutral** names so the model is not “N
 
 ### 3. Other project fields (align with catalog spec)
 
-Minimum fields to align with [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../Refactor%20specs/April20_seah/08_seah_outro_and_project_catalog.md) (Part A):
+Minimum fields to align with [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../../sprints/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md) (Part A):
 
 - `project_uuid` (PK)
 - `name_en`, `name_local`
@@ -64,6 +64,6 @@ Minimum fields to align with [`docs/Refactor specs/April20_seah/08_seah_outro_an
 
 ## References
 
-- [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../Refactor%20specs/April20_seah/08_seah_outro_and_project_catalog.md) — project catalog, payload, `project_uuid`
-- [`docs/Refactor specs/April20_seah/01_seah_route_and_slots.md`](../Refactor%20specs/April20_seah/01_seah_route_and_slots.md) — routing / slots
+- [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../../sprints/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md) — project catalog, payload, `project_uuid`
+- [`docs/Refactor specs/April20_seah/01_seah_route_and_slots.md`](../../sprints/Refactor specs/April20_seah/01_seah_route_and_slots.md) — routing / slots
 - `backend/shared_functions/location_validator.py` — current location source (JSON + optional DB reference tables for ward/village and GRM offices)

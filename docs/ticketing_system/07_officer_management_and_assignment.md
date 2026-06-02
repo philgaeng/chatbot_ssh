@@ -1,6 +1,6 @@
 # Officer management and ticket assignment
 
-**Status:** Locked (2026-05-15)  
+**Status:** As-built reference (updated June 2026).  
 **Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
 
 ---
@@ -67,17 +67,17 @@ Enable admins to **invite, edit, and remove** officers from Settings → Officer
 
 Keycloak: identity + JWT claims. Ticketing DB: routing.
 
-### 3.2 Gaps vs locked decisions
+### 3.2 As-built status vs locked decisions
 
 | Feature | Status |
 | ------- | ------ |
-| Invite with required project / package / location + scope row | ❌ |
-| Edit / Delete officer on roster | ❌ |
-| `auto_assign_officer` uses `ticket.package_id` when set | ❌ |
-| Package-first workflow/assign resolution (§2 cascade) | ❌ partial |
-| Location-without-project routes via package coverage | ❌ verify |
-| Admin audit log for officer changes | ❌ |
-| Keycloak sync on edit (auth stack) | ❌ |
+| Invite with required project / package / location + scope row | ✅ |
+| Edit / Delete officer on roster | ✅ |
+| `auto_assign_officer` uses `ticket.package_id` when set | ✅ |
+| Package-first workflow/assign resolution (§2 cascade) | ✅ |
+| Location-without-project routes via package coverage | ✅ |
+| Admin audit log for officer changes | ✅ (`ticketing.admin_audit_log`) |
+| Keycloak sync on edit (auth stack) | ✅ |
 
 ### 3.3 APIs (existing)
 
@@ -93,9 +93,9 @@ Keycloak: identity + JWT claims. Ticketing DB: routing.
 | `DELETE /api/v1/projects/{id}` | Remove project (blocked if tickets reference it; cascades packages/links) |
 | `POST /api/v1/tickets` | Create + `auto_assign_officer` |
 
-### 3.4 Auto-assign today (`workflow_engine.py`)
+### 3.4 Auto-assign (`workflow_engine.py`)
 
-Uses step `assigned_role_key` + ticket `organization_id`, `location_code`, `project_code`; package via `PackageLocation` and scope `package_id`. **Does not yet** pass `ticket.package_id` into matching. Escalation reuses `auto_assign_officer`.
+Uses step `assigned_role_key` + ticket `organization_id`, `location_code`, `project_id/project_code`; package via `ticket.package_id` and package-location scope rules. Escalation reuses `auto_assign_officer`.
 
 ---
 
@@ -185,17 +185,10 @@ All Remove actions use a confirmation dialog and show the API error message when
 
 ---
 
-## 6. Engineering checklist
+## 6. Engineering checklist (historical)
 
-- [x] **UI:** Invite/Manage modals with required jurisdiction; Manage/Remove on roster (no row expand); per-role/scope delete in modal
-- [ ] **API:** Extend `POST /users/invite`; add `PATCH` officer (or role+scope batch); validate §4.1
-- [ ] **Engine:** `auto_assign_officer(..., package_id=...)`; package-first derivation §4.3–4.4; location-without-project via package locations
-- [ ] **Engine:** Escalation path unchanged interface, same candidate rules
-- [ ] **UI:** Reassign dropdown uses same pool as `get_teammates` (confirm in code)
-- [ ] **Queue:** Unassigned / misconfiguration indicator for admins (no default admin assignee)
-- [ ] **Audit:** `admin_audit_log` (or ticket_events) for §2 audit list
-- [ ] **Auth:** Keycloak attribute sync on edit (`grm_roles`, `organization_id`, etc.)
-- [ ] **Docs:** Link from `05_ticketing_impl_plan.md`; supersede conflicting text in §4 proposed defaults elsewhere
+- This checklist is retained as implementation history from the original design pass.
+- Current source of truth for completion state is `docs/sprints/claude-tickets/PROGRESS.md` plus the API/model references in this document.
 
 ---
 

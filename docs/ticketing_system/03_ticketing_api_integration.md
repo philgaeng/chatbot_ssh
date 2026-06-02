@@ -1,114 +1,233 @@
-# Ticketing System – API Integration
+# Ticketing System – API Reference (as-built, June 2026)
 
-The ticketing system integrates with the rest of the ecosystem **only through APIs**. This document describes the **v1 API contracts** (inbound and outbound) at a practical level.
+All integration with the ticketing system is API-only. This document covers:
+1. **Inbound** — chatbot/backend calls ticketing
+2. **Outbound** — ticketing calls chatbot, messaging, grievance API
+3. **Full endpoint reference** — all implemented ticketing API routes
 
 ---
 
-## 1. Chatbot / Backend → Ticketing (Inbound)
+## 1. Chatbot → Ticketing (Inbound)
 
-The chatbot (or its backend) calls the **Ticketing API** to create and update tickets.
+### 1.1 Create ticket from grievance submission
 
-### 1.1 Create ticket (from submitted grievance)
+Called by `backend/actions/utils/ticketing_dispatch.py` (fire-and-forget Celery task) after OTP verification and DB persistence.
 
-- **When**: After a grievance is successfully submitted (e.g. after OTP verification and DB persistence).
-- **Who**: Backend or orchestrator (same process that creates the grievance) calls Ticketing API.
-- **Contract (conceptual)**:
-  - `POST /api/tickets` (or `/api/v1/tickets`)
-  - Body: `grievance_id`, `chatbot_id`, `source` (country, organization_id, location), optional `session_id`, optional `priority`, optional `category`.
-  - Response: `ticket_id`, `status`, `created_at`.
+```
+POST /api/v1/tickets
+Headers: X-Ticketing-Secret: {TICKETING_SECRET_KEY}
+Body:
+{
+  "grievance_id": "GRV-2025-001",
+  "complainant_id": "...",
+  "session_id": "...",
+  "chatbot_id": "nepal_grievance_bot",
+  "country_code": "NP",
+  "organization_id": "DOR",
+  "location_code": "NP_P1_MOR",
+  "project_code": "KL_ROAD",        // deprecated, use project_id
+  "project_id": "...",              // optional, from QR scan
+  "package_id": "...",             // optional, from QR scan
+  "priority": "NORMAL",
+  "is_seah": false,
+  "grievance_summary": "...",
+  "grievance_categories": "...",
+  "grievance_location": "Morang District, Koshi Province"
+}
+Response: { "ticket_id": "...", "status_code": "OPEN", "created_at": "..." }
+```
 
-The ticketing system may store a copy of key grievance fields or only the reference; when details are needed (e.g. for approval UI), it can fetch from the Backend Grievance API (see below) if that is the chosen design.
+### 1.2 QR token scan (chatbot pre-fill)
 
-**Officer actions on an existing ticket:** `POST /api/v1/tickets/{ticket_id}/actions` — see [11_ticket_resolution_and_case_summary.md](11_ticket_resolution_and_case_summary.md) for the planned **resolution record** (`RESOLVE` + `is_resolution_record`) and **resolved case summary** (`GET …/resolved-summary`).
+Called by chatbot `ActionIntroduce` when URL parameter `t` is present.
 
-### 1.2 Update ticket (optional)
-
-- **When**: Grievance updated (e.g. status change, additional details).
-- **Contract**: `PATCH /api/tickets/{ticket_id}` with fields to update (e.g. status, metadata). Optional for v1 if all updates are done inside the ticketing system.
-
-### 1.3 Link conversation (optional)
-
-- **When**: To associate a ticket with a conversation for “view in chat” or “reply in chat”.
-- **Contract**: `POST /api/tickets/{ticket_id}/link` with `session_id` (or `conversation_id`) and optionally `chatbot_id`. Ticketing stores the link and uses it when calling the chatbot to send a message.
+```
+GET /api/v1/scan/{token}
+Response: {
+  "token": "a1b2c3d4",
+  "package_id": "...",
+  "package_label": "KL Road — Km 45 Sign",
+  "location_code": "NP_P1_MOR",
+  "project_code": "KL_ROAD",
+  "chatbot_url": "https://grm.facets-ai.com/chat"
+}
+404 / 410 / 422 all treated as "no token" by chatbot — graceful fallback.
+```
 
 ---
 
 ## 2. Ticketing → Chatbot (Outbound)
 
-When an agent wants to **send a message to the complainant** (or receive bot replies), the ticketing system calls the **Orchestrator** (or backend) API.
+### 2.1 Reply to complainant
 
-### 2.1 Send message to user (conversation)
+```
+POST {ORCHESTRATOR_BASE_URL}/message
+Body: { "user_id": session_id, "text": "...", "channel": "ticketing" }
+```
 
-- **When**: Agent sends a reply in the context of a ticket (e.g. “We have reviewed your case…”).
-- **Contract**: Same as current Orchestrator `POST /message`:
-  - Body: `user_id` (e.g. session_id or complainant identifier), `message_id`, `text`, `payload`, `channel`.
-  - Response: `messages`, `next_state`, `expected_input_type`.
+Called when officer clicks Reply in ticket detail, or automatically on RESOLVE/ESCALATE events via `notify_complainant.delay()`.
 
-The ticketing system uses the stored `session_id` (or equivalent) as `user_id` so the message is delivered in the same conversation. Base URL for the orchestrator is configured in ticketing settings (per chatbot_id).
+### 2.2 SMS fallback (session expired)
 
-### 2.2 Get conversation history (optional, v2)
-
-- **When**: Ticket UI shows “Conversation” tab.
-- **Contract**: e.g. `GET /api/conversations/{session_id}/history` (or equivalent) if the orchestrator/backend exposes it. If not, v1 can omit this and only support “send message” and a link to the chat channel.
-
----
-
-## 3. Ticketing → Backend Grievance API (Outbound, optional)
-
-If the ticketing system does **not** store full grievance payload, it can fetch details from the existing **Backend API**.
-
-- **Contract**: Use existing endpoints, e.g.:
-  - `GET /api/grievance/{grievance_id}` – full grievance details.
-  - `GET /api/grievance/statuses` – list of statuses.
-
-Ticketing needs the **base URL** of the backend (per chatbot or per deployment) in settings. Same network/security rules as today (e.g. internal only, or with API key).
+```
+POST {BACKEND_API_BASE_URL}/api/messaging/send-sms
+Headers: x-api-key: {MESSAGING_API_KEY}
+Body: { "phone": "...", "message": "..." }
+```
 
 ---
 
-## 4. Ticketing → Messaging API (Outbound)
+## 3. Ticketing → Grievance API (Outbound)
 
-All **SMS and email** sent by the ticketing system (e.g. assignee notified, complainant status update) go through the **Messaging API**, not in-process code.
+```
+GET {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}
+```
 
-### 4.1 Send SMS
-
-- **Contract**: e.g. `POST /api/messaging/send-sms` with recipient, body, optional template_id.
-- **When**: After assignment, escalation, or status change, according to workflow/settings.
-
-### 4.2 Send email
-
-- **Contract**: e.g. `POST /api/messaging/send-email` with to, subject, body, optional template_id.
-- **When**: Same as above.
-
-The Messaging API is the same one used by the chatbot backend (see [BACKEND.md](../BACKEND.md)). If it does not exist yet, it can be added on the backend (FastAPI) and used by both the backend and the ticketing system.
+Called from ticket detail view to fetch PII (name, phone) on-demand. Never cached in `ticketing.*`.
 
 ---
 
-## 5. Authentication and Authorization
+## 4. Full API Endpoint Reference
 
-- **Inbound (Chatbot/Backend → Ticketing)**  
-  Ticketing API must authenticate the caller (e.g. API key, JWT). Only allowed clients (e.g. backend service) should create/update tickets.
+All routes prefixed with `/api/v1` unless noted.
 
-- **Outbound (Ticketing → Chatbot, Backend, Messaging)**  
-  Ticketing acts as a client; it needs credentials (API key or service account) to call Orchestrator, Backend, and Messaging API. Store in settings/env, not in code.
+### Tickets
 
-Detailed auth scheme (API key vs JWT, scopes) to be defined in a security spec.
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/tickets` | Create ticket (chatbot webhook) |
+| `GET` | `/tickets` | List tickets (role-filtered, paginated) |
+| `GET` | `/tickets/{id}` | Ticket detail + event history |
+| `PATCH` | `/tickets/{id}` | Update ticket metadata |
+| `PATCH` | `/tickets/{id}/complainant` | Update complainant data |
+| `POST` | `/tickets/{id}/actions` | Perform workflow action (see below) |
+| `POST` | `/tickets/{id}/reply` | Reply to complainant via orchestrator |
+| `POST` | `/tickets/{id}/inbound-message` | Record inbound complainant message |
+| `GET` | `/tickets/{id}/sla` | SLA countdown data |
+| `GET` | `/tickets/{id}/teammates` | Assignable teammates for this ticket |
+| `POST` | `/tickets/{id}/seen` | Mark events as seen (badge clear) |
+| `POST` | `/tickets/{id}/informed` | Add user to Informed tier |
+| `PUT` | `/tickets/{id}/complainant-reply-owner` | Set complainant reply owner |
+| `GET` | `/tickets/{id}/files` | List complainant-uploaded files |
+| `GET` | `/tickets/{id}/files/{file_id}` | Download complainant file |
+| `POST` | `/tickets/{id}/attachments` | Upload officer attachment |
+| `GET` | `/tickets/{id}/attachments` | List officer attachments |
+| `GET` | `/tickets/{id}/attachments/{file_id}` | Download officer attachment |
+| `GET` | `/tickets/{id}/pii` | Fetch PII from grievance API (logged) |
+| `GET` | `/tickets/{id}/resolved-summary` | Get resolved case summary |
+| `POST` | `/tickets/{id}/resolved-summary` | Generate resolved summary (LLM) |
+| `POST` | `/tickets/{id}/findings` | Generate AI findings digest (LLM) |
+| `POST` | `/tickets/{id}/reveal-contact/begin` | Begin PII reveal (logged) |
+| `POST` | `/tickets/{id}/reveal-contact/close` | Close PII reveal session |
+
+### Ticket actions (`POST /tickets/{id}/actions`)
+
+`action_type` values:
+
+| Action | Who | Effect |
+|---|---|---|
+| `ACKNOWLEDGE` | Actor at current step | Moves status to IN_PROGRESS |
+| `ESCALATE` | Actor or Supervisor | Advances to next step, auto-assigns, notifies |
+| `RESOLVE` | Actor (with resolution record) | Closes workflow, notifies complainant |
+| `CLOSE` | Super admin | Hard close |
+| `NOTE_ADDED` | Any officer with access | Adds internal note to timeline |
+| `FIELD_REPORT` | Actor | Adds field report bubble to timeline |
+| `GRC_CONVENE` | GRC chair | Schedules hearing, notifies GRC members |
+| `GRC_DECIDE` | GRC chair | Records GRC resolution |
+| `ASSIGN` | Actor or Supervisor | Reassign to another officer |
+
+### Workflows
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/workflows` | List all workflow definitions |
+| `GET` | `/workflows/{id}` | Workflow detail + steps |
+| `POST` | `/workflows` | Create workflow |
+| `PATCH` | `/workflows/{id}` | Update workflow |
+| `POST` | `/workflows/{id}/steps` | Add step |
+| `PATCH` | `/workflows/{id}/steps/{step_id}` | Update step |
+| `DELETE` | `/workflows/{id}/steps/{step_id}` | Delete step |
+
+### Users / Officers
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/users/roster` | List all officers (for bypass switcher + Settings) |
+| `POST` | `/users/invite` | Invite officer (creates UserRole + OfficerOnboarding) |
+| `GET` | `/users/{id}` | Officer detail |
+| `PATCH` | `/users/{id}` | Update officer |
+| `GET` | `/roles` | List roles catalog |
+| `PATCH` | `/roles/{id}` | Update role definition |
+
+### Settings
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/settings` | Get all settings (key/value) |
+| `PATCH` | `/settings/{key}` | Update a setting |
+
+### Organizations / Locations / Projects
+
+| Method | Path | Description |
+|---|---|---|
+| `GET/POST` | `/organizations` | List / create orgs |
+| `GET/PATCH` | `/organizations/{id}` | Get / update org |
+| `GET/POST` | `/locations` | List / create locations |
+| `GET/PATCH` | `/locations/{id}` | Get / update location |
+| `GET/POST` | `/projects` | List / create projects |
+| `GET/PATCH` | `/projects/{id}` | Get / update project |
+| `GET/POST` | `/projects/{id}/packages` | List / create packages |
+| `GET/PATCH/DELETE` | `/projects/{id}/packages/{pkg_id}` | Package CRUD |
+
+### QR Tokens
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/scan/{token}` | Public scan — no auth; returns package context |
+| `GET` | `/qr-tokens` | Admin: list tokens (with scan_url) |
+| `POST` | `/qr-tokens` | Admin: create token for a package |
+| `DELETE` | `/qr-tokens/{token}` | Admin: revoke token |
+
+### Reports
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/reports/overview` | Filtered overview (Resolved/High/Overdue/Others) |
+| `GET` | `/reports/pivot` | Pivot crosstab query |
+| `POST` | `/reports/export` | XLSX export (rate-limited) |
+| `GET` | `/reports/quarterly-plan` | Current quarter assignments |
+| `PUT` | `/reports/quarterly-plan/{role}` | Update role's report assignment |
+| `POST` | `/reports/quarterly-library` | Save named report to library |
+| `GET` | `/reports/quarterly-library` | List library |
+| `DELETE` | `/reports/quarterly-library/{id}` | Remove from library |
+| `PATCH` | `/reports/limits` | Update per-role caps (super_admin) |
+| `GET` | `/reports/limits` | Get current caps |
+
+### Viewers / Tasks
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/tickets/{id}/viewers` | List viewers (Informed + Observer) |
+| `POST` | `/tickets/{id}/viewers` | Add viewer |
+| `DELETE` | `/tickets/{id}/viewers/{user_id}` | Remove viewer |
+| `GET` | `/tickets/{id}/tasks` | List tasks |
+| `POST` | `/tickets/{id}/tasks` | Create task |
+| `PATCH` | `/tickets/{id}/tasks/{task_id}` | Update task |
+| `DELETE` | `/tickets/{id}/tasks/{task_id}` | Delete task |
+
+### Webhooks
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/webhooks/keycloak` | Keycloak event webhook (invite accepted → activate officer) |
 
 ---
 
-## 6. Summary Table
+## 5. Authentication
 
-| Direction | Purpose | Contract |
-|-----------|--------|----------|
-| Chatbot/Backend → Ticketing | Create/update ticket, link conversation | `POST /api/tickets`, `PATCH /api/tickets/{id}`, `POST /api/tickets/{id}/link` |
-| Ticketing → Chatbot (Orchestrator) | Send message to user | `POST /message` (existing) |
-| Ticketing → Backend | Get grievance details | `GET /api/grievance/{id}` (existing) |
-| Ticketing → Messaging | Send SMS/email | `POST /api/messaging/send-sms`, `POST /api/messaging/send-email` (to be added if not present) |
-
----
-
-## Next Steps
-
-1. Answer the [first questions](00_ticketing_overview_and_questions.md#first-questions-to-answer) and record decisions.
-2. Implement or confirm Messaging API on the backend so ticketing can depend on it.
-3. Add Ticketing API routes (FastAPI) for `POST /api/tickets` (and optionally PATCH, link) with auth.
-4. Implement outbound clients in the ticketing service for Orchestrator, Backend, and Messaging API using settings for base URLs and credentials.
+| Mode | Mechanism |
+|---|---|
+| Production | Keycloak OIDC JWT bearer token. `ticketing_api_auth` container validates tokens. |
+| Local/demo | `NEXT_PUBLIC_BYPASS_AUTH=true` — `grm_bypass_user` cookie; officer identity from roster. |
+| Chatbot webhook | `X-Ticketing-Secret` header = `TICKETING_SECRET_KEY` env var. |
+| Keycloak webhook | `X-Keycloak-Webhook-Secret` header = `KEYCLOAK_WEBHOOK_SECRET` env var. |

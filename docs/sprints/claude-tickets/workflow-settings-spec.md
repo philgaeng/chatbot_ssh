@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE — reflects implementation as of 2026-05-16  
 **Supersedes:** draft dated 2026-04-21 (workflow-only sections retained where still valid)  
-**Related:** `docs/ticketing_system/10_officer_management_and_assignment.md`, `docs/claude-tickets/PROGRESS.md`, `CLAUDE.md`
+**Related:** `docs/ticketing_system/07_officer_management_and_assignment.md`, `docs/claude-tickets/PROGRESS.md`, `CLAUDE.md`
 
 ---
 
@@ -254,7 +254,7 @@ Until then, mismatches can occur (e.g. ticket `organization_id = DOR` but office
 `auto_assign_officer(step_role, organization_id, location_code, project_code, package_id)`:
 
 - Match `officer_scopes` to ticket fields + step `assigned_role_key`.
-- Package-first when `ticket.package_id` set (see `10_officer_management_and_assignment.md`).
+- Package-first when `ticket.package_id` set (see `07_officer_management_and_assignment.md`).
 - Least-loaded among candidates.
 
 ---
@@ -373,7 +373,7 @@ For demo with seeded tickets only, edits to published workflows affect **new** t
 | Project/location API | `ticketing/api/routers/locations.py` |
 | Workflow resolve | `ticketing/engine/workflow_engine.py` |
 | Actor role service | `ticketing/services/project_actor_roles.py` |
-| Officer assignment spec | `docs/ticketing_system/10_officer_management_and_assignment.md` |
+| Officer assignment spec | `docs/ticketing_system/07_officer_management_and_assignment.md` |
 
 ---
 

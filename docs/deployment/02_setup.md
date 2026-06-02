@@ -2,7 +2,7 @@
 
 Complete installation and deployment guide for the Nepal Chatbot system.
 
-> Note: the current runtime path is Docker Compose. For deployment details use `deployment/docker/README.md`; for schema changes use `docs/MIGRATIONS_POLICY.md` (Alembic-first).
+> Note: the current runtime path is Docker Compose. For deployment details use `deployment/docker/README.md`; for schema changes use `docs/deployment/07_migrations_policy.md` (Alembic-first).
 
 ## Table of Contents
 

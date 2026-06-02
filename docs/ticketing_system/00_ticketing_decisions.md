@@ -1,111 +1,132 @@
-# Ticketing System – v1 Decisions
+# Ticketing System – Decisions (as-built, June 2026)
 
-Snapshot of key **product, architecture, and integration decisions** for v1.  
-These decisions are derived from the answered questions in:
-
-- `00_ticketing_overview_and_questions.md`
-- `01_ticketing_scope_and_stack.md`
-- `02_ticketing_domain_and_settings.md`
-- `Escalation_rules.md`
+This file records **settled product, architecture, and integration decisions** for the GRM ticketing system.
+It reflects what has actually been built. Questions that drove these decisions are in `00_ticketing_overview_and_questions.md`.
 
 ---
 
 ## 1. Product and scope
 
-- **Country / project scope (v1)**
-  - Nepal only, for **one organization and one project** (KL Road GRM), but the data model is multi-tenant ready (country, chatbot, org, location, project).
-
-- **Primary users**
-  - At least three layers of users:
-    - ADB (supervisor level),
-    - Government of Nepal (main implementer),
-    - External partners (contractors at level 1, controllers at level 2).
-
-- **UI requirement**
-  - v1 **must include a complete modern web UI** (tiles, usable by Nepali staff).
-  - Not API-only: the ticketing service must ship with a usable web interface for agents/admins.
-
-- **Chatbot independence**
-  - Ticketing is **optional**: chatbot + grievance backend must be able to run **without** ticketing.
-  - Ticketing integrates via APIs only; no hard dependency in chatbot runtime.
+- **Country / project scope (v1):** Nepal, KL Road GRM (ADB Loan 52097-003). Data model is multi-tenant ready: `country`, `organization_id`, `project_id`, `location_code`.
+- **Primary users:** Three tiers — ADB (supervisor/observer), Government of Nepal / DOR (implementing officers), external partners (contractors L1, controllers L2).
+- **UI requirement:** Full modern web UI (Next.js 16, Tailwind v4) shipped as part of the system. Not API-only.
+- **Chatbot independence:** Ticketing is optional — chatbot + grievance backend run without ticketing. Integration is API-only, fire-and-forget webhook from chatbot to `POST /api/v1/tickets`.
 
 ---
 
-## 2. Access, tenancy, and identity
+## 2. Architecture
 
-- **Access levels / roles**
-  - Roles are defined in the **TOR GRMS** and must be **100% configurable** (no hard-coded role names in code).
-  - Access is scoped by **organization** and **location**; one user can eventually have different roles in different orgs/locations, but this is not required at launch if it complicates the structure.
-
-- **Organizations and locations**
-  - Existing system already has **province**; organizations are **not yet modelled** and must be added in ticketing.
-  - Locations start simple (province-based) but support hierarchy (province/district/office) later.
-
-- **User identity**
-  - v1 starts with **AWS Cognito** as the identity provider.
-  - Ticketing stores only Cognito user IDs and maps them to roles and org/location in its own tables.
+- **Same Postgres instance (`grievance_db`), separate `ticketing.*` schema.**
+- No cross-schema FK from `ticketing.*` into `public.*`. All cross-service data via APIs.
+- PII never stored in `ticketing.*`. Officer detail view fetches PII fresh via `GET /api/grievance/{id}`.
+- Ticketing FastAPI service on port 5002 (standard) / 5003 (auth-mode).
+- Auth: Keycloak OIDC in production; `NEXT_PUBLIC_BYPASS_AUTH=true` bypass mode for local dev.
+- Background workers: dedicated Celery app (`grm_ticketing`) — SLA watchdog, LLM tasks, notification dispatch, report emails.
 
 ---
 
-## 3. Workflows, escalation, and SLA
+## 3. Data model decisions
 
-- **Workflow configuration**
-  - All workflows (including approvals and escalation levels) are defined **through settings**, not code.
-  - One organization can have **different workflows for one project** (e.g. sensitive vs standard, high priority vs normal).
-
-- **Escalation and SLA**
-  - **Escalation is required in v1**.
-  - SLA is time-based per level (response time and resolution time). SLA can be defined in settings as well.
-  - The **ADB KL Road 4-level workflow** is the reference pattern:
-    - Level 1: Site Safeguards Focal Person (1–2 days)
-    - Level 2: PD/PIU Safeguards Focal Person (7 days)
-    - Level 3: Project Office Safeguards / GRC Secretariat (15 days)
-    - Level 4: Legal institutions (no specific timeline)
-  - Auto-escalation when resolution time is exceeded; 4th level has no automatic time-based escalation.
+| Decision | Detail |
+|---|---|
+| `grievance_id` | String ref (no FK). Ticket created from grievance at submission time via chatbot webhook. |
+| `session_id` | Stored on ticket at creation — used for complainant notifications via orchestrator `POST /message`. |
+| Non-PII cache | `grievance_summary`, `grievance_categories`, `grievance_location`, `priority` cached at creation. PII never cached. |
+| `project_id` | FK to `ticketing.projects` (replaced legacy `project_code` string). |
+| `package_id` | Set when ticket created via QR token scan; NULL for walk-in / phone intake. Soft ref (no FK) so non-QR tickets are always valid. |
+| `is_seah` | Boolean flag; DB-level filter ensures SEAH tickets are invisible to non-SEAH roles. |
+| `complainant_reply_owner_id` | User who holds the "reply to complainant" capability. Defaults to L1 Actor; reassignable by any Actor above L1. |
+| `current_overdue_episode_id` | FK to `ticket_overdue_episodes`. NULL = not overdue. One row per overdue stint per step. |
+| `ai_summary_en` | LLM findings digest (GPT-4, Celery task). Role-gated: hidden from L1/L2 field officers. |
 
 ---
 
-## 4. Stack and deployment
+## 4. Workflow and escalation
 
-- **Backend**
-  - **Python + FastAPI** for ticketing API and business logic.
-  - Background work via **Celery** or FastAPI async tasks (for notifications and escalation).
-
-- **Frontend**
-  - **Node.js-based** web frontend for the agent/admin UI (modern UX with tiles, English only for v1).
-
-- **Database**
-  - v1 uses the **same Postgres database instance** as the chatbot.
-  - Ticketing data is isolated into its **own schema** (e.g. `ticketing`) and has **no foreign keys** into existing grievance tables.
-  - This keeps v1 simple and leaves a clean path to move ticketing to a separate DB later.
-
-- **Deployment model**
-  - Ticketing runs as a **separate FastAPI process in the same repo** (e.g. `ticketing/main.py`), with its own port and schema.
-  - This allows the service to be split into a separate repo/service later without changing API contracts.
+- **Two workflows:** Standard GRM (4 levels) and SEAH (dedicated officers, invisible to standard roles).
+- One grievance → one ticket → one workflow. Never both.
+- **Escalation triggers:** automatic (Celery SLA watchdog, every 15 min) + manual (officer button).
+- **Auto-assign on escalation:** `auto_assign_officer()` called inside `escalate_ticket()`; notification fires after reassign.
+- **Complainant notification on RESOLVE / ESCALATE:** automatic via `notify_complainant.delay()` — tries orchestrator `POST /message` first, falls back to `POST /api/messaging/send-sms`.
+- **GRC (L3):** Two-step: Convene (schedules hearing, notifies all GRC members) → Decide (records resolution).
 
 ---
 
-## 5. Integration and messaging
+## 5. Permission / tier model
 
-- **Chatbot ↔ Ticketing**
-  - The chatbot backend (or orchestrator) creates tickets via **HTTP API** (no shared tables access).
-  - Ticketing references grievances via `grievance_id` and can call the **existing Backend Grievance API** when needed.
+Four-tier model per ticket step:
 
-- **Conversation history**
-  - v1 **does not** need to replay full chatbot conversation history inside tickets.
-  - Ticketing stores only what is in the DB (grievance data) and messages sent by officers via the Messaging service.
+| Tier | Who | Permissions |
+|---|---|---|
+| **Actor** | Officer assigned to current step | Can perform step actions (acknowledge, escalate, resolve, etc.) |
+| **Supervisor** | Manager of current Actor | Can read, assign, manually escalate |
+| **Informed** | Previous Actors (auto-moved on escalation) | Read + comment |
+| **Observer** | ADB, senior oversight roles | Read-only; no action |
 
-- **Messaging**
-  - Messaging **must be exposed as an API** (not in-process calls) for both chatbot and ticketing.
-  - Ticketing uses the **same Messaging API** as the backend for SMS/email notifications (assignment, escalation, status updates).
+- `ticket_viewers` table stores all non-Actor participants with a `tier` column.
+- `notification_rules` in settings JSON controls which tiers receive which notification events.
+- Role-based filters enforced at every API endpoint (`OfficerScope`).
 
 ---
 
-## 6. Out-of-scope for v1
+## 6. QR token feature
 
-- SSO beyond AWS Cognito and basic JWT/API-key integration.
-- Custom report builder (v1 can have fixed reports/exports).
-- Mobile app for agents (web-only, responsive UI).
-- Multi-language UI (v1 UI is **English only**; chatbot continues to support its own language strategy).
+- QR tokens link a physical location / project package to the chatbot intake URL.
+- One QR code per package (e.g. a road segment sign). Revocable; expiry optional.
+- When a complainant scans, the chatbot pre-fills `project_code`, `location_code`, `package_id` and displays the package label in the greeting.
+- `ticketing.qr_tokens` table + `GET /api/v1/scan/{token}` public endpoint.
+- QR image generated client-side via qrserver.com API (no server-side image lib needed).
 
-These items can be revisited after v1 based on usage and feedback.
+---
+
+## 7. Reports
+
+- **Overview tab:** Filtered ticket lists (Resolved / High / Overdue / Others).
+- **Pivot tab:** Excel-style crosstab builder (any dimension × any metric).
+- **Quarterly email tab:** Named report library + role assignments (max 3 per role per quarter); Celery dispatches email per assignment.
+- **Summary tab (§12):** Quarterly matrix + charts for ADB Project Director — **specified, not yet built**.
+- **Export:** XLSX via openpyxl. Rate-limited per user (config in `report_limits` settings JSON).
+- **Overdue episodes (`ticket_overdue_episodes`):** Source of truth for "SLA breached Y/N per level" in reports and Summary tab.
+
+---
+
+## 8. LLM / AI features
+
+- **Per-note translation to English:** Celery task using GPT-4 — field officers write in Nepali; supervisors read translated notes.
+- **Findings digest (`ai_summary_en`):** Generated by `POST /tickets/{id}/findings`. Role-gated display.
+- **Model:** GPT-4 via OpenAI. Tasks in `ticketing/tasks/` (separate Celery app from chatbot LLM queue).
+
+---
+
+## 9. Notifications
+
+| Channel | Who | Trigger |
+|---|---|---|
+| In-app badge | Officers | Badge count refreshes on navigation |
+| Chatbot message | Complainant | RESOLVE, ESCALATE → `POST /message` to orchestrator |
+| SMS fallback | Complainant | When session expired → `POST /api/messaging/send-sms` |
+| Email | Quarterly report recipients (by role) | Celery quarterly dispatch |
+| In-app (GRC) | All GRC members for project | On GRC_CONVENE action |
+
+---
+
+## 10. Auth and officer management
+
+- **Production:** Keycloak OIDC. Webhook (`POST /api/v1/webhooks/keycloak`) creates `UserRole` + `OfficerOnboarding` on invite acceptance.
+- **Local/demo:** `NEXT_PUBLIC_BYPASS_AUTH=true` — header role-switcher lists officers from `GET /api/v1/users/roster`.
+- **Officer lifecycle:** `officer_onboarding` table — states: `invited` → `active`.
+- **Roles catalog:** `ticketing.roles` — 9 seeded spec-defined roles (Project Owner, Donor, CSC, etc.) + all GRM roles. `workflow_scope`: `standard` | `seah` | `both`.
+- **OfficerScope:** Each user_role row defines org + location scope; enforced on all ticket queries.
+
+---
+
+## 11. Settings
+
+All configurable via Settings UI (`/settings` — `local_admin` and `super_admin`):
+
+- Workflows (steps, SLA per step, tier config, notification rules)
+- Organizations, locations, projects, packages
+- Users / officer roster, invite, role assignment
+- QR tokens (per package)
+- Report limits (max assignments per quarter)
+- `chatbot_webchat_url` (used in QR scan redirect)

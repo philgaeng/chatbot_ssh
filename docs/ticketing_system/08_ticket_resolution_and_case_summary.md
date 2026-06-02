@@ -1,6 +1,6 @@
 # Ticket resolution record and resolved case summary
 
-**Status:** Spec (not yet implemented)  
+**Status:** Implemented baseline (June 2026); Summary enhancements and complainant closure page/PDF tracked in this spec.  
 **Related:** [04_ticketing_schema.md](04_ticketing_schema.md) (`ticket_events`), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [CLAUDE.md](../../CLAUDE.md) (PII rules)
 
 This document defines:

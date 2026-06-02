@@ -2,7 +2,7 @@
 
 Complete operations guide covering monitoring, troubleshooting, maintenance, and common procedures.
 
-> Note: current operations are Docker-first. Prefer `docker compose` service health/log checks and Alembic-based migrations per `docs/MIGRATIONS_POLICY.md`.
+> Note: current operations are Docker-first. Prefer `docker compose` service health/log checks and Alembic-based migrations per `docs/deployment/07_migrations_policy.md`.
 
 ## Table of Contents
 

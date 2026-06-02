@@ -1,6 +1,6 @@
 # Flicket Gap Assessment – Matching Our Ticketing Specs
 
-This document assesses what needs to be done to adapt [Flicket](https://github.com/evereux/flicket) to match our ticketing specifications ([00_ticketing_decisions.md](00_ticketing_decisions.md), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [Escalation_rules.md](Escalation_rules.md), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [04_ticketing_schema.md](04_ticketing_schema.md)).
+This document assesses what needs to be done to adapt [Flicket](https://github.com/evereux/flicket) to match our ticketing specifications ([00_ticketing_decisions.md](../00_ticketing_decisions.md), [02_ticketing_domain_and_settings.md](../02_ticketing_domain_and_settings.md), [Escalation_rules.md](../Escalation_rules.md), [03_ticketing_api_integration.md](../03_ticketing_api_integration.md), [04_ticketing_schema.md](../04_ticketing_schema.md)).
 
 **Flicket snapshot**: Python 3.90+, Flask, SQLAlchemy, PostgreSQL/MySQL/SQLite, MIT license, ~140 stars, 65 forks, 499 commits, last release 0.3.5 (Jun 2024).
 
@@ -119,7 +119,7 @@ This document assesses what needs to be done to adapt [Flicket](https://github.c
    - Add `POST /api/v1/tickets/{id}/link-conversation`.
 
 2. **Phase 2 – Workflow & roles**
-   - Add `workflow_definitions`, `workflow_steps`, `workflow_assignments` (as in [04_ticketing_schema.md](04_ticketing_schema.md)).
+   - Add `workflow_definitions`, `workflow_steps`, `workflow_assignments` (as in [04_ticketing_schema.md](../04_ticketing_schema.md)).
    - Add `roles`, `user_roles` with org/location scope.
    - Add current_workflow_id, current_step_id, assigned_role_id to ticket (or link table).
    - Seed KL Road 4-level workflow.
