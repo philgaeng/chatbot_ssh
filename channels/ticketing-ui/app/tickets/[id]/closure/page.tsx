@@ -2,7 +2,13 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getResolvedSummary, triggerResolvedSummary, type ResolvedSummaryResponse } from "@/lib/api";
+import { ClosureSummaryBody } from "@/components/ClosureSummaryBody";
+import {
+  getResolvedSummary,
+  triggerResolvedSummary,
+  type ResolvedSummaryResponse,
+} from "@/lib/api";
+import { formatUserFacingError } from "@/lib/user-messages";
 
 function localizeClosurePublicUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -39,7 +45,7 @@ export default function OfficerClosurePage({ params }: { params: Promise<{ id: s
         setNoResolutionRecord(false);
       })
       .catch((e) => {
-        const msg = String(e);
+        const msg = e instanceof Error ? e.message : String(e);
         setData(null);
         if (msg.includes("API 404") && msg.includes("Resolved summary not found")) {
           setMissing(true);
@@ -59,7 +65,7 @@ export default function OfficerClosurePage({ params }: { params: Promise<{ id: s
         setPolling(false);
         setMissing(false);
         setNoResolutionRecord(false);
-        setError(msg);
+        setError(formatUserFacingError(e).message);
       });
 
   useEffect(() => {
@@ -109,18 +115,39 @@ export default function OfficerClosurePage({ params }: { params: Promise<{ id: s
         void loadSummary();
       }, 1200);
     } catch (e) {
-      setError(String(e));
+      setError(formatUserFacingError(e).message);
     } finally {
       setQueueing(false);
     }
   }
 
   const pub = data?.summary_public_json as Record<string, string> | null | undefined;
+  const summaryJson = data?.summary_json as Record<string, unknown> | undefined;
+  const findings = (summaryJson?.findings_summary as Record<string, string> | undefined)?.combined_digest_en;
   const complainantLink = localizeClosurePublicUrl(data?.closure_public_url);
+
+  const caseHeader =
+    data?.case_header ??
+    (data && pub
+      ? {
+          reference: data.grievance_id,
+          complaint_date: pub.complaint_filed_at?.slice(0, 10) ?? null,
+          resolved_date: pub.resolved_at?.slice(0, 10) ?? null,
+          resolution_duration_days:
+            typeof pub.resolved_duration_days === "number"
+              ? pub.resolved_duration_days
+              : null,
+          resolved_by: pub.resolved_by_display_name ?? null,
+          project_name: pub.project_name ?? null,
+          package_label: null,
+        }
+      : null);
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <Link href={`/tickets/${id}`} className="text-sm text-blue-600 hover:underline">← Back to case</Link>
+      <Link href={`/tickets/${id}`} className="text-sm text-blue-600 hover:underline">
+        ← Back to case
+      </Link>
       <h1 className="text-xl font-bold mt-4 mb-2">Case closure summary</h1>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       {!data && !error && !missing && !noResolutionRecord && <p className="text-gray-500">Loading…</p>}
@@ -146,7 +173,9 @@ export default function OfficerClosurePage({ params }: { params: Promise<{ id: s
             </p>
           )}
           {(queueing || polling) && (
-            <p className="text-amber-700">{queueing ? "Queueing summary generation..." : "Generating summary..."}</p>
+            <p className="text-amber-700">
+              {queueing ? "Queueing summary generation..." : "Generating summary..."}
+            </p>
           )}
         </div>
       )}
@@ -155,21 +184,34 @@ export default function OfficerClosurePage({ params }: { params: Promise<{ id: s
           <p className="text-sm text-gray-500 mb-4">
             Status: {data.generation_status}
             {complainantLink && (
-              <> · <a href={complainantLink} className="text-blue-600 underline" target="_blank" rel="noreferrer">Complainant link</a></>
+              <>
+                {" "}
+                ·{" "}
+                <a
+                  href={complainantLink}
+                  className="text-blue-600 underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Complainant link
+                </a>
+              </>
             )}
           </p>
-          {pub && (
-            <div className="space-y-4 text-sm">
-              <section className="bg-white border rounded-lg p-4">
-                <h2 className="font-semibold mb-2">Public view (complainant)</h2>
-                <p><strong>Outcome:</strong> {pub.resolution_category_label}</p>
-                <p className="mt-2 whitespace-pre-wrap">{pub.resolution_text_public}</p>
-                {pub.findings_summary_public && (
-                  <p className="mt-2 whitespace-pre-wrap text-gray-700">{pub.findings_summary_public}</p>
-                )}
-              </section>
-            </div>
-          )}
+          <ClosureSummaryBody
+            caseHeader={caseHeader}
+            officerMetrics={data.officer_metrics}
+            officerFindings={findings}
+            publicView={
+              pub
+                ? {
+                    resolution_category_label: pub.resolution_category_label,
+                    resolution_text_public: pub.resolution_text_public,
+                    findings_summary_public: pub.findings_summary_public,
+                  }
+                : null
+            }
+          />
           {data.generation_status !== "complete" && (
             <p className="text-amber-700 text-sm mt-4">Summary is still generating. Refresh in a moment.</p>
           )}

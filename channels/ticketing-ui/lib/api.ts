@@ -281,6 +281,28 @@ export interface ActionPayload {
   is_call_report?: boolean;
 }
 
+export interface ClosureCaseHeader {
+  reference: string;
+  complaint_date?: string | null;
+  resolved_date?: string | null;
+  resolution_duration_days?: number | null;
+  resolved_by?: string | null;
+  project_name?: string | null;
+  package_label?: string | null;
+}
+
+export interface ClosureOfficerMetrics {
+  complaint_category?: string | null;
+  escalated_yn?: string | null;
+  stage_at_resolution?: string | null;
+  stage_level_at_resolution?: string | null;
+  days_spent_overdue?: number | null;
+  sla_breached_yn?: string | null;
+  resolution_category?: string | null;
+  instance?: string | null;
+  location_display?: string | null;
+}
+
 export interface ResolvedSummaryResponse {
   ticket_id: string;
   grievance_id: string;
@@ -289,6 +311,8 @@ export interface ResolvedSummaryResponse {
   summary_json: Record<string, unknown>;
   summary_public_json: Record<string, unknown> | null;
   primary_language: string;
+  case_header?: ClosureCaseHeader;
+  officer_metrics?: ClosureOfficerMetrics;
 }
 
 export function getResolvedSummary(ticketId: string): Promise<ResolvedSummaryResponse> {

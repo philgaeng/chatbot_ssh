@@ -18,7 +18,10 @@ from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
+from ticketing.models.workflow import WorkflowStep
+from ticketing.services.overdue_episodes import load_episodes_for_tickets, overdue_days_display
 from ticketing.services.pii_vault import grievance_pii_masked, reveal_field
+from ticketing.services.report_rows import _fetch_auxiliary_maps, build_report_row, normalize_complaint_category
 
 _MODEL_STANDARD = "gpt-4o-mini"
 _MODEL_SEAH = "gpt-4o"
@@ -398,6 +401,134 @@ def build_flat_narrative(public_json: dict[str, Any]) -> str:
         public_json.get("findings_summary_public") or "",
     ]
     return "\n".join(lines).strip()
+
+
+def _resolution_step_at_close(db: Session, ticket_id: str) -> tuple[str, str]:
+    """Workflow step active when the case was resolved (from RESOLVED event)."""
+    ev = db.execute(
+        select(TicketEvent)
+        .where(
+            TicketEvent.ticket_id == ticket_id,
+            TicketEvent.event_type == "RESOLVED",
+        )
+        .order_by(TicketEvent.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if not ev or not ev.step_id:
+        return "", ""
+    step = db.get(WorkflowStep, ev.step_id)
+    if not step:
+        return "", ""
+    level = f"L{step.step_order}" if step.step_order is not None else ""
+    return (step.display_name or "").strip(), level
+
+
+def _total_overdue_days(db: Session, ticket_id: str) -> int:
+    episodes = load_episodes_for_tickets(db, [ticket_id]).get(ticket_id, [])
+    total = 0
+    for ep in episodes:
+        if ep.days_overdue is not None:
+            total += int(ep.days_overdue)
+            continue
+        days = overdue_days_display(ep)
+        if days is not None:
+            total += days
+    return total
+
+
+def _iso_date_only(value: Any) -> str | None:
+    if not value or not isinstance(value, str):
+        return None
+    return value[:10] if len(value) >= 10 else value
+
+
+def build_closure_display_context(
+    db: Session,
+    ticket: Ticket,
+    summary_json: dict[str, Any] | None,
+    summary_public_json: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """
+    Officer closure page: shared header (complainant parity) + report-aligned metrics.
+    """
+    sj = summary_json or {}
+    pub = summary_public_json or {}
+    complaint = sj.get("complaint") or {}
+    resolution = sj.get("resolution") or {}
+    project = sj.get("project") or {}
+
+    filed_at = pub.get("complaint_filed_at") or complaint.get("filed_at")
+    resolved_at = pub.get("resolved_at") or resolution.get("resolved_at")
+    duration = pub.get("resolved_duration_days")
+    if duration is None and filed_at and resolved_at:
+        duration = _resolution_duration_days(filed_at, resolved_at)
+
+    aux = _fetch_auxiliary_maps(db, [ticket])
+    report_row = build_report_row(
+        ticket,
+        step_map=aux[0],
+        project_names=aux[1],
+        package_labels=aux[2],
+        resolved_at_map=aux[3],
+        escalated_ids=aux[4],
+        resolution_cat_map=aux[5],
+        date_from=_now().date(),
+        date_to=_now().date(),
+    )
+
+    stage_name, stage_level = _resolution_step_at_close(db, ticket.ticket_id)
+    if not stage_name:
+        stage_name = report_row.get("stage") or ""
+    if not stage_level:
+        stage_level = report_row.get("stage_level") or ""
+
+    project_name = (
+        pub.get("project_name")
+        or project.get("project_name")
+        or project.get("project_code")
+        or report_row.get("project_name")
+        or ""
+    )
+    package_label = (
+        project.get("package_name")
+        or project.get("package_code")
+        or report_row.get("package_label")
+        or ""
+    )
+
+    return {
+        "case_header": {
+            "reference": ticket.grievance_id,
+            "complaint_date": _iso_date_only(filed_at) or report_row.get("complaint_date"),
+            "resolved_date": _iso_date_only(resolved_at),
+            "resolution_duration_days": duration,
+            "resolved_by": (
+                pub.get("resolved_by_display_name")
+                or resolution.get("resolved_by_display_name")
+                or ticket.updated_by_user_id
+                or ""
+            ),
+            "project_name": project_name,
+            "package_label": package_label,
+        },
+        "officer_metrics": {
+            "complaint_category": normalize_complaint_category(
+                complaint.get("categories") or ticket.grievance_categories
+            ),
+            "escalated_yn": report_row.get("escalated_yn", "N"),
+            "stage_at_resolution": stage_name,
+            "stage_level_at_resolution": stage_level,
+            "days_spent_overdue": _total_overdue_days(db, ticket.ticket_id),
+            "sla_breached_yn": report_row.get("sla_breached", "N"),
+            "resolution_category": (
+                resolution.get("category_label")
+                or report_row.get("resolution_category")
+                or ""
+            ),
+            "instance": report_row.get("is_seah", "Standard"),
+            "location_display": report_row.get("location_display") or "",
+        },
+    }
 
 
 def upsert_resolved_summary(

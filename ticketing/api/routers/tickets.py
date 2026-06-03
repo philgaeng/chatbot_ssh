@@ -2031,6 +2031,14 @@ def get_resolved_summary(
                 ),
             )
         raise HTTPException(status_code=404, detail="Resolved summary not found")
+    from ticketing.services.resolved_summary_builder import build_closure_display_context
+
+    display = build_closure_display_context(
+        db,
+        ticket,
+        row.summary_json if isinstance(row.summary_json, dict) else None,
+        row.summary_public_json if isinstance(row.summary_public_json, dict) else None,
+    )
     return {
         "ticket_id": ticket_id,
         "grievance_id": row.grievance_id,
@@ -2042,6 +2050,8 @@ def get_resolved_summary(
         "summary_public_json": row.summary_public_json,
         "summary_text_primary": row.summary_text_primary,
         "primary_language": row.primary_language,
+        "case_header": display["case_header"],
+        "officer_metrics": display["officer_metrics"],
     }
 
 
