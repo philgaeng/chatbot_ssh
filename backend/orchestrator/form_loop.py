@@ -2,9 +2,22 @@
 Form loop driver: required_slots -> extract -> validate -> apply -> ask or complete.
 """
 
+import logging
 import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
+
+_log = logging.getLogger(__name__)
+
+_FORM_ASK_FALLBACK = {
+    "en": "Please provide the requested information.",
+    "ne": "कृपया अनुरोध गरिएको जानकारी प्रदान गर्नुहोस्।",
+}
+
+
+def _form_ask_fallback_text(slots: Dict[str, Any]) -> str:
+    lang = slots.get("language_code") or "en"
+    return _FORM_ASK_FALLBACK.get(lang, _FORM_ASK_FALLBACK["en"])
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
@@ -246,12 +259,24 @@ async def run_form_turn(
                         tracker._slots.update(ask_slot_updates)
                         slot_updates.update(ask_slot_updates)
                 except Exception:
+                    _log.exception(
+                        "form ask action failed: loop=%s slot=%s action=%s",
+                        session.get("active_loop"),
+                        next_slot_to_ask,
+                        ask_action_name,
+                    )
                     ask_dispatcher.messages.append({
-                        "text": "Please provide the requested information.",
+                        "text": _form_ask_fallback_text(slots),
                     })
             dispatcher.messages.extend(ask_dispatcher.messages)
             if not dispatcher.messages and next_slot_to_ask:
-                dispatcher.messages.append({"text": "Please provide the requested information."})
+                _log.warning(
+                    "form ask action returned no messages: loop=%s slot=%s action=%s",
+                    session.get("active_loop"),
+                    next_slot_to_ask,
+                    ask_action_name,
+                )
+                dispatcher.messages.append({"text": _form_ask_fallback_text(slots)})
         slot_updates["requested_slot"] = next_slot_to_ask
 
     if completed:
