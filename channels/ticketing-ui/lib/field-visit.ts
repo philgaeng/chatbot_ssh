@@ -1,3 +1,5 @@
+import { formatUserFacingError } from "@/lib/user-messages";
+
 /** Shared amber styling for field reports and inspection visits in the thread UI. */
 export const FIELD_WORK_AMBER = {
   paletteRow: "text-amber-800 hover:bg-amber-50",
@@ -93,23 +95,7 @@ export function isCallReportEvent(event: {
   );
 }
 
-/** User-facing message when field visit save fails (includes API detail when present). */
+/** User-facing message when field visit save fails (TP-13 — no API jargon). */
 export function fieldVisitSaveErrorMessage(e: unknown): string {
-  const raw = e instanceof Error ? e.message : String(e);
-  if (raw.includes("Only the assigned officer")) {
-    return (
-      "Only the officer assigned to this inspection can complete it. " +
-      "If this is your task, ask an admin to reassign it to your login email."
-    );
-  }
-  if (raw.includes("/complete") && raw.includes("403")) {
-    return (
-      "Permission denied when completing the inspection task. " +
-      "Refresh the page — if the report already appears on the timeline, the visit may be saved."
-    );
-  }
-  const detail = raw.replace(/^API \d+ \S+: /, "").trim();
-  return detail
-    ? `Could not save the field visit report.\n\n${detail.slice(0, 320)}`
-    : "Could not save the field visit report. Please try again.";
+  return formatUserFacingError(e, "field_report").message;
 }

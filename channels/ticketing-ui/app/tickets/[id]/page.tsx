@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
-  listTicketFiles, getFileDownloadUrl, listOfficers, patchTicket,
+  listTicketFiles, getFileDownloadUrl, listOfficers, listOfficerRoster, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
   generateFindings, listTicketTasks, completeTask, createTask, patchComplainant,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
@@ -23,10 +23,22 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
+import { EscalationFormCard }                 from "@/components/thread/EscalationFormCard";
 import { ResolutionSheet }                    from "@/components/ResolutionSheet";
+import { ActionNotice }                       from "@/components/ActionNotice";
+import { hasImageAttachment }                 from "@/lib/attachments";
+import { canAssignTicket }                    from "@/lib/officer-permissions";
+import {
+  formatUserFacingError,
+  MSG_IMAGE_BEFORE_ESCALATE,
+  MSG_IMAGE_BEFORE_RESOLVE,
+  MSG_SUPERVISOR_ONLY_ASSIGN,
+  MSG_SUPERVISOR_ONLY_FIELD_REPORT,
+  type ActionNoticeState,
+} from "@/lib/user-messages";
 import type { ResolutionCategoryCode }        from "@/lib/resolution";
 import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
-import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { PII_MASK } from "@/lib/pii-display";
@@ -188,7 +200,7 @@ function FilesPanel({
       await loadFiles();
       onUpload();
     } catch (e) {
-      setUploadError(String(e));
+      setUploadError(formatUserFacingError(e, "upload").message);
     } finally {
       setUploading(false);
     }
@@ -748,6 +760,11 @@ export default function TicketDetailPage() {
   const threadEndRef = useRef<HTMLDivElement>(null);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const fieldVisitSubmitLock = useRef(false);
+  const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
+  const [officerFiles, setOfficerFiles]         = useState<OfficerAttachment[]>([]);
+  const [rosterIds, setRosterIds]               = useState<string[]>([]);
+  const [actionNotice, setActionNotice]       = useState<ActionNoticeState | null>(null);
+  const [escalationOpen, setEscalationOpen]   = useState(false);
 
   // ── Top bar actions ────────────────────────────────────────────────────
   const [actLoading, setActLoading]     = useState(false);
@@ -786,6 +803,15 @@ export default function TicketDetailPage() {
   const [revealSession, setRevealSession]     = useState<RevealSession | null>(null);
 
   // ── Data loading ───────────────────────────────────────────────────────
+  const refreshFiles = useCallback(async () => {
+    const [cf, of_] = await Promise.all([
+      listTicketFiles(id).catch(() => [] as TicketFile[]),
+      listOfficerAttachments(id).catch(() => [] as OfficerAttachment[]),
+    ]);
+    setComplainantFiles(cf);
+    setOfficerFiles(of_);
+  }, [id]);
+
   const load = useCallback(async () => {
     try {
       const [t, s, tk] = await Promise.all([
@@ -798,15 +824,20 @@ export default function TicketDetailPage() {
       setTasks(tk);
       setAssignSelected(t.assigned_to_user_id ?? "");
       setFilesRefreshKey((k) => k + 1);
+      await refreshFiles();
       markSeen(id).catch(() => {});
     } catch (e) {
-      setError(String(e));
+      setError(formatUserFacingError(e).message);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, refreshFiles]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    listOfficerRoster().then((r) => setRosterIds(r.map((o) => o.user_id))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (showAssign && officers.length === 0) {
@@ -881,23 +912,84 @@ export default function TicketDetailPage() {
     return list;
   }, [ticket, currentUserId]);
 
+  const hasImages = useMemo(
+    () => hasImageAttachment(complainantFiles, officerFiles),
+    [complainantFiles, officerFiles],
+  );
+
+  const userCanAssign = useMemo(
+    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin),
+    [ticket, roleKeys, isAdmin],
+  );
+
   // ── Actions ────────────────────────────────────────────────────────────
   const ensureAcknowledged = useCallback(async () => {
     await ensureTicketAcknowledged(ticket, isAssigned, id, load);
   }, [ticket, isAssigned, id, load]);
 
-  async function act(action_type: string, extra?: Record<string, string>) {
+  const handleSimpleAction = useCallback(async (
+    action_type: string,
+    extra?: Record<string, string>,
+  ) => {
     setActLoading(true);
+    setActionNotice(null);
     try {
       if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
       await performAction(id, { action_type, ...extra });
       await load();
-    } catch (e) { alert(String(e)); }
-    finally { setActLoading(false); }
-  }
+    } catch (e) {
+      console.error("Action failed", e);
+      setActionNotice(formatUserFacingError(e));
+    } finally {
+      setActLoading(false);
+    }
+  }, [id, load, ensureAcknowledged]);
 
-  async function submitResolve(category: ResolutionCategoryCode, note: string) {
+  const openEscalationFlow = useCallback(() => {
+    if (!hasImages) {
+      setActionNotice({ message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" });
+      return;
+    }
+    setEscalationOpen(true);
+  }, [hasImages]);
+
+  const submitEscalation = useCallback(async (data: {
+    escalationDate: string;
+    personsInvolved: string[];
+    notes: string;
+  }) => {
     setActLoading(true);
+    setActionNotice(null);
+    try {
+      await ensureAcknowledged();
+      await performAction(id, {
+        action_type: "ESCALATE",
+        escalation_date: data.escalationDate,
+        persons_involved: data.personsInvolved,
+        escalation_notes: data.notes,
+      });
+      setEscalationOpen(false);
+      await load();
+    } catch (e) {
+      console.error("Escalation failed", e);
+      setActionNotice(formatUserFacingError(e));
+      throw e;
+    } finally {
+      setActLoading(false);
+    }
+  }, [id, load, ensureAcknowledged]);
+
+  const openResolveFlow = useCallback(() => {
+    if (!hasImages) {
+      setActionNotice({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
+      return;
+    }
+    setResolutionOpen(true);
+  }, [hasImages]);
+
+  const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
+    setActLoading(true);
+    setActionNotice(null);
     try {
       await ensureAcknowledged();
       await performAction(id, {
@@ -907,33 +999,51 @@ export default function TicketDetailPage() {
       });
       setResolutionOpen(false);
       await load();
-    } catch (e) { alert(String(e)); }
-    finally { setActLoading(false); }
-  }
+    } catch (e) {
+      console.error("Resolve failed", e);
+      setActionNotice(formatUserFacingError(e));
+    } finally {
+      setActLoading(false);
+    }
+  }, [id, load, ensureAcknowledged]);
 
-  async function sendReply() {
+  const sendReply = useCallback(async () => {
     if (!replyText.trim()) return;
     setActLoading(true);
+    setActionNotice(null);
     try {
       await ensureAcknowledged();
       await replyToComplainant(id, replyText);
       setReplyText("");
       setShowReply(false);
       await load();
-    } catch (e) { alert(String(e)); }
-    finally { setActLoading(false); }
-  }
+    } catch (e) {
+      console.error("Reply failed", e);
+      setActionNotice(formatUserFacingError(e));
+    } finally {
+      setActLoading(false);
+    }
+  }, [replyText, id, load, ensureAcknowledged]);
 
-  async function handleAssign() {
+  const handleAssign = useCallback(async () => {
     if (!assignSelected || assignSelected === ticket?.assigned_to_user_id) return;
+    if (!userCanAssign) {
+      setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
+      return;
+    }
     setSavingAssign(true);
+    setActionNotice(null);
     try {
       await patchTicket(id, { assign_to_user_id: assignSelected });
       setShowAssign(false);
       await load();
-    } catch (e) { alert(String(e)); }
-    finally { setSavingAssign(false); }
-  }
+    } catch (e) {
+      console.error("Assign failed", e);
+      setActionNotice(formatUserFacingError(e));
+    } finally {
+      setSavingAssign(false);
+    }
+  }, [assignSelected, ticket?.assigned_to_user_id, userCanAssign, id, load]);
 
   const handleNote = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
@@ -982,7 +1092,7 @@ export default function TicketDetailPage() {
       await load();
     } catch (e) {
       console.error("Complete task failed", e);
-      alert("Could not complete the task. Please try again.");
+      setActionNotice(formatUserFacingError(e, "task"));
     }
   }, [id, load, openFieldReport]);
 
@@ -1002,7 +1112,7 @@ export default function TicketDetailPage() {
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       console.error("Field report failed", e);
-      alert(fieldVisitSaveErrorMessage(e));
+      setActionNotice(formatUserFacingError(e, "field_report"));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
@@ -1012,26 +1122,31 @@ export default function TicketDetailPage() {
 
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
+    setActionNotice(null);
     try {
       await ensureAcknowledged();
       await uploadOfficerAttachment(id, file, "");
+      await refreshFiles();
       await load();
     } catch (e) {
       console.error("Upload failed", e);
-      alert("Could not upload the file. Please try again.");
+      setActionNotice(formatUserFacingError(e, "upload"));
     } finally {
       setAttachUploading(false);
     }
-  }, [ensureAcknowledged, id, load]);
+  }, [ensureAcknowledged, id, load, refreshFiles]);
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "report") {
       openFieldReport(null);
       return;
     }
+    if (cmd.kind === "action" && cmd.action === "ESCALATE") {
+      openEscalationFlow();
+      return;
+    }
     if (cmd.kind === "action" && cmd.action) {
-      // #escalate — same path as the Escalate button
-      await act(cmd.action);
+      await handleSimpleAction(cmd.action);
       return;
     }
     if (cmd.kind === "task" && cmd.taskKey) {
@@ -1042,16 +1157,19 @@ export default function TicketDetailPage() {
       } catch (e) { console.error("Create task failed", e); }
       return;
     }
+    if (cmd.kind === "assign" && !userCanAssign) {
+      setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
+    }
     // #assign is handled inline in ComposeBar (text becomes "#assign @…")
-  }, [id, currentUserId, load, openFieldReport]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, currentUserId, load, openFieldReport, openEscalationFlow, handleSimpleAction, userCanAssign]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNoteOrReport = useCallback(async () => {
     const text = noteText.trim();
     if (!text || submitting) return;
     setSubmitting(true);
 
-    // Check for #assign @userId pattern
     const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
+    const reportAssignMatch = text.match(/^#report\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
     const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
@@ -1062,7 +1180,22 @@ export default function TicketDetailPage() {
           task_type: "SITE_VISIT",
           assigned_to_user_id: assignee,
         });
+      } else if (reportAssignMatch) {
+        if (!userCanAssign) {
+          setActionNotice({ message: MSG_SUPERVISOR_ONLY_FIELD_REPORT, kind: "validation" });
+          setNoteText(text);
+          return;
+        }
+        await createTask(id, {
+          task_type: "SYSTEM_NOTE",
+          assigned_to_user_id: reportAssignMatch[1],
+        });
       } else if (assignMatch) {
+        if (!userCanAssign) {
+          setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
+          setNoteText(text);
+          return;
+        }
         await patchTicket(id, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
@@ -1073,10 +1206,11 @@ export default function TicketDetailPage() {
     } catch (e) {
       console.error("Submit failed", e);
       setNoteText(text);
+      setActionNotice(formatUserFacingError(e));
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, id, load, ensureAcknowledged]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [noteText, submitting, id, load, ensureAcknowledged, currentUserId, userCanAssign]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1120,7 +1254,7 @@ export default function TicketDetailPage() {
           {isAssigned && !isClosed && (
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {(isOpen || isEscalated) && (
-                <button onClick={() => act("ACKNOWLEDGE")} disabled={actLoading}
+                <button onClick={() => handleSimpleAction("ACKNOWLEDGE")} disabled={actLoading}
                   className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
                   <IconAcknowledge size={15} strokeWidth={2} />
                   Acknowledge
@@ -1128,12 +1262,12 @@ export default function TicketDetailPage() {
               )}
               {!isOpen && !isEscalated && (
                 <>
-                  <button onClick={() => act("ESCALATE")} disabled={actLoading}
+                  <button onClick={openEscalationFlow} disabled={actLoading}
                     className={`${btnBase} inline-flex items-center gap-1.5 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100`}>
                     <IconEscalateAction size={15} strokeWidth={2} />
                     Escalate
                   </button>
-                  <button onClick={() => setResolutionOpen(true)} disabled={actLoading}
+                  <button onClick={openResolveFlow} disabled={actLoading}
                     className={`${btnBase} inline-flex items-center gap-1.5 bg-green-600 text-white hover:bg-green-700`}>
                     <IconResolve size={15} strokeWidth={2} />
                     Resolve
@@ -1145,7 +1279,7 @@ export default function TicketDetailPage() {
                   <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
                     className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
                     placeholder="Hearing date" />
-                  <button onClick={() => act("GRC_CONVENE", { grc_hearing_date: grcHearingDate })} disabled={actLoading || !grcHearingDate}
+                  <button onClick={() => handleSimpleAction("GRC_CONVENE", { grc_hearing_date: grcHearingDate })} disabled={actLoading || !grcHearingDate}
                     className={`${btnBase} inline-flex items-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40`}>
                     <IconGrcConvene size={15} strokeWidth={2} />
                     Convene GRC
@@ -1222,6 +1356,7 @@ export default function TicketDetailPage() {
                   <IconTask size={12} strokeWidth={2} />
                   Task
                 </button>
+                {userCanAssign && (
                 <button
                   onClick={() => { setShowAssign((v) => !v); setShowReply(false); }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition inline-flex items-center gap-1 ${
@@ -1233,6 +1368,7 @@ export default function TicketDetailPage() {
                   <IconAssign size={12} strokeWidth={2} />
                   Assign
                 </button>
+                )}
               </>
             )}
             {showTranslations && (
@@ -1306,6 +1442,12 @@ export default function TicketDetailPage() {
         )}
       </div>
 
+      <ActionNotice
+        notice={actionNotice}
+        onDismiss={() => setActionNotice(null)}
+        className="mx-6 mt-2"
+      />
+
       {isClosed && !hasResolutionRecord && (
         <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
           <p className="font-medium">Resolution record missing for this closed ticket.</p>
@@ -1315,7 +1457,7 @@ export default function TicketDetailPage() {
           <div className="mt-3">
             <button
               type="button"
-              onClick={() => setResolutionOpen(true)}
+              onClick={openResolveFlow}
               disabled={!isAssigned}
               className="rounded border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -1396,7 +1538,15 @@ export default function TicketDetailPage() {
             <div ref={threadEndRef} />
           </div>
 
-          <div className={`flex-shrink-0 border-t ${fieldReportOpen ? "border-amber-200" : "border-gray-100"}`}>
+          <div className={`flex-shrink-0 border-t ${fieldReportOpen || escalationOpen ? "border-amber-200" : "border-gray-100"}`}>
+            <EscalationFormCard
+              open={escalationOpen}
+              currentUserId={currentUserId}
+              rosterIds={rosterIds}
+              submitting={actLoading}
+              onClose={() => setEscalationOpen(false)}
+              onSubmit={submitEscalation}
+            />
             <FieldReportComposeCard
               open={fieldReportOpen}
               defaultLocation={ticket.grievance_location}
@@ -1413,6 +1563,7 @@ export default function TicketDetailPage() {
               onFileSelected={handleAttachFile}
               attachUploading={attachUploading}
               fieldReportOpen={fieldReportOpen}
+              canAssign={userCanAssign}
               disabled={submitting || fieldReportSubmitting}
               participants={mentionParticipants}
             />

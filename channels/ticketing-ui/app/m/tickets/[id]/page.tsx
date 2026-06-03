@@ -55,7 +55,16 @@ import { AttachmentListSection }              from "@/components/AttachmentListS
 import {
   formatCallReportNote, isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData, type CallReportFormData,
 } from "@/lib/field-visit";
-import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { ActionNotice } from "@/components/ActionNotice";
+import {
+  formatUserFacingError,
+  MSG_IMAGE_BEFORE_ESCALATE,
+  MSG_IMAGE_BEFORE_RESOLVE,
+  MSG_SUPERVISOR_ONLY_ASSIGN,
+  MSG_SUPERVISOR_ONLY_FIELD_REPORT,
+  type ActionNoticeState,
+} from "@/lib/user-messages";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
@@ -396,10 +405,12 @@ function AttachmentsSheet({
   ticket,
   onClose,
   onUploaded,
+  onUploadError,
 }: {
   ticket: TicketDetail;
   onClose: () => void;
   onUploaded?: () => void;
+  onUploadError?: (notice: ActionNoticeState) => void;
 }) {
   const [chatbotFiles, setChatbotFiles] = useState<TicketFile[]>([]);
   const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
@@ -455,7 +466,7 @@ function AttachmentsSheet({
                   onUploaded?.();
                 } catch (err) {
                   console.error("Upload failed", err);
-                  alert("Could not upload the file.");
+                  onUploadError?.(formatUserFacingError(err, "upload"));
                 } finally {
                   setUploading(false);
                 }
@@ -606,6 +617,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
   const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
   const [rosterIds, setRosterIds] = useState<string[]>([]);
+  const [actionNotice, setActionNotice] = useState<ActionNoticeState | null>(null);
 
   // Sheet visibility
   const [showInfoMenu, setShowInfoMenu]   = useState(false);
@@ -744,7 +756,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       await refreshFiles();
     } catch (e) {
       console.error("Action failed", e);
-      alert(String(e));
+      setActionNotice(formatUserFacingError(e));
     } finally {
       setSubmitting(false);
     }
@@ -752,12 +764,18 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   const openEscalationFlow = useCallback(() => {
     if (!hasImages) {
-      alert(
-        "Add at least one image before escalating (upload a site photo or ask the complainant via WhatsApp).",
-      );
+      setActionNotice({ message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" });
       return;
     }
     setEscalationOpen(true);
+  }, [hasImages]);
+
+  const openResolveFlow = useCallback(() => {
+    if (!hasImages) {
+      setActionNotice({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
+      return;
+    }
+    setResolutionOpen(true);
   }, [hasImages]);
 
   const submitEscalation = useCallback(async (data: {
@@ -777,7 +795,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       setEscalationOpen(false);
       await loadTicket();
     } catch (e) {
-      alert(String(e));
+      setActionNotice(formatUserFacingError(e));
       throw e;
     } finally {
       setSubmitting(false);
@@ -795,7 +813,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       setReassignOpen(false);
       await loadTicket();
     } catch (e) {
-      alert(String(e));
+      setActionNotice(formatUserFacingError(e));
       throw e;
     } finally {
       setSubmitting(false);
@@ -814,7 +832,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       setCallReportOpen(false);
       await loadTicket();
     } catch (e) {
-      alert(String(e));
+      setActionNotice(formatUserFacingError(e));
       throw e;
     } finally {
       setSubmitting(false);
@@ -823,12 +841,6 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
     if (!ticket) return;
-    if (!hasImages) {
-      alert(
-        "Add at least one image before resolving (upload a site photo or ask the complainant via WhatsApp).",
-      );
-      return;
-    }
     setSubmitting(true);
     try {
       await ensureAcknowledged();
@@ -841,11 +853,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       await loadTicket();
     } catch (e) {
       console.error("Resolve failed", e);
-      alert(String(e));
+      setActionNotice(formatUserFacingError(e));
     } finally {
       setSubmitting(false);
     }
-  }, [ticket, ticketId, loadTicket, ensureAcknowledged, hasImages]);
+  }, [ticket, ticketId, loadTicket, ensureAcknowledged]);
 
   const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
     setFieldReportLinkedTask(linkedTask ?? null);
@@ -865,7 +877,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     if (cmd.kind === "action" && cmd.action === "ESCALATE") { openEscalationFlow(); return; }
     if (cmd.kind === "action" && cmd.action) { await handleAction(cmd.action); return; }
     if (cmd.kind === "assign" && !userCanAssign) {
-      alert("Only a supervisor can assign tickets. Use Ask for reassignment if this case is out of scope.");
+      setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
     }
   }, [handleAction, openEscalationFlow, userCanAssign]);
 
@@ -886,8 +898,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         });
       } else if (reportAssignMatch) {
         if (!userCanAssign) {
-          alert("Only a supervisor can assign field reports.");
-          throw new Error("forbidden");
+          setActionNotice({ message: MSG_SUPERVISOR_ONLY_FIELD_REPORT, kind: "validation" });
+          setNoteText(text);
+          return;
         }
         await createTask(ticketId, {
           task_type: "SYSTEM_NOTE",
@@ -895,8 +908,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         });
       } else if (assignMatch) {
         if (!userCanAssign) {
-          alert("Only a supervisor can assign tickets.");
-          throw new Error("forbidden");
+          setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
+          setNoteText(text);
+          return;
         }
         await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
       } else {
@@ -908,6 +922,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } catch (e) {
       console.error("Submit failed", e);
       setNoteText(text);
+      setActionNotice(formatUserFacingError(e));
     } finally {
       setSubmitting(false);
     }
@@ -924,7 +939,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       await loadTicket();
     } catch (e) {
       console.error("Complete task failed", e);
-      alert("Could not complete the task. Please try again.");
+      setActionNotice(formatUserFacingError(e, "task"));
     }
   }, [ticket, ticketId, loadTicket, openFieldReport]);
 
@@ -944,7 +959,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       console.error("Field report failed", e);
-      alert(fieldVisitSaveErrorMessage(e));
+      setActionNotice(formatUserFacingError(e, "field_report"));
       throw e;
     } finally {
       fieldVisitSubmitLock.current = false;
@@ -960,7 +975,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       await loadTicket();
     } catch (e) {
       console.error("Attach failed", e);
-      alert("Could not upload the file.");
+      setActionNotice(formatUserFacingError(e, "upload"));
     } finally {
       setAttachUploading(false);
     }
@@ -1062,6 +1077,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         />
       </div>
 
+      <ActionNotice
+        notice={actionNotice}
+        onDismiss={() => setActionNotice(null)}
+        className="mx-3 mt-2 flex-shrink-0"
+      />
+
       {/* ── Thread — full width ────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto py-2">
         {ticket.status_code === "OPEN" && (
@@ -1117,7 +1138,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           ticket={ticket}
           onAction={handleAction}
           onMore={() => setShowMore(true)}
-          onOpenResolve={() => setResolutionOpen(true)}
+          onOpenResolve={openResolveFlow}
         />
         <FieldReportComposeCard
           open={fieldReportOpen}
@@ -1195,7 +1216,15 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <ComplainantSheet ticket={ticket} onClose={() => setInfoPanel(null)} />
       )}
       {infoPanel === "attachments" && (
-        <AttachmentsSheet ticket={ticket} onClose={() => setInfoPanel(null)} onUploaded={loadTicket} />
+        <AttachmentsSheet
+          ticket={ticket}
+          onClose={() => setInfoPanel(null)}
+          onUploaded={loadTicket}
+          onUploadError={(notice) => {
+            setInfoPanel(null);
+            setActionNotice(notice);
+          }}
+        />
       )}
 
       {/* More actions (Escalate / Close) */}

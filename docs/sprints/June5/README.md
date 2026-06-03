@@ -9,7 +9,7 @@
 |------|----------|---------|
 | [`01-chatbot-p1-spec.md`](01-chatbot-p1-spec.md) | Chatbot / REST webchat agent | CB-03, CB-04, CB-05, CB-07 |
 | [`02-chatbot-p2-spec.md`](02-chatbot-p2-spec.md) | Chatbot agent (phase 2) | CB-01, CB-06, CB-08, CB-09 |
-| [`03-portal-p1-spec.md`](03-portal-p1-spec.md) | Ticketing UI + `ticketing/` API agent | TP-01, TP-05, TP-07, TP-08, TP-09, TP-10, TP-11, TP-12 |
+| [`03-portal-p1-spec.md`](03-portal-p1-spec.md) | Ticketing UI + `ticketing/` API agent | TP-01 … TP-12, **TP-13** (UX follow-on) |
 | [`04-portal-p2-spec.md`](04-portal-p2-spec.md) | Ticketing agent (phase 2) | TP-02 |
 
 ## Agent prompts (copy into Cursor)
@@ -19,6 +19,7 @@
 | [`agents/chatbot-p1.md`](agents/chatbot-p1.md) | Starting CB-03, CB-04, CB-05, CB-07 |
 | [`agents/chatbot-p2.md`](agents/chatbot-p2.md) | Starting CB-01, CB-06, CB-08, CB-09 |
 | [`agents/portal-p1.md`](agents/portal-p1.md) | Starting TP-01 … TP-12 (P1 set) |
+| [`agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md) | TP-13 — friendly validation messages, no API alerts |
 | [`agents/portal-p2.md`](agents/portal-p2.md) | Starting TP-02 |
 
 Index: [`agents/README.md`](agents/README.md)
