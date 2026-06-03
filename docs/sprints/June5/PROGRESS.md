@@ -89,6 +89,25 @@
 
 ---
 
+## Agent: Portal P1 bugs
+
+**Prompt:** [`agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md)  
+**Spec:** [`03-portal-p1-spec.md`](03-portal-p1-spec.md) § TP-13  
+**Primary paths:** `channels/ticketing-ui/lib/user-messages.ts`, `components/ActionNotice.tsx`, `app/tickets/[id]/page.tsx`, `app/m/tickets/[id]/page.tsx`
+
+| Ticket | Status | Agent / date | PR / commit | Notes |
+|--------|--------|--------------|-------------|-------|
+| TP-13 Officer-friendly validation messages | `done` | Portal P1 bugs / 2026-06-03 | | `user-messages.ts`, `ActionNotice`; desktop escalation form parity |
+
+**TP-13 verification**
+
+- [x] Desktop Escalate without image → amber in-app notice (no browser dialog)
+- [x] Desktop Escalate with image → `EscalationFormCard` → submit succeeds
+- [x] Mobile action errors use in-app notice (no `alert` on ticket action catches)
+- [x] Error text never contains `API`, `/api/v1/`, or JSON `detail` wrapper
+
+---
+
 ## Agent: Portal P2
 
 **Prompt:** [`agents/portal-p2.md`](agents/portal-p2.md)  
@@ -104,6 +123,8 @@
 
 | Date | Who | What |
 |------|-----|------|
+| 2026-06-03 | Portal P1 bugs | TP-13: `formatUserFacingError`, `ActionNotice`, desktop/mobile ticket pages |
+| 2026-06-03 | Docs | TP-13 spec + `portal-p1-bugs` agent prompt (friendly validation UX) |
 | 2026-06-03 | Portal P1 | Officer upload + grievance file download now serve audio/* MIME types for inline playback |
 | | | SMS public report URL: integration point left in `POST /reports/share` (messaging_api not wired) |
 | | | Voice intake (CB-01) + TP-02 share accessible transcription API |

@@ -1,7 +1,7 @@
 # Portal P1 — implementation spec
 
 **Sprint:** June5  
-**Tickets:** TP-01, TP-05, TP-07, TP-08, TP-09, TP-10, TP-11, TP-12  
+**Tickets:** TP-01, TP-05, TP-07, TP-08, TP-09, TP-10, TP-11, TP-12, **TP-13** (follow-on UX — see [`agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md))  
 **Brief:** [voice-notes-and-ux-feature-brief.md](../voice-notes-and-ux-feature-brief.md)
 
 **UI root:** `channels/ticketing-ui/` (Next.js)  
@@ -13,7 +13,11 @@
 
 | Area | Path |
 |------|------|
-| API client | `channels/ticketing-ui/lib/api.ts` — `performAction`, reports, files |
+| API client | `channels/ticketing-ui/lib/api.ts` — `performAction`, reports, files; `apiFetch` throws `Error("API {status} {path}: {body}")` |
+| User messages | `channels/ticketing-ui/lib/user-messages.ts` — **TP-13** `formatUserFacingError`, known-case map |
+| Action notice UI | `channels/ticketing-ui/components/ActionNotice.tsx` — **TP-13** in-app banner (amber / red) |
+| Attachments helper | `channels/ticketing-ui/lib/attachments.ts` — `hasImageAttachment()` (TP-11 gate; TP-13 desktop) |
+| Escalation form | `channels/ticketing-ui/components/thread/EscalationFormCard.tsx` — TP-11; **TP-13** wire desktop Escalate |
 | Desktop ticket | `channels/ticketing-ui/app/tickets/[id]/page.tsx` |
 | Mobile thread | `channels/ticketing-ui/app/m/tickets/[id]/page.tsx` |
 | Compose / # commands | `channels/ticketing-ui/components/thread/ComposeBar.tsx` |
@@ -248,13 +252,109 @@ Supervisors **assign**; L1 **acknowledge** or **ask for reassignment** with reas
 
 ---
 
+## TP-13 — Officer-friendly validation messages
+
+**Agent prompt:** [`agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md)  
+**Brief:** [voice-notes-and-ux-feature-brief.md](../voice-notes-and-ux-feature-brief.md) § TP-13
+
+### Goal
+
+Expected validation failures (missing photo, required notes, wrong role, etc.) are shown **in the GRM UI** with plain language. Officers never see browser `alert()` text containing `API 422`, `/api/v1/...`, or JSON bodies.
+
+### Problem (observed)
+
+Desktop `app/tickets/[id]/page.tsx` uses `alert(String(e))` in `act()`, `submitResolve()`, and related handlers. `apiFetch` in `lib/api.ts` throws:
+
+```text
+Error: API 422 /api/v1/tickets/{id}/actions: {"detail":"At least one image attachment..."}
+```
+
+Mobile has client image gate + `EscalationFormCard`, but still uses `alert(String(e))` on several catch paths.
+
+### Locked decisions
+
+| Item | Decision |
+|------|----------|
+| `window.alert()` | Remove for ticket action errors on desktop + mobile ticket pages |
+| Visible copy | No HTTP status, paths, `API`, or `{"detail":...}` |
+| Validation | Amber in-app notice — “complete this first” |
+| Unexpected | Red in-app notice — “could not save, try again” |
+| Image gate (client) | Desktop **Escalate** / **Resolve** / `#escalate` call `hasImageAttachment()` before API (same message as server) |
+| Desktop escalate | **Escalate** opens `EscalationFormCard` (not bare `performAction(ESCALATE)`) |
+
+### Tasks
+
+1. **`lib/user-messages.ts`**
+   - `parseApiErrorBody(raw: string): string | null` — extract FastAPI `detail` from JSON body after `API \d+ path:` prefix.
+   - `formatUserFacingError(e: unknown, context?: ActionErrorContext): { message: string; kind: "validation" | "failure" }`.
+   - Map known substrings / codes to officer copy (table below). Fallback: generic “Something went wrong. Please try again.”
+
+2. **`components/ActionNotice.tsx`**
+   - Props: `message`, `kind`, `onDismiss`.
+   - Styling: amber border/bg for validation; red for failure; fixed or sticky under ticket header; matches Tailwind patterns from `ResolutionSheet` / mobile cards.
+
+3. **`app/tickets/[id]/page.tsx`**
+   - State: `actionNotice: { message, kind } | null`.
+   - Replace all `alert(String(e))` in action flows with `setActionNotice(formatUserFacingError(e))`.
+   - `openEscalationFlow`: client image check → open `EscalationFormCard`; submit via `submitEscalation` (mirror mobile).
+   - Wire **Escalate** button and `#escalate` in `handleHashCommand` to `openEscalationFlow`, not `act("ESCALATE")`.
+   - Render `<ActionNotice />` + `<EscalationFormCard />` when needed.
+
+4. **`app/m/tickets/[id]/page.tsx`**
+   - Same `formatUserFacingError` + `ActionNotice` (mobile-friendly width).
+   - Replace `alert(...)` in escalate, resolve, assign, reassignment, upload, task flows.
+   - Keep existing client image gate; use shared message constants.
+
+5. **Optional — `lib/api.ts`**
+   - Export `class ApiError extends Error { userMessage: string; kind: ... }` thrown from `apiFetch` so callers need not re-parse. Keep throw shape backward-compatible for grep.
+
+6. **Consolidate** `fieldVisitSaveErrorMessage` to call `formatUserFacingError` (or shared `parseApiErrorBody`) to avoid duplicate strip logic.
+
+### Known backend `detail` strings → officer copy
+
+| Backend signal (substring or exact) | Officer message (use or paraphrase) | Kind |
+|-----------------------------------|-------------------------------------|------|
+| `At least one image attachment is required before escalating` | Add at least one photo before escalating. Upload a site photo or ask the complainant to send photos via WhatsApp. | validation |
+| `At least one image attachment is required before resolving` | Add at least one photo before resolving. Upload a site photo or ask the complainant to send photos via WhatsApp. | validation |
+| `escalation_notes is required` | Add escalation notes explaining why this case should move to the next level. | validation |
+| `Cannot perform` + `ESCALATED` + `Acknowledge` | Acknowledge the ticket first to take ownership at this level. | validation |
+| `No next step available` / `final escalation level` | This case is already at the highest escalation level. | validation |
+| `reassignment_notes required when reason is OTHER` | Add a short explanation when you choose “Other” as the reassignment reason. | validation |
+| `reassignment_reason_code must be` | Choose a reassignment reason before submitting. | validation |
+| `No supervisor configured` | No supervisor is set up for this step. Contact your admin. | failure |
+| `Only` + `supervisor` / assign permission (403/422 from patch) | Only a supervisor can assign this ticket. Use **Ask for reassignment** if it is out of your scope. | validation |
+| `Ticket is already resolved` | This case is already resolved. | validation |
+| `note is required` | Add a note before saving. | validation |
+| Session expired handling | Keep existing redirect; no alert. | — |
+| Unmatched | Something went wrong. Please try again. | failure |
+
+Product may shorten strings; must not expose API paths or field names.
+
+### Acceptance criteria
+
+- [ ] Desktop: Escalate without image shows **amber in-app notice** (no browser dialog).
+- [ ] Desktop: Escalate with image opens **escalation form**; missing notes shows validation notice (not API string).
+- [ ] Mobile: same behaviors; no `alert()` on action errors.
+- [ ] Screenshot regression: error title is **not** `grm-auth... says` / `API 422`.
+- [ ] `grep alert(` in `app/tickets/[id]` and `app/m/tickets/[id]` returns zero for action catch blocks (upload generic message may use notice).
+- [ ] TypeScript build passes.
+
+### Testing
+
+- [ ] GRV demo ticket at L2 without attachments → Escalate blocked with friendly copy.
+- [ ] Add officer image upload → Escalate form → submit with notes → succeeds.
+- [ ] L1 tries `#assign` → supervisor-only message (no API path).
+- [ ] Field report save failure still readable (via shared formatter).
+
+---
+
 ## Suggested implementation order
 
 ```text
-TP-01 → TP-11 → TP-12 → TP-09 → TP-10 → TP-08 → TP-07 → TP-05
+TP-01 → TP-11 → TP-12 → TP-09 → TP-10 → TP-08 → TP-07 → TP-05 → TP-13
 ```
 
-(TP-11 and TP-12 may share compose/modal work.)
+(TP-11 and TP-12 may share compose/modal work. **TP-13** after TP-11/12 or in parallel once gates exist.)
 
 ---
 
@@ -270,3 +370,5 @@ TP-01 → TP-11 → TP-12 → TP-09 → TP-10 → TP-08 → TP-07 → TP-05
 
 - Transcription (**TP-02**)
 - Chatbot intake changes
+
+**TP-13** is Portal P1 follow-on UX (same sprint folder); tracked separately in PROGRESS under **Portal P1 bugs** agent.

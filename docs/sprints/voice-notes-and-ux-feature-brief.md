@@ -38,6 +38,7 @@ Each ticket includes **locked decisions** where product has already chosen a dir
 | TP-08 | Quarterly dashboard clarity |
 | TP-11 | Simplify commands (field report, site photo gate, escalation) |
 | TP-12 | Assign vs ask for reassignment |
+| TP-13 | Officer-friendly validation messages (no API jargon) |
 
 ### P2 — Ticketing / portal
 
@@ -409,6 +410,46 @@ Store on timeline event (`REASSIGNMENT_REQUESTED` / assign payload).
 
 ---
 
+### TP-13 — Officer-friendly validation messages · **P1**
+
+**Feature goal**  
+When an officer action cannot proceed (missing photo, required notes, permission denied, etc.), show a clear message **inside the GRM UI** — never a browser `alert()` with API paths, status codes, or JSON.
+
+**Why**  
+After **TP-11** (image gate, escalation form), desktop **Escalate** still calls the API directly in some paths; failures surface as `Error: API 422 /api/v1/tickets/.../actions: {"detail":"..."}` — confusing and off-brand.
+
+**In scope**
+
+- **Central error formatter** in ticketing UI: parse `apiFetch` errors, extract FastAPI `detail` (string or object), strip `API \d+ /path` prefix.
+- **Known-case mapping** for ticket actions (image required before escalate/resolve, escalation notes required, reassignment notes for OTHER, supervisor-only assign, acknowledge-before-action on escalated ticket, final escalation level, etc.) — use backend `detail` text where already user-friendly; rewrite technical field names (`escalation_notes is required`) to plain language.
+- **In-app notice** component (banner or modal in app chrome): amber for **expected validation**; red for unexpected failures; dismissible; no mention of HTTP, endpoints, or JSON.
+- **Replace `alert(String(e))`** on desktop and mobile ticket detail for: acknowledge, escalate, resolve, assign, reassignment, uploads, task complete, field report save (align with `fieldVisitSaveErrorMessage` pattern).
+- **Client-side gates (desktop parity):** before opening escalation form or resolve sheet, run `hasImageAttachment()` — same copy as server when blocked (avoids round-trip).
+- **Desktop escalate flow:** wire **Escalate** button and `#escalate` to **EscalationFormCard** (date, persons, notes) — not bare `performAction(ESCALATE)` without form.
+
+**Out of scope**
+
+- Changing backend validation rules (only optional polish of `detail` strings if still technical).
+- Toast library / SSE — single notice state per page is enough for P1.
+- Reports/settings pages (unless same `alert` pattern found during pass).
+
+**Locked decisions**
+
+
+| Topic | Decision |
+| ----- | -------- |
+| Browser `alert()` | **Do not use** for ticket action errors on `app/tickets/[id]` and `app/m/tickets/[id]`. |
+| User-visible text | **Never** show status codes, URL paths, `API`, or raw `{"detail":...}` JSON. |
+| Validation vs failure | **Amber** = expected “complete this first”; **red** = could not save / try again. |
+| Image gate copy | *"Add at least one photo before escalating. Upload a site photo or ask the complainant to send photos via WhatsApp."* (align mobile + desktop + server). |
+| Implementation | `lib/user-messages.ts` + `components/ActionNotice.tsx` (or equivalent); optional `ApiError` from `apiFetch` with `.userMessage` only. |
+
+**Related** TP-11 (image gate, escalation form), TP-12 (supervisor assign messages).
+
+**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-13 · Agent: [`docs/sprints/June5/agents/portal-p1-bugs.md`](June5/agents/portal-p1-bugs.md)
+
+---
+
 ### TP-05 — Report delivery: links first, PDF optional, library · **P1**
 
 **Feature goal**  
@@ -497,6 +538,7 @@ Rename ambiguous labels - The current naming makes it difficult to understand th
 | TP-01 / TP-02 | P1 = player only; P2 = transcription + manual fallback                                                   |
 | TP-11         | Site photo = attachment gate; no `#photo`; complainant photos via WhatsApp only                          |
 | TP-12         | Assign = supervisor only; L1 = acknowledge or ask for reassignment + 3 reason codes                      |
+| TP-13         | Action errors in-app only; no API jargon; amber validation / red failure                                   |
 | CB-03         | **Close session** (standard) vs **Close browser** (SEAH); same actions as today, one button per path    |
 | TP-07         | Excel export = **user scope only**                                                                      |
 
@@ -522,6 +564,7 @@ TP-10 (call report) ── field-report pattern
 TP-11 (photo gate) ──► blocks Close / Escalate
 TP-11 (escalate form) ──► replaces #review
 TP-12 (reassign reasons) ──► all assign / ask-for-reassignment
+TP-13 (friendly errors) ──► TP-11 gates + TP-12 permissions; desktop escalate form parity
 TP-01 (player) ──► TP-02 (transcription, P2)
 CB-06 / CB-08 / CB-09 ── backlog (dust path chain)
 ```
@@ -549,6 +592,7 @@ CB-06 / CB-08 / CB-09 ── backlog (dust path chain)
 | TP-10 | **P1** | Complainant call report |
 | TP-11 | **P1** | Simplify commands (field report, site photo gate, escalation) |
 | TP-12 | **P1** | Assign vs ask for reassignment |
+| TP-13 | **P1** | Officer-friendly validation messages |
 | AD-01–03 | — | Training / localization / partner session |
 
 
