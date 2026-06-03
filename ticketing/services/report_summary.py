@@ -1,5 +1,5 @@
 """
-Executive Summary report — docs/ticketing_system/12_reports_and_report_builder.md §12–§13.
+Executive Summary report — docs/ticketing_system/09_reports_and_report_builder.md §12–§13.
 """
 from __future__ import annotations
 
@@ -32,6 +32,16 @@ from ticketing.services.report_rows import (
 
 MAX_QUARTERS = 4
 LEVEL_BUCKETS = ("L1", "L2", "L3", "L4+")
+
+
+def _level_tooltip(level: str) -> str:
+    tips = {
+        "L1": "Level 1 — site safeguards focal person (first response).",
+        "L2": "Level 2 — PD/PIU safeguards focal.",
+        "L3": "Level 3 — GRC hearing level.",
+        "L4+": "Level 4 and above — legal / senior escalation.",
+    }
+    return tips.get(level, level)
 
 
 def _level_bucket(step_order: int) -> str:
@@ -321,32 +331,35 @@ def build_report_summary(
         column_groups.append(
             {
                 "id": f"open_all_{qkey}",
-                "label": f"Open end {qkey}",
+                "label": f"Open at end of {qkey}",
+                "tooltip": f"Cases still open on the last day of {qkey}, by level reached.",
                 "children": [
-                    {"key": f"open_all_{qkey}_{lv}", "label": lv}
+                    {"key": f"open_all_{qkey}_{lv}", "label": lv, "tooltip": _level_tooltip(lv)}
                     for lv in LEVEL_BUCKETS
                 ],
             }
         )
         column_groups.append(
             {
-                "id": f"open_overdue_{qkey}",
-                "label": f"Open overdue end {qkey}",
+                "id": f"open_pipeline_{qkey}",
+                "label": f"Overdue open at end of {qkey}",
+                "tooltip": f"Still open on the last day of {qkey} with an active overdue episode.",
                 "children": [
-                    {"key": f"open_overdue_{qkey}_{lv}", "label": lv}
+                    {"key": f"open_overdue_{qkey}_{lv}", "label": lv, "tooltip": _level_tooltip(lv)}
                     for lv in LEVEL_BUCKETS
                 ],
             }
         )
         for timing, tlabel in (("on_time", "On time"), ("overdue", "Overdue")):
             children = [
-                {"key": f"closed_{qkey}_{timing}_{lv}", "label": lv}
+                {"key": f"closed_{qkey}_{timing}_{lv}", "label": lv, "tooltip": _level_tooltip(lv)}
                 for lv in LEVEL_BUCKETS
             ]
             column_groups.append(
                 {
                     "id": f"closed_{qkey}_{timing}",
-                    "label": f"Closed {qkey} — {tlabel}",
+                    "label": f"Closed during {qkey} — {tlabel}",
+                    "tooltip": f"Resolved in {qkey} — {tlabel.lower()} per SLA episode rules.",
                     "children": children,
                 }
             )
@@ -416,5 +429,10 @@ def build_report_summary(
         "definitions": {
             "closed_on_time": "Resolved with no SLA overdue episode during the case.",
             "closed_overdue": "Resolved after at least one overdue episode.",
+            "level_l1": _level_tooltip("L1"),
+            "level_l2": _level_tooltip("L2"),
+            "level_l3": _level_tooltip("L3"),
+            "level_l4": _level_tooltip("L4+"),
+            "package_row": "Counts grouped by project package (road section / contract).",
         },
     }

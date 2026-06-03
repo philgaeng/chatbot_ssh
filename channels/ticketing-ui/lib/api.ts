@@ -54,6 +54,7 @@ export interface WorkflowStepBrief {
   informed_roles: string[];
   observer_roles: string[];
   informed_pii_access: boolean;
+  expected_actions?: string[] | null;
 }
 
 export interface TicketEvent {
@@ -272,6 +273,12 @@ export interface ActionPayload {
   resolution_category?: string;
   assign_to_user_id?: string;
   grc_hearing_date?: string;
+  escalation_date?: string;
+  persons_involved?: string[];
+  escalation_notes?: string;
+  reassignment_reason_code?: string;
+  reassignment_notes?: string;
+  is_call_report?: boolean;
 }
 
 export interface ResolvedSummaryResponse {
@@ -286,6 +293,13 @@ export interface ResolvedSummaryResponse {
 
 export function getResolvedSummary(ticketId: string): Promise<ResolvedSummaryResponse> {
   return apiFetch<ResolvedSummaryResponse>(`/api/v1/tickets/${ticketId}/resolved-summary`);
+}
+
+export function triggerResolvedSummary(ticketId: string, force = false): Promise<{ ticket_id: string; status: string }> {
+  const q = force ? "?force=true" : "";
+  return apiFetch<{ ticket_id: string; status: string }>(`/api/v1/tickets/${ticketId}/resolved-summary${q}`, {
+    method: "POST",
+  });
 }
 
 export function performAction(id: string, payload: ActionPayload): Promise<ActionResponse> {
@@ -786,6 +800,73 @@ export async function downloadExportReportXlsx(params: {
   await downloadApiFile(path, `grm-report-${from}-to-${to}.xlsx`);
 }
 
+export async function downloadExportAllDataXlsx(params: {
+  date_from?: string;
+  date_to?: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
+}): Promise<void> {
+  const p = new URLSearchParams();
+  if (params.date_from) p.set("date_from", params.date_from);
+  if (params.date_to) p.set("date_to", params.date_to);
+  if (params.project_ids?.length) p.set("project_ids", params.project_ids.join(","));
+  if (params.package_ids?.length) p.set("package_ids", params.package_ids.join(","));
+  if (params.location_codes?.length) p.set("location_codes", params.location_codes.join(","));
+  if (params.include_seah) p.set("include_seah", "true");
+  const from = params.date_from ?? "start";
+  const to = params.date_to ?? "end";
+  await downloadApiFile(`/api/v1/reports/export-all?${p}`, `grm-all-data-${from}-to-${to}.xlsx`);
+}
+
+export interface ReportShareResponse {
+  id: string;
+  name: string;
+  internal_url_path: string;
+  public_url_path: string;
+  internal_token: string;
+  public_token: string;
+  row_count: number;
+}
+
+export function createReportShare(body: {
+  name: string;
+  report_kind?: string;
+  date_from?: string;
+  date_to?: string;
+  project_ids?: string[];
+  package_ids?: string[];
+  location_codes?: string[];
+  include_seah?: boolean;
+  library_item_id?: string;
+}): Promise<ReportShareResponse> {
+  return apiFetch<ReportShareResponse>("/api/v1/reports/share", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchPublicReport(token: string): Promise<{
+  name: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  filters: Record<string, unknown>;
+  generated_at?: string;
+}> {
+  return apiFetch(`/api/v1/public/report/${token}`);
+}
+
+export function fetchInternalReportShare(token: string): Promise<{
+  name: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  filters: Record<string, unknown>;
+  generated_at?: string;
+}> {
+  return apiFetch(`/api/v1/reports/share/${token}`);
+}
+
 export function queryReport(params: {
   date_from: string;
   date_to: string;
@@ -875,7 +956,12 @@ export interface ReportSummaryPieSlice {
 export interface ReportSummaryResponse {
   filters: Record<string, unknown>;
   matrix: {
-    column_groups: { id: string; label: string; children: { key: string; label: string }[] }[];
+    column_groups: {
+      id: string;
+      label: string;
+      tooltip?: string;
+      children: { key: string; label: string; tooltip?: string }[];
+    }[];
     rows: {
       project_id: string;
       project_name: string;

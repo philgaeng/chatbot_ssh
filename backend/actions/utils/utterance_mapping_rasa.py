@@ -706,20 +706,33 @@ UTTERANCE_MAPPING = {
         'action_grievance_outro': {
             'utterances': {
                 1: {
-                    'en': "Your grievance has been filed, we recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.",
-                    'ne': "तपाईको गुनासो दर्ता गरिएको छ, हामी तपाईलाई मोरङको एकल बिन्दु विपत व्यवस्थापन केन्द्रमा सम्पर्क गर्न अनुरोध गर्दछौं जहाँबाट तपाईलाई विशेष सहयोग प्रदान गरिनेछ।",
+                    'en': "Your grievance has been filed successfully.",
+                    'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता भयो।",
                 },
                 2: {
-                    'en': "You have not attached any files. You can still attach them now by clicking on the attachment button below.",
-                    'ne': "तपाईले कुनै पनि फाइल संलग्न गर्नुभएको छैन। तलको संलग्न बटन प्रयोग  गरेर तपाई अझै पनि फाइल संलग्न गर्न सक्नुहुन्छ। ",
+                    'en': "Your grievance reference number is: **{grievance_id}**",
+                    'ne': "तपाईंको गुनासो सन्दर्भ नम्बर: **{grievance_id}**",
                 },
                 3: {
-                    'en': "You can still attach more files to your grievance  by clicking on the attachment button below.",
-                    'ne': "तलको संलग्न बटन प्रयोग गरेर तपाईले आफ्नो गुनासोका थप फाइलहरू संलग्न गर्न सक्नुहुन्छ।",
-                }
+                    'en': "You may continue in this chat to add attachments or contact details. Your grievance is already on record — nothing more is required to file it.",
+                    'ne': "तपाईं यस च्याटमा संलग्नक वा सम्पर्क विवरण थप्न जारी राख्न सक्नुहुन्छ। तपाईंको गुनासो पहिले नै दर्ता भइसकेको छ — दर्ताका लागि अब थप केही आवश्यक छैन।",
+                },
+                4: {
+                    'en': "Your grievance has been filed. We recommend contacting the One Stop Crisis Management Centre of Morang for specialized support.",
+                    'ne': "तपाईंको गुनासो दर्ता भयो। विशेष सहयोगका लागि मोरङको एकल बिन्दु विपत् व्यवस्थापन केन्द्रमा सम्पर्क गर्न हामी सुझाव दिन्छौं।",
+                },
+                5: {
+                    'en': "You can attach pictures or other documents using the button below. Photos of a handwritten complaint are welcome.",
+                    'ne': "तलको बटन प्रयोग गरेर तपाईं तस्बिर वा अन्य कागजात संलग्न गर्न सक्नुहुन्छ। हस्तलिखित उजुरीको फोटो पनि स्वीकार्य छ।",
+                },
+                6: {
+                    'en': "You can add more pictures or documents with the attachment button below.",
+                    'ne': "तलको संलग्न बटनबाट तपाईं थप तस्बिर वा कागजातहरू संलग्न गर्न सक्नुहुन्छ।",
+                },
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS
+                1: BUTTONS_CLOSE_SESSION_ONLY,
+                2: BUTTONS_CLOSE_BROWSER_ONLY,
             }
         },
         'action_submit_grievance_as_is': {
@@ -789,6 +802,7 @@ UTTERANCE_MAPPING = {
             },
             'buttons': {
                 1: BUTTONS_SEAH_OUTRO,
+                2: BUTTONS_FILE_ANOTHER_GRIEVANCE,
             },
         },
     },
@@ -1132,12 +1146,12 @@ UTTERANCE_MAPPING = {
         'action_clean_window_options': {
             'utterances': {
                 1: {
-                    'en': "Your grievance is completed. You can close the browser tab or session.",
-                    'ne': "तपाईंको गुनासो पूरा हुन गरियो। तपाईं ब्राउजर टैब वा सत्र बन्द गर्न सक्नुहुन्छ।"
+                    'en': "Your grievance is complete. Use the button below when you are finished, or file another grievance to start again.",
+                    'ne': "तपाईंको गुनासो पूरा भयो। सकिएपछि तलको बटन प्रयोग गर्नुहोस्, वा फेरि सुरु गर्न अर्को गुनासो दर्ता गर्नुहोस्।"
                 }
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS
+                1: BUTTONS_CLOSE_SESSION_ONLY
             }
         },
         'action_question_attach_files': {
@@ -1371,7 +1385,7 @@ Do you want to add more details before submission?""",
                 }
             },
             'buttons': {
-                1: BUTTONS_CLEAN_WINDOW_OPTIONS
+                1: BUTTONS_CLOSE_BROWSER_ONLY
             }
         }
     },

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+import math
+import re
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -16,11 +18,11 @@ from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
-from ticketing.models.user import User, UserRole
 from ticketing.services.pii_vault import grievance_pii_masked, reveal_field
 
 _MODEL_STANDARD = "gpt-4o-mini"
 _MODEL_SEAH = "gpt-4o"
+_PHONE_NOTE_RE = re.compile(r"\b(call|calls|called|phone|voic(?:e|ing))\b", re.IGNORECASE)
 
 
 def _now() -> datetime:
@@ -46,9 +48,6 @@ def _unwrap_grievance(raw: dict) -> dict:
 def _officer_display_name(db: Session, user_id: Optional[str]) -> str:
     if not user_id:
         return "Officer"
-    row = db.execute(select(User).where(User.user_id == user_id)).scalar_one_or_none()
-    if row and row.display_name:
-        return row.display_name
     return user_id
 
 
@@ -207,6 +206,26 @@ def _looks_nepali(text: str) -> bool:
     return (non_ascii / max(len(text), 1)) > 0.05
 
 
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _resolution_duration_days(filed_at: Any, resolved_at: Any) -> Optional[int]:
+    filed_dt = _parse_iso_datetime(filed_at)
+    resolved_dt = _parse_iso_datetime(resolved_at)
+    if not filed_dt or not resolved_dt:
+        return None
+    delta_seconds = (resolved_dt - filed_dt).total_seconds()
+    if delta_seconds <= 0:
+        return 0
+    return max(1, math.ceil(delta_seconds / 86400))
+
+
 def build_summary_json(
     db: Session,
     data: dict[str, Any],
@@ -284,12 +303,19 @@ def build_public_summary_json(
 ) -> dict[str, Any]:
     llm_out = llm_out or {}
     ticket: Ticket = data["ticket"]
+    complaint_filed_at = summary_json.get("complaint", {}).get("filed_at")
+    resolved_at = summary_json.get("resolution", {}).get("resolved_at")
+    resolved_by_display_name = summary_json.get("resolution", {}).get("resolved_by_display_name")
+    duration_days = _resolution_duration_days(complaint_filed_at, resolved_at)
     return {
         "version": 1,
         "grievance_id": ticket.grievance_id,
         "primary_language": data["primary_language"],
         "project_name": data["project"].get("project_name") or data["project"].get("project_code"),
         "resolved_at": summary_json["resolution"]["resolved_at"],
+        "complaint_filed_at": complaint_filed_at,
+        "resolved_duration_days": duration_days,
+        "resolved_by_display_name": resolved_by_display_name,
         "complainant_name": summary_json["complainant"].get("name"),
         "address_full": summary_json["complainant"].get("address_full"),
         "original_complaint": summary_json["complaint"]["original_complaint"],
@@ -305,14 +331,55 @@ def build_public_summary_json(
 
 def assemble_llm_bundle(data: dict[str, Any], prior_findings: Optional[dict] = None) -> dict:
     ticket: Ticket = data["ticket"]
+    phone_followup_notes = [
+        n for n in data["other_notes"] if _PHONE_NOTE_RE.search(str(n.get("text") or ""))
+    ]
     return {
         "case_ref": {"grievance_id": ticket.grievance_id, "is_seah": ticket.is_seah},
         "original_complaint": data["original_complaint"],
         "resolution": data["resolution"],
         "field_reports": data["field_reports"],
         "other_officer_notes": data["other_notes"],
+        "investigation_facts": {
+            "field_reports_count": len(data["field_reports"]),
+            "other_notes_count": len(data["other_notes"]),
+            "phone_followup_notes_count": len(phone_followup_notes),
+        },
         "prior_ai_findings": prior_findings or {},
     }
+
+
+def with_investigation_activity_preamble(data: dict[str, Any], llm_out: Optional[dict]) -> dict[str, Any]:
+    """
+    Ensure summaries consistently reflect documented investigation effort.
+    Prepends a factual sentence built from source notes (no LLM invention).
+    """
+    out = dict(llm_out or {})
+    field_count = len(data.get("field_reports") or [])
+    other_notes = data.get("other_notes") or []
+    phone_count = sum(
+        1 for note in other_notes if _PHONE_NOTE_RE.search(str(note.get("text") or ""))
+    )
+
+    parts: list[str] = []
+    if field_count:
+        parts.append(f"{field_count} field visit{'s' if field_count != 1 else ''}")
+    if phone_count:
+        parts.append(f"{phone_count} phone follow-up note{'s' if phone_count != 1 else ''}")
+    if parts:
+        lead = f"Documented investigation activity included {', and '.join(parts)}."
+        combined = str(out.get("combined_digest_en") or "").strip()
+        if combined and lead.lower() not in combined.lower():
+            out["combined_digest_en"] = f"{lead} {combined}"
+        elif not combined:
+            out["combined_digest_en"] = lead
+
+        public_summary = str(out.get("findings_summary_public") or "").strip()
+        if public_summary and lead.lower() not in public_summary.lower():
+            out["findings_summary_public"] = f"{lead} {public_summary}"
+        elif not public_summary:
+            out["findings_summary_public"] = lead
+    return out
 
 
 def build_flat_narrative(public_json: dict[str, Any]) -> str:

@@ -163,6 +163,68 @@ def keycloak_configured() -> bool:
     return bool(get_settings().keycloak_admin_url)
 
 
+def keycloak_invite_preflight() -> dict[str, Any]:
+    """
+    Read-only readiness check for Keycloak execute-actions invite emails.
+    Requires realm SMTP (configured via keycloak_setup from KEYCLOAK_SMTP_* env).
+    """
+    if not keycloak_configured():
+        return {
+            "ok": False,
+            "configured": False,
+            "keycloak_reachable": False,
+            "realm": "grm",
+            "smtp_configured": False,
+            "missing_smtp_fields": ["host", "from", "user", "password"],
+            "email_action_supported": False,
+            "message": "Keycloak admin settings are not configured.",
+        }
+
+    try:
+        admin = _keycloak_admin()
+        realm_data = admin.connection.raw_get("admin/realms/grm").json()
+        smtp = realm_data.get("smtpServer") or {}
+    except Exception as exc:
+        return {
+            "ok": False,
+            "configured": True,
+            "keycloak_reachable": False,
+            "realm": "grm",
+            "smtp_configured": False,
+            "missing_smtp_fields": ["host", "from", "user", "password"],
+            "email_action_supported": False,
+            "message": f"Failed to connect to Keycloak realm: {exc}",
+        }
+
+    required = ("host", "from", "user", "password")
+    missing = [k for k in required if not str(smtp.get(k, "")).strip()]
+    smtp_configured = len(missing) == 0
+    email_action_supported = hasattr(admin, "send_update_account")
+    ok = bool(realm_data.get("enabled", True)) and smtp_configured and email_action_supported
+
+    if not smtp_configured:
+        hint = (
+            "Keycloak realm SMTP is not configured. Ensure SES_VERIFIED_EMAIL and "
+            "AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are in env.local (same as notifications), "
+            "then run: python -m ticketing.auth.keycloak_setup"
+        )
+    elif ok:
+        hint = "Invite email preflight passed (Keycloak execute-actions + realm SMTP)."
+    else:
+        hint = "Invite email preflight failed. Check Keycloak realm email settings."
+
+    return {
+        "ok": ok,
+        "configured": True,
+        "keycloak_reachable": True,
+        "realm": "grm",
+        "smtp_configured": smtp_configured,
+        "missing_smtp_fields": missing,
+        "email_action_supported": email_action_supported,
+        "message": hint,
+    }
+
+
 def _keycloak_admin():
     from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 
@@ -196,7 +258,7 @@ def keycloak_create_user(
             "firstName": first_name,
             "lastName": last_name,
             "enabled": True,
-            "emailVerified": True,
+            "emailVerified": False,
             "attributes": {
                 "grm_roles": [role_key],
                 "organization_id": [organization_id],
@@ -208,10 +270,33 @@ def keycloak_create_user(
             }],
             "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
         })
+        kc_users = admin.get_users(query={"username": email, "exact": True})
+        if not kc_users:
+            kc_users = admin.get_users(query={"email": email, "exact": True})
+        if not kc_users:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Keycloak user was created but could not be reloaded for invite email dispatch."
+                ),
+            )
+        admin.send_update_account(
+            user_id=kc_users[0]["id"],
+            payload=["UPDATE_PASSWORD", "UPDATE_PROFILE"],
+        )
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
             raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
+        if "sender address" in err.lower() or "execute actions email" in err.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Keycloak could not send the invite email — realm SMTP is not configured. "
+                    "Ensure SES_VERIFIED_EMAIL and AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
+                    "are set, then run: python -m ticketing.auth.keycloak_setup"
+                ),
+            )
         raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
 
 

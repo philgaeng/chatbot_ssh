@@ -1,7 +1,10 @@
 // PKCE-enabled OIDC client for Keycloak (drop-in replacement for CognitoAuthClient).
 
+import { isAccessTokenExpired } from "./session-expired";
 import {
   TOKEN_STORAGE,
+  clearAuthStorage,
+  decodeJwt,
   persistAuthTokens,
   type AuthTokens,
   type TokenPayload,
@@ -109,17 +112,36 @@ export class OIDCAuthClient {
   }
 
   signOut(): void {
+    if (typeof window === "undefined") return;
+
+    const postLogoutUri = `${window.location.origin}/login`;
+    const accessToken = localStorage.getItem(TOKEN_STORAGE.ACCESS_TOKEN);
     const idToken = localStorage.getItem(TOKEN_STORAGE.ID_TOKEN);
-    Object.values(TOKEN_STORAGE).forEach((k) => {
-      localStorage.removeItem(k);
-      sessionStorage.removeItem(k);
+    const claims = idToken ? decodeJwt(idToken) : null;
+    const azp = typeof claims?.azp === "string" ? claims.azp : undefined;
+    const exp = typeof claims?.exp === "number" ? claims.exp : undefined;
+    const idTokenFresh = exp != null && exp * 1000 > Date.now() + 30_000;
+    const sessionStale =
+      !accessToken ||
+      !idToken ||
+      !idTokenFresh ||
+      isAccessTokenExpired(accessToken);
+
+    clearAuthStorage();
+
+    // Stale or missing tokens: skip Keycloak (expired id_token_hint shows an error page).
+    if (sessionStale) {
+      window.location.replace(postLogoutUri);
+      return;
+    }
+
+    // Password login uses ticketing-api; PKCE uses ticketing-ui — client_id must match azp.
+    const logoutClientId = azp ?? this.clientId;
+    const p = new URLSearchParams({
+      client_id: logoutClientId,
+      id_token_hint: idToken,
+      post_logout_redirect_uri: postLogoutUri,
     });
-    const postLogoutUri = typeof window !== "undefined"
-      ? `${window.location.origin}/login`
-      : "";
-    const p = new URLSearchParams({ client_id: this.clientId });
-    if (idToken) p.set("id_token_hint", idToken);
-    if (postLogoutUri) p.set("post_logout_redirect_uri", postLogoutUri);
     window.location.href = `${this.issuer}/protocol/openid-connect/logout?${p}`;
   }
 }

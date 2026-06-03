@@ -1,127 +1,191 @@
-# Ticketing System – Domain Model and Settings
+# Ticketing System – Domain Model (as-built, June 2026)
 
-## Core Entities
-
-### Ticket
-
-- Represents a **grievance** (or future request types) in the ticketing system.
-- **Key attributes** (conceptual):
-  - `ticket_id` (PK, e.g. UUID)
-  - `grievance_id` (FK or reference to chatbot/backend grievance)
-  - `source`: country, chatbot_id, organization_id, location (for routing and workflow)
-  - Status (e.g. open, in_progress, pending_approval, approved, closed)
-  - Assignment (assigned_to, assigned_at)
-  - Workflow state (current step, approval history)
-  - Created_at, updated_at, and optionally conversation/session reference for “show in chat”
-
-Tickets are created when the chatbot (or backend) notifies the ticketing system via API (e.g. “grievance submitted” → create ticket).
-
-### Access Level (Role)
-
-- Named role that defines what a user can do (e.g. **Viewer**, **Agent**, **Approver**, **Admin**).
-- **Configurable**: list of roles and their permissions are defined in settings, not hard-coded.
-- Permissions can include: view_ticket, edit_ticket, assign_ticket, approve_ticket, manage_workflow, manage_settings, manage_users, etc.
-- Access can be **scoped** by organization and/or location (e.g. “Approver in Org A, Viewer in Org B”).
-
-### Organization
-
-- Logical tenant (e.g. government body, department, partner org).
-- Used to scope:
-  - Which tickets a user can see or act on.
-  - Which workflow and approval rules apply.
-- Identified by `organization_id` (and optionally country/region).
-
-### Location
-
-- Geographic or logical place (district, office, region).
-- Used together with organization to scope access and workflows (e.g. “Nepal / Kathmandu / Org A”).
-- Can be hierarchical (e.g. country → region → district) if needed; v1 can be flat.
-- **Canonical codes (Nepal):** Human-readable CAPS identifiers (provinces `P1`–`P7`, district mnemonics, stable hierarchy keys in DB). Prefer this scheme over CBS-style numeric geo codes for tickets, scopes, and UI. Full rules, migration notes, seeds, and **QR/regeneration checklist:** **[LOCATION_CODES.md](LOCATION_CODES.md)**.
-
-### Workflow
-
-- Defines the **approval path** for a ticket (e.g. Agent → Approver 1 → Approver 2 → Closed), including **escalation levels** with SLAs (response time, resolution time per level).
-- **Configurable** by:
-  - Access level (e.g. high-priority tickets need Approver role)
-  - Organization, location, project, ticket type (e.g. sensitive vs standard)
-- Each step can define: assigned role, stakeholders, resolution timeline, and expected actions. See [Escalation_rules.md](Escalation_rules.md) for the ADB KL Road 4-level example and configurable model.
-- Stored as workflow definitions (steps, transitions, who can approve at each step, SLA per step). Exact schema TBD (e.g. JSON config or normalized tables).
-
-### User / Agent
-
-- Identity that performs actions (view, assign, approve). May come from an existing user store (SSO, internal DB) or be defined inside the ticketing system.
-- Linked to one or more **access levels** per (organization, location).
+Full schema DDL → `04_ticketing_schema.md`. API contracts → `03_ticketing_api_integration.md`.
 
 ---
 
-## Settings (Configurable)
+## Core entities
 
-All of the following should be **manageable through settings** (API and/or admin UI), not only via code or DB migrations.
+### Ticket (`ticketing.tickets`)
 
-| Setting area | What is configured | Example |
-|--------------|--------------------|---------|
-| **Access levels** | Role names and permissions | Viewer: [view_ticket]; Agent: [view_ticket, edit_ticket, assign_ticket]; Approver: [view_ticket, approve_ticket]; Admin: all |
-| **Organizations** | List of organizations, optional parent/country | Nepal / Ministry X, Nepal / Office Y |
-| **Locations** | List of locations, optional hierarchy; **canonical codes** for Nepal | See [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. `P1_MOR`); display names may differ |
-| **User–role mapping** | Which user has which role in which org/location | user_123 → Approver in Org A, Viewer in Org B |
-| **Workflow definitions** | Steps, transitions, conditions | “default”: [submit → assign → approve → close]; “high_priority”: [submit → assign → approve_1 → approve_2 → close] |
-| **Workflow assignment** | Which workflow applies to which (org, location, ticket type/priority) | Org A + Kathmandu + high_priority → workflow “high_priority” |
-| **SLA and escalation** | Response/resolution times per level; auto-escalate when exceeded | See [Escalation_rules.md](Escalation_rules.md) |
-| **Integrations** | Chatbot base URL, Messaging API URL, API keys (secrets in env or vault) | TICKETING_CHATBOT_ORCHESTRATOR_URL, TICKETING_MESSAGING_API_URL |
+The central entity. One ticket per grievance submission.
 
-Settings can live in:
-- **PostgreSQL**: dedicated `settings` or `config` table(s) (JSON or key-value), or normalized tables for roles/workflows.
-- **Environment / config files**: for URLs and secrets; for small deployments, minimal workflow config can also be in config.
+| Field | Type | Notes |
+|---|---|---|
+| `ticket_id` | UUID | PK |
+| `grievance_id` | String(64) | String ref to `public.grievances`; no FK |
+| `complainant_id` | String(64) | String ref; no FK |
+| `session_id` | String(255) | Chatbot session; used for complainant reply via orchestrator |
+| `chatbot_id` | String(64) | e.g. `nepal_grievance_bot` |
+| `grievance_summary` | Text | Non-PII cache from submission |
+| `grievance_categories` | Text | Non-PII cache |
+| `grievance_location` | Text | Non-PII cache (district/municipality text) |
+| `country_code` | String(8) | e.g. `NP` |
+| `organization_id` | String(64) | Executing agency (e.g. `DOR`) |
+| `location_code` | String(64) | Canonical location (see `LOCATION_CODES.md`) |
+| `project_id` | String(36) | FK → `ticketing.projects` |
+| `project_code` | String(64) | Deprecated; kept for backwards compat |
+| `package_id` | String(36) | Set via QR scan; NULL for walk-in |
+| `status_code` | String(32) | `OPEN`, `IN_PROGRESS`, `PENDING_ESCALATION`, `ESCALATED`, `RESOLVED`, `CLOSED` |
+| `current_workflow_id` | UUID FK | Active workflow |
+| `current_step_id` | UUID FK | Current step within workflow |
+| `priority` | String(32) | `NORMAL`, `HIGH`, `SENSITIVE` |
+| `is_seah` | Boolean | DB-level filter; SEAH tickets invisible to non-SEAH roles |
+| `assigned_to_user_id` | String(128) | Current Actor |
+| `assigned_role_id` | String(36) | Role at current step |
+| `complainant_reply_owner_id` | String(128) | Who can reply to complainant (default: L1 Actor) |
+| `step_started_at` | Timestamp | SLA timer start |
+| `sla_breached` | Boolean | True once step SLA exceeded |
+| `current_overdue_episode_id` | UUID FK | Open overdue episode (NULL = on time) |
+| `ai_summary_en` | Text | LLM findings digest; role-gated display |
+
+### TicketEvent (`ticketing.ticket_events`)
+
+Append-only audit log for every state change and communication.
+
+Key `event_type` values: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `CLOSED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `GRC_DECIDED`, `TIER_CHANGED`, `TASK_ADDED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`.
+
+Each event carries: `ticket_id`, `event_type`, `actor_user_id`, `note` (text), `payload` (JSONB), `created_at`.
+
+### TicketTask (`ticketing.ticket_tasks`)
+
+Officer action items attached to a ticket. Fields: `title`, `description`, `status` (`open`/`done`), `assigned_to_user_id`, `due_date`.
+
+### TicketViewer (`ticketing.ticket_viewers`)
+
+Non-Actor participants on a ticket with a `tier` column:
+- `INFORMED` — previous Actors; auto-added on escalation
+- `OBSERVER` — ADB/senior oversight; added explicitly
+
+### TicketOverdueEpisode (`ticketing.ticket_overdue_episodes`)
+
+One row per overdue stint at a workflow step. Source of truth for reports and Summary tab.
+
+| Field | Notes |
+|---|---|
+| `episode_id` | PK |
+| `ticket_id` | FK |
+| `workflow_step_id`, `step_order` | Step context at breach |
+| `assigned_to_user_id`, `assigned_role_id` | Officer at breach |
+| `started_at` | When SLA was breached |
+| `ended_at`, `end_reason` | When overdue period closed (resolved / escalated / manually cleared) |
+| `triggered_by` | `auto` (Celery) or `manual` |
+
+### TicketResolvedSummary (`ticketing.ticket_resolved_summaries`)
+
+Structured closure document generated when a ticket is resolved. For supervisors, GRC, ADB, and quarterly reporting. Fields include: `resolution_category`, `root_cause`, `actions_taken`, `outcome`, `generated_by`.
+
+### TicketContextCache (`ticketing.ticket_context_cache`)
+
+LLM context window cache (per ticket) for findings generation. Avoids re-fetching full event history on each AI call.
 
 ---
 
-## Multi-Country, Multi-Chatbot, Multi-Organization
+## Organisation and geography
 
-- **Country**: optional dimension on ticket and on org/location; used for filtering and reporting.
-- **Chatbot**: each ticket is tied to a `chatbot_id` (or source identifier) so that:
-  - “Send message to user” calls the correct orchestrator/backend for that chatbot.
-  - Lists and filters can be per chatbot.
-- **Organization / Location**: as above; workflows and access are defined per (org, location) (and optionally country).
+### Organization (`ticketing.organizations`)
 
-The ticketing system does **not** contain the chatbot logic; it only holds references (chatbot_id, grievance_id, session_id) and uses the API to interact with the right chatbot and messaging service.
+Logical tenant (e.g. DOR, ADB). Scopes which tickets a user can see.
 
----
+Fields: `organization_id` (server-generated from name initials + country prefix), `name`, `country_code`, `org_type`.
 
-## Data Model (Conceptual)
+### Location (`ticketing.locations`)
 
-```
-Ticket
-  - ticket_id, grievance_id, chatbot_id, source (country, org, location)
-  - status, assigned_to, workflow_state, created_at, updated_at
-  - optional: session_id, conversation_id (for “show in chat”)
+Location tree: country → province → district → municipality.
 
-User / Agent
-  - user_id, display_name, ...
-  - (user_id, organization_id, location_id, access_level_id) for scoped roles
+Fields: `location_code` (canonical mnemonic, see `LOCATION_CODES.md`), `name`, `name_ne`, `parent_code`, `level` (`province`/`district`/`municipality`), `country_code`.
 
-Access_level
-  - access_level_id, name, permissions (list or JSON)
+Also: `ticketing.location_translations` (EN/NE display names for codes).
 
-Organization
-  - organization_id, name, country (optional)
+### Project (`ticketing.projects`)
 
-Location
-  - location_id, name, parent_id (optional)
+A named infrastructure project (e.g. KL Road). Links org, locations, workflows, and packages.
 
-Workflow_definition
-  - workflow_id, name, steps (JSON or normalized)
+Fields: `project_id`, `name`, `project_code`, `organization_id`, `country_code`, `chatbot_url` (used in QR redirect).
 
-Workflow_assignment
-  - (organization_id, location_id, ticket_type/priority) → workflow_id
+### Package (`ticketing.packages`)
 
-Settings
-  - key-value or JSON for integration URLs, feature flags, etc.
-```
+A physical asset within a project (e.g. a road segment). Each package can have multiple QR tokens.
 
-Exact schema (tables, indexes, constraints) to be defined in a later technical spec.
+Fields: `package_id`, `project_id`, `name`, `location_code`.
+
+`ticketing.package_locations` — many-to-many join: one package can span multiple locations.
+`ticketing.package_organizations` — package → allowed organizations.
+
+### ProjectType (`ticketing.project_types`)
+
+Lookup: type of infrastructure project (road, bridge, etc.).
+
+### Country (`ticketing.countries`)
+
+Lookup table for multi-country support.
 
 ---
 
-## Next
+## Workflow and roles
 
-- [03_ticketing_api_integration.md](03_ticketing_api_integration.md): API contracts between ticketing ↔ chatbot and ticketing ↔ messaging.
+### WorkflowDefinition (`ticketing.workflow_definitions`)
+
+Named workflow (e.g. `KL_ROAD_4_LEVEL`, `KL_ROAD_SEAH`). Fields: `name`, `description`, `workflow_scope` (`standard`/`seah`).
+
+### WorkflowStep (`ticketing.workflow_steps`)
+
+One row per level. Fields: `step_order`, `name`, `role_required`, `response_time_hours`, `resolution_time_days`, `tier_config` (JSONB), `notification_rules` (JSONB).
+
+### WorkflowAssignment (`ticketing.workflow_assignments`)
+
+Maps (organization, project, location, priority) to a `workflow_definition`. Engine uses this to pick the right workflow at ticket creation.
+
+### Role (`ticketing.roles`)
+
+Named GRM role. Fields: `role_code`, `name`, `description`, `workflow_scope` (`standard`/`seah`/`both`), `jurisdiction_mode`.
+
+9 seeded GRM roles (from `grm_role_catalog.py`): `site_safeguards_focal_person`, `pd_piu_safeguards_focal`, `grc_chair`, `grc_member`, `seah_national_officer`, `seah_hq_officer`, `adb_national_project_director`, `adb_hq_safeguards`, `super_admin`.
+
+### UserRole (`ticketing.user_roles`)
+
+Maps a user (Keycloak sub or bypass ID) to a role + org + location scope.
+
+### OfficerScope (`ticketing.officer_scopes`)
+
+Fine-grained: which org + location combination a user can act on. Used to filter ticket queries.
+
+### OfficerOnboarding (`ticketing.officer_onboarding`)
+
+Lifecycle: `invited` → `active`. Created by Keycloak webhook on invite; updated on first login.
+
+---
+
+## QR tokens
+
+### QrToken (`ticketing.qr_tokens`)
+
+| Field | Notes |
+|---|---|
+| `token` | Opaque 8-char hex, PK |
+| `package_id` | FK to `ticketing.packages` |
+| `is_active` | Revocable |
+| `expires_at` | Optional |
+| `scan_url` | Full URL returned to UI for QR image generation |
+
+Public endpoint: `GET /api/v1/scan/{token}` — returns package label, location_code, project_code. Used by chatbot `ActionIntroduce` to pre-fill slots.
+
+---
+
+## Settings (`ticketing.settings`)
+
+Key/value JSON store for system-wide configuration. Managed via Settings UI.
+
+Key settings:
+- `chatbot_webchat_url` — base URL for QR code scan redirect
+- `notification_rules` — per-event, per-tier notification channel matrix
+- `report_limits` — per-role quarterly email assignment caps (super_admin JSON)
+- Workflow step SLA overrides
+
+---
+
+## AdminAuditLog (`ticketing.admin_audit_log`)
+
+Append-only log of all admin actions (settings changes, user invites, role modifications).
+
+Fields: `log_id`, `actor_user_id`, `action_type`, `target_entity`, `target_id`, `payload` (JSONB), `created_at`.

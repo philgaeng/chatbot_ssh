@@ -1,6 +1,6 @@
 """
 Operational report row builder — shared by /reports/query, /reports/build, and XLSX export.
-Decisions: docs/ticketing_system/12_reports_and_report_builder.md §8 (product answers).
+Decisions: docs/ticketing_system/09_reports_and_report_builder.md §8 (product answers).
 """
 
 from __future__ import annotations
@@ -44,6 +44,31 @@ DEFAULT_REPORT_COLUMNS = [
     "project_name",
     "package_label",
     "location_display",
+]
+
+# Flat export-all (TP-07) — analysis-ready officer scope export
+ALL_DATA_EXPORT_COLUMNS = [
+    *DEFAULT_REPORT_COLUMNS,
+    "grievance_summary",
+    "stage_level",
+    "priority",
+    "assigned_officer",
+    "sla_breached",
+    "is_seah",
+    "organization_id",
+]
+
+# Public report link — safe subset (TP-05)
+PUBLIC_REPORT_COLUMNS = [
+    "complaint_date",
+    "grievance_id",
+    "complaint_category",
+    "location_display",
+    "status_code",
+    "resolution_category",
+    "stage",
+    "escalated_yn",
+    "total_days",
 ]
 
 FIELD_LABELS: dict[str, str] = {
@@ -543,6 +568,32 @@ def build_xlsx_workbook(
             for c, col_key in enumerate(columns, 1):
                 ws.cell(row=r, column=c, value=row.get(col_key, ""))
 
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def build_flat_xlsx_workbook(rows: list[dict[str, Any]], columns: list[str]) -> bytes:
+    """Single-sheet export for analysis (TP-07)."""
+    import io
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "All data"
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(color="FFFFFF", bold=True)
+    labels = [FIELD_LABELS.get(c, c) for c in columns]
+    for col, label in enumerate(labels, 1):
+        cell = ws.cell(row=1, column=col, value=label)
+        cell.fill = header_fill
+        cell.font = header_font
+    for r, row in enumerate(rows[:MAX_EXPORT_ROWS], 2):
+        for c, col_key in enumerate(columns, 1):
+            ws.cell(row=r, column=c, value=row.get(col_key, ""))
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

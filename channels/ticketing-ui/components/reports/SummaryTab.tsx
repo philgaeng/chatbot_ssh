@@ -162,6 +162,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
   const [loading, setLoading] = useState(false);
   const [savingLibrary, setSavingLibrary] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [matrixView, setMatrixView] = useState<"level" | "package">("level");
 
   const provinces = useMemo(
     () => locations.filter((l) => l.level_number === 1),
@@ -272,23 +273,35 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
   }
 
   // Build two-row header: group row + leaf row (short labels)
-  const { headerGroups, columnLeaves } = useMemo(() => {
-    if (!data) return { headerGroups: [], columnLeaves: [] };
-    const leaves: { key: string; label: string; groupId: string }[] = [];
-    const groups: { id: string; label: string; span: number }[] = [];
+  const { headerGroups, columnLeaves, matrixBodyRows } = useMemo(() => {
+    if (!data) return { headerGroups: [], columnLeaves: [], matrixBodyRows: [] };
+    const leaves: { key: string; label: string; groupId: string; tooltip?: string }[] = [];
+    const groups: { id: string; label: string; span: number; tooltip?: string }[] = [];
     for (const g of data.matrix.column_groups) {
       const children = g.children ?? [];
-      // Short group label: strip long Q-key prefix for readability
-      const shortGroup = g.label
-        .replace(/Closed (\d{4}-Q\d) — /, "Q$1 ")
-        .replace(/Open overdue end /, "Open ");
-      groups.push({ id: g.id, label: shortGroup, span: children.length });
+      groups.push({ id: g.id, label: g.label, span: children.length, tooltip: g.tooltip });
       for (const c of children) {
-        leaves.push({ key: c.key, label: c.label, groupId: g.id });
+        leaves.push({ key: c.key, label: c.label, groupId: g.id, tooltip: c.tooltip });
       }
     }
-    return { headerGroups: groups, columnLeaves: leaves };
-  }, [data]);
+    let rows = data.matrix.rows;
+    if (matrixView === "package") {
+      const byPkg = new Map<string, typeof rows[0]>();
+      for (const row of rows) {
+        const key = row.package_id ?? "__none__";
+        const existing = byPkg.get(key);
+        if (!existing) {
+          byPkg.set(key, { ...row, cells: { ...row.cells } });
+        } else {
+          for (const [cellKey, val] of Object.entries(row.cells)) {
+            existing.cells[cellKey] = (existing.cells[cellKey] ?? 0) + val;
+          }
+        }
+      }
+      rows = Array.from(byPkg.values());
+    }
+    return { headerGroups: groups, columnLeaves: leaves, matrixBodyRows: rows };
+  }, [data, matrixView]);
 
   return (
     <div className="space-y-4">
@@ -372,8 +385,25 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
         <Info size={14} className="shrink-0" />
         <span title={data?.definitions?.closed_on_time}>
-          On time = no overdue episode during the case. Category breakdown is in pies only.
+          On time = no overdue episode during the case. Hover column headers for definitions.
         </span>
+        <div className="flex items-center gap-2 ml-0 sm:ml-4">
+          <span className="text-gray-500">Matrix view:</span>
+          <button
+            type="button"
+            onClick={() => setMatrixView("level")}
+            className={`px-2 py-0.5 rounded ${matrixView === "level" ? "bg-blue-100 text-blue-800 font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Level detail
+          </button>
+          <button
+            type="button"
+            onClick={() => setMatrixView("package")}
+            className={`px-2 py-0.5 rounded ${matrixView === "package" ? "bg-blue-100 text-blue-800 font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Total per package
+          </button>
+        </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -413,6 +443,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
                   <th
                     rowSpan={2}
                     className="p-2 border-b border-r border-gray-300 font-semibold sticky left-0 bg-gray-100 z-10 min-w-[140px]"
+                    title={data?.definitions?.package_row}
                   >
                     Package
                   </th>
@@ -421,6 +452,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
                       key={g.id}
                       colSpan={g.span}
                       className="px-2 py-1 border-b border-r border-gray-300 text-center font-semibold whitespace-nowrap bg-gray-100"
+                      title={g.tooltip}
                     >
                       {g.label}
                     </th>
@@ -433,6 +465,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
                       key={c.key}
                       className="px-1 py-1 border-b border-r border-gray-200 text-center font-medium text-gray-600"
                       style={{ minWidth: 44, maxWidth: 60 }}
+                      title={c.tooltip}
                     >
                       <div
                         style={{
@@ -451,7 +484,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
                 </tr>
               </thead>
               <tbody>
-                {data.matrix.rows.map((row) => (
+                {matrixBodyRows.map((row) => (
                   <tr key={`${row.package_id ?? "none"}-${row.package_name}`} className="border-t hover:bg-gray-50">
                     <td className="p-2 font-medium border-r border-gray-200 sticky left-0 bg-white z-10 whitespace-nowrap">
                       {row.package_name}

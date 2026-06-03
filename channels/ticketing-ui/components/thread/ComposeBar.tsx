@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Mic, Send } from "lucide-react";
 import { HASH_COMMANDS, type HashCommand } from "@/lib/mobile-constants";
 import { FIELD_WORK_AMBER, INSPECT_SELF_MENTION } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
+
+const MENTION_QUERY_REGEX = /@([A-Za-z0-9._@-]*)$/;
+const MENTION_REPLACE_REGEX = /@[A-Za-z0-9._@-]*$/;
+const HASH_QUERY_REGEX = /#([\w]*)$/;
 
 export interface MentionParticipant {
   user_id: string;
@@ -20,6 +24,7 @@ export interface ComposeBarProps {
   attachUploading?: boolean;
   onHashCommand?: (cmd: HashCommand) => void;
   fieldReportOpen?: boolean;
+  canAssign?: boolean;
   disabled?: boolean;
   participants?: MentionParticipant[];
   placeholder?: string;
@@ -48,7 +53,7 @@ function HashCmdIcon({ name, size = 16, strokeWidth = 2, className = "" }: {
 }
 
 function hashCmdRowClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign") {
+  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return FIELD_WORK_AMBER.paletteRow;
   }
   if (cmd.kind === "action") return "text-amber-700 hover:bg-amber-50";
@@ -56,7 +61,7 @@ function hashCmdRowClass(cmd: HashCommand): string {
 }
 
 function hashCmdIconClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign") {
+  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return `${FIELD_WORK_AMBER.paletteIcon} shrink-0`;
   }
   if (cmd.kind === "task") return "text-blue-400 shrink-0";
@@ -72,6 +77,7 @@ export function ComposeBar({
   attachUploading = false,
   onHashCommand,
   fieldReportOpen = false,
+  canAssign = true,
   disabled,
   participants = [],
   placeholder,
@@ -94,12 +100,21 @@ export function ComposeBar({
 
   const handleChange = useCallback((v: string) => {
     onChange(v);
-    setMentionQuery(v.match(/@([\w.-]*)$/) ? v.match(/@([\w.-]*)$/)![1] : null);
-    setHashQuery(v.match(/#([\w]*)$/) ? v.match(/#([\w]*)$/)![1] : null);
+    const mentionMatch = v.match(MENTION_QUERY_REGEX);
+    const hashMatch = v.match(HASH_QUERY_REGEX);
+    setMentionQuery(mentionMatch ? mentionMatch[1] : null);
+    setHashQuery(hashMatch ? hashMatch[1] : null);
   }, [onChange]);
 
+  useEffect(() => {
+    const mentionMatch = value.match(MENTION_QUERY_REGEX);
+    const hashMatch = value.match(HASH_QUERY_REGEX);
+    setMentionQuery(mentionMatch ? mentionMatch[1] : null);
+    setHashQuery(hashMatch ? hashMatch[1] : null);
+  }, [value]);
+
   const insertMention = useCallback((userId: string) => {
-    onChange(value.replace(/@[\w.-]*$/, `@${userId} `));
+    onChange(value.replace(MENTION_REPLACE_REGEX, `@${userId} `));
     setMentionQuery(null);
     textareaRef.current?.focus();
   }, [value, onChange]);
@@ -114,8 +129,12 @@ export function ComposeBar({
       return;
     }
     if (cmd.kind === "task_assign") {
-      onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
-      setMentionQuery(null);
+      if (cmd.hash === "report") {
+        onChange("#report @");
+      } else {
+        onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
+      }
+      setMentionQuery(cmd.hash === "report" ? "" : null);
       textareaRef.current?.focus();
       onHashCommand?.(cmd);
       return;
@@ -129,10 +148,13 @@ export function ComposeBar({
     : [];
 
   const filteredHash = hashQuery !== null
-    ? HASH_COMMANDS.filter((c) => !hashQuery || c.hash.startsWith(hashQuery.toLowerCase()))
+    ? HASH_COMMANDS.filter((c) => {
+        if (!canAssign && c.kind === "assign") return false;
+        return !hashQuery || c.hash.startsWith(hashQuery.toLowerCase());
+      })
     : [];
 
-  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "report" || c.kind === "task_assign");
+  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "report" || c.kind === "task_assign" || c.kind === "call_report");
   const taskCmds = filteredHash.filter((c) => c.kind === "task");
   const actionCmds = filteredHash.filter((c) => c.kind === "action" || c.kind === "assign");
   const hasText = value.trim().length > 0;
@@ -244,7 +266,17 @@ export function ComposeBar({
                 setHashQuery(null);
                 return;
               }
-              if (e.key === "Enter" && !e.shiftKey && mentionQuery === null && hashQuery === null) {
+              if (e.key === "Enter" && !e.shiftKey) {
+                if (mentionQuery !== null && filteredMentions.length > 0) {
+                  e.preventDefault();
+                  insertMention(filteredMentions[0].user_id);
+                  return;
+                }
+                if (hashQuery !== null && filteredHash.length > 0) {
+                  e.preventDefault();
+                  selectHashCmd(filteredHash[0]);
+                  return;
+                }
                 e.preventDefault();
                 onSubmit();
               }

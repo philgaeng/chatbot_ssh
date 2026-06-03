@@ -206,6 +206,7 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
         build_public_summary_json,
         build_summary_json,
         upsert_resolved_summary,
+        with_investigation_activity_preamble,
     )
     from ticketing.tasks.notifications import notify_complainant
 
@@ -244,6 +245,7 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
             is_seah=ticket.is_seah,
             primary_language=data["primary_language"],
         )
+        llm_out = with_investigation_activity_preamble(data, llm_out)
         model = _llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD
         status = "complete" if llm_out else "llm_failed"
 

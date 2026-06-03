@@ -15,6 +15,7 @@ import {
   getLanguage,
   ADD_MORE_PAYLOAD,
   GO_BACK_PAYLOAD,
+  FILE_ANOTHER_PAYLOAD,
 } from "./utterances.js";
 
 // Make FILE_UPLOAD_CONFIG globally available for the file upload function
@@ -51,6 +52,12 @@ window.lastBotMessageText = "";
 window.lastBotQuickReplies = null;
 /** Last POST /message `next_state` — used after file upload to offer exit controls when flow is finished (`done`). */
 window.lastOrchestratorNextState = null;
+/** `session` = Close session only; `browser` = Close browser only (SEAH / sensitive). */
+window.closeControlsMode = "session";
+
+let grievanceFiledBanner;
+let grievanceFiledBannerText;
+let attachmentInvitationShown = false;
 
 // File type constants
 const FILE_TYPES = {
@@ -165,6 +172,13 @@ async function restSendMessage(message, additionalData = {}) {
 
   if (message && message.startsWith("/")) {
     payload.payload = message;
+    if (message.startsWith("/seah_intake")) {
+      window.closeControlsMode = "browser";
+      updateCloseControlsVisibility();
+    } else if (message.startsWith("/new_grievance")) {
+      window.closeControlsMode = "session";
+      updateCloseControlsVisibility();
+    }
     if (message.startsWith("/set_english")) {
       persistLanguagePreference("en");
     } else if (message.startsWith("/set_nepali")) {
@@ -203,10 +217,51 @@ async function restSendMessage(message, additionalData = {}) {
 
 window.safeSendMessage = restSendMessage;
 
+function updateCloseControlsVisibility() {
+  const mode = window.closeControlsMode === "browser" ? "browser" : "session";
+  if (persistentCloseBrowserButton) {
+    persistentCloseBrowserButton.classList.toggle("is-hidden", mode !== "browser");
+  }
+  if (persistentCloseSessionButton) {
+    persistentCloseSessionButton.classList.toggle("is-hidden", mode !== "session");
+  }
+}
+
+function filterCloseQuickReplies(buttons) {
+  if (!Array.isArray(buttons)) return [];
+  const mode = window.closeControlsMode === "browser" ? "browser" : "session";
+  const browserPayloads = new Set(["/nav_close_browser_tab"]);
+  const sessionPayloads = new Set(["/nav_clear", "/nav_goodbye"]);
+  return buttons.filter((btn) => {
+    const p = btn.payload || "";
+    if (browserPayloads.has(p)) return mode === "browser";
+    if (sessionPayloads.has(p)) return mode === "session";
+    return true;
+  });
+}
+
+function showFiledBanner(grievanceId) {
+  if (!grievanceFiledBanner || !grievanceId) return;
+  const label = get("filed_banner.label");
+  grievanceFiledBannerText.textContent = `${label} ${grievanceId}`;
+  grievanceFiledBanner.classList.remove("hidden");
+}
+
+function hideFiledBanner() {
+  if (!grievanceFiledBanner) return;
+  grievanceFiledBanner.classList.add("hidden");
+  if (grievanceFiledBannerText) grievanceFiledBannerText.textContent = "";
+}
+
 function handleOrchestratorResponse(response) {
-  const { messages = [], next_state, expected_input_type } = response || {};
+  const { messages = [], next_state, close_controls_mode } = response || {};
   window.lastOrchestratorNextState =
     typeof next_state === "string" ? next_state : null;
+
+  if (close_controls_mode === "browser" || close_controls_mode === "session") {
+    window.closeControlsMode = close_controls_mode;
+    updateCloseControlsVisibility();
+  }
 
   if (!Array.isArray(messages)) {
     return;
@@ -229,11 +284,12 @@ function handleOrchestratorResponse(response) {
       uiActions.appendMessage(m.text, "received");
     }
     if (m.buttons && m.buttons.length > 0) {
-      window.lastBotQuickReplies = (m.buttons || []).map((btn) => ({
+      const filtered = filterCloseQuickReplies(m.buttons);
+      window.lastBotQuickReplies = filtered.map((btn) => ({
         title: btn.title || btn.text || "",
         payload: btn.payload,
       }));
-      eventHandlers.renderQuickReplies(m.buttons);
+      eventHandlers.renderQuickReplies(filtered);
     }
     if (m.custom) {
       eventHandlers.handleCustomPayload(m.custom);
@@ -242,7 +298,15 @@ function handleOrchestratorResponse(response) {
       eventHandlers.handleCustomPayload(m.json_message);
     }
   });
+
+  if (next_state === "done" && window.grievanceId) {
+    showFiledBanner(window.grievanceId);
+  }
 }
+
+window.updateCloseControlsVisibility = updateCloseControlsVisibility;
+window.showFiledBanner = showFiledBanner;
+window.hideFiledBanner = hideFiledBanner;
 
 // Send introduction message (async: restSendMessage returns a Promise; must await
 // before setting introductionSent, otherwise refresh/reopen can skip retries while
@@ -383,6 +447,9 @@ async function initializeChat() {
   persistentCloseBrowserButton = document.getElementById("persistent-close-browser");
   persistentCloseSessionButton = document.getElementById("persistent-close-session");
   messages = document.getElementById("messages");
+  grievanceFiledBanner = document.getElementById("grievance-filed-banner");
+  grievanceFiledBannerText = document.getElementById("grievance-filed-banner-text");
+  updateCloseControlsVisibility();
 
   // Initialize UI Actions with DOM elements (pass refs for attach button, input lock)
   uiActions.initializeUIActions(messages, window.grievanceId, {
@@ -423,6 +490,10 @@ function setupEventListeners() {
 
   // File attachment handling
   attachmentButton.addEventListener("click", () => {
+    if (window.grievanceId && !attachmentInvitationShown) {
+      uiActions.appendMessage(get("file_upload.invitation"), "received");
+      attachmentInvitationShown = true;
+    }
     fileInput.click();
   });
 
@@ -513,6 +584,10 @@ function resetFrontendState() {
   window.lastBotMessageText = "";
   window.lastBotQuickReplies = null;
   window.lastOrchestratorNextState = null;
+  window.closeControlsMode = "session";
+  attachmentInvitationShown = false;
+  hideFiledBanner();
+  updateCloseControlsVisibility();
 
   if (window.currentRetryTimer) {
     clearTimeout(window.currentRetryTimer);
@@ -543,6 +618,25 @@ window.handleClearSessionCommand = function () {
   const storage = localStorage;
   const storageKey = SESSION_CONFIG.STORAGE_KEY;
   storage.setItem(storageKey, generateSessionId());
+};
+
+window.handleFileAnotherGrievance = async function () {
+  const payload =
+    window.closeControlsMode === "browser" ? "/seah_intake" : "/new_grievance";
+  hideFiledBanner();
+  window.grievanceId = null;
+  window.lastOrchestratorNextState = null;
+  window.lastBotMessageText = "";
+  window.lastBotQuickReplies = null;
+  attachmentInvitationShown = false;
+  selectedFiles = [];
+  if (fileInput) fileInput.value = "";
+  uiActions.setGrievanceId(null);
+  uiActions.setGrievanceCreatedInDb(false);
+  uiActions.clearMessages();
+  const quickReplyBlocks = messages?.querySelectorAll(".quick-replies");
+  quickReplyBlocks?.forEach((el) => el.remove());
+  await restSendMessage(payload);
 };
 
 window.handleCloseWindowCommand = function () {
@@ -892,21 +986,24 @@ function buildPostUploadQuickReplies() {
   if (window.lastOrchestratorNextState !== "done") {
     return base;
   }
-  return [
-    ...base,
+  const endButtons = [
     {
-      title: get("file_upload.buttons.close_browser"),
-      payload: "/nav_close_browser_tab",
-    },
-    {
-      title: get("file_upload.buttons.clear_session"),
-      payload: "/nav_clear",
-    },
-    {
-      title: get("file_upload.buttons.close_session"),
-      payload: "/nav_goodbye",
+      title: get("post_submit.file_another"),
+      payload: FILE_ANOTHER_PAYLOAD,
     },
   ];
+  if (window.closeControlsMode === "browser") {
+    endButtons.push({
+      title: get("file_upload.buttons.close_browser"),
+      payload: "/nav_close_browser_tab",
+    });
+  } else {
+    endButtons.push({
+      title: get("file_upload.buttons.close_session"),
+      payload: "/nav_goodbye",
+    });
+  }
+  return [...base, ...endButtons];
 }
 
 function showPostUploadMessageAndUnlock() {
@@ -919,7 +1016,9 @@ function showPostUploadMessageAndUnlock() {
     ),
     "received"
   );
-  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
+  uiActions.replaceQuickReplies(
+    filterCloseQuickReplies(buildPostUploadQuickReplies())
+  );
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -950,7 +1049,9 @@ function showFailureMessageAndUnlock() {
     ),
     "received"
   );
-  uiActions.replaceQuickReplies(buildPostUploadQuickReplies());
+  uiActions.replaceQuickReplies(
+    filterCloseQuickReplies(buildPostUploadQuickReplies())
+  );
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -1007,6 +1108,10 @@ function updateFileStatus(fileId, data) {
       if (result) {
         if (result.grievance_id) {
           window.grievanceId = result.grievance_id;
+          uiActions.setGrievanceId(result.grievance_id);
+          if (window.lastOrchestratorNextState === "done") {
+            showFiledBanner(result.grievance_id);
+          }
         }
         if (result.message) {
           uiActions.appendMessage(result.message, "received");

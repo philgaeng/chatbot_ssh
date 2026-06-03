@@ -240,15 +240,40 @@ PAYLOAD_TO_INTENT = {
     "exit": "exit",
 }
 
+LANGUAGE_TEXT_TO_INTENT = {
+    "english": "set_english",
+    "english / अंग्रेजी": "set_english",
+    "अंग्रेजी": "set_english",
+    "nepali": "set_nepali",
+    "nepali / नेपाली": "set_nepali",
+    "नेपाली": "set_nepali",
+}
+
+
+def _language_text_to_intent(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = " ".join(value.strip().lower().split())
+    return LANGUAGE_TEXT_TO_INTENT.get(normalized)
+
 
 def derive_intent(text: str, payload: Optional[str]) -> str:
     """Derive intent from payload or text."""
     if payload:
         raw = payload.strip("/").strip() if payload.startswith("/") else payload
-        return PAYLOAD_TO_INTENT.get(raw, "intent_slot_neutral")
+        payload_intent = PAYLOAD_TO_INTENT.get(raw)
+        if payload_intent:
+            return payload_intent
+        language_intent = _language_text_to_intent(raw)
+        if language_intent:
+            return language_intent
+        return "intent_slot_neutral"
     if text and text.strip().startswith("/"):
         raw = text.strip().lstrip("/").strip()
         return PAYLOAD_TO_INTENT.get(raw, raw or "intent_slot_neutral")
+    language_intent = _language_text_to_intent(text)
+    if language_intent:
+        return language_intent
     return "intent_slot_neutral"
 
 
@@ -267,6 +292,74 @@ def build_latest_message(text: str, payload: Optional[str], intent: str) -> Dict
     else:
         msg_text = text or (payload or "")
     return {"text": msg_text, "intent": {"name": intent}}
+
+
+async def _restart_intake_from_done(
+    intent: str,
+    dispatcher: CollectingDispatcher,
+    session: Dict[str, Any],
+    latest_message: Dict[str, Any],
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+) -> str:
+    """CB-04: start a new grievance or SEAH intake without closing the browser tab."""
+    if intent == "new_grievance":
+        ask_dispatcher = CollectingDispatcher()
+        tracker = SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        events = await invoke_action(
+            "action_start_grievance_process",
+            ask_dispatcher,
+            tracker,
+            domain,
+        )
+        slot_updates.update(events_to_slot_updates(events))
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        session["slots"].update(slot_updates)
+        session["active_loop"] = "form_grievance"
+        session["requested_slot"] = "grievance_new_detail"
+        next_state = "form_grievance"
+        session_copy = dict(session)
+        session_copy["slots"] = dict(session["slots"])
+        form = _get_form()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session_copy, None, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            next_state = "contact_form"
+            session["active_loop"] = "form_contact"
+            session["requested_slot"] = None
+        return next_state
+
+    if intent == "start_seah_intake" and _is_seah_enabled():
+        slot_updates["story_main"] = "seah_intake"
+        slot_updates["grievance_sensitive_issue"] = True
+        session["slots"].update(slot_updates)
+        session["active_loop"] = "form_seah_1"
+        session["requested_slot"] = None
+        next_state = "form_seah_1"
+        session_copy = dict(session)
+        session_copy["slots"] = dict(session["slots"])
+        sensitive_form = _get_form_seah_1()
+        msgs, form_updates, completed = await run_form_turn(
+            sensitive_form, session_copy, None, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            next_state = "contact_form"
+            session["active_loop"] = "form_contact"
+            session["requested_slot"] = None
+        return next_state
+
+    return "done"
 
 
 async def run_flow_turn(
@@ -1636,6 +1729,15 @@ async def run_flow_turn(
             )
             dispatcher.messages.extend(ask_dispatcher.messages)
             next_state = "status_check_form"
+        elif intent in ("new_grievance", "start_seah_intake"):
+            next_state = await _restart_intake_from_done(
+                intent,
+                dispatcher,
+                session,
+                latest_message,
+                domain,
+                slot_updates,
+            )
         else:
             pass
 

@@ -1,5 +1,5 @@
 import * as uiActions from "./uiActions.js";
-import { get } from "../utterances.js";
+import { get, FILE_ANOTHER_PAYLOAD } from "../utterances.js";
 
 // REST-specific helpers for rendering orchestrator responses
 
@@ -25,6 +25,9 @@ export function handleCustomPayload(custom) {
 
   if (custom.grievance_id) {
     uiActions.setGrievanceId(custom.grievance_id);
+    if (typeof window.showFiledBanner === "function" && window.lastOrchestratorNextState === "done") {
+      window.showFiledBanner(custom.grievance_id);
+    }
   }
 
   if (custom.text) {
@@ -168,6 +171,21 @@ export function handleQuickReplyClick(payload) {
       window.handleGoBackToChat();
     }
     return true;
+  }
+  if (payload === FILE_ANOTHER_PAYLOAD) {
+    if (typeof window.handleFileAnotherGrievance === "function") {
+      void window.handleFileAnotherGrievance();
+    }
+    return true;
+  }
+  if (
+    (payload === "/new_grievance" || payload === "/seah_intake") &&
+    window.lastOrchestratorNextState === "done"
+  ) {
+    if (typeof window.handleFileAnotherGrievance === "function") {
+      void window.handleFileAnotherGrievance();
+      return true;
+    }
   }
   window.safeSendMessage(payload);
   return false;

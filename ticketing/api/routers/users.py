@@ -725,6 +725,17 @@ class OfficerInviteResponse(BaseModel):
     message: str
 
 
+class KeycloakInvitePreflightResponse(BaseModel):
+    ok: bool
+    configured: bool
+    keycloak_reachable: bool
+    realm: str
+    smtp_configured: bool
+    missing_smtp_fields: list[str]
+    email_action_supported: bool
+    message: str
+
+
 class OfficerUpdateRequest(BaseModel):
     """Sync Keycloak claims from roster; jurisdiction rows managed via scope APIs."""
     role_keys: list[str]
@@ -736,6 +747,19 @@ class OfficerUpdateRequest(BaseModel):
 class OfficerUpdateResponse(BaseModel):
     ok: bool
     user_id: str
+
+
+@router.get(
+    "/users/invite/preflight",
+    response_model=KeycloakInvitePreflightResponse,
+    summary="Preflight check for Keycloak invite-email readiness",
+)
+def invite_preflight(
+    _: CurrentUser = Depends(require_admin),
+) -> KeycloakInvitePreflightResponse:
+    from ticketing.services.officer_admin import keycloak_invite_preflight
+
+    return KeycloakInvitePreflightResponse(**keycloak_invite_preflight())
 
 
 @router.post(
@@ -806,7 +830,7 @@ def invite_officer(
     msg = (
         "Officer created with jurisdiction scope."
         if not keycloak_configured()
-        else "Officer invited in Keycloak with jurisdiction scope. "
+        else "Officer invited in Keycloak; setup email sent with required actions. "
         "Status becomes Active after first password change (webhook)."
     )
     return OfficerInviteResponse(ok=True, email=email, message=msg)

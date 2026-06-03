@@ -209,6 +209,9 @@ def escalate_ticket(
     note: Optional[str] = None,
     created_by_user_id: Optional[str] = None,
     actor_role: Optional[str] = None,
+    escalation_date: Optional[str] = None,
+    persons_involved: Optional[list[str]] = None,
+    escalation_notes: Optional[str] = None,
 ) -> Optional[TicketEvent]:
     """
     Advance ticket to the next workflow step.
@@ -302,6 +305,15 @@ def escalate_ticket(
             "from_step_id": old_step_id,
             "to_step_id": next_step.step_id,
             "to_step_key": next_step.step_key,
+            **(
+                {
+                    "escalation_date": escalation_date,
+                    "persons_involved": persons_involved or [],
+                    "escalation_notes": escalation_notes,
+                }
+                if triggered_by == "MANUAL" and escalation_notes
+                else {}
+            ),
         },
         seen=False,
         notify_user_id=ticket.assigned_to_user_id,  # new officer, not the old one
@@ -391,7 +403,7 @@ def grc_decide(
     Legacy GRC decision path — **no longer exposed via API** (use RESOLVE / ESCALATE).
 
     Kept for historical event replay and tests. GRC chairs close cases with RESOLVE
-    + resolution record per docs/ticketing_system/11_ticket_resolution_and_case_summary.md.
+    + resolution record per docs/ticketing_system/08_ticket_resolution_and_case_summary.md.
 
     decision: "RESOLVED" | "ESCALATE_TO_LEGAL"
     """

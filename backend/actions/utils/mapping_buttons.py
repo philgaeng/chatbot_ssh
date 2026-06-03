@@ -106,24 +106,61 @@ BUTTONS_SKIP = {
     ]
 }
 
-BUTTONS_CLEAN_WINDOW_OPTIONS = {
-    'en': [
-        {"title": "Close Browser", "payload": "/nav_close_browser_tab"},
-        {"title": "Close Session", "payload": "/nav_clear"}
-    ],
-    'ne': [
-        {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
-        {"title": "सत्र बन्द गर्नुहोस्", "payload": "/nav_clear"}
-    ]
-}
-
-# SEAH outro + submit-failure UX uses explicit close controls.
-BUTTONS_SEAH_OUTRO = {
+BUTTONS_CLOSE_BROWSER_ONLY = {
     "en": [
-        *BUTTONS_CLEAN_WINDOW_OPTIONS["en"],
+        {"title": "Close Browser", "payload": "/nav_close_browser_tab"},
     ],
     "ne": [
-        *BUTTONS_CLEAN_WINDOW_OPTIONS["ne"],
+        {"title": "ब्राउजर बन्द गर्नुहोस्", "payload": "/nav_close_browser_tab"},
+    ],
+}
+
+BUTTONS_CLOSE_SESSION_ONLY = {
+    "en": [
+        {"title": "Close Session", "payload": "/nav_clear"},
+    ],
+    "ne": [
+        {"title": "सत्र बन्द गर्नुहोस्", "payload": "/nav_clear"},
+    ],
+}
+
+BUTTONS_FILE_ANOTHER_GRIEVANCE = {
+    "en": [
+        {"title": "File another grievance", "payload": "/new_grievance"},
+    ],
+    "ne": [
+        {"title": "अर्को गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
+    ],
+}
+
+BUTTONS_FILE_ANOTHER_SEAH = {
+    "en": [
+        {"title": "File another grievance", "payload": "/seah_intake"},
+    ],
+    "ne": [
+        {"title": "अर्को गुनासो दर्ता गर्नुहोस्", "payload": "/seah_intake"},
+    ],
+}
+
+# Legacy name — both controls (prefer workflow-specific sets above).
+BUTTONS_CLEAN_WINDOW_OPTIONS = {
+    "en": [
+        *BUTTONS_CLOSE_BROWSER_ONLY["en"],
+        *BUTTONS_CLOSE_SESSION_ONLY["en"],
+    ],
+    "ne": [
+        *BUTTONS_CLOSE_BROWSER_ONLY["ne"],
+        *BUTTONS_CLOSE_SESSION_ONLY["ne"],
+    ],
+}
+
+# SEAH / sensitive paths: browser close only (CB-03).
+BUTTONS_SEAH_OUTRO = {
+    "en": [
+        *BUTTONS_CLOSE_BROWSER_ONLY["en"],
+    ],
+    "ne": [
+        *BUTTONS_CLOSE_BROWSER_ONLY["ne"],
     ],
 }
 

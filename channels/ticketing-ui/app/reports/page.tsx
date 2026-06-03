@@ -17,7 +17,8 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import {
   downloadBuildReportXlsx,
   buildReportJson,
-  downloadExportReportXlsx,
+  downloadExportAllDataXlsx,
+  createReportShare,
   fetchReportFields,
   queryReport,
   saveToQuarterlyLibrary,
@@ -264,14 +265,40 @@ function ReportFilters({
   );
 }
 
+function isResolvedRow(row: ReportRow, bucket: ReportBucket): boolean {
+  const status = String(row.status_code ?? "").toUpperCase();
+  const bucketValue = String(row.report_bucket ?? "").toLowerCase();
+  return (
+    bucket === "resolved" ||
+    bucketValue.includes("resolved") ||
+    status === "RESOLVED" ||
+    status === "CLOSED"
+  );
+}
+
+function hasResolutionRecordHint(row: ReportRow): boolean {
+  const category = String(row.resolution_category ?? "").trim();
+  return category.length > 0;
+}
+
+function reportRowHref(row: ReportRow, bucket: ReportBucket): string | null {
+  if (!row.ticket_id) return null;
+  if (isResolvedRow(row, bucket) && hasResolutionRecordHint(row)) {
+    return `/tickets/${row.ticket_id}/closure`;
+  }
+  return `/tickets/${row.ticket_id}`;
+}
+
 function ReportTable({
   columns,
   labels,
   rows,
+  bucket,
 }: {
   columns: string[];
   labels: Record<string, string>;
   rows: ReportRow[];
+  bucket: ReportBucket;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-gray-500 py-4">No complaints in this section.</p>;
@@ -289,12 +316,14 @@ function ReportTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const href = reportRowHref(row, bucket);
+            return (
             <tr key={row.ticket_id ?? row.grievance_id} className="border-b border-gray-100 hover:bg-gray-50">
               {columns.map((c) => (
                 <td key={c} className="py-2 pr-3 text-gray-800 max-w-[200px] truncate">
-                  {c === "grievance_id" && row.ticket_id ? (
-                    <Link href={`/tickets/${row.ticket_id}`} className="text-blue-600 hover:underline">
+                  {c === "grievance_id" && href ? (
+                    <Link href={href} className="text-blue-600 hover:underline">
                       {row.grievance_id}
                     </Link>
                   ) : (
@@ -303,7 +332,8 @@ function ReportTable({
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -348,6 +378,8 @@ export default function ReportsPage() {
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
   const [savingLibrary, setSavingLibrary] = useState(false);
+  const [shareLinks, setShareLinks] = useState<{ internal: string; public: string } | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [librarySaved, setLibrarySaved] = useState(false);
 
   const filterParams = useMemo(
@@ -431,11 +463,37 @@ export default function ReportsPage() {
     setDownloading(true);
     setError(null);
     try {
-      await downloadExportReportXlsx(filterParams);
+      await downloadExportAllDataXlsx(filterParams);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleCreateShareLinks() {
+    setSharing(true);
+    setError(null);
+    try {
+      const res = await createReportShare({
+        name: `GRM report ${dateFrom} – ${dateTo}`,
+        report_kind: tab === "summary" ? "summary" : "overview",
+        date_from: dateFrom,
+        date_to: dateTo,
+        project_ids: selectedProjectIds.length ? selectedProjectIds : undefined,
+        package_ids: selectedPackageIds.length ? selectedPackageIds : undefined,
+        location_codes: selectedLocationCodes.length ? selectedLocationCodes : undefined,
+        include_seah: includeSeah,
+      });
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      setShareLinks({
+        internal: `${origin}${res.internal_url_path}`,
+        public: `${origin}${res.public_url_path}`,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create share links");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -537,11 +595,13 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Reports</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Operational grievance lists and custom exports (Nepal time, max 100 rows per export).
+            Operational grievance lists, flat export, and shareable report links (Nepal time, max 100 rows per export).
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
           {tab !== "quarterly" && tab !== "summary" && (
+            <>
             <button
               type="button"
               onClick={handleExportAll}
@@ -549,8 +609,24 @@ export default function ReportsPage() {
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
             >
               {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Export all (XLSX)
+              Export all data (XLSX)
             </button>
+            <button
+              type="button"
+              onClick={handleCreateShareLinks}
+              disabled={sharing || !dateFrom || !dateTo}
+              className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {sharing ? "Creating…" : "Copy report links"}
+            </button>
+            </>
+          )}
+          </div>
+          {shareLinks && (
+            <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 max-w-md space-y-1">
+              <div><span className="font-medium">Internal:</span>{" "}<a href={shareLinks.internal} className="text-blue-600 underline break-all">{shareLinks.internal}</a></div>
+              <div><span className="font-medium">Public:</span>{" "}<a href={shareLinks.public} className="text-blue-600 underline break-all">{shareLinks.public}</a></div>
+            </div>
           )}
         </div>
       </div>
@@ -647,6 +723,7 @@ export default function ReportsPage() {
                         columns={data.columns}
                         labels={data.column_labels}
                         rows={block?.items ?? []}
+                        bucket={key}
                       />
                       {(block?.total ?? 0) > (block?.items?.length ?? 0) && (
                         <p className="text-xs text-gray-500 mt-2">

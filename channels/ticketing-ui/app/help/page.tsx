@@ -25,7 +25,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "How do I see my assigned tickets?",
-        a: "Open My Queue from the sidebar. The queue shows tickets assigned to you with SLA countdowns and unread-event badges. Switch between tabs: My Queue (your assignments), All (everything in your scope), Escalated (tickets awaiting next-level acknowledgment), and Resolved (historical).",
+        a: "Open My Queue from the sidebar. The queue is tier-based and shows SLA countdowns plus unread-event badges. Tabs are: Actor (you are the current assignee), Supervisor, Informed, Observer, High Priority, and All. Use these tabs to move between action-owned work and watch-only visibility.",
       },
       {
         q: "What do the urgency dots mean?",
@@ -48,7 +48,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "How do I reply to a complainant?",
-        a: "Use the Reply to Complainant section on the ticket. The message is sent via the chatbot if the session is still active, or via SMS (AWS SNS) if the session has expired. The officer who 'owns' the reply channel is shown in the Viewers bar — any actor above L1 can reassign it.",
+        a: "Use the Reply to Complainant section on the ticket. The message is sent via the chatbot if the session is still active, or via SMS (AWS SNS) if the session has expired. The officer who owns the reply channel is shown in the Viewers bar, and the assigned actor can change that owner when handoffs are needed.",
       },
       {
         q: "What are internal notes?",
@@ -120,11 +120,11 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "How do I generate a report?",
-        a: "Go to Reports in the sidebar. Set the date range (and optionally filter by organisation) and click Download XLSX. The report includes reference number, categories, AI summary, location, SLA status, days at each level, and SEAH / Standard flag.",
+        a: "Go to Reports in the sidebar. Use Overview for KPI cards, Summary for management aggregates, and Pivot table for custom cross-tabs. Set filters (date range, project/package/location, include SEAH) and export XLSX from the Overview or Pivot tabs.",
       },
       {
         q: "Are reports sent automatically?",
-        a: "Yes. Quarterly reports are emailed automatically on the 5th of January, April, July, and October to ADB National Project Director, ADB HQ Safeguards, MoPIT representative, and DOR representative. The schedule and recipient roles are configured in Settings → Report Schedule (admin only).",
+        a: "Yes. Admins can save report templates and assign them in the Quarterly email tab. The system sends one email per assignment based on the current quarter plan, with assignment limits enforced per role for each calendar quarter.",
       },
     ],
   },

@@ -1,360 +1,428 @@
-# Ticketing System – Postgres Schema (v1)
+# Ticketing System – Database Schema (as-built, June 2026)
 
-This spec defines the **concrete Postgres schema** for the ticketing system in **v1**.
+All tables live in the `ticketing` schema inside `grievance_db`.
+No cross-schema FK from `ticketing.*` into `public.*`.
+All SQLAlchemy models use `__table_args__ = {"schema": "ticketing"}`.
+Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
 
-- **Database**: reuse the **existing chatbot Postgres database**.
-- **Isolation**: keep ticketing data in its **own schema / table group** (no cross-FKs into existing grievance tables).
-- **Integration**: relate to grievances and complainants only via IDs (`grievance_id`, `complainant_id`) and the existing **Backend / Messaging / Orchestrator APIs**.
-
-This makes it easy later to:
-- Move ticketing to a **separate database** by copying only the ticketing schema and changing the connection string, and
-- Keep the chatbot working if ticketing is offline or removed.
-
-**Nepal location identifiers:** Canonical rules for `location_code` (and hierarchy keys) in `ticketing.locations`, tickets, packages, and scopes: **[LOCATION_CODES.md](LOCATION_CODES.md)**.
+**Location codes:** Canonical rules for `location_code` → `LOCATION_CODES.md`.
 
 ---
 
+## 1. Design rules
 
-## 1. Schema and naming
-
-For v1 we recommend:
-
-- Use a **dedicated schema** in the existing DB, e.g. `ticketing`.
-- Qualify all tables as `ticketing.*` in SQL and migrations.
-- Do **not** add foreign keys from `ticketing.*` into existing tables; use text/UUID fields for references.
-
-Example:
-
-```sql
-CREATE SCHEMA IF NOT EXISTS ticketing AUTHORIZATION <app_role>;
-```
+1. No FK from `ticketing.*` into `public.*`.
+2. PII (`name`, `phone`, `email`, `address`) never stored in `ticketing.*`.
+3. Grievance/complainant referenced by `grievance_id` (String), `complainant_id` (String) only.
+4. Every model: `__table_args__ = {"schema": "ticketing"}`.
+5. Alembic `include_object` scoped to `ticketing` schema only; `version_table_schema="ticketing"`.
 
 ---
 
 ## 2. Core tables
 
-### 2.1 `ticketing.tickets`
-
-Stores ticket metadata and current state. Each ticket corresponds to one grievance (for now).
+### `ticketing.tickets`
 
 ```sql
-CREATE TABLE ticketing.tickets (
-    ticket_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    -- Links to chatbot data, via IDs only (no FK)
-    grievance_id        VARCHAR(64) NOT NULL,
-    complainant_id      VARCHAR(64),
-    chatbot_id          VARCHAR(64) NOT NULL,   -- e.g. 'nepal_grievance_bot'
-
-    -- Source / scoping
-    country_code        VARCHAR(8)  NOT NULL,   -- e.g. 'NP'
-    organization_id     VARCHAR(64) NOT NULL,
-    location_code       VARCHAR(64),            -- maps province/district etc.
-    project_code        VARCHAR(64),            -- e.g. 'KL_ROAD'
-
-    -- Status & workflow
-    status_code         VARCHAR(32) NOT NULL,   -- e.g. 'OPEN','IN_PROGRESS','PENDING_ESCALATION','CLOSED'
-    current_workflow_id UUID         NOT NULL,
-    current_step_id     UUID,                  -- FK into workflow_steps (within ticketing schema)
-    priority            VARCHAR(32),           -- e.g. 'NORMAL','HIGH','SENSITIVE'
-
-    -- Assignment
-    assigned_to_user_id VARCHAR(128),          -- AWS Cognito sub or internal user id
-    assigned_role_id    UUID,                  -- role at current step (nullable)
-
-    -- Audit
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    created_by_user_id  VARCHAR(128),
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_by_user_id  VARCHAR(128),
-
-    -- Soft delete (if needed later)
-    is_deleted          BOOLEAN NOT NULL DEFAULT FALSE
-);
+ticket_id                   VARCHAR(36)   PK
+grievance_id                VARCHAR(64)   NOT NULL        -- string ref, no FK
+complainant_id              VARCHAR(64)
+session_id                  VARCHAR(255)                  -- chatbot session for complainant reply
+chatbot_id                  VARCHAR(64)   DEFAULT 'nepal_grievance_bot'
+grievance_summary           TEXT                          -- non-PII cache
+grievance_categories        TEXT
+grievance_location          TEXT
+country_code                VARCHAR(8)    DEFAULT 'NP'
+organization_id             VARCHAR(64)   NOT NULL
+location_code               VARCHAR(64)
+project_id                  VARCHAR(64)   FK → ticketing.projects (SET NULL)
+project_code                VARCHAR(64)                   -- deprecated, kept for compat
+package_id                  VARCHAR(36)                   -- soft ref, no FK; set via QR scan
+status_code                 VARCHAR(32)   DEFAULT 'OPEN'
+current_workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions
+current_step_id             VARCHAR(36)   FK → ticketing.workflow_steps (SET NULL)
+priority                    VARCHAR(32)   DEFAULT 'NORMAL'
+is_seah                     BOOLEAN       DEFAULT FALSE
+assigned_to_user_id         VARCHAR(128)
+assigned_role_id            VARCHAR(36)
+complainant_reply_owner_id  VARCHAR(128)                  -- default: L1 Actor
+step_started_at             TIMESTAMPTZ
+sla_breached                BOOLEAN       DEFAULT FALSE
+current_overdue_episode_id  VARCHAR(36)   FK → ticketing.ticket_overdue_episodes (SET NULL)
+ai_summary_en               TEXT                          -- LLM findings digest
+ai_summary_updated_at       TIMESTAMPTZ
+is_deleted                  BOOLEAN       DEFAULT FALSE
+created_at                  TIMESTAMPTZ   NOT NULL
+created_by_user_id          VARCHAR(128)
+updated_at                  TIMESTAMPTZ   NOT NULL
+updated_by_user_id          VARCHAR(128)
 ```
 
-Recommended indexes:
+Indexes: `grievance_id`, `(organization_id, location_code, status_code)`, `assigned_to_user_id`, `(current_workflow_id, current_step_id)`, `is_seah`.
+
+Status codes: `OPEN`, `IN_PROGRESS`, `PENDING_ESCALATION`, `ESCALATED`, `RESOLVED`, `CLOSED`.
+Priority codes: `NORMAL`, `HIGH`, `SENSITIVE`.
+
+### `ticketing.ticket_events`
+
+Append-only audit log.
 
 ```sql
-CREATE INDEX idx_tickets_grievance_id       ON ticketing.tickets (grievance_id);
-CREATE INDEX idx_tickets_org_loc_status     ON ticketing.tickets (organization_id, location_code, status_code);
-CREATE INDEX idx_tickets_assigned_to        ON ticketing.tickets (assigned_to_user_id);
-CREATE INDEX idx_tickets_current_workflow   ON ticketing.tickets (current_workflow_id, current_step_id);
+event_id            VARCHAR(36)   PK
+ticket_id           VARCHAR(36)   FK → ticketing.tickets
+event_type          VARCHAR(64)   NOT NULL
+actor_user_id       VARCHAR(128)
+actor_role          VARCHAR(64)
+note                TEXT
+note_en             TEXT                -- LLM translation of note
+payload             JSONB
+step_id             VARCHAR(36)        -- step context at event time
+created_at          TIMESTAMPTZ   NOT NULL
 ```
 
-**Planned (locked spec — not in DB yet):** see [12_reports_and_report_builder.md](12_reports_and_report_builder.md) §14.
+Event types: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `CLOSED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `GRC_DECIDED`, `TIER_CHANGED`, `TASK_ADDED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`, `ASSIGN`, `REVEAL_CONTACT`.
 
-| Column | Type | Purpose |
-|--------|------|---------|
-| `current_overdue_episode_id` | UUID NULL FK → `ticket_overdue_episodes` | Open overdue stint; NULL if not overdue. Queue filter + display days from episode `started_at`. |
+### `ticketing.ticket_overdue_episodes`
 
-### 2.1a `ticketing.ticket_overdue_episodes` (planned)
-
-One row per overdue stint at a workflow step. **Source of truth** for Summary and “closed on time”. Full column list and writer rules: [12_reports_and_report_builder.md §14](12_reports_and_report_builder.md).
-
-| Column | Notes |
-|--------|--------|
-| `episode_id` | PK |
-| `ticket_id`, `workflow_step_id`, `step_order` | Step context at breach |
-| `assigned_to_user_id`, `assigned_role_id` | Officer at breach |
-| `started_at`, `ended_at`, `end_reason`, `triggered_by` | Episode lifecycle |
-| `days_overdue` | Set **only when** `ended_at` is set; NULL while open |
-
----
-
-### 2.2 `ticketing.ticket_events`
-
-Immutable log of all changes (status, assignment, escalation, comments). Used for audit trail and UI “history”.
-
-**Thread note types (via `payload` flags on `NOTE_ADDED`):** see [11_ticket_resolution_and_case_summary.md](11_ticket_resolution_and_case_summary.md) — `is_field_report`, planned `is_resolution_record`.
+One row per overdue stint per step. Source of truth for reports.
 
 ```sql
-CREATE TABLE ticketing.ticket_events (
-    event_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_id           UUID NOT NULL,
-
-    -- Event metadata
-    event_type          VARCHAR(64) NOT NULL,   -- e.g. 'CREATED','STATUS_CHANGED','ASSIGNED','ESCALATED','COMMENT_ADDED'
-    old_status_code     VARCHAR(32),
-    new_status_code     VARCHAR(32),
-    old_assigned_to     VARCHAR(128),
-    new_assigned_to     VARCHAR(128),
-    workflow_step_id    UUID,
-
-    -- Free-form data (for extra fields, JSON payloads, etc.)
-    payload             JSONB,
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    created_by_user_id  VARCHAR(128)
-);
+episode_id              VARCHAR(36)   PK
+ticket_id               VARCHAR(36)   FK → ticketing.tickets
+workflow_step_id        VARCHAR(36)   FK → ticketing.workflow_steps
+step_order              INTEGER
+assigned_to_user_id     VARCHAR(128)
+assigned_role_id        VARCHAR(36)
+started_at              TIMESTAMPTZ   NOT NULL
+ended_at                TIMESTAMPTZ
+end_reason              VARCHAR(64)   -- 'resolved', 'escalated', 'cleared'
+triggered_by            VARCHAR(32)   -- 'auto', 'manual'
+days_overdue            INTEGER       -- computed at closure
 ```
 
-Indexes:
+### `ticketing.ticket_resolved_summaries`
+
+Structured closure document.
 
 ```sql
-CREATE INDEX idx_ticket_events_ticket_id    ON ticketing.ticket_events (ticket_id, created_at);
-CREATE INDEX idx_ticket_events_event_type   ON ticketing.ticket_events (event_type);
+summary_id          VARCHAR(36)   PK
+ticket_id           VARCHAR(36)   FK → ticketing.tickets (UNIQUE)
+resolution_category VARCHAR(64)
+root_cause          TEXT
+actions_taken       TEXT
+outcome             TEXT
+generated_by        VARCHAR(128)  -- user_id or 'system'
+generated_at        TIMESTAMPTZ
 ```
 
----
+### `ticketing.ticket_tasks`
 
-### 2.3 `ticketing.organizations`
+Officer action items.
 
 ```sql
-CREATE TABLE ticketing.organizations (
-    organization_id     VARCHAR(64) PRIMARY KEY,
-    name                TEXT NOT NULL,
-    country_code        VARCHAR(8) NOT NULL,
-    -- optional: parent organization, type, etc.
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
+task_id                 VARCHAR(36)   PK
+ticket_id               VARCHAR(36)   FK → ticketing.tickets
+title                   VARCHAR(255)  NOT NULL
+description             TEXT
+status                  VARCHAR(32)   DEFAULT 'open'  -- 'open', 'done'
+assigned_to_user_id     VARCHAR(128)
+due_date                DATE
+created_by_user_id      VARCHAR(128)
+created_at              TIMESTAMPTZ
+updated_at              TIMESTAMPTZ
 ```
 
-### 2.4 `ticketing.locations`
+### `ticketing.ticket_viewers`
 
-We keep it simple and province-oriented to match existing data (can evolve later).
-
-**Canonical codes (Nepal):** see [LOCATION_CODES.md](LOCATION_CODES.md) — CAPS mnemonics (e.g. `P1`–`P7` for provinces, `P1_MOR` for districts); all `location_code` / parent keys should follow that spec after migration.
+Non-Actor participants (Informed / Observer tiers).
 
 ```sql
-CREATE TABLE ticketing.locations (
-    location_code       VARCHAR(64) PRIMARY KEY,   -- e.g. 'PROVINCE_1', 'KATHMANDU'
-    name                TEXT NOT NULL,
-    country_code        VARCHAR(8) NOT NULL,
-    parent_location     VARCHAR(64),               -- nullable, for hierarchy
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
+viewer_id           VARCHAR(36)   PK
+ticket_id           VARCHAR(36)   FK → ticketing.tickets
+user_id             VARCHAR(128)  NOT NULL
+tier                VARCHAR(32)   NOT NULL  -- 'INFORMED', 'OBSERVER'
+added_at            TIMESTAMPTZ
+added_by_user_id    VARCHAR(128)
 ```
 
----
+### `ticketing.ticket_context_cache`
 
-### 2.5 `ticketing.roles` and `ticketing.user_roles`
-
-Roles are defined here and mapped to AWS Cognito users (or other IDP) via `user_id`.
+LLM context window (per ticket). Prevents full event history re-fetch on each AI call.
 
 ```sql
-CREATE TABLE ticketing.roles (
-    role_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    role_key            VARCHAR(64) UNIQUE NOT NULL,  -- e.g. 'SITE_SAFEGUARDS_FOCAL_PERSON'
-    display_name        TEXT NOT NULL,
-    permissions         JSONB NOT NULL,               -- list of permission keys
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
-```
-
-```sql
-CREATE TABLE ticketing.user_roles (
-    user_role_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             VARCHAR(128) NOT NULL,        -- Cognito sub or internal id
-    role_id             UUID NOT NULL,
-    organization_id     VARCHAR(64) NOT NULL,
-    location_code       VARCHAR(64),
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_user_roles_user_org_loc ON ticketing.user_roles (user_id, organization_id, location_code);
+cache_id        VARCHAR(36)   PK
+ticket_id       VARCHAR(36)   FK → ticketing.tickets (UNIQUE)
+context_json    JSONB
+last_event_id   VARCHAR(36)
+updated_at      TIMESTAMPTZ
 ```
 
 ---
 
-## 3. Workflow & escalation tables
+## 3. Workflow tables
 
-### 3.1 `ticketing.workflow_definitions`
-
-Top-level named workflows (e.g. “KL_ROAD_STANDARD”, “KL_ROAD_SENSITIVE”).
+### `ticketing.workflow_definitions`
 
 ```sql
-CREATE TABLE ticketing.workflow_definitions (
-    workflow_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_key        VARCHAR(64) UNIQUE NOT NULL,  -- e.g. 'KL_ROAD_4_LEVEL'
-    display_name        TEXT NOT NULL,
-    description         TEXT,
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
+workflow_id         VARCHAR(36)   PK
+name                VARCHAR(128)  NOT NULL
+description         TEXT
+workflow_scope      VARCHAR(32)   DEFAULT 'standard'  -- 'standard', 'seah'
+is_active           BOOLEAN       DEFAULT TRUE
+created_at          TIMESTAMPTZ
 ```
 
-### 3.2 `ticketing.workflow_steps`
-
-Ordered steps within a workflow, each with SLA and escalation config (based on `Escalation_rules.md`).
+### `ticketing.workflow_steps`
 
 ```sql
-CREATE TABLE ticketing.workflow_steps (
-    step_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_id         UUID NOT NULL,
-    step_order          INTEGER NOT NULL,          -- 1,2,3,4...
-
-    step_key            VARCHAR(64) NOT NULL,      -- e.g. 'LEVEL_1_SITE', 'LEVEL_2_PIU'
-    display_name        TEXT NOT NULL,            -- e.g. 'First level – Site'
-
-    assigned_role_key   VARCHAR(64) NOT NULL,     -- matches ticketing.roles.role_key
-    stakeholders        JSONB,                    -- list of stakeholder labels
-
-    -- SLA
-    response_time_hours INTEGER,                  -- e.g. 24 (global) or per-level
-    resolution_time_days INTEGER,                 -- e.g. 2, 7, 15; NULL = no timeline
-
-    expected_actions    JSONB,                    -- list of action descriptions
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_workflow_steps_workflow_order ON ticketing.workflow_steps (workflow_id, step_order);
+step_id                 VARCHAR(36)   PK
+workflow_id             VARCHAR(36)   FK → ticketing.workflow_definitions
+step_order              INTEGER       NOT NULL
+name                    VARCHAR(128)  NOT NULL
+role_required           VARCHAR(64)
+response_time_hours     INTEGER
+resolution_time_days    INTEGER
+tier_config             JSONB         -- per-tier actor/supervisor/informed assignment rules
+notification_rules      JSONB         -- event × tier × channel matrix
 ```
 
-### 3.3 `ticketing.workflow_assignments`
+### `ticketing.workflow_assignments`
 
-Maps (organization, location, project, priority/sensitive flag) to a workflow.
+Maps (org, project, location, priority) → workflow.
 
 ```sql
-CREATE TABLE ticketing.workflow_assignments (
-    assignment_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id     VARCHAR(64) NOT NULL,
-    location_code       VARCHAR(64),
-    project_code        VARCHAR(64),
-    priority            VARCHAR(32),          -- e.g. 'NORMAL','HIGH','SENSITIVE'
-
-    workflow_id         UUID NOT NULL,
-
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_workflow_assign_org_loc_pri
-    ON ticketing.workflow_assignments (organization_id, location_code, project_code, priority);
+assignment_id       VARCHAR(36)   PK
+workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions
+organization_id     VARCHAR(64)
+project_id          VARCHAR(64)
+location_code       VARCHAR(64)
+priority            VARCHAR(32)
+is_default          BOOLEAN       DEFAULT FALSE
 ```
 
 ---
 
-## 4. Settings table
+## 4. Organisation / geography tables
 
-For simple key/value or JSON config, including integration URLs, feature flags, etc.
+### `ticketing.organizations`
 
 ```sql
-CREATE TABLE ticketing.settings (
-    key                 VARCHAR(128) PRIMARY KEY,
-    value               JSONB NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_by_user_id  VARCHAR(128)
-);
+organization_id     VARCHAR(64)   PK  -- server-generated: initials + country prefix
+name                VARCHAR(255)  NOT NULL
+country_code        VARCHAR(8)
+org_type            VARCHAR(64)
+created_at          TIMESTAMPTZ
 ```
 
-Examples:
+### `ticketing.locations`
 
-- `('messaging_api_base_url', '{"url": "https://backend/api/messaging"}')`
-- `('orchestrator_base_url', '{"chatbot_id": "nepal_grievance_bot", "url": "https://..."}')`
+```sql
+location_code   VARCHAR(64)   PK   -- canonical mnemonic (see LOCATION_CODES.md)
+name            VARCHAR(255)  NOT NULL
+name_ne         VARCHAR(255)       -- Nepali name
+parent_code     VARCHAR(64)        -- FK to self
+level           VARCHAR(32)        -- 'province', 'district', 'municipality'
+country_code    VARCHAR(8)
+```
+
+### `ticketing.location_translations`
+
+```sql
+id              INTEGER       PK (autoincrement)
+location_code   VARCHAR(64)   FK → ticketing.locations
+lang            VARCHAR(8)    -- 'en', 'ne'
+name            VARCHAR(255)
+```
+
+### `ticketing.countries`
+
+```sql
+country_code    VARCHAR(8)    PK
+name            VARCHAR(128)
+```
+
+### `ticketing.projects`
+
+```sql
+project_id          VARCHAR(64)   PK
+name                VARCHAR(255)  NOT NULL
+project_code        VARCHAR(64)
+organization_id     VARCHAR(64)   FK → ticketing.organizations
+country_code        VARCHAR(8)
+project_type_id     VARCHAR(36)   FK → ticketing.project_types
+chatbot_url         VARCHAR(512)  -- used in QR scan redirect
+created_at          TIMESTAMPTZ
+```
+
+### `ticketing.project_types`
+
+```sql
+type_id     VARCHAR(36)   PK
+name        VARCHAR(128)  NOT NULL
+code        VARCHAR(32)
+```
+
+### `ticketing.packages`
+
+Physical assets within a project (e.g. a road segment with a QR sign).
+
+```sql
+package_id      VARCHAR(36)   PK
+project_id      VARCHAR(64)   FK → ticketing.projects
+name            VARCHAR(255)  NOT NULL
+location_code   VARCHAR(64)   FK → ticketing.locations
+created_at      TIMESTAMPTZ
+```
+
+### `ticketing.package_locations`
+
+Many-to-many: package → locations it spans.
+
+```sql
+package_id      VARCHAR(36)   FK → ticketing.packages
+location_code   VARCHAR(64)   FK → ticketing.locations
+PRIMARY KEY (package_id, location_code)
+```
+
+### `ticketing.package_organizations`
+
+Many-to-many: package → allowed organizations.
+
+```sql
+package_id          VARCHAR(36)   FK → ticketing.packages
+organization_id     VARCHAR(64)   FK → ticketing.organizations
+PRIMARY KEY (package_id, organization_id)
+```
 
 ---
 
-## 5. Sample data: KL Road 4‑level workflow
+## 5. User / role tables
 
-Illustrative seed data for the **ADB KL Road** example from `Escalation_rules.md`.
-
-### 5.1 Workflow definition
+### `ticketing.roles`
 
 ```sql
-INSERT INTO ticketing.workflow_definitions (workflow_id, workflow_key, display_name, description)
-VALUES (
-    gen_random_uuid(),
-    'KL_ROAD_4_LEVEL',
-    'KL Road – 4-level safeguards workflow',
-    'Site → PIU → GRC → Legal, with time-based escalation'
-);
+role_id             VARCHAR(36)   PK
+role_code           VARCHAR(64)   UNIQUE NOT NULL
+name                VARCHAR(128)
+description         TEXT
+workflow_scope      VARCHAR(32)   -- 'standard', 'seah', 'both'
+jurisdiction_mode   VARCHAR(32)   -- e.g. 'local', 'national', 'global'
 ```
 
-### 5.2 Workflow steps (pseudo-SQL)
+### `ticketing.user_roles`
 
 ```sql
--- Level 1 – Site Safeguards Focal Person
-INSERT INTO ticketing.workflow_steps (
-    workflow_id, step_order, step_key, display_name,
-    assigned_role_key, stakeholders,
-    response_time_hours, resolution_time_days,
-    expected_actions
-) VALUES (
-    (SELECT workflow_id FROM ticketing.workflow_definitions WHERE workflow_key = 'KL_ROAD_4_LEVEL'),
-    1,
-    'LEVEL_1_SITE',
-    'First level – Site',
-    'SITE_SAFEGUARDS_FOCAL_PERSON',
-    '["Contractor","CSC","Site Project Office"]'::jsonb,
-    24,
-    2,
-    '["Initial assessment","Basic resolution attempt","Documentation of actions taken"]'::jsonb
-);
-
--- Level 2 – PD/PIU Safeguards Focal Person
--- resolution_time_days = 7, stakeholders PD + PIU, actions review/coordination/investigation/proposal
-
--- Level 3 – Project Office Safeguards (GRC Secretariat)
--- resolution_time_days = 15, stakeholders GRC + PIU + Site Office + Affected Persons
-
--- Level 4 – Legal Institutions
--- resolution_time_days = NULL (no specific timeline), stakeholders = all previous, actions = legal review/process
+user_role_id        VARCHAR(36)   PK
+user_id             VARCHAR(128)  NOT NULL  -- Keycloak sub or bypass ID
+role_id             VARCHAR(36)   FK → ticketing.roles
+organization_id     VARCHAR(64)
+location_code       VARCHAR(64)
+is_active           BOOLEAN       DEFAULT TRUE
+created_at          TIMESTAMPTZ
 ```
 
-You can seed the remaining levels similarly using the descriptions from `Escalation_rules.md`.
+### `ticketing.officer_scopes`
+
+Fine-grained ticket visibility: which org + location scope a user can act on.
+
+```sql
+scope_id            VARCHAR(36)   PK
+user_id             VARCHAR(128)  NOT NULL
+organization_id     VARCHAR(64)
+location_code       VARCHAR(64)
+role_code           VARCHAR(64)
+```
+
+### `ticketing.officer_onboarding`
+
+Lifecycle tracking for invited officers.
+
+```sql
+onboarding_id       VARCHAR(36)   PK
+user_id             VARCHAR(128)  NOT NULL UNIQUE
+email               VARCHAR(255)
+status              VARCHAR(32)   DEFAULT 'invited'  -- 'invited', 'active'
+invited_at          TIMESTAMPTZ
+activated_at        TIMESTAMPTZ
+invited_by_user_id  VARCHAR(128)
+```
 
 ---
 
-## 6. Notes for future DB split
+## 6. QR tokens
 
-Because **all ticketing objects live under the `ticketing` schema and have no foreign keys into existing tables**:
+### `ticketing.qr_tokens`
 
-- To move ticketing to a **separate database** later, you can:
-  - Create the same schema via migrations in a new DB,
-  - `COPY` / dump+restore only `ticketing.*` tables,
-  - Point the ticketing FastAPI service at the new DB via environment/config.
-- The chatbot backend stays on the original DB and continues to expose its **HTTP APIs** that ticketing already uses.
+```sql
+token           VARCHAR(16)   PK   -- opaque 8-char hex
+package_id      VARCHAR(36)   FK → ticketing.packages (CASCADE)
+is_active       BOOLEAN       DEFAULT TRUE
+expires_at      TIMESTAMPTZ        -- optional
+scan_url        TEXT               -- full URL for QR image
+created_at      TIMESTAMPTZ
+```
 
-This preserves the clean separation you want while keeping v1 operationally simple.
+---
 
+## 7. Settings
+
+### `ticketing.settings`
+
+```sql
+key         VARCHAR(128)  PK
+value       JSONB         NOT NULL
+updated_at  TIMESTAMPTZ
+updated_by  VARCHAR(128)
+```
+
+Key settings stored here:
+- `chatbot_webchat_url`
+- `notification_rules` (event × tier × channel matrix)
+- `report_limits` (per-role quarterly email assignment caps)
+
+---
+
+## 8. Admin audit log
+
+### `ticketing.admin_audit_log`
+
+```sql
+log_id          VARCHAR(36)   PK
+actor_user_id   VARCHAR(128)
+action_type     VARCHAR(64)   NOT NULL
+target_entity   VARCHAR(64)        -- e.g. 'workflow', 'user', 'setting'
+target_id       VARCHAR(128)
+payload         JSONB
+created_at      TIMESTAMPTZ   NOT NULL
+```
+
+---
+
+## 9. Migration history
+
+Managed by Alembic (`ticketing/migrations/`). Key migrations in order:
+
+| Migration ID | Description |
+|---|---|
+| `a1b2c3...` | Initial schema: tickets, ticket_events, workflow_*, organizations, locations, roles, user_roles, settings |
+| `b2c3d4...` | officer_scopes |
+| `c1d5f8a2e047` | LLM findings: `ai_summary_en`, `ai_summary_updated_at` on tickets; `note_en` on ticket_events |
+| `e8d4b6a0f291` | Projects, packages, package_locations, officer scopes redesign |
+| `f1a3e9c72b05` | Countries, location redesign, location_translations |
+| `f2b4d6e8a0c3` | ticket_tasks |
+| `g4d6f8b0c2e5` | ticket_viewers |
+| `h5e7g9i1k3m5` | `chatbot_url` on projects |
+| `i6j8l0n2p4` | ticket_context_cache |
+| `j8l0n2p4r6` | workflow_step tier model (`tier_config`, `notification_rules`) |
+| `k0l2n4p6r8` | `tier` on ticket_viewers; `complainant_reply_owner_id` on tickets |
+| `l2m4o6q8s0` | qr_tokens; `package_id` on tickets |
+| `n4p6r8t0` | `description`, `workflow_scope` on roles |
+| `o5p7q9r1` | officer_onboarding; backfill existing users as active |
+| `p6q8s0t2` | admin_audit_log |
+| `q9r7s1u3` | Canonical Nepal location codes seeded |
+| `r0s2t4v6` | project_workflow_links |
+| `s1t3u5v7` | package_organizations; `actor_roles` on projects |
+| `u3v5w7x9` | project_types |
+| `v5x7y9z1` | `jurisdiction_mode` on roles |
+| `w8x0y2z4` | ticket_resolved_summaries |
+| `x9y1z3a5` | ticket_overdue_episodes; `current_overdue_episode_id` on tickets |

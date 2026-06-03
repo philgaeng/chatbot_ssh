@@ -132,7 +132,7 @@ function TranslationPanel({
   );
 }
 
-// ── File attachments panel ────────────────────────────────────────────────────
+import { AttachmentListSection } from "@/components/AttachmentListSection";
 
 function FilesPanel({
   ticketId,
@@ -198,43 +198,13 @@ function FilesPanel({
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
       <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Attachments</h2>
 
-      <div>
-        <div className="text-xs font-medium text-gray-600 mb-1.5">From complainant</div>
-        {loading ? <div className="text-xs text-gray-400">Loading…</div>
-          : complainantFiles.length === 0
-            ? <div className="text-xs text-gray-400 italic">No files uploaded by complainant.</div>
-            : complainantFiles.map((f) => (
-              <button key={f.file_id}
-                onClick={async () => { await onBeforeDownload(); window.open(getFileDownloadUrl(f.file_id), "_blank", "noopener,noreferrer"); }}
-                className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group w-full text-left mb-1"
-              >
-                <FileIcon type={f.file_type} />
-                <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
-                <span className="text-gray-400 shrink-0">{fmt(f.file_size)}</span>
-              </button>
-            ))
-        }
-      </div>
-
-      <div>
-        <div className="text-xs font-medium text-gray-600 mb-1.5">Officer attachments</div>
-        {officerFiles.length === 0
-          ? <div className="text-xs text-gray-400 italic">No officer files attached yet.</div>
-          : officerFiles.map((f) => (
-            <div key={f.file_id} className="flex items-start gap-2 mb-1">
-              <button
-                onClick={() => window.open(getOfficerAttachmentUrl(f.file_id), "_blank", "noopener,noreferrer")}
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 group shrink-0"
-              >
-                <FileIcon type={f.file_type} />
-                <span className="group-hover:underline max-w-[120px] truncate">{f.file_name}</span>
-                <span className="text-gray-400">{fmt(f.file_size)}</span>
-              </button>
-              {f.caption && <span className="text-xs text-gray-500 italic flex-1 min-w-0 truncate">{f.caption}</span>}
-            </div>
-          ))
-        }
-      </div>
+      <AttachmentListSection
+        complainantFiles={complainantFiles}
+        officerFiles={officerFiles}
+        getComplainantUrl={getFileDownloadUrl}
+        getOfficerUrl={getOfficerAttachmentUrl}
+        onBeforeDownload={onBeforeDownload}
+      />
 
       {isAssigned && (
         <div className="border-t border-gray-100 pt-3 space-y-2">
@@ -886,6 +856,19 @@ export default function TicketDetailPage() {
 
   const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
   const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
+  const hasResolutionRecord = useMemo(() => {
+    if (!ticket) return false;
+    return ticket.events.some((event) => {
+      if (event.event_type === "RESOLUTION_RECORDED") return true;
+      if (event.event_type === "NOTE_ADDED") {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        if (payload.is_resolution_record === true) return true;
+      }
+      if (event.event_type !== "RESOLVED") return false;
+      const payload = (event.payload ?? {}) as Record<string, unknown>;
+      return typeof payload.resolution_category === "string" && payload.resolution_category.trim().length > 0;
+    });
+  }, [ticket]);
 
   const mentionParticipants = useMemo(() => {
     if (!ticket) return [];
@@ -1068,7 +1051,7 @@ export default function TicketDetailPage() {
     setSubmitting(true);
 
     // Check for #assign @userId pattern
-    const assignMatch = text.match(/^#assign\s+@([\w.-]+)/);
+    const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
     const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
@@ -1322,6 +1305,40 @@ export default function TicketDetailPage() {
           </div>
         )}
       </div>
+
+      {isClosed && !hasResolutionRecord && (
+        <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <p className="font-medium">Resolution record missing for this closed ticket.</p>
+          <p className="mt-1 text-red-800">
+            Closure summary generation is blocked until resolution details are saved.
+          </p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setResolutionOpen(true)}
+              disabled={!isAssigned}
+              className="rounded border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Add resolution details
+            </button>
+          </div>
+        </div>
+      )}
+      {isClosed && hasResolutionRecord && (
+        <div className="mx-4 mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <p className="font-medium">Resolution details are saved.</p>
+          <p className="mt-1 text-green-800">You can now open the case closure summary.</p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => router.push(`/tickets/${id}/closure`)}
+              className="rounded border border-green-300 bg-white px-3 py-1.5 text-green-700 hover:bg-green-100"
+            >
+              Open closure summary
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main: thread (2/5) + info (3/5) ─────────────────────────── */}
       <div className="flex-1 min-h-0 grid grid-cols-5 gap-4 p-4">

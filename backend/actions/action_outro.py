@@ -10,6 +10,19 @@ from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
+from backend.actions.utils.mapping_buttons import (
+    BUTTONS_CLOSE_BROWSER_ONLY,
+    BUTTONS_CLOSE_SESSION_ONLY,
+    BUTTONS_FILE_ANOTHER_GRIEVANCE,
+    BUTTONS_FILE_ANOTHER_SEAH,
+)
+
+
+def _post_submit_buttons(language_code: str) -> List[Dict[str, str]]:
+    lang = language_code if language_code in BUTTONS_CLOSE_SESSION_ONLY else "en"
+    buttons = list(BUTTONS_CLOSE_SESSION_ONLY.get(lang, BUTTONS_CLOSE_SESSION_ONLY["en"]))
+    buttons.extend(BUTTONS_FILE_ANOTHER_GRIEVANCE.get(lang, BUTTONS_FILE_ANOTHER_GRIEVANCE["en"]))
+    return buttons
 
 
 class ActionSeahOutro(BaseAction):
@@ -51,6 +64,18 @@ class ActionSeahOutro(BaseAction):
         body = self._get_seah_utterance(idx)
         full_text = body + contact_block
         dispatcher.utter_message(text=full_text)
+
+        lang = language_code if language_code in BUTTONS_CLOSE_BROWSER_ONLY else "en"
+        buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(lang, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
+        buttons.extend(BUTTONS_FILE_ANOTHER_SEAH.get(lang, BUTTONS_FILE_ANOTHER_SEAH["en"]))
+        dispatcher.utter_message(
+            text=(
+                "You may continue in this chat if needed. Your confidential report is already on record."
+                if language_code == "en"
+                else "आवश्यक परेमा तपाईं यस च्याटमा जारी राख्न सक्नुहुन्छ। तपाईंको गोप्य रिपोर्ट पहिले नै दर्ता भइसकेको छ।"
+            ),
+            buttons=buttons,
+        )
         return events
 
 
@@ -82,19 +107,33 @@ class ActionGrievanceOutro(BaseActionSubmit):
     ) -> List[Any]:
         self.grievance_sensitive_issue = tracker.get_slot("grievance_sensitive_issue")
         self.logger.info("send last utterance and buttons")
-        grievance_id = tracker.get_slot("grievance_id")
+        grievance_id = tracker.get_slot("grievance_id") or ""
         language_code = tracker.get_slot("language_code") or "en"
         try:
             if self.grievance_sensitive_issue:
-                utterance = self._get_grievance_utterance(1)
-            elif not self._get_attached_files_info(grievance_id)["has_files"]:
-                utterance = self._get_grievance_utterance(2)
+                dispatcher.utter_message(text=self._get_grievance_utterance(4))
             else:
-                utterance = self._get_grievance_utterance(3)
-            self.logger.debug(f"action_grievance_outro - utterance: {utterance}")
+                dispatcher.utter_message(text=self._get_grievance_utterance(1))
 
-            dispatcher.utter_message(text=utterance)
-            self.logger.debug("action_grievance_outro - outro sent")
+            dispatcher.utter_message(
+                text=self._get_grievance_utterance(2).format(grievance_id=grievance_id)
+            )
+
+            if self.grievance_sensitive_issue:
+                attachment_msg = self._get_grievance_utterance(3)
+            elif not self._get_attached_files_info(grievance_id)["has_files"]:
+                attachment_msg = self._get_grievance_utterance(5)
+            else:
+                attachment_msg = self._get_grievance_utterance(6)
+            dispatcher.utter_message(text=attachment_msg)
+
+            buttons = _post_submit_buttons(language_code)
+            if self.grievance_sensitive_issue:
+                buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(language_code, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
+                buttons.extend(
+                    BUTTONS_FILE_ANOTHER_SEAH.get(language_code, BUTTONS_FILE_ANOTHER_SEAH["en"])
+                )
+            dispatcher.utter_message(text="", buttons=buttons)
 
             grievance_data = self._prepare_grievance_outro_data(tracker)
             self.db_manager.submit_grievance_to_db(grievance_data)
