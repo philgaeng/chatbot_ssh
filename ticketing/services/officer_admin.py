@@ -165,8 +165,8 @@ def keycloak_configured() -> bool:
 
 def keycloak_invite_preflight() -> dict[str, Any]:
     """
-    Read-only readiness check for Keycloak invite emails.
-    Does not create users or send emails.
+    Read-only readiness check for Keycloak execute-actions invite emails.
+    Requires realm SMTP (configured via keycloak_setup from KEYCLOAK_SMTP_* env).
     """
     if not keycloak_configured():
         return {
@@ -175,15 +175,14 @@ def keycloak_invite_preflight() -> dict[str, Any]:
             "keycloak_reachable": False,
             "realm": "grm",
             "smtp_configured": False,
-            "missing_smtp_fields": ["host", "from", "port"],
+            "missing_smtp_fields": ["host", "from", "user", "password"],
             "email_action_supported": False,
             "message": "Keycloak admin settings are not configured.",
         }
 
     try:
         admin = _keycloak_admin()
-        realm_resp = admin.connection.raw_get("admin/realms/grm")
-        realm_data = realm_resp.json() if hasattr(realm_resp, "json") else {}
+        realm_data = admin.connection.raw_get("admin/realms/grm").json()
         smtp = realm_data.get("smtpServer") or {}
     except Exception as exc:
         return {
@@ -192,16 +191,27 @@ def keycloak_invite_preflight() -> dict[str, Any]:
             "keycloak_reachable": False,
             "realm": "grm",
             "smtp_configured": False,
-            "missing_smtp_fields": ["host", "from", "port"],
+            "missing_smtp_fields": ["host", "from", "user", "password"],
             "email_action_supported": False,
             "message": f"Failed to connect to Keycloak realm: {exc}",
         }
 
-    required_smtp_fields = ("host", "from", "port")
-    missing = [k for k in required_smtp_fields if not str(smtp.get(k, "")).strip()]
+    required = ("host", "from", "user", "password")
+    missing = [k for k in required if not str(smtp.get(k, "")).strip()]
     smtp_configured = len(missing) == 0
     email_action_supported = hasattr(admin, "send_update_account")
     ok = bool(realm_data.get("enabled", True)) and smtp_configured and email_action_supported
+
+    if not smtp_configured:
+        hint = (
+            "Keycloak realm SMTP is not configured. Ensure SES_VERIFIED_EMAIL and "
+            "AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are in env.local (same as notifications), "
+            "then run: python -m ticketing.auth.keycloak_setup"
+        )
+    elif ok:
+        hint = "Invite email preflight passed (Keycloak execute-actions + realm SMTP)."
+    else:
+        hint = "Invite email preflight failed. Check Keycloak realm email settings."
 
     return {
         "ok": ok,
@@ -211,11 +221,7 @@ def keycloak_invite_preflight() -> dict[str, Any]:
         "smtp_configured": smtp_configured,
         "missing_smtp_fields": missing,
         "email_action_supported": email_action_supported,
-        "message": (
-            "Invite email preflight passed."
-            if ok
-            else "Invite email preflight failed. Check SMTP and Keycloak settings."
-        ),
+        "message": hint,
     }
 
 
@@ -282,6 +288,15 @@ def keycloak_create_user(
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
             raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
+        if "sender address" in err.lower() or "execute actions email" in err.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Keycloak could not send the invite email — realm SMTP is not configured. "
+                    "Ensure SES_VERIFIED_EMAIL and AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
+                    "are set, then run: python -m ticketing.auth.keycloak_setup"
+                ),
+            )
         raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
 
 

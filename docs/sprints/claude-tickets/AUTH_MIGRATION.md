@@ -89,14 +89,23 @@ Before going to staging / production:
 - [ ] **Switch Keycloak to production mode**: change `command: start-dev` → `start` in docker-compose.grm.yml
 - [ ] **Set hostname**: add `KC_HOSTNAME=grm.facets-ai.com` (or behind reverse proxy with `KC_PROXY=edge`)
 - [ ] **Change admin password**: set `KEYCLOAK_ADMIN_PASSWORD` to something strong in the environment
-- [ ] **Configure SMTP** for email verification and password reset:
+- [ ] **Configure realm SMTP** for officer invite execute-actions emails (via `keycloak_setup`).
+
+  If notifications already work, you only need the **same env vars** already in `env.local`:
+  ```env
+  SES_VERIFIED_EMAIL=philgaeng@project.com.ph   # From address (verified in SES)
+  AWS_REGION=ap-southeast-1
+  AWS_ACCESS_KEY_ID=...
+  AWS_SECRET_ACCESS_KEY=...
   ```
-  KC_SMTP_HOST=email-smtp.ap-southeast-1.amazonaws.com
-  KC_SMTP_PORT=587
-  KC_SMTP_FROM=noreply@grm.facets-ai.com
-  KC_SMTP_USER=<SES SMTP user>
-  KC_SMTP_PASSWORD=<SES SMTP password>
-  KC_SMTP_STARTTLS=true
+  `keycloak_setup` derives SES SMTP credentials from the IAM keys automatically
+  (AWS standard — no separate SMTP password env var required).
+
+  Optional overrides: `KEYCLOAK_SMTP_HOST`, `KEYCLOAK_SMTP_USER`, `KEYCLOAK_SMTP_PASSWORD`.
+
+  Apply to the `grm` realm:
+  ```bash
+  docker compose ... exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
   ```
 - [ ] **Update redirect URIs** in `keycloak_setup.py` when deploying to a new domain, then re-run the setup script.
 - [ ] **Set token lifespans** in the `grm` realm:
