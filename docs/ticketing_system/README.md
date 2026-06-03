@@ -40,6 +40,12 @@
 |---|---|
 | [`../services/05_messaging_service.md`](../services/05_messaging_service.md) | Canonical messaging API contract used by ticketing and chatbot |
 
+## Platform security
+
+| Document | Contents |
+|---|---|
+| [`../deployment/13_security.md`](../deployment/13_security.md) | Security features index across chatbot, backend, and ticketing |
+
 ## Archive (superseded)
 
 Moved to `archive/`. Kept for historical reference only; do not update.

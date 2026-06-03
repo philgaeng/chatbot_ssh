@@ -170,3 +170,35 @@ def test_seah_intake_flag_disabled_keeps_legacy_menu_flow(client: TestClient, mo
     body = response.json()
     assert body["next_state"] == "main_menu"
 
+
+def test_language_button_text_fallback_sets_english(client: TestClient):
+    user_id = "orchestrator-language-text-en-1"
+
+    client.post("/message", json={"user_id": user_id, "text": ""})
+    response = client.post(
+        "/message",
+        json={"user_id": user_id, "text": "English / अंग्रेजी"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_state"] == "main_menu"
+    texts = [m.get("text", "") for m in body.get("messages", []) if m.get("text")]
+    assert any("Hello! Welcome to the Grievance Management Chatbot." in t for t in texts)
+
+
+def test_language_button_text_fallback_sets_nepali(client: TestClient):
+    user_id = "orchestrator-language-text-ne-1"
+
+    client.post("/message", json={"user_id": user_id, "text": ""})
+    response = client.post(
+        "/message",
+        json={"user_id": user_id, "text": "Nepali / नेपाली"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_state"] == "main_menu"
+    texts = [m.get("text", "") for m in body.get("messages", []) if m.get("text")]
+    assert any("नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।" in t for t in texts)
+

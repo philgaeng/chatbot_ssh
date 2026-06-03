@@ -4,7 +4,7 @@ HTTP client for the Backend Messaging API (POST /api/messaging/send-sms, send-em
 Callers (chatbot actions, Celery tasks) use this instead of importing
 backend.services.messaging.Messaging directly — delivery stays behind one API.
 
-See docs/ticketing_system/09_messaging_api_spec.md and backend/api/routers/messaging.py.
+See docs/services/05_messaging_service.md and backend/api/routers/messaging.py.
 """
 from __future__ import annotations
 

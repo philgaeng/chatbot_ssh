@@ -43,7 +43,7 @@ infrastructure projects (KL Road / Kakarbhitta-Laukahi Road, ADB Loan 52097-003)
 - **Never use `main` as a working branch.** Do not commit or push day-to-day implementation directly on `main` — that branch is only an integration target (merge or PR from feature branches).
 - Work on explicit branches such as `features/chatbot`, `feature/grm-ticketing`, `feat/seah-sensitive-intake`, or agreed integration branches.
 - Pulling or merging **`origin/main` into a feature branch** to stay current is fine; changing **`main` itself** only happens via deliberate promotion from those branches.
-- If commits accidentally landed on **`main`**, fix by moving them onto the correct feature branch (cherry-pick / branch-off before pulling others’ changes) and restoring **`main`** to match **`origin/main`** per `docs/COMMIT_STRATEGY.md`.
+- If commits accidentally landed on **`main`**, fix by moving them onto the correct feature branch (cherry-pick / branch-off before pulling others’ changes) and restoring **`main`** to match **`origin/main`** per `docs/deployment/COMMIT_STRATEGY.md`.
 
 ---
 
@@ -172,7 +172,7 @@ def include_object(object, name, type_, reflected, compare_to):
 ### Migration traceability (two streams)
 
 - **Ticketing (`ticketing.*`):** all forward DDL goes through **Alembic** (`ticketing/migrations/alembic.ini`). Any worktree (including Claude-only work on ticketing) should use **only** this stream for ticketing tables so revisions stay linear and visible in git.
-- **Chatbot / public (`public.*`):** **not** migrated by the ticketing Alembic project (see headers and `include_object` above). Use the **second** Alembic project: `migrations/public/alembic.ini` (version table `alembic_version_public`). Some tables may still be **first-created** by app code; **structural changes** go in `migrations/public/versions/`. See **`docs/MIGRATIONS_POLICY.md`**.
+- **Chatbot / public (`public.*`):** **not** migrated by the ticketing Alembic project (see headers and `include_object` above). Use the **second** Alembic project: `migrations/public/alembic.ini` (version table `alembic_version_public`). Some tables may still be **first-created** by app code; **structural changes** go in `migrations/public/versions/`. See **`docs/deployment/MIGRATIONS_POLICY.md`**.
 
 ### Worktree + DB operating model (LOCKED)
 
@@ -521,7 +521,7 @@ docs/
 - Env vars: via `ticketing/config/settings.py` pydantic-settings
 - No hardcoded URLs, credentials, or broker addresses
 - Leave `# INTEGRATION POINT:` for anything needing Cursor wiring
-- Commit strategy: `docs/COMMIT_STRATEGY.md`
+- Commit strategy: `docs/deployment/COMMIT_STRATEGY.md`
 
 ---
 

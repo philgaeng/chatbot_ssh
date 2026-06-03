@@ -1,5 +1,7 @@
 # Privacy and Sensitive Data Safety Spec
 
+> For the full platform security feature index, see [13_security.md](13_security.md).
+
 ## Purpose
 
 Define a single, safer data architecture for grievance and complainant data, including SEAH, without splitting into two complainant databases.

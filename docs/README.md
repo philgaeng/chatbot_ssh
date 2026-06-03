@@ -28,6 +28,7 @@ docs/
 | [`deployment/07_migrations_policy.md`](deployment/07_migrations_policy.md) | Migration ownership/policy across schemas |
 | [`deployment/08_commit_strategy.md`](deployment/08_commit_strategy.md) | Branch and commit workflow |
 | [`deployment/09_privacy.md`](deployment/09_privacy.md) | PII handling and privacy controls |
+| [`deployment/13_security.md`](deployment/13_security.md) | Security features index (auth, PII, audit, SEAH, messaging) |
 | [`deployment/10_production_server_spec.md`](deployment/10_production_server_spec.md) | Production infra/server spec |
 | [`deployment/11_llm_pipeline_policy.md`](deployment/11_llm_pipeline_policy.md) | LLM task pipeline policy |
 | [`deployment/12_environment_urls.md`](deployment/12_environment_urls.md) | Environment URL registry |

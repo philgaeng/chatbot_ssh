@@ -2,7 +2,7 @@
 
 Stack: **Nginx** → **orchestrator** (8000) + **backend** (5001) + **Celery** (default + llm_queue) + **Redis** + **Postgres**.
 
-No Rasa server — matches the REST orchestrator architecture in `docs/BACKEND.md`.
+No Rasa server — matches the REST orchestrator architecture in `docs/deployment/BACKEND.md`.
 
 ## HTTPS / TLS (Let's Encrypt)
 
@@ -113,4 +113,4 @@ curl -4 -s http://127.0.0.1/rest-webchat/ | head
 - [`../nginx/webchat_rest_compose_wsl.conf`](../nginx/webchat_rest_compose_wsl.conf) — local WSL compose nginx
 - [`../nginx/webchat_rest_compose_aws.conf`](../nginx/webchat_rest_compose_aws.conf) — AWS TLS compose nginx
 - [`../../scripts/docker/init_db.sh`](../../scripts/docker/init_db.sh) — sources `scripts/database/config.sh`, runs `scripts/database/init.py`
-- [`../../docs/MIGRATIONS_POLICY.md`](../../docs/MIGRATIONS_POLICY.md) — Alembic-first migration policy
+- [`../../docs/deployment/MIGRATIONS_POLICY.md`](../../docs/deployment/MIGRATIONS_POLICY.md) — Alembic-first migration policy

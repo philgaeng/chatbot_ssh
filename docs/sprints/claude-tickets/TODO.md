@@ -78,6 +78,9 @@ and `ESCALATE` branches (after commit). The task is already scaffolded in
 - Open http://localhost:3001, switch roles via MockRoleSwitcher, verify each screen
 - GRC convene → decide flow visual check (date picker + purple button)
 - Mobile shell (/m/ routes) quick pass on narrow viewport
+- BUG NOTE (2026-06-02): In mobile chat view (`grm-auth.nepal-gms-chatbot.facets-ai.com`),
+  the message textbox intermittently freezes (cannot type/send). Repro and fix in next UI
+  polish pass; likely input/focus or resize event handling regression.
 - Reports — Overview / **Summary** / Pivot / Quarterly ✅; run `alembic upgrade head` + `python -m ticketing.seed.backfill_overdue_episodes` on existing DBs
 
 ### 6. Staging deploy to grm.stage.facets-ai.com

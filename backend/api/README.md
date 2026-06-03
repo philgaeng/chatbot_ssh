@@ -6,4 +6,4 @@ The **live backend** is the **FastAPI** app in `fastapi_app.py`.
 - **Flask** (`app.py`) is **deprecated for production** and kept for reference or rollback.
 - **Environment:** Use the **chatbot-rest** env for running and testing (e.g. `conda activate chatbot-rest`). Backend tests: `PYTHONPATH=. pytest tests/backend/test_fastapi_grievance.py -v`
 
-See [docs/BACKEND.md](../../docs/BACKEND.md) for full API and deployment details.
+See [docs/deployment/BACKEND.md](../../docs/deployment/BACKEND.md) for full API and deployment details.

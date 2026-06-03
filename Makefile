@@ -107,6 +107,7 @@ aws-deploy:
 		cd $(REMOTE_DIR_RUNNING) && \
 		git fetch origin && \
 		git checkout main && \
+		git checkout -- docker-compose.aws.yml && \
 		git pull --ff-only origin main && \
 		docker compose --env-file env.local \
 		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
