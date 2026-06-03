@@ -196,9 +196,14 @@ class ActionAskComplainantMunicipalityTemp(BaseAction):
         return "action_ask_complainant_municipality_temp"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: dict):
-        province = tracker.get_slot("complainant_province")
-        district = tracker.get_slot("complainant_district")
-        message = self.get_utterance(1).format(district=district, province=province)
+        province = tracker.get_slot("complainant_province") or ""
+        district = tracker.get_slot("complainant_district") or ""
+        # Nepali utterance uses {municipality} as district context; EN has no placeholders.
+        message = self.get_utterance(1).format(
+            district=district,
+            province=province,
+            municipality=district,
+        )
         # Force skip-only buttons for municipality prompt to avoid cross-form button leakage.
         language_code = tracker.get_slot("language_code") or "en"
         buttons = BUTTONS_SKIP.get(language_code, BUTTONS_SKIP["en"])
