@@ -439,12 +439,16 @@ class ActionSubmitSeah(BaseActionSubmit):
 
             grievance_ref = result.get("grievance_id")
             if language_code == "ne":
+                dispatcher.utter_message(text="तपाईंको गोप्य SEAH रिपोर्ट सफलतापूर्वक दर्ता भयो।")
                 dispatcher.utter_message(
-                    text=f"तपाईंको गोप्य SEAH रिपोर्ट दर्ता गरिएको छ। तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
+                    text=f"तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
                 )
             else:
                 dispatcher.utter_message(
-                    text=f"Your confidential SEAH report has been submitted. Your reference number is **{grievance_ref}**."
+                    text="Your confidential SEAH report has been filed successfully."
+                )
+                dispatcher.utter_message(
+                    text=f"Your reference number is **{grievance_ref}**."
                 )
 
             return [

@@ -95,6 +95,7 @@ class MessageResponse(BaseModel):
     messages: List[Dict[str, Any]]
     next_state: str
     expected_input_type: str
+    close_controls_mode: str = "session"
 
 
 @app.post("/message", response_model=MessageResponse)
@@ -125,10 +126,17 @@ async def post_message(req: MessageRequest) -> MessageResponse:
 
     save_session(session)
 
+    slots = session.get("slots", {}) or {}
+    if slots.get("story_main") == "seah_intake" or slots.get("grievance_sensitive_issue"):
+        close_controls_mode = "browser"
+    else:
+        close_controls_mode = "session"
+
     return MessageResponse(
         messages=messages,
         next_state=next_state,
         expected_input_type=expected_input_type,
+        close_controls_mode=close_controls_mode,
     )
 
 

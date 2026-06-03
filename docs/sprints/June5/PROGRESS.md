@@ -26,10 +26,33 @@
 
 | Ticket | Status | Agent / date | PR / commit | Notes |
 |--------|--------|--------------|-------------|-------|
-| CB-03 Close / exit consolidation | `todo` | | | |
-| CB-04 File another grievance | `todo` | | | |
-| CB-05 Attachment copy rewrite | `todo` | | | |
-| CB-07 Success messages + filed banner | `todo` | | | |
+| CB-03 Close / exit consolidation | `done` | Chatbot P1 / 2026-06-03 | | `close_controls_mode` + UI filter; workflow-specific outro buttons |
+| CB-04 File another grievance | `done` | Chatbot P1 / 2026-06-03 | | `done` state handles `/new_grievance` and `/seah_intake`; client restart helper |
+| CB-05 Attachment copy rewrite | `done` | Chatbot P1 / 2026-06-03 | | `utterances.js` + server outro attachment strings |
+| CB-07 Success messages + filed banner | `done` | Chatbot P1 / 2026-06-03 | | Three outro messages + `#grievance-filed-banner` |
+
+**CB-03 verification**
+
+- [x] Standard flow: only **Close session** visible in header + post-upload buttons.
+- [x] SEAH flow: only **Close browser** visible (same payloads as today).
+- [x] No duplicate close prompts in bot messages for same step.
+
+**CB-04 verification**
+
+- [x] After submit/review, **File another grievance** appears and triggers clean `/new_grievance` or `/seah_intake` path.
+- [x] Prior `grievance_id` cleared; new intake works without tab close.
+
+**CB-05 verification**
+
+- [x] No harsh “not attached” copy; new EN/NE strings in `utterances.js`.
+- [x] Post-upload encouragement mentions photos, documents, handwritten complaint.
+
+**CB-07 verification**
+
+- [x] Three bot messages after file: success → grievance # → follow-ups OK.
+- [x] Top banner shows filed + grievance id until session reset.
+
+**Sprint P1 chatbot complete when:** all four tickets `done` and checkboxes above checked.
 
 ---
 
@@ -91,6 +114,7 @@
 
 | Ticket | Deviation | Approved by |
 |--------|-----------|-------------|
+| CB-03 | `channels/webchat/` not mirrored; REST_webchat is canonical for this worktree | — |
 | TP-05 | Report shares stored in `ticketing.settings` JSON (`report_share_links`) — no new Alembic table | — |
 | TP-05 | SMS dispatch not wired; `# INTEGRATION POINT` in reports router | — |
 | TP-08 | Second matrix column relabeled “Overdue open at end of Q*” (matches existing metric keys, not new pipeline column) | — |

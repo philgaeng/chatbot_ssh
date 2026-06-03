@@ -22,15 +22,31 @@ export const U = {
       ne: "पुन: जोड्न सकिएन। कृपया पृष्ठ नवीकरण गर्नुहोस्।",
     },
   },
-  file_upload: {
-    post_upload: {
-      en: "Files uploaded. You can add more files or go back to the chat.",
-      ne: "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
+  filed_banner: {
+    label: {
+      en: "Grievance filed — reference:",
+      ne: "गुनासो दर्ता भयो — सन्दर्भ:",
     },
-    /** Shown after upload when orchestrator is already at end of flow (`done`), matching outro options. */
+  },
+  post_submit: {
+    file_another: {
+      en: "File another grievance",
+      ne: "अर्को गुनासो दर्ता गर्नुहोस्",
+    },
+  },
+  file_upload: {
+    invitation: {
+      en: "You can attach pictures or other documents related to your grievance. These will be reviewed by our officer. You may also attach a photo of a handwritten complaint.",
+      ne: "तपाईं आफ्नो गुनासोसँग सम्बन्धित तस्बिर वा अन्य कागजात संलग्न गर्न सक्नुहुन्छ। यी हाम्रा अधिकारीले हेर्नेछन्। हस्तलिखित उजुरीको फोटो पनि संलग्न गर्न सक्नुहुन्छ।",
+    },
+    post_upload: {
+      en: "Your files are saved. You can add more files or go back to the chat.",
+      ne: "तपाईंका फाइलहरू सेव भयो। तपाईं थप फाइलहरू थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
+    },
+    /** Shown after upload when orchestrator is already at end of flow (`done`). */
     post_upload_at_flow_end: {
-      en: "Files uploaded. You can add more files, go back to the chat, or end your session using the buttons below.",
-      ne: "फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गरी सत्र समाप्त गर्न सक्नुहुन्छ।",
+      en: "Your files are saved. You can add more, go back to the chat, file another grievance, or end your session below.",
+      ne: "तपाईंका फाइलहरू सेव भयो। तपाईं थप थप्न, च्याटमा फर्कन, अर्को गुनासो दर्ता गर्न, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
     },
     transition: {
       en: "Your files are uploaded. Here's where we left off.",
@@ -41,12 +57,12 @@ export const U = {
       ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
     failure_at_flow_end: {
-      en: "One or more files could not be saved. You can try again, go back to the chat, or end your session below.",
-      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
+      en: "We could not save one or more files. You can try again, go back to the chat, or use the buttons below.",
+      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
     },
     no_grievance: {
-      en: 'To attach files, first start a grievance: click "Register a grievance" (गुनासो दर्ता गर्नुहोस्) above and complete the steps. Once your grievance is created, you can attach files here.',
-      ne: "फाइलहरू संलग्न गर्न, पहिले गुनासो सुरु गर्नुहोस्: माथि \"गुनासो दर्ता गर्नुहोस्\" क्लिक गर्नुहोस् र चरणहरू पूरा गर्नुहोस्। गुनासो सिर्जना भएपछि तपाईं यहाँ फाइलहरू संलग्न गर्न सक्नुहुन्छ।",
+      en: 'To attach files, start a grievance first: choose "File a grievance" (गुनासो दर्ता गर्नुहोस्) in the chat above and complete the steps. After your grievance is created, you can attach photos or documents here.',
+      ne: "फाइल संलग्न गर्न पहिले गुनासो सुरु गर्नुहोस्: माथिको च्याटमा \"गुनासो दर्ता गर्नुहोस्\" छान्नुहोस् र चरणहरू पूरा गर्नुहोस्। गुनासो सिर्जना भएपछि तपाईं यहाँ तस्बिर वा कागजात संलग्न गर्न सक्नुहुन्छ।",
     },
     voice_detected: {
       en: "Voice recordings detected. These will be processed and transcribed.",
@@ -208,3 +224,4 @@ export function format(template, vars = {}) {
 
 export const ADD_MORE_PAYLOAD = "__add_more_files__";
 export const GO_BACK_PAYLOAD = "__go_back_to_chat__";
+export const FILE_ANOTHER_PAYLOAD = "__file_another_grievance__";

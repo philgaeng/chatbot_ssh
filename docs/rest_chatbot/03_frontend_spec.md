@@ -130,8 +130,15 @@ Local-only quick reply payloads:
 
 - `__add_more_files__`
 - `__go_back_to_chat__`
+- `__file_another_grievance__` (restart intake from `done` without closing tab)
 
 These do not call orchestrator.
+
+Post-submit UX (June5 P1):
+
+- `close_controls_mode` on `/message` response: `session` (Close session only) or `browser` (SEAH / sensitive — Close browser only).
+- `#grievance-filed-banner` shows reference id from submit until session reset or file-another.
+- Orchestrator outro emits three text messages (success → reference → follow-up/attachments).
 
 ## 8) File Upload UX and API Flow
 
