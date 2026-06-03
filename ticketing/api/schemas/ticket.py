@@ -218,6 +218,18 @@ class TicketActionRequest(BaseModel):
     )
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
     grc_hearing_date: Optional[str] = Field(None, description="ISO date for GRC_CONVENE e.g. 2026-05-03")
+    # Escalation review (TP-11) — merged into ESCALATE action
+    escalation_date: Optional[str] = Field(None, description="ISO date for manual escalation review")
+    persons_involved: Optional[list[str]] = Field(None, description="Officers involved in escalation decision")
+    escalation_notes: Optional[str] = Field(None, description="Required notes for manual ESCALATE")
+    # Reassignment request (TP-12)
+    reassignment_reason_code: Optional[str] = Field(
+        None,
+        description="OUT_OF_PACKAGE_SCOPE | OUT_OF_LOCATION | OTHER",
+    )
+    reassignment_notes: Optional[str] = None
+    # Call report flag (TP-10) — NOTE with is_call_report in payload
+    is_call_report: Optional[bool] = False
 
 
 class TicketActionResponse(BaseModel):

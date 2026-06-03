@@ -59,11 +59,9 @@ export const AUTHORITY_ROLES = new Set([
 // hash = shortcut trigger in the ComposeBar # command palette
 
 export const TASK_TYPES = [
-  { key: "SITE_VISIT",        label: "Inspection visit",    icon: "MapPin",        hash: "inspect" },
-  { key: "DOCUMENT_PHOTO",    label: "Site photo required", icon: "Camera",        hash: "photo"   },
-  { key: "FOLLOW_UP_CALL",    label: "Call complainant",    icon: "Phone",         hash: "call"    },
-  { key: "SYSTEM_NOTE",       label: "Field report",        icon: "FileText",      hash: "report"  },
-  { key: "ESCALATION_REVIEW", label: "Escalation review",   icon: "ClipboardList", hash: "review"  },
+  { key: "SITE_VISIT",     label: "Inspection visit", icon: "MapPin",   hash: "inspect" },
+  { key: "FOLLOW_UP_CALL", label: "Call complainant", icon: "Phone",    hash: "call"    },
+  { key: "SYSTEM_NOTE",    label: "Field report",     icon: "FileText", hash: "report"  },
 ] as const;
 
 export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
@@ -76,7 +74,7 @@ export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
 //   "action" — performs an immediate ticket action (ESCALATE)
 //   "assign" — triggers @mention autocomplete to pick the assignee
 
-export type HashCommandKind = "task" | "task_assign" | "report" | "action" | "assign";
+export type HashCommandKind = "task" | "task_assign" | "report" | "call_report" | "action" | "assign";
 
 export interface HashCommand {
   hash: string;
@@ -91,15 +89,12 @@ export interface HashCommand {
 
 export const HASH_COMMANDS: HashCommand[] = [
   // ── Field / inspection (#inspect @me default; #inspect @officer for others) ──
-  { hash: "inspect",  label: "Inspection visit",    icon: "MapPin",        kind: "task_assign", taskKey: "SITE_VISIT" },
-  { hash: "report",   label: "Write field report",   icon: "FileText",      kind: "report" },
-  // ── Task shortcuts (creates TicketTask assigned to self) ──
-  { hash: "photo",    label: "Site photo required",  icon: "Camera",        kind: "task",   taskKey: "DOCUMENT_PHOTO"    },
-  { hash: "call",     label: "Call complainant",     icon: "Phone",         kind: "task",   taskKey: "FOLLOW_UP_CALL"    },
-  { hash: "review",   label: "Escalation review",    icon: "ClipboardList", kind: "task",   taskKey: "ESCALATION_REVIEW" },
+  { hash: "inspect",  label: "Assign inspection visit", icon: "MapPin",        kind: "task_assign", taskKey: "SITE_VISIT" },
+  { hash: "report",   label: "Assign field report",     icon: "FileText",      kind: "task_assign", taskKey: "SYSTEM_NOTE" },
+  { hash: "call",     label: "Call complainant",        icon: "Phone",         kind: "call_report" },
   // ── Direct actions ────────────────────────────────────────
-  { hash: "escalate", label: "Escalate ticket",       icon: "ArrowUpCircle", kind: "action", action: "ESCALATE"           },
-  { hash: "assign",   label: "Assign ticket to…",     icon: "UserCheck",     kind: "assign"                              },
+  { hash: "escalate", label: "Escalate ticket",         icon: "ArrowUpCircle", kind: "action", action: "ESCALATE" },
+  { hash: "assign",   label: "Assign ticket to…",       icon: "UserCheck",     kind: "assign" },
 ];
 
 // ── Event type classification ─────────────────────────────────────────────────
@@ -109,7 +104,7 @@ export const SYSTEM_EVENT_TYPES = new Set([
   "CREATED", "ACKNOWLEDGED", "ESCALATED", "ASSIGNED", "PRIORITY_CHANGED",
   "RESOLVED", "CLOSED", "GRC_CONVENED", "GRC_DECIDED", "SLA_BREACH_FINAL_STEP",
   "REVEAL_ORIGINAL", "REVEAL_ORIGINAL_CLOSED", "VIEWER_ADDED", "VIEWER_REMOVED",
-  "COMPLAINANT_UPDATED",
+  "COMPLAINANT_UPDATED", "REASSIGNMENT_REQUESTED",
   // Spec 12 tier model events
   "TIER_CHANGED", "REPLY_OWNER_CHANGED",
 ]);
@@ -141,6 +136,16 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     case "ACKNOWLEDGED":          return "Acknowledged — case in progress";
     case "ESCALATED":             return `Escalated${payload?.to_step_key ? ` → ${payload.to_step_key}` : ""}`;
     case "ASSIGNED":              return `Assigned to ${payload?.new_assigned ?? "officer"}`;
+    case "REASSIGNMENT_REQUESTED": {
+      const code = payload?.reason_code as string | undefined;
+      const labels: Record<string, string> = {
+        OUT_OF_PACKAGE_SCOPE: "Out of package scope",
+        OUT_OF_LOCATION: "Out of location",
+        OTHER: "Other",
+      };
+      const reason = code ? labels[code] ?? code : "Reassignment requested";
+      return `Reassignment requested — ${reason}`;
+    }
     case "PRIORITY_CHANGED":      return `Priority changed to ${payload?.new_priority ?? "—"}`;
     case "RESOLVED": {
       const cat = payload?.resolution_category as string | undefined;

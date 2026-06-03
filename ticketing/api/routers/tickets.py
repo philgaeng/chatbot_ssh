@@ -73,7 +73,7 @@ from ticketing.tasks.llm import (
     translate_note,
 )
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
-from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status
+from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status, _scope_candidates
 from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
@@ -198,6 +198,92 @@ def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) 
     step = get_current_step(ticket, db)
     if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
         return True
+    return False
+
+
+def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
+    """Supervisor for current step or admin may assign (TP-12)."""
+    if current_user.is_admin:
+        return True
+    step = get_current_step(ticket, db)
+    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
+        return True
+    return False
+
+
+def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
+    step = get_current_step(ticket, db)
+    if not step or not step.supervisor_role:
+        return None
+    candidates = _scope_candidates(
+        role_key=step.supervisor_role,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        db=db,
+    )
+    return candidates[0] if candidates else None
+
+
+_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif")
+
+
+def _ticket_has_image_attachment(db: Session, ticket: Ticket) -> bool:
+    """True when ≥1 image exists in complainant or officer attachments (TP-11)."""
+    officer_files = db.execute(
+        select(TicketFile).where(TicketFile.ticket_id == ticket.ticket_id)
+    ).scalars().all()
+    for tf in officer_files:
+        if (tf.file_type or "").lower() == "image":
+            return True
+        if tf.file_name and tf.file_name.lower().endswith(_IMAGE_EXTENSIONS):
+            return True
+
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT file_type, file_name
+                FROM public.file_attachments
+                WHERE grievance_id = :gid
+                """
+            ),
+            {"gid": ticket.grievance_id},
+        ).mappings().all()
+        for row in rows:
+            ft = (row.get("file_type") or "").lower()
+            fn = (row.get("file_name") or "").lower()
+            if ft == "image" or ft.startswith("image/"):
+                return True
+            if fn.endswith(_IMAGE_EXTENSIONS):
+                return True
+    except Exception as exc:
+        logger.warning("image gate: file_attachments unavailable — %s", exc)
+        db.rollback()
+    return False
+
+
+def _media_type_for_path(file_path: str) -> str:
+    lower = file_path.lower()
+    if lower.endswith((".jpg", ".jpeg")):
+        return "image/jpeg"
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".pdf"):
+        return "application/pdf"
+    if lower.endswith((".m4a", ".mp4")):
+        return "audio/mp4"
+    if lower.endswith(".mp3"):
+        return "audio/mpeg"
+    if lower.endswith(".wav"):
+        return "audio/wav"
+    if lower.endswith(".webm"):
+        return "audio/webm"
+    if lower.endswith(".aac"):
+        return "audio/aac"
+    if lower.endswith(".ogg"):
+        return "audio/ogg"
+    return "application/octet-stream"
     return False
 
 
@@ -718,6 +804,11 @@ def patch_ticket(
     old_assigned = ticket.assigned_to_user_id
 
     if payload.assign_to_user_id is not None:
+        if not _can_assign_ticket(db, ticket, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="Only a step supervisor or admin may assign tickets to another officer.",
+            )
         ticket.assigned_to_user_id = payload.assign_to_user_id
         ticket.assigned_role_id = payload.assigned_role_id
         ticket.updated_by_user_id = current_user.user_id
@@ -840,7 +931,7 @@ def patch_ticket_complainant(
 
 VALID_ACTIONS = {
     "ACKNOWLEDGE", "ESCALATE", "RESOLVE", "NOTE", "FIELD_REPORT",
-    "GRC_CONVENE",
+    "GRC_CONVENE", "REASSIGNMENT_REQUESTED",
 }
 
 @router.post(
@@ -877,7 +968,7 @@ def perform_action(
 
     # Assignment guard — only the assigned officer (or admin) may change ticket status.
     # NOTE is always allowed so any officer can add internal notes.
-    ASSIGNMENT_REQUIRED = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "GRC_CONVENE"}
+    ASSIGNMENT_REQUIRED = {"ACKNOWLEDGE", "ESCALATE", "RESOLVE", "GRC_CONVENE", "REASSIGNMENT_REQUESTED"}
     if action in ASSIGNMENT_REQUIRED and not current_user.is_admin:
         if action == "RESOLVE":
             if not _can_resolve_ticket(db, ticket, current_user):
@@ -937,13 +1028,30 @@ def perform_action(
         )
 
     elif action == "ESCALATE":
+        if not _ticket_has_image_attachment(db, ticket):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "At least one image attachment is required before escalating. "
+                    "Upload a site photo or ask the complainant to send photos via WhatsApp."
+                ),
+            )
+        review_notes = (payload.escalation_notes or payload.note or "").strip()
+        if not review_notes:
+            raise HTTPException(
+                status_code=422,
+                detail="escalation_notes is required for ESCALATE",
+            )
         # Delegate to engine — single code path for manual + auto escalation
         result = escalate_ticket(
             ticket, db,
             triggered_by="MANUAL",
-            note=payload.note,
+            note=review_notes,
             created_by_user_id=current_user.user_id,
             actor_role=_actor_role(current_user),
+            escalation_date=payload.escalation_date,
+            persons_involved=payload.persons_involved or [current_user.user_id],
+            escalation_notes=review_notes,
         )
         if result is None:
             raise HTTPException(
@@ -957,6 +1065,14 @@ def perform_action(
         )
 
     elif action == "RESOLVE":
+        if ticket.status_code not in ("RESOLVED", "CLOSED") and not _ticket_has_image_attachment(db, ticket):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "At least one image attachment is required before resolving. "
+                    "Upload a site photo or ask the complainant to send photos via WhatsApp."
+                ),
+            )
         try:
             category = validate_resolution_category(payload.resolution_category)
             officer_text = validate_resolution_note(payload.note)
@@ -1055,12 +1171,15 @@ def perform_action(
         if not payload.note:
             raise HTTPException(status_code=422, detail="note is required for action_type=NOTE")
         _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
+        note_payload: dict = {"internal": True}
+        if payload.is_call_report:
+            note_payload["is_call_report"] = True
         # Internal note — no status change, not visible to complainant
         event = _add_event(
             db, ticket, "NOTE_ADDED",
             step_id=event_step_id,
             note=payload.note,
-            payload={"internal": True},
+            payload=note_payload,
             created_by=current_user.user_id,
             seen=True,
             actor_role=_actor_role(current_user),
@@ -1116,6 +1235,59 @@ def perform_action(
             summary_regen_required=True,
         )
         _translate_note_event_id = event.event_id
+
+    elif action == "REASSIGNMENT_REQUESTED":
+        reason = (payload.reassignment_reason_code or "").strip().upper()
+        valid_reasons = {"OUT_OF_PACKAGE_SCOPE", "OUT_OF_LOCATION", "OTHER"}
+        if reason not in valid_reasons:
+            raise HTTPException(
+                status_code=422,
+                detail=f"reassignment_reason_code must be one of {sorted(valid_reasons)}",
+            )
+        if reason == "OTHER" and not (payload.reassignment_notes or "").strip():
+            raise HTTPException(status_code=422, detail="reassignment_notes required when reason is OTHER")
+
+        supervisor_id = _find_supervisor_user_id(db, ticket)
+        if not supervisor_id:
+            raise HTTPException(
+                status_code=422,
+                detail="No supervisor configured for this workflow step.",
+            )
+
+        old_assigned = ticket.assigned_to_user_id
+        ticket.assigned_to_user_id = supervisor_id
+        ticket.updated_by_user_id = current_user.user_id
+
+        event = _add_event(
+            db, ticket, "REASSIGNMENT_REQUESTED",
+            old_assigned=old_assigned,
+            new_assigned=supervisor_id,
+            step_id=event_step_id,
+            note=(payload.reassignment_notes or "").strip() or None,
+            payload={
+                "reason_code": reason,
+                "reason_notes": (payload.reassignment_notes or "").strip() or None,
+                "requested_by": current_user.user_id,
+            },
+            seen=False,
+            notify_user_id=supervisor_id,
+            created_by=current_user.user_id,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=True,
+        )
+        _add_event(
+            db, ticket, "ASSIGNED",
+            old_assigned=old_assigned,
+            new_assigned=supervisor_id,
+            step_id=event_step_id,
+            note=f"Reassignment routed to supervisor ({reason.replace('_', ' ').lower()})",
+            payload={"reason_code": reason, "via_reassignment_request": True},
+            seen=False,
+            notify_user_id=supervisor_id,
+            created_by=current_user.user_id,
+            actor_role=_actor_role(current_user),
+            summary_regen_required=False,
+        )
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
@@ -1618,12 +1790,7 @@ def download_file(
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not on disk")
 
-    media_type = (
-        "image/jpeg" if file_path.lower().endswith((".jpg", ".jpeg")) else
-        "image/png"  if file_path.lower().endswith(".png") else
-        "application/pdf" if file_path.lower().endswith(".pdf") else
-        "application/octet-stream"
-    )
+    media_type = _media_type_for_path(file_path)
     return FileResponse(path=file_path, filename=row["file_name"], media_type=media_type)
 
 
@@ -1664,6 +1831,8 @@ async def upload_officer_attachment(
     mime = file.content_type or ""
     if mime.startswith("image/"):
         file_type = "image"
+    elif mime.startswith("audio/") or suffix.lower() in (".m4a", ".mp3", ".wav", ".aac", ".webm", ".ogg"):
+        file_type = "audio"
     elif mime == "application/pdf" or suffix.lower() == ".pdf":
         file_type = "pdf"
     else:
@@ -1765,12 +1934,7 @@ def download_officer_attachment(
     if not os.path.isfile(tf.file_path):
         raise HTTPException(status_code=404, detail="File not on disk")
 
-    media_type = (
-        "image/jpeg" if tf.file_path.lower().endswith((".jpg", ".jpeg")) else
-        "image/png"  if tf.file_path.lower().endswith(".png") else
-        "application/pdf" if tf.file_path.lower().endswith(".pdf") else
-        "application/octet-stream"
-    )
+    media_type = _media_type_for_path(tf.file_path)
     return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
 
 

@@ -132,7 +132,7 @@ function TranslationPanel({
   );
 }
 
-// ── File attachments panel ────────────────────────────────────────────────────
+import { AttachmentListSection } from "@/components/AttachmentListSection";
 
 function FilesPanel({
   ticketId,
@@ -198,43 +198,13 @@ function FilesPanel({
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
       <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3">Attachments</h2>
 
-      <div>
-        <div className="text-xs font-medium text-gray-600 mb-1.5">From complainant</div>
-        {loading ? <div className="text-xs text-gray-400">Loading…</div>
-          : complainantFiles.length === 0
-            ? <div className="text-xs text-gray-400 italic">No files uploaded by complainant.</div>
-            : complainantFiles.map((f) => (
-              <button key={f.file_id}
-                onClick={async () => { await onBeforeDownload(); window.open(getFileDownloadUrl(f.file_id), "_blank", "noopener,noreferrer"); }}
-                className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 group w-full text-left mb-1"
-              >
-                <FileIcon type={f.file_type} />
-                <span className="flex-1 truncate group-hover:underline">{f.file_name}</span>
-                <span className="text-gray-400 shrink-0">{fmt(f.file_size)}</span>
-              </button>
-            ))
-        }
-      </div>
-
-      <div>
-        <div className="text-xs font-medium text-gray-600 mb-1.5">Officer attachments</div>
-        {officerFiles.length === 0
-          ? <div className="text-xs text-gray-400 italic">No officer files attached yet.</div>
-          : officerFiles.map((f) => (
-            <div key={f.file_id} className="flex items-start gap-2 mb-1">
-              <button
-                onClick={() => window.open(getOfficerAttachmentUrl(f.file_id), "_blank", "noopener,noreferrer")}
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 group shrink-0"
-              >
-                <FileIcon type={f.file_type} />
-                <span className="group-hover:underline max-w-[120px] truncate">{f.file_name}</span>
-                <span className="text-gray-400">{fmt(f.file_size)}</span>
-              </button>
-              {f.caption && <span className="text-xs text-gray-500 italic flex-1 min-w-0 truncate">{f.caption}</span>}
-            </div>
-          ))
-        }
-      </div>
+      <AttachmentListSection
+        complainantFiles={complainantFiles}
+        officerFiles={officerFiles}
+        getComplainantUrl={getFileDownloadUrl}
+        getOfficerUrl={getOfficerAttachmentUrl}
+        onBeforeDownload={onBeforeDownload}
+      />
 
       {isAssigned && (
         <div className="border-t border-gray-100 pt-3 space-y-2">

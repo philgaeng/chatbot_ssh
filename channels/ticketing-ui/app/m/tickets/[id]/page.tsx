@@ -20,19 +20,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
   listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl, uploadOfficerAttachment,
+  listOfficerRoster,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
   type TicketFile, type OfficerAttachment,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, isThreadTaskEvent,
+  SYSTEM_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, isThreadTaskEvent,
   COMPLAINANT_EVENT_TYPES, AUTHORITY_ROLES, type HashCommand,
 } from "@/lib/mobile-constants";
+import { hasImageAttachment } from "@/lib/attachments";
+import { canAssignTicket, canRequestReassignment } from "@/lib/officer-permissions";
 import {
   AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2,
-  MoreVertical, User, FileText, Paperclip, ChevronLeft, Download, FileIcon, X,
-  ClipboardCheck, BookOpen,
+  MoreVertical, User, FileText, Paperclip, ChevronLeft, Download, FileIcon,
+  ClipboardCheck, BookOpen, X,
 } from "lucide-react";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
@@ -44,7 +47,14 @@ import { FilterChips, type FilterChip }       from "@/components/thread/FilterCh
 import { ViewersBar }                         from "@/components/thread/ViewersBar";
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
-import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
+import { GrievanceThreadCard }                from "@/components/thread/GrievanceThreadCard";
+import { EscalationFormCard }                 from "@/components/thread/EscalationFormCard";
+import { CallReportComposeCard }              from "@/components/thread/CallReportComposeCard";
+import { ReassignmentRequestCard, type ReassignmentReasonCode } from "@/components/thread/ReassignmentRequestCard";
+import { AttachmentListSection }              from "@/components/AttachmentListSection";
+import {
+  formatCallReportNote, isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData, type CallReportFormData,
+} from "@/lib/field-visit";
 import { fieldVisitSaveErrorMessage, submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
@@ -279,7 +289,8 @@ function FieldReportsSheet({
           <Flag size={32} strokeWidth={1.5} />
           <p className="text-sm">No field reports yet.</p>
           <p className="text-xs text-center px-8">
-            Type <code className="bg-gray-100 px-1 rounded">#report</code> or <code className="bg-gray-100 px-1 rounded">#inspect @me</code> in the compose bar.
+            Assign a field report with <code className="bg-gray-100 px-1 rounded">#report @officer</code> or{" "}
+            <code className="bg-gray-100 px-1 rounded">#inspect @me</code> in the compose bar.
           </p>
         </div>
       ) : (
@@ -404,9 +415,6 @@ function AttachmentsSheet({
       .finally(() => setLoading(false));
   }, [ticket.ticket_id]);
 
-  const fmt = (b: number) =>
-    b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
-
   const total = chatbotFiles.length + officerFiles.length;
 
   return (
@@ -414,54 +422,23 @@ function AttachmentsSheet({
       {loading ? (
         <div className="flex justify-center py-10 text-xs text-gray-400 animate-pulse">Loading…</div>
       ) : (
-        <div className="py-2">
+        <div className="py-2 px-4">
           {total === 0 && (
             <div className="flex flex-col items-center py-12 gap-2 text-gray-400">
               <Paperclip size={32} strokeWidth={1.5} />
               <span className="text-sm">No attachments yet</span>
             </div>
           )}
-          {chatbotFiles.length > 0 && (
-            <>
-              <div className="px-5 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
-                From complainant
-              </div>
-              {chatbotFiles.map((f) => (
-                <a key={f.file_id} href={getFileDownloadUrl(f.file_id)} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-5 py-3 border-b border-gray-50 active:bg-gray-50">
-                  <FileIcon size={20} strokeWidth={1.5} className="text-blue-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-800 truncate">{f.file_name}</div>
-                    <div className="text-xs text-gray-400">{fmt(f.file_size)}</div>
-                  </div>
-                  <Download size={16} strokeWidth={1.8} className="text-gray-300 shrink-0" />
-                </a>
-              ))}
-            </>
-          )}
-          {officerFiles.length > 0 && (
-            <>
-              <div className="px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
-                Officer uploads
-              </div>
-              {officerFiles.map((f) => (
-                <a key={f.file_id} href={getOfficerAttachmentUrl(f.file_id)} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-5 py-3 border-b border-gray-50 active:bg-gray-50">
-                  <FileIcon size={20} strokeWidth={1.5} className="text-green-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-800 truncate">{f.file_name}</div>
-                    <div className="text-xs text-gray-400">
-                      {fmt(f.file_size)}{f.caption ? ` · ${f.caption}` : ""}
-                    </div>
-                  </div>
-                  <Download size={16} strokeWidth={1.8} className="text-gray-300 shrink-0" />
-                </a>
-              ))}
-            </>
-          )}
-          <div className="px-5 py-4">
+          <AttachmentListSection
+            complainantFiles={chatbotFiles}
+            officerFiles={officerFiles}
+            getComplainantUrl={getFileDownloadUrl}
+            getOfficerUrl={getOfficerAttachmentUrl}
+            compact
+          />
+          <div className="py-4">
             <input ref={fileInputRef} type="file" className="hidden"
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,audio/*,.m4a,.mp3,.wav,.webm"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 e.target.value = "";
@@ -498,13 +475,19 @@ function AttachmentsSheet({
 
 function MoreActionsSheet({
   ticket,
-  onAction,
+  onEscalate,
   onAssignTask,
+  onReassign,
+  canAssign,
+  canReassign,
   onClose,
 }: {
   ticket: TicketDetail;
-  onAction: (type: string) => void;
+  onEscalate: () => void;
   onAssignTask: () => void;
+  onReassign: () => void;
+  canAssign: boolean;
+  canReassign: boolean;
   onClose: () => void;
 }) {
   const canEscalate = !["RESOLVED", "CLOSED"].includes(ticket.status_code);
@@ -517,17 +500,33 @@ function MoreActionsSheet({
         </div>
         <div className="py-2">
           {canEscalate && (
-            <button onClick={() => { onAction("ESCALATE"); onClose(); }}
+            <button onClick={() => { onEscalate(); onClose(); }}
               className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
               <ArrowUpCircle size={22} strokeWidth={1.8} className="text-amber-500 shrink-0" />
               <span className="text-base text-gray-800">Escalate to next level</span>
             </button>
           )}
-          <button onClick={() => { onAssignTask(); onClose(); }}
-            className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
-            <ClipboardList size={22} strokeWidth={1.8} className="text-blue-500 shrink-0" />
-            <span className="text-base text-gray-800">Assign a task</span>
-          </button>
+          {canReassign && (
+            <button onClick={() => { onReassign(); onClose(); }}
+              className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
+              <ClipboardList size={22} strokeWidth={1.8} className="text-violet-500 shrink-0" />
+              <span className="text-base text-gray-800">Ask for reassignment</span>
+            </button>
+          )}
+          {canAssign && (
+            <button onClick={() => { onAssignTask(); onClose(); }}
+              className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
+              <User size={22} strokeWidth={1.8} className="text-blue-500 shrink-0" />
+              <span className="text-base text-gray-800">Assign ticket to officer</span>
+            </button>
+          )}
+          {canAssign && (
+            <button onClick={() => { onAssignTask(); onClose(); }}
+              className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
+              <ClipboardList size={22} strokeWidth={1.8} className="text-blue-500 shrink-0" />
+              <span className="text-base text-gray-800">Assign a task</span>
+            </button>
+          )}
         </div>
         <div className="border-t border-gray-100 px-6 py-4">
           <button onClick={onClose} className="w-full text-sm font-medium text-gray-500 text-center">Cancel</button>
@@ -563,15 +562,7 @@ function PrimaryCtaBar({
   }
 
   if (status_code === "OPEN") {
-    return (
-      <div className="px-4 py-2">
-        <button onClick={() => onAction("ACKNOWLEDGE")}
-          className="w-full bg-blue-600 active:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm">
-          <CheckCircle2 size={16} strokeWidth={2} className="inline mr-1.5" />
-          Acknowledge — tap to start
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -594,7 +585,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const { id: ticketId } = use(params);
   const router           = useRouter();
   const searchParams     = useSearchParams();
-  const { user }         = useAuth();
+  const { user, roleKeys, isAdmin } = useAuth();
   const currentUserId    = canonicalUserId(user);
   const fieldVisitSubmitLock = useRef(false);
 
@@ -609,6 +600,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
   const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
+  const [escalationOpen, setEscalationOpen] = useState(false);
+  const [callReportOpen, setCallReportOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
+  const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
+  const [rosterIds, setRosterIds] = useState<string[]>([]);
 
   // Sheet visibility
   const [showInfoMenu, setShowInfoMenu]   = useState(false);
@@ -639,6 +636,14 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   }, [ticketId]);
 
   useEffect(() => { loadTicket(); }, [loadTicket]);
+  useEffect(() => {
+    if (!ticketId) return;
+    Promise.all([
+      listTicketFiles(ticketId).catch(() => [] as TicketFile[]),
+      listOfficerAttachments(ticketId).catch(() => [] as OfficerAttachment[]),
+    ]).then(([cf, of]) => { setComplainantFiles(cf); setOfficerFiles(of); });
+    listOfficerRoster().then((r) => setRosterIds(r.map((o) => o.user_id))).catch(() => {});
+  }, [ticketId, ticket?.updated_at]);
   useEffect(() => { markSeen(ticketId).catch(() => {}); }, [ticketId]);
   useEffect(() => {
     const openId = searchParams.get("openFieldVisit");
@@ -692,6 +697,27 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         assigneeIsCurrentUser(ticket.assigned_to_user_id, user)),
     [ticket, user],
   );
+  const userCanAssign = useMemo(
+    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin),
+    [ticket, roleKeys, isAdmin],
+  );
+  const userCanReassign = useMemo(
+    () => !!ticket && canRequestReassignment(roleKeys, ticket, currentUserId, isAdmin),
+    [ticket, roleKeys, currentUserId, isAdmin],
+  );
+  const hasImages = useMemo(
+    () => hasImageAttachment(complainantFiles, officerFiles),
+    [complainantFiles, officerFiles],
+  );
+
+  const refreshFiles = useCallback(async () => {
+    const [cf, of] = await Promise.all([
+      listTicketFiles(ticketId).catch(() => [] as TicketFile[]),
+      listOfficerAttachments(ticketId).catch(() => [] as OfficerAttachment[]),
+    ]);
+    setComplainantFiles(cf);
+    setOfficerFiles(of);
+  }, [ticketId]);
 
   const ensureAcknowledged = useCallback(async () => {
     await ensureTicketAcknowledged(ticket, isAssignedActor, ticketId, loadTicket);
@@ -715,15 +741,94 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     try {
       await performAction(ticketId, { action_type: actionType });
       await loadTicket();
+      await refreshFiles();
     } catch (e) {
       console.error("Action failed", e);
+      alert(String(e));
     } finally {
       setSubmitting(false);
     }
-  }, [ticket, ticketId, loadTicket]);
+  }, [ticket, ticketId, loadTicket, refreshFiles]);
+
+  const openEscalationFlow = useCallback(() => {
+    if (!hasImages) {
+      alert(
+        "Add at least one image before escalating (upload a site photo or ask the complainant via WhatsApp).",
+      );
+      return;
+    }
+    setEscalationOpen(true);
+  }, [hasImages]);
+
+  const submitEscalation = useCallback(async (data: {
+    escalationDate: string;
+    personsInvolved: string[];
+    notes: string;
+  }) => {
+    setSubmitting(true);
+    try {
+      await ensureAcknowledged();
+      await performAction(ticketId, {
+        action_type: "ESCALATE",
+        escalation_date: data.escalationDate,
+        persons_involved: data.personsInvolved,
+        escalation_notes: data.notes,
+      });
+      setEscalationOpen(false);
+      await loadTicket();
+    } catch (e) {
+      alert(String(e));
+      throw e;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ticketId, loadTicket, ensureAcknowledged]);
+
+  const submitReassignment = useCallback(async (reasonCode: ReassignmentReasonCode, notes: string) => {
+    setSubmitting(true);
+    try {
+      await performAction(ticketId, {
+        action_type: "REASSIGNMENT_REQUESTED",
+        reassignment_reason_code: reasonCode,
+        reassignment_notes: notes,
+      });
+      setReassignOpen(false);
+      await loadTicket();
+    } catch (e) {
+      alert(String(e));
+      throw e;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ticketId, loadTicket]);
+
+  const submitCallReport = useCallback(async (data: CallReportFormData) => {
+    setSubmitting(true);
+    try {
+      await ensureAcknowledged();
+      await performAction(ticketId, {
+        action_type: "NOTE",
+        note: formatCallReportNote(data),
+        is_call_report: true,
+      });
+      setCallReportOpen(false);
+      await loadTicket();
+    } catch (e) {
+      alert(String(e));
+      throw e;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ticketId, loadTicket, ensureAcknowledged]);
 
   const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
     if (!ticket) return;
+    if (!hasImages) {
+      alert(
+        "Add at least one image before resolving (upload a site photo or ask the complainant via WhatsApp).",
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       await ensureAcknowledged();
@@ -740,7 +845,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } finally {
       setSubmitting(false);
     }
-  }, [ticket, ticketId, loadTicket, ensureAcknowledged]);
+  }, [ticket, ticketId, loadTicket, ensureAcknowledged, hasImages]);
 
   const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
     setFieldReportLinkedTask(linkedTask ?? null);
@@ -756,15 +861,13 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   }, []);
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
-    if (cmd.kind === "report")                          { openFieldReport(null); return; }
-    if (cmd.kind === "action" && cmd.action)            { await handleAction(cmd.action); return; }
-    if (cmd.kind === "task" && cmd.taskKey) {
-      try {
-        await createTask(ticketId, { task_type: cmd.taskKey, assigned_to_user_id: currentUserId });
-        await loadTicket();
-      } catch (e) { console.error("Create task failed", e); }
+    if (cmd.kind === "call_report") { setCallReportOpen(true); return; }
+    if (cmd.kind === "action" && cmd.action === "ESCALATE") { openEscalationFlow(); return; }
+    if (cmd.kind === "action" && cmd.action) { await handleAction(cmd.action); return; }
+    if (cmd.kind === "assign" && !userCanAssign) {
+      alert("Only a supervisor can assign tickets. Use Ask for reassignment if this case is out of scope.");
     }
-  }, [ticketId, currentUserId, loadTicket, handleAction, openFieldReport]);
+  }, [handleAction, openEscalationFlow, userCanAssign]);
 
   const handleNoteOrReport = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
@@ -773,6 +876,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     setNoteText("");
     try {
       const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
+      const reportAssignMatch = text.match(/^#report\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
       const inspectAssignee = parseInspectAssignCommand(text);
       if (inspectAssignee !== undefined) {
         const assignee = inspectAssignee ?? currentUserId;
@@ -780,7 +884,20 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           task_type: "SITE_VISIT",
           assigned_to_user_id: assignee,
         });
+      } else if (reportAssignMatch) {
+        if (!userCanAssign) {
+          alert("Only a supervisor can assign field reports.");
+          throw new Error("forbidden");
+        }
+        await createTask(ticketId, {
+          task_type: "SYSTEM_NOTE",
+          assigned_to_user_id: reportAssignMatch[1],
+        });
       } else if (assignMatch) {
+        if (!userCanAssign) {
+          alert("Only a supervisor can assign tickets.");
+          throw new Error("forbidden");
+        }
         await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
       } else {
         await ensureAcknowledged();
@@ -794,7 +911,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     } finally {
       setSubmitting(false);
     }
-  }, [noteText, submitting, ticketId, loadTicket, ensureAcknowledged]);
+  }, [noteText, submitting, ticketId, loadTicket, ensureAcknowledged, currentUserId, userCanAssign]);
 
   const handleCompleteTask = useCallback(async (task: TicketTask) => {
     if (!ticket) return;
@@ -838,16 +955,16 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const handleAttachFile = useCallback(async (file: File) => {
     setAttachUploading(true);
     try {
-      await ensureAcknowledged();
       await uploadOfficerAttachment(ticketId, file, "");
+      await refreshFiles();
       await loadTicket();
     } catch (e) {
-      console.error("Upload failed", e);
-      alert("Could not upload the file. Please try again.");
+      console.error("Attach failed", e);
+      alert("Could not upload the file.");
     } finally {
       setAttachUploading(false);
     }
-  }, [ticketId, loadTicket, ensureAcknowledged]);
+  }, [ticketId, loadTicket, refreshFiles]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -947,6 +1064,13 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
       {/* ── Thread — full width ────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto py-2">
+        {ticket.status_code === "OPEN" && (
+          <GrievanceThreadCard
+            ticket={ticket}
+            acknowledging={submitting}
+            onAcknowledge={() => handleAction("ACKNOWLEDGE")}
+          />
+        )}
         {filteredEvents.length === 0 ? (
           <div className="flex justify-center py-8 text-xs text-gray-400">No messages in this view</div>
         ) : (
@@ -1003,6 +1127,27 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           onClose={closeFieldReport}
           onSubmit={submitFieldReportForm}
         />
+        <EscalationFormCard
+          open={escalationOpen}
+          currentUserId={currentUserId}
+          rosterIds={rosterIds}
+          submitting={submitting}
+          onClose={() => setEscalationOpen(false)}
+          onSubmit={submitEscalation}
+        />
+        <CallReportComposeCard
+          open={callReportOpen}
+          submitting={submitting}
+          onClose={() => setCallReportOpen(false)}
+          onSubmit={submitCallReport}
+        />
+        <ReassignmentRequestCard
+          open={reassignOpen}
+          ticket={ticket}
+          submitting={submitting}
+          onClose={() => setReassignOpen(false)}
+          onSubmit={submitReassignment}
+        />
         <ComposeBar
           value={noteText}
           onChange={setNoteText}
@@ -1011,6 +1156,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           attachUploading={attachUploading}
           onHashCommand={handleHashCommand}
           fieldReportOpen={fieldReportOpen}
+          canAssign={userCanAssign}
           disabled={submitting || fieldReportSubmitting}
           participants={mentionParticipants}
         />
@@ -1056,8 +1202,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       {showMore && (
         <MoreActionsSheet
           ticket={ticket}
-          onAction={handleAction}
+          onEscalate={openEscalationFlow}
           onAssignTask={() => setShowAssignTask(true)}
+          onReassign={() => setReassignOpen(true)}
+          canAssign={userCanAssign}
+          canReassign={userCanReassign}
           onClose={() => setShowMore(false)}
         />
       )}

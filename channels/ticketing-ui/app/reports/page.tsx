@@ -17,7 +17,8 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import {
   downloadBuildReportXlsx,
   buildReportJson,
-  downloadExportReportXlsx,
+  downloadExportAllDataXlsx,
+  createReportShare,
   fetchReportFields,
   queryReport,
   saveToQuarterlyLibrary,
@@ -377,6 +378,8 @@ export default function ReportsPage() {
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
   const [savingLibrary, setSavingLibrary] = useState(false);
+  const [shareLinks, setShareLinks] = useState<{ internal: string; public: string } | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [librarySaved, setLibrarySaved] = useState(false);
 
   const filterParams = useMemo(
@@ -460,11 +463,37 @@ export default function ReportsPage() {
     setDownloading(true);
     setError(null);
     try {
-      await downloadExportReportXlsx(filterParams);
+      await downloadExportAllDataXlsx(filterParams);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleCreateShareLinks() {
+    setSharing(true);
+    setError(null);
+    try {
+      const res = await createReportShare({
+        name: `GRM report ${dateFrom} – ${dateTo}`,
+        report_kind: tab === "summary" ? "summary" : "overview",
+        date_from: dateFrom,
+        date_to: dateTo,
+        project_ids: selectedProjectIds.length ? selectedProjectIds : undefined,
+        package_ids: selectedPackageIds.length ? selectedPackageIds : undefined,
+        location_codes: selectedLocationCodes.length ? selectedLocationCodes : undefined,
+        include_seah: includeSeah,
+      });
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      setShareLinks({
+        internal: `${origin}${res.internal_url_path}`,
+        public: `${origin}${res.public_url_path}`,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create share links");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -566,11 +595,13 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Reports</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Operational grievance lists and custom exports (Nepal time, max 100 rows per export).
+            Operational grievance lists, flat export, and shareable report links (Nepal time, max 100 rows per export).
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
           {tab !== "quarterly" && tab !== "summary" && (
+            <>
             <button
               type="button"
               onClick={handleExportAll}
@@ -578,8 +609,24 @@ export default function ReportsPage() {
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
             >
               {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Export all (XLSX)
+              Export all data (XLSX)
             </button>
+            <button
+              type="button"
+              onClick={handleCreateShareLinks}
+              disabled={sharing || !dateFrom || !dateTo}
+              className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+            >
+              {sharing ? "Creating…" : "Copy report links"}
+            </button>
+            </>
+          )}
+          </div>
+          {shareLinks && (
+            <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 max-w-md space-y-1">
+              <div><span className="font-medium">Internal:</span>{" "}<a href={shareLinks.internal} className="text-blue-600 underline break-all">{shareLinks.internal}</a></div>
+              <div><span className="font-medium">Public:</span>{" "}<a href={shareLinks.public} className="text-blue-600 underline break-all">{shareLinks.public}</a></div>
+            </div>
           )}
         </div>
       </div>

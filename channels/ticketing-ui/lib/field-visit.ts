@@ -58,6 +58,41 @@ export function isFieldReportEvent(event: {
   );
 }
 
+/** Structured call log with complainant (TP-10). */
+export interface CallReportFormData {
+  callDate: string;
+  callTime: string;
+  personContacted: string;
+  notes: string;
+}
+
+export function nowIsoTime(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export function formatCallReportNote(data: CallReportFormData): string {
+  const lines = [
+    `Call with complainant — ${data.callDate}${data.callTime ? ` ${data.callTime}` : ""}`,
+    `Person contacted: ${data.personContacted.trim() || "—"}`,
+  ];
+  const notes = data.notes.trim();
+  if (notes) {
+    lines.push("", "Notes:", notes);
+  }
+  return lines.join("\n");
+}
+
+export function isCallReportEvent(event: {
+  event_type: string;
+  payload?: Record<string, unknown> | null;
+}): boolean {
+  return (
+    event.event_type === "NOTE_ADDED" &&
+    (event.payload as Record<string, unknown> | null)?.is_call_report === true
+  );
+}
+
 /** User-facing message when field visit save fails (includes API detail when present). */
 export function fieldVisitSaveErrorMessage(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);

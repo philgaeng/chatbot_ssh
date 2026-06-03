@@ -24,6 +24,7 @@ export interface ComposeBarProps {
   attachUploading?: boolean;
   onHashCommand?: (cmd: HashCommand) => void;
   fieldReportOpen?: boolean;
+  canAssign?: boolean;
   disabled?: boolean;
   participants?: MentionParticipant[];
   placeholder?: string;
@@ -52,7 +53,7 @@ function HashCmdIcon({ name, size = 16, strokeWidth = 2, className = "" }: {
 }
 
 function hashCmdRowClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign") {
+  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return FIELD_WORK_AMBER.paletteRow;
   }
   if (cmd.kind === "action") return "text-amber-700 hover:bg-amber-50";
@@ -60,7 +61,7 @@ function hashCmdRowClass(cmd: HashCommand): string {
 }
 
 function hashCmdIconClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign") {
+  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return `${FIELD_WORK_AMBER.paletteIcon} shrink-0`;
   }
   if (cmd.kind === "task") return "text-blue-400 shrink-0";
@@ -76,6 +77,7 @@ export function ComposeBar({
   attachUploading = false,
   onHashCommand,
   fieldReportOpen = false,
+  canAssign = true,
   disabled,
   participants = [],
   placeholder,
@@ -127,8 +129,12 @@ export function ComposeBar({
       return;
     }
     if (cmd.kind === "task_assign") {
-      onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
-      setMentionQuery(null);
+      if (cmd.hash === "report") {
+        onChange("#report @");
+      } else {
+        onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
+      }
+      setMentionQuery(cmd.hash === "report" ? "" : null);
       textareaRef.current?.focus();
       onHashCommand?.(cmd);
       return;
@@ -142,10 +148,13 @@ export function ComposeBar({
     : [];
 
   const filteredHash = hashQuery !== null
-    ? HASH_COMMANDS.filter((c) => !hashQuery || c.hash.startsWith(hashQuery.toLowerCase()))
+    ? HASH_COMMANDS.filter((c) => {
+        if (!canAssign && c.kind === "assign") return false;
+        return !hashQuery || c.hash.startsWith(hashQuery.toLowerCase());
+      })
     : [];
 
-  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "report" || c.kind === "task_assign");
+  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "report" || c.kind === "task_assign" || c.kind === "call_report");
   const taskCmds = filteredHash.filter((c) => c.kind === "task");
   const actionCmds = filteredHash.filter((c) => c.kind === "action" || c.kind === "assign");
   const hasText = value.trim().length > 0;

@@ -5,6 +5,7 @@ import io
 from datetime import date, timedelta
 from typing import Optional
 
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -60,18 +61,44 @@ from ticketing.services.report_export import (
     summary_workbook_bytes,
 )
 from ticketing.services.report_rows import (
+    ALL_DATA_EXPORT_COLUMNS,
     DEFAULT_REPORT_COLUMNS,
     FIELD_LABELS,
     GROUP_BY_KEYS,
     MAX_EXPORT_ROWS,
+    PUBLIC_REPORT_COLUMNS,
     aggregate_rows,
+    build_flat_xlsx_workbook,
     build_xlsx_workbook,
     load_report_rows,
     project_row,
     split_sections,
 )
+from ticketing.services.report_shares import create_report_share
 
 router = APIRouter()
+
+
+class ReportShareCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    report_kind: str = Field("overview", description="overview | summary")
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    project_ids: Optional[list[str]] = None
+    package_ids: Optional[list[str]] = None
+    location_codes: Optional[list[str]] = None
+    include_seah: bool = False
+    library_item_id: Optional[str] = None
+
+
+class ReportShareResponse(BaseModel):
+    id: str
+    name: str
+    internal_url_path: str
+    public_url_path: str
+    internal_token: str
+    public_token: str
+    row_count: int
 
 
 def _parse_id_list(value: Optional[str]) -> list[str] | None:
@@ -466,6 +493,107 @@ def export_report(
         io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/reports/export-all",
+    summary="Export all scoped ticket data — single flat XLSX sheet (TP-07)",
+    response_class=StreamingResponse,
+)
+def export_all_data(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    project_ids: Optional[str] = Query(None),
+    package_ids: Optional[str] = Query(None),
+    location_codes: Optional[str] = Query(None),
+    include_seah: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> StreamingResponse:
+    if date_from is None:
+        date_from = date.today() - timedelta(days=90)
+    if date_to is None:
+        date_to = date.today()
+    if include_seah and not current_user.can_see_seah:
+        include_seah = False
+
+    rows = load_report_rows(
+        db,
+        current_user,
+        date_from=date_from,
+        date_to=date_to,
+        project_ids=_parse_id_list(project_ids),
+        package_ids=_parse_id_list(package_ids),
+        location_codes=_parse_id_list(location_codes),
+        include_seah=include_seah,
+    )
+    public_rows = [project_row(r, ALL_DATA_EXPORT_COLUMNS) for r in rows]
+    _guard_export(db, current_user, "export_all_data", len(public_rows))
+    xlsx_bytes = build_flat_xlsx_workbook(public_rows, ALL_DATA_EXPORT_COLUMNS)
+    filename = f"grm_all_data_{date_from}_{date_to}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post(
+    "/reports/share",
+    response_model=ReportShareResponse,
+    summary="Create internal + public share links for current report filters (TP-05)",
+)
+def create_report_share_links(
+    body: ReportShareCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ReportShareResponse:
+    date_from = body.date_from or (date.today() - timedelta(days=90))
+    date_to = body.date_to or date.today()
+    include_seah = body.include_seah and current_user.can_see_seah
+
+    rows = load_report_rows(
+        db,
+        current_user,
+        date_from=date_from,
+        date_to=date_to,
+        project_ids=body.project_ids,
+        package_ids=body.package_ids,
+        location_codes=body.location_codes,
+        include_seah=include_seah,
+    )
+    rows_internal = [project_row(r, ALL_DATA_EXPORT_COLUMNS) for r in rows]
+    rows_public = [project_row(r, PUBLIC_REPORT_COLUMNS) for r in rows]
+    filters = {
+        "date_from": str(date_from),
+        "date_to": str(date_to),
+        "project_ids": body.project_ids or [],
+        "package_ids": body.package_ids or [],
+        "location_codes": body.location_codes or [],
+        "include_seah": include_seah,
+    }
+    item = create_report_share(
+        db,
+        name=body.name,
+        report_kind=body.report_kind,
+        filters=filters,
+        rows_internal=rows_internal,
+        rows_public=rows_public,
+        columns_internal=ALL_DATA_EXPORT_COLUMNS,
+        columns_public=PUBLIC_REPORT_COLUMNS,
+        created_by=current_user.user_id,
+        library_item_id=body.library_item_id,
+    )
+    # INTEGRATION POINT: ticketing/clients/messaging_api.py — send public URL via SMS
+    return ReportShareResponse(
+        id=item["id"],
+        name=item["name"],
+        internal_url_path=f"/reports/view/{item['internal_token']}",
+        public_url_path=f"/reports/public/{item['public_token']}",
+        internal_token=item["internal_token"],
+        public_token=item["public_token"],
+        row_count=len(rows_internal),
     )
 
 
