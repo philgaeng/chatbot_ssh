@@ -202,3 +202,27 @@ def test_language_button_text_fallback_sets_nepali(client: TestClient):
     texts = [m.get("text", "") for m in body.get("messages", []) if m.get("text")]
     assert any("नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।" in t for t in texts)
 
+
+def test_english_main_menu_after_prior_nepali_session(client: TestClient):
+    """Regression: singleton actions must not keep another session's cached language."""
+    ne_user = "orchestrator-language-cache-ne"
+    en_user = "orchestrator-language-cache-en"
+
+    client.post("/message", json={"user_id": ne_user, "text": ""})
+    client.post("/message", json={"user_id": ne_user, "payload": "/set_nepali"})
+
+    client.post("/message", json={"user_id": en_user, "text": ""})
+    response = client.post(
+        "/message",
+        json={"user_id": en_user, "payload": "/set_english"},
+    )
+
+    assert response.status_code == 200
+    texts = [m.get("text", "") for m in response.json().get("messages", []) if m.get("text")]
+    assert any("Hello! Welcome to the Grievance Management Chatbot." in t for t in texts)
+    assert not any(
+        t.startswith("नमस्कार! गुनासो व्यवस्थापन च्याटबटमा स्वागत छ।")
+        and "Hello! Welcome" not in t
+        for t in texts
+    )
+

@@ -199,15 +199,16 @@ class LanguageHelpersMixin(ActionCommonMixin):
         return len(text.strip()) > min_length
 
     def _update_language_code_and_location_info(self, tracker: Tracker) -> None:
-        """Update the language code from tracker for use in validation methods."""
-        if not hasattr(self, 'language_code'):
-            self.language_code = tracker.get_slot("language_code") or self.DEFAULT_LANGUAGE_CODE
-        if not hasattr(self, 'province'):
-            self.province = tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE
-        if not hasattr(self, 'district'):
-            self.district = tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT
-        if not hasattr(self, 'office'):
-            self.office = tracker.get_slot("complainant_office") or self.DEFAULT_OFFICE
+        """Refresh language and location from tracker every turn.
+
+        Orchestrator action instances are process-wide singletons; caching these
+        on first use caused mixed Nepali/English within one session when the
+        language_code slot changed (e.g. after /set_english).
+        """
+        self.language_code = tracker.get_slot("language_code") or self.DEFAULT_LANGUAGE_CODE
+        self.province = tracker.get_slot("complainant_province") or self.DEFAULT_PROVINCE
+        self.district = tracker.get_slot("complainant_district") or self.DEFAULT_DISTRICT
+        self.office = tracker.get_slot("complainant_office") or self.DEFAULT_OFFICE
 
     def _initialize_language_and_helpers(self, tracker: Tracker) -> None:
         """Initialize language code and update all helper services."""
