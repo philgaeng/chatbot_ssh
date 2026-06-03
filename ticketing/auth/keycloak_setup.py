@@ -241,6 +241,17 @@ def _get_client_uuid(admin: KeycloakAdmin, client_id: str) -> str | None:
     return None
 
 
+def _post_logout_redirect_uris() -> str:
+    """Keycloak stores post-logout URIs as a '##'-joined string, not a list."""
+    return "##".join([
+        "http://localhost:3001/login",
+        "http://localhost:3002/login",
+        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/login",
+        "https://grm.stage.facets-ai.com/login",
+        "https://grm.facets-ai.com/login",
+    ])
+
+
 def setup_clients(admin: KeycloakAdmin) -> str:
     """Create ticketing-ui and ticketing-api clients. Returns ticketing-ui internal UUID.
 
@@ -257,14 +268,7 @@ def setup_clients(admin: KeycloakAdmin) -> str:
         "https://grm.stage.facets-ai.com/*",
         "https://grm.facets-ai.com/*",
     ]
-    # Keycloak stores post-logout URIs as a '##'-joined string, not a list.
-    post_logout_uris = "##".join([
-        "http://localhost:3001/login",
-        "http://localhost:3002/login",
-        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/login",
-        "https://grm.stage.facets-ai.com/login",
-        "https://grm.facets-ai.com/login",
-    ])
+    post_logout_uris = _post_logout_redirect_uris()
     ui_payload = {
         "clientId": CLIENT_UI,
         "publicClient": True,
@@ -291,6 +295,8 @@ def setup_clients(admin: KeycloakAdmin) -> str:
         logger.info("Created client '%s' (uuid=%s)", CLIENT_UI, ui_uuid)
 
     # ticketing-api — confidential; ROPC for in-app login + service account for JWKS
+    # Password login issues tokens with azp=ticketing-api; logout must allow the
+    # same post_logout_redirect_uri on that client (not only ticketing-ui).
     api_payload = {
         "clientId": CLIENT_API,
         "publicClient": False,
@@ -298,6 +304,9 @@ def setup_clients(admin: KeycloakAdmin) -> str:
         "directAccessGrantsEnabled": True,
         "serviceAccountsEnabled": True,
         "clientAuthenticatorType": "client-secret",
+        "attributes": {
+            "post.logout.redirect.uris": post_logout_uris,
+        },
     }
     api_uuid = _get_client_uuid(admin, CLIENT_API)
     if api_uuid:
