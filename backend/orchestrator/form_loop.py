@@ -19,6 +19,14 @@ def _form_ask_fallback_text(slots: Dict[str, Any]) -> str:
     lang = slots.get("language_code") or "en"
     return _FORM_ASK_FALLBACK.get(lang, _FORM_ASK_FALLBACK["en"])
 
+
+def _classification_consent_already_prompted(slots: Dict[str, Any], slot: str) -> bool:
+    """Retrieve action already sent categorization text + Yes/No for this slot."""
+    return (
+        slot == "grievance_classification_consent"
+        and slots.get("grievance_complainant_review") is True
+    )
+
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -265,11 +273,16 @@ async def run_form_turn(
                         next_slot_to_ask,
                         ask_action_name,
                     )
-                    ask_dispatcher.messages.append({
-                        "text": _form_ask_fallback_text(slots),
-                    })
+                    if not _classification_consent_already_prompted(slots, next_slot_to_ask):
+                        ask_dispatcher.messages.append({
+                            "text": _form_ask_fallback_text(slots),
+                        })
             dispatcher.messages.extend(ask_dispatcher.messages)
-            if not dispatcher.messages and next_slot_to_ask:
+            if (
+                not dispatcher.messages
+                and next_slot_to_ask
+                and not _classification_consent_already_prompted(slots, next_slot_to_ask)
+            ):
                 _log.warning(
                     "form ask action returned no messages: loop=%s slot=%s action=%s",
                     session.get("active_loop"),

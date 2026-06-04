@@ -92,10 +92,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
 
 
             elif grievance_summary or grievance_categories:
-                # we are setting the slots to the values of the grievance summary and categories so they can be validated in the next step
                 utterance = self.get_utterance(1)
                 buttons = self.get_buttons(1)
-                dispatcher.utter_message(text=utterance.format(category_text=', '.join(grievance_categories), summary=grievance_summary))
+                dispatcher.utter_message(text=utterance, buttons=buttons)
                 grievance_categories_local = self._get_categories_in_local_language(grievance_categories)
                 grievance_categories_alternative_local = self._get_categories_in_local_language(grievance_categories_alternative)
                 return [SlotSet('grievance_classification_status', self.  GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
@@ -535,6 +534,9 @@ class ActionAskFormGrievanceComplainantReviewGrievanceClassificationConsent(Base
         return "action_ask_form_grievance_complainant_review_grievance_classification_consent"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        # Prompt + Yes/No already sent by action_retrieve_classification_results when ready.
+        if tracker.get_slot("grievance_complainant_review"):
+            return []
         utterance = self.get_utterance(1)
         buttons = self.get_buttons(1)
         dispatcher.utter_message(text=utterance, buttons=buttons)

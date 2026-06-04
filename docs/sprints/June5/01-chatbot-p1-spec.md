@@ -120,22 +120,33 @@ Users must never see a single “recap wall” bubble that mixes success, ID, de
 
 | Phase | When | Chat messages | Banner |
 |-------|------|---------------|--------|
-| **A — Filed** | Immediately after `action_submit_grievance` (OTP/contact complete), **before** categorization review | Three separate bubbles (see below) | **Show** — stays visible through review |
-| **B — Review complete** | After complainant finishes `grievance_review` (`action_grievance_outro`) | Same three-bubble pattern (reference UX in manual QA) | **Still visible** |
+| **A — Filed** | Immediately after `action_submit_grievance` (OTP/contact complete) | Two bubbles (see below); **no** categorization copy | **Show** — stays visible through review |
+| **A2 — Classification ready** | After `action_retrieve_classification_results` finds summary/categories in DB | One bubble + Yes/No (see below) | Still visible |
+| **B — Review complete** | After complainant finishes `grievance_review` (`action_grievance_outro`) | Three-bubble outro (attachments focus) | Still visible |
 
-Phase A is the fix for the post-OTP screenshot (one long confirmation). Phase B is the post–“Validate summary” screenshot (already correct).
+Categorization messaging is **not** part of submit: wait until classification succeeded in the database before prompting the user.
 
 Orchestrator state after Phase A is `grievance_review` (not `done`). The banner must **not** wait for `done`.
 
-### Message sequence (locked) — each phase uses three separate `utter_message` calls
+### Phase A message sequence (submit — two `utter_message` calls)
 
 | # | Content |
 |---|---------|
-| 1 | Explicit **success** — grievance filed |
-| 2 | **Grievance number** (`grievance_id`) prominent (own bubble) |
-| 3 | Follow-up may continue (categorization review, attachments, contact) but filing is **already complete** |
+| 1 | **Success + reference:** filed successfully and `grievance_id` in one bubble |
+| 2 | **On record:** may add attachments or modify grievance; not required to complete filing |
 
-Phase A message 3 should mention that **categorization / summary review** may follow. Phase B message 3 focuses on **attachments** (existing outro copy).
+### Phase A2 (classification retrieve — one `utter_message` + buttons)
+
+| # | Content |
+|---|---------|
+| 1 | Categories/summary generated; helps officer; ask to review if correct |
+| — | Yes / No buttons (same turn) |
+
+Do **not** repeat this text in `action_ask_form_grievance_complainant_review_grievance_classification_consent` when retrieve already prompted.
+
+### Phase B (review outro)
+
+Three separate messages: success → reference → attachment follow-up (existing `action_grievance_outro`).
 
 ### Banner (locked)
 

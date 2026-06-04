@@ -284,23 +284,19 @@ class BaseActionSubmit(BaseAction):
         dispatcher: CollectingDispatcher,
         grievance_data: Dict[str, Any],
     ) -> None:
-        """CB-07 Phase A: three separate chat bubbles + filed event (not recap wall)."""
+        """CB-07 Phase A: filed confirmation only (categorization comes after LLM retrieve)."""
         lang = self.language_code or "en"
         gid = grievance_data.get("grievance_id") or ""
 
-        msg1 = get_utterance_base(
-            "action_submit_grievance", "action_grievance_outro", 1, lang
-        )
-        msg2 = get_utterance_base(
-            "action_submit_grievance", "action_grievance_outro", 2, lang
+        filed_line = get_utterance_base(
+            "action_submit_grievance", "action_submit_grievance", 6, lang
         ).format(grievance_id=gid)
-        msg3 = get_utterance_base(
+        on_record = get_utterance_base(
             "action_submit_grievance", "action_submit_grievance", 5, lang
         )
 
-        dispatcher.utter_message(text=msg1)
-        dispatcher.utter_message(text=msg2)
-        dispatcher.utter_message(text=msg3)
+        dispatcher.utter_message(text=filed_line)
+        dispatcher.utter_message(text=on_record)
         dispatcher.utter_message(
             json_message={
                 "data": {
