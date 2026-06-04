@@ -487,6 +487,9 @@ def create_ticket(
     db.commit()
     db.refresh(ticket)
 
+    if (payload.grievance_summary or "").strip():
+        _enqueue_celery(generate_findings, ticket.ticket_id)
+
     logger.info(
         "Ticket created: ticket_id=%s grievance_id=%s workflow=%s is_seah=%s",
         ticket.ticket_id, payload.grievance_id, workflow.workflow_key, payload.is_seah,

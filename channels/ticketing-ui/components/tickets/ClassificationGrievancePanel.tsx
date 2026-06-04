@@ -4,17 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import type { TicketDetail } from "@/lib/api";
 import { validateTicketClassification } from "@/lib/api";
+import { formatGrievanceCategories } from "@/lib/format-grievance";
 import { formatUserFacingError } from "@/lib/user-messages";
 
 function parseCategoriesForEdit(raw: string | null | undefined): string {
-  if (!raw?.trim()) return "";
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.join(", ");
-  } catch {
-    /* plain string */
-  }
-  return raw;
+  return formatGrievanceCategories(raw);
 }
 
 function categoriesToPayload(text: string): string {
@@ -116,6 +110,13 @@ export function ClassificationGrievancePanel({
           ) : null}
           <span>{statusLabel}</span>
         </div>
+      )}
+
+      {!needsOfficer && parseCategoriesForEdit(ticket.grievance_categories) && (
+        <p className="text-sm text-gray-800 mb-3">
+          <span className="font-semibold text-gray-900">Category:</span>{" "}
+          {parseCategoriesForEdit(ticket.grievance_categories)}
+        </p>
       )}
 
       {ticket.grievance_description ? (

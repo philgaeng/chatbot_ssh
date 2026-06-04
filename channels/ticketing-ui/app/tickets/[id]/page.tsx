@@ -39,6 +39,7 @@ import {
 import type { ResolutionCategoryCode }        from "@/lib/resolution";
 import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
 import { submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { formatGrievanceCategories } from "@/lib/format-grievance";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { PII_MASK } from "@/lib/pii-display";
@@ -483,18 +484,61 @@ function FindingsCard({
 }) {
   const canView = roleKeys.some((r) => FINDINGS_ROLES.has(r));
   const [regenerating, setRegenerating] = useState(false);
-  const [queuedMsg, setQueuedMsg]       = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const categoryLabel = formatGrievanceCategories(ticket.grievance_categories);
+  const validatedSummary = ticket.grievance_summary?.trim() ?? "";
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ticket.ai_summary_en) {
+      setStatusMsg(null);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+  }, [ticket.ai_summary_en]);
 
   if (!canView) return null;
 
+  function startPolling() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    let attempts = 0;
+    pollRef.current = setInterval(() => {
+      attempts += 1;
+      void onRefresh();
+      if (attempts >= 15) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        setStatusMsg((prev) =>
+          prev?.includes("Generating")
+            ? "Still generating — try Refresh in the case header or click Regenerate again."
+            : prev,
+        );
+      }
+    }, 2000);
+  }
+
   async function handleRegenerate() {
     setRegenerating(true);
-    setQueuedMsg(null);
+    setStatusMsg(null);
     try {
       await generateFindings(ticket.ticket_id);
-      setQueuedMsg("Generation queued — this may take up to 30 s. Refresh to see the updated summary.");
+      if (!ticket.ai_summary_en) {
+        setStatusMsg("Generating AI case summary…");
+        startPolling();
+      } else {
+        await onRefresh();
+      }
     } catch (e) {
-      setQueuedMsg(`Error: ${String(e)}`);
+      setStatusMsg(formatUserFacingError(e).message);
     } finally {
       setRegenerating(false);
     }
@@ -507,16 +551,40 @@ function FindingsCard({
           <IconFindings size={14} strokeWidth={2} className="text-indigo-500" />
           Findings
         </h2>
-        <button onClick={handleRegenerate} disabled={regenerating}
+        <button
+          type="button"
+          onClick={() => void handleRegenerate()}
+          disabled={regenerating}
           className="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
         >
           <IconRegenerate size={11} strokeWidth={2} className={regenerating ? "animate-spin" : ""} />
-          {regenerating ? "Queuing…" : "Regenerate"}
+          {regenerating ? "Queuing…" : ticket.ai_summary_en ? "Regenerate" : "Generate"}
         </button>
       </div>
-      {queuedMsg && <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 mb-2">{queuedMsg}</div>}
+
+      {(categoryLabel || validatedSummary) && (
+        <div className="mb-3 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 space-y-1">
+          <p className="text-[11px] font-semibold text-indigo-800 uppercase tracking-wide">
+            Validated in chatbot
+          </p>
+          {categoryLabel && (
+            <p className="text-sm text-indigo-900">
+              <span className="font-medium">Category:</span> {categoryLabel}
+            </p>
+          )}
+          {validatedSummary && (
+            <p className="text-sm text-gray-800 leading-snug">{validatedSummary}</p>
+          )}
+        </div>
+      )}
+
+      {statusMsg && (
+        <div className="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1.5 mb-2">{statusMsg}</div>
+      )}
+
       {ticket.ai_summary_en ? (
         <>
+          <p className="text-[11px] font-medium text-gray-500 uppercase mb-1">AI case summary</p>
           <p className="text-sm text-gray-700 leading-relaxed">{ticket.ai_summary_en}</p>
           {ticket.ai_summary_updated_at && (
             <p className="text-xs text-gray-400 mt-2">
@@ -525,8 +593,9 @@ function FindingsCard({
           )}
         </>
       ) : (
-        <p className="text-xs text-gray-400 italic">
-          No summary yet. Click Regenerate to generate one.
+        <p className="text-xs text-gray-500">
+          No AI summary yet. It is generated automatically for new cases; use Generate if this case
+          was filed before that was enabled.
         </p>
       )}
     </div>

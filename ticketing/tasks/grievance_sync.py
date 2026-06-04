@@ -190,6 +190,7 @@ def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
 def sync_grievances(self) -> dict:
     db: Session = SessionLocal()
     created = updated = skipped = errors = 0
+    created_ticket_ids: list[str] = []
 
     try:
         grievances = _fetch_all_grievance_rows(db)
@@ -217,6 +218,7 @@ def sync_grievances(self) -> dict:
                     if ticket:
                         tickets_by_gid[gid] = ticket
                         created += 1
+                        created_ticket_ids.append(ticket.ticket_id)
                         logger.info(
                             "grievance_sync: created ticket %s for %s",
                             ticket.ticket_id, gid,
@@ -230,6 +232,18 @@ def sync_grievances(self) -> dict:
         if created > 0 or updated > 0:
             db.commit()
             logger.info("grievance_sync: committed created=%d updated=%d", created, updated)
+            if created_ticket_ids:
+                from ticketing.tasks.llm import generate_findings
+
+                for tid in created_ticket_ids:
+                    try:
+                        generate_findings.delay(tid)
+                    except Exception as exc:
+                        logger.warning(
+                            "grievance_sync: could not queue findings for %s: %s",
+                            tid,
+                            exc,
+                        )
 
     except Exception as exc:
         db.rollback()
