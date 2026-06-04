@@ -54,6 +54,10 @@ window.lastBotQuickReplies = null;
 window.lastOrchestratorNextState = null;
 /** `session` = Close session only; `browser` = Close browser only (SEAH / sensitive). */
 window.closeControlsMode = "session";
+/** True after server emits grievance_filed (submit); banner stays through review. */
+window.grievanceFiledPhase = false;
+
+const POST_FILED_ORCHESTRATOR_STATES = new Set(["grievance_review", "done"]);
 
 let grievanceFiledBanner;
 let grievanceFiledBannerText;
@@ -243,8 +247,27 @@ function filterCloseQuickReplies(buttons) {
 function showFiledBanner(grievanceId) {
   if (!grievanceFiledBanner || !grievanceId) return;
   const label = get("filed_banner.label");
-  grievanceFiledBannerText.textContent = `${label} ${grievanceId}`;
+  grievanceFiledBannerText.innerHTML = `${label} <strong>${grievanceId}</strong>`;
   grievanceFiledBanner.classList.remove("hidden");
+}
+
+function markGrievanceFiled(grievanceId) {
+  window.grievanceFiledPhase = true;
+  if (grievanceId) {
+    window.grievanceId = grievanceId;
+    uiActions.setGrievanceId(grievanceId);
+  }
+  showFiledBanner(window.grievanceId);
+}
+
+function maybeShowFiledBannerForState(nextState) {
+  if (
+    window.grievanceFiledPhase &&
+    window.grievanceId &&
+    POST_FILED_ORCHESTRATOR_STATES.has(nextState)
+  ) {
+    showFiledBanner(window.grievanceId);
+  }
 }
 
 function hideFiledBanner() {
@@ -299,14 +322,13 @@ function handleOrchestratorResponse(response) {
     }
   });
 
-  if (next_state === "done" && window.grievanceId) {
-    showFiledBanner(window.grievanceId);
-  }
+  maybeShowFiledBannerForState(next_state);
 }
 
 window.updateCloseControlsVisibility = updateCloseControlsVisibility;
 window.showFiledBanner = showFiledBanner;
 window.hideFiledBanner = hideFiledBanner;
+window.markGrievanceFiled = markGrievanceFiled;
 
 // Send introduction message (async: restSendMessage returns a Promise; must await
 // before setting introductionSent, otherwise refresh/reopen can skip retries while
@@ -585,6 +607,7 @@ function resetFrontendState() {
   window.lastBotQuickReplies = null;
   window.lastOrchestratorNextState = null;
   window.closeControlsMode = "session";
+  window.grievanceFiledPhase = false;
   attachmentInvitationShown = false;
   hideFiledBanner();
   updateCloseControlsVisibility();
@@ -624,6 +647,7 @@ window.handleFileAnotherGrievance = async function () {
   const payload =
     window.closeControlsMode === "browser" ? "/seah_intake" : "/new_grievance";
   hideFiledBanner();
+  window.grievanceFiledPhase = false;
   window.grievanceId = null;
   window.lastOrchestratorNextState = null;
   window.lastBotMessageText = "";
@@ -1109,7 +1133,7 @@ function updateFileStatus(fileId, data) {
         if (result.grievance_id) {
           window.grievanceId = result.grievance_id;
           uiActions.setGrievanceId(result.grievance_id);
-          if (window.lastOrchestratorNextState === "done") {
+          if (window.grievanceFiledPhase) {
             showFiledBanner(result.grievance_id);
           }
         }

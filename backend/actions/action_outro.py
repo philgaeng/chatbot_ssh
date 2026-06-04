@@ -134,6 +134,15 @@ class ActionGrievanceOutro(BaseActionSubmit):
                     BUTTONS_FILE_ANOTHER_SEAH.get(language_code, BUTTONS_FILE_ANOTHER_SEAH["en"])
                 )
             dispatcher.utter_message(text="", buttons=buttons)
+            if grievance_id:
+                dispatcher.utter_message(
+                    json_message={
+                        "data": {
+                            "event_type": "grievance_filed",
+                            "grievance_id": grievance_id,
+                        }
+                    }
+                )
 
             grievance_data = self._prepare_grievance_outro_data(tracker)
             self.db_manager.submit_grievance_to_db(grievance_data)

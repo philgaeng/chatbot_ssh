@@ -84,6 +84,27 @@ FAILED = status_codes['FAILED']
 RETRYING = status_codes['RETRYING']
 
 
+def _persist_classification_failed_if_final(task_self, grievance_id: str) -> None:
+    """Set grievance_classification_status=LLM_failed only after Celery retries are exhausted."""
+    max_retries = getattr(task_self, "max_retries", None)
+    if max_retries is None:
+        max_retries = 3
+    if task_self.request.retries < max_retries:
+        return
+    try:
+        from backend.config.classification_status import LLM_FAILED
+        from backend.services.database_services.postgres_services import DatabaseManager
+
+        DatabaseManager().update_grievance(
+            grievance_id,
+            {"grievance_classification_status": LLM_FAILED},
+        )
+    except Exception as exc:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "Could not persist LLM_failed for %s: %s", grievance_id, exc
+        )
+
 
 #---------------------------------REGISTERED TASKS---------------------------------
 # File Processing Tasks
@@ -621,7 +642,11 @@ def classify_and_summarize_grievance_task(self,
             raise ValueError(f"No result found in classify_and_summarize_grievance: {values}")
 
         # Flatten the classification results into the main result for frontend
-        values.update({'grievance_description': grievance_description})
+        from backend.config.classification_status import LLM_GENERATED
+        values.update({
+            'grievance_description': grievance_description,
+            'grievance_classification_status': LLM_GENERATED,
+        })
         result = {'status': SUCCESS,  
                   'operation': 'classification',
                   'entity_key': entity_key,
@@ -638,6 +663,7 @@ def classify_and_summarize_grievance_task(self,
         
     except Exception as e:
         error = "error during classification by LLM: " + str(e) #adding context to error message
+        _persist_classification_failed_if_final(self, grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 
@@ -660,6 +686,7 @@ def classify_and_summarize_grievance_task(self,
         print(f"Database operation completed: {db_result}")
     except Exception as e:
         error = "Error in classify_and_summarize_grievance_task during database operation: " + str(e) #adding context to error message
+        _persist_classification_failed_if_final(self, grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 

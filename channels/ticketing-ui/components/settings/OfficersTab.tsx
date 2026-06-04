@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listOfficerRoster,
   deleteOfficer,
+  resendOfficerInvite,
   listProjects,
   listPackages,
   type OfficerRosterEntry,
@@ -60,6 +61,7 @@ export function OfficersTab({
   const [showInvite, setShowInvite] = useState(false);
   const [editOfficer, setEditOfficer] = useState<OfficerRosterEntry | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const [searchQ, setSearchQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -146,6 +148,21 @@ export function OfficersTab({
     setSuccessMsg(`Invite sent to ${email}.`);
     setTimeout(() => setSuccessMsg(null), 8000);
     loadRoster();
+  }
+
+  async function handleResendInvite(o: OfficerRosterEntry) {
+    const label = o.email ?? o.user_id;
+    setResendingId(o.user_id);
+    setLoadError(null);
+    try {
+      const result = await resendOfficerInvite(o.user_id);
+      setSuccessMsg(result.message || `Invite resent to ${label}.`);
+      setTimeout(() => setSuccessMsg(null), 8000);
+    } catch (e: unknown) {
+      setLoadError(e instanceof Error ? e.message : "Resend invite failed");
+    } finally {
+      setResendingId(null);
+    }
   }
 
   async function handleDeleteOfficer(o: OfficerRosterEntry) {
@@ -335,6 +352,17 @@ export function OfficersTab({
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
+                      {status === "invited" && (
+                        <button
+                          type="button"
+                          onClick={() => handleResendInvite(o)}
+                          disabled={resendingId === o.user_id}
+                          className="text-sm text-amber-800 hover:underline font-medium mr-3 disabled:opacity-50"
+                          title="Send a new setup email (12-hour link; check spam)"
+                        >
+                          {resendingId === o.user_id ? "Sending…" : "Resend invite"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setEditOfficer(o)}

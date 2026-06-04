@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutList } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { AuthApiError, requestPasswordResetApi } from "@/lib/auth/auth-api";
+import { AuthApiError, requestInviteSetupLinkApi, requestPasswordResetApi } from "@/lib/auth/auth-api";
 import { SESSION_EXPIRED_QUERY } from "@/lib/auth/session-expired";
 import { readRememberedLoginEmail, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { defaultQueuePath } from "@/lib/mobile-routes";
 
-type Step = "email" | "password" | "forgot" | "forgot-sent";
+type Step = "email" | "password" | "forgot" | "forgot-sent" | "invite-resend" | "invite-sent";
 
 const BYPASS = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
 
@@ -89,6 +89,21 @@ function LoginContent() {
     }
   }
 
+  async function submitInviteResend(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const message = await requestInviteSetupLinkApi(normalizeEmail(email));
+      setInfo(message);
+      setStep("invite-sent");
+    } catch (err) {
+      setError(err instanceof AuthApiError ? err.message : "Could not send setup email.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitForgot(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -138,7 +153,7 @@ function LoginContent() {
           </Alert>
         )}
 
-        {info && step === "forgot-sent" && (
+        {info && (step === "forgot-sent" || step === "invite-sent") && (
           <Alert tone="green" title="Check your email">
             {info}
           </Alert>
@@ -162,6 +177,17 @@ function LoginContent() {
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm"
             >
               Continue
+            </button>
+            <button
+              type="button"
+              className="w-full text-sm text-amber-800 hover:underline"
+              onClick={() => {
+                setError(null);
+                setInfo(null);
+                setStep("invite-resend");
+              }}
+            >
+              Invited but your setup link expired?
             </button>
           </form>
         )}
@@ -255,7 +281,44 @@ function LoginContent() {
           </form>
         )}
 
-        {step === "forgot-sent" && (
+        {step === "invite-resend" && (
+          <form onSubmit={submitInviteResend} className="space-y-4 text-left">
+            <p className="text-sm text-gray-600">
+              Enter the email your administrator invited. If your account is still pending setup,
+              we will send a new link (valid 12 hours). Check spam if you do not see it.
+            </p>
+            <Field label="Officer email">
+              <input
+                type="email"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@organisation.org"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </Field>
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg text-sm"
+            >
+              {busy ? "Sending…" : "Send new setup link"}
+            </button>
+            <button
+              type="button"
+              className="w-full text-sm text-gray-500 hover:underline"
+              onClick={() => {
+                setError(null);
+                setStep("email");
+              }}
+            >
+              Back to sign in
+            </button>
+          </form>
+        )}
+
+        {(step === "forgot-sent" || step === "invite-sent") && (
           <div className="space-y-4 text-left">
             <button
               type="button"
@@ -263,7 +326,7 @@ function LoginContent() {
               onClick={() => {
                 setInfo(null);
                 setPassword("");
-                setStep("password");
+                setStep(step === "invite-sent" ? "email" : "password");
               }}
             >
               Back to sign in
@@ -274,6 +337,19 @@ function LoginContent() {
         <p className="text-xs text-gray-400 mt-6 text-center">
           Authorised officers only.
           <br />
+          Already invited?{" "}
+          <button
+            type="button"
+            className="text-amber-700 hover:underline"
+            onClick={() => {
+              setError(null);
+              setInfo(null);
+              setStep("invite-resend");
+            }}
+          >
+            Request a new setup link
+          </button>
+          {" · "}
           Contact your administrator if you need access.
         </p>
       </div>

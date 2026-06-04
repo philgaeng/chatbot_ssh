@@ -25,8 +25,16 @@ export function handleCustomPayload(custom) {
 
   if (custom.grievance_id) {
     uiActions.setGrievanceId(custom.grievance_id);
-    if (typeof window.showFiledBanner === "function" && window.lastOrchestratorNextState === "done") {
-      window.showFiledBanner(custom.grievance_id);
+  }
+
+  if (custom.event_type === "grievance_filed" && custom.grievance_id) {
+    if (typeof window.markGrievanceFiled === "function") {
+      window.markGrievanceFiled(custom.grievance_id);
+    }
+  }
+  if (custom.data?.event_type === "grievance_filed" && custom.data?.grievance_id) {
+    if (typeof window.markGrievanceFiled === "function") {
+      window.markGrievanceFiled(custom.data.grievance_id);
     }
   }
 

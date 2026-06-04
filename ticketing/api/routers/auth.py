@@ -1,12 +1,16 @@
 """Public auth endpoints (login + password reset). No JWT required."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from ticketing.api.dependencies import get_db
 from ticketing.services.auth_login import (
+    INVITE_SETUP_LINK_GENERIC,
     AuthLoginError,
     login_with_password,
+    request_invite_setup_link,
     request_password_reset,
     reset_password_with_token,
 )
@@ -30,6 +34,10 @@ class LoginResponse(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=254)
     redirect_base: str = Field(..., min_length=8, max_length=256)
+
+
+class RequestInviteLinkRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -78,6 +86,23 @@ def auth_forgot_password(body: ForgotPasswordRequest) -> MessageResponse:
     return MessageResponse(
         message="If an account exists for that email, we sent password reset instructions.",
     )
+
+
+@router.post(
+    "/auth/request-invite-link",
+    response_model=MessageResponse,
+    summary="Self-service: request a new officer setup email (expired invite link)",
+)
+def auth_request_invite_link(
+    body: RequestInviteLinkRequest,
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    try:
+        request_invite_setup_link(body.email, db)
+        db.commit()
+    except AuthLoginError as exc:
+        raise _http_error(exc) from exc
+    return MessageResponse(message=INVITE_SETUP_LINK_GENERIC)
 
 
 @router.post(

@@ -1,25 +1,16 @@
 """
-Grievance sync task — polls public.grievances for newly submitted grievances
-and auto-creates ticketing.tickets entries.
+Grievance sync task — keeps ticketing.tickets aligned with public.grievances.
 
 Runs every 2 minutes via Celery Beat (see celery_app.py beat_schedule).
 
-Design:
-  - Reads public.grievances WHERE is_temporary = false (fully submitted)
-  - Skips any grievance_id already in ticketing.tickets (idempotent)
-  - Uses grievance_sensitive_issue = True to route to SEAH workflow
-  - session_id stored as None — INTEGRATION POINT for session lookup
-
-SEAH INTEGRATION POINT:
-  When feat/seah-sensitive-intake is merged, there will be a dedicated
-  SEAH submissions table (separate from public.grievances). Add a second
-  query block here to sync those as well, also with is_seah=True.
-
-Does NOT join ticketing.* and public.* — two separate queries, compliant
-with the "no cross-schema joins" architecture rule.
+Design (TP-14 / 04-classification-status-spec):
+  - No is_temporary filter on read
+  - UPDATE existing tickets when summary/categories/location change
+  - CREATE tickets for grievances not yet in ticketing.tickets (idempotent)
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -32,20 +23,15 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
+from ticketing.services.grievance_content import _coerce_categories
 
 logger = logging.getLogger(__name__)
 
-
-# ── Constants ─────────────────────────────────────────────────────────────────
-
-# Default org for KL Road project — used when grievance has no org context
 DEFAULT_ORG_ID = "DOR"
 DEFAULT_PROJECT_CODE = "KL_ROAD"
 DEFAULT_CHATBOT_ID = "nepal_grievance_bot"
 DEFAULT_COUNTRY_CODE = "NP"
 
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -63,7 +49,6 @@ def _lookup_workflow(
     is_seah: bool,
     priority: str,
 ) -> Optional[WorkflowDefinition]:
-    """Resolve workflow (project-linked first, then legacy assignments)."""
     from ticketing.engine.workflow_engine import resolve_workflow
 
     return resolve_workflow(
@@ -91,19 +76,7 @@ def _map_priority(grievance_high_priority: bool, is_seah: bool) -> str:
     return "HIGH" if grievance_high_priority else "NORMAL"
 
 
-def _fetch_new_grievances(db: Session) -> list[dict]:
-    """
-    Query public.grievances for fully-submitted grievances not yet in ticketing.tickets.
-
-    Uses two separate queries (no cross-schema JOIN — architecture rule).
-    """
-    # Step 1: get all grievance_ids already tracked
-    existing = db.execute(
-        select(Ticket.grievance_id)
-    ).scalars().all()
-    existing_set = set(existing)
-
-    # Step 2: read new submitted grievances from public schema (read-only)
+def _fetch_all_grievance_rows(db: Session) -> list[dict]:
     result = db.execute(text("""
         SELECT
             grievance_id,
@@ -116,34 +89,47 @@ def _fetch_new_grievances(db: Session) -> list[dict]:
             grievance_creation_date,
             source
         FROM public.grievances
-        WHERE is_temporary = false
         ORDER BY grievance_creation_date ASC
     """))
-    rows = result.mappings().all()
+    return [dict(r) for r in result.mappings().all()]
 
-    return [dict(r) for r in rows if r["grievance_id"] not in existing_set]
+
+def _cache_needs_update(ticket: Ticket, g: dict) -> bool:
+    cats = _coerce_categories(g.get("grievance_categories"))
+    if g.get("grievance_summary") and ticket.grievance_summary != g.get("grievance_summary"):
+        return True
+    if cats and ticket.grievance_categories != cats:
+        return True
+    if g.get("grievance_location") and ticket.grievance_location != g.get("grievance_location"):
+        return True
+    return False
+
+
+def _apply_cache(ticket: Ticket, g: dict) -> None:
+    ticket.grievance_summary = g.get("grievance_summary") or ticket.grievance_summary
+    cats = _coerce_categories(g.get("grievance_categories"))
+    if cats:
+        ticket.grievance_categories = cats
+    if g.get("grievance_location"):
+        ticket.grievance_location = g.get("grievance_location")
+    ticket.updated_at = _now()
 
 
 def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
-    """
-    Create a single Ticket + CREATED event from a public.grievances row.
-    Returns the Ticket on success, None if workflow cannot be resolved.
-    """
     is_seah = bool(g.get("grievance_sensitive_issue", False))
     priority = _map_priority(bool(g.get("grievance_high_priority", False)), is_seah)
 
-    # Resolve workflow
     workflow = _lookup_workflow(
         db=db,
         organization_id=DEFAULT_ORG_ID,
-        location_code=None,  # grievances table has no location_code column
+        location_code=None,
         project_code=DEFAULT_PROJECT_CODE,
         is_seah=is_seah,
         priority=priority,
     )
     if not workflow:
         logger.warning(
-            "sync: no workflow found for grievance %s (is_seah=%s, priority=%s) — skipping",
+            "sync: no workflow for grievance %s (is_seah=%s, priority=%s)",
             g["grievance_id"], is_seah, priority,
         )
         return None
@@ -151,15 +137,12 @@ def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
     first_step = _first_step(db, workflow.workflow_id)
     ticket_id = _new_id()
     now = _now()
+    cats = _coerce_categories(g.get("grievance_categories"))
 
     ticket = Ticket(
         ticket_id=ticket_id,
         grievance_id=g["grievance_id"],
         complainant_id=g.get("complainant_id"),
-        # session_id: not available in public.grievances — stored as None.
-        # INTEGRATION POINT: to enable chatbot reply, look up the Rasa sender_id
-        # from public.events WHERE data::jsonb @> '{"value": {"grievance_id": "<id>"}}'
-        # and store it here. See docs/claude-tickets/session-3-cursor-handoff.md.
         session_id=None,
         chatbot_id=DEFAULT_CHATBOT_ID,
         country_code=DEFAULT_COUNTRY_CODE,
@@ -176,7 +159,7 @@ def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
         is_deleted=False,
         step_started_at=now,
         grievance_summary=g.get("grievance_summary"),
-        grievance_categories=g.get("grievance_categories"),
+        grievance_categories=cats,
         grievance_location=g.get("grievance_location"),
         created_at=g.get("grievance_creation_date") or now,
         updated_at=now,
@@ -198,8 +181,6 @@ def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
     return ticket
 
 
-# ── Celery task ───────────────────────────────────────────────────────────────
-
 @shared_task(
     bind=True,
     name="ticketing.tasks.grievance_sync.sync_grievances",
@@ -207,53 +188,68 @@ def _create_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
     default_retry_delay=60,
 )
 def sync_grievances(self) -> dict:
-    """
-    Poll public.grievances for new fully-submitted grievances and create tickets.
-
-    Also checks for SEAH-specific tables once feat/seah-sensitive-intake is merged.
-    INTEGRATION POINT: add second query block for SEAH table when available.
-
-    Returns summary dict: {"created": N, "skipped": N, "errors": N}
-    """
     db: Session = SessionLocal()
-    created = skipped = errors = 0
+    created = updated = skipped = errors = 0
+    created_ticket_ids: list[str] = []
 
     try:
-        new_grievances = _fetch_new_grievances(db)
+        grievances = _fetch_all_grievance_rows(db)
+        if not grievances:
+            return {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
 
-        if not new_grievances:
-            logger.debug("grievance_sync: no new submissions found")
-            return {"created": 0, "skipped": 0, "errors": 0}
+        tickets_by_gid = {
+            t.grievance_id: t
+            for t in db.execute(select(Ticket).where(Ticket.is_deleted.is_(False))).scalars().all()
+        }
 
-        logger.info("grievance_sync: found %d new grievance(s) to process", len(new_grievances))
-
-        for g in new_grievances:
+        for g in grievances:
+            gid = g["grievance_id"]
             try:
-                ticket = _create_ticket_from_grievance(db, g)
-                if ticket:
-                    created += 1
-                    logger.info(
-                        "grievance_sync: created ticket %s for grievance %s (is_seah=%s)",
-                        ticket.ticket_id, g["grievance_id"], ticket.is_seah,
-                    )
+                existing = tickets_by_gid.get(gid)
+                if existing:
+                    if _cache_needs_update(existing, g):
+                        _apply_cache(existing, g)
+                        updated += 1
+                        logger.info("grievance_sync: updated cache for ticket %s", existing.ticket_id)
+                    else:
+                        skipped += 1
                 else:
-                    skipped += 1
+                    ticket = _create_ticket_from_grievance(db, g)
+                    if ticket:
+                        tickets_by_gid[gid] = ticket
+                        created += 1
+                        created_ticket_ids.append(ticket.ticket_id)
+                        logger.info(
+                            "grievance_sync: created ticket %s for %s",
+                            ticket.ticket_id, gid,
+                        )
+                    else:
+                        skipped += 1
             except Exception as exc:
                 errors += 1
-                logger.error(
-                    "grievance_sync: error processing %s: %s",
-                    g.get("grievance_id"), exc, exc_info=True,
-                )
+                logger.error("grievance_sync: %s: %s", gid, exc, exc_info=True)
 
-        if created > 0:
+        if created > 0 or updated > 0:
             db.commit()
-            logger.info("grievance_sync: committed %d new ticket(s)", created)
+            logger.info("grievance_sync: committed created=%d updated=%d", created, updated)
+            if created_ticket_ids:
+                from ticketing.tasks.llm import generate_findings
+
+                for tid in created_ticket_ids:
+                    try:
+                        generate_findings.delay(tid)
+                    except Exception as exc:
+                        logger.warning(
+                            "grievance_sync: could not queue findings for %s: %s",
+                            tid,
+                            exc,
+                        )
 
     except Exception as exc:
         db.rollback()
-        logger.exception("grievance_sync: fatal error — rolled back")
+        logger.exception("grievance_sync: fatal error")
         raise self.retry(exc=exc)
     finally:
         db.close()
 
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {"created": created, "updated": updated, "skipped": skipped, "errors": errors}

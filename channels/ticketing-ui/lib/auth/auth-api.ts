@@ -46,6 +46,17 @@ export async function loginWithPasswordApi(email: string, password: string): Pro
   return resp.json() as Promise<AuthTokens>;
 }
 
+export async function requestInviteSetupLinkApi(email: string): Promise<string> {
+  const resp = await fetch("/api/v1/auth/request-invite-link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!resp.ok) throw await parseAuthError(resp);
+  const data = (await resp.json()) as { message: string };
+  return data.message;
+}
+
 export async function requestPasswordResetApi(email: string): Promise<string> {
   const resp = await fetch("/api/v1/auth/forgot-password", {
     method: "POST",

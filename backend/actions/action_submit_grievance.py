@@ -12,6 +12,13 @@ from backend.actions.utils.ticketing_dispatch import dispatch_ticket
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 from backend.shared_functions.location_mapping import resolve_location_payload
+from backend.config.classification_status import (
+    COMPLAINANT_CONFIRMED,
+    LLM_GENERATED,
+    LLM_SKIPPED,
+    normalize_classification_status,
+)
+from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 
 
 
@@ -86,10 +93,12 @@ class BaseActionSubmit(BaseAction):
                  ]
 
         if review:
-            review_keys = ["grievance_categories",
-                           "grievance_summary",
-                           "grievance_sensitive_issue"]
-
+            review_keys = [
+                "grievance_categories",
+                "grievance_summary",
+                "grievance_sensitive_issue",
+                "grievance_classification_status",
+            ]
             keys = keys + review_keys
         
         
@@ -124,9 +133,39 @@ class BaseActionSubmit(BaseAction):
         grievance_data = self._update_key_values_for_db_storage(grievance_data)
         if grievance_data.get("party_contacts") == self.NOT_PROVIDED:
             grievance_data["party_contacts"] = {}
+        grievance_data["grievance_classification_status"] = (
+            self._classification_status_for_submit(tracker, grievance_data)
+        )
         self.logger.info(f"Grievance data: {grievance_data}")
                 
         return grievance_data
+
+    def _classification_status_for_submit(
+        self, tracker: Tracker, grievance_data: Dict[str, Any]
+    ) -> str:
+        """Map session slots to DB classification status on final submit."""
+        slot_status = tracker.get_slot("grievance_classification_status")
+        cm = self.GRIEVANCE_CLASSIFICATION_STATUS.get("complainant_confirmed", COMPLAINANT_CONFIRMED)
+        if slot_status == cm:
+            return COMPLAINANT_CONFIRMED
+        cat_st = tracker.get_slot("grievance_categories_status")
+        sum_st = tracker.get_slot("grievance_summary_status")
+        if cat_st == cm and sum_st == cm:
+            return COMPLAINANT_CONFIRMED
+        normalized = normalize_classification_status(slot_status)
+        if normalized and normalized not in (self.SKIP_VALUE, self.NOT_PROVIDED, "pending"):
+            return normalized
+        if not self.LLM_CLASSIFICATION:
+            return LLM_SKIPPED
+        gid = tracker.get_slot("grievance_id")
+        if gid:
+            row = self.db_manager.get_grievance_by_id(gid) or {}
+            db_status = normalize_classification_status(
+                row.get("grievance_classification_status")
+            )
+            if db_status:
+                return db_status
+        return "pending"
 
     def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update the values of the grievance data for the database storage."""
@@ -239,19 +278,44 @@ class BaseActionSubmit(BaseAction):
         if has_files:
             message = message + files_info
         return message
+
+    def _emit_chat_filed_confirmation(
+        self,
+        dispatcher: CollectingDispatcher,
+        grievance_data: Dict[str, Any],
+    ) -> None:
+        """CB-07 Phase A: filed confirmation only (categorization comes after LLM retrieve)."""
+        lang = self.language_code or "en"
+        gid = grievance_data.get("grievance_id") or ""
+
+        filed_line = get_utterance_base(
+            "action_submit_grievance", "action_submit_grievance", 6, lang
+        ).format(grievance_id=gid)
+        on_record = get_utterance_base(
+            "action_submit_grievance", "action_submit_grievance", 5, lang
+        )
+
+        dispatcher.utter_message(text=filed_line)
+        dispatcher.utter_message(text=on_record)
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "event_type": "grievance_filed",
+                    "grievance_id": gid,
+                }
+            }
+        )
     
     async def _send_grievance_recap_sms(self, 
                                   grievance_data: Dict[str, Any],
                                   dispatcher: CollectingDispatcher) -> None:
-        """Send a recap sms to the user."""
+        """Send filed confirmation in chat (3 bubbles) and optional SMS recap."""
         try:
-            # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
                 grievance_data
             )
-                
-            # Send confirmation message
-            dispatcher.utter_message(text=confirmation_message)
+
+            self._emit_chat_filed_confirmation(dispatcher, grievance_data)
             
             if grievance_data.get('otp_verified') == True:
                 #send sms
@@ -443,6 +507,12 @@ class ActionSubmitSeah(BaseActionSubmit):
                 dispatcher.utter_message(
                     text=f"तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
                 )
+                dispatcher.utter_message(
+                    text=(
+                        "तपाईंको रिपोर्ट दर्ता भइसकेको छ। आवश्यक परेमा तपाईं यस च्याटमा "
+                        "जारी राख्न सक्नुहुन्छ।"
+                    )
+                )
             else:
                 dispatcher.utter_message(
                     text="Your confidential SEAH report has been filed successfully."
@@ -450,6 +520,19 @@ class ActionSubmitSeah(BaseActionSubmit):
                 dispatcher.utter_message(
                     text=f"Your reference number is **{grievance_ref}**."
                 )
+                dispatcher.utter_message(
+                    text=(
+                        "Your report is on record. You may continue in this chat if needed."
+                    )
+                )
+            dispatcher.utter_message(
+                json_message={
+                    "data": {
+                        "event_type": "grievance_filed",
+                        "grievance_id": grievance_ref,
+                    }
+                }
+            )
 
             return [
                 SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"]),

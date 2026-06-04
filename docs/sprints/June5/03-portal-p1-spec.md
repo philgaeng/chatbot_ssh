@@ -1,7 +1,7 @@
 # Portal P1 — implementation spec
 
 **Sprint:** June5  
-**Tickets:** TP-01, TP-05, TP-07, TP-08, TP-09, TP-10, TP-11, TP-12, **TP-13** (follow-on UX — see [`agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md))  
+**Tickets:** TP-01, TP-05, TP-07, TP-08, TP-09, TP-10, TP-11, TP-12, **TP-13**, **TP-14** (grievance classification display + officer validation)  
 **Brief:** [voice-notes-and-ux-feature-brief.md](../voice-notes-and-ux-feature-brief.md)
 
 **UI root:** `channels/ticketing-ui/` (Next.js)  
@@ -29,6 +29,8 @@
 | Task model | `ticketing/models/ticket_task.py` |
 | Files | `ticketing/api/routers/tickets.py` — upload/list; `ticketing/models/ticket_file.py` |
 | Grievance files | `ticketing/clients/grievance_api.py` — `GET /api/grievance/{id}` → `files` |
+| Grievance sync | `ticketing/tasks/grievance_sync.py` — creates tickets from `public.grievances` (`is_temporary = false` filter today) |
+| Chatbot dispatch | `backend/actions/utils/ticketing_dispatch.py` — `POST /api/v1/tickets` cache at submit |
 | Reports page | `channels/ticketing-ui/app/reports/page.tsx` |
 | Summary tab | `channels/ticketing-ui/components/reports/SummaryTab.tsx` |
 | Report services | `ticketing/services/report_rows.py`, `report_summary.py`, `report_export.py` |
@@ -348,13 +350,145 @@ Product may shorten strings; must not expose API paths or field names.
 
 ---
 
+## TP-14 — Grievance summary, categories sync, and officer validation
+
+**Brief:** [voice-notes-and-ux-feature-brief.md](../voice-notes-and-ux-feature-brief.md) § TP-14
+
+### Original Grievance layout (locked 2026-06-04)
+
+Single card, three blocks (top → bottom):
+
+| Block | Content | Interaction |
+|-------|---------|-------------|
+| **Original grievance** | `grievance_description` (verbatim chatbot narrative) | Read-only bordered panel |
+| **Summary** | `grievance_summary` | Editable textarea; badge: *Validated by complainant* / *Validated by officer* / *Review required* / *Pending* / *LLM failed* |
+| **Categories** | `grievance_categories` (formatted) | Editable when officer gate active; read-only line when validated unless officer saves edits |
+
+**Save:** `PATCH /api/v1/tickets/{id}/classification` — required Confirm when `LLM_generated` \| `LLM_failed` \| `LLM_skipped`; optional **Save changes** when already `complainant_confirmed` (sets `officer_confirmed` on save). Component: `ClassificationGrievancePanel.tsx` (desktop Original Grievance + mobile sheet + `GrievanceThreadCard`).
+
+### Goal
+
+Officers see complete **original grievance** content (description + LLM summary + categories) on every ticket. Summary/categories are not lost when the ticket row is created before classification finishes. Officers **validate categories** when the complainant did not confirm them in chatbot.
+
+### Problem (observed on AWS, 2026-06-02)
+
+| Store | `grievance_summary` | `grievance_categories` | Timestamp |
+|-------|-------------------|------------------------|-----------|
+| `public.grievances` | Present (60 chars) | `["Environmental - Air Pollution"]` | Modified **09:21:07** UTC |
+| `ticketing.tickets` | **NULL** | **NULL** | Created **09:20:02** UTC |
+
+Root causes in code today:
+
+1. `dispatch_ticket` uses session slots at submit — often empty if user filed before LLM completes (`action_submit_grievance.py`).
+2. `grievance_sync` copies summary/categories only at **ticket create** and only for `is_temporary = false` (`grievance_sync.py`); no update of existing tickets.
+3. `GET /tickets/{id}` returns only `ticketing.tickets` columns — no merge from grievance API (`tickets.py` `get_ticket`).
+4. Portal UI reads `ticket.grievance_summary` only → “No summary” (`app/tickets/[id]/page.tsx`).
+
+### Classification status model (Option B — locked 2026-06-03)
+
+**Authoritative spec:** [`04-classification-status-spec.md`](04-classification-status-spec.md)
+
+**Column:** `public.grievances.grievance_classification_status` only (not `grievance_status` history, not `is_temporary`).
+
+| Code | Meaning |
+|------|---------|
+| `pending` | **Default.** Submitted allowed; LLM not done or not started. |
+| `LLM_generated` | LLM wrote summary/categories. |
+| `LLM_failed` | LLM failed (final — no transient retry code in DB). |
+| `LLM_skipped` | User skipped LLM entirely (replaces `slot_skipped`). **Officer must classify.** |
+| `complainant_confirmed` | Complainant validated in chatbot review. |
+| `officer_confirmed` | Officer validated in portal. |
+
+**Officer gate:** Required when status is `LLM_generated`, `LLM_failed`, or `LLM_skipped` (including when ticket is **assigned**). **Acknowledge disabled** until `officer_confirmed`. `complainant_confirmed` clears the gate.
+
+**Deprecated:** `LLM_error` (do not persist during Celery retry), `slot_skipped` → `LLM_skipped`, `REVIEWING` (slots only), `is_temporary` (stop using in app/sync/read).
+
+### Locked decisions (product, 2026-06-03)
+
+| # | Topic | Decision |
+|---|--------|----------|
+| 1 | Classification field | `grievance_classification_status` — codes above. Default `pending`. |
+| 2 | Complainant validated | `=== 'complainant_confirmed'` in DB (persist on review + submit). |
+| 3 | Officer validated | `=== 'officer_confirmed'` after edit + confirm in portal. |
+| 4 | Officer required when | `LLM_generated`, `LLM_failed`, or `LLM_skipped` (not `complainant_confirmed` / `officer_confirmed`). |
+| 5 | `is_temporary` | **Retired** — no filter on read; remove from `grievance_sync` WHERE clause. |
+| 6 | Read model | **Hybrid:** detail GET merges live grievance + ticket cache; list uses cache + forward sync. |
+| 7 | Officer validation UX | **Edit + confirm** — categories **and** summary (chatbot parity). |
+| 8 | Who validates | Any officer with ticket access. |
+| 9 | Chatbot submit | `dispatch_ticket`: load summary/categories/description from grievance DB if slots empty. |
+| 10 | Forward sync | `grievance_sync` (or LLM hook): **UPDATE** existing tickets when grievance fields/status change. |
+| 11 | Backfill | One-time SQL on AWS for empty ticket cache (e.g. `B-GR-20260602-KOJH-5491`). |
+
+### Architecture
+
+| Layer | Decision |
+|-------|----------|
+| Read (detail) | `GET /tickets/{id}` merges grievance API/DB + `ticketing.tickets` cache; expose `grievance_classification_status`; never filter `is_temporary`. |
+| Read (list) | Cache columns; forward sync within ~2 min of LLM. |
+| Write cache | Persist non-empty summary/categories/description on merge/sync/officer confirm. |
+| Sync task | Create idempotent by `grievance_id`; **update** existing rows on classification/content change. |
+| Complainant flag | `classification_validated_by_complainant` := status `complainant_confirmed`. |
+| Officer validate | `VALIDATE_CLASSIFICATION` or `PATCH /tickets/{id}/classification` → `officer_confirmed` + grievance fields + `ticket_events`. |
+| UI | **Dual panels** in Original Grievance card (desktop + mobile): (1) **Original grievance** — read-only `grievance_description`; (2) **Summary** — editable textarea + **summary validation badge** (complainant / officer / review required / pending); (3) **Categories** — display + edit. Card-level badge removed; status lives on summary block. Officer gate: amber + Confirm; `complainant_confirmed`: green summary badge + Save changes still allowed. |
+
+### Tasks (implementation)
+
+**Schema / seed**
+
+1. `backend/config/database_tables.py` — seed: add `LLM_skipped`; deprecate `slot_skipped` in docs; migration normalize old rows.
+2. `backend/config/grm_config.py` — map `LLM_skipped` → `pending` for GRM export.
+
+**Backend / ticketing**
+
+3. `ticketing/clients/grievance_api.py` — no `is_temporary` filter.
+4. `ticketing/api/routers/tickets.py` — merge on `get_ticket`; schema includes `grievance_classification_status`, validation flags.
+5. `ticketing/tasks/grievance_sync.py` — drop `is_temporary` filter; UPDATE path for existing tickets.
+6. Officer validate endpoint + `ticket_events` audit.
+
+**Chatbot**
+
+7. `classify_and_summarize_grievance_task` — set `LLM_generated` / `LLM_failed` (not `LLM_error`).
+8. Skip-LLM path — set `LLM_skipped` (not `slot_skipped`).
+9. `form_grievance_complainant_review` + `action_update_grievance_categorization` + submit — persist `complainant_confirmed` / `LLM_generated` to DB.
+10. `ticketing_dispatch.py` — DB fallback for summary/categories at submit.
+
+**Portal UI**
+
+11. Ticket detail + mobile: merged content; `ClassificationGrievancePanel` — original read-only box, summary editable box with per-field status badge, categories block; amber Confirm + blocked Ack per status table.
+12. `lib/api.ts` — types + validate classification API.
+
+**Ops**
+
+13. Backfill script/SQL (ops note).
+
+### Acceptance criteria
+
+- [ ] Ticket `B-GR-20260602-KOJH-5491` (after fix/backfill) shows summary and categories on portal without manual DB edit.
+- [ ] New grievance filed before LLM: ticket exists at `pending`; after LLM, status `LLM_generated` and content visible (sync or merge).
+- [ ] `complainant_confirmed` in DB → green **summary** badge; original text read-only; summary still editable; Acknowledge not blocked for classification.
+- [ ] Original narrative and summary never rendered in a single undifferentiated block.
+- [ ] `LLM_generated` / `LLM_failed` / `LLM_skipped` → amber review panel; Acknowledge blocked until `officer_confirmed`.
+- [ ] `LLM_skipped` grievances require officer classification (same gate as `LLM_failed`).
+- [ ] No reliance on `is_temporary` for portal or sync.
+- [ ] List/queue shows summary when grievance has data (cache or sync).
+
+### Testing
+
+- [ ] Submit → ticket → LLM → `LLM_generated` in DB + detail API shows summary.
+- [ ] Skip LLM → `LLM_skipped` → officer confirm → `officer_confirmed`.
+- [ ] Chatbot review Yes → `complainant_confirmed` persisted (not slots-only).
+- [ ] `grievance_sync` does not duplicate tickets; updates existing cache.
+- [ ] TP-09 ack card shows merged content and respects classification gate.
+
+---
+
 ## Suggested implementation order
 
 ```text
-TP-01 → TP-11 → TP-12 → TP-09 → TP-10 → TP-08 → TP-07 → TP-05 → TP-13
+TP-14 (data visible) → TP-09 → TP-01 → TP-11 → TP-12 → TP-10 → TP-08 → TP-07 → TP-05 → TP-13
 ```
 
-(TP-11 and TP-12 may share compose/modal work. **TP-13** after TP-11/12 or in parallel once gates exist.)
+(**TP-14** before **TP-09** so ack card has real summary/categories. TP-11/12/13 unchanged.)
 
 ---
 

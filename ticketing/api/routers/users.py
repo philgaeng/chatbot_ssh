@@ -330,7 +330,7 @@ def list_officer_roster(
             if scope_loc:
                 locs_by[uid].add(scope_loc)
 
-    # Include Keycloak officers not yet in user_roles (invited, pending DB sync).
+    # Include enabled Keycloak officers not yet in user_roles (invited, pending DB sync).
     for email, profile in kc_profiles.items():
         if email not in role_keys_by:
             role_keys_by[email] = list(profile.role_keys)
@@ -836,6 +836,47 @@ def invite_officer(
     return OfficerInviteResponse(ok=True, email=email, message=msg)
 
 
+@router.post(
+    "/users/{user_id}/resend-invite",
+    response_model=OfficerInviteResponse,
+    summary="Resend Keycloak setup email for an invited officer (fresh action link)",
+)
+def resend_officer_invite(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerInviteResponse:
+    from ticketing.services.officer_admin import keycloak_resend_invite_email, log_admin_audit
+
+    email = user_id.strip().lower()
+    ob = db.get(OfficerOnboarding, email)
+    if ob and ob.status != "invited":
+        raise HTTPException(
+            status_code=400,
+            detail="Resend invite is only available while onboarding status is Invited.",
+        )
+
+    sent_to = keycloak_resend_invite_email(email, db=db)
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.invite.resend",
+        target_user_id=email,
+        payload={},
+    )
+    db.commit()
+
+    return OfficerInviteResponse(
+        ok=True,
+        email=sent_to,
+        message=(
+            f"Setup email resent to {sent_to}. "
+            "The new link expires in 12 hours (check spam if needed)."
+        ),
+    )
+
+
 @router.patch(
     "/users/{user_id}",
     response_model=OfficerUpdateResponse,
@@ -874,18 +915,20 @@ def update_officer(
 @router.delete(
     "/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remove officer — all roles/scopes; disable Keycloak user",
+    summary="Remove officer — DB roles/scopes and Keycloak realm user",
 )
 def delete_officer(
     user_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ) -> None:
-    from ticketing.services.officer_admin import keycloak_disable_user, log_admin_audit
+    from ticketing.services.officer_admin import keycloak_delete_user, log_admin_audit
 
     roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
     scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
-    if not roles and not scopes:
+    had_db = bool(roles or scopes)
+    kc_deleted = keycloak_delete_user(user_id)
+    if not had_db and not kc_deleted:
         raise HTTPException(status_code=404, detail="Officer not found")
 
     for s in scopes:
@@ -895,12 +938,10 @@ def delete_officer(
     ob = db.get(OfficerOnboarding, user_id)
     if ob:
         db.delete(ob)
-
-    keycloak_disable_user(user_id)
     log_admin_audit(
         db,
         actor_user_id=current_user.user_id,
-        action="officer.disable",
+        action="officer.delete",
         target_user_id=user_id,
         payload={"roles_removed": len(roles), "scopes_removed": len(scopes)},
     )

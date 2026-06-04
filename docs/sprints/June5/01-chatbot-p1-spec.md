@@ -114,25 +114,60 @@ Friendlier attachment messaging; encourage photos, documents, and photos of hand
 
 Three clear messages after filing + persistent top-of-chat banner with grievance number.
 
-### Message sequence (locked)
+Users must never see a single “recap wall” bubble that mixes success, ID, details, SMS, and timeline (legacy `create_confirmation_message` in chat). SMS/email may still use the full recap text.
+
+### Two phases (standard grievance)
+
+| Phase | When | Chat messages | Banner |
+|-------|------|---------------|--------|
+| **A — Filed** | Immediately after `action_submit_grievance` (OTP/contact complete) | Two bubbles (see below); **no** categorization copy | **Show** — stays visible through review |
+| **A2 — Classification ready** | After `action_retrieve_classification_results` finds summary/categories in DB | One bubble + Yes/No (see below) | Still visible |
+| **B — Review complete** | After complainant finishes `grievance_review` (`action_grievance_outro`) | Three-bubble outro (attachments focus) | Still visible |
+
+Categorization messaging is **not** part of submit: wait until classification succeeded in the database before prompting the user.
+
+Orchestrator state after Phase A is `grievance_review` (not `done`). The banner must **not** wait for `done`.
+
+### Phase A message sequence (submit — two `utter_message` calls)
 
 | # | Content |
 |---|---------|
-| 1 | Explicit **success** — grievance filed |
-| 2 | **Grievance number** (`grievance_id`) prominent |
-| 3 | Follow-up steps may continue (attachments, contact) but filing is **already complete** |
+| 1 | **Success + reference:** filed successfully and `grievance_id` in one bubble |
+| 2 | **On record:** may add attachments or modify grievance; not required to complete filing |
+
+### Phase A2 (classification retrieve — one `utter_message` + buttons)
+
+| # | Content |
+|---|---------|
+| 1 | Categories/summary generated; helps officer; ask to review if correct |
+| — | Yes / No buttons (same turn) |
+
+Do **not** repeat this text in `action_ask_form_grievance_complainant_review_grievance_classification_consent` when retrieve already prompted.
+
+### Phase B (review outro)
+
+Three separate messages: success → reference → attachment follow-up (existing `action_grievance_outro`).
+
+### Banner (locked)
+
+- Placement: `#grievance-filed-banner` between chat header and `#messages` in `index.html`.
+- Copy: status **Grievance filed** + grievance number (EN + NE via `utterances.js`).
+- **Show:** on `grievance_filed` custom event from server (emit from `action_submit_grievance` and SEAH submit) and whenever client already knows `grievance_id` in post-filed states (`grievance_review`, `done`).
+- **Hide:** session reset, file another grievance, clear session.
 
 ### Tasks
 
-1. **Server:** Extend `action_grievance_outro` / submit recap in `action_submit_grievance.py` (or post-submit branch in `state_machine.py`) to emit three messages or one structured `json_message` the client splits.
-2. **Client:** In `app.js`, render banner element above `#messages` when `grievance_id` set post-submit; show id; hide on session reset (`CB-03` clear session).
-3. Ensure attachment step after submit does not imply “not yet filed” (coordinate copy with **CB-05**).
+1. **Server — submit:** Replace in-chat `create_confirmation_message` with three utterances in `action_submit_grievance.py`; keep full recap for SMS only. Emit `json_message` `event_type: grievance_filed` with `grievance_id`.
+2. **Server — outro:** Keep `action_grievance_outro` three messages after review (Phase B).
+3. **Client:** Show banner on `grievance_filed` and for `next_state` in `grievance_review` \| `done` when `window.grievanceId` is set; do not require `done` only.
+4. Coordinate attachment copy with **CB-05** (no “not yet filed” wording).
 
 ### Acceptance criteria
 
-- [ ] Banner visible from submit until session reset or “file another grievance”.
-- [ ] Three messages appear in order on standard submit path.
-- [ ] SEAH path shows equivalent success + id (SEAH-specific outro may need extra line in `action_seah_outro` path in `state_machine.py`).
+- [ ] Banner visible from **submit** (Phase A) through review until session reset or file another.
+- [ ] Phase A: three separate chat messages after OTP/submit (no recap wall).
+- [ ] Phase B: three messages after review confirm (unchanged UX target).
+- [ ] SEAH path: equivalent success + id + banner on submit.
 
 ---
 

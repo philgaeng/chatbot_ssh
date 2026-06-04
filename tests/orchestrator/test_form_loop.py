@@ -223,6 +223,33 @@ def test_review_continue_without_categories_handles_missing_categories_slot(doma
     assert not any("Please provide the requested information." == t for t in texts)
 
 
+def test_review_consent_ask_skips_fallback_when_retrieve_already_prompted(domain):
+    from backend.orchestrator.form_loop import get_form
+
+    form = get_form("form_grievance_complainant_review")
+    session = {
+        "user_id": "test",
+        "active_loop": "form_grievance_complainant_review",
+        "requested_slot": None,
+        "slots": {
+            "language_code": "en",
+            "grievance_id": "G-TEST-001",
+            "grievance_complainant_review": True,
+            "grievance_classification_consent": None,
+            "grievance_summary": "dust issue",
+            "grievance_categories": ["ENVIRONMENT"],
+        },
+    }
+
+    messages, _, completed = _run(
+        run_form_turn(form=form, session=session, user_input=None, domain=domain)
+    )
+
+    assert completed is False
+    texts = [m.get("text", "") for m in messages]
+    assert not any(t == "Please provide the requested information." for t in texts)
+
+
 @pytest.mark.skip(reason="Deprecated: legacy form_sensitive_issues tests replaced by form_seah_* coverage")
 def test_legacy_sensitive_issues_form_coverage_deprecated():
     pass

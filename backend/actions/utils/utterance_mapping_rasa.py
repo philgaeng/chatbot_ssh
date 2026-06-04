@@ -701,6 +701,26 @@ UTTERANCE_MAPPING = {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 },
+                5: {
+                    'en': (
+                        "Your grievance is on record. You may continue here to add attachments, "
+                        "or modify your grievance — none of that is required to complete filing."
+                    ),
+                    'ne': (
+                        "तपाईंको गुनासो दर्ता भइसकेको छ। तपाईं यहाँ संलग्नक थप्न वा "
+                        "गुनासो परिमार्जन गर्न जारी राख्न सक्नुहुन्छ — दर्ता पूरा गर्न यो अनिवार्य छैन।"
+                    ),
+                },
+                6: {
+                    'en': (
+                        "Your grievance has been filed successfully. "
+                        "Your grievance reference number is: **{grievance_id}**"
+                    ),
+                    'ne': (
+                        "तपाईंको गुनासो सफलतापूर्वक दर्ता भयो। "
+                        "तपाईंको गुनासो सन्दर्भ नम्बर: **{grievance_id}**"
+                    ),
+                },
             },
         },
         'action_grievance_outro': {
@@ -818,8 +838,16 @@ UTTERANCE_MAPPING = {
         'action_ask_form_grievance_complainant_review_grievance_classification_consent': {
             'utterances': {
                 1: {
-                    'en': "We have generated categories and summary for your grievance. They will help our officer to treat your grievance faster. Do you want to review if they are correct and possibly answer one more question?",
-                    'ne': "हामीले तपाईको गुनासोको लागि समुहहरू र सारांश उत्पन्न गरिएको छ। यसले  हाम्रा अधिकारीलाई तपाईंको गुनासो छिटो सम्बोधन गर्न मद्दत गर्नेछन्। के तपाई यो सही छ कि छैन भनेर समीक्षा गर्न चाहनुहुन्छ र अर्को एक प्रश्न जाँच गर्न चाहनुहुन्छ? ",
+                    'en': (
+                        "We have generated categories and summary for your grievance. "
+                        "They will help our officer to treat your grievance faster. "
+                        "Do you want to review if they are correct?"
+                    ),
+                    'ne': (
+                        "हामीले तपाईंको गुनासोका लागि श्रेणीहरू र सारांश तयार गरेका छौं। "
+                        "यसले हाम्रा अधिकारीलाई तपाईंको गुनासो छिटो समाधान गर्न मद्दत गर्नेछ। "
+                        "के तपाईं यी सही छन् भनेर समीक्षा गर्न चाहनुहुन्छ?"
+                    ),
                 }
             },
             'buttons': {
@@ -939,14 +967,25 @@ UTTERANCE_MAPPING = {
         'action_retrieve_classification_results': {
             'utterances': {
                 1: {
-                    'en': "Categorization of your grievance is available.",
-                    'ne': "तपाईको गुनासोको लागि समुहहरु उपलब्ध गरिएको छ। ",
+                    'en': (
+                        "We have generated categories and summary for your grievance. "
+                        "They will help our officer to treat your grievance faster. "
+                        "Do you want to review if they are correct?"
+                    ),
+                    'ne': (
+                        "हामीले तपाईंको गुनासोका लागि श्रेणीहरू र सारांश तयार गरेका छौं। "
+                        "यसले हाम्रा अधिकारीलाई तपाईंको गुनासो छिटो समाधान गर्न मद्दत गर्नेछ। "
+                        "के तपाईं यी सही छन् भनेर समीक्षा गर्न चाहनुहुन्छ?"
+                    ),
                 },
                 2: {
                     'en': "Categorization of your grievance is not available. Our officer will review your grievance and contact you soon.",
                     'ne': "तपाईको गुनासोको समूह उपलब्ध छैन।  हाम्रा अधिकारीले तपाईको गुनासोको समीक्षा गर्नेछन् र चाँडै तपाईलाई सम्पर्क गर्नेछन्। ",
                 }
-            }
+            },
+            'buttons': {
+                1: BUTTONS_AFFIRM_DENY,
+            },
         },
         'action_ask_form_grievance_complainant_review_sensitive_issues_follow_up': SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS,  
        

@@ -15,7 +15,7 @@
 #                        Browser-facing URL pinned by KC_HOSTNAME_URL so tokens'
 #                        `iss` claim matches what the UI uses for login.
 #
-# After first start with auth profile, initialise the GRM realm once:
+# After first start with auth profile, set KEYCLOAK_SMTP_* in env.local, then initialise realm:
 #   docker compose -f docker-compose.yml -f docker-compose.grm.yml --profile auth \
 #     exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
 #
@@ -42,6 +42,8 @@ services:
     profiles: [auth]
     image: quay.io/keycloak/keycloak:26.0.7
     command: start-dev
+    volumes:
+      - ./deployment/keycloak/themes/grm:/opt/keycloak/themes/grm:ro
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/app_db

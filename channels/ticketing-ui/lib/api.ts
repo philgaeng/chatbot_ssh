@@ -92,7 +92,13 @@ export interface TicketDetail extends TicketListItem {
   session_id: string | null;
   chatbot_id: string;
   grievance_categories: string | null;
+  grievance_description?: string | null;
   grievance_location: string | null;
+  grievance_classification_status?: string | null;
+  classification_validated_by_complainant?: boolean;
+  classification_validated_by_officer?: boolean;
+  classification_officer_validation_required?: boolean;
+  classification_validated?: boolean;
   country_code: string;
   assigned_role_id: string | null;
   is_deleted: boolean;
@@ -259,6 +265,27 @@ export function getTicket(id: string): Promise<TicketDetail> {
   return apiFetch<TicketDetail>(`/api/v1/tickets/${id}`);
 }
 
+export interface ClassificationValidatePayload {
+  grievance_summary: string;
+  grievance_categories: string;
+  note?: string;
+}
+
+export function validateTicketClassification(
+  ticketId: string,
+  payload: ClassificationValidatePayload,
+): Promise<{
+  ticket_id: string;
+  grievance_id: string;
+  grievance_classification_status: string;
+  event_id: string;
+}> {
+  return apiFetch(`/api/v1/tickets/${ticketId}/classification`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getSla(id: string): Promise<SlaStatus> {
   return apiFetch<SlaStatus>(`/api/v1/tickets/${id}/sla`);
 }
@@ -281,6 +308,28 @@ export interface ActionPayload {
   is_call_report?: boolean;
 }
 
+export interface ClosureCaseHeader {
+  reference: string;
+  complaint_date?: string | null;
+  resolved_date?: string | null;
+  resolution_duration_days?: number | null;
+  resolved_by?: string | null;
+  project_name?: string | null;
+  package_label?: string | null;
+}
+
+export interface ClosureOfficerMetrics {
+  complaint_category?: string | null;
+  escalated_yn?: string | null;
+  stage_at_resolution?: string | null;
+  stage_level_at_resolution?: string | null;
+  days_spent_overdue?: number | null;
+  sla_breached_yn?: string | null;
+  resolution_category?: string | null;
+  instance?: string | null;
+  location_display?: string | null;
+}
+
 export interface ResolvedSummaryResponse {
   ticket_id: string;
   grievance_id: string;
@@ -289,6 +338,8 @@ export interface ResolvedSummaryResponse {
   summary_json: Record<string, unknown>;
   summary_public_json: Record<string, unknown> | null;
   primary_language: string;
+  case_header?: ClosureCaseHeader;
+  officer_metrics?: ClosureOfficerMetrics;
 }
 
 export function getResolvedSummary(ticketId: string): Promise<ResolvedSummaryResponse> {
@@ -1781,6 +1832,13 @@ export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInv
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function resendOfficerInvite(userId: string): Promise<OfficerInviteResult> {
+  return apiFetch<OfficerInviteResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/resend-invite`,
+    { method: "POST" },
+  );
 }
 
 export function deleteOfficer(userId: string): Promise<void> {

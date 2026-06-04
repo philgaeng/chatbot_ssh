@@ -52,16 +52,17 @@ class TicketingSettings(BaseSettings):
     keycloak_admin_password: str = ""   # KEYCLOAK_ADMIN_PASSWORD
     # Shared secret for POST /api/v1/webhooks/keycloak (Keycloak HTTP event listener)
     keycloak_webhook_secret: str = ""
-    # Keycloak realm SMTP (execute-actions invite emails). Applied by keycloak_setup.
-    # Defaults: host from AWS_REGION, from=SES_VERIFIED_EMAIL, SMTP auth derived from
-    # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY when KEYCLOAK_SMTP_* are unset.
+    # Keycloak realm SMTP (officer invite / password-reset emails). Applied by keycloak_setup.
+    # Standard mailbox only — not AWS SES (Messaging API keeps SES/SNS for complainants).
     keycloak_smtp_host: str = ""
     keycloak_smtp_port: int = 587
     keycloak_smtp_user: str = ""
     keycloak_smtp_password: str = ""
-    keycloak_smtp_from: str = ""          # defaults to SES_VERIFIED_EMAIL when empty
+    keycloak_smtp_from: str = ""
     keycloak_smtp_from_display: str = "GRM Ticketing"
-    aws_region: str = "ap-southeast-1"    # used to derive email-smtp.{region}.amazonaws.com
+    # Officer invite email: after required actions, redirect to GRM login (needs client_id).
+    keycloak_invite_client_id: str = "ticketing-ui"
+    keycloak_invite_redirect_uri: str = "http://localhost:3002/login"
 
     # ── LLM (OpenAI — same key used by chatbot backend) ──
     openai_api_key: str = ""

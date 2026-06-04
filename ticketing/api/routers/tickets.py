@@ -36,7 +36,6 @@ from ticketing.api.schemas.ticket import (
     TicketActionRequest,
     TicketActionResponse,
     TicketCreate,
-    TicketDetail,
     TicketCreateResponse,
     TicketDetail,
     TicketListItem,
@@ -46,13 +45,25 @@ from ticketing.api.schemas.ticket import (
     TicketReplyResponse,
     ComplainantPatch,
     ComplainantPatchResponse,
+    ClassificationValidateRequest,
+    ClassificationValidateResponse,
     InboundMessageRequest,
     InboundMessageResponse,
     AddInformedRequest,
     AddInformedResponse,
     ReplyOwnerRequest,
 )
-from ticketing.clients.grievance_api import patch_complainant, update_grievance_status
+from ticketing.clients.grievance_api import (
+    patch_complainant,
+    patch_grievance_classification,
+    update_grievance_status,
+)
+from ticketing.constants.classification import OFFICER_CONFIRMED, officer_validation_required
+from ticketing.services.grievance_content import (
+    fetch_grievance_row,
+    merge_grievance_into_ticket,
+    refresh_ticket_cache_from_grievance,
+)
 from ticketing.constants.resolution import (
     format_resolution_note,
     resolution_category_label,
@@ -476,6 +487,9 @@ def create_ticket(
     db.commit()
     db.refresh(ticket)
 
+    if (payload.grievance_summary or "").strip():
+        _enqueue_celery(generate_findings, ticket.ticket_id)
+
     logger.info(
         "Ticket created: ticket_id=%s grievance_id=%s workflow=%s is_seah=%s",
         ticket.ticket_id, payload.grievance_id, workflow.workflow_key, payload.is_seah,
@@ -779,7 +793,91 @@ def get_ticket(
         for v in viewers
     ]
 
-    return ticket
+    g_row = fetch_grievance_row(db, ticket.grievance_id)
+    merged: dict = {}
+    if g_row:
+        if refresh_ticket_cache_from_grievance(db, ticket, g_row):
+            ticket.updated_at = _now()
+            db.commit()
+            db.refresh(ticket)
+        merged = merge_grievance_into_ticket(ticket, g_row)
+
+    payload = TicketDetail.model_validate(ticket, from_attributes=True).model_dump()
+    payload.update(merged)
+    return TicketDetail(**payload)
+
+
+@router.patch(
+    "/tickets/{ticket_id}/classification",
+    response_model=ClassificationValidateResponse,
+    summary="Officer validates/edits grievance summary and categories",
+)
+def validate_ticket_classification(
+    ticket_id: str,
+    payload: ClassificationValidateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ClassificationValidateResponse:
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    import json as _json
+
+    cats_raw = payload.grievance_categories.strip()
+    try:
+        parsed = _json.loads(cats_raw)
+        if not isinstance(parsed, list):
+            raise ValueError("categories must be a JSON array")
+        categories_for_api = parsed
+        categories_cache = cats_raw
+    except _json.JSONDecodeError:
+        categories_for_api = [
+            c.strip() for c in cats_raw.split(",") if c.strip()
+        ]
+        categories_cache = _json.dumps(categories_for_api)
+
+    try:
+        patch_grievance_classification(
+            ticket.grievance_id,
+            grievance_classification_status=OFFICER_CONFIRMED,
+            grievance_summary=payload.grievance_summary.strip(),
+            grievance_categories=categories_for_api,
+        )
+    except Exception as exc:
+        logger.error("validate_ticket_classification backend failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not save classification on grievance record",
+        ) from exc
+
+    ticket.grievance_summary = payload.grievance_summary.strip()
+    ticket.grievance_categories = categories_cache
+    ticket.updated_at = _now()
+    ticket.updated_by_user_id = current_user.user_id
+
+    event = _add_event(
+        db,
+        ticket,
+        "CLASSIFICATION_VALIDATED",
+        old_status=ticket.status_code,
+        new_status=ticket.status_code,
+        step_id=ticket.current_step_id,
+        note=payload.note or "Officer confirmed summary and categories",
+        created_by=current_user.user_id,
+        seen=True,
+        actor_role=_actor_role(current_user),
+    )
+    db.commit()
+
+    return ClassificationValidateResponse(
+        ticket_id=ticket.ticket_id,
+        grievance_id=ticket.grievance_id,
+        grievance_classification_status=OFFICER_CONFIRMED,
+        event_id=event.event_id,
+    )
 
 
 # ─── PATCH /tickets/{ticket_id} — assign / priority ──────────────────────────
@@ -1012,6 +1110,16 @@ def perform_action(
     _translate_resolution_event_id: Optional[str] = None
 
     if action == "ACKNOWLEDGE":
+        g_row = fetch_grievance_row(db, ticket.grievance_id)
+        class_status = (g_row or {}).get("grievance_classification_status")
+        if officer_validation_required(class_status):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Review and confirm the grievance summary and categories "
+                    "before acknowledging this ticket."
+                ),
+            )
         close_open_episode(db, ticket, "ACKNOWLEDGED")
         ticket.status_code = "IN_PROGRESS"
         ticket.step_started_at = _now()
@@ -2031,6 +2139,14 @@ def get_resolved_summary(
                 ),
             )
         raise HTTPException(status_code=404, detail="Resolved summary not found")
+    from ticketing.services.resolved_summary_builder import build_closure_display_context
+
+    display = build_closure_display_context(
+        db,
+        ticket,
+        row.summary_json if isinstance(row.summary_json, dict) else None,
+        row.summary_public_json if isinstance(row.summary_public_json, dict) else None,
+    )
     return {
         "ticket_id": ticket_id,
         "grievance_id": row.grievance_id,
@@ -2042,6 +2158,8 @@ def get_resolved_summary(
         "summary_public_json": row.summary_public_json,
         "summary_text_primary": row.summary_text_primary,
         "primary_language": row.primary_language,
+        "case_header": display["case_header"],
+        "officer_metrics": display["officer_metrics"],
     }
 
 

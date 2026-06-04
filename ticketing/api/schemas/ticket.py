@@ -139,6 +139,23 @@ class TicketViewerOut(BaseModel):
         from_attributes = True
 
 
+class ClassificationValidateRequest(BaseModel):
+    """PATCH /api/v1/tickets/{ticket_id}/classification — officer confirms summary/categories."""
+    grievance_summary: str = Field(..., min_length=1)
+    grievance_categories: str = Field(
+        ...,
+        description="JSON array string or comma-separated category labels",
+    )
+    note: Optional[str] = None
+
+
+class ClassificationValidateResponse(BaseModel):
+    ticket_id: str
+    grievance_id: str
+    grievance_classification_status: str
+    event_id: str
+
+
 class TicketDetail(BaseModel):
     ticket_id: str
     grievance_id: str
@@ -147,7 +164,13 @@ class TicketDetail(BaseModel):
     chatbot_id: str
     grievance_summary: Optional[str]
     grievance_categories: Optional[str]
-    grievance_location: Optional[str]
+    grievance_description: Optional[str] = None
+    grievance_location: Optional[str] = None
+    grievance_classification_status: Optional[str] = None
+    classification_validated_by_complainant: bool = False
+    classification_validated_by_officer: bool = False
+    classification_officer_validation_required: bool = False
+    classification_validated: bool = False
     country_code: str
     organization_id: str
     location_code: Optional[str]

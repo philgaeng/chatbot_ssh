@@ -1,28 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronUp, MapPin, Tag } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import type { TicketDetail } from "@/lib/api";
+import { ClassificationGrievancePanel } from "@/components/tickets/ClassificationGrievancePanel";
 
 interface GrievanceThreadCardProps {
   ticket: TicketDetail;
   onAcknowledge?: () => void;
   acknowledging?: boolean;
+  onClassificationUpdated?: () => void;
 }
 
-/** Pinned grievance summary + Acknowledge CTA (TP-09). */
+/** Pinned grievance summary + Acknowledge CTA (TP-09 / TP-14). */
 export function GrievanceThreadCard({
   ticket,
   onAcknowledge,
   acknowledging = false,
+  onClassificationUpdated,
 }: GrievanceThreadCardProps) {
   const [expanded, setExpanded] = useState(true);
   const [reviewed, setReviewed] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const needsOfficer = ticket.classification_officer_validation_required ?? false;
+
   const showAck =
     ticket.status_code === "OPEN" &&
     (ticket.current_step?.expected_actions ?? []).includes("ACKNOWLEDGE");
+
+  const ackBlocked = needsOfficer;
 
   useEffect(() => {
     if (!cardRef.current || reviewed) return;
@@ -37,7 +44,6 @@ export function GrievanceThreadCard({
     return () => obs.disconnect();
   }, [reviewed]);
 
-  const categories = ticket.grievance_categories?.trim();
   const location = ticket.grievance_location?.trim();
 
   return (
@@ -61,47 +67,55 @@ export function GrievanceThreadCard({
       </button>
 
       {expanded && (
-        <div className="px-4 py-3 space-y-2.5">
-          {ticket.grievance_summary ? (
-            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-              {ticket.grievance_summary}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-500 italic">No summary on file.</p>
-          )}
-          <div className="flex flex-wrap gap-2 text-xs text-gray-600">
-            {categories && (
-              <span className="inline-flex items-center gap-1 bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
-                <Tag size={11} className="text-blue-500" />
-                {categories}
-              </span>
-            )}
-            {location && (
+        <div className="px-4 py-3">
+          <ClassificationGrievancePanel
+            ticket={ticket}
+            onUpdated={onClassificationUpdated}
+          />
+          {location && !needsOfficer && (
+            <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2">
               <span className="inline-flex items-center gap-1 bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
                 <MapPin size={11} className="text-blue-500" />
                 {location}
               </span>
-            )}
-            {ticket.priority && (
-              <span className="inline-flex items-center bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
-                Priority: {ticket.priority}
-              </span>
-            )}
-          </div>
+              {ticket.priority && (
+                <span className="inline-flex items-center bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
+                  Priority: {ticket.priority}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {showAck && onAcknowledge && (
         <div className="px-4 pb-3 pt-1">
+          {ackBlocked && (
+            <p className="text-xs text-amber-800 mb-2">
+              Confirm summary and categories above before acknowledging.
+            </p>
+          )}
           <button
             type="button"
             onClick={onAcknowledge}
-            disabled={!reviewed || acknowledging}
-            title={reviewed ? undefined : "Scroll to read the grievance before acknowledging"}
+            disabled={!reviewed || acknowledging || ackBlocked}
+            title={
+              ackBlocked
+                ? "Complete classification review first"
+                : reviewed
+                  ? undefined
+                  : "Scroll to read the grievance before acknowledging"
+            }
             className="w-full bg-blue-600 active:bg-blue-700 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2"
           >
             <CheckCircle2 size={16} strokeWidth={2} />
-            {acknowledging ? "Acknowledging…" : reviewed ? "Acknowledge — I have read this grievance" : "Read grievance to enable Acknowledge"}
+            {acknowledging
+              ? "Acknowledging…"
+              : ackBlocked
+                ? "Confirm classification to enable Acknowledge"
+                : reviewed
+                  ? "Acknowledge — I have read this grievance"
+                  : "Read grievance to enable Acknowledge"}
           </button>
         </div>
       )}

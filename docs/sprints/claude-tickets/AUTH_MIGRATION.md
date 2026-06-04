@@ -91,22 +91,34 @@ Before going to staging / production:
 - [ ] **Change admin password**: set `KEYCLOAK_ADMIN_PASSWORD` to something strong in the environment
 - [ ] **Configure realm SMTP** for officer invite execute-actions emails (via `keycloak_setup`).
 
-  If notifications already work, you only need the **same env vars** already in `env.local`:
-  ```env
-  SES_VERIFIED_EMAIL=philgaeng@project.com.ph   # From address (verified in SES)
-  AWS_REGION=ap-southeast-1
-  AWS_ACCESS_KEY_ID=...
-  AWS_SECRET_ACCESS_KEY=...
-  ```
-  `keycloak_setup` derives SES SMTP credentials from the IAM keys automatically
-  (AWS standard — no separate SMTP password env var required).
+  Keycloak uses a **standard mailbox SMTP** (local provider in Nepal production; staging may use Infomaniak, etc.).
+  This is **separate** from complainant/report email, which stays on the Messaging API (SES until a local provider is wired there).
 
-  Optional overrides: `KEYCLOAK_SMTP_HOST`, `KEYCLOAK_SMTP_USER`, `KEYCLOAK_SMTP_PASSWORD`.
+  Required in `env.local`:
+  ```env
+  KEYCLOAK_SMTP_HOST=mail.example.com
+  KEYCLOAK_SMTP_PORT=587
+  KEYCLOAK_SMTP_USER=grm@example.com
+  KEYCLOAK_SMTP_PASSWORD=...   # if password contains $, use $$ in env.local (Compose escaping)
+  KEYCLOAK_SMTP_FROM=grm@example.com
+  KEYCLOAK_SMTP_FROM_DISPLAY=GRM Ticketing
+  ```
 
   Apply to the `grm` realm:
   ```bash
   docker compose ... exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
   ```
+
+  **Invite email UX** (custom `grm` login theme under `deployment/keycloak/themes/grm/`):
+  - Skips the default “Perform the following actions” interstitial (auto-continues to password/profile).
+  - After completion, redirects to GRM login when `KEYCLOAK_INVITE_REDIRECT_URI` is set (default `http://localhost:3002/login`; staging/production: `https://grm-auth…/login`).
+
+  ```env
+  KEYCLOAK_INVITE_CLIENT_ID=ticketing-ui
+  KEYCLOAK_INVITE_REDIRECT_URI=https://grm-auth.nepal-gms-chatbot.facets-ai.com/login
+  ```
+
+  Restart Keycloak after theme changes: `docker compose ... --profile auth up -d --force-recreate keycloak`
 - [ ] **Update redirect URIs** in `keycloak_setup.py` when deploying to a new domain, then re-run the setup script.
 - [ ] **Set token lifespans** in the `grm` realm:
   - Access token: 1 hour (already set by setup script)
