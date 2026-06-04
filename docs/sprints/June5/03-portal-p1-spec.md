@@ -354,6 +354,18 @@ Product may shorten strings; must not expose API paths or field names.
 
 **Brief:** [voice-notes-and-ux-feature-brief.md](../voice-notes-and-ux-feature-brief.md) § TP-14
 
+### Original Grievance layout (locked 2026-06-04)
+
+Single card, three blocks (top → bottom):
+
+| Block | Content | Interaction |
+|-------|---------|-------------|
+| **Original grievance** | `grievance_description` (verbatim chatbot narrative) | Read-only bordered panel |
+| **Summary** | `grievance_summary` | Editable textarea; badge: *Validated by complainant* / *Validated by officer* / *Review required* / *Pending* / *LLM failed* |
+| **Categories** | `grievance_categories` (formatted) | Editable when officer gate active; read-only line when validated unless officer saves edits |
+
+**Save:** `PATCH /api/v1/tickets/{id}/classification` — required Confirm when `LLM_generated` \| `LLM_failed` \| `LLM_skipped`; optional **Save changes** when already `complainant_confirmed` (sets `officer_confirmed` on save). Component: `ClassificationGrievancePanel.tsx` (desktop Original Grievance + mobile sheet + `GrievanceThreadCard`).
+
 ### Goal
 
 Officers see complete **original grievance** content (description + LLM summary + categories) on every ticket. Summary/categories are not lost when the ticket row is created before classification finishes. Officers **validate categories** when the complainant did not confirm them in chatbot.
@@ -417,7 +429,7 @@ Root causes in code today:
 | Sync task | Create idempotent by `grievance_id`; **update** existing rows on classification/content change. |
 | Complainant flag | `classification_validated_by_complainant` := status `complainant_confirmed`. |
 | Officer validate | `VALIDATE_CLASSIFICATION` or `PATCH /tickets/{id}/classification` → `officer_confirmed` + grievance fields + `ticket_events`. |
-| UI | Description + summary + chips; green if `complainant_confirmed` or `officer_confirmed`; amber panel + blocked Ack for `LLM_*` states. |
+| UI | **Dual panels** in Original Grievance card (desktop + mobile): (1) **Original grievance** — read-only `grievance_description`; (2) **Summary** — editable textarea + **summary validation badge** (complainant / officer / review required / pending); (3) **Categories** — display + edit. Card-level badge removed; status lives on summary block. Officer gate: amber + Confirm; `complainant_confirmed`: green summary badge + Save changes still allowed. |
 
 ### Tasks (implementation)
 
@@ -442,7 +454,7 @@ Root causes in code today:
 
 **Portal UI**
 
-11. Ticket detail + mobile: merged content, badges, amber panel, blocked Ack per status table.
+11. Ticket detail + mobile: merged content; `ClassificationGrievancePanel` — original read-only box, summary editable box with per-field status badge, categories block; amber Confirm + blocked Ack per status table.
 12. `lib/api.ts` — types + validate classification API.
 
 **Ops**
@@ -453,7 +465,8 @@ Root causes in code today:
 
 - [ ] Ticket `B-GR-20260602-KOJH-5491` (after fix/backfill) shows summary and categories on portal without manual DB edit.
 - [ ] New grievance filed before LLM: ticket exists at `pending`; after LLM, status `LLM_generated` and content visible (sync or merge).
-- [ ] `complainant_confirmed` in DB → green badge; Acknowledge not blocked for classification.
+- [ ] `complainant_confirmed` in DB → green **summary** badge; original text read-only; summary still editable; Acknowledge not blocked for classification.
+- [ ] Original narrative and summary never rendered in a single undifferentiated block.
 - [ ] `LLM_generated` / `LLM_failed` / `LLM_skipped` → amber review panel; Acknowledge blocked until `officer_confirmed`.
 - [ ] `LLM_skipped` grievances require officer classification (same gate as `LLM_failed`).
 - [ ] No reliance on `is_temporary` for portal or sync.

@@ -16,6 +16,60 @@ function categoriesToPayload(text: string): string {
   return JSON.stringify(parts);
 }
 
+function SummaryStatusBadge({ ticket }: { ticket: TicketDetail }) {
+  const needsOfficer = ticket.classification_officer_validation_required ?? false;
+  const status = ticket.grievance_classification_status;
+
+  let label: string;
+  let tone: "green" | "amber" | "gray";
+
+  if (ticket.classification_validated_by_officer) {
+    label = "Validated by officer";
+    tone = "green";
+  } else if (ticket.classification_validated_by_complainant) {
+    label = "Validated by complainant";
+    tone = "green";
+  } else if (status === "LLM_failed") {
+    label = "Classification failed — review required";
+    tone = "amber";
+  } else if (status === "LLM_skipped") {
+    label = "LLM skipped — officer must classify";
+    tone = "amber";
+  } else if (needsOfficer) {
+    label = "Review required before acknowledge";
+    tone = "amber";
+  } else if (status === "pending" && !ticket.grievance_summary?.trim()) {
+    label = "Summary pending";
+    tone = "gray";
+  } else if (status === "LLM_generated") {
+    label = "Generated — not yet validated";
+    tone = "amber";
+  } else {
+    label = "Not validated";
+    tone = "gray";
+  }
+
+  const styles =
+    tone === "green"
+      ? "bg-green-50 text-green-800 border-green-200"
+      : tone === "amber"
+        ? "bg-amber-50 text-amber-900 border-amber-200"
+        : "bg-gray-50 text-gray-600 border-gray-200";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${styles}`}
+    >
+      {tone === "green" ? (
+        <CheckCircle2 size={12} className="shrink-0" />
+      ) : tone === "amber" ? (
+        <AlertTriangle size={12} className="shrink-0" />
+      ) : null}
+      {label}
+    </span>
+  );
+}
+
 interface ClassificationGrievancePanelProps {
   ticket: TicketDetail;
   onUpdated?: () => void;
@@ -45,31 +99,19 @@ export function ClassificationGrievancePanel({
   ]);
 
   const needsOfficer = ticket.classification_officer_validation_required ?? false;
-  const validated = ticket.classification_validated ?? false;
 
-  const statusLabel = useMemo(() => {
-    if (ticket.classification_validated_by_complainant) {
-      return "Validated by complainant";
-    }
-    if (ticket.classification_validated_by_officer) {
-      return "Validated by officer";
-    }
-    if (ticket.grievance_classification_status === "LLM_skipped") {
-      return "LLM skipped — officer classification required";
-    }
-    if (ticket.grievance_classification_status === "LLM_failed") {
-      return "Classification failed — officer review required";
-    }
-    if (ticket.grievance_classification_status === "pending") {
-      return "Classification pending";
-    }
-    if (needsOfficer) {
-      return "Review summary and categories before acknowledging";
-    }
-    return null;
-  }, [ticket, needsOfficer]);
+  const isDirty = useMemo(() => {
+    const summaryChanged =
+      summary.trim() !== (ticket.grievance_summary ?? "").trim();
+    const catsChanged =
+      categories.trim() !== parseCategoriesForEdit(ticket.grievance_categories).trim();
+    return summaryChanged || catsChanged;
+  }, [summary, categories, ticket.grievance_summary, ticket.grievance_categories]);
 
-  async function handleConfirm() {
+  const canSave =
+    needsOfficer || isDirty || !(ticket.grievance_summary ?? "").trim();
+
+  async function handleSave() {
     setError(null);
     const summaryTrim = summary.trim();
     const catsTrim = categories.trim();
@@ -91,98 +133,103 @@ export function ClassificationGrievancePanel({
     }
   }
 
+  const originalText = ticket.grievance_description?.trim() ?? "";
+  const saveLabel = needsOfficer
+    ? "Confirm summary & categories"
+    : "Save changes";
+
   return (
-    <div className={className}>
-      {statusLabel && (
-        <div
-          className={`mb-3 flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-            validated
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : needsOfficer
-                ? "bg-amber-50 text-amber-900 border border-amber-200"
-                : "bg-gray-50 text-gray-600 border border-gray-200"
-          }`}
-        >
-          {validated ? (
-            <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-          ) : needsOfficer ? (
-            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-          ) : null}
-          <span>{statusLabel}</span>
-        </div>
-      )}
-
-      {!needsOfficer && parseCategoriesForEdit(ticket.grievance_categories) && (
-        <p className="text-sm text-gray-800 mb-3">
-          <span className="font-semibold text-gray-900">Category:</span>{" "}
-          {parseCategoriesForEdit(ticket.grievance_categories)}
+    <div className={`space-y-4 ${className}`}>
+      {/* Block 1: original narrative — read-only */}
+      <div className="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5">
+        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+          Original grievance
         </p>
-      )}
-
-      {ticket.grievance_description ? (
-        <div className="mb-3">
-          <p className="text-xs font-medium text-gray-500 uppercase mb-1">Complainant narrative</p>
+        {originalText ? (
           <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-            {ticket.grievance_description}
+            {originalText}
           </p>
-        </div>
-      ) : null}
+        ) : (
+          <p className="text-sm text-gray-500 italic">No original narrative on file.</p>
+        )}
+      </div>
 
-      {needsOfficer ? (
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Summary</label>
-            <textarea
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              rows={4}
-              className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">
-              Categories (comma-separated)
-            </label>
-            <textarea
-              value={categories}
-              onChange={(e) => setCategories(e.target.value)}
-              rows={2}
-              className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-          {error && <p className="text-xs text-red-600">{error}</p>}
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={saving}
-            className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm"
-          >
-            {saving ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
-                Saving…
-              </span>
-            ) : (
-              "Confirm summary & categories"
-            )}
-          </button>
+      {/* Block 2: summary — editable + validation badge */}
+      <div
+        className={`rounded-lg border px-3 py-2.5 ${
+          needsOfficer ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+            Summary
+          </p>
+          <SummaryStatusBadge ticket={ticket} />
         </div>
-      ) : (
-        <>
-          {ticket.grievance_summary ? (
-            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-              {ticket.grievance_summary}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-500 italic">No summary on file.</p>
-          )}
-          {ticket.grievance_categories && (
-            <p className="text-xs text-gray-500 mt-2">
-              <span className="font-medium">Categories:</span>{" "}
-              {parseCategoriesForEdit(ticket.grievance_categories)}
-            </p>
-          )}
-        </>
+        <textarea
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          rows={4}
+          placeholder="LLM or officer summary of the grievance…"
+          className={`w-full text-sm rounded-lg px-3 py-2 leading-relaxed focus:ring-2 ${
+            needsOfficer
+              ? "border border-amber-200 focus:ring-amber-400"
+              : "border border-slate-200 focus:ring-blue-400"
+          }`}
+        />
+        {!summary.trim() && (
+          <p className="text-xs text-gray-500 mt-1 italic">
+            No summary yet — enter one or wait for classification to finish.
+          </p>
+        )}
+      </div>
+
+      {/* Block 3: categories */}
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+          Categories
+        </p>
+        <textarea
+          value={categories}
+          onChange={(e) => setCategories(e.target.value)}
+          rows={2}
+          placeholder="e.g. Environmental - Air Pollution"
+          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400"
+        />
+        <p className="text-[11px] text-gray-500 mt-1">Comma-separated list</p>
+      </div>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <button
+        type="button"
+        onClick={() => void handleSave()}
+        disabled={saving || !canSave}
+        title={
+          !canSave && !needsOfficer
+            ? "No changes to save"
+            : undefined
+        }
+        className={`w-full font-semibold py-2.5 rounded-lg text-sm disabled:opacity-50 ${
+          needsOfficer
+            ? "bg-amber-600 hover:bg-amber-700 text-white"
+            : "bg-slate-700 hover:bg-slate-800 text-white"
+        }`}
+      >
+        {saving ? (
+          <span className="inline-flex items-center justify-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Saving…
+          </span>
+        ) : (
+          saveLabel
+        )}
+      </button>
+
+      {needsOfficer && (
+        <p className="text-xs text-amber-800">
+          Confirm summary and categories before acknowledging this case.
+        </p>
       )}
     </div>
   );

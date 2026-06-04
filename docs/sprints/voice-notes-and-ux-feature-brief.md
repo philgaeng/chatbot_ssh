@@ -466,8 +466,10 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 
 - **Data:** Ticket detail and list must show summary/categories even when cache on `ticketing.tickets` is empty — source of truth includes **`public.grievances`** (read via grievance API), **without** requiring `is_temporary = false` for **read** paths.
 - **Sync:** Keep ticket cache updated when classification completes (backfill job + forward path on LLM completion / periodic sync).
-- **UI — ORIGINAL GRIEVANCE / TP-09 card:** Show description (raw), summary (LLM), and categories; badge when complainant validated vs pending officer review.
-- **UI — Officer validation:** When status is `LLM_generated`, `LLM_failed`, or `LLM_skipped`, show review UI (edit categories + summary, then confirm → `officer_confirmed`). **Blocks Acknowledge** until then. `complainant_confirmed` skips the gate.
+- **UI — ORIGINAL GRIEVANCE / TP-09 card:** Two distinct panels in one card (not one blended narrative block):
+  1. **Original grievance** — read-only box with raw `grievance_description` only.
+  2. **Summary** — separate bordered box with LLM/officer summary text, **its own validation badge** (complainant / officer / review required / pending), and an **editable textarea** so officers can fix LLM errors; **Categories** below as a third labeled block (comma-separated edit when required).
+- **UI — Officer validation:** When status is `LLM_generated`, `LLM_failed`, or `LLM_skipped`, amber summary badge + **Confirm summary & categories** → `officer_confirmed`. **Blocks Acknowledge** until then. `complainant_confirmed` skips the gate but summary/categories remain **editable** with **Save changes** (same PATCH; sets `officer_confirmed` if officer edits).
 - **Submit path (chatbot):** Ensure `dispatch_ticket` sends summary/categories when available at submit (read from DB if session slots empty).
 - **Read path:** Grievance fetch for display **must not** filter on `is_temporary` (AWS shows submitted rows can still be `is_temporary = true`).
 
@@ -488,7 +490,7 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 | Officer required | When `LLM_generated`, `LLM_failed`, or `LLM_skipped` (e.g. on assign / before Acknowledge) → edit + confirm → `officer_confirmed` |
 | `is_temporary` | Retired (no read/sync filter) |
 | Read model | **Hybrid** detail merge + list cache + forward sync |
-| Officer UX | Edit **categories + summary**, then confirm |
+| Officer UX | Edit **categories + summary**, then confirm; layout = original (read-only) + summary (editable + status badge) + categories |
 | Backfill | One-time AWS SQL for empty ticket cache |
 
 **Related** TP-09, `dispatch_ticket`, `grievance_sync`.
