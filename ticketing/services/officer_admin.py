@@ -245,6 +245,46 @@ def _keycloak_admin():
     return KeycloakAdmin(connection=conn)
 
 
+def _keycloak_find_user(admin, user_id: str) -> dict | None:
+    """Lookup realm user by username or email (case-insensitive email)."""
+    uid = user_id.strip()
+    for query in (
+        {"username": uid, "exact": True},
+        {"email": uid, "exact": True},
+        {"email": uid.lower(), "exact": True},
+    ):
+        users = admin.get_users(query=query)
+        if users:
+            return users[0]
+    return None
+
+
+def _keycloak_invite_email_options() -> tuple[str, str]:
+    """client_id + redirect_uri for execute-actions email (Keycloak Admin API)."""
+    import os
+
+    settings = get_settings()
+    client_id = (
+        os.getenv("KEYCLOAK_INVITE_CLIENT_ID") or settings.keycloak_invite_client_id or "ticketing-ui"
+    ).strip()
+    redirect_uri = (
+        os.getenv("KEYCLOAK_INVITE_REDIRECT_URI") or settings.keycloak_invite_redirect_uri or ""
+    ).strip()
+    if not redirect_uri:
+        redirect_uri = "http://localhost:3002/login"
+    return client_id, redirect_uri
+
+
+def _keycloak_send_invite_email(admin, kc_id: str) -> None:
+    client_id, redirect_uri = _keycloak_invite_email_options()
+    admin.send_update_account(
+        user_id=kc_id,
+        payload=["UPDATE_PASSWORD", "UPDATE_PROFILE"],
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+    )
+
+
 def keycloak_create_user(
     email: str,
     role_key: str,
@@ -256,43 +296,64 @@ def keycloak_create_user(
     name_parts = local.replace(".", " ").replace("-", " ").split()
     first_name = name_parts[0].title() if name_parts else local
     last_name = name_parts[-1].title() if len(name_parts) > 1 else "Officer"
+    create_payload = {
+        "username": email,
+        "email": email,
+        "firstName": first_name,
+        "lastName": last_name,
+        "enabled": True,
+        "emailVerified": False,
+        "attributes": {
+            "grm_roles": [role_key],
+            "organization_id": [organization_id],
+        },
+        "credentials": [{
+            "type": "password",
+            "value": temp_password or "GrmDemo2026!",
+            "temporary": True,
+        }],
+        "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
+    }
     try:
-        admin.create_user({
-            "username": email,
-            "email": email,
-            "firstName": first_name,
-            "lastName": last_name,
-            "enabled": True,
-            "emailVerified": False,
-            "attributes": {
-                "grm_roles": [role_key],
-                "organization_id": [organization_id],
-            },
-            "credentials": [{
-                "type": "password",
-                "value": temp_password or "GrmDemo2026!",
-                "temporary": True,
-            }],
-            "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
-        })
-        kc_users = admin.get_users(query={"username": email, "exact": True})
-        if not kc_users:
-            kc_users = admin.get_users(query={"email": email, "exact": True})
-        if not kc_users:
+        admin.create_user(create_payload)
+        kc_user = _keycloak_find_user(admin, email)
+        if not kc_user:
             raise HTTPException(
                 status_code=500,
                 detail=(
                     "Keycloak user was created but could not be reloaded for invite email dispatch."
                 ),
             )
-        admin.send_update_account(
-            user_id=kc_users[0]["id"],
-            payload=["UPDATE_PASSWORD", "UPDATE_PROFILE"],
-        )
+        _keycloak_send_invite_email(admin, kc_user["id"])
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
-            raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
+            existing = _keycloak_find_user(admin, email)
+            if existing and existing.get("enabled"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"User {email!r} already exists in Keycloak",
+                )
+            if existing:
+                admin.update_user(
+                    user_id=existing["id"],
+                    payload={
+                        "enabled": True,
+                        "email": email,
+                        "firstName": first_name,
+                        "lastName": last_name,
+                        "emailVerified": False,
+                        "attributes": create_payload["attributes"],
+                        "requiredActions": create_payload["requiredActions"],
+                        "credentials": create_payload["credentials"],
+                    },
+                )
+                _keycloak_send_invite_email(admin, existing["id"])
+                return
+            raise HTTPException(
+                status_code=409,
+                detail=f"User {email!r} already exists in Keycloak",
+            )
         if "sender address" in err.lower() or "execute actions email" in err.lower():
             from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
 
@@ -309,12 +370,10 @@ def keycloak_update_user_attributes(
     if not keycloak_configured():
         return
     admin = _keycloak_admin()
-    kc_users = admin.get_users(query={"username": user_id, "exact": True})
-    if not kc_users:
-        kc_users = admin.get_users(query={"email": user_id, "exact": True})
-    if not kc_users:
+    kc_user = _keycloak_find_user(admin, user_id)
+    if not kc_user:
         return
-    kc_id = kc_users[0]["id"]
+    kc_id = kc_user["id"]
     attrs: dict[str, list[str]] = {
         "grm_roles": [",".join(role_keys) if role_keys else ""],
         "organization_id": [organization_id],
@@ -324,13 +383,13 @@ def keycloak_update_user_attributes(
     admin.update_user(user_id=kc_id, payload={"attributes": attrs})
 
 
-def keycloak_disable_user(user_id: str) -> None:
+def keycloak_delete_user(user_id: str) -> bool:
+    """Remove realm user so roster and re-invite stay consistent. Returns True if deleted."""
     if not keycloak_configured():
-        return
+        return False
     admin = _keycloak_admin()
-    kc_users = admin.get_users(query={"username": user_id, "exact": True})
-    if not kc_users:
-        kc_users = admin.get_users(query={"email": user_id, "exact": True})
-    if not kc_users:
-        return
-    admin.update_user(user_id=kc_users[0]["id"], payload={"enabled": False})
+    kc_user = _keycloak_find_user(admin, user_id)
+    if not kc_user:
+        return False
+    admin.delete_user(kc_user["id"])
+    return True

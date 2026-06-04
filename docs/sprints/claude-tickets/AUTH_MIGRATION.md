@@ -99,7 +99,7 @@ Before going to staging / production:
   KEYCLOAK_SMTP_HOST=mail.example.com
   KEYCLOAK_SMTP_PORT=587
   KEYCLOAK_SMTP_USER=grm@example.com
-  KEYCLOAK_SMTP_PASSWORD=...
+  KEYCLOAK_SMTP_PASSWORD=...   # if password contains $, use $$ in env.local (Compose escaping)
   KEYCLOAK_SMTP_FROM=grm@example.com
   KEYCLOAK_SMTP_FROM_DISPLAY=GRM Ticketing
   ```
@@ -108,6 +108,17 @@ Before going to staging / production:
   ```bash
   docker compose ... exec ticketing_api_auth python -m ticketing.auth.keycloak_setup
   ```
+
+  **Invite email UX** (custom `grm` login theme under `deployment/keycloak/themes/grm/`):
+  - Skips the default “Perform the following actions” interstitial (auto-continues to password/profile).
+  - After completion, redirects to GRM login when `KEYCLOAK_INVITE_REDIRECT_URI` is set (default `http://localhost:3002/login`; staging/production: `https://grm-auth…/login`).
+
+  ```env
+  KEYCLOAK_INVITE_CLIENT_ID=ticketing-ui
+  KEYCLOAK_INVITE_REDIRECT_URI=https://grm-auth.nepal-gms-chatbot.facets-ai.com/login
+  ```
+
+  Restart Keycloak after theme changes: `docker compose ... --profile auth up -d --force-recreate keycloak`
 - [ ] **Update redirect URIs** in `keycloak_setup.py` when deploying to a new domain, then re-run the setup script.
 - [ ] **Set token lifespans** in the `grm` realm:
   - Access token: 1 hour (already set by setup script)

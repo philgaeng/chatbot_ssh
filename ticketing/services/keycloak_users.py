@@ -49,6 +49,8 @@ def list_grm_officer_profiles() -> dict[str, KeycloakUserProfile]:
         admin = _admin()
         profiles: dict[str, KeycloakUserProfile] = {}
         for user in admin.get_users({}):
+            if not user.get("enabled", True):
+                continue
             attrs = user.get("attributes") or {}
             roles_raw = (attrs.get("grm_roles") or [""])[0]
             role_keys = tuple(r.strip() for r in roles_raw.split(",") if r.strip())

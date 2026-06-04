@@ -42,6 +42,8 @@ services:
     profiles: [auth]
     image: quay.io/keycloak/keycloak:26.0.7
     command: start-dev
+    volumes:
+      - ./deployment/keycloak/themes/grm:/opt/keycloak/themes/grm:ro
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/app_db

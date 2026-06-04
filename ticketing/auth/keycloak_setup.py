@@ -177,6 +177,12 @@ def setup_realm_smtp(admin: KeycloakAdmin) -> None:
     )
 
 
+def setup_realm_login_theme(admin: KeycloakAdmin) -> None:
+    """GRM login theme: skip execute-actions interstitial; link back to officer UI login."""
+    admin.update_realm(REALM, {"loginTheme": "grm", "emailTheme": "keycloak"})
+    logger.info("Realm '%s' login theme set to 'grm'", REALM)
+
+
 def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
     """Enable unmanaged attribute storage.
 
@@ -420,6 +426,7 @@ def main() -> None:
 
     grm = _realm_admin()
     setup_realm_smtp(grm)
+    setup_realm_login_theme(grm)
     setup_user_profile_policy(grm)
     setup_officer_phone_profile(grm)
     ui_uuid = setup_clients(grm)

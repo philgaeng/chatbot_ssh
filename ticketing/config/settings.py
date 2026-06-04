@@ -60,6 +60,9 @@ class TicketingSettings(BaseSettings):
     keycloak_smtp_password: str = ""
     keycloak_smtp_from: str = ""
     keycloak_smtp_from_display: str = "GRM Ticketing"
+    # Officer invite email: after required actions, redirect to GRM login (needs client_id).
+    keycloak_invite_client_id: str = "ticketing-ui"
+    keycloak_invite_redirect_uri: str = "http://localhost:3002/login"
 
     # ── LLM (OpenAI — same key used by chatbot backend) ──
     openai_api_key: str = ""
