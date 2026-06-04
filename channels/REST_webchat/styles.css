@@ -285,8 +285,10 @@
 }
 
 .send-button svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  /* Nudge icon like WhatsApp: plane sits slightly up-left in the circle */
+  transform: translate(-1px, -1px);
 }
 
 .send-button-wrap {
@@ -368,34 +370,149 @@
   padding: 0 5px;
 }
 
-/* Launcher Button */
-#chat-launcher {
+/* Launcher zone (button + arc arrow hint) */
+.chat-launcher-zone {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  width: 60px;
-  height: 60px;
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.chat-launcher-hint {
+  /* Clear launcher (72px) + border + pulse ring (~1.4×) + gap */
+  position: fixed;
+  right: 118px;
+  bottom: 72px;
+  width: min(50vw, 400px);
+  height: min(38vh, 280px);
+  color: var(--primary-color);
+  pointer-events: none;
+  overflow: visible;
+  z-index: 998;
+}
+
+.chat-launcher-hint-sketch {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.2;
+}
+
+.chat-launcher-hint-path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 310;
+  stroke-dashoffset: 310;
+  animation: launcher-hint-draw 3.2s ease-in-out infinite;
+}
+
+@keyframes launcher-hint-draw {
+  0% {
+    stroke-dashoffset: 310;
+    opacity: 0.4;
+  }
+  42% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  68% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 310;
+    opacity: 0.4;
+  }
+}
+
+#chat-launcher {
+  position: relative;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: var(--primary-color);
-  border: none;
+  border: 3px solid rgba(255, 255, 255, 0.95);
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  z-index: 999;
+  box-shadow: 0 4px 18px rgba(4, 105, 173, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  animation: launcher-attention 2.4s ease-in-out infinite;
+}
+
+#chat-launcher::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(4, 105, 173, 0.4);
+  animation: launcher-ring-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes launcher-attention {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 18px rgba(4, 105, 173, 0.4);
+  }
+  50% {
+    transform: scale(1.07);
+    box-shadow: 0 8px 28px rgba(4, 105, 173, 0.55);
+  }
+}
+
+@keyframes launcher-ring-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  75% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 #chat-launcher:hover {
-  transform: scale(1.1);
+  transform: scale(1.12);
   background: var(--secondary-color);
+  animation: none;
+}
+
+#chat-launcher:hover::before {
+  animation: none;
+  opacity: 0;
 }
 
 #chat-launcher svg {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   fill: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat-launcher,
+  #chat-launcher::before,
+  .chat-launcher-hint-path {
+    animation: none !important;
+  }
+
+  .chat-launcher-hint-path {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }
 
 /* Mobile Styles */
@@ -423,16 +540,26 @@
     padding: 10px;
   }
 
-  #chat-launcher {
-    width: 50px;
-    height: 50px;
+  .chat-launcher-zone {
     bottom: 15px;
     right: 15px;
   }
 
+  .chat-launcher-hint {
+    right: 96px;
+    width: min(58vw, 220px);
+    height: min(32vh, 200px);
+    bottom: 66px;
+  }
+
+  #chat-launcher {
+    width: 64px;
+    height: 64px;
+  }
+
   #chat-launcher svg {
-    width: 20px;
-    height: 20px;
+    width: 30px;
+    height: 30px;
   }
 
   .quick-reply-button {
@@ -465,6 +592,10 @@ body.high-contrast .message_sent {
 body.high-contrast #chat-launcher {
   background: var(--primary-color);
   border: 2px solid var(--border-color);
+}
+
+body.high-contrast .chat-launcher-hint {
+  color: var(--text-color);
 }
 
 body.high-contrast .quick-reply-button {
