@@ -1834,6 +1834,13 @@ export function inviteOfficer(payload: OfficerInvitePayload): Promise<OfficerInv
   });
 }
 
+export function resendOfficerInvite(userId: string): Promise<OfficerInviteResult> {
+  return apiFetch<OfficerInviteResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/resend-invite`,
+    { method: "POST" },
+  );
+}
+
 export function deleteOfficer(userId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
 }

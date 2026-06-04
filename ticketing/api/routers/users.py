@@ -836,6 +836,47 @@ def invite_officer(
     return OfficerInviteResponse(ok=True, email=email, message=msg)
 
 
+@router.post(
+    "/users/{user_id}/resend-invite",
+    response_model=OfficerInviteResponse,
+    summary="Resend Keycloak setup email for an invited officer (fresh action link)",
+)
+def resend_officer_invite(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerInviteResponse:
+    from ticketing.services.officer_admin import keycloak_resend_invite_email, log_admin_audit
+
+    email = user_id.strip().lower()
+    ob = db.get(OfficerOnboarding, email)
+    if ob and ob.status != "invited":
+        raise HTTPException(
+            status_code=400,
+            detail="Resend invite is only available while onboarding status is Invited.",
+        )
+
+    sent_to = keycloak_resend_invite_email(email, db=db)
+
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.invite.resend",
+        target_user_id=email,
+        payload={},
+    )
+    db.commit()
+
+    return OfficerInviteResponse(
+        ok=True,
+        email=sent_to,
+        message=(
+            f"Setup email resent to {sent_to}. "
+            "The new link expires in 12 hours (check spam if needed)."
+        ),
+    )
+
+
 @router.patch(
     "/users/{user_id}",
     response_model=OfficerUpdateResponse,

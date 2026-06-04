@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
 from ticketing.models.admin_audit_log import AdminAuditLog
+from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
@@ -283,6 +284,73 @@ def _keycloak_send_invite_email(admin, kc_id: str) -> None:
         client_id=client_id,
         redirect_uri=redirect_uri,
     )
+
+
+def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
+    """True if officer has not finished Keycloak onboarding (invited or pending required actions)."""
+    ob = db.get(OfficerOnboarding, email)
+    if ob and ob.status == "invited":
+        return True
+    if not keycloak_configured():
+        return False
+    kc_user = _keycloak_find_user(_keycloak_admin(), email)
+    if not kc_user or not kc_user.get("enabled", True):
+        return False
+    pending = kc_user.get("requiredActions") or []
+    return bool(pending)
+
+
+def keycloak_resend_invite_email(user_id: str, db=None) -> str:
+    """
+    Send a fresh execute-actions email (new 12h link) for an invited officer.
+    Returns the normalized email address the message was sent to.
+    """
+    if not keycloak_configured():
+        raise HTTPException(status_code=503, detail="Keycloak is not configured for this environment.")
+
+    preflight = keycloak_invite_preflight()
+    if not preflight.get("ok"):
+        raise HTTPException(status_code=503, detail=preflight.get("message", "Invite email is not ready."))
+
+    email = user_id.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=422, detail="Resend invite requires an email user id.")
+
+    admin = _keycloak_admin()
+    kc_user = _keycloak_find_user(admin, email)
+    if not kc_user:
+        raise HTTPException(status_code=404, detail="Officer not found in Keycloak.")
+
+    if not kc_user.get("enabled", True):
+        raise HTTPException(
+            status_code=409,
+            detail="Officer account is disabled in Keycloak. Remove and invite again.",
+        )
+
+    try:
+        admin.update_user(
+            user_id=kc_user["id"],
+            payload={"requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"]},
+        )
+        _keycloak_send_invite_email(admin, kc_user["id"])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        err = str(exc)
+        if "sender address" in err.lower() or "execute actions email" in err.lower():
+            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+
+            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
+        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+
+    sent_to = (kc_user.get("email") or email).strip().lower()
+    if db is not None:
+        from datetime import datetime, timezone
+
+        ob = db.get(OfficerOnboarding, sent_to)
+        if ob:
+            ob.updated_at = datetime.now(timezone.utc)
+    return sent_to
 
 
 def keycloak_create_user(

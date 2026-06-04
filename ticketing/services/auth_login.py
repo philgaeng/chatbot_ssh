@@ -250,6 +250,59 @@ def request_password_reset(email: str, redirect_base: str) -> None:
         ) from exc
 
 
+INVITE_SETUP_LINK_GENERIC = (
+    "If an invited officer account exists for that email, we sent a new setup link. "
+    "Check your inbox and spam folder. The link expires in 12 hours."
+)
+
+_INVITE_RESEND_COOLDOWN_SEC = 120
+
+
+def request_invite_setup_link(email: str, db) -> None:
+    """
+    Self-service: resend Keycloak execute-actions email for invited officers.
+    Always appears to succeed from the caller's perspective when not eligible (no enumeration).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi import HTTPException
+
+    from ticketing.models.officer_onboarding import OfficerOnboarding
+    from ticketing.services.officer_admin import (
+        keycloak_configured,
+        keycloak_resend_invite_email,
+        officer_eligible_for_invite_resend,
+    )
+
+    if not keycloak_configured():
+        raise AuthLoginError("auth_unavailable", "Authentication is not configured.", 503)
+
+    normalized = _normalize_email(email)
+    if not normalized or "@" not in normalized:
+        raise AuthLoginError("invalid_email", "Enter a valid email address.", 422)
+
+    if not officer_eligible_for_invite_resend(db, normalized):
+        logger.info("Invite setup link requested for non-eligible email %s", normalized)
+        return
+
+    ob = db.get(OfficerOnboarding, normalized)
+    if ob and ob.updated_at:
+        age = datetime.now(timezone.utc) - ob.updated_at
+        if age < timedelta(seconds=_INVITE_RESEND_COOLDOWN_SEC):
+            logger.info("Invite setup link throttled for %s", normalized)
+            return
+
+    try:
+        keycloak_resend_invite_email(normalized, db=db)
+    except HTTPException as exc:
+        if exc.status_code == 503:
+            detail = exc.detail if isinstance(exc.detail, str) else "Could not send email."
+            raise AuthLoginError("email_failed", detail, 503) from exc
+        logger.warning("Invite setup link failed for %s: %s", normalized, exc.detail)
+    except Exception as exc:
+        logger.error("Invite setup link failed for %s: %s", normalized, exc)
+
+
 def reset_password_with_token(token: str, new_password: str) -> None:
     email = _verify_reset_token(token)
     if len(new_password) < 8:
