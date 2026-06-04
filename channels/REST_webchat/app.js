@@ -24,6 +24,16 @@ window.FILE_UPLOAD_CONFIG = FILE_UPLOAD_CONFIG;
 // DOM Elements
 let chatWidget;
 let chatLauncher;
+let chatLauncherZone;
+
+function setChatLauncherVisible(visible) {
+  const display = visible ? "flex" : "none";
+  if (chatLauncherZone) {
+    chatLauncherZone.style.display = display;
+  } else if (chatLauncher) {
+    chatLauncher.style.display = display;
+  }
+}
 let closeButton;
 let messageForm;
 let messageInput;
@@ -460,6 +470,7 @@ function setupTaskStatusSocket() {
 async function initializeChat() {
   // Get DOM elements
   chatWidget = document.getElementById("chat-widget");
+  chatLauncherZone = document.getElementById("chat-launcher-zone");
   chatLauncher = document.getElementById("chat-launcher");
   closeButton = document.querySelector(".close-button");
   messageForm = document.getElementById("form");
@@ -482,7 +493,7 @@ async function initializeChat() {
 
   // Initialize chat widget visibility
   chatWidget.style.display = "none";
-  chatLauncher.style.display = "flex";
+  setChatLauncherVisible(true);
 
   // Initialize Socket.IO connection for task status updates (classification, etc.)
   setupTaskStatusSocket();
@@ -498,7 +509,7 @@ async function initializeChat() {
 function setupEventListeners() {
   chatLauncher.addEventListener("click", () => {
     chatWidget.style.display = "flex";
-    chatLauncher.style.display = "none";
+    setChatLauncherVisible(false);
     messageInput.focus();
     if (!window.introductionSent) {
       void sendIntroduceMessage();
@@ -507,7 +518,7 @@ function setupEventListeners() {
 
   closeButton.addEventListener("click", () => {
     chatWidget.style.display = "none";
-    chatLauncher.style.display = "flex";
+    setChatLauncherVisible(true);
   });
 
   // File attachment handling
@@ -636,7 +647,7 @@ function resetFrontendState() {
 window.handleClearSessionCommand = function () {
   resetFrontendState();
   chatWidget.style.display = "none";
-  chatLauncher.style.display = "flex";
+  setChatLauncherVisible(true);
 
   const storage = localStorage;
   const storageKey = SESSION_CONFIG.STORAGE_KEY;
@@ -670,7 +681,7 @@ window.handleCloseWindowCommand = function () {
   setTimeout(() => {
     if (!window.closed) {
       chatWidget.style.display = "none";
-      chatLauncher.style.display = "flex";
+      setChatLauncherVisible(true);
       uiActions.appendMessage(
         "For security reasons, your browser may block automatic tab closing. Please close this tab manually.",
         "received"

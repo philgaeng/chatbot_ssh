@@ -56,9 +56,9 @@
                 <button type="button" id="persistent-close-session" class="persistent-control-button">
                     Close Session
                 </button>
-                <button type="submit" class="send-button">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <button type="submit" class="send-button" aria-label="Send message">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M1.101 21.757 23.8 12.45 1.101 3.143v7.714l9.923 1.692-9.923 1.692v7.714z"/>
                     </svg>
                 </button>
             </div>
@@ -69,12 +69,48 @@
         </form>
     </div>
 
-    <!-- Launcher button -->
-    <button id="chat-launcher">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+    <!-- Launcher + arc hint (hidden while chat is open) -->
+    <div id="chat-launcher-zone" class="chat-launcher-zone">
+        <svg
+            id="chat-launcher-hint"
+            class="chat-launcher-hint"
+            viewBox="620 395 300 270"
+            preserveAspectRatio="xMaxYMax meet"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+        >
+            <defs>
+                <marker
+                    id="launcher-arrowhead"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="5"
+                    refY="4"
+                    orient="auto"
+                >
+                    <path
+                        d="M0,0 L8,4 L0,8 L2.5,4 Z"
+                        fill="currentColor"
+                    />
+                </marker>
+            </defs>
+            <!-- Concave arc (~50% span): mid-page toward launcher -->
+            <path
+                class="chat-launcher-hint-sketch"
+                d="M 714 473 A 168 168 0 0 0 828 612"
+            />
+            <path
+                class="chat-launcher-hint-path"
+                d="M 710 465 A 170 170 0 0 0 822 608"
+                marker-end="url(#launcher-arrowhead)"
+            />
         </svg>
-    </button>
+        <button id="chat-launcher" type="button" aria-label="Open grievance chatbot">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+        </button>
+    </div>
 
     <script src="../shared/scripts/utils.js"></script>
 </body>
