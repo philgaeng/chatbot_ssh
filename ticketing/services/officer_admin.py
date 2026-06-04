@@ -166,8 +166,10 @@ def keycloak_configured() -> bool:
 def keycloak_invite_preflight() -> dict[str, Any]:
     """
     Read-only readiness check for Keycloak execute-actions invite emails.
-    Requires realm SMTP (configured via keycloak_setup from KEYCLOAK_SMTP_* env).
+    Requires realm SMTP (KEYCLOAK_SMTP_* env + keycloak_setup).
     """
+    from ticketing.auth.keycloak_smtp import SMTP_SETUP_HINT, missing_smtp_env_fields
+
     if not keycloak_configured():
         return {
             "ok": False,
@@ -203,11 +205,14 @@ def keycloak_invite_preflight() -> dict[str, Any]:
     ok = bool(realm_data.get("enabled", True)) and smtp_configured and email_action_supported
 
     if not smtp_configured:
-        hint = (
-            "Keycloak realm SMTP is not configured. Ensure SES_VERIFIED_EMAIL and "
-            "AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are in env.local (same as notifications), "
-            "then run: python -m ticketing.auth.keycloak_setup"
-        )
+        env_missing = missing_smtp_env_fields()
+        if env_missing:
+            hint = f"Keycloak realm SMTP not configured. Missing env: {', '.join(env_missing)}. {SMTP_SETUP_HINT}"
+        else:
+            hint = (
+                "Keycloak realm SMTP not configured in the grm realm (env looks set — re-run keycloak_setup). "
+                + SMTP_SETUP_HINT
+            )
     elif ok:
         hint = "Invite email preflight passed (Keycloak execute-actions + realm SMTP)."
     else:
@@ -289,14 +294,9 @@ def keycloak_create_user(
         if "409" in err or "already exists" in err.lower():
             raise HTTPException(status_code=409, detail=f"User {email!r} already exists in Keycloak")
         if "sender address" in err.lower() or "execute actions email" in err.lower():
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Keycloak could not send the invite email — realm SMTP is not configured. "
-                    "Ensure SES_VERIFIED_EMAIL and AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
-                    "are set, then run: python -m ticketing.auth.keycloak_setup"
-                ),
-            )
+            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+
+            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
         raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
 
 

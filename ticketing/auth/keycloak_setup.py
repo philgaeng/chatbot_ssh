@@ -155,70 +155,18 @@ def setup_realm(master: KeycloakAdmin) -> None:
         logger.info("Realm '%s' already exists — skipping create", REALM)
 
 
-def _resolved_smtp_config() -> dict[str, str] | None:
-    """
-    Build Keycloak realm smtpServer for execute-actions invite emails.
-
-    Priority:
-    1. Explicit KEYCLOAK_SMTP_USER / KEYCLOAK_SMTP_PASSWORD
-    2. AWS IAM keys already used by Messaging API (SES_VERIFIED_EMAIL + boto3):
-       SMTP user = AWS_ACCESS_KEY_ID, password = HMAC-derived secret (AWS standard)
-    """
-    from ticketing.auth.ses_smtp import derive_ses_smtp_password
-
-    settings = get_settings()
-    region = (os.getenv("AWS_REGION") or settings.aws_region or "ap-southeast-1").strip()
-    default_host = f"email-smtp.{region}.amazonaws.com"
-
-    host = (settings.keycloak_smtp_host or os.getenv("KEYCLOAK_SMTP_HOST") or default_host).strip()
-    port = str(
-        settings.keycloak_smtp_port
-        or os.getenv("KEYCLOAK_SMTP_PORT")
-        or "587"
-    ).strip()
-    from_addr = (
-        settings.keycloak_smtp_from
-        or os.getenv("KEYCLOAK_SMTP_FROM")
-        or os.getenv("SES_VERIFIED_EMAIL")
-        or ""
-    ).strip()
-    display = (settings.keycloak_smtp_from_display or "GRM Ticketing").strip()
-
-    user = (settings.keycloak_smtp_user or os.getenv("KEYCLOAK_SMTP_USER") or "").strip()
-    password = (settings.keycloak_smtp_password or os.getenv("KEYCLOAK_SMTP_PASSWORD") or "").strip()
-
-    if not user or not password:
-        aws_key = (os.getenv("AWS_ACCESS_KEY_ID") or "").strip()
-        aws_secret = (os.getenv("AWS_SECRET_ACCESS_KEY") or "").strip()
-        if aws_key and aws_secret:
-            user = aws_key
-            password = derive_ses_smtp_password(aws_secret)
-
-    if not from_addr or not user or not password:
-        return None
-
-    return {
-        "host": host,
-        "port": port,
-        "from": from_addr,
-        "fromDisplayName": display,
-        "ssl": "false",
-        "starttls": "true",
-        "auth": "true",
-        "user": user,
-        "password": password,
-    }
-
-
 def setup_realm_smtp(admin: KeycloakAdmin) -> None:
     """Configure grm realm email (required for officer invite execute-actions emails)."""
-    smtp = _resolved_smtp_config()
+    from ticketing.auth.keycloak_smtp import (
+        SMTP_SETUP_HINT,
+        missing_smtp_env_fields,
+        resolved_keycloak_smtp_config,
+    )
+
+    smtp = resolved_keycloak_smtp_config()
     if not smtp:
-        logger.warning(
-            "Keycloak realm SMTP not configured — need SES_VERIFIED_EMAIL plus either "
-            "KEYCLOAK_SMTP_USER/PASSWORD or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
-            "(same IAM creds as Messaging API). Then re-run keycloak_setup."
-        )
+        missing = ", ".join(missing_smtp_env_fields()) or "KEYCLOAK_SMTP_*"
+        logger.warning("Keycloak realm SMTP not configured — missing: %s. %s", missing, SMTP_SETUP_HINT)
         return
     admin.update_realm(REALM, {"smtpServer": smtp})
     logger.info(
