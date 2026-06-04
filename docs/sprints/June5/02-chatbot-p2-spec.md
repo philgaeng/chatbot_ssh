@@ -135,7 +135,7 @@ Short path when category = **DUST**.
 ## Recommended build order
 
 ```text
-CB-01 → CB-06 → CB-08 → CB-09
+CB -09, CB 08, CB 06, cb 01
 ```
 
 ---

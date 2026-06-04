@@ -7,8 +7,10 @@ import { get } from "../utterances.js";
 let messages;
 let grievanceId = null;
 let attachmentButton = null;
+let voiceNoteButton = null;
 let messageInput = null;
 let sendButton = null;
+let voiceNoteEnabled = false;
 let grievanceCreatedInDb = false;
 
 // Initialize UI Actions with DOM elements
@@ -20,6 +22,7 @@ export function initializeUIActions(
   messages = messagesElement;
   grievanceId = initialGrievanceId;
   attachmentButton = options.attachmentButton ?? document.getElementById("attachment-button");
+  voiceNoteButton = options.voiceNoteButton ?? document.getElementById("voice-note-button");
   messageInput = options.messageInput ?? document.getElementById("message-input");
   sendButton = options.sendButton ?? document.querySelector("#form .send-button");
   updateAttachButtonState();
@@ -27,18 +30,39 @@ export function initializeUIActions(
 
 // Update attach button disabled state and tooltip when grievanceId changes
 function updateAttachButtonState() {
-  if (!attachmentButton) return;
   const hasGrievance = !!grievanceId;
   const canUploadFiles = hasGrievance && grievanceCreatedInDb;
+  // Voice at description step: allow upload once grievance_id exists (DB row ensured on upload).
+  const canVoice = hasGrievance && voiceNoteEnabled;
 
-  attachmentButton.disabled = !canUploadFiles;
-  if (!hasGrievance) {
-    attachmentButton.title = get("attach_button.start_first");
-  } else if (!grievanceCreatedInDb) {
-    attachmentButton.title = get("attach_button.saving");
-  } else {
-    attachmentButton.title = get("attach_button.ready");
+  if (attachmentButton) {
+    attachmentButton.disabled = !canUploadFiles;
+    attachmentButton.classList.toggle("is-active", canUploadFiles);
+    if (!hasGrievance) {
+      attachmentButton.title = get("attach_button.start_first");
+    } else if (!grievanceCreatedInDb) {
+      attachmentButton.title = get("attach_button.saving");
+    } else {
+      attachmentButton.title = get("attach_button.ready");
+    }
   }
+
+  if (voiceNoteButton) {
+    voiceNoteButton.disabled = !canVoice;
+    voiceNoteButton.classList.toggle("is-active", canVoice);
+    if (canVoice) {
+      voiceNoteButton.title = get("voice_note.tap_to_record");
+    } else if (!hasGrievance) {
+      voiceNoteButton.title = get("voice_note.need_grievance");
+    } else {
+      voiceNoteButton.title = get("voice_note.inactive_step");
+    }
+  }
+}
+
+export function setVoiceNoteEnabled(enabled) {
+  voiceNoteEnabled = !!enabled;
+  updateAttachButtonState();
 }
 
 // Message display functions

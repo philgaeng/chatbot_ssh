@@ -30,7 +30,14 @@ def _get_action(action_name: str) -> Any:
         )
         from backend.actions.forms.form_grievance import (
             ActionStartGrievanceProcess,
+            ActionStartDustGrievanceProcess,
             ActionAskGrievanceNewDetail,
+        )
+        from backend.actions.action_map_location import (
+            ActionAskLocationMethod,
+            ActionAskMapLocation,
+            ActionApplyMapPin,
+            ActionOpenMapPicker,
         )
         from backend.actions.forms.form_seah_1 import (
             ActionAskFormSeah1SensitiveIssuesFollowUp,
@@ -133,7 +140,12 @@ def _get_action(action_name: str) -> Any:
 
         # Grievance
         _ACTIONS["action_start_grievance_process"] = ActionStartGrievanceProcess()
+        _ACTIONS["action_start_dust_grievance_process"] = ActionStartDustGrievanceProcess()
         _ACTIONS["action_ask_grievance_new_detail"] = ActionAskGrievanceNewDetail()
+        _ACTIONS["action_ask_location_method"] = ActionAskLocationMethod()
+        _ACTIONS["action_ask_map_location"] = ActionAskMapLocation()
+        _ACTIONS["action_open_map_picker"] = ActionOpenMapPicker()
+        _ACTIONS["action_apply_map_pin"] = ActionApplyMapPin()
         _ACTIONS["action_submit_grievance"] = ActionSubmitGrievance()
         _ACTIONS["action_submit_seah"] = ActionSubmitSeah()
 

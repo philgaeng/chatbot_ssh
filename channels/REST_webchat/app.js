@@ -8,6 +8,9 @@ import {
 // Import modules
 import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
+import { initMapPicker, openMapPicker, closeMapPicker } from "./modules/mapPicker.js";
+import { buildFileMetadataList, setExifConsent } from "./modules/exifHelper.js";
+import { initVoiceNote } from "./modules/voiceNote.js";
 import {
   get,
   format,
@@ -15,6 +18,8 @@ import {
   getLanguage,
   ADD_MORE_PAYLOAD,
   GO_BACK_PAYLOAD,
+  VOICE_ADD_PAYLOAD,
+  VOICE_NEXT_STEP_PAYLOAD,
   FILE_ANOTHER_PAYLOAD,
 } from "./utterances.js";
 
@@ -40,6 +45,7 @@ let messageInput;
 let messages;
 let fileInput;
 let attachmentButton;
+let voiceNoteButton;
 let sendButton;
 let persistentCloseBrowserButton;
 let persistentCloseSessionButton;
@@ -333,6 +339,13 @@ function handleOrchestratorResponse(response) {
   });
 
   maybeShowFiledBannerForState(next_state);
+
+  if (
+    next_state === "location_consent" ||
+    next_state === "location_method"
+  ) {
+    closeMapPicker();
+  }
 }
 
 window.updateCloseControlsVisibility = updateCloseControlsVisibility;
@@ -477,6 +490,19 @@ async function initializeChat() {
   messageInput = document.getElementById("message-input");
   fileInput = document.getElementById("file-input");
   attachmentButton = document.getElementById("attachment-button");
+  voiceNoteButton = document.getElementById("voice-note-button");
+  initMapPicker();
+  initVoiceNote({
+    button: voiceNoteButton,
+    onStatus: (status) => {
+      if (status === "recording") uiActions.appendMessage(get("voice_note.recording"), "received");
+      if (status === "max_length") uiActions.appendMessage(get("voice_note.max_length"), "received");
+      if (status === "denied") uiActions.appendMessage(get("voice_note.denied"), "received");
+    },
+    onRecorded: async (file) => {
+      await handleFileUpload([file]);
+    },
+  });
   persistentCloseBrowserButton = document.getElementById("persistent-close-browser");
   persistentCloseSessionButton = document.getElementById("persistent-close-session");
   messages = document.getElementById("messages");
@@ -487,6 +513,7 @@ async function initializeChat() {
   // Initialize UI Actions with DOM elements (pass refs for attach button, input lock)
   uiActions.initializeUIActions(messages, window.grievanceId, {
     attachmentButton,
+    voiceNoteButton,
     messageInput,
     sendButton: document.querySelector("#form .send-button"),
   });
@@ -641,6 +668,7 @@ function resetFrontendState() {
 
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
+  uiActions.setVoiceNoteEnabled(false);
   uiActions.clearMessages();
 }
 
@@ -668,6 +696,7 @@ window.handleFileAnotherGrievance = async function () {
   if (fileInput) fileInput.value = "";
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
+  uiActions.setVoiceNoteEnabled(false);
   uiActions.clearMessages();
   const quickReplyBlocks = messages?.querySelectorAll(".quick-replies");
   quickReplyBlocks?.forEach((el) => el.remove());
@@ -855,9 +884,23 @@ async function handleFileUpload(files) {
     return false;
   }
 
+  const isVoiceOnlyUpload =
+    files.length === 1 &&
+    FILE_TYPES.AUDIO.extensions.includes(
+      files[0].name.split(".").pop()?.toLowerCase() || ""
+    );
+  window.lastUploadWasVoiceOnly = isVoiceOnlyUpload;
+  if (!window.grievanceCreatedInDb && !isVoiceOnlyUpload) {
+    uiActions.appendMessage(get("attach_button.saving"), "received");
+    return false;
+  }
+
   const formData = new FormData();
   const sessionId = window.getSessionId();
   formData.append("grievance_id", window.grievanceId);
+  if (window.complainantId) {
+    formData.append("complainant_id", window.complainantId);
+  }
   formData.append("client_type", "webchat-rest");
   formData.append("rasa_session_id", sessionId);
   formData.append("flask_session_id", window.flaskSessionId || sessionId);
@@ -900,6 +943,11 @@ async function handleFileUpload(files) {
 
   for (const file of validFiles) {
     formData.append("files[]", file);
+  }
+
+  const exifMeta = await buildFileMetadataList(validFiles, promptExifConsent);
+  if (exifMeta.length) {
+    formData.append("file_metadata", JSON.stringify(exifMeta));
   }
 
   if (validFiles.length === 0) {
@@ -1014,10 +1062,21 @@ async function pollFileStatus(fileIds) {
 }
 
 function buildPostUploadQuickReplies() {
-  const base = [
-    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
-    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ];
+  const base = window.lastUploadWasVoiceOnly
+    ? [
+        {
+          title: get("file_upload.buttons.add_voice_record"),
+          payload: VOICE_ADD_PAYLOAD,
+        },
+        {
+          title: get("file_upload.buttons.next_step"),
+          payload: VOICE_NEXT_STEP_PAYLOAD,
+        },
+      ]
+    : [
+        { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
+        { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
+      ];
   if (window.lastOrchestratorNextState !== "done") {
     return base;
   }
@@ -1051,6 +1110,9 @@ function showPostUploadMessageAndUnlock() {
     ),
     "received"
   );
+  if (window.lastUploadWasVoiceOnly) {
+    uiActions.setVoiceNoteEnabled(true);
+  }
   uiActions.replaceQuickReplies(
     filterCloseQuickReplies(buildPostUploadQuickReplies())
   );
@@ -1125,9 +1187,7 @@ function updateFileStatus(fileId, data) {
       break;
     case "STARTED":
       if (result && result.file_type === "audio") {
-        statusMessage = progress
-          ? format(get("file_upload.transcribing_progress"), { progress })
-          : get("file_upload.transcribing");
+        statusMessage = get("file_upload.uploaded_processing");
       } else {
         statusMessage = progress
           ? format(get("file_upload.processing_progress"), { progress })
@@ -1152,7 +1212,11 @@ function updateFileStatus(fileId, data) {
           uiActions.appendMessage(result.message, "received");
         }
       }
-      if (prevStatus !== "SUCCESS" && !(result && result.message)) {
+      if (
+        prevStatus !== "SUCCESS" &&
+        !(result && result.message) &&
+        !window.lastUploadWasVoiceOnly
+      ) {
         const notice = (data && data.message) || get("file_upload.file_saved");
         uiActions.appendMessage(notice, "received");
       }
@@ -1184,6 +1248,28 @@ function updateFileStatus(fileId, data) {
   }
 }
 
+// Voice intake: finish details and continue main flow (map → contact).
+async function handleVoiceNextStep() {
+  uiActions.replaceQuickReplies([]);
+  uiActions.setInputLocked(true);
+  uiActions.setVoiceNoteEnabled(false);
+  window.lastUploadWasVoiceOnly = false;
+  fileUploadSnapshot = null;
+  const ok = await restSendMessage("/voice_record", { voice_record_submit: true });
+  if (ok) {
+    uiActions.setGrievanceCreatedInDb(true);
+  }
+  uiActions.setInputLocked(false);
+}
+
+function handleAddVoiceRecord() {
+  if (voiceNoteButton && !voiceNoteButton.disabled) {
+    voiceNoteButton.click();
+    return;
+  }
+  uiActions.appendMessage(get("voice_note.inactive_step"), "received");
+}
+
 // "Go back to chat": restore snapshot, transition message, unlock (no orchestrator call)
 function handleGoBackToChat() {
   uiActions.appendMessage(get("file_upload.transition"), "received");
@@ -1211,8 +1297,33 @@ function handleAddMoreFiles() {
 }
 
 // Set up global handlers (eventHandlers.handleQuickReplyClick will call these for file-upload payloads)
+async function promptExifConsent() {
+  const granted = window.confirm(get("photo_exif.consent"));
+  setExifConsent(granted);
+  return granted;
+}
+
+window.openMapPickerFromBot = ({ defaultLat, defaultLng }) => {
+  openMapPicker({
+    defaultLat: defaultLat ?? 27.7172,
+    defaultLng: defaultLng ?? 85.324,
+    onConfirm: async ({ lat, lng }) => {
+      const ok = await restSendMessage("", {
+        map_pin: { lat, lng },
+      });
+      if (ok) uiActions.appendMessage(get("map.confirm_sent"), "received");
+    },
+  });
+};
+
+window.setVoiceNoteEnabled = (enabled) => {
+  uiActions.setVoiceNoteEnabled(enabled);
+};
+
 window.handleGoBackToChat = handleGoBackToChat;
 window.handleAddMoreFiles = handleAddMoreFiles;
+window.handleVoiceNextStep = handleVoiceNextStep;
+window.handleAddVoiceRecord = handleAddVoiceRecord;
 window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 
 // Initialize when DOM is loaded

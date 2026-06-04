@@ -75,7 +75,31 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             grievance_classification_status_db = grievance_data.get('grievance_classification_status')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
-                
+
+            from backend.config.classification_status import LLM_SKIPPED
+            if (
+                tracker.get_slot("grievance_new_detail") == "voice_record"
+                or grievance_classification_status_db == LLM_SKIPPED
+            ):
+                utterance = self.get_utterance(2)
+                dispatcher.utter_message(text=utterance)
+                return [
+                    SlotSet("grievance_summary_temp", ""),
+                    SlotSet("grievance_summary", ""),
+                    SlotSet("grievance_categories", []),
+                    SlotSet("grievance_categories_alternative", []),
+                    SlotSet("grievance_categories_local", []),
+                    SlotSet("grievance_categories_alternative_local", []),
+                    SlotSet("follow_up_question", ""),
+                    SlotSet("grievance_complainant_review", False),
+                    SlotSet(
+                        "grievance_classification_status",
+                        self.GRIEVANCE_CLASSIFICATION_STATUS.get("LLM_skipped", LLM_SKIPPED),
+                    ),
+                    SlotSet("grievance_summary_status", self.SKIP_VALUE),
+                    SlotSet("grievance_categories_status", self.SKIP_VALUE),
+                ]
+
             if sensitive_categories:
                 grievance_categories_local = self._get_categories_in_local_language(grievance_categories)
                 self.logger.debug(f"Sensitive categories detected: {sensitive_categories}")
@@ -171,6 +195,13 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
         self.logger.debug(f"form_grievance_complainant_review - Values of slots: grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_status: {grievance_categories_status}, grievance_summary_status: {grievance_summary_status}, grievance_cat_modify: {grievance_cat_modify}, grievance_summary_temp: {grievance_summary_temp}")
 
+
+        # Voice-only intake: classification skipped; officer handles summary/categories.
+        if tracker.get_slot("grievance_new_detail") == "voice_record":
+            self.logger.debug(
+                "form_grievance_complainant_review - voice_record intake - form skipped"
+            )
+            return []
 
         #display the values of required slots from the tracker
         #case where sensitive issues are detected, form is skipped

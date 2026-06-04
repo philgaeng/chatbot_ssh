@@ -64,12 +64,12 @@ class ActionStartGrievanceProcess(BaseAction):
             json_message={
                 "data": {
                     "grievance_id": grievance_id,
-                    "event_type": "grievance_id_set"
+                    "complainant_id": complainant_id,
+                    "event_type": "grievance_id_set",
                 }
             }
         )
-        
-        # Also set it as a slot for session persistence
+
         return [
                 SlotSet("grievance_id", grievance_id),
                 SlotSet("complainant_id", complainant_id),
@@ -77,13 +77,158 @@ class ActionStartGrievanceProcess(BaseAction):
                 SlotSet("grievance_sensitive_issue", False)]
 
 
+class ActionStartDustGrievanceProcess(BaseAction):
+    """CB-09: start dust fast-path intake with preset category."""
+
+    DUST_CATEGORY = "Air Pollution"
+    DUST_DEFAULT_DESCRIPTION = (
+        "Road dust complaint filed via the dust fast path (location and photos to follow)."
+    )
+
+    def name(self) -> Text:
+        return "action_start_dust_grievance_process"
+
+    async def execute_action(self, dispatcher, tracker, domain):
+        BaseFormValidationAction.message_display_list_cat = True
+        set_id_data = {
+            "complainant_province": tracker.get_slot("complainant_province") or self.province,
+            "complainant_district": tracker.get_slot("complainant_district") or self.district,
+            "complainant_office": tracker.get_slot("complainant_office") or None,
+            "source": "bot",
+        }
+        complainant_id = self.db_manager.generate_complainant_id(set_id_data)
+        grievance_id = self.db_manager.generate_grievance_id(set_id_data)
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "grievance_id": grievance_id,
+                    "complainant_id": complainant_id,
+                    "event_type": "grievance_id_set",
+                }
+            }
+        )
+        return [
+            SlotSet("grievance_id", grievance_id),
+            SlotSet("complainant_id", complainant_id),
+            SlotSet("story_main", "dust_grievance"),
+            SlotSet("grievance_sensitive_issue", False),
+            SlotSet("grievance_categories", [self.DUST_CATEGORY]),
+            SlotSet("grievance_description", self.DUST_DEFAULT_DESCRIPTION),
+            SlotSet("intake_fast_path", "dust"),
+        ]
+
+
 ############################ STEP 1 - GRIEVANCE FORM DETAILS ############################
 
 class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instance directly
-        
+
+    DUST_DEFAULT_DESCRIPTION = ActionStartDustGrievanceProcess.DUST_DEFAULT_DESCRIPTION
+    VOICE_DESCRIPTION_PLACEHOLDER = "[Voice note — officer review]"
+
     def name(self) -> Text:
         return "validate_form_grievance"
-    
+
+    def _has_voice_attachment(self, grievance_id: Optional[str]) -> bool:
+        if not grievance_id:
+            return False
+        try:
+            from backend.config.constants import AUDIO_EXTENSIONS
+
+            files = self.db_manager.get_grievance_files(grievance_id) or []
+        except Exception:
+            return False
+        for f in files:
+            if (f.get("file_type") or "").lower() == "audio":
+                return True
+            name = (f.get("file_name") or "").lower()
+            if name.startswith("voice_note_"):
+                return True
+            ext = name.rsplit(".", 1)[-1] if "." in name else ""
+            if ext in AUDIO_EXTENSIONS:
+                return True
+        return False
+
+    async def _finalize_voice_record(
+        self,
+        tracker: Tracker,
+        dispatcher: CollectingDispatcher,
+        *,
+        require_voice_attachment: bool = True,
+    ) -> Dict[Text, Any]:
+        """Voice-only intake: persist grievance, skip LLM classification/transcription."""
+        from backend.config.classification_status import LLM_SKIPPED
+
+        self._initialize_language_and_helpers(tracker)
+        grievance_id = tracker.get_slot("grievance_id")
+        if not grievance_id:
+            return {
+                "grievance_new_detail": None,
+                "grievance_description_status": "add_more_details",
+            }
+        if require_voice_attachment and not self._has_voice_attachment(grievance_id):
+            return {
+                "grievance_new_detail": None,
+                "grievance_description_status": "add_more_details",
+            }
+
+        description = (tracker.get_slot("grievance_description") or "").strip()
+        if not description:
+            description = self.VOICE_DESCRIPTION_PLACEHOLDER
+
+        session_id = tracker.get_slot("flask_session_id") or tracker.sender_id
+        sensitive_slots = await self._get_sensitive_issue_slots_on_submit(
+            description,
+            session_id=session_id,
+            grievance_id=grievance_id,
+            dispatcher=dispatcher,
+        )
+
+        grievance_data = {
+            "grievance_id": grievance_id,
+            "complainant_id": tracker.get_slot("complainant_id"),
+            "grievance_description": description,
+            "complainant_province": tracker.get_slot("complainant_province"),
+            "complainant_district": tracker.get_slot("complainant_district"),
+            "complainant_office": tracker.get_slot("complainant_office"),
+            "source": "bot",
+            "grievance_classification_status": LLM_SKIPPED,
+            "grievance_summary": "",
+            "grievance_categories": [],
+        }
+        self.db_manager.create_or_update_complainant(grievance_data)
+        self.db_manager.create_or_update_grievance(grievance_data)
+
+        try:
+            dispatcher.utter_message(
+                json_message={
+                    "data": {
+                        "grievance_id": grievance_id,
+                        "event_type": "grievance_saved_in_db",
+                    }
+                }
+            )
+            dispatcher.utter_message(
+                json_message={"data": {"event_type": "disable_voice_note"}}
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to emit voice_record frontend events: {e}")
+
+        self.logger.info(
+            "voice_record_finalized grievance_id=%s classification=LLM_skipped",
+            grievance_id,
+        )
+        return {
+            "grievance_new_detail": "voice_record",
+            "grievance_description": description,
+            "grievance_description_status": None,
+            "grievance_classification_status": LLM_SKIPPED,
+            "grievance_summary": "",
+            "grievance_categories": [],
+            "grievance_summary_status": self.SKIP_VALUE,
+            "grievance_categories_status": self.SKIP_VALUE,
+            **sensitive_slots,
+        }
+
     async def _trigger_async_classification(
         self,
         tracker: Tracker,
@@ -285,7 +430,8 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         self._initialize_language_and_helpers(tracker)
         # Check if grievance_new_detail is "completed" - form completes
         # (SEAH subflow is handled by form_seah_1 and follow-on forms, not here)
-        if tracker.get_slot("grievance_new_detail") == "completed":
+        detail_status = tracker.get_slot("grievance_new_detail")
+        if detail_status in ("completed", "voice_record"):
             return []  # Form complete; router/state machine transitions to SEAH forms when sensitive
 
         # Otherwise, keep asking for grievance_new_detail
@@ -333,14 +479,28 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         
         """
         try:
-            expected_values = ["restart", "add_more_details", "submit_details"]
+            expected_values = ["restart", "add_more_details", "submit_details", "voice_record"]
             normalized_slot_value = slot_value.strip() if isinstance(slot_value, str) else slot_value
             
             self.logger.debug(f"Validating grievance_new_detail: {slot_value}")
 
-            # Reject blank/whitespace input when asking for grievance details.
+            if normalized_slot_value == "voice_record":
+                return await self._finalize_voice_record(
+                    tracker, dispatcher, require_voice_attachment=False
+                )
+
+            # Reject blank/whitespace unless voice-only (CB-01) or dust fast path (CB-09).
             if isinstance(normalized_slot_value, str) and not normalized_slot_value:
                 current_description = tracker.get_slot("grievance_description")
+                grievance_id = tracker.get_slot("grievance_id")
+                story_main = tracker.get_slot("story_main")
+                if self._has_voice_attachment(grievance_id):
+                    return await self._finalize_voice_record(tracker, dispatcher)
+                if story_main == "dust_grievance":
+                    return {
+                        "grievance_new_detail": "submit_details",
+                        "grievance_description": current_description or self.DUST_DEFAULT_DESCRIPTION,
+                    }
                 return {
                     "grievance_new_detail": None,
                     "grievance_description_status": "add_more_details" if current_description else None,
@@ -360,6 +520,17 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
             if normalized_slot_value == "submit_details":
                 self.logger.debug(f"Submitting details for grievance {tracker.get_slot('grievance_description')}")
                 grievance_description = tracker.get_slot("grievance_description")
+                grievance_id = tracker.get_slot("grievance_id")
+                if not (grievance_description or "").strip():
+                    if self._has_voice_attachment(grievance_id):
+                        grievance_description = ""
+                    elif tracker.get_slot("story_main") == "dust_grievance":
+                        grievance_description = self.DUST_DEFAULT_DESCRIPTION
+                    else:
+                        return {
+                            "grievance_new_detail": None,
+                            "grievance_description_status": "add_more_details",
+                        }
                 self.logger.info(
                     "submit_details_received grievance_id=%s complainant_id=%s has_description=%s description_len=%s llm_classification=%s",
                     tracker.get_slot("grievance_id"),
@@ -483,21 +654,59 @@ class ActionAskGrievanceNewDetail(BaseAction):
         return "action_ask_grievance_new_detail"
     
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        if tracker.get_slot("grievance_new_detail") in ("completed", "voice_record"):
+            return []
+
         slot_grievance_description_status = tracker.get_slot("grievance_description_status")
         
         if not slot_grievance_description_status:
-            utterance = self.get_utterance(1)
+            if tracker.get_slot("story_main") == "dust_grievance":
+                utterance = self.get_utterance(6)
+            else:
+                utterance = self.get_utterance(5) or self.get_utterance(1)
             dispatcher.utter_message(text=utterance)
+            if tracker.get_slot("story_main") != "dust_grievance":
+                dispatcher.utter_message(
+                    json_message={
+                        "data": {
+                            "event_type": "enable_voice_note",
+                            "max_seconds": 90,
+                        }
+                    }
+                )
+            else:
+                dispatcher.utter_message(
+                    json_message={"data": {"event_type": "disable_voice_note"}}
+                )
 
         if slot_grievance_description_status == "restart":
             utterance = self.get_utterance(2)
             dispatcher.utter_message(text=utterance)
+            dispatcher.utter_message(
+                json_message={
+                    "data": {
+                        "event_type": "enable_voice_note",
+                        "max_seconds": 90,
+                    }
+                }
+            )
 
         if slot_grievance_description_status == "add_more_details":
             utterance = self.get_utterance(3)
             dispatcher.utter_message(text=utterance)
+            dispatcher.utter_message(
+                json_message={
+                    "data": {
+                        "event_type": "enable_voice_note",
+                        "max_seconds": 90,
+                    }
+                }
+            )
 
         if slot_grievance_description_status == "show_options":
+            dispatcher.utter_message(
+                json_message={"data": {"event_type": "disable_voice_note"}}
+            )
             slot_grievance_description = tracker.get_slot("grievance_description")
             utterance = self.get_utterance(4).format(grievance_description=slot_grievance_description)
             buttons = self.get_buttons(4)

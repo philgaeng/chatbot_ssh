@@ -499,6 +499,26 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 
 ---
 
+### TP-15 — Complainant PII: standard visible, SEAH masked, mobile `tel:` · **P1**
+
+**Feature goal**  
+Standard GRM officers read complainant **name, phone, email, and address** in the portal without a vault step. SEAH cases **keep** masked contact + audited reveal. On **mobile**, phone is a **`tel:`** link for one-tap calling.
+
+**In scope**
+
+- `GET /api/v1/tickets/{id}/pii`: return decrypted contact for `is_seah = false`; omit contact fields when `is_seah = true` (`pii_masked: true`).
+- Desktop **Complainant** card and mobile **Complainant Info** sheet share `ComplainantContactFields`.
+- SEAH: amber notice + **Reveal original statement** (mobile sheet closes then opens reveal modal).
+
+**Out of scope**
+
+- Changing vault TTL or reveal reason codes.
+- Complainant self-service portal.
+
+**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-15
+
+---
+
 ### TP-05 — Report delivery: links first, PDF optional, library · **P1**
 
 **Feature goal**  

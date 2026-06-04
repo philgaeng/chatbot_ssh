@@ -92,6 +92,7 @@
   font-weight: 600;
 }
 
+.composer-close-icon-btn.is-hidden,
 .persistent-control-button.is-hidden {
   display: none;
 }
@@ -171,45 +172,77 @@
 }
 
 /* Chat Form */
-#form {
+#form,
+#form.composer {
   padding: 10px 15px;
   background: var(--light-bg);
   border-top: 1px solid #eee;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   position: relative;
-  align-items: stretch;
 }
 
-.chat-action-row {
+.composer-input {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.composer-toolbar {
+  --composer-btn-gap: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+}
+
+.composer-toolbar-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--composer-btn-gap);
+}
+
+.composer-toolbar-left {
+  justify-content: flex-start;
+}
+
+.composer-toolbar-right {
+  justify-content: flex-end;
+}
+
+.composer-round-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  box-sizing: border-box;
 }
 
-.input-container {
-  display: flex;
-  flex: 1;
-  position: relative;
-  align-items: flex-end;
-  gap: 8px;
+.composer-close-icon-btn.is-hidden {
+  display: none;
 }
 
-.persistent-control-button {
-  background: #6c757d;
-  color: #fff;
+.composer-close-icon-btn {
+  background: #f0f2f5;
   border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: clamp(13px, 3.5vw, 15px);
+  color: #54656f;
   cursor: pointer;
-  white-space: nowrap;
 }
 
-.persistent-control-button:hover {
-  background: #5a6268;
+.composer-close-icon-btn:hover {
+  background: #e4e6eb;
+  color: #333;
 }
 
 #message-input {
@@ -236,46 +269,31 @@
   cursor: not-allowed;
 }
 
-.attachment-button {
-  background: none;
+/* Attach + voice: grey when inactive; light grey bg + blue icon when active */
+.attachment-button,
+.voice-note-button {
+  background: #e9ecef;
   border: none;
-  padding: 8px;
-  cursor: pointer;
-  color: #555;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-}
-
-.attachment-button:disabled {
-  color: #bbb;
+  color: #adb5bd;
   cursor: not-allowed;
-  opacity: 0.7;
 }
 
-.attachment-button svg {
-  width: 20px;
-  height: 20px;
+.attachment-button.is-active:not(:disabled),
+.voice-note-button.is-active:not(:disabled) {
+  background: #f0f2f5;
+  color: var(--primary-color);
+  cursor: pointer;
+}
+
+.attachment-button.is-active:not(:disabled):hover,
+.voice-note-button.is-active:not(:disabled):hover {
+  background: #e4e6eb;
 }
 
 .send-button {
   background: var(--primary-color);
   color: white;
   border: none;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 0;
-  flex: 0 0 auto;
 }
 
 .send-button:disabled {
@@ -596,6 +614,72 @@ body.high-contrast #chat-launcher {
 
 body.high-contrast .chat-launcher-hint {
   color: var(--text-color);
+}
+
+/* CB-01 voice note — recording overrides secondary style */
+.voice-note-button.is-recording {
+  background: var(--error-color);
+  color: #fff;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+.voice-note-button .voice-note-icon {
+  display: block;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* CB-06 map picker */
+.map-picker-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.map-picker-modal.hidden {
+  display: none;
+}
+
+.map-picker-panel {
+  background: var(--light-bg);
+  border-radius: 12px;
+  max-width: 520px;
+  width: 100%;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.map-picker-map {
+  height: 280px;
+  width: 100%;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+
+.map-picker-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.map-picker-confirm {
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  padding: 10px 16px;
 }
 
 body.high-contrast .quick-reply-button {

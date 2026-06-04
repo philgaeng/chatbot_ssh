@@ -89,6 +89,7 @@ class MessageRequest(BaseModel):
     text: str = ""
     payload: Optional[str] = None
     channel: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class MessageResponse(BaseModel):
@@ -111,6 +112,12 @@ async def post_message(req: MessageRequest) -> MessageResponse:
 
     _log = logging.getLogger(__name__)
     try:
+        if req.metadata and req.metadata.get("map_pin"):
+            pin = req.metadata["map_pin"]
+            payload = (
+                f'/map_pin_set{{"lat":{pin.get("lat")},"lng":{pin.get("lng")}}}'
+            )
+
         messages, next_state, expected_input_type = await run_flow_turn(
             session, text, payload, _DOMAIN
         )

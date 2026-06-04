@@ -120,11 +120,32 @@ slots:
     values:
       - status_check
       - new_grievance
+      - dust_grievance
       - seah_intake
       - new_complainant
       - modify_grievance
       - modify_contact
     influence_conversation: true
+    mappings:
+      - type: custom
+  geo_lat:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  geo_lng:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  location_pin_status:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  intake_fast_path:
+    type: text
+    influence_conversation: false
     mappings:
       - type: custom
   story_route:

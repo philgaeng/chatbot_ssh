@@ -1,5 +1,10 @@
 import * as uiActions from "./uiActions.js";
-import { get, FILE_ANOTHER_PAYLOAD } from "../utterances.js";
+import {
+  get,
+  FILE_ANOTHER_PAYLOAD,
+  VOICE_ADD_PAYLOAD,
+  VOICE_NEXT_STEP_PAYLOAD,
+} from "../utterances.js";
 
 // REST-specific helpers for rendering orchestrator responses
 
@@ -48,6 +53,9 @@ export function handleCustomPayload(custom) {
   // Orchestrator sends json_message with event_type inside data
   if (custom.data?.event_type === "grievance_id_set" && custom.data?.grievance_id) {
     uiActions.setGrievanceId(custom.data.grievance_id);
+    if (custom.data.complainant_id) {
+      window.complainantId = custom.data.complainant_id;
+    }
   }
 
   // Grievance created in DB: enable file upload button
@@ -74,6 +82,28 @@ export function handleCustomPayload(custom) {
     if (typeof window.openFileUploadModal === "function") {
       window.openFileUploadModal();
     }
+  }
+
+  if (custom.data?.event_type === "open_map_picker") {
+    if (typeof window.openMapPickerFromBot === "function") {
+      window.openMapPickerFromBot({
+        defaultLat: custom.data.default_lat,
+        defaultLng: custom.data.default_lng,
+      });
+    }
+  }
+
+  if (
+    custom.event_type === "enable_voice_note" ||
+    custom.data?.event_type === "enable_voice_note"
+  ) {
+    uiActions.setVoiceNoteEnabled(true);
+  }
+  if (
+    custom.event_type === "disable_voice_note" ||
+    custom.data?.event_type === "disable_voice_note"
+  ) {
+    uiActions.setVoiceNoteEnabled(false);
   }
 
   if (custom.clear_window || custom.custom?.clear_window) {
@@ -177,6 +207,18 @@ export function handleQuickReplyClick(payload) {
   if (payload === GO_BACK_PAYLOAD) {
     if (typeof window.handleGoBackToChat === "function") {
       window.handleGoBackToChat();
+    }
+    return true;
+  }
+  if (payload === VOICE_ADD_PAYLOAD) {
+    if (typeof window.handleAddVoiceRecord === "function") {
+      window.handleAddVoiceRecord();
+    }
+    return true;
+  }
+  if (payload === VOICE_NEXT_STEP_PAYLOAD) {
+    if (typeof window.handleVoiceNextStep === "function") {
+      void window.handleVoiceNextStep();
     }
     return true;
   }

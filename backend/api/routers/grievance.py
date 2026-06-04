@@ -9,8 +9,6 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from psycopg2 import sql
-
 from backend.clients.messaging_api import send_email as send_email_via_api
 from backend.clients.messaging_api import send_sms as send_sms_via_api
 from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
@@ -38,6 +36,8 @@ class GrievanceClassificationPatchBody(BaseModel):
 
 
 class ComplainantPatchBody(BaseModel):
+    complainant_full_name: Optional[str] = Field(None, max_length=255)
+    complainant_phone: Optional[str] = Field(None, max_length=64)
     complainant_address: Optional[str] = None
     complainant_village: Optional[str] = None
     complainant_ward: Optional[str] = None
@@ -45,6 +45,33 @@ class ComplainantPatchBody(BaseModel):
     complainant_district: Optional[str] = None
     complainant_province: Optional[str] = None
     complainant_email: Optional[str] = None
+
+
+_COMPLAINANT_ADDRESS_FIELDS = frozenset({
+    "complainant_address",
+    "complainant_village",
+    "complainant_ward",
+    "complainant_municipality",
+    "complainant_district",
+    "complainant_province",
+    "complainant_email",
+})
+_IDENTITY_FILL_FIELDS = frozenset({"complainant_full_name", "complainant_phone"})
+
+
+def _identity_value_missing(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        s = value.strip()
+        if len(s) >= 40 and all(c in "0123456789abcdefABCDEF" for c in s):
+            return True
+    s = str(value).strip()
+    if not s:
+        return True
+    if s.lower() in {"anonymous", "unknown", "n/a", "na", "not provided"}:
+        return True
+    return False
 
 
 def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
@@ -286,49 +313,64 @@ def patch_complainant(
     _: None = Depends(_ticketing_auth_check),
 ):
     """
-    Update whitelisted complainant fields. Called by ticketing API - never
-    stores PII in ticketing.*, proxies edits back here instead.
-    Identity fields (full_name, phone, phone_hash) are NOT in the whitelist
-    and cannot be changed through this endpoint.
-    """
-    allowed_fields = {
-        "complainant_address",
-        "complainant_village",
-        "complainant_ward",
-        "complainant_municipality",
-        "complainant_district",
-        "complainant_province",
-        "complainant_email",
-    }
+    Update whitelisted complainant fields (ticketing officer edit form).
 
-    fields = {k: v for k, v in body.model_dump().items() if v is not None}
-    if not fields:
+    Address/location/email: always editable when provided.
+    full_name / phone: fill-missing only — allowed when DB value is empty; rejected if already set.
+    """
+    from backend.services.database_services.complainant_manager import ComplainantDbManager
+
+    raw = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not raw:
         return JSONResponse(status_code=422, content={"status": "ERROR", "message": "No fields provided"})
 
-    # Safety: re-check whitelist (defense in depth)
-    fields = {k: v for k, v in fields.items() if k in allowed_fields}
-    if not fields:
+    complainant_mgr = ComplainantDbManager()
+    current = complainant_mgr.get_complainant_by_id(complainant_id)
+    if not current:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "ERROR", "message": f"Complainant {complainant_id} not found"},
+        )
+
+    update_data: dict[str, Any] = {}
+    blocked: list[str] = []
+
+    for key, value in raw.items():
+        if key in _COMPLAINANT_ADDRESS_FIELDS:
+            if str(value).strip():
+                update_data[key] = str(value).strip()
+            continue
+        if key in _IDENTITY_FILL_FIELDS:
+            if not str(value).strip():
+                continue
+            if _identity_value_missing(current.get(key)):
+                update_data[key] = str(value).strip()
+            else:
+                blocked.append(key)
+            continue
+
+    if blocked:
+        labels = ", ".join(blocked)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "ERROR",
+                "message": (
+                    f"Cannot change {labels} — already on file from chatbot. "
+                    "Contact the chatbot admin to correct identity fields."
+                ),
+            },
+        )
+
+    if not update_data:
         return JSONResponse(
             status_code=422,
             content={"status": "ERROR", "message": "No allowed fields provided"},
         )
 
     try:
-        set_fragments = [
-            sql.SQL("{} = %s").format(sql.Identifier(column_name)) for column_name in fields.keys()
-        ]
-        update_query = sql.SQL("UPDATE complainants SET {} WHERE complainant_id = %s").format(
-            sql.SQL(", ").join(set_fragments)
-        )
-        values = [*fields.values(), complainant_id]
-
-        with grievance_manager.get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(update_query, values)
-                updated_rows = cursor.rowcount
-            conn.commit()
-
-        if updated_rows == 0:
+        affected = complainant_mgr.update_complainant(complainant_id, update_data)
+        if not affected:
             return JSONResponse(
                 status_code=404,
                 content={"status": "ERROR", "message": f"Complainant {complainant_id} not found"},
@@ -336,11 +378,11 @@ def patch_complainant(
 
         return {
             "ok": True,
-            "updated_fields": list(fields.keys()),
+            "updated_fields": list(update_data.keys()),
             "complainant_id": complainant_id,
         }
     except Exception as e:
-        print(f"Error in patch_complainant: {str(e)}")
+        logger.exception("patch_complainant failed for %s", complainant_id)
         return JSONResponse(
             status_code=500,
             content={"status": "ERROR", "message": f"Internal server error: {str(e)}"},

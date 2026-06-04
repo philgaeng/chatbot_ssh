@@ -46,13 +46,20 @@ class FileServerCore(APIManager):
         os.makedirs(upload_folder, exist_ok=True)
 
     def get_file_type(self, filename: str) -> str:
-        """Determine the type of file based on extension"""
-        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-        
+        """Determine the type of file based on extension."""
+        name_lower = (filename or "").lower()
+        ext = name_lower.rsplit(".", 1)[-1] if "." in name_lower else ""
+
+        # In-chat voice notes use webm; classify as audio (webm is also listed under VIDEO).
+        if name_lower.startswith("voice_note_") or (
+            ext in FILE_TYPES["AUDIO"]["extensions"]
+        ):
+            return "audio"
+
         for file_type, info in FILE_TYPES.items():
-            if ext in info['extensions']:
+            if ext in info["extensions"]:
                 return file_type.lower()
-        return 'other'
+        return "other"
 
     def get_valid_file(self, file_id: str) -> dict:
         """Retrieve and validate a file by ID."""
@@ -148,7 +155,32 @@ class FileServerCore(APIManager):
                 f"Failed to store file {file_data['file_name']} in database "
                 "(check DB logs for cause; often grievance_id missing or FK violation)"
             )
-        
+
+        client_meta = file_data.get("client_metadata") or {}
+        if client_meta:
+            try:
+                from backend.shared_functions.geo_pin import (
+                    build_file_exif_patch,
+                    merge_grievance_location_blob,
+                )
+
+                row = db_manager.get_grievance_by_id(grievance_id) or {}
+                patch = build_file_exif_patch(file_data["file_id"], client_meta)
+                merged = merge_grievance_location_blob(
+                    row.get("grievance_location"), patch
+                )
+                db_manager.update_grievance(
+                    grievance_id, {"grievance_location": merged}
+                )
+            except Exception as meta_err:
+                self.log_event(
+                    event_type=FAILED,
+                    details={
+                        "grievance_id": grievance_id,
+                        "error": f"client_metadata persist: {meta_err}",
+                    },
+                )
+
         return file_data
 
 
