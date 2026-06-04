@@ -137,7 +137,7 @@ These do not call orchestrator.
 Post-submit UX (June5 P1):
 
 - `close_controls_mode` on `/message` response: `session` (Close session only) or `browser` (SEAH / sensitive — Close browser only).
-- `#grievance-filed-banner` shows reference id from submit until session reset or file-another.
+- `#grievance-filed-banner` shows *Grievance filed* + reference id from **submit** (`grievance_filed` event) through `grievance_review` and `done`, until session reset or file-another.
 - Orchestrator outro emits three text messages (success → reference → follow-up/attachments).
 
 ## 8) File Upload UX and API Flow

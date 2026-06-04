@@ -24,8 +24,8 @@ export const U = {
   },
   filed_banner: {
     label: {
-      en: "Grievance filed — reference:",
-      ne: "गुनासो दर्ता भयो — सन्दर्भ:",
+      en: "Grievance filed —",
+      ne: "गुनासो दर्ता भयो —",
     },
   },
   post_submit: {

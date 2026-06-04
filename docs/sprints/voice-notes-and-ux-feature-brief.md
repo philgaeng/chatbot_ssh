@@ -194,8 +194,11 @@ Users confuse “still in chat” with “not yet submitted”; follow-up questi
 
 - **Message 1:** explicit **success** (grievance filed).
 - **Message 2:** **grievance number** (reference id) prominently shown.
-- **Message 3:** clarify that **follow-up questions may continue** but the grievance is **already filed** (attachments, contact, etc.).
-- **UI banner** at top of chat while in post-filed phase: status *Grievance filed* + grievance number (visible until session reset or flow end).
+- **Message 3:** clarify that **follow-up questions may continue** but the grievance is **already filed** (attachments, contact, categorization review, etc.).
+- **UI banner** at top of chat while in post-filed phase: status *Grievance filed* + grievance number (visible from **submit** through `grievance_review` and `done`, until session reset or file another — not only at `done`).
+- **Two chat phases (standard):** (A) three bubbles right after submit/OTP — not one combined recap in chat; (B) same pattern after review outro. SMS may keep full recap text.
+
+**Implementation detail:** see [`01-chatbot-p1-spec.md`](June5/01-chatbot-p1-spec.md) CB-07.
 
 **Related**
 

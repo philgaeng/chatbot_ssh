@@ -18,6 +18,7 @@ from backend.config.classification_status import (
     LLM_SKIPPED,
     normalize_classification_status,
 )
+from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 
 
 
@@ -277,19 +278,48 @@ class BaseActionSubmit(BaseAction):
         if has_files:
             message = message + files_info
         return message
+
+    def _emit_chat_filed_confirmation(
+        self,
+        dispatcher: CollectingDispatcher,
+        grievance_data: Dict[str, Any],
+    ) -> None:
+        """CB-07 Phase A: three separate chat bubbles + filed event (not recap wall)."""
+        lang = self.language_code or "en"
+        gid = grievance_data.get("grievance_id") or ""
+
+        msg1 = get_utterance_base(
+            "action_submit_grievance", "action_grievance_outro", 1, lang
+        )
+        msg2 = get_utterance_base(
+            "action_submit_grievance", "action_grievance_outro", 2, lang
+        ).format(grievance_id=gid)
+        msg3 = get_utterance_base(
+            "action_submit_grievance", "action_submit_grievance", 5, lang
+        )
+
+        dispatcher.utter_message(text=msg1)
+        dispatcher.utter_message(text=msg2)
+        dispatcher.utter_message(text=msg3)
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "event_type": "grievance_filed",
+                    "grievance_id": gid,
+                }
+            }
+        )
     
     async def _send_grievance_recap_sms(self, 
                                   grievance_data: Dict[str, Any],
                                   dispatcher: CollectingDispatcher) -> None:
-        """Send a recap sms to the user."""
+        """Send filed confirmation in chat (3 bubbles) and optional SMS recap."""
         try:
-            # Create confirmation message to be sent by sms and through the bot
             confirmation_message = self.create_confirmation_message(
                 grievance_data
             )
-                
-            # Send confirmation message
-            dispatcher.utter_message(text=confirmation_message)
+
+            self._emit_chat_filed_confirmation(dispatcher, grievance_data)
             
             if grievance_data.get('otp_verified') == True:
                 #send sms
@@ -481,6 +511,12 @@ class ActionSubmitSeah(BaseActionSubmit):
                 dispatcher.utter_message(
                     text=f"तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
                 )
+                dispatcher.utter_message(
+                    text=(
+                        "तपाईंको रिपोर्ट दर्ता भइसकेको छ। आवश्यक परेमा तपाईं यस च्याटमा "
+                        "जारी राख्न सक्नुहुन्छ।"
+                    )
+                )
             else:
                 dispatcher.utter_message(
                     text="Your confidential SEAH report has been filed successfully."
@@ -488,6 +524,19 @@ class ActionSubmitSeah(BaseActionSubmit):
                 dispatcher.utter_message(
                     text=f"Your reference number is **{grievance_ref}**."
                 )
+                dispatcher.utter_message(
+                    text=(
+                        "Your report is on record. You may continue in this chat if needed."
+                    )
+                )
+            dispatcher.utter_message(
+                json_message={
+                    "data": {
+                        "event_type": "grievance_filed",
+                        "grievance_id": grievance_ref,
+                    }
+                }
+            )
 
             return [
                 SlotSet("grievance_status", self.GRIEVANCE_STATUS["SUBMITTED"]),

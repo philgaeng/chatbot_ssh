@@ -701,6 +701,18 @@ UTTERANCE_MAPPING = {
                     'en': "I apologize, but there was an error submitting your grievance. Please try again or contact support.",
                     'ne': "मलाई माफ गर्नुहोस्, तर तपाईंको गुनासो दर्ता गर्दै गर्दा त्रुटि भयो। कृपया पुनः प्रयास गर्नुहोस् वा सहयोग सम्पर्क गर्नुहोस्।"
                 },
+                5: {
+                    'en': (
+                        "Your grievance is on record. You may continue here to review categories "
+                        "or a summary, add attachments, or update contact details — none of that "
+                        "is required to complete filing."
+                    ),
+                    'ne': (
+                        "तपाईंको गुनासो दर्ता भइसकेको छ। तपाईं यहाँ श्रेणी वा सारांश समीक्षा, "
+                        "संलग्नक थप्न, वा सम्पर्क विवरण अद्यावधिक गर्न जारी राख्न सक्नुहुन्छ — "
+                        "दर्ता पूरा गर्न यी चरणहरू अनिवार्य छैनन्।"
+                    ),
+                },
             },
         },
         'action_grievance_outro': {
