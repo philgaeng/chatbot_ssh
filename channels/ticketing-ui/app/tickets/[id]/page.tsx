@@ -56,6 +56,7 @@ import {
   TaskTypeIcon,
 } from "@/lib/icons";
 import { Check, RefreshCw } from "lucide-react";
+import { ClassificationGrievancePanel } from "@/components/tickets/ClassificationGrievancePanel";
 
 // ── SLA urgency helpers ───────────────────────────────────────────────────────
 
@@ -1254,8 +1255,16 @@ export default function TicketDetailPage() {
           {isAssigned && !isClosed && (
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {(isOpen || isEscalated) && (
-                <button onClick={() => handleSimpleAction("ACKNOWLEDGE")} disabled={actLoading}
-                  className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700`}>
+                <button
+                  onClick={() => handleSimpleAction("ACKNOWLEDGE")}
+                  disabled={actLoading || ticket.classification_officer_validation_required}
+                  title={
+                    ticket.classification_officer_validation_required
+                      ? "Confirm summary and categories in Original Grievance first"
+                      : undefined
+                  }
+                  className={`${btnBase} inline-flex items-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50`}
+                >
                   <IconAcknowledge size={15} strokeWidth={2} />
                   Acknowledge
                 </button>
@@ -1593,21 +1602,14 @@ export default function TicketDetailPage() {
             />
           </div>
 
-          {/* Row 2: Original Grievance — full width (primary reading content) */}
+          {/* Row 2: Original Grievance — full width (TP-14 classification) */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide border-l-[3px] border-blue-500 pl-3 mb-3">
               Original Grievance
             </h2>
-            <p className="text-sm text-gray-700 leading-relaxed">
-              {ticket.grievance_summary ?? <span className="text-gray-400 italic">No summary</span>}
-            </p>
-            {ticket.grievance_categories && (
-              <p className="text-xs text-gray-500 mt-2">
-                <span className="font-medium">Categories:</span> {ticket.grievance_categories}
-              </p>
-            )}
+            <ClassificationGrievancePanel ticket={ticket} onUpdated={load} />
             {ticket.grievance_location && (
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2">
                 <span className="font-medium">Location:</span> {ticket.grievance_location}
               </p>
             )}

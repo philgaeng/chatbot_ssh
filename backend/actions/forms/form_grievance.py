@@ -118,8 +118,13 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                 self.logger.warning(
                     f"Celery not available (ImportError: {ie}); skipping async classification for grievance {grievance_id}"
                 )
+                from backend.config.classification_status import LLM_SKIPPED
+                if grievance_id:
+                    self.db_manager.update_grievance(
+                        grievance_id,
+                        {"grievance_classification_status": LLM_SKIPPED},
+                    )
                 return {
-                    "grievance_classification_status": self.SKIP_VALUE,
                     "grievance_summary": "",
                     "grievance_categories": [],
                     "grievance_summary_status": self.SKIP_VALUE,
@@ -174,12 +179,17 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
         except Exception as e:
             self.logger.error(f"Error launching async classification: {e}")
             # Fallback - proceed without classification
+            from backend.config.classification_status import LLM_FAILED
+            if grievance_id:
+                self.db_manager.update_grievance(
+                    grievance_id,
+                    {"grievance_classification_status": LLM_FAILED},
+                )
             return {
-                "grievance_classification_status": self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_error"],
                 "grievance_summary": "",
                 "grievance_categories": [],
                 "grievance_summary_status": self.SKIP_VALUE,
-                "grievance_categories_status": self.SKIP_VALUE
+                "grievance_categories_status": self.SKIP_VALUE,
             }
 
     def _trigger_detect_sensitive_content_task(
@@ -382,6 +392,9 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     'complainant_office': tracker.get_slot('complainant_office'),
                     'source': 'bot'
                 }
+                grievance_data["grievance_classification_status"] = (
+                    self.GRIEVANCE_CLASSIFICATION_STATUS.get("pending", "pending")
+                )
                 self.db_manager.create_or_update_complainant(grievance_data)
                 self.db_manager.create_or_update_grievance(grievance_data)
 
@@ -407,8 +420,13 @@ class ValidateFormGrievance(BaseFormValidationAction):# Use the singleton instan
                     )
                     slots_to_set.update(classification_slots)
                 else:
+                    from backend.config.classification_status import LLM_SKIPPED
+                    self.db_manager.update_grievance(
+                        grievance_id,
+                        {"grievance_classification_status": LLM_SKIPPED},
+                    )
                     self.logger.info(
-                        "classification_trigger_skipped grievance_id=%s reason=LLM_CLASSIFICATION_false",
+                        "classification_trigger_skipped grievance_id=%s reason=LLM_CLASSIFICATION_false status=LLM_skipped",
                         grievance_id,
                     )
                 self.logger.debug(f"Slots to set: {slots_to_set}")

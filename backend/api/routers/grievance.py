@@ -31,6 +31,12 @@ class UpdateStatusBody(BaseModel):
     created_by: Optional[str] = None
 
 
+class GrievanceClassificationPatchBody(BaseModel):
+    grievance_classification_status: str = Field(..., max_length=64)
+    grievance_summary: Optional[str] = None
+    grievance_categories: Optional[Any] = None
+
+
 class ComplainantPatchBody(BaseModel):
     complainant_address: Optional[str] = None
     complainant_village: Optional[str] = None
@@ -224,6 +230,52 @@ def get_grievance(grievance_id: str):
         return JSONResponse(
             status_code=500,
             content={"status": "ERROR", "message": f"Internal server error: {str(e)}"},
+        )
+
+
+@router.patch("/api/grievance/{grievance_id}/classification")
+def patch_grievance_classification(
+    grievance_id: str,
+    body: GrievanceClassificationPatchBody,
+    _: None = Depends(_ticketing_auth_check),
+):
+    """
+    Update classification status and optional summary/categories.
+    Called by ticketing when an officer validates classification (TP-14).
+    """
+    from backend.config.classification_status import OFFICER_CONFIRMED, ACTIVE_CODES
+
+    status = body.grievance_classification_status
+    if status not in ACTIVE_CODES:
+        return JSONResponse(
+            status_code=422,
+            content={"status": "ERROR", "message": f"Invalid classification status: {status}"},
+        )
+    payload: Dict[str, Any] = {"grievance_classification_status": status}
+    if body.grievance_summary is not None:
+        payload["grievance_summary"] = body.grievance_summary
+    if body.grievance_categories is not None:
+        payload["grievance_categories"] = body.grievance_categories
+
+    if not grievance_manager.get_grievance_by_id(grievance_id):
+        return JSONResponse(
+            status_code=404,
+            content={"status": "ERROR", "message": f"Grievance {grievance_id} not found"},
+        )
+
+    try:
+        grievance_manager.update_grievance(grievance_id, payload)
+        return {
+            "ok": True,
+            "grievance_id": grievance_id,
+            "grievance_classification_status": status,
+            "officer_confirmed": status == OFFICER_CONFIRMED,
+        }
+    except Exception as e:
+        logger.exception("patch_grievance_classification failed for %s", grievance_id)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "ERROR", "message": str(e)},
         )
 
 

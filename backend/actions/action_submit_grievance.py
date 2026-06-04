@@ -12,6 +12,12 @@ from backend.actions.utils.ticketing_dispatch import dispatch_ticket
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 from backend.shared_functions.location_mapping import resolve_location_payload
+from backend.config.classification_status import (
+    COMPLAINANT_CONFIRMED,
+    LLM_GENERATED,
+    LLM_SKIPPED,
+    normalize_classification_status,
+)
 
 
 
@@ -86,10 +92,12 @@ class BaseActionSubmit(BaseAction):
                  ]
 
         if review:
-            review_keys = ["grievance_categories",
-                           "grievance_summary",
-                           "grievance_sensitive_issue"]
-
+            review_keys = [
+                "grievance_categories",
+                "grievance_summary",
+                "grievance_sensitive_issue",
+                "grievance_classification_status",
+            ]
             keys = keys + review_keys
         
         
@@ -124,9 +132,39 @@ class BaseActionSubmit(BaseAction):
         grievance_data = self._update_key_values_for_db_storage(grievance_data)
         if grievance_data.get("party_contacts") == self.NOT_PROVIDED:
             grievance_data["party_contacts"] = {}
+        grievance_data["grievance_classification_status"] = (
+            self._classification_status_for_submit(tracker, grievance_data)
+        )
         self.logger.info(f"Grievance data: {grievance_data}")
                 
         return grievance_data
+
+    def _classification_status_for_submit(
+        self, tracker: Tracker, grievance_data: Dict[str, Any]
+    ) -> str:
+        """Map session slots to DB classification status on final submit."""
+        slot_status = tracker.get_slot("grievance_classification_status")
+        cm = self.GRIEVANCE_CLASSIFICATION_STATUS.get("complainant_confirmed", COMPLAINANT_CONFIRMED)
+        if slot_status == cm:
+            return COMPLAINANT_CONFIRMED
+        cat_st = tracker.get_slot("grievance_categories_status")
+        sum_st = tracker.get_slot("grievance_summary_status")
+        if cat_st == cm and sum_st == cm:
+            return COMPLAINANT_CONFIRMED
+        normalized = normalize_classification_status(slot_status)
+        if normalized and normalized not in (self.SKIP_VALUE, self.NOT_PROVIDED, "pending"):
+            return normalized
+        if not self.LLM_CLASSIFICATION:
+            return LLM_SKIPPED
+        gid = tracker.get_slot("grievance_id")
+        if gid:
+            row = self.db_manager.get_grievance_by_id(gid) or {}
+            db_status = normalize_classification_status(
+                row.get("grievance_classification_status")
+            )
+            if db_status:
+                return db_status
+        return "pending"
 
     def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update the values of the grievance data for the database storage."""

@@ -39,6 +39,7 @@ Each ticket includes **locked decisions** where product has already chosen a dir
 | TP-11 | Simplify commands (field report, site photo gate, escalation) |
 | TP-12 | Assign vs ask for reassignment |
 | TP-13 | Officer-friendly validation messages (no API jargon) |
+| TP-14 | Grievance summary + categories sync and officer validation |
 
 ### P2 — Ticketing / portal
 
@@ -446,7 +447,50 @@ After **TP-11** (image gate, escalation form), desktop **Escalate** still calls 
 
 **Related** TP-11 (image gate, escalation form), TP-12 (supervisor assign messages).
 
-**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-13 · Agent: [`docs/sprints/June5/agents/portal-p1-bugs.md`](June5/agents/portal-p1-bugs.md)
+**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-13 · Agent: [`docs/sprints/June5/agents/portal-p1-bugs.md`](agents/portal-p1-bugs.md)
+
+---
+
+### TP-14 — Grievance summary, categories, and officer validation · **P1**
+
+**Feature goal**  
+Officers always see **AI summary**, **categories**, and **complainant narrative** on the ticket (including cases filed “as is” before classification finishes). When the complainant did not confirm classification in chatbot, an officer with access to the case **reviews/edits and confirms** categories (and summary per spec) in the portal **before Acknowledge**.
+
+**Why**  
+Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + categories ~1 minute after `ticketing.tickets` was created with empty cache — portal showed “No summary”. `grievance_sync` only creates tickets and filters `is_temporary = false`, so late LLM results never reach the UI.
+
+**In scope**
+
+- **Data:** Ticket detail and list must show summary/categories even when cache on `ticketing.tickets` is empty — source of truth includes **`public.grievances`** (read via grievance API), **without** requiring `is_temporary = false` for **read** paths.
+- **Sync:** Keep ticket cache updated when classification completes (backfill job + forward path on LLM completion / periodic sync).
+- **UI — ORIGINAL GRIEVANCE / TP-09 card:** Show description (raw), summary (LLM), and categories; badge when complainant validated vs pending officer review.
+- **UI — Officer validation:** When status is `LLM_generated`, `LLM_failed`, or `LLM_skipped`, show review UI (edit categories + summary, then confirm → `officer_confirmed`). **Blocks Acknowledge** until then. `complainant_confirmed` skips the gate.
+- **Submit path (chatbot):** Ensure `dispatch_ticket` sends summary/categories when available at submit (read from DB if session slots empty).
+- **Read path:** Grievance fetch for display **must not** filter on `is_temporary` (AWS shows submitted rows can still be `is_temporary = true`).
+
+**Out of scope (initial)**
+
+- Rebuilding the full chatbot complainant-review form inside the portal (use a focused officer review panel, not every chatbot button/slot).
+
+**Locked decisions (2026-06-03)** — full model: [`docs/sprints/June5/04-classification-status-spec.md`](June5/04-classification-status-spec.md)
+
+| Topic | Decision |
+| ----- | -------- |
+| Field | `public.grievances.grievance_classification_status` (Option B). **Not** `grievance_status` workflow history. |
+| Default | `pending` |
+| Active codes | `pending`, `LLM_generated`, `LLM_failed`, `LLM_skipped`, `complainant_confirmed`, `officer_confirmed` |
+| Skip LLM | `LLM_skipped` replaces `slot_skipped`; **officer must classify** |
+| No retry status in DB | Do not store `LLM_error` while Celery retries; final failure → `LLM_failed` |
+| Complainant validated | `complainant_confirmed` — green badge; no officer gate |
+| Officer required | When `LLM_generated`, `LLM_failed`, or `LLM_skipped` (e.g. on assign / before Acknowledge) → edit + confirm → `officer_confirmed` |
+| `is_temporary` | Retired (no read/sync filter) |
+| Read model | **Hybrid** detail merge + list cache + forward sync |
+| Officer UX | Edit **categories + summary**, then confirm |
+| Backfill | One-time AWS SQL for empty ticket cache |
+
+**Related** TP-09, `dispatch_ticket`, `grievance_sync`.
+
+**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-14
 
 ---
 

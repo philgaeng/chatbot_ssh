@@ -81,6 +81,30 @@ def fetch_qr_scan(token: str) -> Optional[dict]:
     }
 
 
+def _load_grievance_cache_fields(grievance_id: str) -> dict:
+    """Read summary/categories/location from DB when session slots are empty."""
+    try:
+        from backend.services.database_services.postgres_services import DatabaseManager
+        import json as _json
+
+        row = DatabaseManager().get_grievance_by_id(grievance_id) or {}
+        cats = row.get("grievance_categories")
+        if cats is not None and not isinstance(cats, str):
+            cats = _json.dumps(cats)
+        return {
+            "grievance_summary": row.get("grievance_summary"),
+            "grievance_categories": cats,
+            "grievance_location": row.get("grievance_location"),
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning(
+            "ticketing_dispatch: could not load grievance %s from DB: %s",
+            grievance_id,
+            exc,
+        )
+        return {}
+
+
 def dispatch_ticket(
     grievance_id: str,
     complainant_id: str | None,
@@ -96,6 +120,15 @@ def dispatch_ticket(
     package_id: str | None = None,
 ) -> None:
     """POST to /api/v1/tickets.  Never raises; logs warning on failure."""
+    if not _clean(grievance_summary) and grievance_categories in (None, "", []):
+        cached = _load_grievance_cache_fields(grievance_id)
+        if not _clean(grievance_summary):
+            grievance_summary = cached.get("grievance_summary")
+        if grievance_categories in (None, "", []):
+            grievance_categories = cached.get("grievance_categories")
+        if not _clean(grievance_location):
+            grievance_location = cached.get("grievance_location")
+
     # Normalise categories: ticketing API expects a JSON string or None
     cats = _clean(grievance_categories)
     if cats is not None and not isinstance(cats, str):

@@ -1090,6 +1090,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
             ticket={ticket}
             acknowledging={submitting}
             onAcknowledge={() => handleAction("ACKNOWLEDGE")}
+            onClassificationUpdated={loadTicket}
           />
         )}
         {filteredEvents.length === 0 ? (

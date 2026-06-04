@@ -92,7 +92,13 @@ export interface TicketDetail extends TicketListItem {
   session_id: string | null;
   chatbot_id: string;
   grievance_categories: string | null;
+  grievance_description?: string | null;
   grievance_location: string | null;
+  grievance_classification_status?: string | null;
+  classification_validated_by_complainant?: boolean;
+  classification_validated_by_officer?: boolean;
+  classification_officer_validation_required?: boolean;
+  classification_validated?: boolean;
   country_code: string;
   assigned_role_id: string | null;
   is_deleted: boolean;
@@ -257,6 +263,27 @@ export function listTickets(filters: TicketFilters = {}): Promise<TicketListResp
 
 export function getTicket(id: string): Promise<TicketDetail> {
   return apiFetch<TicketDetail>(`/api/v1/tickets/${id}`);
+}
+
+export interface ClassificationValidatePayload {
+  grievance_summary: string;
+  grievance_categories: string;
+  note?: string;
+}
+
+export function validateTicketClassification(
+  ticketId: string,
+  payload: ClassificationValidatePayload,
+): Promise<{
+  ticket_id: string;
+  grievance_id: string;
+  grievance_classification_status: string;
+  event_id: string;
+}> {
+  return apiFetch(`/api/v1/tickets/${ticketId}/classification`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getSla(id: string): Promise<SlaStatus> {

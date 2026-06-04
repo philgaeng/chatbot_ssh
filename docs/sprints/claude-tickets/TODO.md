@@ -273,6 +273,25 @@ a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_r
 
 ---
 
+## 🔴 TP-14 — Classification status + portal sync (P1, spec locked 2026-06-03)
+
+**Specs:** [`docs/sprints/June5/04-classification-status-spec.md`](../June5/04-classification-status-spec.md) · [`03-portal-p1-spec.md`](../June5/03-portal-p1-spec.md) § TP-14
+
+**Classification codes:** `pending` (default) → `LLM_generated` | `LLM_failed` | `LLM_skipped` → `complainant_confirmed` or `officer_confirmed`. Officer gate for `LLM_*` (not complainant confirmed). Retire `is_temporary`, `slot_skipped`, `LLM_error` in DB.
+
+**Implementation checklist:**
+
+- [ ] Chatbot: persist `grievance_classification_status` on review + submit; `LLM_skipped`; LLM task sets `LLM_generated`/`LLM_failed`
+- [ ] `ticketing_dispatch.py` — DB fallback for summary/categories at submit
+- [ ] `grievance_sync.py` — no `is_temporary` filter; UPDATE existing ticket cache
+- [ ] `GET /tickets/{id}` — merge grievance; expose classification status
+- [ ] Portal: badges, amber panel, block Ack until `officer_confirmed` when required
+- [ ] Officer validate API → `officer_confirmed` + audit event
+- [ ] AWS backfill for empty cache rows
+- [ ] Seed/migration: `LLM_skipped` in `grievance_classification_statuses`; normalize `slot_skipped`
+
+---
+
 ## 🔵 TECH DEBT (low urgency)
 
 | Item | File | Notes |

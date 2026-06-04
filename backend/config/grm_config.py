@@ -77,8 +77,9 @@ GRM_STATUS_MAPPING = {
     'denied': 'denied',
     'LLM_generated': 'pending',
     'LLM_failed': 'pending',
+    'LLM_skipped': 'pending',
     'complainant_confirmed': 'submitted',
-    'officer_confirmed': 'under_evaluation'
+    'officer_confirmed': 'under_evaluation',
 }
 
 # GRM Table Names (adjust based on actual GRM schema)

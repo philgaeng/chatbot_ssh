@@ -697,15 +697,21 @@ class ActionUpdateGrievanceCategorization(BaseAction):
             grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
             grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
             
+            class_status = tracker.get_slot("grievance_classification_status")
+            cm = self.GRIEVANCE_CLASSIFICATION_STATUS["complainant_confirmed"]
+            if (
+                grievance_categories_status == cm
+                and grievance_summary_status == cm
+            ):
+                class_status = cm
+            elif class_status in (None, self.SKIP_VALUE, False):
+                class_status = self.GRIEVANCE_CLASSIFICATION_STATUS["LLM_generated"]
+
             data_to_update = {
                 "grievance_categories": grievance_categories,
                 "grievance_summary": grievance_summary,
-                "grievance_categories_status": grievance_categories_status,
-                "grievance_summary_status": grievance_summary_status,
-                "grievance_cat_modify": grievance_cat_modify,
-                "grievance_summary_temp": grievance_summary_temp
+                "grievance_classification_status": class_status,
             }
-            self.db_manager.update_grievance(grievance_id = grievance_id, 
-            data = data_to_update)
+            self.db_manager.update_grievance(grievance_id=grievance_id, data=data_to_update)
             self.logger.info(f"Grievance categorization updated in db: {grievance_id}")
         return []

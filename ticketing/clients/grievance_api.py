@@ -71,6 +71,44 @@ def update_grievance_status(grievance_id: str, status: str, note: str = "") -> d
         return resp.json()
 
 
+def patch_grievance_classification(
+    grievance_id: str,
+    *,
+    grievance_classification_status: str,
+    grievance_summary: str | None = None,
+    grievance_categories: str | list | None = None,
+) -> dict[str, Any]:
+    """
+    PATCH /api/grievance/{grievance_id}/classification — officer validation (TP-14).
+    """
+    import json as _json
+
+    settings = get_settings()
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if settings.messaging_api_key:
+        headers["x-api-key"] = settings.messaging_api_key
+
+    body: dict[str, Any] = {
+        "grievance_classification_status": grievance_classification_status,
+    }
+    if grievance_summary is not None:
+        body["grievance_summary"] = grievance_summary
+    if grievance_categories is not None:
+        if isinstance(grievance_categories, str):
+            body["grievance_categories"] = grievance_categories
+        else:
+            body["grievance_categories"] = grievance_categories
+
+    with _client() as client:
+        resp = client.patch(
+            f"/api/grievance/{grievance_id}/classification",
+            json=body,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
 def patch_complainant(
     complainant_id: str,
     fields: dict[str, Any],
