@@ -21,11 +21,14 @@ def _form_ask_fallback_text(slots: Dict[str, Any]) -> str:
 
 
 def _classification_consent_already_prompted(slots: Dict[str, Any], slot: str) -> bool:
-    """Retrieve action already sent categorization text + Yes/No for this slot."""
-    return (
-        slot == "grievance_classification_consent"
-        and slots.get("grievance_complainant_review") is True
-    )
+    """Retrieve already sent categorization Yes/No when LLM content is in session."""
+    if slot != "grievance_classification_consent":
+        return False
+    if slots.get("grievance_complainant_review") is not True:
+        return False
+    summary = (slots.get("grievance_summary_temp") or slots.get("grievance_summary") or "").strip()
+    categories = slots.get("grievance_categories") or []
+    return bool(summary or categories)
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
@@ -38,6 +41,7 @@ from backend.orchestrator.action_registry import invoke_action, events_to_slot_u
 _ASK_ACTIONS_BY_SLOT = {
     # Grievance flow
     "grievance_new_detail": "action_ask_grievance_new_detail",
+    "dust_new_detail": "action_ask_dust_new_detail",
     # Contact form
     "complainant_location_consent": "action_ask_complainant_location_consent",
     "complainant_province": "action_ask_complainant_province",
@@ -323,6 +327,9 @@ def get_form(active_loop: str) -> Any:
         if active_loop == "form_grievance":
             from backend.actions.forms.form_grievance import ValidateFormGrievance
             _FORMS[active_loop] = ValidateFormGrievance()
+        elif active_loop == "form_dust":
+            from backend.actions.forms.form_dust import ValidateFormDust
+            _FORMS[active_loop] = ValidateFormDust()
         elif active_loop == "form_contact":
             from backend.actions.forms.form_contact import ValidateFormContact
             _FORMS[active_loop] = ValidateFormContact()

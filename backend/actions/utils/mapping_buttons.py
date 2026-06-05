@@ -221,6 +221,15 @@ BUTTONS_GRIEVANCE_SUBMISSION = {
     ]
 }
 
+BUTTONS_DUST_FILE_AS_IS = {
+    "en": [
+        {"title": "File as is", "payload": BUTTON_SUBMIT_DETAILS},
+    ],
+    "ne": [
+        {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
+    ],
+}
+
 BUTTONS_EMAIL_CONFIRMATION = {
     'en': [
         {"title": "Confirm Email", "payload": BUTTON_SLOT_CONFIRMED},

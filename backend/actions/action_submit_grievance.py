@@ -171,6 +171,11 @@ class BaseActionSubmit(BaseAction):
             return normalized
         if not self.LLM_CLASSIFICATION:
             return LLM_SKIPPED
+        if (
+            tracker.get_slot("story_main") == "dust_grievance"
+            or tracker.get_slot("intake_fast_path") == "dust"
+        ):
+            return LLM_SKIPPED
         gid = tracker.get_slot("grievance_id")
         if gid:
             row = self.db_manager.get_grievance_by_id(gid) or {}

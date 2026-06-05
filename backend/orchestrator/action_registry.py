@@ -30,8 +30,11 @@ def _get_action(action_name: str) -> Any:
         )
         from backend.actions.forms.form_grievance import (
             ActionStartGrievanceProcess,
-            ActionStartDustGrievanceProcess,
             ActionAskGrievanceNewDetail,
+        )
+        from backend.actions.forms.form_dust import (
+            ActionStartDustGrievanceProcess,
+            ActionAskDustNewDetail,
         )
         from backend.actions.action_map_location import (
             ActionAskLocationMethod,
@@ -142,6 +145,7 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_start_grievance_process"] = ActionStartGrievanceProcess()
         _ACTIONS["action_start_dust_grievance_process"] = ActionStartDustGrievanceProcess()
         _ACTIONS["action_ask_grievance_new_detail"] = ActionAskGrievanceNewDetail()
+        _ACTIONS["action_ask_dust_new_detail"] = ActionAskDustNewDetail()
         _ACTIONS["action_ask_location_method"] = ActionAskLocationMethod()
         _ACTIONS["action_ask_map_location"] = ActionAskMapLocation()
         _ACTIONS["action_open_map_picker"] = ActionOpenMapPicker()

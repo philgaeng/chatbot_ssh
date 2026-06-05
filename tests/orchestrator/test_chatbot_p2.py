@@ -9,8 +9,11 @@ from backend.actions.action_map_location import (
     location_skip_slot_updates,
     parse_map_pin_payload,
 )
-from backend.actions.forms.form_grievance import (
+from backend.actions.forms.form_dust import (
     ActionStartDustGrievanceProcess,
+    DUST_CATEGORY,
+    DUST_DEFAULT_DESCRIPTION,
+    ValidateFormDust,
     ValidateFormGrievance,
 )
 from backend.orchestrator.state_machine import derive_intent
@@ -99,7 +102,58 @@ def test_build_file_client_metadata():
 
 def test_dust_start_sets_story_and_category():
     action = ActionStartDustGrievanceProcess()
-    assert action.DUST_CATEGORY == "Air Pollution"
+    assert DUST_CATEGORY == "Air Pollution"
+    assert action.name() == "action_start_dust_grievance_process"
+
+
+def test_dust_submit_skips_llm_classification(monkeypatch):
+    form = ValidateFormDust()
+    saved: dict = {}
+
+    class FakeDb:
+        def create_or_update_complainant(self, data):
+            saved["complainant"] = data
+            return True
+
+        def create_or_update_grievance(self, data):
+            saved["grievance"] = data
+            return True
+
+        def update_grievance(self, *_args, **_kwargs):
+            raise AssertionError("dust path must not update grievance for LLM")
+
+    async def _no_classification(*_args, **_kwargs):
+        raise AssertionError("dust path must not trigger async classification")
+
+    form.db_manager = FakeDb()
+    monkeypatch.setattr(form, "_trigger_async_classification", _no_classification)
+    tracker = type(
+        "T",
+        (),
+        {
+            "get_slot": lambda self, k: {
+                "grievance_id": "G-DUST-1",
+                "complainant_id": "C-1",
+                "grievance_description": DUST_DEFAULT_DESCRIPTION,
+                "story_main": "dust_grievance",
+                "intake_fast_path": "dust",
+                "grievance_categories": [DUST_CATEGORY],
+                "flask_session_id": "sess-dust",
+            }.get(k),
+            "sender_id": "sess-dust",
+        },
+    )()
+
+    import asyncio
+
+    result = asyncio.run(
+        form.validate_dust_new_detail("submit_details", None, tracker, {})
+    )
+    assert result.get("dust_new_detail") == "completed"
+    assert result.get("grievance_classification_status") == "LLM_skipped"
+    assert result.get("grievance_categories") == [DUST_CATEGORY]
+    assert saved["grievance"]["grievance_classification_status"] == "LLM_skipped"
+    assert saved["grievance"]["grievance_categories"] == [DUST_CATEGORY]
 
 
 def test_validate_voice_only_empty_text_triggers_voice_record(monkeypatch):

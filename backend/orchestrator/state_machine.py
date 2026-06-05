@@ -86,6 +86,17 @@ def _get_form() -> Any:
     return _FORM
 
 
+_FORM_DUST = None
+
+
+def _get_form_dust() -> Any:
+    global _FORM_DUST
+    if _FORM_DUST is None:
+        from backend.actions.forms.form_dust import ValidateFormDust
+        _FORM_DUST = ValidateFormDust()
+    return _FORM_DUST
+
+
 def _get_status_form_1() -> Any:
     global _STATUS_FORM_1
     if _STATUS_FORM_1 is None:
@@ -466,12 +477,12 @@ async def _restart_intake_from_done(
         slot_updates.update(events_to_slot_updates(events))
         dispatcher.messages.extend(ask_dispatcher.messages)
         session["slots"].update(slot_updates)
-        session["active_loop"] = "form_grievance"
-        session["requested_slot"] = "grievance_new_detail"
-        next_state = "form_grievance"
+        session["active_loop"] = "form_dust"
+        session["requested_slot"] = "dust_new_detail"
+        next_state = "form_dust"
         session_copy = dict(session)
         session_copy["slots"] = dict(session["slots"])
-        form = _get_form()
+        form = _get_form_dust()
         msgs, form_updates, completed = await run_form_turn(
             form, session_copy, None, domain
         )
@@ -641,12 +652,12 @@ async def run_flow_turn(
             slot_updates.update(events_to_slot_updates(events))
             dispatcher.messages.extend(ask_dispatcher.messages)
             session["slots"].update(slot_updates)
-            session["active_loop"] = "form_grievance"
-            session["requested_slot"] = "grievance_new_detail"
-            next_state = "form_grievance"
+            session["active_loop"] = "form_dust"
+            session["requested_slot"] = "dust_new_detail"
+            next_state = "form_dust"
             session_copy = dict(session)
             session_copy["slots"] = dict(session["slots"])
-            form = _get_form()
+            form = _get_form_dust()
             msgs, form_updates, completed = await run_form_turn(
                 form, session_copy, None, domain
             )
@@ -726,6 +737,18 @@ async def run_flow_turn(
                 slot_updates.update(form_updates2)
             else:
                 next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+
+    elif state == "form_dust":
+        user_input = latest_message if (text or payload) else None
+        form = _get_form_dust()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session, user_input, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            session["slots"].update(slot_updates)
+            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
 
     elif state == "location_consent":
         from backend.actions.action_map_location import location_skip_slot_updates
@@ -2045,7 +2068,7 @@ async def run_flow_turn(
         "map_location",
     ) else "text"
     form_states = (
-        "form_grievance", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
+        "form_grievance", "form_dust", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
         "contact_form", "otp_form", "grievance_review",
         "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
     )

@@ -69,12 +69,13 @@ class GrievanceDbManager(BaseDatabaseManager):
             if not complainant_id:
                 self.logger.error(f"Missing complainant_id: {str(e)}")
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
-            elif not grievance_id: 
+            elif not grievance_id:
                 self.logger.error(f"Missing grievance_id: {str(e)}")
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
             else:
                 self.logger.error(f"Error in create_grievance: {str(e)}")
                 self.logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
     
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> int:
@@ -111,6 +112,44 @@ class GrievanceDbManager(BaseDatabaseManager):
             self.logger.error(f"Error in update_grievance: {str(e)}")
             return False
 
+    def grievance_row_exists(self, grievance_id: str) -> bool:
+        """Lightweight existence check on grievances only (no JOINs)."""
+        if not grievance_id:
+            return False
+        try:
+            results = self.execute_query(
+                "SELECT 1 FROM grievances WHERE grievance_id = %s LIMIT 1",
+                (grievance_id,),
+                "grievance_row_exists",
+            )
+            return bool(results)
+        except Exception as e:
+            self.logger.error(
+                "grievance_row_exists failed for %s: %s", grievance_id, e
+            )
+            return False
+
+    def get_grievance_core_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
+        """Read grievances table only — fallback when JOIN/detail query fails."""
+        try:
+            results = self.execute_query(
+                "SELECT * FROM grievances WHERE grievance_id = %s",
+                (grievance_id,),
+                "get_grievance_core_by_id",
+            )
+            if not results:
+                return None
+            parsed_result = self._parse_database_result(results[0])
+            self.logger.debug(
+                "get_grievance_core_by_id: %s", grievance_row_summary(parsed_result)
+            )
+            return parsed_result
+        except Exception as e:
+            self.logger.error(
+                "get_grievance_core_by_id failed for %s: %s", grievance_id, e
+            )
+            return None
+
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         query = """
                 SELECT g.*, c.complainant_full_name, c.complainant_phone, c.complainant_email,
@@ -129,14 +168,17 @@ class GrievanceDbManager(BaseDatabaseManager):
         try:
             results = self.execute_query(query, (grievance_id,), "get_grievance_by_id")
             if results:
-                # Parse the result to convert JSON fields back to Python objects
                 parsed_result = self._parse_database_result(results[0])
                 self.logger.debug("get_grievance_by_id: %s", grievance_row_summary(parsed_result))
                 return parsed_result
             return None
         except Exception as e:
-            self.logger.error(f"Error retrieving grievance by ID: {str(e)}")
-            return None
+            self.logger.error(
+                "get_grievance_by_id JOIN query failed for %s: %s — trying core read",
+                grievance_id,
+                e,
+            )
+            return self.get_grievance_core_by_id(grievance_id)
             
     def get_grievance_files(self, grievance_id: str) -> List[Dict]:
         query = """

@@ -648,14 +648,6 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
-        'action_start_dust_grievance_process': {
-            'utterances': {
-                1: {
-                    'en': "Road dust report — we will ask for map location and photos next.",
-                    'ne': "सडक धुलो उजुरी — अर्को चरणमा नक्सा स्थान र तस्बिर सोधिनेछ।",
-                }
-            }
-        },
          'action_ask_grievance_new_detail': {
             'utterances': {
                 1: {
@@ -682,16 +674,6 @@ UTTERANCE_MAPPING = {
                         "रेकर्ड गर्नुभएमा टाइप गर्न अनिवार्य छैन।"
                     ),
                 },
-                6: {
-                    'en': (
-                        "Road dust fast path: add a short note if you wish, or tap **File as is** to continue. "
-                        "Next you will set location on the map and add photos."
-                    ),
-                    'ne': (
-                        "सडक धुलो द्रुत मार्ग: चाहनुभए छोटो नोट थप्नुहोस्, वा **यसै रूपमा दर्ता** थिचेर अगाडि बढ्नुहोस्। "
-                        "अर्को चरणमा नक्सामा स्थान र तस्बिरहरू थपिनेछ।"
-                    ),
-                },
                 4: {
                     'en': """Thank you for your entry: "{grievance_description}\n. 
                     Do you want to add more details to your grievance, such as:\n
@@ -711,6 +693,52 @@ UTTERANCE_MAPPING = {
                 4: BUTTONS_GRIEVANCE_SUBMISSION
             }
         }
+    },
+    'form_dust': {
+        'action_start_dust_grievance_process': {
+            'utterances': {
+                1: {
+                    'en': "Road dust report — we will ask for map location and photos next.",
+                    'ne': "सडक धुलो उजुरी — अर्को चरणमा नक्सा स्थान र तस्बिर सोधिनेछ।",
+                }
+            }
+        },
+        'action_ask_dust_new_detail': {
+            'utterances': {
+                1: {
+                    'en': (
+                        "Road dust fast path: add a short note if you wish, or tap **File as is** to continue. "
+                        "Next you will set location on the map and add photos."
+                    ),
+                    'ne': (
+                        "सडक धुलो द्रुत मार्ग: चाहनुभए छोटो नोट थप्नुहोस्, वा **यसै रूपमा दर्ता** थिचेर अगाडि बढ्नुहोस्। "
+                        "अर्को चरणमा नक्सामा स्थान र तस्बिरहरू थपिनेछ।"
+                    ),
+                },
+                2: {
+                    'en': "Lets restart, please enter your note or tap File as is.",
+                    'ne': "पुनः सुरु गर्नुहोस्, नोट टाइप गर्नुहोस् वा यसै रूपमा दर्ता थिच्नुहोस्।",
+                },
+                3: {
+                    'en': "Please enter more details about the dust issue...",
+                    'ne': "कृपया धुलो सम्बन्धी थप विवरण प्रविष्ट गर्नुहोस्...",
+                },
+                4: {
+                    'en': (
+                        'Thank you for your entry: "{grievance_description}". '
+                        "Tap **File as is** to continue to map and photos, or add more details."
+                    ),
+                    'ne': (
+                        'तपाईंको प्रविष्टिको लागि धन्यवाद: "{grievance_description}". '
+                        "नक्सा र तस्बिरका लागि **यसै रूपमा दर्ता** थिच्नुहोस्, वा थप विवरण थप्नुहोस्।"
+                    ),
+                },
+            },
+            'buttons': {
+                1: BUTTONS_DUST_FILE_AS_IS,
+                4: BUTTONS_GRIEVANCE_SUBMISSION,
+            },
+        },
     },
     'action_submit_grievance': {
         'action_submit_grievance': {
