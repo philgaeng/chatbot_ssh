@@ -531,6 +531,7 @@ class BaseDatabaseManager:
             "country_code",
             "location_code",
             "location_resolution_status",
+            "location_geo",
             "level_1_name", "level_2_name", "level_3_name", "level_4_name", "level_5_name", "level_6_name",
             "level_1_code", "level_2_code", "level_3_code", "level_4_code", "level_5_code", "level_6_code",
         }
@@ -1320,6 +1321,7 @@ class TableDbManager(BaseDatabaseManager):
         cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_code TEXT")
         cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_code TEXT")
         cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_code TEXT")
+        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_geo TEXT")
 
         # Tasks table
         self.migrations_logger.info("Creating/recreating tasks table...")
@@ -1398,9 +1400,13 @@ class TableDbManager(BaseDatabaseManager):
                 file_path TEXT NOT NULL,
                 file_type TEXT NOT NULL,
                 file_size INTEGER NOT NULL,
-                upload_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                upload_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                client_metadata JSONB
             )
         """)
+        cur.execute(
+            "ALTER TABLE file_attachments ADD COLUMN IF NOT EXISTS client_metadata JSONB"
+        )
 
         # Voice recording tables with language_code fields
         self.migrations_logger.info("Creating/recreating grievance_voice_recordings table...")
@@ -2305,7 +2311,15 @@ class FileDbManager(BaseDatabaseManager):
     """Handles file attachment CRUD and lookup logic"""
     def store_file_attachment(self, file_data: Dict) -> bool:
         """Store file attachment in the database"""
-        allowed_keys = ['file_id', 'grievance_id', 'file_name', 'file_path', 'file_type', 'file_size']
+        allowed_keys = [
+            'file_id',
+            'grievance_id',
+            'file_name',
+            'file_path',
+            'file_type',
+            'file_size',
+            'client_metadata',
+        ]
 
         try:
             self.execute_insert(table_name="file_attachments", input_data=file_data, allowed_fields=allowed_keys)

@@ -11,6 +11,10 @@ from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 from backend.actions.utils.ticketing_dispatch import dispatch_ticket
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
+from backend.shared_functions.geo_pin import (
+    apply_location_enrichment_for_submit,
+    slots_for_location_resolve,
+)
 from backend.shared_functions.location_mapping import resolve_location_payload
 from backend.config.classification_status import (
     COMPLAINANT_CONFIRMED,
@@ -106,10 +110,20 @@ class BaseActionSubmit(BaseAction):
         grievance_data={k : tracker.get_slot(k) for k in keys}
         location_payload = resolve_location_payload(
             db_manager=self.db_manager,
-            slots=grievance_data,
+            slots=slots_for_location_resolve(grievance_data),
             country_code=tracker.get_slot("country_code") or "NP",
         )
         grievance_data.update(location_payload)
+        grievance_data.update(
+            apply_location_enrichment_for_submit(
+                grievance_data,
+                geo_lat=tracker.get_slot("geo_lat"),
+                geo_lng=tracker.get_slot("geo_lng"),
+                location_pin_status=tracker.get_slot("location_pin_status"),
+                location_code=tracker.get_slot("location_code")
+                or location_payload.get("location_code"),
+            )
+        )
         self.logger.info(
             "submission_location_resolution country_code=%s status=%s deepest_level=%s",
             location_payload.get("country_code"),

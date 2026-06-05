@@ -11,10 +11,6 @@ from rasa_sdk.executor import CollectingDispatcher
 
 from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.base_classes.base_mixins import SKIP_VALUE
-from backend.shared_functions.geo_pin import build_pin_patch, merge_grievance_location_blob
-from backend.shared_functions.location_mapping import resolve_location_code_to_names
-
-MAP_COORDINATES = "map_coordinates"
 
 
 def location_skip_slot_updates() -> Dict[str, Any]:
@@ -25,14 +21,14 @@ def location_skip_slot_updates() -> Dict[str, Any]:
         "complainant_district": SKIP_VALUE,
         "complainant_municipality_temp": SKIP_VALUE,
         "complainant_municipality": SKIP_VALUE,
-        "complainant_municipality_confirmed": False,
+        "complainant_municipality_confirmed": True,
         "complainant_village": SKIP_VALUE,
         "complainant_village_temp": SKIP_VALUE,
-        "complainant_village_confirmed": False,
+        "complainant_village_confirmed": True,
         "complainant_ward": SKIP_VALUE,
         "complainant_address_temp": SKIP_VALUE,
         "complainant_address": SKIP_VALUE,
-        "complainant_address_confirmed": False,
+        "complainant_address_confirmed": True,
         "location_pin_status": "skipped",
     }
 
@@ -43,28 +39,34 @@ def build_map_filled_location_slots(
     *,
     province: Optional[str] = None,
     district: Optional[str] = None,
+    location_code: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Prefill contact-form location slots from a map pin (ward=0, filler=map_coordinates)."""
-    filler = MAP_COORDINATES
-    coord_address = f"{lat:.5f}, {lng:.5f}"
-    return {
+    """
+    Prefill contact-form slots after a map pin.
+    Coordinates persist on submit as complainant.location_geo (not grievance_location).
+    """
+    address_label = f"Map pin ({lat:.5f}, {lng:.5f})"
+    updates: Dict[str, Any] = {
         "complainant_location_consent": True,
-        "complainant_province": province or filler,
-        "complainant_district": district or filler,
-        "complainant_municipality_temp": filler,
-        "complainant_municipality": filler,
+        "complainant_province": province or SKIP_VALUE,
+        "complainant_district": district or SKIP_VALUE,
+        "complainant_municipality_temp": SKIP_VALUE,
+        "complainant_municipality": SKIP_VALUE,
         "complainant_municipality_confirmed": True,
-        "complainant_village_temp": filler,
-        "complainant_village": filler,
+        "complainant_village_temp": SKIP_VALUE,
+        "complainant_village": SKIP_VALUE,
         "complainant_village_confirmed": True,
-        "complainant_ward": 0,
-        "complainant_address_temp": coord_address,
-        "complainant_address": coord_address,
+        "complainant_ward": SKIP_VALUE,
+        "complainant_address_temp": address_label,
+        "complainant_address": address_label,
         "complainant_address_confirmed": True,
-        "location_pin_status": "set",
+        "location_pin_status": "map_pin",
         "geo_lat": lat,
         "geo_lng": lng,
     }
+    if location_code:
+        updates["location_code"] = location_code
+    return updates
 
 
 class ActionAskLocationMethod(BaseAction):
@@ -130,7 +132,7 @@ class ActionOpenMapPicker(BaseAction):
 
 
 class ActionApplyMapPin(BaseAction):
-    """Apply lat/lng from client payload into slots + grievance_location blob."""
+    """Acknowledge map pin in-session; DB write happens on final submit."""
 
     def name(self) -> Text:
         return "action_apply_map_pin"
@@ -146,32 +148,6 @@ class ActionApplyMapPin(BaseAction):
         if lat is None or lng is None:
             return [SlotSet("location_pin_status", "missing")]
 
-        location_code = tracker.get_slot("location_code")
-        names = (
-            resolve_location_code_to_names(self.db_manager, location_code, self.language_code or "en")
-            if location_code
-            else {}
-        )
-        patch = build_pin_patch(float(lat), float(lng), location_code)
-        if names.get("province_name"):
-            patch["province_name"] = names["province_name"]
-        if names.get("district_name"):
-            patch["district_name"] = names["district_name"]
-
-        grievance_id = tracker.get_slot("grievance_id")
-        if grievance_id:
-            existing = None
-            try:
-                row = self.db_manager.get_grievance_by_id(grievance_id)
-                existing = (row or {}).get("grievance_location")
-            except Exception:
-                existing = None
-            merged = merge_grievance_location_blob(existing, patch)
-            self.db_manager.update_grievance(
-                grievance_id,
-                {"grievance_location": merged},
-            )
-
         utterance = self.get_utterance(1).format(
             lat=f"{float(lat):.5f}",
             lng=f"{float(lng):.5f}",
@@ -183,6 +159,7 @@ class ActionApplyMapPin(BaseAction):
             float(lng),
             province=tracker.get_slot("complainant_province"),
             district=tracker.get_slot("complainant_district"),
+            location_code=tracker.get_slot("location_code"),
         )
         return [SlotSet(k, v) for k, v in filled.items()]
 

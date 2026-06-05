@@ -146,40 +146,21 @@ class FileServerCore(APIManager):
             # Add audio-specific metadata
             audio_metadata = self.get_audio_metadata(file_data['file_path'])
             file_data.update(audio_metadata)
-        
+
+        client_meta = file_data.get("client_metadata") or {}
+        if client_meta:
+            from backend.shared_functions.geo_pin import build_file_client_metadata
+
+            file_data["client_metadata"] = build_file_client_metadata(client_meta)
+
         # Store file attachment in DB (requires grievance_id to exist in grievances table)
         success = db_manager.store_file_attachment(file_data)
-        
+
         if not success:
             raise Exception(
                 f"Failed to store file {file_data['file_name']} in database "
                 "(check DB logs for cause; often grievance_id missing or FK violation)"
             )
-
-        client_meta = file_data.get("client_metadata") or {}
-        if client_meta:
-            try:
-                from backend.shared_functions.geo_pin import (
-                    build_file_exif_patch,
-                    merge_grievance_location_blob,
-                )
-
-                row = db_manager.get_grievance_by_id(grievance_id) or {}
-                patch = build_file_exif_patch(file_data["file_id"], client_meta)
-                merged = merge_grievance_location_blob(
-                    row.get("grievance_location"), patch
-                )
-                db_manager.update_grievance(
-                    grievance_id, {"grievance_location": merged}
-                )
-            except Exception as meta_err:
-                self.log_event(
-                    event_type=FAILED,
-                    details={
-                        "grievance_id": grievance_id,
-                        "error": f"client_metadata persist: {meta_err}",
-                    },
-                )
 
         return file_data
 

@@ -801,6 +801,7 @@ async def run_flow_turn(
                         coords["lng"],
                         province=province,
                         district=district,
+                        location_code=slot_updates.get("location_code"),
                     )
                 )
                 session["slots"].update(slot_updates)

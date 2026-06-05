@@ -63,9 +63,9 @@
 
 | Ticket | Status | Agent / date | PR / commit | Notes |
 |--------|--------|--------------|-------------|-------|
-| CB-01 Voice note intake | `done` | Chatbot P2 / 2026-06-03 | | Record button, 90s cap, voice-only submit, `transcribe_audio_file_task` on audio upload |
-| CB-06 Location by pin | `done` | Chatbot P2 / 2026-06-03 | | `map_location` state, Leaflet modal, `/location_manual_entry` fallback |
-| CB-08 Photo EXIF metadata | `done` | Chatbot P2 / 2026-06-03 | | Session consent + exifr; metadata merged into `grievance_location` JSON |
+| CB-01 Voice note intake | `done` | Chatbot P2 / 2026-06-03 | | Record button, 45s cap, composer status banner, voice-only submit |
+| CB-06 Location by pin | `done` | Chatbot P2 / 2026-06-03 | | Consent → manual/map; coords on `complainants.location_geo` at submit |
+| CB-08 Photo EXIF metadata | `done` | Chatbot P2 / 2026-06-03 | | Session consent + exifr; metadata on `file_attachments.client_metadata` |
 | CB-09 Dust fast path | `done` | Chatbot P2 / 2026-06-03 | | Menu `/dust_grievance`, preset Air Pollution, photo prompt after pin |
 
 **P2 verification (manual)**

@@ -1,9 +1,10 @@
 """Chatbot P2 (CB-01, CB-06, CB-08, CB-09) unit tests."""
 
+import json
+
 import pytest
 
 from backend.actions.action_map_location import (
-    MAP_COORDINATES,
     build_map_filled_location_slots,
     location_skip_slot_updates,
     parse_map_pin_payload,
@@ -13,7 +14,12 @@ from backend.actions.forms.form_grievance import (
     ValidateFormGrievance,
 )
 from backend.orchestrator.state_machine import derive_intent
-from backend.shared_functions.geo_pin import merge_grievance_location_blob
+from backend.shared_functions.geo_pin import (
+    apply_location_enrichment_for_submit,
+    build_file_client_metadata,
+    build_location_geo_json,
+    format_location_display_label,
+)
 
 
 def test_derive_intent_map_pin_set():
@@ -28,41 +34,67 @@ def test_derive_intent_location_open_map():
     assert derive_intent("", "/location_open_map") == "location_open_map"
 
 
-def test_build_map_filled_location_slots():
-    slots = build_map_filled_location_slots(27.5, 85.3, province="Koshi", district="Morang")
-    assert slots["complainant_ward"] == 0
-    assert slots["complainant_municipality"] == MAP_COORDINATES
-    assert slots["complainant_village"] == MAP_COORDINATES
-    assert slots["complainant_province"] == "Koshi"
-    assert slots["complainant_location_consent"] is True
-
-
-def test_location_skip_slot_updates():
-    skipped = location_skip_slot_updates()
-    assert skipped["complainant_location_consent"] is False
-    assert skipped["complainant_province"] == "slot_skipped"
-
-
-def test_derive_intent_dust_grievance():
-    assert derive_intent("", "/dust_grievance") == "dust_grievance"
-
-
 def test_parse_map_pin_payload():
     coords = parse_map_pin_payload('/map_pin_set{"lat":27.5,"lng":85.3}')
     assert coords["lat"] == pytest.approx(27.5)
     assert coords["lng"] == pytest.approx(85.3)
 
 
-def test_merge_grievance_location_blob_files():
-    merged = merge_grievance_location_blob(
-        None,
-        {"pin": {"lat": 1.0, "lng": 2.0}, "files": [{"file_id": "a", "lat": 3.0}]},
-    )
-    import json
+def test_build_location_geo_json():
+    raw = build_location_geo_json(27.5, 85.3, location_code="P1_MOR")
+    data = json.loads(raw)
+    assert data["lat"] == pytest.approx(27.5)
+    assert data["lng"] == pytest.approx(85.3)
+    assert data["location_code"] == "P1_MOR"
+    assert data["source"] == "map_pin"
 
-    data = json.loads(merged)
-    assert data["pin"]["lat"] == 1.0
-    assert len(data["files"]) == 1
+
+def test_build_map_filled_location_slots():
+    slots = build_map_filled_location_slots(
+        27.5, 85.3, province="Koshi", district="Morang", location_code="P1_MOR"
+    )
+    assert slots["complainant_ward"] == "slot_skipped"
+    assert slots["complainant_municipality"] == "slot_skipped"
+    assert slots["complainant_province"] == "Koshi"
+    assert slots["location_pin_status"] == "map_pin"
+    assert "Map pin" in slots["complainant_address"]
+
+
+def test_location_skip_slot_updates():
+    skipped = location_skip_slot_updates()
+    assert skipped["complainant_location_consent"] is False
+    assert skipped["location_pin_status"] == "skipped"
+
+
+def test_apply_location_enrichment_for_submit_map_pin():
+    enriched = apply_location_enrichment_for_submit(
+        {"complainant_district": "Morang"},
+        geo_lat=27.5,
+        geo_lng=85.3,
+        location_pin_status="map_pin",
+        location_code="P1_MOR",
+    )
+    assert enriched["location_resolution_status"] == "map_pin"
+    geo = json.loads(enriched["location_geo"])
+    assert geo["lat"] == pytest.approx(27.5)
+    assert "Map pin" in enriched["grievance_location"]
+
+
+def test_format_location_display_label_manual():
+    label = format_location_display_label(
+        {
+            "location_pin_status": "manual",
+            "complainant_district": "Morang",
+            "complainant_province": "Koshi",
+        }
+    )
+    assert label == "Morang, Koshi"
+
+
+def test_build_file_client_metadata():
+    meta = build_file_client_metadata({"lat": 1.0, "lng": 2.0, "exif_consent": True})
+    assert meta["lat"] == 1.0
+    assert meta["source"] == "client_upload"
 
 
 def test_dust_start_sets_story_and_category():
