@@ -6,10 +6,9 @@ import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
   listTicketFiles, getFileDownloadUrl, listOfficers, listOfficerRoster, patchTicket,
   listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  generateFindings, listTicketTasks, completeTask, createTask, patchComplainant,
+  generateFindings, listTicketTasks, completeTask, createTask,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
-  type ComplainantPatchPayload,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
@@ -42,7 +41,8 @@ import { submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { formatGrievanceCategories } from "@/lib/format-grievance";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
-import { PII_MASK } from "@/lib/pii-display";
+import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
+import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
 import {
   SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
   isThreadTaskEvent,
@@ -51,7 +51,7 @@ import {
 import {
   IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene,
   IconReply, IconTask, IconAssign, IconTranslations,
-  IconEdit, IconActiveSession, IconExpiredSession, IconRevealStatement,
+  IconEdit,
   IconFileImage, IconFilePdf, IconFileOther, IconUpload,
   IconFindings, IconRegenerate, IconWarning, IconClose,
   TaskTypeIcon,
@@ -240,17 +240,7 @@ function FilesPanel({
   );
 }
 
-// ── Complainant edit sheet ────────────────────────────────────────────────────
-
-const EDIT_FIELDS: { key: keyof ComplainantPatchPayload; label: string }[] = [
-  { key: "complainant_address",      label: "Address" },
-  { key: "complainant_village",      label: "Village / Tole" },
-  { key: "complainant_ward",         label: "Ward No." },
-  { key: "complainant_municipality", label: "Municipality / VDC" },
-  { key: "complainant_district",     label: "District" },
-  { key: "complainant_province",     label: "Province" },
-  { key: "complainant_email",        label: "Email" },
-];
+// ── Complainant edit sheet (desktop modal) ────────────────────────────────────
 
 function EditComplainantSheet({
   ticket,
@@ -263,40 +253,6 @@ function EditComplainantSheet({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState<ComplainantPatchPayload>({
-    complainant_address:      (pii?.address      as string | undefined) ?? "",
-    complainant_municipality: (pii?.municipality as string | undefined) ?? "",
-    complainant_district:     (pii?.district     as string | undefined) ?? "",
-    complainant_province:     (pii?.province     as string | undefined) ?? "",
-    complainant_email:        pii?.email ?? "",
-    complainant_village:      "",
-    complainant_ward:         "",
-  });
-  const [saving, setSaving]   = useState(false);
-  const [error,  setError]    = useState<string | null>(null);
-
-  async function handleSave() {
-    // Only send non-empty fields
-    const payload: ComplainantPatchPayload = {};
-    for (const { key } of EDIT_FIELDS) {
-      const val = form[key];
-      if (val && val.trim()) payload[key] = val.trim();
-    }
-    if (Object.keys(payload).length === 0) { onClose(); return; }
-
-    setSaving(true);
-    setError(null);
-    try {
-      await patchComplainant(ticket.ticket_id, payload);
-      onSaved();
-      onClose();
-    } catch {
-      setError("Save failed — please try again.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
       <div
@@ -307,44 +263,13 @@ function EditComplainantSheet({
           <h3 className="text-sm font-semibold text-gray-800">Edit complainant info</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
         </div>
-
-        <p className="text-xs text-gray-400 mb-4">
-          Name and phone number cannot be changed here — contact the chatbot admin.
-          All changes are logged in the case timeline.
-        </p>
-
-        <div className="space-y-3">
-          {EDIT_FIELDS.map(({ key, label }) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-              <input
-                type={key === "complainant_email" ? "email" : "text"}
-                value={form[key] ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder={`Enter ${label.toLowerCase()}`}
-              />
-            </div>
-          ))}
-        </div>
-
-        {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-
-        <div className="flex gap-2 mt-5">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2.5 rounded-xl transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
+        <ComplainantEditForm
+          ticket={ticket}
+          pii={pii}
+          variant="desktop"
+          onSaved={onSaved}
+          onCancel={onClose}
+        />
       </div>
     </div>
   );
@@ -410,47 +335,12 @@ function ComplainantCard({
             </button>
           </div>
         ) : (
-          <div className="text-xs space-y-1.5 text-gray-700">
-            <div>
-              <span className="text-gray-400">Name:</span>{" "}
-              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
-            </div>
-            <div><span className="text-gray-400">Ref:</span> {ticket.complainant_id ?? "—"}</div>
-            <div>
-              <span className="text-gray-400">Phone:</span>{" "}
-              <span className="text-gray-300 tracking-wide font-mono">{PII_MASK}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Email:</span>{" "}
-              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Address:</span>{" "}
-              <span className="text-gray-300 tracking-wide">{PII_MASK}</span>
-            </div>
-            {(pii as GrievancePii & { municipality?: string })?.municipality && (
-              <div><span className="text-gray-400">Municipality:</span> {(pii as GrievancePii & { municipality?: string }).municipality}</div>
-            )}
-            {(pii as GrievancePii & { district?: string })?.district && (
-              <div><span className="text-gray-400">District:</span> {(pii as GrievancePii & { district?: string }).district}</div>
-            )}
-            <div>
-              <span className="text-gray-400">Session:</span>{" "}
-              {ticket.session_id
-                ? <span className="inline-flex items-center gap-1 text-green-600"><IconActiveSession size={12} strokeWidth={2} />Active</span>
-                : <span className="inline-flex items-center gap-1 text-red-500"><IconExpiredSession size={12} strokeWidth={2} />Expired — SMS fallback</span>}
-            </div>
-            {ticket.grievance_id && (
-              <div className="border-t border-gray-100 pt-2 mt-1">
-                <button onClick={onRevealOriginal}
-                  className="text-xs text-red-700 hover:text-red-900 underline flex items-center gap-1"
-                >
-                  <IconRevealStatement size={13} strokeWidth={2} />
-                  Reveal original statement
-                </button>
-              </div>
-            )}
-          </div>
+          <ComplainantContactFields
+            ticket={ticket}
+            pii={pii}
+            variant="desktop"
+            onRevealOriginal={onRevealOriginal}
+          />
         )}
       </div>
 
@@ -1677,11 +1567,6 @@ export default function TicketDetailPage() {
               Original Grievance
             </h2>
             <ClassificationGrievancePanel ticket={ticket} onUpdated={load} />
-            {ticket.grievance_location && (
-              <p className="text-xs text-gray-500 mt-2">
-                <span className="font-medium">Location:</span> {ticket.grievance_location}
-              </p>
-            )}
           </div>
 
           {/* Row 3: Field Reports — full width (officer-written, always visible) */}

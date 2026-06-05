@@ -136,8 +136,9 @@ def patch_complainant(
     """
     settings = get_settings()
     headers = {}
-    if settings.messaging_api_key:
-        headers["x-api-key"] = settings.messaging_api_key
+    api_key = settings.ticketing_secret_key or settings.messaging_api_key
+    if api_key:
+        headers["x-api-key"] = api_key
 
     with _client(chatbot_base_url) as client:
         try:
@@ -151,16 +152,19 @@ def patch_complainant(
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 # ── PROTO FALLBACK ────────────────────────────────────────────
-                # Real endpoint not yet implemented — return synthetic success so
-                # the officer UI works during the demo.  Remove once backend/api/
-                # has PATCH /api/complainant/{complainant_id}.
                 logger.warning(
                     "patch_complainant: PATCH /api/complainant/%s returned 404 "
                     "(endpoint not yet implemented) — returning proto success",
                     complainant_id,
                 )
                 return {"ok": True, "updated_fields": list(fields.keys()), "_proto_mode": True}
-                # ── END PROTO FALLBACK ────────────────────────────────────────
+            if exc.response.status_code == 422:
+                try:
+                    body = exc.response.json()
+                    msg = body.get("message") if isinstance(body, dict) else None
+                except Exception:
+                    msg = None
+                raise ValueError(msg or "Invalid complainant update") from exc
             raise
 
 

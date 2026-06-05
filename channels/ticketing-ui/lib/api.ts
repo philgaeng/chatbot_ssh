@@ -546,6 +546,12 @@ export interface GrievancePii {
   phone_number?: string;
   email?: string;
   address?: string;
+  municipality?: string;
+  district?: string;
+  /** JSON map pin from complainant record, e.g. `{"lat":27.5,"lng":85.3,"source":"map_pin"}` */
+  location_geo?: string | null;
+  /** True for SEAH tickets — contact fields omitted from /pii; use vault reveal */
+  pii_masked?: boolean;
   /** True when the grievance backend was unreachable — PII fields will be null */
   _backend_unavailable?: boolean;
   [key: string]: unknown;
@@ -1996,6 +2002,8 @@ export function removeViewer(ticketId: string, userId: string): Promise<void> {
 // ── Complainant info edit ─────────────────────────────────────────────────────
 
 export interface ComplainantPatchPayload {
+  complainant_full_name?:    string;
+  complainant_phone?:        string;
   complainant_address?:      string;
   complainant_village?:      string;
   complainant_ward?:         string;

@@ -956,7 +956,7 @@ _COMPLAINANT_EDIT_ROLES = {
     description=(
         "Proxies the update to the local chatbot backend "
         "(`ticketing.projects.chatbot_base_url`). "
-        "Identity fields (full_name, phone) are never writable from ticketing. "
+        "Name and phone are fill-missing only when chatbot left them empty. "
         "Requires assigned officer or manager role."
     ),
 )
@@ -972,10 +972,12 @@ def patch_ticket_complainant(
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Role check: assigned officer OR a manager role
-    is_assigned = ticket.assigned_to_user_id == current_user.user_id
-    is_manager  = current_user.role in _COMPLAINANT_EDIT_ROLES
-    if not (is_assigned or is_manager):
+    # Role check: assigned officer OR whitelisted role (or admin)
+    is_assigned = current_user.matches_assignee(ticket.assigned_to_user_id)
+    is_editor = current_user.is_admin or bool(
+        set(current_user.role_keys) & _COMPLAINANT_EDIT_ROLES
+    )
+    if not (is_assigned or is_editor):
         raise HTTPException(status_code=403, detail="Only the assigned officer or a manager can edit complainant info")
 
     if not ticket.complainant_id:
@@ -1001,6 +1003,8 @@ def patch_ticket_complainant(
             fields=fields,
             chatbot_base_url=chatbot_url,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("complainant patch failed: ticket=%s error=%s", ticket_id, exc)
         raise HTTPException(status_code=502, detail=f"Chatbot backend unavailable: {exc}")
@@ -2090,13 +2094,16 @@ def get_ticket_pii(
     # Unwrap to the grievance dict where PII fields live.
     grievance = (raw.get("data") or {}).get("grievance") or raw  # raw fallback for any future shape change
 
-    from ticketing.services.pii_vault import grievance_pii_masked
+    from ticketing.services.pii_vault import grievance_pii_for_officer_card
 
-    # Never return pgcrypto ciphertext to the browser — UI shows standard masks instead.
-    # Full plaintext is only available via POST /tickets/{id}/reveal (audited, time-limited).
+    # Standard GRM: decrypted contact in card. SEAH: masked until vault reveal.
     return {
         "grievance_id": ticket.grievance_id,
-        **grievance_pii_masked(grievance),
+        "pii_masked": bool(ticket.is_seah),
+        **grievance_pii_for_officer_card(
+            grievance,
+            mask_sensitive_contact=bool(ticket.is_seah),
+        ),
     }
 
 

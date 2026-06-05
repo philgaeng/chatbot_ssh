@@ -94,6 +94,52 @@ def grievance_pii_masked(grievance: dict[str, Any]) -> dict[str, Any]:
         "municipality": grievance.get("complainant_municipality"),
         "district": grievance.get("complainant_district"),
         "province": grievance.get("complainant_province"),
+        "location_geo": grievance.get("location_geo"),
+    }
+
+
+def _officer_card_identity(value: Any) -> Any:
+    """Decrypt for standard GRM card; treat placeholders as empty."""
+    plain = reveal_field(value)
+    if plain is None:
+        return None
+    s = str(plain).strip()
+    if not s or s.lower() in {"not provided", "unknown", "n/a", "na", "anonymous"}:
+        return None
+    return s
+
+
+def grievance_pii_for_officer_card(
+    grievance: dict[str, Any],
+    *,
+    mask_sensitive_contact: bool,
+) -> dict[str, Any]:
+    """
+    Officer complainant card: standard GRM shows decrypted contact fields;
+    SEAH keeps name/phone/email/address out of the default API (vault reveal only).
+
+    Grievance GET often returns pgcrypto ciphertext on joined complainant columns;
+    decrypt here so the portal matches what PATCH /api/complainant sees.
+    """
+    if mask_sensitive_contact:
+        data = grievance_pii_masked(grievance)
+        data["complainant_name"] = None
+        data["phone_number"] = None
+        data["email"] = None
+        data["address"] = None
+        return data
+
+    return {
+        "complainant_name": _officer_card_identity(grievance.get("complainant_full_name")),
+        "phone_number": _officer_card_identity(grievance.get("complainant_phone")),
+        "email": _officer_card_identity(grievance.get("complainant_email")),
+        "address": _officer_card_identity(grievance.get("complainant_address")),
+        "village": grievance.get("complainant_village"),
+        "ward": grievance.get("complainant_ward"),
+        "municipality": grievance.get("complainant_municipality"),
+        "district": grievance.get("complainant_district"),
+        "province": grievance.get("complainant_province"),
+        "location_geo": grievance.get("location_geo"),
     }
 
 
