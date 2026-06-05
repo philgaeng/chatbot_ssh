@@ -92,7 +92,8 @@ Supports low-literacy users and mobile usage in the field.
 
 | Topic                                 | Decision                                                                                                                                                                                                                             |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Audio capture (rural / low bandwidth) | Prefer **medium sample rate** and **small chunks** suitable for patchy networks. If the web client **cannot** chunk on device, cap each recording at **60–90 seconds**; user may attach **multiple** voice notes for a longer story. |
+| Audio capture (rural / low bandwidth) | Prefer **medium sample rate** and **small chunks** suitable for patchy networks. If the web client **cannot** chunk on device, cap each recording at **45 seconds**; user may attach **multiple** voice notes for a longer story. |
+| Upload / record status UX | **Light-blue banner** above composer toolbar (not chat bubbles); live timer while recording; copy says **saved for officer review** (no live transcription promise in webchat). |
 | Transcription                         | Server-side via existing accessible voice service API; async after upload is acceptable.                                                                                                                                             |
 | Pairing                               | Same audio limits and attachment model apply on portal side → **TP-01** / **TP-02**.                                                                                                                                                 |
 
@@ -602,7 +603,7 @@ Rename ambiguous labels - The current naming makes it difficult to understand th
 
 | ID            | Decision                                                                                                |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
-| CB-01 / TP-02 | Medium sample rate; chunk on device if feasible; else **60–90s** per file, multiple voice notes allowed |
+| CB-01 / TP-02 | Medium sample rate; chunk on device if feasible; else **45s** per file, multiple voice notes allowed; status in composer banner |
 | CB-01 / TP-02 | Transcription via **accessible** service API (P2)                                                         |
 | TP-01 / TP-02 | P1 = player only; P2 = transcription + manual fallback                                                   |
 | TP-11         | Site photo = attachment gate; no `#photo`; complainant photos via WhatsApp only                          |

@@ -10,7 +10,7 @@ import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
 import { initMapPicker, openMapPicker, closeMapPicker } from "./modules/mapPicker.js";
 import { buildFileMetadataList, setExifConsent } from "./modules/exifHelper.js";
-import { initVoiceNote } from "./modules/voiceNote.js";
+import { initVoiceNote, MAX_RECORD_SECONDS } from "./modules/voiceNote.js";
 import {
   get,
   format,
@@ -294,6 +294,7 @@ function hideFiledBanner() {
 
 function handleOrchestratorResponse(response) {
   const { messages = [], next_state, close_controls_mode } = response || {};
+  const prevOrchestratorState = window.lastOrchestratorNextState;
   window.lastOrchestratorNextState =
     typeof next_state === "string" ? next_state : null;
 
@@ -345,6 +346,14 @@ function handleOrchestratorResponse(response) {
     next_state === "location_method"
   ) {
     closeMapPicker();
+  }
+
+  if (
+    prevOrchestratorState === "contact_form" &&
+    next_state &&
+    next_state !== "contact_form"
+  ) {
+    uiActions.clearVoiceStatusBanner();
   }
 }
 
@@ -495,9 +504,39 @@ async function initializeChat() {
   initVoiceNote({
     button: voiceNoteButton,
     onStatus: (status) => {
-      if (status === "recording") uiActions.appendMessage(get("voice_note.recording"), "received");
-      if (status === "max_length") uiActions.appendMessage(get("voice_note.max_length"), "received");
-      if (status === "denied") uiActions.appendMessage(get("voice_note.denied"), "received");
+      const maxLabel = formatRecordingClock(MAX_RECORD_SECONDS);
+      if (status === "recording") {
+        uiActions.setVoiceStatusBanner(
+          format(get("status_banner.recording"), {
+            elapsed: formatRecordingClock(0),
+            max: maxLabel,
+          }),
+          { recording: true }
+        );
+      }
+      if (status === "max_length") {
+        uiActions.setVoiceStatusBanner(
+          format(get("status_banner.max_length"), { max: maxLabel })
+        );
+      }
+      if (status === "stopped") {
+        voiceNoteButton?.classList.remove("is-recording");
+        voiceNoteButton?.setAttribute("aria-pressed", "false");
+      }
+      if (status === "denied") {
+        uiActions.setVoiceStatusBanner(get("status_banner.mic_denied"), {
+          error: true,
+        });
+      }
+    },
+    onTick: (elapsedSeconds) => {
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.recording"), {
+          elapsed: formatRecordingClock(elapsedSeconds),
+          max: formatRecordingClock(MAX_RECORD_SECONDS),
+        }),
+        { recording: true }
+      );
     },
     onRecorded: async (file) => {
       await handleFileUpload([file]);
@@ -669,6 +708,7 @@ function resetFrontendState() {
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
   uiActions.setVoiceNoteEnabled(false);
+  uiActions.clearVoiceStatusBanner();
   uiActions.clearMessages();
 }
 
@@ -913,7 +953,7 @@ async function handleFileUpload(files) {
 
   if (audioFiles.length > 0) {
     console.log("Audio files detected:", audioFiles);
-    uiActions.appendMessage(get("file_upload.voice_detected"), "received");
+    uiActions.setVoiceStatusBanner(get("status_banner.voice_detected"));
   }
 
   // Check file sizes
@@ -929,9 +969,11 @@ async function handleFileUpload(files) {
 
   if (oversizedFiles.length > 0) {
     console.log("Oversized files detected:", oversizedFiles);
-    uiActions.appendMessage(
-      `${get("file_upload.oversized_prefix")} ${oversizedFiles.map((f) => f.name).join(", ")}`,
-      "received"
+    uiActions.setVoiceStatusBanner(
+      format(get("status_banner.oversized"), {
+        names: oversizedFiles.map((f) => f.name).join(", "),
+      }),
+      { error: true }
     );
   }
 
@@ -952,6 +994,10 @@ async function handleFileUpload(files) {
 
   if (validFiles.length === 0) {
     return false;
+  }
+
+  if (audioFiles.length === 0) {
+    uiActions.setVoiceStatusBanner(get("status_banner.files_detected"));
   }
 
   try {
@@ -1047,7 +1093,7 @@ async function pollFileStatus(fileIds) {
         setTimeout(poll, delayMs);
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
-        uiActions.appendMessage(get("file_upload.processing_long"), "received");
+        uiActions.setVoiceStatusBanner(get("status_banner.processing_long"));
         uiActions.setInputLocked(false);
         currentUploadFileIds = [];
         currentUploadStatuses = {};
@@ -1101,6 +1147,7 @@ function buildPostUploadQuickReplies() {
 }
 
 function showPostUploadMessageAndUnlock() {
+  uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(
     get(
@@ -1139,6 +1186,7 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
+  uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(
     get(
@@ -1154,98 +1202,23 @@ function showFailureMessageAndUnlock() {
   currentUploadStatuses = {};
 }
 
-// Update file status in UI
+// Update file status in composer banner (replaces prior status text).
 function updateFileStatus(fileId, data) {
-  const { status, progress, result, error } = data;
-
-  currentUploadStatuses[fileId] = status;
-
-  // Get messages container
-  const chatMessages = document.getElementById("messages");
-  if (!chatMessages) {
-    console.error("Messages container not found");
-    return;
+  currentUploadStatuses[fileId] = data.status;
+  uiActions.updateFileStatus(fileId, data);
+  if (data.result?.grievance_id && window.grievanceFiledPhase) {
+    showFiledBanner(data.result.grievance_id);
   }
-
-  // Create or update file status message
-  let statusElement = document.getElementById(`file-status-${fileId}`);
-  const prevStatus = statusElement
-    ? statusElement.getAttribute("data-status")
-    : null;
-  if (!statusElement) {
-    statusElement = document.createElement("div");
-    statusElement.id = `file-status-${fileId}`;
-    statusElement.className = "file-status";
-    chatMessages.appendChild(statusElement);
-  }
-
-  // Update status message
-  let statusMessage = "";
-  switch (status) {
-    case "PENDING":
-      statusMessage = get("file_upload.processing");
-      break;
-    case "STARTED":
-      if (result && result.file_type === "audio") {
-        statusMessage = get("file_upload.uploaded_processing");
-      } else {
-        statusMessage = progress
-          ? format(get("file_upload.processing_progress"), { progress })
-          : get("file_upload.processing");
-      }
-      break;
-    case "SUCCESS":
-      if (result && result.file_type === "audio") {
-        statusMessage = get("file_upload.voice_success");
-      } else {
-        statusMessage = get("file_upload.files_success");
-      }
-      if (result) {
-        if (result.grievance_id) {
-          window.grievanceId = result.grievance_id;
-          uiActions.setGrievanceId(result.grievance_id);
-          if (window.grievanceFiledPhase) {
-            showFiledBanner(result.grievance_id);
-          }
-        }
-        if (result.message) {
-          uiActions.appendMessage(result.message, "received");
-        }
-      }
-      if (
-        prevStatus !== "SUCCESS" &&
-        !(result && result.message) &&
-        !window.lastUploadWasVoiceOnly
-      ) {
-        const notice = (data && data.message) || get("file_upload.file_saved");
-        uiActions.appendMessage(notice, "received");
-      }
-      break;
-    case "FAILURE":
-      let errorMsg = error || "Unknown error";
-      if (result && result.file_type === "audio") {
-        statusMessage = `${get("file_upload.voice_failure_prefix")} ${errorMsg}`;
-      } else {
-        statusMessage = `${get("file_upload.files_failure_prefix")} ${errorMsg}`;
-      }
-      uiActions.appendMessage(statusMessage, "received");
-      console.error("Task failed:", errorMsg);
-      break;
-    default:
-      statusMessage = `${get("file_upload.status_prefix")} ${status}`;
-  }
-
-  statusElement.textContent = statusMessage;
-  statusElement.setAttribute("data-status", status);
-
-  if (status === "SUCCESS" || status === "FAILURE") {
+  if (data.status === "SUCCESS" || data.status === "FAILURE") {
     checkUploadBatchComplete();
-    setTimeout(() => {
-      if (statusElement && statusElement.parentNode) {
-        statusElement.remove();
-      }
-    }, 5000);
   }
+}
+
+function formatRecordingClock(totalSeconds) {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 // Voice intake: finish details and continue main flow (map → contact).
@@ -1308,10 +1281,15 @@ window.openMapPickerFromBot = ({ defaultLat, defaultLng }) => {
     defaultLat: defaultLat ?? 27.7172,
     defaultLng: defaultLng ?? 85.324,
     onConfirm: async ({ lat, lng }) => {
+      uiActions.setVoiceStatusBanner(get("status_banner.map_saving"));
       const ok = await restSendMessage("", {
         map_pin: { lat, lng },
       });
-      if (ok) uiActions.appendMessage(get("map.confirm_sent"), "received");
+      if (!ok) {
+        uiActions.setVoiceStatusBanner(get("status_banner.map_failed"), {
+          error: true,
+        });
+      }
     },
   });
 };

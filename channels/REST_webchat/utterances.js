@@ -65,8 +65,8 @@ export const U = {
       ne: "फाइल संलग्न गर्न पहिले गुनासो सुरु गर्नुहोस्: माथिको च्याटमा \"गुनासो दर्ता गर्नुहोस्\" छान्नुहोस् र चरणहरू पूरा गर्नुहोस्। गुनासो सिर्जना भएपछि तपाईं यहाँ तस्बिर वा कागजात संलग्न गर्न सक्नुहुन्छ।",
     },
     voice_detected: {
-      en: "Voice recordings detected. These will be processed and transcribed.",
-      ne: "आवाज रेकर्डिङहरू पत्ता लाग्यो। यी प्रशोधन र ट्रान्सक्रिप्सन गरिनेछ।",
+      en: "Voice recording detected. Uploading…",
+      ne: "आवाज रेकर्ड पत्ता लाग्यो। अपलोड गर्दैछ…",
     },
     oversized_prefix: {
       en: "Some files are too large and will be skipped:",
@@ -101,8 +101,8 @@ export const U = {
       ne: "आवाज रेकर्ड डाटाबेसमा सेव भयो।",
     },
     voice_success: {
-      en: "Voice record saved.",
-      ne: "आवाज रेकर्ड सेव भयो।",
+      en: "Voice record saved for officer review.",
+      ne: "आवाज रेकर्ड अधिकारी समीक्षाको लागि सेव भयो।",
     },
     voice_failure_prefix: {
       en: "Failed to process voice recording:",
@@ -151,12 +151,12 @@ export const U = {
       },
     },
     uploaded_processing: {
-      en: "Voice record uploaded successfully. Processing...",
-      ne: "आवाज रेकर्ड सफलतापूर्वक अपलोड भयो। प्रशोधन गर्दैछ...",
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
     },
     voice_uploaded_processing: {
-      en: "Voice record uploaded successfully. Processing...",
-      ne: "आवाज रेकर्ड सफलतापूर्वक अपलोड भयो। प्रशोधन गर्दैछ...",
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
     },
     continue_below: {
       en: "You can continue below.",
@@ -191,6 +191,80 @@ export const U = {
       ne: "नक्साको स्थान पठाइयो।",
     },
   },
+  status_banner: {
+    recording: {
+      en: "Recording {elapsed} / {max} — tap mic to stop",
+      ne: "रेकर्डिङ {elapsed} / {max} — रोक्न माइक थिच्नुहोस्",
+    },
+    max_length: {
+      en: "Maximum length ({max}) reached. Uploading…",
+      ne: "अधिकतम लम्बाइ ({max}) पुग्यो। अपलोड गर्दैछ…",
+    },
+    mic_denied: {
+      en: "Microphone access is required to record.",
+      ne: "रेकर्ड गर्न माइक्रोफोन अनुमति चाहिन्छ।",
+    },
+    voice_detected: {
+      en: "Voice recording detected. Uploading…",
+      ne: "आवाज रेकर्ड पत्ता लाग्यो। अपलोड गर्दैछ…",
+    },
+    files_detected: {
+      en: "Files selected. Uploading…",
+      ne: "फाइलहरू छानियो। अपलोड गर्दैछ…",
+    },
+    voice_uploaded_processing: {
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
+    },
+    voice_processing: {
+      en: "Processing voice record…",
+      ne: "आवाज रेकर्ड प्रशोधन गर्दैछ…",
+    },
+    voice_saved: {
+      en: "Voice record saved for officer review.",
+      ne: "आवाज रेकर्ड अधिकारी समीक्षाको लागि सेव भयो।",
+    },
+    voice_failure: {
+      en: "Could not save voice record: {error}",
+      ne: "आवाज रेकर्ड सेव गर्न सकिएन: {error}",
+    },
+    files_processing: {
+      en: "Processing files…",
+      ne: "फाइलहरू प्रशोधन गर्दैछ…",
+    },
+    files_processing_progress: {
+      en: "Processing files: {progress}%",
+      ne: "फाइलहरू प्रशोधन: {progress}%",
+    },
+    files_saved: {
+      en: "Files saved for officer review.",
+      ne: "फाइलहरू अधिकारी समीक्षाको लागि सेव भयो।",
+    },
+    files_failure: {
+      en: "Could not save files: {error}",
+      ne: "फाइलहरू सेव गर्न सकिएन: {error}",
+    },
+    oversized: {
+      en: "Some files are too large and were skipped: {names}",
+      ne: "केही फाइलहरू धेरै ठूला थिए र छोडियो: {names}",
+    },
+    processing_long: {
+      en: "Processing is taking longer than expected…",
+      ne: "प्रशोधन अपेक्षित भन्दा बढी समय लिँदैछ…",
+    },
+    map_saving: {
+      en: "Saving map location…",
+      ne: "नक्साको स्थान सेव गर्दैछ…",
+    },
+    map_saved: {
+      en: "Location saved from map pin ({lat}, {lng}).",
+      ne: "नक्सा पिनबाट स्थान सेव भयो ({lat}, {lng})।",
+    },
+    map_failed: {
+      en: "Could not save map location. Please try again.",
+      ne: "नक्साको स्थान सेव गर्न सकिएन। कृपया फेरि प्रयास गर्नुहोस्।",
+    },
+  },
   voice_note: {
     tap_to_record: {
       en: "Record voice note (tap again to stop)",
@@ -201,8 +275,8 @@ export const U = {
       ne: "गुनासो विवरण बताउँदा मात्र आवाज रेकर्ड उपलब्ध छ।",
     },
     recording: {
-      en: "Recording… tap again to stop (max 90 seconds).",
-      ne: "रेकर्डिङ… रोक्न फेरि थिच्नुहोस् (अधिकतम ९० सेकेन्ड)।",
+      en: "Recording… tap again to stop (max 45 seconds).",
+      ne: "रेकर्डिङ… रोक्न फेरि थिच्नुहोस् (अधिकतम ४५ सेकेन्ड)।",
     },
     max_length: {
       en: "Maximum recording length reached. Uploading your voice note…",

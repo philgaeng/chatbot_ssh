@@ -50,7 +50,9 @@
         </div>
         <div id="messages"></div>
         <form id="form" class="composer">
-            <div class="composer-toolbar" role="toolbar" aria-label="Message actions">
+            <div class="composer-top">
+                <div id="voice-status-banner" class="voice-status-banner hidden" role="status" aria-live="polite"></div>
+                <div class="composer-toolbar" role="toolbar" aria-label="Message actions">
                 <div class="composer-toolbar-group composer-toolbar-left">
                     <button type="button" id="persistent-close-session" class="composer-round-btn composer-close-icon-btn" aria-label="Close session" title="Close session">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -80,6 +82,7 @@
                         </svg>
                     </button>
                 </div>
+            </div>
             </div>
             <textarea id="message-input" class="composer-input" placeholder="Type your message here..." autocomplete="off" rows="1"></textarea>
             <input type="file" id="file-input" style="display: none;" multiple />

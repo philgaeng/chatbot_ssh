@@ -148,11 +148,16 @@ class ActionApplyMapPin(BaseAction):
         if lat is None or lng is None:
             return [SlotSet("location_pin_status", "missing")]
 
-        utterance = self.get_utterance(1).format(
-            lat=f"{float(lat):.5f}",
-            lng=f"{float(lng):.5f}",
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "event_type": "status_banner",
+                    "banner_key": "map_saved",
+                    "lat": f"{float(lat):.5f}",
+                    "lng": f"{float(lng):.5f}",
+                }
+            }
         )
-        dispatcher.utter_message(text=utterance)
 
         filled = build_map_filled_location_slots(
             float(lat),

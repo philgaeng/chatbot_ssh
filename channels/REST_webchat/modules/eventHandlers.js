@@ -1,5 +1,6 @@
 import * as uiActions from "./uiActions.js";
 import {
+  format,
   get,
   FILE_ANOTHER_PAYLOAD,
   VOICE_ADD_PAYLOAD,
@@ -93,6 +94,21 @@ export function handleCustomPayload(custom) {
     }
   }
 
+  const statusBannerEvent =
+    custom.event_type === "status_banner"
+      ? custom
+      : custom.data?.event_type === "status_banner"
+        ? custom.data
+        : null;
+  if (statusBannerEvent) {
+    const { banner_key: bannerKey, lat, lng } = statusBannerEvent;
+    if (bannerKey === "map_saved" && lat != null && lng != null) {
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.map_saved"), { lat, lng })
+      );
+    }
+  }
+
   if (
     custom.event_type === "enable_voice_note" ||
     custom.data?.event_type === "enable_voice_note"
@@ -104,6 +120,7 @@ export function handleCustomPayload(custom) {
     custom.data?.event_type === "disable_voice_note"
   ) {
     uiActions.setVoiceNoteEnabled(false);
+    uiActions.clearVoiceStatusBanner();
   }
 
   if (custom.clear_window || custom.custom?.clear_window) {
@@ -157,16 +174,18 @@ export function handleFileUploadApiResponse(response) {
   if (response.ok) {
     const data = response.data;
 
-    let statusMessage = get("file_upload.uploaded_processing");
+    let statusMessage = get("status_banner.files_processing");
     if (data.audio_files && data.audio_files.length > 0) {
-      statusMessage = get("file_upload.voice_uploaded_processing");
+      statusMessage = get("status_banner.voice_uploaded_processing");
     }
-    uiActions.appendMessage(statusMessage, "received");
+    uiActions.setVoiceStatusBanner(statusMessage);
 
     if (data.oversized_files && data.oversized_files.length > 0) {
-      uiActions.appendMessage(
-        `${get("file_upload.oversized_api_prefix")} ${data.oversized_files.join(", ")}`,
-        "received"
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.oversized"), {
+          names: data.oversized_files.join(", "),
+        }),
+        { error: true }
       );
     }
   } else {
