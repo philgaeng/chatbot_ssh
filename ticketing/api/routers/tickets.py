@@ -807,6 +807,18 @@ def get_ticket(
     return TicketDetail(**payload)
 
 
+@router.get(
+    "/reference/grievance-categories",
+    summary="List grievance category options from classification taxonomy (TP-14)",
+)
+def list_grievance_categories(
+    _current_user: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
+    from ticketing.services.grievance_taxonomy import list_grievance_category_options
+
+    return list_grievance_category_options()
+
+
 @router.patch(
     "/tickets/{ticket_id}/classification",
     response_model=ClassificationValidateResponse,

@@ -44,6 +44,8 @@
 | Call report | `channels/ticketing-ui/components/thread/CallReportComposeCard.tsx` — **TP-10** |
 | Grievance thread card | `channels/ticketing-ui/components/thread/GrievanceThreadCard.tsx` — **TP-09** + **TP-14** ack gate |
 | Classification panel | `channels/ticketing-ui/components/tickets/ClassificationGrievancePanel.tsx` — **TP-14** |
+| Category multi-select | `channels/ticketing-ui/components/tickets/GrievanceCategoryMultiSelect.tsx` — **TP-14** |
+| Category taxonomy API | `ticketing/services/grievance_taxonomy.py` — `GET /api/v1/reference/grievance-categories` |
 | Complainant read-only | `channels/ticketing-ui/components/tickets/ComplainantContactFields.tsx` — **TP-15** desktop card |
 | Complainant edit | `channels/ticketing-ui/components/tickets/ComplainantEditForm.tsx` — **TP-15** shared desktop modal + mobile sheet |
 | Complainant helpers | `channels/ticketing-ui/lib/complainant-contact.ts` — `complainantIdentityOnFile`, `phoneTelHref` |
@@ -485,7 +487,7 @@ Single card, three blocks (top → bottom):
 |-------|---------|-------------|
 | **Original grievance** | `grievance_description` (verbatim chatbot narrative) | Read-only bordered panel |
 | **Summary** | `grievance_summary` | Editable textarea; badge: *Validated by complainant* / *Validated by officer* / *Review required* / *Pending* / *LLM failed* |
-| **Categories** | `grievance_categories` (formatted) | Editable when officer gate active; read-only line when validated unless officer saves edits |
+| **Categories** | `grievance_categories` (JSON array of taxonomy keys) | **Multi-select dropdown** from `public.grievance_classification_taxonomy` via `GET /reference/grievance-categories`; multiple selection allowed; editable whenever officer may save |
 
 **Save:** `PATCH /api/v1/tickets/{id}/classification` — required Confirm when `LLM_generated` \| `LLM_failed` \| `LLM_skipped`; optional **Save changes** when already `complainant_confirmed` (sets `officer_confirmed` on save). Component: `ClassificationGrievancePanel.tsx` (desktop Original Grievance + mobile sheet + `GrievanceThreadCard`).
 
@@ -598,7 +600,8 @@ Root causes in code today:
 
 **Portal UI**
 
-- `ClassificationGrievancePanel.tsx` — three blocks: original (read-only), summary (editable + badge), categories (editable).
+- `ClassificationGrievancePanel.tsx` — three blocks: original (read-only), summary (editable + badge), categories (**multi-select** from DB taxonomy).
+- `GrievanceCategoryMultiSelect.tsx` + `GET /reference/grievance-categories` — options from `grievance_classification_taxonomy`; grouped by `classification`; chip UI for selected keys.
 - Desktop: full-width **Original Grievance** card on ticket detail.
 - Mobile: `GrievanceThreadCard` embeds panel + Acknowledge gate (not the ⋮ → Original Grievance sheet — that sheet remains read-only reference).
 
@@ -746,3 +749,4 @@ TP-14 was sequenced before TP-09 so the ack card has real summary/categories. TP
 | TP-14 | Mobile classification edit in `GrievanceThreadCard`, not ⋮ → Original Grievance sheet | 2026-06-04 |
 | TP-15 | Mobile uses inline `ComplainantEditForm` in sheet; desktop keeps read-only card + Edit modal | 2026-06-04 |
 | TP-15 | `/pii` had to decrypt for standard GRM (was showing empty despite DB value) | 2026-06-04 |
+| TP-14 | Categories: taxonomy multi-select (replaces free-text comma-separated textarea) | 2026-06-05 |

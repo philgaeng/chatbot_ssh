@@ -265,6 +265,18 @@ export function getTicket(id: string): Promise<TicketDetail> {
   return apiFetch<TicketDetail>(`/api/v1/tickets/${id}`);
 }
 
+export interface GrievanceCategoryOption {
+  key: string;
+  label: string;
+  classification: string;
+  generic_name: string;
+  high_priority: boolean;
+}
+
+export function listGrievanceCategories(): Promise<GrievanceCategoryOption[]> {
+  return apiFetch<GrievanceCategoryOption[]>("/api/v1/reference/grievance-categories");
+}
+
 export interface ClassificationValidatePayload {
   grievance_summary: string;
   grievance_categories: string;

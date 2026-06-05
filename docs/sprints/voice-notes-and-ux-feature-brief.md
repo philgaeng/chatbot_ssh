@@ -469,7 +469,8 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 - **Sync:** Keep ticket cache updated when classification completes (backfill job + forward path on LLM completion / periodic sync).
 - **UI — ORIGINAL GRIEVANCE / TP-09 card:** Two distinct panels in one card (not one blended narrative block):
   1. **Original grievance** — read-only box with raw `grievance_description` only.
-  2. **Summary** — separate bordered box with LLM/officer summary text, **its own validation badge** (complainant / officer / review required / pending), and an **editable textarea** so officers can fix LLM errors; **Categories** below as a third labeled block (comma-separated edit when required).
+  2. **Summary** — separate bordered box with LLM/officer summary text, **its own validation badge** (complainant / officer / review required / pending), and an **editable textarea** so officers can fix LLM errors.
+  3. **Categories** — multi-select dropdown from **`public.grievance_classification_taxonomy`** (same keys as chatbot / LLM); officers may select **multiple** categories; values saved as JSON array on confirm.
 - **UI — Officer validation:** When status is `LLM_generated`, `LLM_failed`, or `LLM_skipped`, amber summary badge + **Confirm summary & categories** → `officer_confirmed`. **Blocks Acknowledge** until then. `complainant_confirmed` skips the gate but summary/categories remain **editable** with **Save changes** (same PATCH; sets `officer_confirmed` if officer edits).
 - **Submit path (chatbot):** Ensure `dispatch_ticket` sends summary/categories when available at submit (read from DB if session slots empty).
 - **Read path:** Grievance fetch for display **must not** filter on `is_temporary` (AWS shows submitted rows can still be `is_temporary = true`).
@@ -491,7 +492,8 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 | Officer required | When `LLM_generated`, `LLM_failed`, or `LLM_skipped` (e.g. on assign / before Acknowledge) → edit + confirm → `officer_confirmed` |
 | `is_temporary` | Retired (no read/sync filter) |
 | Read model | **Hybrid** detail merge + list cache + forward sync |
-| Officer UX | Edit **categories + summary**, then confirm; layout = original (read-only) + summary (editable + status badge) + categories |
+| Officer UX | Edit **summary** (textarea) + **categories** (taxonomy multi-select), then confirm; layout = original (read-only) + summary + categories |
+| Category picker | `GET /api/v1/reference/grievance-categories` — reads `grievance_classification_taxonomy`; grouped by `classification`; LLM-only values not in taxonomy stay selectable under “On this case” |
 | Backfill | One-time AWS SQL for empty ticket cache |
 
 **Related** TP-09, `dispatch_ticket`, `grievance_sync`.
