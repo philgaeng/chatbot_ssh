@@ -263,8 +263,10 @@ def dispatch_assignment_email(
         return False
 
     settings = get_settings()
-    if not settings.messaging_api_key:
-        logger.warning("MESSAGING_API_KEY not set — skipping quarterly email")
+    from ticketing.clients.backend_auth import service_integration_api_key
+
+    if not service_integration_api_key():
+        logger.warning("TICKETING_SECRET_KEY not set — skipping quarterly email")
         return False
 
     import base64 as b64
