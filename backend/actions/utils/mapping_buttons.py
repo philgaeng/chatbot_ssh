@@ -24,6 +24,7 @@ BUTTON_SKIP = "/skip"
 BUTTON_ANONYMOUS_WITH_PHONE = "/anonymous_with_phone"
 BUTTON_RESEND = "/resend"
 BUTTON_SUBMIT_DETAILS = "/submit_details"
+BUTTON_VOICE_RECORD = "/voice_record"
 BUTTON_ADD_MORE_DETAILS = "/add_more_details"
 BUTTON_EXIT_WITHOUT_FILING = "/exit_without_filing"
 BUTTON_SLOT_CONFIRMED = "/slot_confirmed"
@@ -40,6 +41,10 @@ BUTTON_EXIT = "/exit"
 
 BUTTON_GOODBYE = "/nav_goodbye"
 BUTTON_SELECTION_DONE = "/selection_done"
+BUTTON_DUST_GRIEVANCE = "/dust_grievance"
+BUTTON_LOCATION_MANUAL = "/location_manual_entry"
+BUTTON_LOCATION_USE_MAP = "/location_use_map"
+BUTTON_LOCATION_OPEN_MAP = "/location_open_map"
 
 BUTTON_SKIP_EN = {"title": "Skip", "payload": BUTTON_SKIP}
 BUTTON_SKIP_NE = {"title": "छोड्नुहोस्", "payload": BUTTON_SKIP}
@@ -216,6 +221,15 @@ BUTTONS_GRIEVANCE_SUBMISSION = {
     ]
 }
 
+BUTTONS_DUST_FILE_AS_IS = {
+    "en": [
+        {"title": "File as is", "payload": BUTTON_SUBMIT_DETAILS},
+    ],
+    "ne": [
+        {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
+    ],
+}
+
 BUTTONS_EMAIL_CONFIRMATION = {
     'en': [
         {"title": "Confirm Email", "payload": BUTTON_SLOT_CONFIRMED},
@@ -260,6 +274,28 @@ BUTTONS_RESTART_OPTIONS = {
 }
 
 
+
+BUTTONS_LOCATION_METHOD = {
+    "en": [
+        {"title": "Use the map", "payload": BUTTON_LOCATION_USE_MAP},
+        {"title": "Enter location manually", "payload": BUTTON_LOCATION_MANUAL},
+    ],
+    "ne": [
+        {"title": "नक्सा प्रयोग गर्नुहोस्", "payload": BUTTON_LOCATION_USE_MAP},
+        {"title": "स्थान आफैं टाइप गर्नुहोस्", "payload": BUTTON_LOCATION_MANUAL},
+    ],
+}
+
+BUTTONS_MAP_LOCATION = {
+    "en": [
+        {"title": "Open map", "payload": BUTTON_LOCATION_OPEN_MAP},
+        {"title": "Enter location manually", "payload": BUTTON_LOCATION_MANUAL},
+    ],
+    "ne": [
+        {"title": "नक्सा खोल्नुहोस्", "payload": BUTTON_LOCATION_OPEN_MAP},
+        {"title": "स्थान आफैं टाइप गर्नुहोस्", "payload": BUTTON_LOCATION_MANUAL},
+    ],
+}
 
 BUTTONS_FALLBACK = {
     'en': [

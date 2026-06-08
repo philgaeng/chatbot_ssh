@@ -46,13 +46,20 @@ class FileServerCore(APIManager):
         os.makedirs(upload_folder, exist_ok=True)
 
     def get_file_type(self, filename: str) -> str:
-        """Determine the type of file based on extension"""
-        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-        
+        """Determine the type of file based on extension."""
+        name_lower = (filename or "").lower()
+        ext = name_lower.rsplit(".", 1)[-1] if "." in name_lower else ""
+
+        # In-chat voice notes use webm; classify as audio (webm is also listed under VIDEO).
+        if name_lower.startswith("voice_note_") or (
+            ext in FILE_TYPES["AUDIO"]["extensions"]
+        ):
+            return "audio"
+
         for file_type, info in FILE_TYPES.items():
-            if ext in info['extensions']:
+            if ext in info["extensions"]:
                 return file_type.lower()
-        return 'other'
+        return "other"
 
     def get_valid_file(self, file_id: str) -> dict:
         """Retrieve and validate a file by ID."""
@@ -139,16 +146,22 @@ class FileServerCore(APIManager):
             # Add audio-specific metadata
             audio_metadata = self.get_audio_metadata(file_data['file_path'])
             file_data.update(audio_metadata)
-        
+
+        client_meta = file_data.get("client_metadata") or {}
+        if client_meta:
+            from backend.shared_functions.geo_pin import build_file_client_metadata
+
+            file_data["client_metadata"] = build_file_client_metadata(client_meta)
+
         # Store file attachment in DB (requires grievance_id to exist in grievances table)
         success = db_manager.store_file_attachment(file_data)
-        
+
         if not success:
             raise Exception(
                 f"Failed to store file {file_data['file_name']} in database "
                 "(check DB logs for cause; often grievance_id missing or FK violation)"
             )
-        
+
         return file_data
 
 

@@ -9,6 +9,7 @@ from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.action_submit_grievance import BaseActionSubmit
+from backend.actions.forms.form_dust import is_dust_intake
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 from backend.actions.utils.mapping_buttons import (
     BUTTONS_CLOSE_BROWSER_ONLY,
@@ -109,32 +110,38 @@ class ActionGrievanceOutro(BaseActionSubmit):
         self.logger.info("send last utterance and buttons")
         grievance_id = tracker.get_slot("grievance_id") or ""
         language_code = tracker.get_slot("language_code") or "en"
+        dust = is_dust_intake(tracker)
         try:
-            if self.grievance_sensitive_issue:
+            if dust:
+                # Submit already sent filed + reference; only offer next steps.
+                buttons = _post_submit_buttons(language_code)
+                dispatcher.utter_message(text="", buttons=buttons)
+            elif self.grievance_sensitive_issue:
                 dispatcher.utter_message(text=self._get_grievance_utterance(4))
-            else:
-                dispatcher.utter_message(text=self._get_grievance_utterance(1))
-
-            dispatcher.utter_message(
-                text=self._get_grievance_utterance(2).format(grievance_id=grievance_id)
-            )
-
-            if self.grievance_sensitive_issue:
+                dispatcher.utter_message(
+                    text=self._get_grievance_utterance(2).format(grievance_id=grievance_id)
+                )
                 attachment_msg = self._get_grievance_utterance(3)
-            elif not self._get_attached_files_info(grievance_id)["has_files"]:
-                attachment_msg = self._get_grievance_utterance(5)
-            else:
-                attachment_msg = self._get_grievance_utterance(6)
-            dispatcher.utter_message(text=attachment_msg)
-
-            buttons = _post_submit_buttons(language_code)
-            if self.grievance_sensitive_issue:
+                dispatcher.utter_message(text=attachment_msg)
                 buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(language_code, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
                 buttons.extend(
                     BUTTONS_FILE_ANOTHER_SEAH.get(language_code, BUTTONS_FILE_ANOTHER_SEAH["en"])
                 )
-            dispatcher.utter_message(text="", buttons=buttons)
-            if grievance_id:
+                dispatcher.utter_message(text="", buttons=buttons)
+            else:
+                dispatcher.utter_message(text=self._get_grievance_utterance(1))
+                dispatcher.utter_message(
+                    text=self._get_grievance_utterance(2).format(grievance_id=grievance_id)
+                )
+                if not self._get_attached_files_info(grievance_id)["has_files"]:
+                    attachment_msg = self._get_grievance_utterance(5)
+                else:
+                    attachment_msg = self._get_grievance_utterance(6)
+                dispatcher.utter_message(text=attachment_msg)
+                buttons = _post_submit_buttons(language_code)
+                dispatcher.utter_message(text="", buttons=buttons)
+
+            if grievance_id and not dust:
                 dispatcher.utter_message(
                     json_message={
                         "data": {

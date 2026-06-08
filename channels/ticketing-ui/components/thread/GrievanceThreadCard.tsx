@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronUp, MapPin } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import type { TicketDetail } from "@/lib/api";
 import { ClassificationGrievancePanel } from "@/components/tickets/ClassificationGrievancePanel";
 
@@ -44,8 +44,6 @@ export function GrievanceThreadCard({
     return () => obs.disconnect();
   }, [reviewed]);
 
-  const location = ticket.grievance_location?.trim();
-
   return (
     <div
       ref={cardRef}
@@ -72,19 +70,6 @@ export function GrievanceThreadCard({
             ticket={ticket}
             onUpdated={onClassificationUpdated}
           />
-          {location && !needsOfficer && (
-            <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2">
-              <span className="inline-flex items-center gap-1 bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
-                <MapPin size={11} className="text-blue-500" />
-                {location}
-              </span>
-              {ticket.priority && (
-                <span className="inline-flex items-center bg-white/80 border border-blue-100 rounded-full px-2 py-0.5">
-                  Priority: {ticket.priority}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       )}
 

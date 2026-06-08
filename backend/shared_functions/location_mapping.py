@@ -195,3 +195,38 @@ def resolve_location_payload(
     payload["location_resolution_status"] = resolution_status
     payload["location_deepest_mapped_level"] = deepest_mapped_level
     return payload
+
+
+def resolve_pin_to_location_code(
+    db_manager: Any,
+    lat: float,
+    lng: float,
+    country_code: str = "NP",
+) -> Optional[str]:
+    """
+    Best-effort: map pin to nearest ticketing location_code (district level).
+    Returns None when geodata is unavailable — pin coords are still stored on grievance.
+    """
+    try:
+        rows = db_manager.execute_query(
+            """
+            SELECT location_code
+            FROM ticketing.locations
+            WHERE country_code = %s
+              AND level_number = 2
+              AND is_active = TRUE
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+            ORDER BY (
+              (latitude - %s) * (latitude - %s) + (longitude - %s) * (longitude - %s)
+            )
+            LIMIT 1
+            """,
+            (country_code, lat, lat, lng, lng),
+            "resolve_pin_to_location_code",
+        )
+        if rows:
+            return rows[0].get("location_code")
+    except Exception:
+        pass
+    return None

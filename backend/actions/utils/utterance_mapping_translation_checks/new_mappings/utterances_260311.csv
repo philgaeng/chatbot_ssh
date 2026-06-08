@@ -258,6 +258,6 @@ file_server,upload_files,6,There was a problem uploading your files. Please try 
 file_server,get_files,1,Internal server error,आंतरिक सर्वर त्रुटि
 file_server,download_files,1,File not found,फाइल भेटिन्छ नैन
 file_server,download_files,2,Internal server error,आंतरिक सर्वर त्रुटि
-rest_webchat_file_upload,post_upload,1,Files uploaded. You can add more files or go back to the chat.,फाइलहरू अपलोड गरियो। तपाईं थप फाइलहरू थप्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।
-rest_webchat_file_upload,post_upload,2,Your files are uploaded. Here's where we left off.,तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।
-rest_webchat_file_upload,post_upload,3,One or more files could not be saved. You can try adding files again or go back to the chat.,एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।
+rest_webchat_file_upload,post_upload,1,Your voice record is saved. You can add more voice records or go back to the chat.,तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न वा च्याटमा फर्कन सक्नुहुन्छ।
+rest_webchat_file_upload,post_upload,2,Your voice record is saved. Here's where we left off.,तपाईंको आवाज रेकर्ड सेव भयो। यहाँ हामी रोक्यौ।
+rest_webchat_file_upload,post_upload,3,One or more voice records could not be saved. You can try adding voice records again or go back to the chat.,एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं आवाज रेकर्ड फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।

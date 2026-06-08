@@ -2,19 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import type { TicketDetail } from "@/lib/api";
-import { validateTicketClassification } from "@/lib/api";
-import { formatGrievanceCategories } from "@/lib/format-grievance";
+import type { GrievanceCategoryOption, TicketDetail } from "@/lib/api";
+import { listGrievanceCategories, validateTicketClassification } from "@/lib/api";
+import {
+  categoriesSelectionEqual,
+  grievanceCategoriesToPayload,
+  parseGrievanceCategoryList,
+} from "@/lib/format-grievance";
 import { formatUserFacingError } from "@/lib/user-messages";
-
-function parseCategoriesForEdit(raw: string | null | undefined): string {
-  return formatGrievanceCategories(raw);
-}
-
-function categoriesToPayload(text: string): string {
-  const parts = text.split(",").map((s) => s.trim()).filter(Boolean);
-  return JSON.stringify(parts);
-}
+import { GrievanceCategoryMultiSelect } from "@/components/tickets/GrievanceCategoryMultiSelect";
 
 function SummaryStatusBadge({ ticket }: { ticket: TicketDetail }) {
   const needsOfficer = ticket.classification_officer_validation_required ?? false;
@@ -82,15 +78,18 @@ export function ClassificationGrievancePanel({
   className = "",
 }: ClassificationGrievancePanelProps) {
   const [summary, setSummary] = useState(ticket.grievance_summary ?? "");
-  const [categories, setCategories] = useState(
-    parseCategoriesForEdit(ticket.grievance_categories),
+  const [categories, setCategories] = useState<string[]>(() =>
+    parseGrievanceCategoryList(ticket.grievance_categories),
   );
+  const [categoryOptions, setCategoryOptions] = useState<GrievanceCategoryOption[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesLoadError, setCategoriesLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setSummary(ticket.grievance_summary ?? "");
-    setCategories(parseCategoriesForEdit(ticket.grievance_categories));
+    setCategories(parseGrievanceCategoryList(ticket.grievance_categories));
   }, [
     ticket.ticket_id,
     ticket.grievance_summary,
@@ -98,15 +97,39 @@ export function ClassificationGrievancePanel({
     ticket.grievance_classification_status,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setCategoriesLoading(true);
+    setCategoriesLoadError(null);
+    listGrievanceCategories()
+      .then((opts) => {
+        if (!cancelled) setCategoryOptions(opts);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategoriesLoadError("Could not load category list. Retry by refreshing the page.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCategoriesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const needsOfficer = ticket.classification_officer_validation_required ?? false;
+  const ticketCategories = useMemo(
+    () => parseGrievanceCategoryList(ticket.grievance_categories),
+    [ticket.grievance_categories],
+  );
 
   const isDirty = useMemo(() => {
     const summaryChanged =
       summary.trim() !== (ticket.grievance_summary ?? "").trim();
-    const catsChanged =
-      categories.trim() !== parseCategoriesForEdit(ticket.grievance_categories).trim();
+    const catsChanged = !categoriesSelectionEqual(categories, ticketCategories);
     return summaryChanged || catsChanged;
-  }, [summary, categories, ticket.grievance_summary, ticket.grievance_categories]);
+  }, [summary, categories, ticket.grievance_summary, ticketCategories]);
 
   const canSave =
     needsOfficer || isDirty || !(ticket.grievance_summary ?? "").trim();
@@ -114,16 +137,19 @@ export function ClassificationGrievancePanel({
   async function handleSave() {
     setError(null);
     const summaryTrim = summary.trim();
-    const catsTrim = categories.trim();
-    if (!summaryTrim || !catsTrim) {
-      setError("Summary and categories are required.");
+    if (!summaryTrim) {
+      setError("Summary is required.");
+      return;
+    }
+    if (categories.length === 0) {
+      setError("Select at least one category.");
       return;
     }
     setSaving(true);
     try {
       await validateTicketClassification(ticket.ticket_id, {
         grievance_summary: summaryTrim,
-        grievance_categories: categoriesToPayload(catsTrim),
+        grievance_categories: grievanceCategoriesToPayload(categories),
       });
       onUpdated?.();
     } catch (e) {
@@ -140,7 +166,6 @@ export function ClassificationGrievancePanel({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Block 1: original narrative — read-only */}
       <div className="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5">
         <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
           Original grievance
@@ -154,7 +179,6 @@ export function ClassificationGrievancePanel({
         )}
       </div>
 
-      {/* Block 2: summary — editable + validation badge */}
       <div
         className={`rounded-lg border px-3 py-2.5 ${
           needsOfficer ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"
@@ -184,19 +208,17 @@ export function ClassificationGrievancePanel({
         )}
       </div>
 
-      {/* Block 3: categories */}
       <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
         <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
           Categories
         </p>
-        <textarea
+        <GrievanceCategoryMultiSelect
           value={categories}
-          onChange={(e) => setCategories(e.target.value)}
-          rows={2}
-          placeholder="e.g. Environmental - Air Pollution"
-          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400"
+          onChange={setCategories}
+          options={categoryOptions}
+          loading={categoriesLoading}
+          loadError={categoriesLoadError}
         />
-        <p className="text-[11px] text-gray-500 mt-1">Comma-separated list</p>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}

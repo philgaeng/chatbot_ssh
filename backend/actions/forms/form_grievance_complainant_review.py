@@ -13,6 +13,9 @@ from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
 from backend.actions.action_submit_grievance import BaseActionSubmit
+from backend.actions.grievance_intake.classification import (
+    load_grievance_for_classification,
+)
 
 from backend.actions.utils.utterance_mapping_rasa import BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY
 from rapidfuzz import process
@@ -66,7 +69,18 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
         - send a message to the user about the classification results
         """
         try:
-            grievance_data = self.db_manager.get_grievance_by_id(tracker.get_slot("grievance_id"))
+            grievance_id = tracker.get_slot("grievance_id")
+            grievance_data = await load_grievance_for_classification(
+                self.db_manager,
+                self.logger,
+                grievance_id,
+            )
+            if not grievance_data:
+                self.logger.error(
+                    "retrieve_classification: no grievance row for %s", grievance_id
+                )
+                return []
+
             self.logger.debug(f"Grievance data: {grievance_data}")
             grievance_summary = grievance_data.get('grievance_summary', '')
             grievance_categories = grievance_data.get('grievance_categories', [])
@@ -75,7 +89,56 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             grievance_classification_status_db = grievance_data.get('grievance_classification_status')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
-                
+
+            from backend.config.classification_status import LLM_SKIPPED
+            from backend.actions.forms.form_dust import is_dust_intake
+
+            if is_dust_intake(tracker):
+                preset_categories = grievance_categories or tracker.get_slot("grievance_categories") or []
+                categories_local = self._get_categories_in_local_language(preset_categories)
+                return [
+                    SlotSet("grievance_summary_temp", ""),
+                    SlotSet("grievance_summary", ""),
+                    SlotSet("grievance_categories", preset_categories),
+                    SlotSet("grievance_categories_alternative", []),
+                    SlotSet("grievance_categories_local", categories_local),
+                    SlotSet("grievance_categories_alternative_local", []),
+                    SlotSet("follow_up_question", ""),
+                    SlotSet("grievance_complainant_review", False),
+                    SlotSet(
+                        "grievance_classification_status",
+                        self.GRIEVANCE_CLASSIFICATION_STATUS.get("LLM_skipped", LLM_SKIPPED),
+                    ),
+                    SlotSet("grievance_summary_status", self.SKIP_VALUE),
+                    SlotSet("grievance_categories_status", self.SKIP_VALUE),
+                ]
+            if (
+                tracker.get_slot("grievance_new_detail") == "voice_record"
+                or (
+                    grievance_classification_status_db == LLM_SKIPPED
+                    and tracker.get_slot("story_main") != "dust_grievance"
+                    and tracker.get_slot("intake_fast_path") != "dust"
+                )
+            ):
+                utterance = self.get_utterance(2)
+                dispatcher.utter_message(text=utterance)
+                return [
+                    SlotSet("grievance_summary_temp", ""),
+                    SlotSet("grievance_summary", ""),
+                    SlotSet("grievance_categories", []),
+                    SlotSet("grievance_categories_alternative", []),
+                    SlotSet("grievance_categories_local", []),
+                    SlotSet("grievance_categories_alternative_local", []),
+                    SlotSet("follow_up_question", ""),
+                    SlotSet("grievance_complainant_review", False),
+                    SlotSet(
+                        "grievance_classification_status",
+                        self.GRIEVANCE_CLASSIFICATION_STATUS.get("LLM_skipped", LLM_SKIPPED),
+                    ),
+                    SlotSet("grievance_summary_status", self.SKIP_VALUE),
+                    SlotSet("grievance_categories_status", self.SKIP_VALUE),
+                ]
+
             if sensitive_categories:
                 grievance_categories_local = self._get_categories_in_local_language(grievance_categories)
                 self.logger.debug(f"Sensitive categories detected: {sensitive_categories}")
@@ -127,9 +190,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                             SlotSet('grievance_complainant_review', False)
                             ]
 
-                # Pending/empty classification should still allow complainant manual review.
+                # Pending/empty after poll — manual add path; do not skip consent with empty slots.
                 self.logger.warning(
-                    "Classification results not yet available; allowing manual review fallback "
+                    "Classification results not yet available after poll; manual review "
                     f"(db_status={grievance_classification_status_db})"
                 )
                 return [SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
@@ -139,7 +202,7 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                         SlotSet('grievance_categories_local', self._get_categories_in_local_language(grievance_categories or [])),
                         SlotSet('grievance_categories_alternative_local', self._get_categories_in_local_language(grievance_categories_alternative or [])),
                         SlotSet('follow_up_question', follow_up_question or ''),
-                        SlotSet('grievance_complainant_review', True)
+                        SlotSet('grievance_complainant_review', False)
                         ]
                 
         except Exception as e:
@@ -171,6 +234,23 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
         self.logger.debug(f"form_grievance_complainant_review - Values of slots: grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_status: {grievance_categories_status}, grievance_summary_status: {grievance_summary_status}, grievance_cat_modify: {grievance_cat_modify}, grievance_summary_temp: {grievance_summary_temp}")
 
+
+        # Voice-only intake: classification skipped; officer handles summary/categories.
+        if tracker.get_slot("grievance_new_detail") == "voice_record":
+            self.logger.debug(
+                "form_grievance_complainant_review - voice_record intake - form skipped"
+            )
+            return []
+
+        # Dust fast path: preset category; no LLM complainant review.
+        if (
+            tracker.get_slot("story_main") == "dust_grievance"
+            or tracker.get_slot("intake_fast_path") == "dust"
+        ):
+            self.logger.debug(
+                "form_grievance_complainant_review - dust fast path - form skipped"
+            )
+            return []
 
         #display the values of required slots from the tracker
         #case where sensitive issues are detected, form is skipped

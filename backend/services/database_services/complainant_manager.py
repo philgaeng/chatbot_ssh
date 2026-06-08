@@ -31,6 +31,7 @@ class ComplainantDbManager(BaseDatabaseManager):
         'country_code',
         'location_code',
         'location_resolution_status',
+        'location_geo',
         'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
         'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
     }

@@ -40,33 +40,33 @@ export const U = {
       ne: "तपाईं आफ्नो गुनासोसँग सम्बन्धित तस्बिर वा अन्य कागजात संलग्न गर्न सक्नुहुन्छ। यी हाम्रा अधिकारीले हेर्नेछन्। हस्तलिखित उजुरीको फोटो पनि संलग्न गर्न सक्नुहुन्छ।",
     },
     post_upload: {
-      en: "Your files are saved. You can add more files or go back to the chat.",
-      ne: "तपाईंका फाइलहरू सेव भयो। तपाईं थप फाइलहरू थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
+      en: "Your voice record is saved. You can add more voice records or go back to the chat.",
+      ne: "तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
     /** Shown after upload when orchestrator is already at end of flow (`done`). */
     post_upload_at_flow_end: {
-      en: "Your files are saved. You can add more, go back to the chat, file another grievance, or end your session below.",
-      ne: "तपाईंका फाइलहरू सेव भयो। तपाईं थप थप्न, च्याटमा फर्कन, अर्को गुनासो दर्ता गर्न, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
+      en: "Your voice record is saved. You can add more voice records, go back to the chat, file another grievance, or end your session below.",
+      ne: "तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न, च्याटमा फर्कन, अर्को गुनासो दर्ता गर्न, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
     },
     transition: {
-      en: "Your files are uploaded. Here's where we left off.",
-      ne: "तपाईंको फाइलहरू सेव भयो। यहाँ हामी रोक्यौ।",
+      en: "Your voice record is saved. Here's where we left off.",
+      ne: "तपाईंको आवाज रेकर्ड सेव भयो। यहाँ हामी रोक्यौ।",
     },
     failure: {
-      en: "One or more files could not be saved. You can try adding files again or go back to the chat.",
-      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
+      en: "One or more voice records could not be saved. You can try adding voice records again or go back to the chat.",
+      ne: "एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं आवाज रेकर्ड फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
     failure_at_flow_end: {
-      en: "We could not save one or more files. You can try again, go back to the chat, or use the buttons below.",
-      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
+      en: "We could not save one or more voice records. You can try again, go back to the chat, or use the buttons below.",
+      ne: "एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
     },
     no_grievance: {
       en: 'To attach files, start a grievance first: choose "File a grievance" (गुनासो दर्ता गर्नुहोस्) in the chat above and complete the steps. After your grievance is created, you can attach photos or documents here.',
       ne: "फाइल संलग्न गर्न पहिले गुनासो सुरु गर्नुहोस्: माथिको च्याटमा \"गुनासो दर्ता गर्नुहोस्\" छान्नुहोस् र चरणहरू पूरा गर्नुहोस्। गुनासो सिर्जना भएपछि तपाईं यहाँ तस्बिर वा कागजात संलग्न गर्न सक्नुहुन्छ।",
     },
     voice_detected: {
-      en: "Voice recordings detected. These will be processed and transcribed.",
-      ne: "आवाज रेकर्डिङहरू पत्ता लाग्यो। यी प्रशोधन र ट्रान्सक्रिप्सन गरिनेछ।",
+      en: "Voice recording detected. Uploading…",
+      ne: "आवाज रेकर्ड पत्ता लाग्यो। अपलोड गर्दैछ…",
     },
     oversized_prefix: {
       en: "Some files are too large and will be skipped:",
@@ -97,12 +97,12 @@ export const U = {
       ne: "फाइलहरू प्रशोधन: {progress}%",
     },
     file_saved: {
-      en: "File is saved in the database.",
-      ne: "फाइल डाटाबेसमा सेव भयो।",
+      en: "Voice record is saved in the database.",
+      ne: "आवाज रेकर्ड डाटाबेसमा सेव भयो।",
     },
     voice_success: {
-      en: "Voice recording processed and transcribed successfully",
-      ne: "आवाज रेकर्डिङ सफलतापूर्वक प्रशोधन र ट्रान्सक्रिप्शन गरियो",
+      en: "Voice record saved for officer review.",
+      ne: "आवाज रेकर्ड अधिकारी समीक्षाको लागि सेव भयो।",
     },
     voice_failure_prefix: {
       en: "Failed to process voice recording:",
@@ -129,6 +129,14 @@ export const U = {
         en: "Go back to chat",
         ne: "च्याटमा फर्कनुहोस्",
       },
+      add_voice_record: {
+        en: "Add a voice record",
+        ne: "आवाज रेकर्ड थप्नुहोस्",
+      },
+      next_step: {
+        en: "Next step",
+        ne: "अर्को चरण",
+      },
       close_browser: {
         en: "Close Browser",
         ne: "ब्राउजर बन्द गर्नुहोस्",
@@ -143,12 +151,12 @@ export const U = {
       },
     },
     uploaded_processing: {
-      en: "Files uploaded successfully. Processing...",
-      ne: "फाइलहरू सफलतापूर्वक अपलोड भयो। प्रशोधन गर्दैछ...",
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
     },
     voice_uploaded_processing: {
-      en: "Voice recordings uploaded. Processing and transcribing...",
-      ne: "आवाज रेकर्डिङहरू अपलोड भयो। प्रशोधन र ट्रान्सक्रिप्शन गर्दैछ...",
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
     },
     continue_below: {
       en: "You can continue below.",
@@ -176,6 +184,128 @@ export const U = {
       en: "Task is processing...",
       ne: "कार्य प्रशोधन गर्दैछ...",
     },
+  },
+  map: {
+    confirm_sent: {
+      en: "Map location sent.",
+      ne: "नक्साको स्थान पठाइयो।",
+    },
+  },
+  status_banner: {
+    recording: {
+      en: "Recording {elapsed} / {max} — tap mic to stop",
+      ne: "रेकर्डिङ {elapsed} / {max} — रोक्न माइक थिच्नुहोस्",
+    },
+    max_length: {
+      en: "Maximum length ({max}) reached. Uploading…",
+      ne: "अधिकतम लम्बाइ ({max}) पुग्यो। अपलोड गर्दैछ…",
+    },
+    mic_denied: {
+      en: "Microphone access is required to record.",
+      ne: "रेकर्ड गर्न माइक्रोफोन अनुमति चाहिन्छ।",
+    },
+    voice_detected: {
+      en: "Voice recording detected. Uploading…",
+      ne: "आवाज रेकर्ड पत्ता लाग्यो। अपलोड गर्दैछ…",
+    },
+    files_detected: {
+      en: "Files selected. Uploading…",
+      ne: "फाइलहरू छानियो। अपलोड गर्दैछ…",
+    },
+    voice_uploaded_processing: {
+      en: "Voice record uploaded. Processing…",
+      ne: "आवाज रेकर्ड अपलोड भयो। प्रशोधन गर्दैछ…",
+    },
+    voice_processing: {
+      en: "Processing voice record…",
+      ne: "आवाज रेकर्ड प्रशोधन गर्दैछ…",
+    },
+    voice_saved: {
+      en: "Voice record saved for officer review.",
+      ne: "आवाज रेकर्ड अधिकारी समीक्षाको लागि सेव भयो।",
+    },
+    voice_failure: {
+      en: "Could not save voice record: {error}",
+      ne: "आवाज रेकर्ड सेव गर्न सकिएन: {error}",
+    },
+    files_processing: {
+      en: "Processing files…",
+      ne: "फाइलहरू प्रशोधन गर्दैछ…",
+    },
+    files_processing_progress: {
+      en: "Processing files: {progress}%",
+      ne: "फाइलहरू प्रशोधन: {progress}%",
+    },
+    files_saved: {
+      en: "Files saved for officer review.",
+      ne: "फाइलहरू अधिकारी समीक्षाको लागि सेव भयो।",
+    },
+    files_failure: {
+      en: "Could not save files: {error}",
+      ne: "फाइलहरू सेव गर्न सकिएन: {error}",
+    },
+    oversized: {
+      en: "Some files are too large and were skipped: {names}",
+      ne: "केही फाइलहरू धेरै ठूला थिए र छोडियो: {names}",
+    },
+    processing_long: {
+      en: "Processing is taking longer than expected…",
+      ne: "प्रशोधन अपेक्षित भन्दा बढी समय लिँदैछ…",
+    },
+    map_saving: {
+      en: "Saving map location…",
+      ne: "नक्साको स्थान सेव गर्दैछ…",
+    },
+    map_saved: {
+      en: "Location saved from map pin ({lat}, {lng}).",
+      ne: "नक्सा पिनबाट स्थान सेव भयो ({lat}, {lng})।",
+    },
+    map_failed: {
+      en: "Could not save map location. Please try again.",
+      ne: "नक्साको स्थान सेव गर्न सकिएन। कृपया फेरि प्रयास गर्नुहोस्।",
+    },
+  },
+  voice_note: {
+    tap_to_record: {
+      en: "Record voice note (tap again to stop)",
+      ne: "आवाज नोट रेकर्ड गर्नुहोस् (रोक्न फेरि थिच्नुहोस्)",
+    },
+    inactive_step: {
+      en: "Voice recording is available when describing your grievance.",
+      ne: "गुनासो विवरण बताउँदा मात्र आवाज रेकर्ड उपलब्ध छ।",
+    },
+    recording: {
+      en: "Recording… tap again to stop (max 45 seconds).",
+      ne: "रेकर्डिङ… रोक्न फेरि थिच्नुहोस् (अधिकतम ४५ सेकेन्ड)।",
+    },
+    max_length: {
+      en: "Maximum recording length reached. Uploading your voice note…",
+      ne: "अधिकतम रेकर्डिङ लम्बाइ पुग्यो। आवाज नोट अपलोड गर्दैछ…",
+    },
+    denied: {
+      en: "Microphone access was denied. You can type your grievance instead.",
+      ne: "माइक्रोफोन अनुमति अस्वीकार भयो। तपाईं टाइप गरेर गुनासो दर्ता गर्न सक्नुहुन्छ।",
+    },
+    uploaded: {
+      en: "Voice note uploaded. You can add more or tap **File as is** when ready.",
+      ne: "आवाज नोट अपलोड भयो। थप थप्न वा तयार भएपछि **यसै रूपमा दर्ता** थिच्नुहोस्।",
+    },
+    uploaded_advancing: {
+      en: "Voice note saved. Continuing to the next step…",
+      ne: "आवाज नोट सुरक्षित भयो। अर्को चरणमा जाँदैछ…",
+    },
+    need_grievance: {
+      en: "Start a grievance first before recording a voice note.",
+      ne: "आवाज नोट रेकर्ड गर्न पहिले गुनासो सुरु गर्नुहोस्।",
+    },
+  },
+  photo_exif: {
+    consent: {
+      en: "May we read photo location and time from your images (EXIF)? This helps officers verify where/when photos were taken. We never show raw EXIF data in the chat.",
+      ne: "के हामी तपाईंका तस्बिरबाट स्थान र समय (EXIF) पढ्न सक्छौं? यसले अधिकारीलाई तस्बिर कहाँ/कहिले लिइएको थियो भनेर जाँच गर्न मद्दत गर्छ। कच्चा EXIF डेटा च्याटमा देखाइँदैन।",
+    },
+    allow: { en: "Allow", ne: "अनुमति दिनुहोस्" },
+    deny: { en: "Not now", ne: "अहिले होइन" },
   },
   attach_button: {
     start_first: {
@@ -224,4 +354,6 @@ export function format(template, vars = {}) {
 
 export const ADD_MORE_PAYLOAD = "__add_more_files__";
 export const GO_BACK_PAYLOAD = "__go_back_to_chat__";
+export const VOICE_ADD_PAYLOAD = "__add_voice_record__";
+export const VOICE_NEXT_STEP_PAYLOAD = "__voice_next_step__";
 export const FILE_ANOTHER_PAYLOAD = "__file_another_grievance__";

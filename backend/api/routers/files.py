@@ -3,6 +3,7 @@ File server API router (production). Same URL surface as legacy FileServerAPI in
 Uses FileServerCore and Celery; accessible emit is wired from fastapi_app lifespan (Socket.IO ASGI).
 """
 
+import json
 import os
 import time
 import uuid
@@ -229,8 +230,10 @@ async def generate_ids(request: Request):
 async def upload_files(
     request: Request,
     grievance_id: str = Form(...),
+    complainant_id: Optional[str] = Form(None),
     rasa_session_id: Optional[str] = Form(None),
     flask_session_id: Optional[str] = Form(None),
+    file_metadata: Optional[str] = Form(None),
     language: Optional[str] = Query(None),
     files: List[UploadFile] = File(..., alias="files[]"),
 ):
@@ -263,6 +266,19 @@ async def upload_files(
             file_server_core, files, grievance_id
         )
 
+        if not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
+            stub: Dict[str, Any] = {
+                "grievance_id": grievance_id,
+                "source": "bot",
+                "grievance_description": "",
+            }
+            if complainant_id:
+                stub["complainant_id"] = complainant_id
+                db_manager.create_or_update_complainant(
+                    {"complainant_id": complainant_id, "source": "bot"}
+                )
+            db_manager.create_or_update_grievance(stub)
+
         if not uploaded_files:
             file_server_core.log_event(event_type=FAILED, details={"error": "All files were invalid"})
             return JSONResponse(
@@ -275,12 +291,28 @@ async def upload_files(
                 status_code=400,
             )
 
-        file_data = uploaded_files[0]
-        result = process_file_upload_task.delay(
-            grievance_id=grievance_id,
-            file_data=file_data,
-            session_id=flask_session_id,
-        )
+        metadata_by_name: Dict[str, Dict[str, Any]] = {}
+        if file_metadata:
+            try:
+                parsed = json.loads(file_metadata)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and item.get("file_name"):
+                            metadata_by_name[item["file_name"]] = item
+            except json.JSONDecodeError:
+                pass
+
+        task_ids = []
+        for file_data in uploaded_files:
+            client_meta = metadata_by_name.get(file_data.get("file_name"), {})
+            if client_meta:
+                file_data["client_metadata"] = client_meta
+            result = process_file_upload_task.delay(
+                grievance_id=grievance_id,
+                file_data=file_data,
+                session_id=flask_session_id,
+            )
+            task_ids.append(result.id)
 
         return JSONResponse(
             {
@@ -291,7 +323,8 @@ async def upload_files(
                 "oversized_files": oversized_files,
                 "wrong_extensions_list": wrong_extensions_list,
                 "max_file_size": MAX_FILE_SIZE,
-                "task_id": result.id,
+                "task_id": task_ids[0] if task_ids else None,
+                "task_ids": task_ids,
             },
             status_code=202,
         )

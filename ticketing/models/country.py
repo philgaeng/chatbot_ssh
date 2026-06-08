@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, PrimaryKeyConstraint, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -102,6 +102,8 @@ class Location(Base):
         nullable=True,
     )
     source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

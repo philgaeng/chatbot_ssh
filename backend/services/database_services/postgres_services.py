@@ -626,21 +626,62 @@ class DatabaseManager(BaseDatabaseManager):
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
+    @staticmethod
+    def _is_duplicate_grievance_key_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "duplicate key" in msg or "grievances_pkey" in msg
+
     def create_or_update_grievance(self, data: Dict[str, Any]):
-        """Create or update a grievance"""
+        """Create or update a grievance.
+
+        Uses a lightweight existence check (same as file-upload stub path) so an
+        earlier partial row from form_grievance text intake does not trigger a
+        failed INSERT on submit_details.
+        """
         try:
             grievance_id = data.get("grievance_id")
+            if not grievance_id:
+                grievance_id = self.create_grievance(data)
+                return grievance_id
+
             self.logger.debug(
                 "create_or_update_grievance: grievance_id=%s data_keys=%s",
                 grievance_id,
                 sorted(k for k in data.keys() if k is not None),
             )
-            if self.grievance.get_grievance_by_id(grievance_id):
+
+            exists = self.check_entry_exists_for_entity_key("grievance_id", grievance_id)
+            if exists:
                 self.update_grievance(grievance_id, data)
-            else:
-                grievance_id = self.create_grievance(data)
-            return grievance_id
+                return grievance_id
+
+            try:
+                self.create_grievance(data)
+                return grievance_id
+            except Exception as insert_exc:
+                if not self._is_duplicate_grievance_key_error(insert_exc):
+                    raise
+                self.logger.warning(
+                    "create_or_update_grievance: duplicate insert for %s, falling back to update",
+                    grievance_id,
+                )
+                self.update_grievance(grievance_id, data)
+                return grievance_id
         except Exception as e:
+            if data.get("grievance_id") and self._is_duplicate_grievance_key_error(e):
+                grievance_id = data["grievance_id"]
+                self.logger.warning(
+                    "create_or_update_grievance: recovering from duplicate key for %s",
+                    grievance_id,
+                )
+                try:
+                    self.update_grievance(grievance_id, data)
+                    return grievance_id
+                except Exception as update_exc:
+                    self.logger.error(
+                        "create_or_update_grievance: update after duplicate failed: %s",
+                        update_exc,
+                    )
             self.logger.error(f"Error creating or updating grievance: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
@@ -649,6 +690,12 @@ class DatabaseManager(BaseDatabaseManager):
     def get_grievance_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
         """Get grievance by ID"""
         return self.grievance.get_grievance_by_id(grievance_id)
+
+    def grievance_row_exists(self, grievance_id: str) -> bool:
+        return self.grievance.grievance_row_exists(grievance_id)
+
+    def get_grievance_core_by_id(self, grievance_id: str) -> Optional[Dict[str, Any]]:
+        return self.grievance.get_grievance_core_by_id(grievance_id)
     
     def is_valid_grievance_id(self, grievance_id: str) -> bool:
         """Check if a grievance ID exists in the database"""

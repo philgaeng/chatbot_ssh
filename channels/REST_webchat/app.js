@@ -8,6 +8,9 @@ import {
 // Import modules
 import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
+import { initMapPicker, openMapPicker, closeMapPicker } from "./modules/mapPicker.js";
+import { buildFileMetadataList, setExifConsent } from "./modules/exifHelper.js";
+import { initVoiceNote, MAX_RECORD_SECONDS } from "./modules/voiceNote.js";
 import {
   get,
   format,
@@ -15,6 +18,8 @@ import {
   getLanguage,
   ADD_MORE_PAYLOAD,
   GO_BACK_PAYLOAD,
+  VOICE_ADD_PAYLOAD,
+  VOICE_NEXT_STEP_PAYLOAD,
   FILE_ANOTHER_PAYLOAD,
 } from "./utterances.js";
 
@@ -40,6 +45,7 @@ let messageInput;
 let messages;
 let fileInput;
 let attachmentButton;
+let voiceNoteButton;
 let sendButton;
 let persistentCloseBrowserButton;
 let persistentCloseSessionButton;
@@ -288,6 +294,7 @@ function hideFiledBanner() {
 
 function handleOrchestratorResponse(response) {
   const { messages = [], next_state, close_controls_mode } = response || {};
+  const prevOrchestratorState = window.lastOrchestratorNextState;
   window.lastOrchestratorNextState =
     typeof next_state === "string" ? next_state : null;
 
@@ -333,6 +340,21 @@ function handleOrchestratorResponse(response) {
   });
 
   maybeShowFiledBannerForState(next_state);
+
+  if (
+    next_state === "location_consent" ||
+    next_state === "location_method"
+  ) {
+    closeMapPicker();
+  }
+
+  if (
+    prevOrchestratorState === "contact_form" &&
+    next_state &&
+    next_state !== "contact_form"
+  ) {
+    uiActions.clearVoiceStatusBanner();
+  }
 }
 
 window.updateCloseControlsVisibility = updateCloseControlsVisibility;
@@ -477,6 +499,49 @@ async function initializeChat() {
   messageInput = document.getElementById("message-input");
   fileInput = document.getElementById("file-input");
   attachmentButton = document.getElementById("attachment-button");
+  voiceNoteButton = document.getElementById("voice-note-button");
+  initMapPicker();
+  initVoiceNote({
+    button: voiceNoteButton,
+    onStatus: (status) => {
+      const maxLabel = formatRecordingClock(MAX_RECORD_SECONDS);
+      if (status === "recording") {
+        uiActions.setVoiceStatusBanner(
+          format(get("status_banner.recording"), {
+            elapsed: formatRecordingClock(0),
+            max: maxLabel,
+          }),
+          { recording: true }
+        );
+      }
+      if (status === "max_length") {
+        uiActions.setVoiceStatusBanner(
+          format(get("status_banner.max_length"), { max: maxLabel })
+        );
+      }
+      if (status === "stopped") {
+        voiceNoteButton?.classList.remove("is-recording");
+        voiceNoteButton?.setAttribute("aria-pressed", "false");
+      }
+      if (status === "denied") {
+        uiActions.setVoiceStatusBanner(get("status_banner.mic_denied"), {
+          error: true,
+        });
+      }
+    },
+    onTick: (elapsedSeconds) => {
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.recording"), {
+          elapsed: formatRecordingClock(elapsedSeconds),
+          max: formatRecordingClock(MAX_RECORD_SECONDS),
+        }),
+        { recording: true }
+      );
+    },
+    onRecorded: async (file) => {
+      await handleFileUpload([file]);
+    },
+  });
   persistentCloseBrowserButton = document.getElementById("persistent-close-browser");
   persistentCloseSessionButton = document.getElementById("persistent-close-session");
   messages = document.getElementById("messages");
@@ -487,6 +552,7 @@ async function initializeChat() {
   // Initialize UI Actions with DOM elements (pass refs for attach button, input lock)
   uiActions.initializeUIActions(messages, window.grievanceId, {
     attachmentButton,
+    voiceNoteButton,
     messageInput,
     sendButton: document.querySelector("#form .send-button"),
   });
@@ -641,6 +707,8 @@ function resetFrontendState() {
 
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
+  uiActions.setVoiceNoteEnabled(false);
+  uiActions.clearVoiceStatusBanner();
   uiActions.clearMessages();
 }
 
@@ -668,6 +736,7 @@ window.handleFileAnotherGrievance = async function () {
   if (fileInput) fileInput.value = "";
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
+  uiActions.setVoiceNoteEnabled(false);
   uiActions.clearMessages();
   const quickReplyBlocks = messages?.querySelectorAll(".quick-replies");
   quickReplyBlocks?.forEach((el) => el.remove());
@@ -855,9 +924,23 @@ async function handleFileUpload(files) {
     return false;
   }
 
+  const isVoiceOnlyUpload =
+    files.length === 1 &&
+    FILE_TYPES.AUDIO.extensions.includes(
+      files[0].name.split(".").pop()?.toLowerCase() || ""
+    );
+  window.lastUploadWasVoiceOnly = isVoiceOnlyUpload;
+  if (!window.grievanceCreatedInDb && !isVoiceOnlyUpload) {
+    uiActions.appendMessage(get("attach_button.saving"), "received");
+    return false;
+  }
+
   const formData = new FormData();
   const sessionId = window.getSessionId();
   formData.append("grievance_id", window.grievanceId);
+  if (window.complainantId) {
+    formData.append("complainant_id", window.complainantId);
+  }
   formData.append("client_type", "webchat-rest");
   formData.append("rasa_session_id", sessionId);
   formData.append("flask_session_id", window.flaskSessionId || sessionId);
@@ -870,7 +953,7 @@ async function handleFileUpload(files) {
 
   if (audioFiles.length > 0) {
     console.log("Audio files detected:", audioFiles);
-    uiActions.appendMessage(get("file_upload.voice_detected"), "received");
+    uiActions.setVoiceStatusBanner(get("status_banner.voice_detected"));
   }
 
   // Check file sizes
@@ -886,9 +969,11 @@ async function handleFileUpload(files) {
 
   if (oversizedFiles.length > 0) {
     console.log("Oversized files detected:", oversizedFiles);
-    uiActions.appendMessage(
-      `${get("file_upload.oversized_prefix")} ${oversizedFiles.map((f) => f.name).join(", ")}`,
-      "received"
+    uiActions.setVoiceStatusBanner(
+      format(get("status_banner.oversized"), {
+        names: oversizedFiles.map((f) => f.name).join(", "),
+      }),
+      { error: true }
     );
   }
 
@@ -902,8 +987,17 @@ async function handleFileUpload(files) {
     formData.append("files[]", file);
   }
 
+  const exifMeta = await buildFileMetadataList(validFiles, promptExifConsent);
+  if (exifMeta.length) {
+    formData.append("file_metadata", JSON.stringify(exifMeta));
+  }
+
   if (validFiles.length === 0) {
     return false;
+  }
+
+  if (audioFiles.length === 0) {
+    uiActions.setVoiceStatusBanner(get("status_banner.files_detected"));
   }
 
   try {
@@ -999,7 +1093,7 @@ async function pollFileStatus(fileIds) {
         setTimeout(poll, delayMs);
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
-        uiActions.appendMessage(get("file_upload.processing_long"), "received");
+        uiActions.setVoiceStatusBanner(get("status_banner.processing_long"));
         uiActions.setInputLocked(false);
         currentUploadFileIds = [];
         currentUploadStatuses = {};
@@ -1014,10 +1108,21 @@ async function pollFileStatus(fileIds) {
 }
 
 function buildPostUploadQuickReplies() {
-  const base = [
-    { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
-    { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
-  ];
+  const base = window.lastUploadWasVoiceOnly
+    ? [
+        {
+          title: get("file_upload.buttons.add_voice_record"),
+          payload: VOICE_ADD_PAYLOAD,
+        },
+        {
+          title: get("file_upload.buttons.next_step"),
+          payload: VOICE_NEXT_STEP_PAYLOAD,
+        },
+      ]
+    : [
+        { title: get("file_upload.buttons.add_more"), payload: ADD_MORE_PAYLOAD },
+        { title: get("file_upload.buttons.go_back"), payload: GO_BACK_PAYLOAD },
+      ];
   if (window.lastOrchestratorNextState !== "done") {
     return base;
   }
@@ -1042,6 +1147,7 @@ function buildPostUploadQuickReplies() {
 }
 
 function showPostUploadMessageAndUnlock() {
+  uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(
     get(
@@ -1051,6 +1157,9 @@ function showPostUploadMessageAndUnlock() {
     ),
     "received"
   );
+  if (window.lastUploadWasVoiceOnly) {
+    uiActions.setVoiceNoteEnabled(true);
+  }
   uiActions.replaceQuickReplies(
     filterCloseQuickReplies(buildPostUploadQuickReplies())
   );
@@ -1077,6 +1186,7 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
+  uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(
     get(
@@ -1092,96 +1202,45 @@ function showFailureMessageAndUnlock() {
   currentUploadStatuses = {};
 }
 
-// Update file status in UI
+// Update file status in composer banner (replaces prior status text).
 function updateFileStatus(fileId, data) {
-  const { status, progress, result, error } = data;
+  currentUploadStatuses[fileId] = data.status;
+  uiActions.updateFileStatus(fileId, data);
+  if (data.result?.grievance_id && window.grievanceFiledPhase) {
+    showFiledBanner(data.result.grievance_id);
+  }
+  if (data.status === "SUCCESS" || data.status === "FAILURE") {
+    checkUploadBatchComplete();
+  }
+}
 
-  currentUploadStatuses[fileId] = status;
+function formatRecordingClock(totalSeconds) {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
-  // Get messages container
-  const chatMessages = document.getElementById("messages");
-  if (!chatMessages) {
-    console.error("Messages container not found");
+// Voice intake: finish details and continue main flow (map → contact).
+async function handleVoiceNextStep() {
+  uiActions.replaceQuickReplies([]);
+  uiActions.setInputLocked(true);
+  uiActions.setVoiceNoteEnabled(false);
+  window.lastUploadWasVoiceOnly = false;
+  fileUploadSnapshot = null;
+  const ok = await restSendMessage("/voice_record", { voice_record_submit: true });
+  if (ok) {
+    uiActions.setGrievanceCreatedInDb(true);
+  }
+  uiActions.setInputLocked(false);
+}
+
+function handleAddVoiceRecord() {
+  if (voiceNoteButton && !voiceNoteButton.disabled) {
+    voiceNoteButton.click();
     return;
   }
-
-  // Create or update file status message
-  let statusElement = document.getElementById(`file-status-${fileId}`);
-  const prevStatus = statusElement
-    ? statusElement.getAttribute("data-status")
-    : null;
-  if (!statusElement) {
-    statusElement = document.createElement("div");
-    statusElement.id = `file-status-${fileId}`;
-    statusElement.className = "file-status";
-    chatMessages.appendChild(statusElement);
-  }
-
-  // Update status message
-  let statusMessage = "";
-  switch (status) {
-    case "PENDING":
-      statusMessage = get("file_upload.processing");
-      break;
-    case "STARTED":
-      if (result && result.file_type === "audio") {
-        statusMessage = progress
-          ? format(get("file_upload.transcribing_progress"), { progress })
-          : get("file_upload.transcribing");
-      } else {
-        statusMessage = progress
-          ? format(get("file_upload.processing_progress"), { progress })
-          : get("file_upload.processing");
-      }
-      break;
-    case "SUCCESS":
-      if (result && result.file_type === "audio") {
-        statusMessage = get("file_upload.voice_success");
-      } else {
-        statusMessage = get("file_upload.files_success");
-      }
-      if (result) {
-        if (result.grievance_id) {
-          window.grievanceId = result.grievance_id;
-          uiActions.setGrievanceId(result.grievance_id);
-          if (window.grievanceFiledPhase) {
-            showFiledBanner(result.grievance_id);
-          }
-        }
-        if (result.message) {
-          uiActions.appendMessage(result.message, "received");
-        }
-      }
-      if (prevStatus !== "SUCCESS" && !(result && result.message)) {
-        const notice = (data && data.message) || get("file_upload.file_saved");
-        uiActions.appendMessage(notice, "received");
-      }
-      break;
-    case "FAILURE":
-      let errorMsg = error || "Unknown error";
-      if (result && result.file_type === "audio") {
-        statusMessage = `${get("file_upload.voice_failure_prefix")} ${errorMsg}`;
-      } else {
-        statusMessage = `${get("file_upload.files_failure_prefix")} ${errorMsg}`;
-      }
-      uiActions.appendMessage(statusMessage, "received");
-      console.error("Task failed:", errorMsg);
-      break;
-    default:
-      statusMessage = `${get("file_upload.status_prefix")} ${status}`;
-  }
-
-  statusElement.textContent = statusMessage;
-  statusElement.setAttribute("data-status", status);
-
-  if (status === "SUCCESS" || status === "FAILURE") {
-    checkUploadBatchComplete();
-    setTimeout(() => {
-      if (statusElement && statusElement.parentNode) {
-        statusElement.remove();
-      }
-    }, 5000);
-  }
+  uiActions.appendMessage(get("voice_note.inactive_step"), "received");
 }
 
 // "Go back to chat": restore snapshot, transition message, unlock (no orchestrator call)
@@ -1211,8 +1270,38 @@ function handleAddMoreFiles() {
 }
 
 // Set up global handlers (eventHandlers.handleQuickReplyClick will call these for file-upload payloads)
+async function promptExifConsent() {
+  const granted = window.confirm(get("photo_exif.consent"));
+  setExifConsent(granted);
+  return granted;
+}
+
+window.openMapPickerFromBot = ({ defaultLat, defaultLng }) => {
+  openMapPicker({
+    defaultLat: defaultLat ?? 27.7172,
+    defaultLng: defaultLng ?? 85.324,
+    onConfirm: async ({ lat, lng }) => {
+      uiActions.setVoiceStatusBanner(get("status_banner.map_saving"));
+      const ok = await restSendMessage("", {
+        map_pin: { lat, lng },
+      });
+      if (!ok) {
+        uiActions.setVoiceStatusBanner(get("status_banner.map_failed"), {
+          error: true,
+        });
+      }
+    },
+  });
+};
+
+window.setVoiceNoteEnabled = (enabled) => {
+  uiActions.setVoiceNoteEnabled(enabled);
+};
+
 window.handleGoBackToChat = handleGoBackToChat;
 window.handleAddMoreFiles = handleAddMoreFiles;
+window.handleVoiceNextStep = handleVoiceNextStep;
+window.handleAddVoiceRecord = handleAddVoiceRecord;
 window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 
 // Initialize when DOM is loaded

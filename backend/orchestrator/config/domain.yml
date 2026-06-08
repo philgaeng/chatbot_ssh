@@ -120,11 +120,32 @@ slots:
     values:
       - status_check
       - new_grievance
+      - dust_grievance
       - seah_intake
       - new_complainant
       - modify_grievance
       - modify_contact
     influence_conversation: true
+    mappings:
+      - type: custom
+  geo_lat:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  geo_lng:
+    type: float
+    influence_conversation: false
+    mappings:
+      - type: custom
+  location_pin_status:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+  intake_fast_path:
+    type: text
+    influence_conversation: false
     mappings:
       - type: custom
   story_route:
@@ -499,6 +520,14 @@ slots:
     mappings:
       - type: custom
   grievance_new_detail:
+    type: text
+    mappings:
+      - type: custom
+  dust_new_detail:
+    type: text
+    mappings:
+      - type: custom
+  dust_description_status:
     type: text
     mappings:
       - type: custom
@@ -907,6 +936,7 @@ actions:
   - action_ask_complainant_village_temp
   - action_ask_complainant_ward
   - action_ask_grievance_new_detail
+  - action_ask_dust_new_detail
   - action_ask_form_seah_1_sensitive_issues_follow_up
   - action_ask_form_seah_1_seah_victim_survivor_role
   - action_ask_form_seah_1_seah_witness_victim_consent_to_file
@@ -1002,6 +1032,7 @@ actions:
   - action_handle_sensitive_content_deny
   - validate_form_contact
   - validate_form_grievance
+  - validate_form_dust
   - validate_form_grievance_complainant_review
   - validate_form_grievance_id
   - validate_form_story_main
@@ -1037,6 +1068,10 @@ forms:
   form_grievance:
     required_slots:
       - grievance_new_detail
+    ignored_intents: *common-ignore-intents
+  form_dust:
+    required_slots:
+      - dust_new_detail
     ignored_intents: *common-ignore-intents
   form_contact:
     required_slots:

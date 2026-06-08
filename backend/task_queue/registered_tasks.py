@@ -146,6 +146,13 @@ def process_file_upload_task(self, grievance_id: str,
         result = file_server_core.process_file_upload(grievance_id=grievance_id, 
                                                          file_data=file_data,
                                                          )
+        # CB-01 proto: store audio only; transcription/classification deferred to officers.
+        if (result or {}).get("file_type") == "audio":
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "Audio stored for grievance_id=%s (transcription skipped in proto)",
+                grievance_id,
+            )
         task_mgr.complete_task(
             result=result, 
             grievance_id=grievance_id, 

@@ -329,10 +329,11 @@ class ComplainantPatch(BaseModel):
     wrong at submission time.  The update is proxied to the chatbot backend via
     PATCH {chatbot_base_url}/api/complainant/{complainant_id}.
 
-    STRICTLY WHITELISTED — identity fields (full_name, phone, phone_hash) are
-    never writable from ticketing.  All fields are optional; only provided
-    (non-None) fields are sent to the backend.
+    Address/location/email are always editable.  full_name and phone are
+    fill-missing only on the chatbot backend (rejected if already on file).
     """
+    complainant_full_name: Optional[str] = Field(None, max_length=255)
+    complainant_phone: Optional[str] = Field(None, max_length=64)
     complainant_address: Optional[str] = Field(None, max_length=512)
     complainant_village: Optional[str] = Field(None, max_length=255)
     complainant_ward: Optional[str] = Field(None, max_length=64)

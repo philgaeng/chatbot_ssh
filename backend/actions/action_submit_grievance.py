@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Text, Tuple
+from typing import Any, Dict, List, Optional, Text, Tuple
 from datetime import datetime, timedelta
 import re
 from .base_classes.base_classes import BaseAction
@@ -11,6 +11,10 @@ from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
 from backend.actions.utils.ticketing_dispatch import dispatch_ticket
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
+from backend.shared_functions.geo_pin import (
+    apply_location_enrichment_for_submit,
+    slots_for_location_resolve,
+)
 from backend.shared_functions.location_mapping import resolve_location_payload
 from backend.config.classification_status import (
     COMPLAINANT_CONFIRMED,
@@ -106,10 +110,20 @@ class BaseActionSubmit(BaseAction):
         grievance_data={k : tracker.get_slot(k) for k in keys}
         location_payload = resolve_location_payload(
             db_manager=self.db_manager,
-            slots=grievance_data,
+            slots=slots_for_location_resolve(grievance_data),
             country_code=tracker.get_slot("country_code") or "NP",
         )
         grievance_data.update(location_payload)
+        grievance_data.update(
+            apply_location_enrichment_for_submit(
+                grievance_data,
+                geo_lat=tracker.get_slot("geo_lat"),
+                geo_lng=tracker.get_slot("geo_lng"),
+                location_pin_status=tracker.get_slot("location_pin_status"),
+                location_code=tracker.get_slot("location_code")
+                or location_payload.get("location_code"),
+            )
+        )
         self.logger.info(
             "submission_location_resolution country_code=%s status=%s deepest_level=%s",
             location_payload.get("country_code"),
@@ -156,6 +170,11 @@ class BaseActionSubmit(BaseAction):
         if normalized and normalized not in (self.SKIP_VALUE, self.NOT_PROVIDED, "pending"):
             return normalized
         if not self.LLM_CLASSIFICATION:
+            return LLM_SKIPPED
+        if (
+            tracker.get_slot("story_main") == "dust_grievance"
+            or tracker.get_slot("intake_fast_path") == "dust"
+        ):
             return LLM_SKIPPED
         gid = tracker.get_slot("grievance_id")
         if gid:
@@ -283,6 +302,8 @@ class BaseActionSubmit(BaseAction):
         self,
         dispatcher: CollectingDispatcher,
         grievance_data: Dict[str, Any],
+        *,
+        tracker: Optional[Tracker] = None,
     ) -> None:
         """CB-07 Phase A: filed confirmation only (categorization comes after LLM retrieve)."""
         lang = self.language_code or "en"
@@ -291,12 +312,16 @@ class BaseActionSubmit(BaseAction):
         filed_line = get_utterance_base(
             "action_submit_grievance", "action_submit_grievance", 6, lang
         ).format(grievance_id=gid)
-        on_record = get_utterance_base(
-            "action_submit_grievance", "action_submit_grievance", 5, lang
-        )
+        from backend.actions.forms.form_dust import is_dust_intake
+
+        dust = tracker is not None and is_dust_intake(tracker)
 
         dispatcher.utter_message(text=filed_line)
-        dispatcher.utter_message(text=on_record)
+        if not dust:
+            on_record = get_utterance_base(
+                "action_submit_grievance", "action_submit_grievance", 5, lang
+            )
+            dispatcher.utter_message(text=on_record)
         dispatcher.utter_message(
             json_message={
                 "data": {
@@ -308,14 +333,15 @@ class BaseActionSubmit(BaseAction):
     
     async def _send_grievance_recap_sms(self, 
                                   grievance_data: Dict[str, Any],
-                                  dispatcher: CollectingDispatcher) -> None:
+                                  dispatcher: CollectingDispatcher,
+                                  tracker: Tracker) -> None:
         """Send filed confirmation in chat (3 bubbles) and optional SMS recap."""
         try:
             confirmation_message = self.create_confirmation_message(
                 grievance_data
             )
 
-            self._emit_chat_filed_confirmation(dispatcher, grievance_data)
+            self._emit_chat_filed_confirmation(dispatcher, grievance_data, tracker=tracker)
             
             if grievance_data.get('otp_verified') == True:
                 #send sms
@@ -338,7 +364,7 @@ class BaseActionSubmit(BaseAction):
                     utterance = utterance.format(complainant_phone=complainant_phone)
                     dispatcher.utter_message(text=utterance)
         except Exception as e:
-            self.logger.error(f"Failed to send recap sms to {complainant_phone}: {e}")
+            self.logger.error(f"Failed to send grievance filed confirmation: {e}")
   
     
 
@@ -374,7 +400,7 @@ class BaseActionSubmit(BaseAction):
 
             self.logger.info(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
 
-            await self._send_grievance_recap_sms(grievance_data, dispatcher) #call the function that extracts the phone number, generates the confirmation message and sends it to the user
+            await self._send_grievance_recap_sms(grievance_data, dispatcher, tracker)
 
             # #send email to admin
             # await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)

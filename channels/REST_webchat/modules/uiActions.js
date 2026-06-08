@@ -1,15 +1,19 @@
 // UI Actions Module - Pure UI manipulation functions
 // Handles DOM manipulation, message display, and UI state updates
 
-import { get } from "../utterances.js";
+import { format, get } from "../utterances.js";
 
 // Global state (will be initialized from app.js)
 let messages;
 let grievanceId = null;
 let attachmentButton = null;
+let voiceNoteButton = null;
 let messageInput = null;
 let sendButton = null;
+let voiceNoteEnabled = false;
 let grievanceCreatedInDb = false;
+let voiceStatusBanner = null;
+let voiceStatusBannerText = null;
 
 // Initialize UI Actions with DOM elements
 export function initializeUIActions(
@@ -20,25 +24,80 @@ export function initializeUIActions(
   messages = messagesElement;
   grievanceId = initialGrievanceId;
   attachmentButton = options.attachmentButton ?? document.getElementById("attachment-button");
+  voiceNoteButton = options.voiceNoteButton ?? document.getElementById("voice-note-button");
   messageInput = options.messageInput ?? document.getElementById("message-input");
   sendButton = options.sendButton ?? document.querySelector("#form .send-button");
+  voiceStatusBanner = document.getElementById("voice-status-banner");
+  voiceStatusBannerText = voiceStatusBanner;
   updateAttachButtonState();
+}
+
+/** Light-blue banner above composer toolbar; each call replaces prior text. */
+export function setVoiceStatusBanner(text, { error = false, recording = false } = {}) {
+  if (!voiceStatusBanner) {
+    voiceStatusBanner = document.getElementById("voice-status-banner");
+    voiceStatusBannerText = voiceStatusBanner;
+  }
+  if (!voiceStatusBanner) return;
+  const message = (text || "").trim();
+  if (!message) {
+    clearVoiceStatusBanner();
+    return;
+  }
+  voiceStatusBanner.textContent = message;
+  voiceStatusBanner.classList.toggle("is-error", !!error);
+  voiceStatusBanner.classList.toggle("is-recording", !!recording);
+  voiceStatusBanner.classList.remove("hidden");
+}
+
+export function clearVoiceStatusBanner() {
+  if (!voiceStatusBanner) {
+    voiceStatusBanner = document.getElementById("voice-status-banner");
+  }
+  if (!voiceStatusBanner) return;
+  voiceStatusBanner.textContent = "";
+  voiceStatusBanner.classList.remove("is-error", "is-recording");
+  voiceStatusBanner.classList.add("hidden");
 }
 
 // Update attach button disabled state and tooltip when grievanceId changes
 function updateAttachButtonState() {
-  if (!attachmentButton) return;
   const hasGrievance = !!grievanceId;
   const canUploadFiles = hasGrievance && grievanceCreatedInDb;
+  // Voice at description step: allow upload once grievance_id exists (DB row ensured on upload).
+  const canVoice = hasGrievance && voiceNoteEnabled;
 
-  attachmentButton.disabled = !canUploadFiles;
-  if (!hasGrievance) {
-    attachmentButton.title = get("attach_button.start_first");
-  } else if (!grievanceCreatedInDb) {
-    attachmentButton.title = get("attach_button.saving");
-  } else {
-    attachmentButton.title = get("attach_button.ready");
+  if (attachmentButton) {
+    attachmentButton.disabled = !canUploadFiles;
+    attachmentButton.classList.toggle("is-active", canUploadFiles);
+    if (!hasGrievance) {
+      attachmentButton.title = get("attach_button.start_first");
+    } else if (!grievanceCreatedInDb) {
+      attachmentButton.title = get("attach_button.saving");
+    } else {
+      attachmentButton.title = get("attach_button.ready");
+    }
   }
+
+  if (voiceNoteButton) {
+    voiceNoteButton.disabled = !canVoice;
+    voiceNoteButton.classList.toggle("is-active", canVoice);
+    if (canVoice) {
+      voiceNoteButton.title = get("voice_note.tap_to_record");
+    } else if (!hasGrievance) {
+      voiceNoteButton.title = get("voice_note.need_grievance");
+    } else {
+      voiceNoteButton.title = get("voice_note.inactive_step");
+    }
+  }
+}
+
+export function setVoiceNoteEnabled(enabled) {
+  voiceNoteEnabled = !!enabled;
+  if (!voiceNoteEnabled) {
+    clearVoiceStatusBanner();
+  }
+  updateAttachButtonState();
 }
 
 // Message display functions
@@ -160,80 +219,53 @@ export function updateTaskStatus(taskStatus) {
   }
 }
 
-// File status display functions
+// File status → composer banner (shared with app.js poll handler)
 export function updateFileStatus(fileId, data) {
   const { status, progress, result, error } = data;
-
-  // Create or update file status message
-  let statusElement = document.getElementById(`file-status-${fileId}`);
-  if (!statusElement) {
-    statusElement = document.createElement("div");
-    statusElement.id = `file-status-${fileId}`;
-    statusElement.className = "file-status";
-    messages.appendChild(statusElement);
-  }
-
-  // Update status message
+  const isAudio = result?.file_type === "audio";
   let statusMessage = "";
+
   switch (status) {
     case "PENDING":
-      statusMessage = "Processing files...";
+      statusMessage = isAudio
+        ? get("status_banner.voice_processing")
+        : get("status_banner.files_processing");
       break;
     case "STARTED":
-      if (result && result.file_type === "audio") {
-        statusMessage = progress
-          ? `Transcribing audio: ${progress}%`
-          : "Transcribing audio...";
+      if (isAudio) {
+        statusMessage = get("status_banner.voice_uploaded_processing");
       } else {
         statusMessage = progress
-          ? `Processing files: ${progress}%`
-          : "Processing files...";
+          ? format(get("status_banner.files_processing_progress"), { progress })
+          : get("status_banner.files_processing");
       }
       break;
     case "SUCCESS":
-      if (result && result.file_type === "audio") {
-        statusMessage =
-          "Voice recording processed and transcribed successfully";
-      } else {
-        statusMessage = "Files processed successfully";
+      statusMessage = isAudio
+        ? get("status_banner.voice_saved")
+        : get("status_banner.files_saved");
+      if (result?.grievance_id) {
+        grievanceId = result.grievance_id;
+        window.grievanceId = grievanceId;
       }
-      if (result) {
-        // Handle successful result
-        if (result.grievance_id) {
-          grievanceId = result.grievance_id;
-          window.grievanceId = grievanceId;
-        }
-        if (result.message) {
-          appendMessage(result.message, "received");
-        }
+      if (result?.message) {
+        appendMessage(result.message, "received");
       }
       break;
-    case "FAILURE":
-      let errorMsg = error || "Unknown error";
-      if (result && result.file_type === "audio") {
-        statusMessage = `Failed to process voice recording: ${errorMsg}`;
-      } else {
-        statusMessage = `Failed to process files: ${errorMsg}`;
-      }
-      // Always show failure message to user
-      appendMessage(statusMessage, "received");
+    case "FAILURE": {
+      const errorMsg = error || "Unknown error";
+      statusMessage = isAudio
+        ? format(get("status_banner.voice_failure"), { error: errorMsg })
+        : format(get("status_banner.files_failure"), { error: errorMsg });
       console.error("Task failed:", errorMsg);
-      break;
+      setVoiceStatusBanner(statusMessage, { error: true });
+      return;
+    }
     default:
-      statusMessage = `Status: ${status}`;
+      statusMessage = `${get("file_upload.status_prefix")} ${status}`;
   }
 
-  statusElement.textContent = statusMessage;
-  statusElement.setAttribute("data-status", status);
-
-  // Remove status element after a delay
-  if (status === "SUCCESS" || status === "FAILURE") {
-    setTimeout(() => {
-      if (statusElement && statusElement.parentNode) {
-        statusElement.remove();
-      }
-    }, 5000);
-  }
+  setVoiceStatusBanner(statusMessage, { error: false });
 }
 
 // File preview functions

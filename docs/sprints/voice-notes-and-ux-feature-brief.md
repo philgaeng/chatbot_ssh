@@ -92,7 +92,8 @@ Supports low-literacy users and mobile usage in the field.
 
 | Topic                                 | Decision                                                                                                                                                                                                                             |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Audio capture (rural / low bandwidth) | Prefer **medium sample rate** and **small chunks** suitable for patchy networks. If the web client **cannot** chunk on device, cap each recording at **60–90 seconds**; user may attach **multiple** voice notes for a longer story. |
+| Audio capture (rural / low bandwidth) | Prefer **medium sample rate** and **small chunks** suitable for patchy networks. If the web client **cannot** chunk on device, cap each recording at **45 seconds**; user may attach **multiple** voice notes for a longer story. |
+| Upload / record status UX | **Light-blue banner** above composer toolbar (not chat bubbles); live timer while recording; copy says **saved for officer review** (no live transcription promise in webchat). |
 | Transcription                         | Server-side via existing accessible voice service API; async after upload is acceptable.                                                                                                                                             |
 | Pairing                               | Same audio limits and attachment model apply on portal side → **TP-01** / **TP-02**.                                                                                                                                                 |
 
@@ -468,7 +469,8 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 - **Sync:** Keep ticket cache updated when classification completes (backfill job + forward path on LLM completion / periodic sync).
 - **UI — ORIGINAL GRIEVANCE / TP-09 card:** Two distinct panels in one card (not one blended narrative block):
   1. **Original grievance** — read-only box with raw `grievance_description` only.
-  2. **Summary** — separate bordered box with LLM/officer summary text, **its own validation badge** (complainant / officer / review required / pending), and an **editable textarea** so officers can fix LLM errors; **Categories** below as a third labeled block (comma-separated edit when required).
+  2. **Summary** — separate bordered box with LLM/officer summary text, **its own validation badge** (complainant / officer / review required / pending), and an **editable textarea** so officers can fix LLM errors.
+  3. **Categories** — multi-select dropdown from **`public.grievance_classification_taxonomy`** (same keys as chatbot / LLM); officers may select **multiple** categories; values saved as JSON array on confirm.
 - **UI — Officer validation:** When status is `LLM_generated`, `LLM_failed`, or `LLM_skipped`, amber summary badge + **Confirm summary & categories** → `officer_confirmed`. **Blocks Acknowledge** until then. `complainant_confirmed` skips the gate but summary/categories remain **editable** with **Save changes** (same PATCH; sets `officer_confirmed` if officer edits).
 - **Submit path (chatbot):** Ensure `dispatch_ticket` sends summary/categories when available at submit (read from DB if session slots empty).
 - **Read path:** Grievance fetch for display **must not** filter on `is_temporary` (AWS shows submitted rows can still be `is_temporary = true`).
@@ -490,12 +492,33 @@ Observed on AWS (`B-GR-20260602-KOJH-5491`): `public.grievances` had summary + c
 | Officer required | When `LLM_generated`, `LLM_failed`, or `LLM_skipped` (e.g. on assign / before Acknowledge) → edit + confirm → `officer_confirmed` |
 | `is_temporary` | Retired (no read/sync filter) |
 | Read model | **Hybrid** detail merge + list cache + forward sync |
-| Officer UX | Edit **categories + summary**, then confirm; layout = original (read-only) + summary (editable + status badge) + categories |
+| Officer UX | Edit **summary** (textarea) + **categories** (taxonomy multi-select), then confirm; layout = original (read-only) + summary + categories |
+| Category picker | `GET /api/v1/reference/grievance-categories` — reads `grievance_classification_taxonomy`; grouped by `classification`; LLM-only values not in taxonomy stay selectable under “On this case” |
 | Backfill | One-time AWS SQL for empty ticket cache |
 
 **Related** TP-09, `dispatch_ticket`, `grievance_sync`.
 
 **June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-14
+
+---
+
+### TP-15 — Complainant PII: standard visible, SEAH masked, mobile `tel:` · **P1**
+
+**Feature goal**  
+Standard GRM officers read complainant **name, phone, email, and address** in the portal without a vault step. SEAH cases **keep** masked contact + audited reveal. On **mobile**, phone is a **`tel:`** link for one-tap calling.
+
+**In scope**
+
+- `GET /api/v1/tickets/{id}/pii`: return decrypted contact for `is_seah = false`; omit contact fields when `is_seah = true` (`pii_masked: true`).
+- Desktop **Complainant** card and mobile **Complainant Info** sheet share `ComplainantContactFields`.
+- SEAH: amber notice + **Reveal original statement** (mobile sheet closes then opens reveal modal).
+
+**Out of scope**
+
+- Changing vault TTL or reveal reason codes.
+- Complainant self-service portal.
+
+**June5 spec:** [`docs/sprints/June5/03-portal-p1-spec.md`](June5/03-portal-p1-spec.md) § TP-15
 
 ---
 
@@ -582,7 +605,7 @@ Rename ambiguous labels - The current naming makes it difficult to understand th
 
 | ID            | Decision                                                                                                |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
-| CB-01 / TP-02 | Medium sample rate; chunk on device if feasible; else **60–90s** per file, multiple voice notes allowed |
+| CB-01 / TP-02 | Medium sample rate; chunk on device if feasible; else **45s** per file, multiple voice notes allowed; status in composer banner |
 | CB-01 / TP-02 | Transcription via **accessible** service API (P2)                                                         |
 | TP-01 / TP-02 | P1 = player only; P2 = transcription + manual fallback                                                   |
 | TP-11         | Site photo = attachment gate; no `#photo`; complainant photos via WhatsApp only                          |

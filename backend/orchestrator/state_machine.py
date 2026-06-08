@@ -86,6 +86,17 @@ def _get_form() -> Any:
     return _FORM
 
 
+_FORM_DUST = None
+
+
+def _get_form_dust() -> Any:
+    global _FORM_DUST
+    if _FORM_DUST is None:
+        from backend.actions.forms.form_dust import ValidateFormDust
+        _FORM_DUST = ValidateFormDust()
+    return _FORM_DUST
+
+
 def _get_status_form_1() -> Any:
     global _STATUS_FORM_1
     if _STATUS_FORM_1 is None:
@@ -203,6 +214,12 @@ PAYLOAD_TO_INTENT = {
     "set_english": "set_english",
     "set_nepali": "set_nepali",
     "new_grievance": "new_grievance",
+    "dust_grievance": "dust_grievance",
+    "location_manual_entry": "location_manual_entry",
+    "location_use_map": "location_use_map",
+    "location_open_map": "location_open_map",
+    "affirm": "affirm",
+    "deny": "deny",
     "seah_intake": "start_seah_intake",
     "check_status": "start_status_check",
     "start_status_check": "start_status_check",
@@ -261,6 +278,8 @@ def derive_intent(text: str, payload: Optional[str]) -> str:
     """Derive intent from payload or text."""
     if payload:
         raw = payload.strip("/").strip() if payload.startswith("/") else payload
+        if raw.startswith("map_pin_set"):
+            return "map_pin_set"
         payload_intent = PAYLOAD_TO_INTENT.get(raw)
         if payload_intent:
             return payload_intent
@@ -270,6 +289,8 @@ def derive_intent(text: str, payload: Optional[str]) -> str:
         return "intent_slot_neutral"
     if text and text.strip().startswith("/"):
         raw = text.strip().lstrip("/").strip()
+        if raw.startswith("map_pin_set"):
+            return "map_pin_set"
         return PAYLOAD_TO_INTENT.get(raw, raw or "intent_slot_neutral")
     language_intent = _language_text_to_intent(text)
     if language_intent:
@@ -292,6 +313,108 @@ def build_latest_message(text: str, payload: Optional[str], intent: str) -> Dict
     else:
         msg_text = text or (payload or "")
     return {"text": msg_text, "intent": {"name": intent}}
+
+
+async def _begin_contact_form(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+) -> str:
+    session["active_loop"] = "form_contact"
+    session["requested_slot"] = None
+    contact_form = _get_contact_form()
+    msgs, form_updates, _ = await run_form_turn(contact_form, session, None, domain)
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    return "contact_form"
+
+
+async def _invoke_ask_action(
+    action_name: str,
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    intent_name: str = "location_prompt",
+) -> None:
+    ask_dispatcher = CollectingDispatcher()
+    await invoke_action(
+        action_name,
+        ask_dispatcher,
+        SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message={"text": "", "intent": {"name": intent_name}},
+            active_loop=None,
+            requested_slot=None,
+        ),
+        domain,
+    )
+    dispatcher.messages.extend(ask_dispatcher.messages)
+
+
+async def _begin_location_consent(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+) -> str:
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    await _invoke_ask_action(
+        "action_ask_complainant_location_consent",
+        session,
+        dispatcher,
+        domain,
+        intent_name="location_consent_prompt",
+    )
+    return "location_consent"
+
+
+async def _begin_location_method(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+) -> str:
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    await _invoke_ask_action(
+        "action_ask_location_method",
+        session,
+        dispatcher,
+        domain,
+        intent_name="location_method_prompt",
+    )
+    return "location_method"
+
+
+async def _begin_map_picker(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    open_picker: bool = False,
+) -> str:
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    await _invoke_ask_action(
+        "action_ask_map_location",
+        session,
+        dispatcher,
+        domain,
+        intent_name="map_location_prompt",
+    )
+    if open_picker:
+        await _invoke_ask_action(
+            "action_open_map_picker",
+            session,
+            dispatcher,
+            domain,
+            intent_name="map_location_open",
+        )
+    return "map_location"
 
 
 async def _restart_intake_from_done(
@@ -333,9 +456,40 @@ async def _restart_intake_from_done(
         dispatcher.messages.extend(msgs)
         slot_updates.update(form_updates)
         if completed:
-            next_state = "contact_form"
-            session["active_loop"] = "form_contact"
-            session["requested_slot"] = None
+            return await _begin_location_consent(session, dispatcher, domain, slot_updates)
+        return next_state
+
+    if intent == "dust_grievance":
+        ask_dispatcher = CollectingDispatcher()
+        tracker = SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        events = await invoke_action(
+            "action_start_dust_grievance_process",
+            ask_dispatcher,
+            tracker,
+            domain,
+        )
+        slot_updates.update(events_to_slot_updates(events))
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        session["slots"].update(slot_updates)
+        session["active_loop"] = "form_dust"
+        session["requested_slot"] = "dust_new_detail"
+        next_state = "form_dust"
+        session_copy = dict(session)
+        session_copy["slots"] = dict(session["slots"])
+        form = _get_form_dust()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session_copy, None, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            return await _begin_location_consent(session, dispatcher, domain, slot_updates)
         return next_state
 
     if intent == "start_seah_intake" and _is_seah_enabled():
@@ -458,7 +612,7 @@ async def run_flow_turn(
             await invoke_action("action_introduce", dispatcher, tracker, domain)
 
     elif state == "main_menu":
-        menu_transition_intents = {"new_grievance", "start_seah_intake", "start_status_check"}
+        menu_transition_intents = {"new_grievance", "dust_grievance", "start_seah_intake", "start_status_check"}
         # Avoid repeating the main menu utterance when the user already clicked one of its options.
         if intent not in menu_transition_intents:
             await invoke_action("action_main_menu", dispatcher, tracker, domain)
@@ -486,9 +640,31 @@ async def run_flow_turn(
             dispatcher.messages.extend(msgs)
             slot_updates.update(form_updates)
             if completed:
-                next_state = "contact_form"
-                session["active_loop"] = "form_contact"
-                session["requested_slot"] = None
+                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+        elif intent == "dust_grievance":
+            ask_dispatcher = CollectingDispatcher()
+            events = await invoke_action(
+                "action_start_dust_grievance_process",
+                ask_dispatcher,
+                tracker,
+                domain,
+            )
+            slot_updates.update(events_to_slot_updates(events))
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            session["slots"].update(slot_updates)
+            session["active_loop"] = "form_dust"
+            session["requested_slot"] = "dust_new_detail"
+            next_state = "form_dust"
+            session_copy = dict(session)
+            session_copy["slots"] = dict(session["slots"])
+            form = _get_form_dust()
+            msgs, form_updates, completed = await run_form_turn(
+                form, session_copy, None, domain
+            )
+            dispatcher.messages.extend(msgs)
+            slot_updates.update(form_updates)
+            if completed:
+                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
         elif intent == "start_seah_intake" and _is_seah_enabled():
             slot_updates["story_main"] = "seah_intake"
             slot_updates["grievance_sensitive_issue"] = True
@@ -560,15 +736,150 @@ async def run_flow_turn(
                 dispatcher.messages.extend(msgs2)
                 slot_updates.update(form_updates2)
             else:
-                next_state = "contact_form"
-                session["active_loop"] = "form_contact"
-                session["requested_slot"] = None
-                contact_form = _get_contact_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    contact_form, session, None, domain
+                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+
+    elif state == "form_dust":
+        user_input = latest_message if (text or payload) else None
+        form = _get_form_dust()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session, user_input, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            session["slots"].update(slot_updates)
+            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+
+    elif state == "location_consent":
+        from backend.actions.action_map_location import location_skip_slot_updates
+
+        consent_text = latest_message.get("text", "")
+        if consent_text.startswith("/affirm") or intent == "affirm":
+            slot_updates["complainant_location_consent"] = True
+            session["slots"].update(slot_updates)
+            next_state = await _begin_location_method(
+                session, dispatcher, domain, slot_updates
+            )
+        elif consent_text.startswith("/deny") or intent == "deny":
+            slot_updates.update(location_skip_slot_updates())
+            session["slots"].update(slot_updates)
+            next_state = await _begin_contact_form(
+                session, dispatcher, domain, slot_updates
+            )
+        else:
+            next_state = await _begin_location_consent(
+                session, dispatcher, domain, slot_updates
+            )
+
+    elif state == "location_method":
+        if intent == "location_manual_entry":
+            slot_updates["complainant_location_consent"] = True
+            slot_updates["location_pin_status"] = "manual"
+            session["slots"].update(slot_updates)
+            next_state = await _begin_contact_form(
+                session, dispatcher, domain, slot_updates
+            )
+        elif intent == "location_use_map":
+            slot_updates["complainant_location_consent"] = True
+            session["slots"].update(slot_updates)
+            next_state = await _begin_map_picker(
+                session, dispatcher, domain, slot_updates, open_picker=True
+            )
+        else:
+            next_state = await _begin_location_method(
+                session, dispatcher, domain, slot_updates
+            )
+
+    elif state == "map_location":
+        from backend.actions.action_map_location import (
+            build_map_filled_location_slots,
+            parse_map_pin_payload,
+        )
+        from backend.shared_functions.location_mapping import (
+            resolve_location_code_to_names,
+            resolve_pin_to_location_code,
+        )
+        from backend.services.database_services.postgres_services import db_manager
+
+        if intent == "map_pin_set":
+            try:
+                coords = parse_map_pin_payload(payload_raw or msg_text)
+                province = None
+                district = None
+                location_code = resolve_pin_to_location_code(
+                    db_manager, coords["lat"], coords["lng"]
                 )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
+                if location_code:
+                    slot_updates["location_code"] = location_code
+                    names = resolve_location_code_to_names(
+                        db_manager,
+                        location_code,
+                        session.get("slots", {}).get("language_code") or "en",
+                    )
+                    province = names.get("province_name")
+                    district = names.get("district_name")
+                slot_updates.update(
+                    build_map_filled_location_slots(
+                        coords["lat"],
+                        coords["lng"],
+                        province=province,
+                        district=district,
+                        location_code=slot_updates.get("location_code"),
+                    )
+                )
+                session["slots"].update(slot_updates)
+                apply_dispatcher = CollectingDispatcher()
+                apply_tracker = SessionTracker(
+                    slots=session.get("slots", {}),
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                )
+                events = await invoke_action(
+                    "action_apply_map_pin",
+                    apply_dispatcher,
+                    apply_tracker,
+                    domain,
+                )
+                slot_updates.update(events_to_slot_updates(events))
+                dispatcher.messages.extend(apply_dispatcher.messages)
+                if session.get("slots", {}).get("story_main") == "dust_grievance":
+                    dispatcher.utter_message(
+                        json_message={
+                            "data": {
+                                "event_type": "open_upload_modal",
+                                "grievance_id": session.get("slots", {}).get("grievance_id"),
+                            }
+                        }
+                    )
+                next_state = await _begin_contact_form(
+                    session, dispatcher, domain, slot_updates
+                )
+            except (ValueError, KeyError, TypeError):
+                next_state = await _begin_map_picker(
+                    session, dispatcher, domain, slot_updates, open_picker=False
+                )
+        elif intent == "location_manual_entry":
+            slot_updates["complainant_location_consent"] = True
+            slot_updates["location_pin_status"] = "manual"
+            session["slots"].update(slot_updates)
+            next_state = await _begin_contact_form(
+                session, dispatcher, domain, slot_updates
+            )
+        elif intent == "location_open_map":
+            await _invoke_ask_action(
+                "action_open_map_picker",
+                session,
+                dispatcher,
+                domain,
+                intent_name="map_location_open",
+            )
+            next_state = "map_location"
+        else:
+            next_state = await _begin_map_picker(
+                session, dispatcher, domain, slot_updates, open_picker=False
+            )
 
     elif state == "form_seah_1":
         user_input = latest_message if (text or payload) else None
@@ -702,7 +1013,7 @@ async def run_flow_turn(
             # If the user refused to share any contact information in the grievance flow,
             # skip the OTP form entirely and move directly to grievance submission +
             # review (same path as otp_form completed for new_grievance).
-            elif story_main in ("new_grievance", "grievance_submission") and complainant_consent is False:
+            elif story_main in ("new_grievance", "dust_grievance", "grievance_submission") and complainant_consent is False:
                 session["active_loop"] = None
                 session["requested_slot"] = None
 
@@ -1729,7 +2040,7 @@ async def run_flow_turn(
             )
             dispatcher.messages.extend(ask_dispatcher.messages)
             next_state = "status_check_form"
-        elif intent in ("new_grievance", "start_seah_intake"):
+        elif intent in ("new_grievance", "dust_grievance", "start_seah_intake"):
             next_state = await _restart_intake_from_done(
                 intent,
                 dispatcher,
@@ -1749,9 +2060,15 @@ async def run_flow_turn(
     if "requested_slot" in slot_updates:
         session["requested_slot"] = slot_updates["requested_slot"]
 
-    expected = "buttons" if next_state in ("intro", "main_menu") else "text"
+    expected = "buttons" if next_state in (
+        "intro",
+        "main_menu",
+        "location_consent",
+        "location_method",
+        "map_location",
+    ) else "text"
     form_states = (
-        "form_grievance", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
+        "form_grievance", "form_dust", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
         "contact_form", "otp_form", "grievance_review",
         "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
     )

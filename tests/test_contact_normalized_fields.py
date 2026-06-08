@@ -36,6 +36,7 @@ def test_base_manager_routes_normalized_contact_fields_to_complainant():
         "country_code": "NP",
         "location_code": "P1_BHO_BHM",
         "location_resolution_status": "mapped_full",
+        "location_geo": '{"source":"map_pin","lat":27.5,"lng":85.3}',
         "level_1_name": "Koshi",
         "level_1_code": "P1",
         "grievance_description": "Some grievance",
@@ -50,6 +51,7 @@ def test_base_manager_routes_normalized_contact_fields_to_complainant():
     assert complainant_fields["country_code"] == "NP"
     assert complainant_fields["location_code"] == "P1_BHO_BHM"
     assert complainant_fields["level_1_code"] == "P1"
+    assert complainant_fields["location_geo"].startswith("{")
     assert "contact_id" not in grievance_fields
     assert grievance_fields["grievance_id"] == "GR-1"
 
@@ -60,6 +62,7 @@ def test_complainant_allowed_update_fields_include_normalized_columns():
         "country_code",
         "location_code",
         "location_resolution_status",
+        "location_geo",
         "level_1_name",
         "level_6_name",
         "level_1_code",

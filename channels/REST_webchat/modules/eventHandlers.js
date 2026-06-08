@@ -1,5 +1,11 @@
 import * as uiActions from "./uiActions.js";
-import { get, FILE_ANOTHER_PAYLOAD } from "../utterances.js";
+import {
+  format,
+  get,
+  FILE_ANOTHER_PAYLOAD,
+  VOICE_ADD_PAYLOAD,
+  VOICE_NEXT_STEP_PAYLOAD,
+} from "../utterances.js";
 
 // REST-specific helpers for rendering orchestrator responses
 
@@ -48,6 +54,9 @@ export function handleCustomPayload(custom) {
   // Orchestrator sends json_message with event_type inside data
   if (custom.data?.event_type === "grievance_id_set" && custom.data?.grievance_id) {
     uiActions.setGrievanceId(custom.data.grievance_id);
+    if (custom.data.complainant_id) {
+      window.complainantId = custom.data.complainant_id;
+    }
   }
 
   // Grievance created in DB: enable file upload button
@@ -74,6 +83,44 @@ export function handleCustomPayload(custom) {
     if (typeof window.openFileUploadModal === "function") {
       window.openFileUploadModal();
     }
+  }
+
+  if (custom.data?.event_type === "open_map_picker") {
+    if (typeof window.openMapPickerFromBot === "function") {
+      window.openMapPickerFromBot({
+        defaultLat: custom.data.default_lat,
+        defaultLng: custom.data.default_lng,
+      });
+    }
+  }
+
+  const statusBannerEvent =
+    custom.event_type === "status_banner"
+      ? custom
+      : custom.data?.event_type === "status_banner"
+        ? custom.data
+        : null;
+  if (statusBannerEvent) {
+    const { banner_key: bannerKey, lat, lng } = statusBannerEvent;
+    if (bannerKey === "map_saved" && lat != null && lng != null) {
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.map_saved"), { lat, lng })
+      );
+    }
+  }
+
+  if (
+    custom.event_type === "enable_voice_note" ||
+    custom.data?.event_type === "enable_voice_note"
+  ) {
+    uiActions.setVoiceNoteEnabled(true);
+  }
+  if (
+    custom.event_type === "disable_voice_note" ||
+    custom.data?.event_type === "disable_voice_note"
+  ) {
+    uiActions.setVoiceNoteEnabled(false);
+    uiActions.clearVoiceStatusBanner();
   }
 
   if (custom.clear_window || custom.custom?.clear_window) {
@@ -127,16 +174,18 @@ export function handleFileUploadApiResponse(response) {
   if (response.ok) {
     const data = response.data;
 
-    let statusMessage = get("file_upload.uploaded_processing");
+    let statusMessage = get("status_banner.files_processing");
     if (data.audio_files && data.audio_files.length > 0) {
-      statusMessage = get("file_upload.voice_uploaded_processing");
+      statusMessage = get("status_banner.voice_uploaded_processing");
     }
-    uiActions.appendMessage(statusMessage, "received");
+    uiActions.setVoiceStatusBanner(statusMessage);
 
     if (data.oversized_files && data.oversized_files.length > 0) {
-      uiActions.appendMessage(
-        `${get("file_upload.oversized_api_prefix")} ${data.oversized_files.join(", ")}`,
-        "received"
+      uiActions.setVoiceStatusBanner(
+        format(get("status_banner.oversized"), {
+          names: data.oversized_files.join(", "),
+        }),
+        { error: true }
       );
     }
   } else {
@@ -177,6 +226,18 @@ export function handleQuickReplyClick(payload) {
   if (payload === GO_BACK_PAYLOAD) {
     if (typeof window.handleGoBackToChat === "function") {
       window.handleGoBackToChat();
+    }
+    return true;
+  }
+  if (payload === VOICE_ADD_PAYLOAD) {
+    if (typeof window.handleAddVoiceRecord === "function") {
+      window.handleAddVoiceRecord();
+    }
+    return true;
+  }
+  if (payload === VOICE_NEXT_STEP_PAYLOAD) {
+    if (typeof window.handleVoiceNextStep === "function") {
+      void window.handleVoiceNextStep();
     }
     return true;
   }

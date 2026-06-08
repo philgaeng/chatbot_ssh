@@ -20,10 +20,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
   listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl, uploadOfficerAttachment,
-  listOfficerRoster,
+  listOfficerRoster, getGrievancePii,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
-  type TicketFile, type OfficerAttachment,
+  type TicketFile, type OfficerAttachment, type GrievancePii, type RevealSession,
 } from "@/lib/api";
+import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
+import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import {
@@ -347,7 +349,6 @@ function GrievanceSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: ()
           </div>
         )}
         <Row label="Categories"  value={ticket.grievance_categories} />
-        <Row label="Location"    value={ticket.grievance_location} />
         <Row label="Priority"    value={ticket.priority} />
         <Row label="Submitted"   value={ticket.created_at ? new Date(ticket.created_at).toLocaleString() : null} />
         {ticket.ai_summary_en ? (
@@ -372,28 +373,59 @@ function GrievanceSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: ()
 
 // ── Complainant sheet ─────────────────────────────────────────────────────────
 
-function ComplainantSheet({ ticket, onClose }: { ticket: TicketDetail; onClose: () => void }) {
-  function Row({ label, value }: { label: string; value?: string | null }) {
-    if (!value) return null;
-    return (
-      <div className="px-5 py-3.5 border-b border-gray-50">
-        <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{label}</div>
-        <div className="text-sm text-gray-800 leading-snug">{value}</div>
-      </div>
-    );
+function ComplainantSheet({
+  ticket,
+  onClose,
+  onRevealOriginal,
+  onComplainantUpdated,
+}: {
+  ticket: TicketDetail;
+  onClose: () => void;
+  onRevealOriginal?: () => void;
+  onComplainantUpdated?: () => void;
+}) {
+  const [pii, setPii] = useState<GrievancePii | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function loadPii() {
+    setLoading(true);
+    setError(null);
+    getGrievancePii(ticket.ticket_id)
+      .then(setPii)
+      .catch(() => setError("Could not load complainant details"))
+      .finally(() => setLoading(false));
   }
+
+  useEffect(() => {
+    loadPii();
+  }, [ticket.ticket_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <BottomSheet title="Complainant Info" onClose={onClose}>
       <div className="py-2">
-        <div className="mx-5 mt-3 mb-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs text-amber-700">
-          PII is masked per data policy. Full identity retrieved on-demand from the grievance system.
-        </div>
-        <Row label="Complainant ID"      value={ticket.complainant_id} />
-        <Row label="Grievance reference" value={ticket.grievance_id} />
-        <Row label="Location"            value={ticket.grievance_location} />
-        <Row label="Categories"          value={ticket.grievance_categories} />
-        <Row label="Submitted"           value={ticket.created_at ? new Date(ticket.created_at).toLocaleString() : null} />
-        <Row label="Case status"         value={ticket.status_code} />
+        {loading ? (
+          <div className="px-5 py-8 text-center text-xs text-gray-400 animate-pulse">Loading…</div>
+        ) : error ? (
+          <div className="px-5 py-6 text-center text-xs text-gray-500">
+            <p>{error}</p>
+            <button type="button" onClick={loadPii} className="mt-2 text-blue-600 underline">
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ComplainantEditForm
+            ticket={ticket}
+            pii={pii}
+            variant="mobile"
+            onSaved={() => {
+              loadPii();
+              onComplainantUpdated?.();
+            }}
+            onCancel={onClose}
+            onRevealOriginal={onRevealOriginal}
+          />
+        )}
       </div>
     </BottomSheet>
   );
@@ -618,6 +650,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
   const [rosterIds, setRosterIds] = useState<string[]>([]);
   const [actionNotice, setActionNotice] = useState<ActionNoticeState | null>(null);
+  const [revealModalOpen, setRevealModalOpen] = useState(false);
+  const [revealSession, setRevealSession] = useState<RevealSession | null>(null);
 
   // Sheet visibility
   const [showInfoMenu, setShowInfoMenu]   = useState(false);
@@ -1214,7 +1248,14 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <FieldReportsSheet ticket={ticket} onClose={() => setInfoPanel(null)} />
       )}
       {infoPanel === "complainant" && (
-        <ComplainantSheet ticket={ticket} onClose={() => setInfoPanel(null)} />
+        <ComplainantSheet
+          ticket={ticket}
+          onClose={() => setInfoPanel(null)}
+          onComplainantUpdated={loadTicket}
+          onRevealOriginal={
+            ticket.is_seah ? () => { setInfoPanel(null); setRevealModalOpen(true); } : undefined
+          }
+        />
       )}
       {infoPanel === "attachments" && (
         <AttachmentsSheet
@@ -1257,6 +1298,25 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         onSubmit={submitResolve}
         submitting={submitting}
       />
+
+      {ticket && revealModalOpen && (
+        <RevealModal
+          ticketId={ticket.ticket_id}
+          isSeah={ticket.is_seah}
+          onClose={() => setRevealModalOpen(false)}
+          onGranted={(session) => {
+            setRevealModalOpen(false);
+            setRevealSession(session);
+          }}
+        />
+      )}
+      {ticket && revealSession && (
+        <RevealOverlay
+          session={revealSession}
+          ticketId={ticket.ticket_id}
+          onClose={() => setRevealSession(null)}
+        />
+      )}
 
     </div>
   );

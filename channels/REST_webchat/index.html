@@ -6,6 +6,12 @@
     <title>Nepal Roads Grievance Chatbot</title>
     <link rel="stylesheet" href="../shared/styles/common.css">
     <link rel="stylesheet" href="styles.css">
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
     <link rel="apple-touch-icon" sizes="180x180" href="../shared/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../shared/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../shared/images/favicon-16x16.png">
@@ -43,29 +49,43 @@
             <span id="grievance-filed-banner-text"></span>
         </div>
         <div id="messages"></div>
-        <form id="form">
-            <div class="chat-action-row">
-                <button type="button" id="attachment-button" class="attachment-button">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </button>
-                <button type="button" id="persistent-close-browser" class="persistent-control-button">
-                    Close Browser
-                </button>
-                <button type="button" id="persistent-close-session" class="persistent-control-button">
-                    Close Session
-                </button>
-                <button type="submit" class="send-button" aria-label="Send message">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <path d="M1.101 21.757 23.8 12.45 1.101 3.143v7.714l9.923 1.692-9.923 1.692v7.714z"/>
-                    </svg>
-                </button>
+        <form id="form" class="composer">
+            <div class="composer-top">
+                <div id="voice-status-banner" class="voice-status-banner hidden" role="status" aria-live="polite"></div>
+                <div class="composer-toolbar" role="toolbar" aria-label="Message actions">
+                <div class="composer-toolbar-group composer-toolbar-left">
+                    <button type="button" id="persistent-close-session" class="composer-round-btn composer-close-icon-btn" aria-label="Close session" title="Close session">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                    <button type="button" id="persistent-close-browser" class="composer-round-btn composer-close-icon-btn is-hidden" aria-label="Close browser tab" title="Close browser tab">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                    <button type="button" id="attachment-button" class="composer-round-btn attachment-button" aria-label="Attach files">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="composer-toolbar-group composer-toolbar-right">
+                    <button type="button" id="voice-note-button" class="composer-round-btn voice-note-button" disabled aria-label="Record voice note" aria-pressed="false">
+                        <svg class="voice-note-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm-1-9a1 1 0 112 0v6a1 1 0 11-2 0V5zm6 6a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-1 6h-4v3h4v-3z"/>
+                        </svg>
+                    </button>
+                    <button type="submit" class="composer-round-btn send-button" aria-label="Send message">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M1.101 21.757 23.8 12.45 1.101 3.143v7.714l9.923 1.692-9.923 1.692v7.714z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="input-container">
-                <textarea id="message-input" placeholder="Type your message here..." autocomplete="off" rows="1"></textarea>
-                <input type="file" id="file-input" style="display: none;" multiple />
             </div>
+            <textarea id="message-input" class="composer-input" placeholder="Type your message here..." autocomplete="off" rows="1"></textarea>
+            <input type="file" id="file-input" style="display: none;" multiple />
         </form>
     </div>
 
@@ -112,6 +132,20 @@
         </button>
     </div>
 
+    <div id="map-picker-modal" class="map-picker-modal hidden" aria-hidden="true" role="dialog" aria-labelledby="map-picker-title">
+        <div class="map-picker-panel">
+            <h2 id="map-picker-title">Drop a pin on the map</h2>
+            <p class="map-picker-hint">Tap the map or drag the marker to the issue location.</p>
+            <div id="map-picker-map" class="map-picker-map"></div>
+            <div class="map-picker-actions">
+                <button type="button" id="map-picker-cancel" class="persistent-control-button">Cancel</button>
+                <button type="button" id="map-picker-confirm" class="send-button map-picker-confirm">Use this location</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js"></script>
     <script src="../shared/scripts/utils.js"></script>
 </body>
 </html> 

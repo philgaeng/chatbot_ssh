@@ -59,6 +59,14 @@ Typical voice path:
 4. persist derived fields
 5. emit task completion status
 
+## 3b) REST webchat path (CB-01, June5)
+
+After `POST /upload-files` stores an **audio** attachment for a bot grievance (`*-B` id suffix), `process_file_upload_task` starts the same chain as accessible intake via `process_single_audio_file()` with `field_name: grievance_voice_note`.
+
+- Client: MediaRecorder in `channels/REST_webchat/modules/voiceNote.js` (max 90s per clip).
+- Voice-only submit: empty description allowed when ≥1 audio file exists on the grievance.
+- Early upload: if the grievance row is not yet in DB, `/upload-files` creates a minimal stub when `complainant_id` is posted with the file.
+
 ## 4) Cross-Service Dependencies
 
 - Task queue service (Celery tasks)
