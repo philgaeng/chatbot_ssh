@@ -285,7 +285,7 @@ function LoginContent() {
           <form onSubmit={submitInviteResend} className="space-y-4 text-left">
             <p className="text-sm text-gray-600">
               Enter the email your administrator invited. If your account is still pending setup,
-              we will send a new link (valid 12 hours). Check spam if you do not see it.
+              we will send a new link (valid 7 days). Check spam if you do not see it.
             </p>
             <Field label="Officer email">
               <input

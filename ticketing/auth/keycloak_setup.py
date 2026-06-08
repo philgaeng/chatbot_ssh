@@ -26,6 +26,11 @@ REALM = "grm"
 CLIENT_UI = "ticketing-ui"   # public, PKCE, browser
 CLIENT_API = "ticketing-api"  # confidential, for JWKS endpoint + service account
 
+# Realm token lifespans (seconds). Officer invite emails use actionTokenGeneratedByAdminLifespan.
+SSO_SESSION_MAX_LIFESPAN = 28800  # 8h
+ACCESS_TOKEN_LIFESPAN = 3600  # 1h
+ACTION_TOKEN_ADMIN_LIFESPAN = 604800  # 7d — execute-actions / resend-invite links
+
 DEMO_OFFICERS: list[dict[str, str]] = keycloak_demo_officers()
 
 # Token mappers: emit Cognito-compatible claim names so the rest of the code
@@ -146,13 +151,33 @@ def setup_realm(master: KeycloakAdmin) -> None:
             "realm": REALM,
             "enabled": True,
             "displayName": "GRM Ticketing",
-            "ssoSessionMaxLifespan": 28800,    # 8h
-            "accessTokenLifespan": 3600,        # 1h
+            "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
+            "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
             "bruteForceProtected": True,
         })
         logger.info("Created realm '%s'", REALM)
     else:
         logger.info("Realm '%s' already exists — skipping create", REALM)
+
+
+def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
+    """Apply token lifespans, including 7-day officer invite / execute-actions links."""
+    admin.update_realm(
+        REALM,
+        {
+            "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
+            "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
+        },
+    )
+    logger.info(
+        "Realm '%s' token lifespans updated (access=%ss, sso=%ss, admin invite link=%ss)",
+        REALM,
+        ACCESS_TOKEN_LIFESPAN,
+        SSO_SESSION_MAX_LIFESPAN,
+        ACTION_TOKEN_ADMIN_LIFESPAN,
+    )
 
 
 def setup_realm_smtp(admin: KeycloakAdmin) -> None:
@@ -425,6 +450,7 @@ def main() -> None:
     setup_realm(master)
 
     grm = _realm_admin()
+    setup_realm_token_lifespans(grm)
     setup_realm_smtp(grm)
     setup_realm_login_theme(grm)
     setup_user_profile_policy(grm)

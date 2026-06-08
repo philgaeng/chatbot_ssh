@@ -252,7 +252,7 @@ def request_password_reset(email: str, redirect_base: str) -> None:
 
 INVITE_SETUP_LINK_GENERIC = (
     "If an invited officer account exists for that email, we sent a new setup link. "
-    "Check your inbox and spam folder. The link expires in 12 hours."
+    "Check your inbox and spam folder. The link expires in 7 days."
 )
 
 _INVITE_RESEND_COOLDOWN_SEC = 120
