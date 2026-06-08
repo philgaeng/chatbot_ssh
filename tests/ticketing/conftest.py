@@ -1,6 +1,10 @@
 """Shared fixtures for ticketing engine integration tests (requires live DB + seed)."""
 from __future__ import annotations
 
+from tests.ticketing._host_env import configure_host_test_env
+
+configure_host_test_env()
+
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional

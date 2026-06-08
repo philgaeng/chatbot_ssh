@@ -13,15 +13,42 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, require_admin
+from ticketing.api.dependencies import (
+    CurrentUser,
+    get_authenticated_user,
+    get_current_user,
+    get_db,
+    require_admin,
+    require_super_admin,
+)
 from ticketing.api.schemas.user import (
+    AdminContextResponse,
+    AdminScopeCreate,
+    AdminScopeResponse,
     NotificationBadgeResponse,
     NotificationItem,
     NotificationsResponse,
+    RoleCreate,
     RoleResponse,
     RoleUpdate,
     UserRoleCreate,
     UserRoleResponse,
+)
+from ticketing.constants.role_archetypes import (
+    list_archetypes,
+    permissions_for_archetype,
+    slugify_role_key,
+    validate_operational_permissions,
+)
+from ticketing.models.admin_scope import AdminScope
+from ticketing.services.admin_access import (
+    ADMIN_ROLE_KEYS,
+    SettingsAction,
+    admin_context_payload,
+    can_create_operational_role,
+    is_country_admin,
+    is_super_admin,
+    require_settings_write,
 )
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.officer_onboarding import OfficerOnboarding
@@ -50,12 +77,121 @@ def _email_hint(user_id: str) -> str | None:
 
 # ── Roles ─────────────────────────────────────────────────────────────────────
 
-@router.get("/roles", response_model=list[RoleResponse], summary="List all GRM roles")
+def _role_usage_counts(db: Session, role_key: str) -> tuple[int, int]:
+    steps = db.scalar(
+        select(func.count())
+        .select_from(WorkflowStep)
+        .where(
+            WorkflowStep.assigned_role_key == role_key,
+            WorkflowStep.is_deleted.is_(False),
+        )
+    ) or 0
+    role_row = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
+    officers = 0
+    if role_row:
+        officers = db.scalar(
+            select(func.count()).select_from(UserRole).where(UserRole.role_id == role_row.role_id)
+        ) or 0
+        officers += db.scalar(
+            select(func.count())
+            .select_from(OfficerScope)
+            .where(OfficerScope.role_key == role_key)
+        ) or 0
+    return steps, officers
+
+
+def _role_to_response(db: Session, role: Role) -> RoleResponse:
+    steps, officers = _role_usage_counts(db, role.role_key)
+    return RoleResponse(
+        role_id=role.role_id,
+        role_key=role.role_key,
+        display_name=role.display_name,
+        description=role.description,
+        workflow_scope=role.workflow_scope,
+        jurisdiction_mode=role.jurisdiction_mode,
+        permissions=role.permissions,
+        role_kind=role.role_kind,
+        role_origin=role.role_origin,
+        steps_count=steps,
+        officers_count=officers,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+    )
+
+
+@router.get("/roles/archetypes", summary="List role archetype templates")
+def get_role_archetypes(
+    _: CurrentUser = Depends(get_authenticated_user),
+) -> list[dict[str, str]]:
+    return list_archetypes()
+
+
+@router.get("/roles", response_model=list[RoleResponse], summary="List GRM roles")
 def list_roles(
+    kind: str = "operational",
+    workflow_track: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
-) -> list[Role]:
-    return db.execute(select(Role).order_by(Role.role_key)).scalars().all()
+    _: CurrentUser = Depends(get_authenticated_user),
+) -> list[RoleResponse]:
+    stmt = select(Role).order_by(Role.role_key)
+    if kind == "admin":
+        stmt = stmt.where(Role.role_kind == "admin")
+    elif kind == "operational":
+        stmt = stmt.where(Role.role_kind == "operational")
+    roles = db.execute(stmt).scalars().all()
+    if workflow_track:
+        wt = workflow_track.lower()
+        if wt == "standard":
+            roles = [r for r in roles if r.workflow_scope in ("Standard", "Both", None)]
+        elif wt == "seah":
+            roles = [r for r in roles if r.workflow_scope in ("SEAH", "Both", None)]
+    return [_role_to_response(db, r) for r in roles]
+
+
+@router.post(
+    "/roles",
+    response_model=RoleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create custom operational role",
+)
+def create_role(
+    body: RoleCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> RoleResponse:
+    track = "seah" if body.workflow_scope == "SEAH" else "standard"
+    require_settings_write(current_user, SettingsAction.CREATE_OPERATIONAL_ROLE, track=track)
+
+    role_key = (body.role_key or slugify_role_key(body.display_name)).strip().lower()
+    if not role_key or role_key in ADMIN_ROLE_KEYS:
+        raise HTTPException(status_code=422, detail="Invalid or reserved role_key")
+
+    existing = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"role_key already exists: {role_key}")
+
+    try:
+        perms = body.permissions if body.permissions is not None else permissions_for_archetype(
+            body.archetype, workflow_scope=body.workflow_scope
+        )
+        validate_operational_permissions(perms)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    role = Role(
+        role_key=role_key,
+        display_name=body.display_name.strip(),
+        description=(body.description or "").strip() or None,
+        workflow_scope=body.workflow_scope,
+        jurisdiction_mode=body.jurisdiction_mode,
+        permissions=perms,
+        role_kind="operational",
+        role_origin="custom",
+    )
+    db.add(role)
+    db.commit()
+    db.refresh(role)
+    return _role_to_response(db, role)
 
 
 @router.patch(
@@ -67,11 +203,23 @@ def update_role(
     role_id: str,
     body: RoleUpdate,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
-) -> Role:
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> RoleResponse:
     role = db.get(Role, role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
+
+    if role.role_kind == "admin" and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Admin roles editable by super_admin only")
+
+    if role.role_origin == "system" and body.permissions is not None and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="System role permissions require super_admin")
+
+    if role.role_kind == "operational" and role.role_origin == "custom":
+        track = "seah" if role.workflow_scope == "SEAH" else "standard"
+        if not can_create_operational_role(current_user, track=track) and not current_user.is_super_admin:
+            raise HTTPException(status_code=403, detail="Country admin required for this track")
+
     if body.display_name is not None:
         role.display_name = body.display_name.strip()
     if body.description is not None:
@@ -94,10 +242,16 @@ def update_role(
                 detail="jurisdiction_mode must be field, country, global, or empty",
             )
         role.jurisdiction_mode = v or None
+    if body.permissions is not None:
+        try:
+            validate_operational_permissions(body.permissions)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        role.permissions = body.permissions
     role.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(role)
-    return role
+    return _role_to_response(db, role)
 
 
 @router.delete(
@@ -108,47 +262,155 @@ def update_role(
 def delete_role(
     role_id: str,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     role = db.get(Role, role_id)
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
-    ur_count = db.scalar(
-        select(func.count()).select_from(UserRole).where(UserRole.role_id == role_id)
-    ) or 0
-    if ur_count:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Cannot delete: {ur_count} officer(s) still have this role. Remove assignments first.",
-        )
+    if role.role_origin == "system" and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="System roles deletable by super_admin only")
 
-    scope_count = db.scalar(
-        select(func.count())
-        .select_from(OfficerScope)
-        .where(OfficerScope.role_key == role.role_key)
-    ) or 0
-    if scope_count:
+    steps, officers = _role_usage_counts(db, role.role_key)
+    if steps or officers:
         raise HTTPException(
             status_code=409,
-            detail=f"Cannot delete: {scope_count} jurisdiction scope(s) use this role.",
-        )
-
-    step_count = db.scalar(
-        select(func.count())
-        .select_from(WorkflowStep)
-        .where(
-            WorkflowStep.assigned_role_key == role.role_key,
-            WorkflowStep.is_deleted.is_(False),
-        )
-    ) or 0
-    if step_count:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Cannot delete: {step_count} workflow step(s) assign this role.",
+            detail={
+                "message": "Role is in use",
+                "steps_count": steps,
+                "officers_count": officers,
+            },
         )
 
     db.delete(role)
+    db.commit()
+
+
+# ── Admin scopes ──────────────────────────────────────────────────────────────
+
+def _resolve_project_ref(db: Session, project_ref: str | None) -> str | None:
+    if not project_ref:
+        return None
+    from ticketing.models.project import Project
+
+    row = db.get(Project, project_ref)
+    if row:
+        return row.short_code
+    row = db.execute(
+        select(Project).where(Project.short_code == project_ref)
+    ).scalar_one_or_none()
+    return row.short_code if row else project_ref
+
+
+@router.get(
+    "/users/me/admin-context",
+    response_model=AdminContextResponse,
+    summary="Current officer admin matrix context",
+)
+def get_my_admin_context(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> AdminContextResponse:
+    return AdminContextResponse(**admin_context_payload(current_user))
+
+
+@router.get(
+    "/admin-scopes",
+    response_model=list[AdminScopeResponse],
+    summary="List admin scope assignments",
+)
+def list_admin_scopes(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> list[AdminScope]:
+    if current_user.is_super_admin:
+        return db.execute(select(AdminScope).order_by(AdminScope.created_at.desc())).scalars().all()
+    return db.execute(
+        select(AdminScope).where(AdminScope.user_id == current_user.user_id)
+    ).scalars().all()
+
+
+@router.post(
+    "/admin-scopes",
+    response_model=AdminScopeResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Appoint country_admin or project_admin",
+)
+def create_admin_scope(
+    body: AdminScopeCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> AdminScope:
+    if body.role_key == "country_admin":
+        if not current_user.is_super_admin:
+            raise HTTPException(status_code=403, detail="Only super_admin may appoint country_admin")
+        if not body.country_code:
+            raise HTTPException(status_code=422, detail="country_code required for country_admin")
+    elif body.role_key == "project_admin":
+        if not (current_user.is_super_admin or is_country_admin(current_user, body.workflow_track)):  # type: ignore[arg-type]
+            raise HTTPException(
+                status_code=403,
+                detail="country_admin (matching track) or super_admin required",
+            )
+        if not body.project_id:
+            raise HTTPException(status_code=422, detail="project_id required for project_admin")
+    else:
+        raise HTTPException(status_code=422, detail="Invalid role_key")
+
+    project_ref = _resolve_project_ref(db, body.project_id)
+    role = db.execute(select(Role).where(Role.role_key == body.role_key)).scalar_one_or_none()
+    if not role:
+        raise HTTPException(status_code=404, detail=f"Role not found: {body.role_key}")
+
+    scope = AdminScope(
+        user_id=body.user_id.strip(),
+        role_key=body.role_key,
+        country_code=body.country_code,
+        project_id=project_ref,
+        organization_id=body.organization_id,
+        package_id=body.package_id,
+        workflow_track=body.workflow_track,
+        created_by_user_id=current_user.user_id,
+    )
+    db.add(scope)
+
+    org_id = (body.organization_id or "DOR").strip()
+    existing_ur = db.execute(
+        select(UserRole).where(
+            UserRole.user_id == body.user_id,
+            UserRole.role_id == role.role_id,
+            UserRole.organization_id == org_id,
+        )
+    ).scalar_one_or_none()
+    if not existing_ur:
+        db.add(
+            UserRole(
+                user_id=body.user_id.strip(),
+                role_id=role.role_id,
+                organization_id=org_id,
+            )
+        )
+    db.commit()
+    db.refresh(scope)
+    return scope
+
+
+@router.delete(
+    "/admin-scopes/{admin_scope_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoke admin scope assignment",
+)
+def delete_admin_scope(
+    admin_scope_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> None:
+    scope = db.get(AdminScope, admin_scope_id)
+    if not scope:
+        raise HTTPException(status_code=404, detail="Admin scope not found")
+    if not current_user.is_super_admin and scope.created_by_user_id != current_user.user_id:
+        if scope.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Cannot revoke this assignment")
+    db.delete(scope)
     db.commit()
 
 

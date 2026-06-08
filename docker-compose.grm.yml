@@ -95,6 +95,11 @@ services:
       retries: 20
       start_period: 90s
 
+  # ── Postgres host port (for host-side pytest / psql — containers still use db:5432) ──
+  db:
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+
   # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
   # The ticketing_api service also overrides BACKEND_GRIEVANCE_BASE_URL to use the
@@ -139,6 +144,7 @@ services:
       KEYCLOAK_ADMIN_URL: ""
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KEYCLOAK_WEBHOOK_SECRET: ""
+      TICKETING_TEST_IN_DOCKER: "1"
     ports:
       - "5002:5002"
     depends_on:

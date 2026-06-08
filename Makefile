@@ -41,6 +41,7 @@ AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
 	aws-up aws-deploy \
+	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
 	compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local \
@@ -67,6 +68,9 @@ help:
 	@echo "DB / optional:"
 	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
 	@echo "  make wsl-seed       re-seed GRM demo tickets (first-time / reset)"
+	@echo "  make test-ticketing     pytest tests/ticketing in ticketing_api container"
+	@echo "  make test-ticketing-host pytest on WSL host (needs dev-grm-deps + db :5433)"
+	@echo "  make dev-grm-deps   pip install -r requirements.grm.txt (host conda env)"
 	@echo "  make wsl-keycloak-ps  show Keycloak container status (after wsl-auth)"
 	@echo "  make wsl-auth-ps      show Keycloak + grm_ui_auth + ticketing_api_auth"
 	@echo "  make keycloak-setup   bootstrap GRM realm (once, after Keycloak is healthy)"
@@ -195,6 +199,22 @@ keycloak-setup compose_keycloak_setup:
 # GRM demo tickets in ticketing.* (idempotent with --reset).
 wsl-seed:
 	$(COMPOSE_WSL) exec -T ticketing_api python -m ticketing.seed.mock_tickets --reset
+
+# ── Ticketing tests ───────────────────────────────────────────────────────────
+# Container: same image/deps/DB as production stack (preferred).
+test-ticketing:
+	$(COMPOSE_WSL) exec -T ticketing_api python -m pytest tests/ticketing/ -v
+
+# Host WSL: requires `make dev-grm-deps`, Docker db published on :5433, migrations + seed.
+test-ticketing-host:
+	PYTHONPATH=. python -m pytest tests/ticketing/ -v
+
+# Host unit tests only (no DB): admin_access matrix helpers.
+test-ticketing-unit:
+	PYTHONPATH=. python -m pytest tests/ticketing/test_admin_access.py -v
+
+dev-grm-deps:
+	pip install -r requirements.grm.txt
 
 compose_seed_seah_catalog:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python scripts/database/migrate_seah_demo_catalog.py

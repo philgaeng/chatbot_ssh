@@ -9,13 +9,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_current_user, get_db
+from ticketing.services.admin_access import SettingsAction, require_settings_write
 from ticketing.models.settings import Settings
 
 router = APIRouter()
 
 # Only super_admin may write these keys (IT / advanced settings).
-SUPER_ADMIN_ONLY_KEYS = frozenset({"org_roles", "report_limits"})
+SUPER_ADMIN_ONLY_KEYS = frozenset({"org_roles", "report_limits", "archiving_policy"})
 
 
 class SettingsUpsert(BaseModel):
@@ -60,15 +61,12 @@ def upsert_setting(
     key: str,
     payload: SettingsUpsert,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> Settings:
-    if not current_user.is_admin:
+    if key in SUPER_ADMIN_ONLY_KEYS:
+        require_settings_write(current_user, SettingsAction.PLATFORM_SETTINGS)
+    elif not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    if key in SUPER_ADMIN_ONLY_KEYS and not current_user.is_super_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Super-admin access required for this setting",
-        )
 
     value = payload.value
     if key == "report_limits":
@@ -79,6 +77,21 @@ def upsert_setting(
             value if isinstance(value, dict) else {},
             current_user.user_id,
         )
+        setting = db.get(Settings, key)
+        assert setting is not None
+        return setting
+
+    if key == "archiving_policy":
+        from ticketing.services.archiving_policy import save_archiving_policy
+
+        try:
+            merged = save_archiving_policy(
+                db,
+                value if isinstance(value, dict) else {},
+                current_user.user_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         setting = db.get(Settings, key)
         assert setting is not None
         return setting
@@ -107,15 +120,12 @@ def upsert_setting(
 def delete_setting(
     key: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    if not current_user.is_admin:
+    if key in SUPER_ADMIN_ONLY_KEYS:
+        require_settings_write(current_user, SettingsAction.PLATFORM_SETTINGS)
+    elif not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    if key in SUPER_ADMIN_ONLY_KEYS and not current_user.is_super_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Super-admin access required for this setting",
-        )
     setting = db.get(Settings, key)
     if not setting:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")

@@ -596,12 +596,98 @@ export interface GrmRole {
   workflow_scope: string | null;
   jurisdiction_mode: string | null;
   permissions: unknown;
+  role_kind?: string | null;
+  role_origin?: string | null;
+  steps_count?: number;
+  officers_count?: number;
   created_at: string;
   updated_at: string;
 }
 
-export function listRoles(): Promise<GrmRole[]> {
-  return apiFetch<GrmRole[]>("/api/v1/roles");
+export function listRoles(params?: {
+  kind?: "operational" | "admin";
+  workflow_track?: "standard" | "seah";
+}): Promise<GrmRole[]> {
+  const qs = new URLSearchParams();
+  if (params?.kind) qs.set("kind", params.kind);
+  if (params?.workflow_track) qs.set("workflow_track", params.workflow_track);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return apiFetch<GrmRole[]>(`/api/v1/roles${suffix}`);
+}
+
+export interface RoleArchetype {
+  key: string;
+  label: string;
+}
+
+export function listRoleArchetypes(): Promise<RoleArchetype[]> {
+  return apiFetch<RoleArchetype[]>("/api/v1/roles/archetypes");
+}
+
+export function createRole(payload: {
+  display_name: string;
+  role_key?: string;
+  workflow_scope: string;
+  jurisdiction_mode?: string;
+  archetype?: string;
+  permissions?: string[];
+  description?: string;
+}): Promise<GrmRole> {
+  return apiFetch<GrmRole>("/api/v1/roles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface AdminScopeRow {
+  admin_scope_id: string;
+  user_id: string;
+  role_key: string;
+  country_code: string | null;
+  project_id: string | null;
+  organization_id: string | null;
+  package_id: string | null;
+  workflow_track: string;
+  created_at: string;
+  created_by_user_id?: string | null;
+}
+
+export interface AdminContext {
+  is_super_admin: boolean;
+  is_country_admin: boolean;
+  is_project_admin: boolean;
+  admin_workflow_tracks: string[];
+  admin_project_ids: string[];
+  admin_country_codes: string[];
+  can_access_platform_settings: boolean;
+  can_manage_structure: boolean;
+  admin_scopes: AdminScopeRow[];
+}
+
+export function getAdminContext(): Promise<AdminContext> {
+  return apiFetch<AdminContext>("/api/v1/users/me/admin-context");
+}
+
+export function listAdminScopes(): Promise<AdminScopeRow[]> {
+  return apiFetch<AdminScopeRow[]>("/api/v1/admin-scopes");
+}
+
+export function createAdminScope(payload: {
+  user_id: string;
+  role_key: "country_admin" | "project_admin";
+  country_code?: string;
+  project_id?: string;
+  organization_id?: string;
+  workflow_track: "standard" | "seah";
+}): Promise<AdminScopeRow> {
+  return apiFetch<AdminScopeRow>("/api/v1/admin-scopes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminScope(adminScopeId: string): Promise<void> {
+  return apiFetch(`/api/v1/admin-scopes/${adminScopeId}`, { method: "DELETE" });
 }
 
 export function updateRole(
@@ -1111,6 +1197,17 @@ export interface ReportLimitsInfo {
   allowed_recipient_roles: string[] | null;
 }
 
+export interface ArchivingPolicyInfo {
+  enabled: boolean;
+  years_before_archiving: number;
+  archive_run_month: number;
+  archive_run_day: number;
+  timezone: string;
+  attachment_tier_on_archive: "none" | "cold" | "glacier";
+  allow_complainant_download_when_archived: boolean;
+  seah_years_before_archiving: number | null;
+}
+
 export interface QuarterlyAssignment {
   id: string;
   quarter_key: string;
@@ -1500,6 +1597,20 @@ export function setReportLimits(limits: ReportLimitsInfo): Promise<void> {
   return apiFetch<void>("/api/v1/settings/report_limits", {
     method: "PUT",
     body: JSON.stringify({ value: limits }),
+  });
+}
+
+/** Super-admin: resolved-case archiving policy (ticketing.settings.archiving_policy). */
+export function getArchivingPolicy(): Promise<ArchivingPolicyInfo> {
+  return apiFetch<{ key: string; value: ArchivingPolicyInfo }>(
+    "/api/v1/settings/archiving_policy",
+  ).then((r) => r.value);
+}
+
+export function setArchivingPolicy(policy: ArchivingPolicyInfo): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/archiving_policy", {
+    method: "PUT",
+    body: JSON.stringify({ value: policy }),
   });
 }
 

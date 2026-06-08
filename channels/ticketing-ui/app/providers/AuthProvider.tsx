@@ -6,14 +6,9 @@ import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
-import { getUserPreferences, getMyProfile, listOfficerRoster, type OfficerRosterEntry } from "@/lib/api";
+import { getUserPreferences, getMyProfile, listOfficerRoster, getAdminContext, type OfficerRosterEntry, type AdminContext } from "@/lib/api";
 
 const BYPASS_DEFAULT_EMAIL = "admin@grm.local";
-
-// ── Demo / dev bypass (NEXT_PUBLIC_BYPASS_AUTH=true) ─────────────────────────
-// No OIDC: the Next.js proxy reads `grm_bypass_user` and forwards internal
-// identity headers. Officer choices come from GET /api/v1/users/roster (DB),
-// not a hardcoded list — same data as production, with one-click role switching.
 
 const BYPASS_COOKIE = "grm_bypass_user";
 const LEGACY_MOCK_COOKIE = "grm_mock_user";
@@ -45,10 +40,16 @@ function tokenFromRosterRow(o: OfficerRosterEntry): TokenPayload {
   };
 }
 
+const PRIVILEGED_ROLE_KEYS = new Set([
+  "super_admin",
+  "country_admin",
+  "project_admin",
+]);
+
 function pickDefaultOfficer(roster: OfficerRosterEntry[]): OfficerRosterEntry | null {
   if (roster.length === 0) return null;
   const privileged = roster.filter((r) =>
-    r.role_keys.some((k) => k === "super_admin" || k === "local_admin"),
+    r.role_keys.some((k) => PRIVILEGED_ROLE_KEYS.has(k)),
   );
   const pool = privileged.length ? privileged : roster;
   return [...pool].sort((a, b) => a.display_name.localeCompare(b.display_name))[0];
@@ -59,7 +60,6 @@ function clearCookie(name: string): void {
   document.cookie = `${name}=; path=/; max-age=0`;
 }
 
-/** Read bypass cookie JSON (raw value after =). */
 function readBypassCookieRaw(): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(new RegExp(`(?:^|; )${BYPASS_COOKIE}=([^;]*)`));
@@ -90,7 +90,6 @@ function parseBypassCookie(raw: string): {
   }
 }
 
-/** Persist identity for the API route proxy (must stay JSON, not URL-encoded). */
 export function setBypassUserCookie(entry: OfficerRosterEntry | null): void {
   if (typeof document === "undefined") return;
   clearCookie(LEGACY_MOCK_COOKIE);
@@ -107,38 +106,33 @@ export function setBypassUserCookie(entry: OfficerRosterEntry | null): void {
   document.cookie = `${BYPASS_COOKIE}=${value}; path=/; max-age=86400`;
 }
 
-// ── Auth context ─────────────────────────────────────────────────────────────
-
 export interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: TokenPayload | null;
   error: string | null;
-  /** Current user's role keys (from custom:grm_roles or OIDC) */
   roleKeys: string[];
   canSeeSeah: boolean;
   isAdmin: boolean;
-  /** Full Settings (orgs, workflows, platform). False for local_admin-only users. */
   isSuperAdmin: boolean;
+  isCountryAdmin: boolean;
+  isProjectAdmin: boolean;
+  adminWorkflowTracks: ("standard" | "seah")[];
+  adminProjectIds: string[];
+  adminCountryCode: string | null;
+  canAccessPlatformSettings: boolean;
+  canManageStructure: boolean;
+  canCreateOperationalRoles: boolean;
   signIn: () => void;
   signOut: () => void;
-  /** Email + password login (auth stack). Stores tokens and updates React state. */
   loginWithPassword: (email: string, password: string) => Promise<void>;
-  /** Bearer token for API calls (null in bypass mode) */
   accessToken: string | null;
   effectiveLang: "en" | "ne" | null;
-  /**
-   * Bypass mode: roster from DB for the header role switcher (null until first fetch).
-   */
   bypassRoster: OfficerRosterEntry[] | null;
   bypassRosterError: string | null;
-  /**
-   * Bypass mode only: switch to another officer from `ticketing.user_roles`.
-   * Sets cookie + reloads queue so API calls use the new identity.
-   */
   switchBypassUser: (entry: OfficerRosterEntry) => void;
-  /** Refresh header display name from Keycloak profile (after account save). */
   refreshDisplayName: () => Promise<void>;
+  refreshAdminContext: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -149,13 +143,24 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer"]);
-const ADMIN_ROLES = new Set(["super_admin", "local_admin"]);
+const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "country_admin", "project_admin"]);
+const ADMIN_ROLES = new Set(["super_admin", "country_admin", "project_admin"]);
 
-function derivePermissions(roleKeys: string[]) {
-  return {
+function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
+  const fromRoles = {
     canSeeSeah: roleKeys.some((r) => SEAH_CAN_SEE_ROLES.has(r)),
     isAdmin: roleKeys.some((r) => ADMIN_ROLES.has(r)),
+    isSuperAdmin: roleKeys.includes("super_admin"),
+    isCountryAdmin: roleKeys.includes("country_admin"),
+    isProjectAdmin: roleKeys.includes("project_admin"),
+  };
+  if (!adminCtx) return fromRoles;
+  return {
+    canSeeSeah: fromRoles.canSeeSeah || adminCtx.admin_workflow_tracks.includes("seah"),
+    isAdmin: fromRoles.isAdmin || adminCtx.is_country_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
+    isSuperAdmin: fromRoles.isSuperAdmin || adminCtx.is_super_admin,
+    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_country_admin,
+    isProjectAdmin: fromRoles.isProjectAdmin || adminCtx.is_project_admin,
   };
 }
 
@@ -171,6 +176,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const [effectiveLang, setEffectiveLang] = useState<"en" | "ne" | null>(null);
   const [bypassRoster, setBypassRoster] = useState<OfficerRosterEntry[] | null>(bypass ? null : []);
   const [bypassRosterError, setBypassRosterError] = useState<string | null>(null);
+  const [adminContext, setAdminContext] = useState<AdminContext | null>(null);
 
   const client = !bypass
     ? new OIDCAuthClient(
@@ -182,7 +188,15 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       )
     : null;
 
-  // Bypass: load roster from DB, reconcile cookie + React user (matches proxy headers).
+  const refreshAdminContext = useCallback(async () => {
+    try {
+      const ctx = await getAdminContext();
+      setAdminContext(ctx);
+    } catch {
+      setAdminContext(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (!bypass) return;
     let cancelled = false;
@@ -231,6 +245,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [bypass]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return;
+    refreshAdminContext();
+  }, [isAuthenticated, isLoading, user?.sub, refreshAdminContext]);
 
   useEffect(() => {
     if (bypass) return;
@@ -355,7 +374,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {
-      /* profile API unavailable (e.g. demo bypass without Keycloak) */
+      /* profile API unavailable */
     }
   }, [bypass]);
 
@@ -363,8 +382,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     .split(",")
     .map((r) => r.trim())
     .filter(Boolean);
-  const { canSeeSeah, isAdmin } = derivePermissions(roleKeys);
-  const isSuperAdmin = roleKeys.includes("super_admin");
+  const perms = derivePermissions(roleKeys, adminContext);
+  const adminWorkflowTracks = (adminContext?.admin_workflow_tracks ?? []) as ("standard" | "seah")[];
+  const canCreateOperationalRoles =
+    perms.isSuperAdmin ||
+    adminWorkflowTracks.some((t) => t === "standard" || t === "seah");
 
   return (
     <AuthContext.Provider
@@ -374,9 +396,17 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         user,
         error,
         roleKeys,
-        canSeeSeah,
-        isAdmin,
-        isSuperAdmin,
+        canSeeSeah: perms.canSeeSeah,
+        isAdmin: perms.isAdmin,
+        isSuperAdmin: perms.isSuperAdmin,
+        isCountryAdmin: perms.isCountryAdmin,
+        isProjectAdmin: perms.isProjectAdmin,
+        adminWorkflowTracks,
+        adminProjectIds: adminContext?.admin_project_ids ?? [],
+        adminCountryCode: adminContext?.admin_country_codes[0] ?? null,
+        canAccessPlatformSettings: adminContext?.can_access_platform_settings ?? perms.isSuperAdmin,
+        canManageStructure: adminContext?.can_manage_structure ?? perms.isSuperAdmin,
+        canCreateOperationalRoles,
         signIn,
         signOut,
         loginWithPassword,
@@ -386,6 +416,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         bypassRosterError,
         switchBypassUser,
         refreshDisplayName,
+        refreshAdminContext,
       }}
     >
       {children}

@@ -12,7 +12,11 @@ from typing import Optional
 # ── Canonical emails (import these instead of hardcoding strings) ─────────────
 
 OFFICER_ADMIN = "admin@grm.local"
-OFFICER_LOCAL_ADMIN = "local-admin@grm.local"
+OFFICER_COUNTRY_ADMIN_STD = "country-admin@grm.local"
+OFFICER_COUNTRY_ADMIN_SEAH = "country-admin-seah@grm.local"
+OFFICER_PROJECT_ADMIN = "project-admin@grm.local"
+# Deprecated alias — migrated to country_admin
+OFFICER_LOCAL_ADMIN = OFFICER_COUNTRY_ADMIN_STD
 OFFICER_SITE_L1 = "l1-officer@grm.local"
 OFFICER_SITE_L1_2 = "l1-officer-2@grm.local"
 OFFICER_SITE_L1_3 = "l1-officer-3@grm.local"
@@ -42,7 +46,8 @@ LEGACY_OFFICER_ID_MAP: dict[str, str] = {
     "mock-officer-seah-national": OFFICER_SEAH_NATIONAL,
     "mock-officer-seah-hq": OFFICER_SEAH_HQ,
     "mock-officer-adb-observer": OFFICER_ADB,
-    "local_admin_mock_1@grm.local": OFFICER_LOCAL_ADMIN,
+    "local_admin_mock_1@grm.local": OFFICER_COUNTRY_ADMIN_STD,
+    "local-admin@grm.local": OFFICER_COUNTRY_ADMIN_STD,
 }
 
 
@@ -66,7 +71,15 @@ DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
         OFFICER_ADMIN, "GRM", "Admin", "super_admin", "DOR",
     ),
     DemoOfficerSpec(
-        OFFICER_LOCAL_ADMIN, "Local", "Admin", "local_admin", "DOR",
+        OFFICER_COUNTRY_ADMIN_STD, "Country", "Admin (Standard)", "country_admin", "DOR",
+        user_role_location="P1", keycloak_location="P1",
+    ),
+    DemoOfficerSpec(
+        OFFICER_COUNTRY_ADMIN_SEAH, "Country", "Admin (SEAH)", "country_admin", "DOR",
+        user_role_location="P1", keycloak_location="P1",
+    ),
+    DemoOfficerSpec(
+        OFFICER_PROJECT_ADMIN, "Project", "Admin", "project_admin", "DOR",
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(

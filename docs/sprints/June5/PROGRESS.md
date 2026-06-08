@@ -150,8 +150,82 @@
 
 ---
 
+## Agent: Image compression
+
+**Prompt:** [`agents/image-compression.md`](agents/image-compression.md)  
+**Spec:** [`docs/services/04_file_processing_service.md`](../../services/04_file_processing_service.md) §6
+
+| Item | Status | Agent / date | PR / commit | Notes |
+|------|--------|--------------|-------------|-------|
+| Dockerfile libheif gate | `done` | Image compression / 2026-06-08 | | `vips -l foreign` HEIF check in Dockerfile |
+| `image_compression.py` | `done` | Image compression / 2026-06-08 | | pyvips thumbnail → JPEG q80, EXIF strip |
+| `file_server_core` hook | `done` | Image compression / 2026-06-08 | | Image branch before `store_file_attachment` |
+| `file_queue` worker (concurrency 1) | `done` | Image compression / 2026-06-08 | | `celery_file` service in docker-compose |
+| Tests | `done` | Image compression / 2026-06-08 | | `tests/backend/test_image_compression.py` |
+| Prod smoke (HEIC + JPEG) | `todo` | | | Manual after deploy |
+
+---
+
 ## Open blockers
 
 | Ticket | Blocker | Owner |
 |--------|---------|-------|
 | TP-05 | SMS wiring requires `MESSAGING_API_KEY` + product copy for public URL | Integration |
+
+---
+
+## Agent: Archiving and retention
+
+**Prompt:** [`agents/archiving-retention.md`](agents/archiving-retention.md)  
+**Spec:** [`docs/ARCHIVING_AND_RETENTION.md`](../../ARCHIVING_AND_RETENTION.md)
+
+| Item | Status | Agent / date | PR / commit | Notes |
+|------|--------|--------------|-------------|-------|
+| Settings `archiving_policy` | `done` | Archiving agent / 2026-06-08 | | super_admin JSON + seed default |
+| Ticketing migration | `done` | Archiving agent / 2026-06-08 | | `z1a3b5c7` — `is_archived`, `archived_at` |
+| Public migration | `done` | Archiving agent / 2026-06-08 | | `pub008` — grievances + file_attachments + `archived` status |
+| `archiving.py` + Celery task | `done` | Archiving agent / 2026-06-08 | | Daily 03:00 Kathmandu; `ARCHIVING_DRY_RUN` env |
+| Queue/upload guards | `done` | Archiving agent / 2026-06-08 | | Default queue filter; 409 upload; admin file access |
+| Settings UI JSON | `done` | Archiving agent / 2026-06-08 | | System config tab section |
+| Tests | `done` | Archiving agent / 2026-06-08 | | `tests/ticketing/test_archiving.py` |
+| Prod dry-run | `todo` | | | Set `ARCHIVING_DRY_RUN=true` on first prod run |
+
+**Implementation notes**
+
+- `attachment_tier_on_archive` default **`none`** in seed (local DB); **`cold`** copies to `uploads/archive/{grievance_id}/` when enabled.
+- S3 Glacier tier documented only; no boto3 move until `S3_BUCKET` is wired.
+- Reopen (L2): `clear_archive_on_reopen` on ticket action when status leaves `RESOLVED`/`CLOSED`.
+
+---
+
+## Agent: Roles & permissions
+
+**Prompt:** [`agents/roles-permissions.md`](agents/roles-permissions.md)  
+**Product spec:** [`docs/ticketing_system/11_roles_and_permissions.md`](../../ticketing_system/11_roles_and_permissions.md)  
+**Implementation spec:** [`05-roles-permissions-spec.md`](05-roles-permissions-spec.md)  
+**Primary paths:** `ticketing/`, `channels/ticketing-ui/app/settings/`, `AuthProvider.tsx`
+
+| Ticket | Status | Agent / date | PR / commit | Notes |
+|--------|--------|--------------|-------------|-------|
+| RP-01 Data model (`admin_scopes`, `role_kind`, `role_origin`) | `done` | Cursor / 2026-06-08 | | Migration `a2b4c6d8` |
+| RP-02 Auth core (`admin_access.py`, `CurrentUser`) | `done` | Cursor / 2026-06-08 | | `get_authenticated_user` loads scopes |
+| RP-03 Roles API (CRUD, archetypes, usage counts) | `done` | Cursor / 2026-06-08 | | |
+| RP-04 Admin assignment API | `done` | Cursor / 2026-06-08 | | `/api/v1/admin-scopes` |
+| RP-05 Route guards (matrix on routers) | `done` | Cursor / 2026-06-08 | | workflows, locations create, settings |
+| RP-06 Settings UI tab access matrix | `done` | Cursor / 2026-06-08 | | AuthProvider + `page.tsx` |
+| RP-07 Roles tab (operational only, create wizard) | `done` | Cursor / 2026-06-08 | | |
+| RP-08 Workflows-first (step dropdown, inline create) | `done` | Cursor / 2026-06-08 | | |
+| RP-09 Admin access platform sub-tab | `done` | Cursor / 2026-06-08 | | |
+| RP-10 Seed & `local_admin` migration | `done` | Cursor / 2026-06-08 | | Demo officers + 3 `admin_scopes` rows |
+| RP-11 Tests | `done` | Cursor / 2026-06-08 | | 11 passed in `ticketing_api` container |
+
+**Verification (manual)**
+
+- [ ] `super_admin`: all Settings tabs + Admin access
+- [ ] `country_admin` NP + `standard`: create project; cannot see SEAH-only officer invite
+- [ ] `country_admin` NP + `seah`: SEAH workflows/officers; cannot create project
+- [ ] `project_admin` KL_ROAD + `standard`: staffing + orgs; cannot create roles
+- [ ] Custom role created → bound on workflow step → officer invited → auto-assign eligible
+- [ ] Inline **+ Create role** from workflow step works
+
+**Sprint complete when:** RP-01 … RP-11 `done` and `11_roles_and_permissions.md` §8 updated.

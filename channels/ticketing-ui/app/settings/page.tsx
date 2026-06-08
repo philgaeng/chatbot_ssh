@@ -41,6 +41,8 @@ import {
   setOrgRoles,
   getReportLimits,
   setReportLimits,
+  getArchivingPolicy,
+  setArchivingPolicy,
   getProjectActorRoles,
   setProjectActorRoles,
   addPackageOrg,
@@ -67,9 +69,16 @@ import {
   type PackageItem,
   type PackageCreate,
   listRoles,
+  createRole,
+  listRoleArchetypes,
+  listAdminScopes,
+  createAdminScope,
+  deleteAdminScope,
   updateRole,
   deleteRole,
   type GrmRole,
+  type AdminScopeRow,
+  type RoleArchetype,
 } from "@/lib/api";
 import { OfficersTab } from "@/components/settings/OfficersTab";
 import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
@@ -90,6 +99,9 @@ type RoleEntry = {
   workflow: string;
   jurisdiction: string;
   description: string;
+  role_origin?: string;
+  steps_count?: number;
+  officers_count?: number;
 };
 
 function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
@@ -100,6 +112,9 @@ function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
     workflow: r.workflow_scope ?? "Standard",
     jurisdiction: r.jurisdiction_mode ?? "field",
     description: r.description ?? "",
+    role_origin: r.role_origin ?? "system",
+    steps_count: r.steps_count ?? 0,
+    officers_count: r.officers_count ?? 0,
   };
 }
 
@@ -232,7 +247,7 @@ function RoleEditModal({ role, onSaved, onClose }: {
 type MainTab = "org_officers" | "workflows_roles" | "projects" | "platform";
 type OrgOfficersSub = "organizations" | "officers";
 type WorkflowsRolesSub = "workflows" | "roles";
-type PlatformSub = "locations" | "reports" | "project_types" | "system_config";
+type PlatformSub = "locations" | "reports" | "project_types" | "system_config" | "admin_access";
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: "org_officers",      label: "Organizations & officers" },
@@ -256,13 +271,131 @@ const ORG_ROLE_COLORS: Record<string, string> = {
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
-function RolesTab({ catalog, loading, onReload }: {
+function RoleCreateModal({
+  defaultTrack,
+  onCreated,
+  onClose,
+}: {
+  defaultTrack: "standard" | "seah";
+  onCreated: () => void;
+  onClose: () => void;
+}) {
+  const [displayName, setDisplayName] = useState("");
+  const [roleKey, setRoleKey] = useState("");
+  const [workflowScope, setWorkflowScope] = useState(defaultTrack === "seah" ? "SEAH" : "Standard");
+  const [jurisdiction, setJurisdiction] = useState<JurisdictionMode>("field");
+  const [archetype, setArchetype] = useState("field_actor");
+  const [description, setDescription] = useState("");
+  const [archetypes, setArchetypes] = useState<RoleArchetype[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    listRoleArchetypes().then(setArchetypes).catch(() => setArchetypes([]));
+  }, []);
+
+  async function handleSave() {
+    if (!displayName.trim()) { setErr("Display name is required"); return; }
+    setSaving(true); setErr("");
+    try {
+      await createRole({
+        display_name: displayName.trim(),
+        role_key: roleKey.trim() || undefined,
+        workflow_scope: workflowScope,
+        jurisdiction_mode: jurisdiction,
+        archetype,
+        description: description.trim() || undefined,
+      });
+      onCreated();
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-5">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">New operational role</h3>
+        {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+        <div className="space-y-3 text-sm">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Display name *</label>
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1.5" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Role key (slug)</label>
+            <input value={roleKey} onChange={(e) => setRoleKey(e.target.value)} placeholder="auto-generated if empty"
+              className="w-full border border-gray-300 rounded px-2 py-1.5 font-mono text-xs" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Workflow track</label>
+              <select value={workflowScope} onChange={(e) => setWorkflowScope(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5">
+                <option value="Standard">Standard</option>
+                <option value="SEAH">SEAH</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Archetype</label>
+              <select value={archetype} onChange={(e) => setArchetype(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1.5">
+                {archetypes.map((a) => (
+                  <option key={a.key} value={a.key}>{a.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Default jurisdiction</label>
+            <select value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value as JurisdictionMode)}
+              className="w-full border border-gray-300 rounded px-2 py-1.5">
+              {Object.entries(JURISDICTION_MODE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+              className="w-full border border-gray-300 rounded px-2 py-1.5" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+            {saving ? "Creating…" : "Create role"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RolesTab({ catalog, loading, onReload, canCreate }: {
   catalog: RoleEntry[];
   loading: boolean;
   onReload: () => void;
+  canCreate: boolean;
 }) {
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [trackFilter, setTrackFilter] = useState<"all" | "standard" | "seah">("all");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { adminWorkflowTracks } = useAuth();
+  const defaultTrack = adminWorkflowTracks.includes("seah") && !adminWorkflowTracks.includes("standard")
+    ? "seah" as const : "standard" as const;
+
+  const filtered = catalog.filter((r) => {
+    if (trackFilter === "standard") return r.workflow === "Standard" || r.workflow === "Both";
+    if (trackFilter === "seah") return r.workflow === "SEAH" || r.workflow === "Both";
+    return true;
+  });
 
   async function handleRemoveRole(r: RoleEntry) {
     if (!confirm(`Remove role "${r.label}" (${r.key}) from the catalog?`)) return;
@@ -292,18 +425,35 @@ function RolesTab({ catalog, loading, onReload }: {
           onClose={() => setEditing(null)}
         />
       )}
+      {creating && (
+        <RoleCreateModal
+          defaultTrack={defaultTrack}
+          onCreated={onReload}
+          onClose={() => setCreating(false)}
+        />
+      )}
 
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <p className="text-sm text-gray-500">
-          {loading ? "Loading roles…" : `${catalog.length} roles in ticketing.roles`}
+          {loading ? "Loading roles…" : `${filtered.length} operational roles`}
         </p>
-        <button
-          type="button"
-          onClick={() => onReload()}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <select value={trackFilter} onChange={(e) => setTrackFilter(e.target.value as typeof trackFilter)}
+            className="text-xs border border-gray-300 rounded px-2 py-1">
+            <option value="all">All tracks</option>
+            <option value="standard">Standard</option>
+            <option value="seah">SEAH</option>
+          </select>
+          {canCreate && (
+            <button type="button" onClick={() => setCreating(true)}
+              className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+              + New role
+            </button>
+          )}
+          <button type="button" onClick={() => onReload()} className="text-xs text-blue-600 hover:underline">
+            Refresh
+          </button>
+        </div>
       </div>
 
       {!loading && catalog.length === 0 && (
@@ -323,12 +473,13 @@ function RolesTab({ catalog, loading, onReload }: {
             <tr className="bg-slate-700 text-slate-100 text-left">
               <th className="px-4 py-2.5 font-medium">Role</th>
               <th className="px-4 py-2.5 font-medium">Workflow</th>
+              <th className="px-4 py-2.5 font-medium">Usage</th>
               <th className="px-4 py-2.5 font-medium">Description</th>
               <th className="px-4 py-2.5 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {catalog.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.key} className="border-t border-gray-100 hover:bg-gray-50 align-top">
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-800">{r.label}</div>
@@ -338,6 +489,12 @@ function RolesTab({ catalog, loading, onReload }: {
                   <span className={`text-xs font-medium px-2 py-0.5 rounded ${workflowBadge(r.workflow)}`}>
                     {r.workflow}
                   </span>
+                  {r.role_origin === "custom" && (
+                    <span className="ml-1 text-[10px] text-gray-400">custom</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                  {r.steps_count ?? 0} steps · {r.officers_count ?? 0} officers
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs max-w-sm">{r.description}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -362,16 +519,134 @@ function RolesTab({ catalog, loading, onReload }: {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        New role <span className="font-mono">role_key</span> values require a migration / catalog update. Edit updates
-        labels and descriptions in the database. Remove is blocked while officers or workflows still use the role.
+        Operational catalog only — admin assignments live under Settings → Admin access.
+        Country admins may create custom roles via archetype templates.
       </p>
+    </div>
+  );
+}
+
+// ── Admin access (platform) ───────────────────────────────────────────────────
+
+function AdminAccessTab() {
+  const [rows, setRows] = useState<AdminScopeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [userId, setUserId] = useState("");
+  const [roleKey, setRoleKey] = useState<"country_admin" | "project_admin">("country_admin");
+  const [countryCode, setCountryCode] = useState("NP");
+  const [projectId, setProjectId] = useState("KL_ROAD");
+  const [track, setTrack] = useState<"standard" | "seah">("standard");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setRows(await listAdminScopes());
+      setErr("");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAppoint() {
+    if (!userId.trim()) return;
+    try {
+      await createAdminScope({
+        user_id: userId.trim(),
+        role_key: roleKey,
+        country_code: roleKey === "country_admin" ? countryCode : undefined,
+        project_id: roleKey === "project_admin" ? projectId : undefined,
+        workflow_track: track,
+      });
+      setUserId("");
+      await load();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Appoint failed");
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    if (!confirm("Revoke this admin assignment?")) return;
+    try {
+      await deleteAdminScope(id);
+      await load();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Revoke failed");
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-4">Appoint scoped country and project administrators.</p>
+      {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+      <div className="border border-gray-200 rounded-lg p-4 mb-5 bg-gray-50 space-y-3 text-sm">
+        <div className="font-medium text-gray-700">+ Appoint admin</div>
+        <div className="grid grid-cols-2 gap-3">
+          <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="Officer email"
+            className="border border-gray-300 rounded px-2 py-1.5 col-span-2" />
+          <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as typeof roleKey)}
+            className="border border-gray-300 rounded px-2 py-1.5">
+            <option value="country_admin">country_admin</option>
+            <option value="project_admin">project_admin</option>
+          </select>
+          <select value={track} onChange={(e) => setTrack(e.target.value as typeof track)}
+            className="border border-gray-300 rounded px-2 py-1.5">
+            <option value="standard">standard</option>
+            <option value="seah">seah</option>
+          </select>
+          {roleKey === "country_admin" ? (
+            <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country code"
+              className="border border-gray-300 rounded px-2 py-1.5" />
+          ) : (
+            <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="Project (e.g. KL_ROAD)"
+              className="border border-gray-300 rounded px-2 py-1.5" />
+          )}
+        </div>
+        <button type="button" onClick={handleAppoint}
+          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
+          Appoint
+        </button>
+      </div>
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : (
+        <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+          <thead>
+            <tr className="bg-slate-700 text-slate-100 text-left">
+              <th className="px-3 py-2">User</th>
+              <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Scope</th>
+              <th className="px-3 py-2">Track</th>
+              <th className="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.admin_scope_id} className="border-t border-gray-100">
+                <td className="px-3 py-2 font-mono text-xs">{r.user_id}</td>
+                <td className="px-3 py-2">{r.role_key}</td>
+                <td className="px-3 py-2 text-xs">{r.country_code ?? r.project_id ?? "—"}</td>
+                <td className="px-3 py-2">{r.workflow_track}</td>
+                <td className="px-3 py-2">
+                  <button type="button" onClick={() => handleRevoke(r.admin_scope_id)}
+                    className="text-red-600 text-xs hover:underline">Revoke</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
 // ── Workflow helpers ──────────────────────────────────────────────────────────
 
-type WorkflowRoleOption = { key: string; label: string };
+type WorkflowRoleOption = { key: string; label: string; origin?: string };
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -393,12 +668,16 @@ function StepForm({
   step,
   workflowId,
   roleOptions,
+  canCreateRole,
+  onRoleCreated,
   onSaved,
   onCancel,
 }: {
   step: WorkflowStep;
   workflowId: string;
   roleOptions: WorkflowRoleOption[];
+  canCreateRole?: boolean;
+  onRoleCreated?: () => void;
   onSaved: (s: WorkflowStep) => void;
   onCancel: () => void;
 }) {
@@ -418,6 +697,9 @@ function StepForm({
   const [informedPii, setInformedPii]         = useState<boolean>(step.informed_pii_access ?? false);
   const [saving, setSaving]                   = useState(false);
   const [error, setError]                     = useState("");
+  const [showCreateRole, setShowCreateRole]   = useState(false);
+  const systemRoles = roleOptions.filter((r) => r.origin !== "custom");
+  const customRoles = roleOptions.filter((r) => r.origin === "custom");
 
   async function handleSave() {
     if (!displayName.trim() || !roleKey) { setError("Name and role are required."); return; }
@@ -466,12 +748,32 @@ function StepForm({
         </div>
       </div>
 
+      {showCreateRole && (
+        <RoleCreateModal
+          defaultTrack="standard"
+          onCreated={() => { setShowCreateRole(false); onRoleCreated?.(); }}
+          onClose={() => setShowCreateRole(false)}
+        />
+      )}
       <div>
         <label className="text-xs font-medium text-gray-500 block mb-1">Assigned role *</label>
-        <select value={roleKey} onChange={e => setRoleKey(e.target.value)}
+        <select value={roleKey} onChange={e => {
+          if (e.target.value === "__create__") { setShowCreateRole(true); return; }
+          setRoleKey(e.target.value);
+        }}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
           <option value="">— select role —</option>
-          {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          {systemRoles.length > 0 && (
+            <optgroup label="System (TOR)">
+              {systemRoles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </optgroup>
+          )}
+          {customRoles.length > 0 && (
+            <optgroup label="Custom">
+              {customRoles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </optgroup>
+          )}
+          {canCreateRole && <option value="__create__">+ Create role…</option>}
         </select>
       </div>
 
@@ -665,11 +967,15 @@ function ProjectWorkflowSelect({
 function WorkflowEditor({
   workflow: initial,
   roleOptions,
+  canCreateRole,
+  onRoleCatalogRefresh,
   onBack,
   onUpdated,
 }: {
   workflow: WorkflowDefinition;
   roleOptions: WorkflowRoleOption[];
+  canCreateRole?: boolean;
+  onRoleCatalogRefresh?: () => void;
   onBack: () => void;
   onUpdated: (w: WorkflowDefinition) => void;
 }) {
@@ -689,6 +995,11 @@ function WorkflowEditor({
   function flash(text: string) { setMsg(text); setTimeout(() => setMsg(""), 2500); }
 
   async function handlePublish() {
+    const missing = steps.filter((s) => !s.assigned_role_key);
+    if (missing.length) {
+      flash(`Assign a role to every step before publishing (${missing.length} missing)`);
+      return;
+    }
     setPublishing(true);
     try { const updated = await publishWorkflow(wf.workflow_id); setWf(updated); onUpdated(updated); flash("Published ✓"); }
     catch (e: unknown) { flash(e instanceof Error ? e.message : "Publish failed"); }
@@ -884,6 +1195,8 @@ function WorkflowEditor({
                   step={step}
                   workflowId={wf.workflow_id}
                   roleOptions={roleOptions}
+                  canCreateRole={canCreateRole}
+                  onRoleCreated={onRoleCatalogRefresh}
                   onSaved={handleStepSaved}
                   onCancel={() => setExpanded(null)}
                 />
@@ -1184,12 +1497,16 @@ function NewWorkflowModal({
 
 // ── Workflows tab ─────────────────────────────────────────────────────────────
 
-function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
+function WorkflowsTab({
+  roleCatalog,
+  canCreateRole,
+  onRoleCatalogRefresh,
+}: {
+  roleCatalog: RoleEntry[];
+  canCreateRole: boolean;
+  onRoleCatalogRefresh: () => void;
+}) {
   const { canSeeSeah } = useAuth();
-  const wfRoleOptions: WorkflowRoleOption[] = useMemo(
-    () => roleCatalog.map((r) => ({ key: r.key, label: r.label })),
-    [roleCatalog],
-  );
   const [workflows, setWorkflows]     = useState<WorkflowDefinition[]>([]);
   const [templates, setTemplates]     = useState<WorkflowDefinition[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -1245,12 +1562,24 @@ function WorkflowsTab({ roleCatalog }: { roleCatalog: RoleEntry[] }) {
     }
   }
 
+  const wfRoleOptions: WorkflowRoleOption[] = useMemo(() => {
+    const wfType = editing?.workflow_type ?? "standard";
+    return roleCatalog
+      .filter((r) => {
+        if (wfType === "seah") return r.workflow === "SEAH" || r.workflow === "Both";
+        return r.workflow === "Standard" || r.workflow === "Both";
+      })
+      .map((r) => ({ key: r.key, label: r.label, origin: r.role_origin }));
+  }, [roleCatalog, editing?.workflow_type]);
+
   // Editor view
   if (editing) {
     return (
       <WorkflowEditor
         workflow={editing}
         roleOptions={wfRoleOptions}
+        canCreateRole={canCreateRole}
+        onRoleCatalogRefresh={onRoleCatalogRefresh}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={updated => setEditing(updated)}
       />
@@ -3255,20 +3584,39 @@ const DEFAULT_REPORT_LIMITS_JSON = {
   ],
 };
 
+const DEFAULT_ARCHIVING_POLICY_JSON = {
+  enabled: true,
+  years_before_archiving: 1,
+  archive_run_month: 1,
+  archive_run_day: 2,
+  timezone: "Asia/Kathmandu",
+  attachment_tier_on_archive: "none",
+  allow_complainant_download_when_archived: false,
+  seah_years_before_archiving: null,
+};
+
 function SystemConfigTab() {
   const [jsonText, setJsonText] = useState("");
   const [limitsJson, setLimitsJson] = useState("");
+  const [archivingJson, setArchivingJson] = useState("");
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [savingArchiving, setSavingArchiving] = useState(false);
   const [error, setError]       = useState("");
   const [limitsError, setLimitsError] = useState("");
+  const [archivingError, setArchivingError] = useState("");
   const [saved, setSaved]       = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
+  const [archivingSaved, setArchivingSaved] = useState(false);
 
   useEffect(() => {
-    Promise.all([getOrgRoles().catch(() => null), getReportLimits().catch(() => null)])
-      .then(([roles, limits]) => {
+    Promise.all([
+      getOrgRoles().catch(() => null),
+      getReportLimits().catch(() => null),
+      getArchivingPolicy().catch(() => null),
+    ])
+      .then(([roles, limits, archiving]) => {
         if (roles) {
           setJsonText(JSON.stringify(roles, null, 2));
         } else {
@@ -3290,6 +3638,7 @@ function SystemConfigTab() {
           );
         }
         setLimitsJson(JSON.stringify(limits ?? DEFAULT_REPORT_LIMITS_JSON, null, 2));
+        setArchivingJson(JSON.stringify(archiving ?? DEFAULT_ARCHIVING_POLICY_JSON, null, 2));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -3326,6 +3675,24 @@ function SystemConfigTab() {
       setLimitsError(e instanceof Error ? e.message : "Invalid JSON");
     }
     setSavingLimits(false);
+  }
+
+  async function handleSaveArchiving() {
+    setSavingArchiving(true);
+    setArchivingError("");
+    setArchivingSaved(false);
+    try {
+      const parsed = JSON.parse(archivingJson);
+      if (typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Must be a JSON object");
+      }
+      await setArchivingPolicy(parsed);
+      setArchivingSaved(true);
+      setTimeout(() => setArchivingSaved(false), 2500);
+    } catch (e: unknown) {
+      setArchivingError(e instanceof Error ? e.message : "Invalid JSON");
+    }
+    setSavingArchiving(false);
   }
 
   return (
@@ -3420,6 +3787,46 @@ function SystemConfigTab() {
           {limitsSaved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
         </div>
       </section>
+
+      <section className="bg-gray-50 border border-gray-200 rounded-lg p-5 mt-6">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Archiving and retention</h3>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Resolved cases archive after{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">years_before_archiving</code> full
+            calendar years (eligible from 2 January). Daily Celery job at 03:00 Asia/Kathmandu.
+            Keys:{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">enabled</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">years_before_archiving</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">attachment_tier_on_archive</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">seah_years_before_archiving</code>.
+          </p>
+        </div>
+        <textarea
+          value={archivingJson}
+          onChange={(e) => setArchivingJson(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          disabled={loading}
+          className="w-full font-mono text-xs bg-white border border-gray-300 rounded px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y"
+        />
+        {archivingError && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {archivingError}
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveArchiving}
+            disabled={savingArchiving || loading}
+            className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {savingArchiving ? "Saving…" : "Save archiving policy"}
+          </button>
+          {archivingSaved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
+        </div>
+      </section>
     </div>
   );
 }
@@ -3470,12 +3877,30 @@ function SettingsSubTabs<T extends string>({
 }
 
 export default function SettingsPage() {
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const {
+    isAdmin,
+    isSuperAdmin,
+    isCountryAdmin,
+    isProjectAdmin,
+    canAccessPlatformSettings,
+    canCreateOperationalRoles,
+    adminWorkflowTracks,
+  } = useAuth();
   const mainTabs = useMemo(() => {
     if (isSuperAdmin) return MAIN_TABS;
-    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "projects" || t.id === "platform");
+    if (isCountryAdmin) {
+      const tabs = MAIN_TABS.filter((t) => t.id !== "platform");
+      if (!adminWorkflowTracks.includes("standard")) {
+        return tabs.filter((t) => t.id !== "projects" || adminWorkflowTracks.includes("seah"));
+      }
+      return tabs;
+    }
+    if (isProjectAdmin) {
+      return MAIN_TABS.filter((t) => t.id === "org_officers" || t.id === "workflows_roles" || t.id === "projects");
+    }
+    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "projects");
     return MAIN_TABS.filter((t) => t.id === "projects");
-  }, [isSuperAdmin, isAdmin]);
+  }, [isSuperAdmin, isCountryAdmin, isProjectAdmin, isAdmin, adminWorkflowTracks]);
   const [activeMain, setActiveMain] = useState<MainTab>("projects");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
   const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
@@ -3492,7 +3917,7 @@ export default function SettingsPage() {
   const loadRoleCatalog = useCallback(async () => {
     setRolesLoading(true);
     try {
-      const raw = await listRoles();
+      const raw = await listRoles({ kind: "operational" });
       setRoleCatalog(raw.map(mapGrmRoleToEntry));
     } catch {
       setRoleCatalog([]);
@@ -3526,25 +3951,23 @@ export default function SettingsPage() {
   }
 
   const platformTabs: { id: PlatformSub; label: string }[] = useMemo(() => {
-    if (isSuperAdmin) {
+    if (canAccessPlatformSettings) {
       return [
         { id: "locations", label: "Locations" },
         { id: "reports", label: "Quarterly reports" },
         { id: "project_types", label: "Project types" },
         { id: "system_config", label: "Advanced (JSON)" },
+        { id: "admin_access", label: "Admin access" },
       ];
     }
-    if (isAdmin) {
-      return [{ id: "reports", label: "Quarterly reports" }];
-    }
     return [];
-  }, [isSuperAdmin, isAdmin]);
+  }, [canAccessPlatformSettings]);
 
   useEffect(() => {
-    if (isAdmin && !isSuperAdmin && platformSub !== "reports") {
-      setPlatformSub("reports");
+    if (!canAccessPlatformSettings && platformSub !== "reports") {
+      setPlatformSub("locations");
     }
-  }, [isAdmin, isSuperAdmin, platformSub]);
+  }, [canAccessPlatformSettings, platformSub]);
 
   return (
     <div className="p-6">
@@ -3603,9 +4026,20 @@ export default function SettingsPage() {
             active={wfSub}
             onChange={setWfSub}
           />
-          {wfSub === "workflows" && <WorkflowsTab roleCatalog={roleCatalog} />}
+          {wfSub === "workflows" && (
+            <WorkflowsTab
+              roleCatalog={roleCatalog}
+              canCreateRole={canCreateOperationalRoles}
+              onRoleCatalogRefresh={loadRoleCatalog}
+            />
+          )}
           {wfSub === "roles" && (
-            <RolesTab catalog={roleCatalog} loading={rolesLoading} onReload={loadRoleCatalog} />
+            <RolesTab
+              catalog={roleCatalog}
+              loading={rolesLoading}
+              onReload={loadRoleCatalog}
+              canCreate={canCreateOperationalRoles}
+            />
           )}
         </>
       )}
@@ -3621,6 +4055,7 @@ export default function SettingsPage() {
           {platformSub === "reports" && <QuarterlyReportSettings />}
           {platformSub === "project_types" && isSuperAdmin && <ProjectTypesTab />}
           {platformSub === "system_config" && isSuperAdmin && <SystemConfigTab />}
+          {platformSub === "admin_access" && isSuperAdmin && <AdminAccessTab />}
         </>
       )}
     </div>
