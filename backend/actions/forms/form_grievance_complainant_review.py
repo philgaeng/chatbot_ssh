@@ -91,13 +91,10 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
 
             from backend.config.classification_status import LLM_SKIPPED
-            if (
-                tracker.get_slot("story_main") == "dust_grievance"
-                or tracker.get_slot("intake_fast_path") == "dust"
-            ):
+            from backend.actions.forms.form_dust import is_dust_intake
+
+            if is_dust_intake(tracker):
                 preset_categories = grievance_categories or tracker.get_slot("grievance_categories") or []
-                utterance = self.get_utterance(2)
-                dispatcher.utter_message(text=utterance)
                 categories_local = self._get_categories_in_local_language(preset_categories)
                 return [
                     SlotSet("grievance_summary_temp", ""),

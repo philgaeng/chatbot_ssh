@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Text, Tuple
+from typing import Any, Dict, List, Optional, Text, Tuple
 from datetime import datetime, timedelta
 import re
 from .base_classes.base_classes import BaseAction
@@ -302,6 +302,8 @@ class BaseActionSubmit(BaseAction):
         self,
         dispatcher: CollectingDispatcher,
         grievance_data: Dict[str, Any],
+        *,
+        tracker: Optional[Tracker] = None,
     ) -> None:
         """CB-07 Phase A: filed confirmation only (categorization comes after LLM retrieve)."""
         lang = self.language_code or "en"
@@ -310,12 +312,16 @@ class BaseActionSubmit(BaseAction):
         filed_line = get_utterance_base(
             "action_submit_grievance", "action_submit_grievance", 6, lang
         ).format(grievance_id=gid)
-        on_record = get_utterance_base(
-            "action_submit_grievance", "action_submit_grievance", 5, lang
-        )
+        from backend.actions.forms.form_dust import is_dust_intake
+
+        dust = tracker is not None and is_dust_intake(tracker)
 
         dispatcher.utter_message(text=filed_line)
-        dispatcher.utter_message(text=on_record)
+        if not dust:
+            on_record = get_utterance_base(
+                "action_submit_grievance", "action_submit_grievance", 5, lang
+            )
+            dispatcher.utter_message(text=on_record)
         dispatcher.utter_message(
             json_message={
                 "data": {
@@ -327,14 +333,15 @@ class BaseActionSubmit(BaseAction):
     
     async def _send_grievance_recap_sms(self, 
                                   grievance_data: Dict[str, Any],
-                                  dispatcher: CollectingDispatcher) -> None:
+                                  dispatcher: CollectingDispatcher,
+                                  tracker: Tracker) -> None:
         """Send filed confirmation in chat (3 bubbles) and optional SMS recap."""
         try:
             confirmation_message = self.create_confirmation_message(
                 grievance_data
             )
 
-            self._emit_chat_filed_confirmation(dispatcher, grievance_data)
+            self._emit_chat_filed_confirmation(dispatcher, grievance_data, tracker=tracker)
             
             if grievance_data.get('otp_verified') == True:
                 #send sms
@@ -357,7 +364,7 @@ class BaseActionSubmit(BaseAction):
                     utterance = utterance.format(complainant_phone=complainant_phone)
                     dispatcher.utter_message(text=utterance)
         except Exception as e:
-            self.logger.error(f"Failed to send recap sms to {complainant_phone}: {e}")
+            self.logger.error(f"Failed to send grievance filed confirmation: {e}")
   
     
 
@@ -393,7 +400,7 @@ class BaseActionSubmit(BaseAction):
 
             self.logger.info(f"✅ Grievance updated successfully with ID: {self.grievance_id}")
 
-            await self._send_grievance_recap_sms(grievance_data, dispatcher) #call the function that extracts the phone number, generates the confirmation message and sends it to the user
+            await self._send_grievance_recap_sms(grievance_data, dispatcher, tracker)
 
             # #send email to admin
             # await self._send_grievance_recap_email_to_admin(grievance_data, dispatcher)

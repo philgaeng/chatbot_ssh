@@ -20,6 +20,14 @@ DUST_DEFAULT_DESCRIPTION = (
 )
 
 
+def is_dust_intake(tracker) -> bool:
+    """True when the session is on the road-dust fast path."""
+    return (
+        tracker.get_slot("story_main") == "dust_grievance"
+        or tracker.get_slot("intake_fast_path") == "dust"
+    )
+
+
 class ActionStartDustGrievanceProcess(BaseAction):
     """Start dust fast path: IDs, preset category, default description."""
 
