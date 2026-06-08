@@ -302,7 +302,7 @@ def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
 
 def keycloak_resend_invite_email(user_id: str, db=None) -> str:
     """
-    Send a fresh execute-actions email (new 12h link) for an invited officer.
+    Send a fresh execute-actions email (new 7-day link) for an invited officer.
     Returns the normalized email address the message was sent to.
     """
     if not keycloak_configured():

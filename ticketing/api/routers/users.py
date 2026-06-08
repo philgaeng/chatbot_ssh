@@ -872,7 +872,7 @@ def resend_officer_invite(
         email=sent_to,
         message=(
             f"Setup email resent to {sent_to}. "
-            "The new link expires in 12 hours (check spam if needed)."
+            "The new link expires in 7 days (check spam if needed)."
         ),
     )
 
