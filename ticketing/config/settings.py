@@ -21,11 +21,13 @@ class TicketingSettings(BaseSettings):
 
     # ── Ticketing service ──
     ticketing_port: int = 5002
+    # Canonical shared secret: chatbot ↔ ticketing + ticketing → chatbot backend.
     ticketing_secret_key: str = ""
 
     # ── Integration URLs ──
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
+    # Optional legacy alias; prefer TICKETING_SECRET_KEY everywhere.
     messaging_api_key: str = ""
     # Same key as chatbot backend — used only to decrypt vault fields for reveal broker.
     db_encryption_key: str = ""

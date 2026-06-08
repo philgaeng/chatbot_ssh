@@ -75,8 +75,15 @@ def _identity_value_missing(value: Any) -> bool:
 
 
 def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
-    expected = os.environ.get("TICKETING_SECRET_KEY", "")
-    if expected and x_api_key != expected:
+    valid = {
+        k.strip()
+        for k in (
+            os.environ.get("TICKETING_SECRET_KEY", ""),
+            os.environ.get("MESSAGING_API_KEY", ""),
+        )
+        if k and k.strip()
+    }
+    if valid and (not x_api_key or x_api_key not in valid):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 

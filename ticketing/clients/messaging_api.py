@@ -6,7 +6,7 @@ Used for:
   2. Quarterly report delivery by email to senior roles.
 
 Base URL: settings.backend_grievance_base_url
-Auth:     x-api-key: settings.messaging_api_key
+Auth:     x-api-key: TICKETING_SECRET_KEY (or MESSAGING_API_KEY fallback)
 
 INTEGRATION POINT: backend/api/routers/messaging.py
   POST /api/messaging/send-sms   — AWS SNS, works internationally
@@ -18,6 +18,7 @@ import logging
 
 import httpx
 
+from ticketing.clients.backend_auth import service_integration_api_key
 from ticketing.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -25,9 +26,13 @@ logger = logging.getLogger(__name__)
 
 def _client() -> httpx.Client:
     settings = get_settings()
+    headers: dict[str, str] = {}
+    api_key = service_integration_api_key()
+    if api_key:
+        headers["x-api-key"] = api_key
     return httpx.Client(
         base_url=settings.backend_grievance_base_url,
-        headers={"x-api-key": settings.messaging_api_key},
+        headers=headers,
         timeout=15.0,
     )
 

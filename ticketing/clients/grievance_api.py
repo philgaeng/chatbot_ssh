@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from ticketing.clients.backend_auth import service_integration_api_key
 from ticketing.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -83,10 +84,10 @@ def patch_grievance_classification(
     """
     import json as _json
 
-    settings = get_settings()
     headers: dict[str, str] = {"Content-Type": "application/json"}
-    if settings.messaging_api_key:
-        headers["x-api-key"] = settings.messaging_api_key
+    api_key = service_integration_api_key()
+    if api_key:
+        headers["x-api-key"] = api_key
 
     body: dict[str, Any] = {
         "grievance_classification_status": grievance_classification_status,
@@ -134,9 +135,8 @@ def patch_complainant(
     the backend is reachable, then returns a synthetic success.  Replace once
     the real PATCH endpoint is implemented in backend/api/.
     """
-    settings = get_settings()
     headers = {}
-    api_key = settings.ticketing_secret_key or settings.messaging_api_key
+    api_key = service_integration_api_key()
     if api_key:
         headers["x-api-key"] = api_key
 

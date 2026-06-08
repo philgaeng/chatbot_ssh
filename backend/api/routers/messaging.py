@@ -63,12 +63,15 @@ def _get_logger():
 
 
 def _auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
-    expected = (
-        os.getenv("MESSAGING_API_KEY")
-        or os.getenv("TICKETING_SECRET_KEY")
-        or ""
-    ).strip() or None
-    if expected and x_api_key != expected:
+    valid = {
+        k.strip()
+        for k in (
+            os.getenv("TICKETING_SECRET_KEY", ""),
+            os.getenv("MESSAGING_API_KEY", ""),
+        )
+        if k and k.strip()
+    }
+    if valid and (not x_api_key or x_api_key not in valid):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"status": "FAILED", "error_code": "UNAUTHORIZED", "error": "Invalid API key"},
