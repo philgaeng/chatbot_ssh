@@ -812,11 +812,12 @@ def get_ticket(
     summary="List grievance category options from classification taxonomy (TP-14)",
 )
 def list_grievance_categories(
+    db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(get_current_user),
 ) -> list[dict]:
     from ticketing.services.grievance_taxonomy import list_grievance_category_options
 
-    return list_grievance_category_options()
+    return list_grievance_category_options(db)
 
 
 @router.patch(

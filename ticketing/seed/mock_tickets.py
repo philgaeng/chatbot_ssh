@@ -646,6 +646,17 @@ def seed_default_settings(db: Session) -> None:
         existing.value = ORG_ROLES
         logger.info("Updated org_roles setting (%d roles)", len(ORG_ROLES))
 
+    from ticketing.services.grievance_categories_catalog import SETTING_KEY, load_default_catalog
+
+    existing_categories = db.get(Settings, SETTING_KEY)
+    if existing_categories is None:
+        catalog = load_default_catalog()
+        db.add(Settings(key=SETTING_KEY, value=catalog))
+        logger.info(
+            "Seeded grievance_categories setting (%d categories)",
+            len(catalog["categories"]),
+        )
+
 
 def seed_all(reset: bool = False) -> None:
     """Full seed: workflows + officers + mock tickets."""

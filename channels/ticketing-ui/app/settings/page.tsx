@@ -43,6 +43,8 @@ import {
   setReportLimits,
   getArchivingPolicy,
   setArchivingPolicy,
+  getGrievanceCategoriesCatalog,
+  setGrievanceCategoriesCatalog,
   getProjectActorRoles,
   setProjectActorRoles,
   addPackageOrg,
@@ -3595,28 +3597,35 @@ const DEFAULT_ARCHIVING_POLICY_JSON = {
   seah_years_before_archiving: null,
 };
 
+const DEFAULT_GRIEVANCE_CATEGORIES_JSON = { categories: [] };
+
 function SystemConfigTab() {
   const [jsonText, setJsonText] = useState("");
   const [limitsJson, setLimitsJson] = useState("");
   const [archivingJson, setArchivingJson] = useState("");
+  const [categoriesJson, setCategoriesJson] = useState("");
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [savingLimits, setSavingLimits] = useState(false);
   const [savingArchiving, setSavingArchiving] = useState(false);
+  const [savingCategories, setSavingCategories] = useState(false);
   const [error, setError]       = useState("");
   const [limitsError, setLimitsError] = useState("");
   const [archivingError, setArchivingError] = useState("");
+  const [categoriesError, setCategoriesError] = useState("");
   const [saved, setSaved]       = useState(false);
   const [limitsSaved, setLimitsSaved] = useState(false);
   const [archivingSaved, setArchivingSaved] = useState(false);
+  const [categoriesSaved, setCategoriesSaved] = useState(false);
 
   useEffect(() => {
     Promise.all([
       getOrgRoles().catch(() => null),
       getReportLimits().catch(() => null),
       getArchivingPolicy().catch(() => null),
+      getGrievanceCategoriesCatalog().catch(() => null),
     ])
-      .then(([roles, limits, archiving]) => {
+      .then(([roles, limits, archiving, categories]) => {
         if (roles) {
           setJsonText(JSON.stringify(roles, null, 2));
         } else {
@@ -3639,6 +3648,9 @@ function SystemConfigTab() {
         }
         setLimitsJson(JSON.stringify(limits ?? DEFAULT_REPORT_LIMITS_JSON, null, 2));
         setArchivingJson(JSON.stringify(archiving ?? DEFAULT_ARCHIVING_POLICY_JSON, null, 2));
+        setCategoriesJson(
+          JSON.stringify(categories ?? DEFAULT_GRIEVANCE_CATEGORIES_JSON, null, 2),
+        );
       })
       .finally(() => setLoading(false));
   }, []);
@@ -3693,6 +3705,34 @@ function SystemConfigTab() {
       setArchivingError(e instanceof Error ? e.message : "Invalid JSON");
     }
     setSavingArchiving(false);
+  }
+
+  async function handleSaveCategories() {
+    setSavingCategories(true);
+    setCategoriesError("");
+    setCategoriesSaved(false);
+    try {
+      const parsed = JSON.parse(categoriesJson);
+      if (typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Must be a JSON object with a categories array");
+      }
+      if (!Array.isArray(parsed.categories) || parsed.categories.length === 0) {
+        throw new Error("categories must be a non-empty array");
+      }
+      for (const item of parsed.categories) {
+        if (!item.classification || !item.generic_grievance_name) {
+          throw new Error(
+            'Each category needs "classification" and "generic_grievance_name"',
+          );
+        }
+      }
+      await setGrievanceCategoriesCatalog(parsed);
+      setCategoriesSaved(true);
+      setTimeout(() => setCategoriesSaved(false), 2500);
+    } catch (e: unknown) {
+      setCategoriesError(e instanceof Error ? e.message : "Invalid JSON");
+    }
+    setSavingCategories(false);
   }
 
   return (
@@ -3825,6 +3865,52 @@ function SystemConfigTab() {
             {savingArchiving ? "Saving…" : "Save archiving policy"}
           </button>
           {archivingSaved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
+        </div>
+      </section>
+
+      <section className="bg-gray-50 border border-gray-200 rounded-lg p-5 mt-6">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Grievance classification catalog</h3>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Complaint categories for LLM classification and officer validation. Saving syncs to{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">public.grievance_classification_taxonomy</code>.
+            Each entry in <code className="bg-gray-200 px-1 rounded text-xs">categories</code> supports:{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">category_key</code> (optional — derived from
+            classification + generic name),{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">generic_grievance_name</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">generic_grievance_name_ne</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">short_description</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">short_description_ne</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">classification</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">classification_ne</code>,{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">description</code> (LLM prompt text),{" "}
+            <code className="bg-gray-200 px-1 rounded text-xs">description_ne</code>, follow-up question
+            fields, and <code className="bg-gray-200 px-1 rounded text-xs">high_priority</code>.
+          </p>
+        </div>
+        <textarea
+          value={categoriesJson}
+          onChange={(e) => setCategoriesJson(e.target.value)}
+          rows={28}
+          spellCheck={false}
+          disabled={loading}
+          className="w-full font-mono text-xs bg-white border border-gray-300 rounded px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y"
+        />
+        {categoriesError && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {categoriesError}
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveCategories}
+            disabled={savingCategories || loading}
+            className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {savingCategories ? "Saving…" : "Save classification catalog"}
+          </button>
+          {categoriesSaved && <span className="text-xs text-green-600 font-medium">✓ Saved</span>}
         </div>
       </section>
     </div>

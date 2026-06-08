@@ -1208,6 +1208,28 @@ export interface ArchivingPolicyInfo {
   seah_years_before_archiving: number | null;
 }
 
+/** One grievance classification entry (LLM + officer UI taxonomy). */
+export interface GrievanceCategoryCatalogEntry {
+  category_key: string;
+  generic_grievance_name: string;
+  generic_grievance_name_ne: string;
+  short_description: string;
+  short_description_ne: string;
+  classification: string;
+  classification_ne: string;
+  description: string;
+  description_ne: string;
+  follow_up_question_description: string;
+  follow_up_question_description_ne: string;
+  follow_up_question_quantification: string;
+  follow_up_question_quantification_ne: string;
+  high_priority: boolean;
+}
+
+export interface GrievanceCategoriesCatalogInfo {
+  categories: GrievanceCategoryCatalogEntry[];
+}
+
 export interface QuarterlyAssignment {
   id: string;
   quarter_key: string;
@@ -1611,6 +1633,22 @@ export function setArchivingPolicy(policy: ArchivingPolicyInfo): Promise<void> {
   return apiFetch<void>("/api/v1/settings/archiving_policy", {
     method: "PUT",
     body: JSON.stringify({ value: policy }),
+  });
+}
+
+/** Super-admin: grievance classification catalog (ticketing.settings.grievance_categories). */
+export function getGrievanceCategoriesCatalog(): Promise<GrievanceCategoriesCatalogInfo> {
+  return apiFetch<{ key: string; value: GrievanceCategoriesCatalogInfo }>(
+    "/api/v1/settings/grievance_categories",
+  ).then((r) => r.value);
+}
+
+export function setGrievanceCategoriesCatalog(
+  catalog: GrievanceCategoriesCatalogInfo,
+): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/grievance_categories", {
+    method: "PUT",
+    body: JSON.stringify({ value: catalog }),
   });
 }
 

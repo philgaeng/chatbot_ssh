@@ -283,6 +283,8 @@ def seed_workflow_assignment(db: Session) -> None:
 def seed_settings(db: Session) -> None:
     """Seed default integration settings."""
     from ticketing.config.settings import get_settings
+    from ticketing.services.grievance_categories_catalog import load_default_catalog
+
     s = get_settings()
 
     defaults = {
@@ -305,6 +307,7 @@ def seed_settings(db: Session) -> None:
                 "dor_rep",
             ],
         },
+        "grievance_categories": load_default_catalog(),
         "sla_watchdog_interval_minutes": {"value": 15},
         # ── Tier-based notification rules (spec 12) ───────────────────────────
         "notification_rules": {
@@ -340,7 +343,34 @@ def seed_settings(db: Session) -> None:
         else:
             logger.info("  = setting already exists: %s", key)
     _seed_quarterly_assignments(db)
+    _sync_grievance_categories_public_if_empty(db)
     db.flush()
+
+
+def _sync_grievance_categories_public_if_empty(db: Session) -> None:
+    """When public taxonomy is empty, sync from ticketing.settings (chatbot LLM)."""
+    from sqlalchemy import text
+
+    from ticketing.services.grievance_categories_catalog import (
+        SETTING_KEY,
+        sync_categories_to_public_taxonomy,
+    )
+
+    try:
+        count = db.execute(
+            text("SELECT COUNT(*) FROM public.grievance_classification_taxonomy")
+        ).scalar()
+        if count:
+            return
+        row = db.get(Settings, SETTING_KEY)
+        if not row or not isinstance(row.value, dict):
+            return
+        categories = row.value.get("categories") or []
+        if categories:
+            sync_categories_to_public_taxonomy(db, categories)
+            logger.info("  + synced %s grievance categories to public taxonomy", len(categories))
+    except Exception as exc:
+        logger.warning("  ! grievance category public sync skipped: %s", exc)
 
 
 def _seed_quarterly_assignments(db: Session) -> None:

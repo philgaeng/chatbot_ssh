@@ -16,7 +16,9 @@ from ticketing.models.settings import Settings
 router = APIRouter()
 
 # Only super_admin may write these keys (IT / advanced settings).
-SUPER_ADMIN_ONLY_KEYS = frozenset({"org_roles", "report_limits", "archiving_policy"})
+SUPER_ADMIN_ONLY_KEYS = frozenset(
+    {"org_roles", "report_limits", "archiving_policy", "grievance_categories"}
+)
 
 
 class SettingsUpsert(BaseModel):
@@ -45,7 +47,18 @@ def get_setting(
     key: str,
     db: Session = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
-) -> Settings:
+) -> Settings | SettingsResponse:
+    if key == "grievance_categories":
+        from ticketing.services.grievance_categories_catalog import load_grievance_categories_catalog
+
+        value = load_grievance_categories_catalog(db)
+        row = db.get(Settings, key)
+        return SettingsResponse(
+            key=key,
+            value=value,
+            updated_by_user_id=row.updated_by_user_id if row else None,
+        )
+
     setting = db.get(Settings, key)
     if not setting:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
@@ -86,6 +99,21 @@ def upsert_setting(
 
         try:
             merged = save_archiving_policy(
+                db,
+                value if isinstance(value, dict) else {},
+                current_user.user_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        setting = db.get(Settings, key)
+        assert setting is not None
+        return setting
+
+    if key == "grievance_categories":
+        from ticketing.services.grievance_categories_catalog import save_grievance_categories_catalog
+
+        try:
+            save_grievance_categories_catalog(
                 db,
                 value if isinstance(value, dict) else {},
                 current_user.user_id,
