@@ -214,6 +214,41 @@ To change any of these for local dev, set them in `env.local` and rebuild `grm_u
 
 ---
 
+## Ticketing pytest
+
+**Preferred (container — matches deployed deps and DB):**
+
+```bash
+make test-ticketing
+# equivalent:
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml \
+  exec -T ticketing_api python -m pytest tests/ticketing/ -v
+```
+
+**Host WSL (conda `chatbot-rest`):** needs GRM pip deps + Docker Postgres on host **:5433**
+(`docker-compose.grm.yml` publishes `db` as `${POSTGRES_HOST_PORT:-5433}:5432`).
+Do **not** use host `:5432` unless that is your compose DB — another Postgres there
+will cause auth failures or hangs.
+
+```bash
+make dev-grm-deps          # pip install -r requirements.grm.txt (reportlab, etc.)
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml up -d db
+make migrate_ticketing
+make wsl-seed              # or --officers-only seed if tickets already exist
+make test-ticketing-host   # uses tests/ticketing/_host_env.py → localhost:5433
+```
+
+**Unit-only on host (no DB):**
+
+```bash
+make test-ticketing-unit
+```
+
+After changing `ticketing/` Python code, rebuild before `make test-ticketing`:
+`docker compose ... build ticketing_api && docker compose ... up -d --force-recreate ticketing_api`
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -230,6 +265,8 @@ To change any of these for local dev, set them in `env.local` and rebuild `grm_u
 | `GET /api/v1/scan/{token}` → `422 package_has_no_location` | Package referenced by the QR token has no rows in `ticketing.package_locations` | Open the Settings UI → Packages → attach at least one location, then re-test the scan. See the "QR Token Scan Flow" section in `docs/COMMIT_STRATEGY.md`. |
 | QR sticker scans but webchat asks geography anyway | Token resolved with no district info, or chatbot can't reach `ticketing_api` (logged but non-fatal) | Confirm `curl http://127.0.0.1:5002/api/v1/scan/{token}` returns `location_code`; check `backend` container has `TICKETING_API_URL` reachable |
 | QR URL printed by Settings UI points at wrong host | `CHATBOT_WEBCHAT_URL` env var unset or stale in `ticketing_api` | Set `CHATBOT_WEBCHAT_URL` in `env.local` and recreate `ticketing_api` only — see `docs/COMMIT_STRATEGY.md` |
+| Host `pytest tests/ticketing` fails `No module named 'reportlab'` | `requirements.grm.txt` not installed in conda env | `make dev-grm-deps` |
+| Host pytest DB `password authentication failed` on `:5432` | Host Postgres is not the Docker `db` container | Use `make test-ticketing-host` (port **5433**) or `make test-ticketing` in container |
 
 ---
 

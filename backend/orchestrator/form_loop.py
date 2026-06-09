@@ -41,7 +41,9 @@ from backend.orchestrator.action_registry import invoke_action, events_to_slot_u
 _ASK_ACTIONS_BY_SLOT = {
     # Grievance flow
     "grievance_new_detail": "action_ask_grievance_new_detail",
-    "dust_new_detail": "action_ask_dust_new_detail",
+    "road_hazard_subtype": "action_ask_road_hazard_subtype",
+    "road_hazard_new_detail": "action_ask_road_hazard_new_detail",
+    "dust_new_detail": "action_ask_road_hazard_new_detail",
     # Contact form
     "complainant_location_consent": "action_ask_complainant_location_consent",
     "complainant_province": "action_ask_complainant_province",
@@ -327,9 +329,9 @@ def get_form(active_loop: str) -> Any:
         if active_loop == "form_grievance":
             from backend.actions.forms.form_grievance import ValidateFormGrievance
             _FORMS[active_loop] = ValidateFormGrievance()
-        elif active_loop == "form_dust":
-            from backend.actions.forms.form_dust import ValidateFormDust
-            _FORMS[active_loop] = ValidateFormDust()
+        elif active_loop in ("form_road_hazard", "form_dust"):
+            from backend.actions.forms.form_road_hazard import ValidateFormRoadHazard
+            _FORMS[active_loop] = ValidateFormRoadHazard()
         elif active_loop == "form_contact":
             from backend.actions.forms.form_contact import ValidateFormContact
             _FORMS[active_loop] = ValidateFormContact()

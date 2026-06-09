@@ -33,10 +33,12 @@ from ticketing.constants.demo_officers import (
     LEGACY_OFFICER_ID_MAP,
     OFFICER_ADMIN,
     OFFICER_ADB,
+    OFFICER_COUNTRY_ADMIN_SEAH,
+    OFFICER_COUNTRY_ADMIN_STD,
     OFFICER_GRC_CHAIR,
     OFFICER_GRC_MEMBER_1,
     OFFICER_GRC_MEMBER_2,
-    OFFICER_LOCAL_ADMIN,
+    OFFICER_PROJECT_ADMIN,
     OFFICER_PIU_L2,
     OFFICER_PIU_L2_2,
     OFFICER_PIU_L2_3,
@@ -202,6 +204,42 @@ def seed_mock_officers(db: Session) -> None:
     db.flush()
 
 
+def seed_admin_scopes(db: Session) -> None:
+    """Scoped admin assignments for demo matrix (country_admin / project_admin)."""
+    from sqlalchemy import select
+
+    from ticketing.models.admin_scope import AdminScope
+
+    specs = [
+        (OFFICER_COUNTRY_ADMIN_STD, "country_admin", "NP", None, "standard", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_SEAH, "country_admin", "NP", None, "seah", OFFICER_ADMIN),
+        (OFFICER_PROJECT_ADMIN, "project_admin", None, "KL_ROAD", "standard", OFFICER_COUNTRY_ADMIN_STD),
+    ]
+    for user_id, role_key, country, project_id, track, created_by in specs:
+        existing = db.execute(
+            select(AdminScope).where(
+                AdminScope.user_id == user_id,
+                AdminScope.role_key == role_key,
+                AdminScope.workflow_track == track,
+                AdminScope.project_id == project_id,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            continue
+        db.add(
+            AdminScope(
+                user_id=user_id,
+                role_key=role_key,
+                country_code=country,
+                project_id=project_id,
+                workflow_track=track,
+                created_by_user_id=created_by,
+            )
+        )
+        logger.info("  + admin_scope: %s → %s track=%s", user_id, role_key, track)
+    db.flush()
+
+
 def seed_mock_officer_scopes(db: Session) -> None:
     """
     Seed OfficerScope rows so auto_assign_officer() can match live tickets.
@@ -215,8 +253,8 @@ def seed_mock_officer_scopes(db: Session) -> None:
     from sqlalchemy import select
 
     scopes = [
-        # Local admin: KL Road project setup (province-wide)
-        dict(user_id=OFFICER_LOCAL_ADMIN, role_key="local_admin",
+        # Project admin: KL Road project setup (province-wide)
+        dict(user_id=OFFICER_PROJECT_ADMIN, role_key="project_admin",
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
@@ -608,6 +646,17 @@ def seed_default_settings(db: Session) -> None:
         existing.value = ORG_ROLES
         logger.info("Updated org_roles setting (%d roles)", len(ORG_ROLES))
 
+    from ticketing.services.grievance_categories_catalog import SETTING_KEY, load_default_catalog
+
+    existing_categories = db.get(Settings, SETTING_KEY)
+    if existing_categories is None:
+        catalog = load_default_catalog()
+        db.add(Settings(key=SETTING_KEY, value=catalog))
+        logger.info(
+            "Seeded grievance_categories setting (%d categories)",
+            len(catalog["categories"]),
+        )
+
 
 def seed_all(reset: bool = False) -> None:
     """Full seed: workflows + officers + mock tickets."""
@@ -617,6 +666,8 @@ def seed_all(reset: bool = False) -> None:
             logger.info("Reset mode: deleting all ticketing.* rows...")
             db.execute(TicketEvent.__table__.delete())
             db.execute(Ticket.__table__.delete())
+            from ticketing.models.admin_scope import AdminScope
+            db.execute(AdminScope.__table__.delete())
             db.execute(OfficerScope.__table__.delete())
             db.execute(UserRole.__table__.delete())
             from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
@@ -641,6 +692,8 @@ def seed_all(reset: bool = False) -> None:
         # Seed mock officers, scopes, and tickets
         logger.info("Seeding mock officers...")
         seed_mock_officers(db)
+        logger.info("Seeding admin scopes...")
+        seed_admin_scopes(db)
         logger.info("Seeding mock officer scopes...")
         seed_mock_officer_scopes(db)
         logger.info("Seeding mock tickets (demo scenarios)...")
@@ -667,6 +720,8 @@ def seed_officers_only() -> None:
     try:
         logger.info("Seeding mock officers (roles only)...")
         seed_mock_officers(db)
+        logger.info("Seeding admin scopes...")
+        seed_admin_scopes(db)
         logger.info("Seeding mock officer scopes...")
         seed_mock_officer_scopes(db)
         db.commit()

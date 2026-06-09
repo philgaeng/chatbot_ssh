@@ -13,7 +13,9 @@ It is written so a ticketing-team engineer can implement the tab without re-deri
 
 | Artifact | Role |
 |----------|------|
-| [`docs/features_to_add/projects_catalog_admin_layers_and_settings.md`](../projects_catalog_admin_layers_and_settings.md) | Country-agnostic project columns, JSON alignment rule |
+| [`features/projects_catalog_admin_layers_and_settings.md`](../projects_catalog_admin_layers_and_settings.md) | Country-agnostic project columns, JSON alignment rule |
+| [`10_settings_overview.md`](../../10_settings_overview.md) | Ticketing Settings index — **not** the same as `public.projects` |
+| [`13_projects_and_packages.md`](../../13_projects_and_packages.md) | GRM `ticketing.projects` (workflows, packages, go-live) |
 | [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../../../sprints/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md) | Catalog behavior, `project_uuid`, outro |
 | [`docs/Refactor specs/April20_seah/10_seah_db_migration_inventory.md`](../../../sprints/Refactor specs/April20_seah/10_seah_db_migration_inventory.md) | DB inventory and rollout notes |
 | `backend/services/database_services/postgres_services.py` | `find_seah_contact_point`, `_ensure_seah_contact_points_table` |

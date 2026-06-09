@@ -15,6 +15,10 @@ This folder contains production specs for backend services used across multiple 
 - `docs/services/10_database_service.md`
 - `docs/services/09_grm_integration_service.md`
 
+## Cross-cutting policies
+
+- [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) — resolved grievance archiving (touches file processing, task queue, grievance API, ticketing)
+
 ## Scope Boundary
 
 - Shared service contracts and responsibilities live in `docs/services`.

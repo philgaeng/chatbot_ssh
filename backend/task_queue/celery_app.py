@@ -6,6 +6,7 @@ from .settings import (
     CELERY_RESULT_BACKEND,
     QUEUE_LLM,
     QUEUE_DEFAULT,
+    QUEUE_FILE,
     task_config,
     worker_config
 )
@@ -40,7 +41,13 @@ celery_app.conf.update(
     task_queues=(
         Queue(QUEUE_LLM, Exchange(QUEUE_LLM), routing_key=QUEUE_LLM),
         Queue(QUEUE_DEFAULT, Exchange(QUEUE_DEFAULT), routing_key=QUEUE_DEFAULT),
+        Queue(QUEUE_FILE, Exchange(QUEUE_FILE), routing_key=QUEUE_FILE),
     ),
+    task_routes={
+        'process_file_upload_task': {'queue': QUEUE_FILE},
+        'process_batch_files_task': {'queue': QUEUE_FILE},
+        'aggregate_batch_results': {'queue': QUEUE_FILE},
+    },
     # Logger settings
     worker_log_level='DEBUG',
     worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',

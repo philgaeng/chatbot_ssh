@@ -32,9 +32,12 @@ def _get_action(action_name: str) -> Any:
             ActionStartGrievanceProcess,
             ActionAskGrievanceNewDetail,
         )
-        from backend.actions.forms.form_dust import (
+        from backend.actions.forms.form_road_hazard import (
             ActionStartDustGrievanceProcess,
+            ActionStartRoadHazardGrievanceProcess,
             ActionAskDustNewDetail,
+            ActionAskRoadHazardSubtype,
+            ActionAskRoadHazardNewDetail,
         )
         from backend.actions.action_map_location import (
             ActionAskLocationMethod,
@@ -144,8 +147,13 @@ def _get_action(action_name: str) -> Any:
         # Grievance
         _ACTIONS["action_start_grievance_process"] = ActionStartGrievanceProcess()
         _ACTIONS["action_start_dust_grievance_process"] = ActionStartDustGrievanceProcess()
+        _ACTIONS["action_start_road_hazard_grievance_process"] = (
+            ActionStartRoadHazardGrievanceProcess()
+        )
         _ACTIONS["action_ask_grievance_new_detail"] = ActionAskGrievanceNewDetail()
         _ACTIONS["action_ask_dust_new_detail"] = ActionAskDustNewDetail()
+        _ACTIONS["action_ask_road_hazard_subtype"] = ActionAskRoadHazardSubtype()
+        _ACTIONS["action_ask_road_hazard_new_detail"] = ActionAskRoadHazardNewDetail()
         _ACTIONS["action_ask_location_method"] = ActionAskLocationMethod()
         _ACTIONS["action_ask_map_location"] = ActionAskMapLocation()
         _ACTIONS["action_open_map_picker"] = ActionOpenMapPicker()

@@ -694,34 +694,53 @@ UTTERANCE_MAPPING = {
             }
         }
     },
-    'form_dust': {
-        'action_start_dust_grievance_process': {
+    'form_road_hazard': {
+        'action_start_road_hazard_grievance_process': {
             'utterances': {
                 1: {
-                    'en': "Road dust report — we will ask for map location and photos next.",
-                    'ne': "सडक धुलो उजुरी — अर्को चरणमा नक्सा स्थान र तस्बिर सोधिनेछ।",
+                    'en': "Road hazard report — choose the type, then we will ask for map location and photos.",
+                    'ne': "सडक खतरा उजुरी — प्रकार छान्नुहोस्, त्यसपछि नक्सा स्थान र तस्बिर सोधिनेछ।",
                 }
             }
         },
-        'action_ask_dust_new_detail': {
+        'action_start_dust_grievance_process': {
+            'utterances': {
+                1: {
+                    'en': "Road hazard (dust) report — we will ask for map location and photos next.",
+                    'ne': "सडक खतरा (धुलो) उजुरी — अर्को चरणमा नक्सा स्थान र तस्बिर सोधिनेछ।",
+                }
+            }
+        },
+        'action_ask_road_hazard_subtype': {
+            'utterances': {
+                1: {
+                    'en': "What type of road hazard are you reporting?",
+                    'ne': "तपाईं कस्तो प्रकारको सडक खतरा रिपोर्ट गर्दै हुनुहुन्छ?",
+                }
+            },
+            'buttons': {
+                1: BUTTONS_ROAD_HAZARD_SUBTYPES,
+            },
+        },
+        'action_ask_road_hazard_new_detail': {
             'utterances': {
                 1: {
                     'en': (
-                        "Road dust fast path: add a short note if you wish, or tap **File as is** to continue. "
-                        "Next you will set location on the map and add photos."
+                        "Road hazard ({subtype_label}) fast path: add a short note if you wish, or tap **File as is** "
+                        "to continue. Next you will set location on the map and add photos."
                     ),
                     'ne': (
-                        "सडक धुलो द्रुत मार्ग: चाहनुभए छोटो नोट थप्नुहोस्, वा **यसै रूपमा दर्ता** थिचेर अगाडि बढ्नुहोस्। "
-                        "अर्को चरणमा नक्सामा स्थान र तस्बिरहरू थपिनेछ।"
+                        "सडक खतरा ({subtype_label}) द्रुत मार्ग: चाहनुभए छोटो नोट थप्नुहोस्, वा **यसै रूपमा दर्ता** "
+                        "थिचेर अगाडि बढ्नुहोस्। अर्को चरणमा नक्सामा स्थान र तस्बिरहरू थपिनेछ।"
                     ),
                 },
                 2: {
-                    'en': "Lets restart, please enter your note or tap File as is.",
+                    'en': "Let's restart — enter your note or tap File as is.",
                     'ne': "पुनः सुरु गर्नुहोस्, नोट टाइप गर्नुहोस् वा यसै रूपमा दर्ता थिच्नुहोस्।",
                 },
                 3: {
-                    'en': "Please enter more details about the dust issue...",
-                    'ne': "कृपया धुलो सम्बन्धी थप विवरण प्रविष्ट गर्नुहोस्...",
+                    'en': "Please enter more details about this road hazard...",
+                    'ne': "कृपया यो सडक खतराको थप विवरण प्रविष्ट गर्नुहोस्...",
                 },
                 4: {
                     'en': (
@@ -735,7 +754,7 @@ UTTERANCE_MAPPING = {
                 },
             },
             'buttons': {
-                1: BUTTONS_DUST_FILE_AS_IS,
+                1: BUTTONS_ROAD_HAZARD_FILE_AS_IS,
                 4: BUTTONS_GRIEVANCE_SUBMISSION,
             },
         },
@@ -1121,14 +1140,14 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': [
                         {"title": "File a grievance", "payload": "/new_grievance"},
-                        {"title": "Report road dust (fast path)", "payload": "/dust_grievance"},
+                        {"title": "Report a road hazard (fast path)", "payload": "/road_hazard_grievance"},
                         {"title": "Report sexual exploitation, sexual abuse, and sexual harassment", "payload": "/seah_intake"},
                         {"title": "Check my status", "payload": "/start_status_check"},
                         {"title": "Exit", "payload": "/goodbye"}
                     ],
                     'ne': [
                         {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
-                        {"title": "सडक धुलो उजुरी (छिटो मार्ग)", "payload": "/dust_grievance"},
+                        {"title": "सडक खतरा उजुरी (छिटो मार्ग)", "payload": "/road_hazard_grievance"},
                         {"title": "SEAH/SEIA उजुरी दर्ता गर्नुहोस्", "payload": "/seah_intake"},
                         {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/start_status_check"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
@@ -2252,26 +2271,26 @@ Do you want to add more details before submission?""",
         "post_upload": {
             "utterances": {
                 1: {
-                    "en": "Your voice record is saved. You can add more voice records or go back to the chat.",
-                    'ne': "तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
+                    "en": "Your file is saved. You can add more files or go back to the chat.",
+                    'ne': "तपाईंको फाइल सेव भयो। तपाईं थप फाइलहरू थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
                 },
                 2: {
-                    "en": "Your voice record is saved. Here's where we left off.",
-                    'ne': "तपाईंको आवाज रेकर्ड सेव भयो। यहाँ हामी रोक्यौ।",
+                    "en": "Your file is saved. Here's where we left off.",
+                    'ne': "तपाईंको फाइल सेव भयो। यहाँ हामी रोक्यौ।",
                 },
                 3: {
-                    "en": "One or more voice records could not be saved. You can try adding voice records again or go back to the chat.",
-                    'ne': "एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं आवाज रेकर्ड फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
+                    "en": "One or more files could not be saved. You can try adding files again or go back to the chat.",
+                    'ne': "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
                 }
             },
             "buttons": {
                 1: {
                     "en": [
-                        {"title": "Add a voice record", "payload": "__add_voice_record__"},
+                        {"title": "Add a file", "payload": "__add_voice_record__"},
                         {"title": "Next step", "payload": "__voice_next_step__"}
                     ],
                     "ne": [
-                        {"title": "आवाज रेकर्ड थप्नुहोस्", "payload": "__add_voice_record__"},
+                        {"title": "फाइल थप्नुहोस्", "payload": "__add_voice_record__"},
                         {"title": "अर्को चरण", "payload": "__voice_next_step__"},
                     ]
                 }

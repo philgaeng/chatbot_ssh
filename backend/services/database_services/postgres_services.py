@@ -708,6 +708,10 @@ class DatabaseManager(BaseDatabaseManager):
     def update_grievance_status(self, grievance_id: str, status_code: str, created_by: Optional[str] = None, assigned_to: Optional[str] = None, notes: Optional[str] = None) -> bool:
         """Update grievance status"""
         return self.grievance.update_grievance_status(grievance_id, status_code, created_by, assigned_to, notes)
+
+    def is_grievance_archived(self, grievance_id: str) -> bool:
+        """True when grievance is archived."""
+        return self.grievance.is_grievance_archived(grievance_id)
     
     def get_grievance_files(self, grievance_id: str) -> List[Dict[str, Any]]:
         """Get files attached to a grievance"""

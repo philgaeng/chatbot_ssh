@@ -19,20 +19,35 @@
 | [`Escalation_rules.md`](Escalation_rules.md) | SLA rules, escalation levels, as-implemented summary | ✅ Current |
 | [`LOCATION_CODES.md`](LOCATION_CODES.md) | Canonical Nepal location codes scheme | ✅ Current |
 
+**Cross-cutting (repo root):** [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) — resolved-case archiving, `archiving_policy` settings, attachment tiers.
+
 ## Extended specs
 
 | Document | Contents | Status |
 |---|---|---|
-| [`07_officer_management_and_assignment.md`](07_officer_management_and_assignment.md) | Officer accounts, roles, OfficerScope, assignment logic | Current |
+| [`07_officer_management_and_assignment.md`](07_officer_management_and_assignment.md) | Officer accounts, scopes, assignment logic | Current |
 | [`08_ticket_resolution_and_case_summary.md`](08_ticket_resolution_and_case_summary.md) | Resolution flow, resolved summary, 4-tier model spec | Current |
 | [`09_reports_and_report_builder.md`](09_reports_and_report_builder.md) | Reports: Overview / Pivot / Quarterly email (built); Summary tab §12 (planned) | Current |
+| [`15_ticket_queue_search_and_filters.md`](15_ticket_queue_search_and_filters.md) | Queue / All Tickets search bar + filters (priority, SLA, date filed, project, package) | Current |
 
-## Features
+## Settings (admin UI)
+
+Start at [`10_settings_overview.md`](10_settings_overview.md) — maps all four Settings tabs to child specs.
+
+| Document | Contents | Status |
+|---|---|---|
+| [`10_settings_overview.md`](10_settings_overview.md) | Settings index, access control, two “role” concepts, `ticketing.settings` keys | Current |
+| [`11_roles_and_permissions.md`](11_roles_and_permissions.md) | Admin ladder (3 levels) + operational GRM roles, UI placement | Locked spec |
+| [`12_workflows_configuration.md`](12_workflows_configuration.md) | Workflow definitions, steps, SLAs, templates, notification rules | Current |
+| [`13_projects_and_packages.md`](13_projects_and_packages.md) | `ticketing.projects`, actors, packages, go-live, QR | Current |
+| [`14_platform_settings.md`](14_platform_settings.md) | Locations, quarterly report settings, project types, system JSON | Current |
+
+## Features (chatbot-shared data)
 
 | Document | Contents |
 |---|---|
-| [`features/projects_catalog_admin_layers_and_settings.md`](features/projects_catalog_admin_layers_and_settings.md) | Projects table, country-agnostic admin layers, settings CRUD |
-| [`features/settings/settings_tab_projects_and_seah_contact_centers.md`](features/settings/settings_tab_projects_and_seah_contact_centers.md) | Settings tab: projects + SEAH contact centers |
+| [`features/projects_catalog_admin_layers_and_settings.md`](features/projects_catalog_admin_layers_and_settings.md) | `public.projects` catalog design, country-agnostic admin layers |
+| [`features/settings/settings_tab_projects_and_seah_contact_centers.md`](features/settings/settings_tab_projects_and_seah_contact_centers.md) | Chatbot catalog Settings: `public.projects` + `seah_contact_points` CSV |
 
 ## Shared service contract
 

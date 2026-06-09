@@ -26,6 +26,8 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "display_name": "Super Admin",
         "workflow_scope": "Both",
         "jurisdiction_mode": "global",
+        "role_kind": "admin",
+        "role_origin": "system",
         "description": (
             "Full system access. Can manage all settings, users, and tickets."
         ),
@@ -34,9 +36,11 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "country_admin",
         "display_name": "Country Administrator",
-        "workflow_scope": "Standard",
+        "workflow_scope": "Both",
         "jurisdiction_mode": "country",
-        "description": "Country-level administration (legacy seed role).",
+        "role_kind": "admin",
+        "role_origin": "system",
+        "description": "Country-tier admin — workflow track is set on admin_scopes assignment.",
         "permissions": [
             "tickets:read",
             "projects:manage",
@@ -49,13 +53,16 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "project_admin",
         "display_name": "Project Administrator",
-        "workflow_scope": "Standard",
-        "description": "Project-scoped administration (legacy seed role).",
+        "workflow_scope": "Both",
+        "role_kind": "admin",
+        "role_origin": "system",
+        "description": "Project-tier delegate — workflow track is set on admin_scopes assignment.",
         "permissions": [
             "tickets:read",
             "officers:assign",
             "notifications:configure",
             "settings:project",
+            "users:invite",
         ],
     },
     {

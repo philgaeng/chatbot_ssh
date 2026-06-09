@@ -72,6 +72,8 @@ This supports retry-safe task lifecycle tracking.
 - file processing:
   - `process_file_upload_task`
   - `process_batch_files_task`
+- retention (planned — see [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md)):
+  - `archive_eligible_grievances_task` — daily; archives resolved tickets past `years_before_archiving` cooling period
 - messaging:
   - `send_sms_task`
   - `send_email_task`

@@ -22,7 +22,9 @@ Slash payload priority:
 Main payload-to-intent mapping:
 
 - language: `/set_english`, `/set_nepali`
-- main menu: `/new_grievance`, `/start_status_check`, `/seah_intake`
+- main menu: `/new_grievance`, `/road_hazard_grievance`, `/start_status_check`, `/seah_intake`
+- legacy payload only (not in menu): `/dust_grievance` → road hazard with Dust pre-selected
+- road hazard subtypes: `/road_hazard_subtype_dust`, `/road_hazard_subtype_potholes`, etc.
 - submission/review actions: `/submit_details`, `/add_more_details`
 - status-check and modify paths: route/modify/cancel payloads
 
@@ -45,6 +47,8 @@ Top-level states:
 - `intro`
 - `main_menu`
 - `form_grievance`
+- `form_road_hazard` (CB-09 fast path; `form_dust` alias retained)
+- `location_consent`, `location_method`, `map_location` (CB-06 pin path)
 - `contact_form`
 - `otp_form`
 - `grievance_review`
@@ -96,7 +100,19 @@ Modify branch includes:
 - add more details
 - add missing contact information
 
-### 5.3 Dedicated SEAH Flow
+### 5.3 Road Hazard Fast Path (CB-09)
+
+High-level path:
+
+1. `main_menu` -> `/road_hazard_grievance` (or `/dust_grievance` with Dust pre-selected)
+2. `form_road_hazard` — subtype picker (six options), then optional note / **File as is**
+3. Preset `grievance_categories` to `Road Hazard - {subtype}` (no LLM classification)
+4. `location_consent` -> pin (**CB-06**) or manual location fallback
+5. Photo upload prompt after map pin (`open_upload_modal`); **CB-08** EXIF consent on upload
+6. `contact_form` — optional contact (skippable)
+7. `action_submit_grievance` + ticketing dispatch
+
+### 5.4 Dedicated SEAH Flow
 
 Enabled by `ENABLE_SEAH_DEDICATED_FLOW`.
 

@@ -34,6 +34,7 @@ class Ticket(Base):
         Index("idx_tickets_assigned_to", "assigned_to_user_id"),
         Index("idx_tickets_current_workflow", "current_workflow_id", "current_step_id"),
         Index("idx_tickets_is_seah", "is_seah"),
+        Index("idx_tickets_is_archived_status", "is_archived", "status_code"),
         {"schema": "ticketing"},
     )
 
@@ -105,6 +106,10 @@ class Ticket(Base):
     # Visible to grc_chair, adb_*, super_admin — hidden from L1/L2 field officers.
     ai_summary_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ── Archiving (docs/ARCHIVING_AND_RETENTION.md) ──
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── Soft delete ──
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

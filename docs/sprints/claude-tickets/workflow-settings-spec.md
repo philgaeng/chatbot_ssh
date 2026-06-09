@@ -1,8 +1,10 @@
 # GRM Settings, Workflows & Project Routing — Product + Engineering Spec
 
-**Status:** ACTIVE — reflects implementation as of 2026-05-16  
+> **Superseded (June 2026):** Content split into `docs/ticketing_system/10_settings_overview.md` through `14_platform_settings.md`. **Admin ladder locked** in `11_roles_and_permissions.md` (`super_admin` → `country_admin` → `project_admin`). Use those for day-to-day reference; this file is kept for migration notes and historical decisions.
+
+**Status:** ARCHIVED — see `docs/ticketing_system/10–14`  
 **Supersedes:** draft dated 2026-04-21 (workflow-only sections retained where still valid)  
-**Related:** `docs/ticketing_system/07_officer_management_and_assignment.md`, `docs/claude-tickets/PROGRESS.md`, `CLAUDE.md`
+**Related:** `docs/ticketing_system/10_settings_overview.md`, `07_officer_management_and_assignment.md`, `docs/claude-tickets/PROGRESS.md`, `CLAUDE.md`
 
 ---
 

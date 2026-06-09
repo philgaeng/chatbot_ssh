@@ -39,7 +39,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from ticketing.api.dependencies import CurrentUser, require_admin, require_super_admin
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, require_admin, require_super_admin
+from ticketing.services.admin_access import SettingsAction, require_settings_write
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
@@ -666,9 +667,10 @@ def list_projects(
 def create_project(
     body: ProjectCreate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new project. Admin only."""
+    """Create a new project. Standard-track country admin or super_admin only."""
+    require_settings_write(current_user, SettingsAction.MANAGE_STRUCTURE, track="standard")
 
     # Validate country exists
     if not db.get(Country, body.country_code):

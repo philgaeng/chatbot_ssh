@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { listTickets, type TicketListItem } from "@/lib/api";
+import {
+  EMPTY_TICKET_LIST_FILTERS,
+  listTickets,
+  ticketListFiltersActive,
+  ticketListFiltersToApi,
+  type TicketListFilterValues,
+  type TicketListItem,
+} from "@/lib/api";
+import { TicketListFiltersBar } from "@/components/tickets/TicketListFiltersBar";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
@@ -193,9 +201,21 @@ export default function QueuePage() {
   const [total, setTotal]             = useState(0);
   const [loading, setLoading]         = useState(true);
   const [tabCounts, setTabCounts]     = useState<Partial<Record<Tab, number>>>({});
+  const [filters, setFilters]         = useState<TicketListFilterValues>(EMPTY_TICKET_LIST_FILTERS);
+  const [debouncedQ, setDebouncedQ]   = useState("");
 
   // Reset tile filter whenever the active tab changes
   useEffect(() => { setTileFilter("all"); }, [activeTab]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(filters.q), 300);
+    return () => window.clearTimeout(t);
+  }, [filters.q]);
+
+  const apiFilters = useMemo(
+    () => ticketListFiltersToApi({ ...filters, q: debouncedQ }),
+    [filters, debouncedQ],
+  );
 
   // ── Actor tab tickets — always fetched for tile counts ────────────────────
   const [actorTickets, setActorTickets] = useState<TicketListItem[]>([]);
@@ -254,17 +274,21 @@ export default function QueuePage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
-    listTickets({ tab: activeTab, page_size: 100 })
+    listTickets({ tab: activeTab, page_size: 100, ...apiFilters })
       .then((r) => {
         setTickets(r.items);
         setTotal(r.total);
         const tabDef = TABS.find((t) => t.id === activeTab);
-        if (tabDef?.showBadge) setTabCounts((prev) => ({ ...prev, [activeTab]: r.total }));
-        if (activeTab === "actor") setActorTickets(r.items);
+        if (tabDef?.showBadge && !ticketListFiltersActive(filters)) {
+          setTabCounts((prev) => ({ ...prev, [activeTab]: r.total }));
+        }
+        if (activeTab === "actor" && !ticketListFiltersActive(filters)) {
+          setActorTickets(r.items);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [activeTab, isAuthenticated]);
+  }, [activeTab, isAuthenticated, apiFilters, filters]);
 
   // ── Sorted + filtered list ────────────────────────────────────────────────
   const displayedTickets = useMemo(() => {
@@ -297,12 +321,14 @@ export default function QueuePage() {
         <p className="text-sm text-gray-500 mt-0.5">
           {tileFilter !== "all"
             ? `${tileCount} ticket${tileCount !== 1 ? "s" : ""} · filtered · click tile again to clear`
+            : ticketListFiltersActive(filters)
+            ? `${total} ticket${total !== 1 ? "s" : ""} · matching filters`
             : `${total} ticket${total !== 1 ? "s" : ""} · ${activeTabDef.description}`}
         </p>
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-3 gap-3 mb-4">
         <SummaryTile
           label="Action Needed"
           count={actionNeeded}
@@ -327,6 +353,12 @@ export default function QueuePage() {
           onClick={() => handleTileClick("overdue")}
         />
       </div>
+
+      <TicketListFiltersBar
+        values={filters}
+        onChange={setFilters}
+        onClear={() => setFilters(EMPTY_TICKET_LIST_FILTERS)}
+      />
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">

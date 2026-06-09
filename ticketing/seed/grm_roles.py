@@ -32,11 +32,17 @@ def upsert_grm_roles(db: Session) -> None:
         wf = entry.get("workflow_scope")
         jmode = entry.get("jurisdiction_mode")
         dname = entry["display_name"]
+        rkind = entry.get("role_kind") or (
+            "admin" if rk in ("super_admin", "country_admin", "project_admin") else "operational"
+        )
+        rorigin = entry.get("role_origin", "system")
         if existing:
             existing.display_name = dname
             existing.permissions = perms
             existing.description = desc
             existing.workflow_scope = wf
+            existing.role_kind = rkind
+            existing.role_origin = rorigin
             if jmode:
                 existing.jurisdiction_mode = jmode
             logger.info("  = role updated from catalog: %s", rk)
@@ -50,6 +56,8 @@ def upsert_grm_roles(db: Session) -> None:
                     description=desc,
                     workflow_scope=wf,
                     jurisdiction_mode=jmode,
+                    role_kind=rkind,
+                    role_origin=rorigin,
                 )
             )
             logger.info("  + role from catalog: %s", rk)

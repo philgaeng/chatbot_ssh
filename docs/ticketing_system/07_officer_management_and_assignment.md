@@ -1,13 +1,19 @@
 # Officer management and ticket assignment
 
 **Status:** As-built reference (updated June 2026).  
-**Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
+**Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md) (admin ladder), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
 
 ---
 
 ## 1. Goal
 
-Enable admins to **invite, edit, and remove** officers from Settings → Officers, and to scope each officer to **organization**, **project**, **package**, and/or **location** so tickets are **always assigned to operational officers** (not IT admins) via auto-assign and controlled manual reassignment.
+Enable **`project_admin`** and **`country_admin`** (see [11_roles_and_permissions.md](11_roles_and_permissions.md)) to **invite, edit, and remove** **operational officers** from Settings → Officers (and project **Staffing**), scoped to **organization**, **project**, **package**, and/or **location**, so tickets are **always assigned to case handlers** (not platform admins) via auto-assign and controlled manual reassignment.
+
+| Who invites operational officers | Scope |
+|----------------------------------|-------|
+| `project_admin` | Assigned project(s); typically their organization on that project |
+| `country_admin` | Any project in country (e.g. ADB observers at country scope) |
+| `super_admin` | Global |
 
 ---
 

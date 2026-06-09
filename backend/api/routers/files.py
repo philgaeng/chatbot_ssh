@@ -257,6 +257,19 @@ async def upload_files(
             error_message = get_utterance("file_server", "upload_files", 1, language_code)
             return JSONResponse({"error": error_message}, status_code=400)
 
+        if db_manager.is_grievance_archived(grievance_id):
+            file_server_core.log_event(
+                event_type=FAILED,
+                details={"error": "grievance_archived", "grievance_id": grievance_id},
+            )
+            return JSONResponse(
+                {
+                    "error": "This grievance has been archived. New uploads are not allowed.",
+                    "grievance_id": grievance_id,
+                },
+                status_code=409,
+            )
+
         if not files:
             file_server_core.log_event(event_type=FAILED, details={"error": "No files in files[] list"})
             error_message = get_utterance("file_server", "upload_files", 4, language_code)

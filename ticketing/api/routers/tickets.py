@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 import uuid
 
@@ -274,6 +274,19 @@ def _ticket_has_image_attachment(db: Session, ticket: Ticket) -> bool:
     return False
 
 
+def _resolve_attachment_path(stored_path: str | None) -> str | None:
+    """Resolve DB file_path to a readable path on disk."""
+    if not stored_path:
+        return None
+    if os.path.isabs(stored_path) and os.path.isfile(stored_path):
+        return stored_path
+    upload_root = os.getenv("UPLOAD_FOLDER", "uploads")
+    for candidate in (stored_path, os.path.join(upload_root, stored_path)):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def _media_type_for_path(file_path: str) -> str:
     lower = file_path.lower()
     if lower.endswith((".jpg", ".jpeg")):
@@ -520,19 +533,35 @@ def list_tickets(
     organization_id: Optional[str] = Query(None),
     location_code: Optional[str] = Query(None),
     project_code: Optional[str] = Query(None),
+    package_id: Optional[str] = Query(None, description="Filter by ticketing.tickets.package_id"),
+    priority: Optional[str] = Query(None, description="NORMAL | HIGH | CRITICAL"),
+    search: Optional[str] = Query(None, alias="q", description="Search grievance_id, summary, or assignee email"),
+    created_from: Optional[date] = Query(None, description="Created on or after (calendar date, UTC day boundary)"),
+    created_to: Optional[date] = Query(None, description="Created on or before (calendar date, UTC day boundary)"),
     sla_breached: Optional[bool] = Query(None),
+    include_archived: Optional[bool] = Query(
+        False,
+        description="Include archived tickets (super_admin / local_admin only). Default excludes archived.",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> TicketListResponse:
-    q = select(Ticket).where(Ticket.is_deleted.is_(False))
+    stmt = select(Ticket).where(Ticket.is_deleted.is_(False))
+
+    # ── Archived filter — hidden from default officer queues (L5) ──
+    if include_archived:
+        if not current_user.can_view_archived:
+            raise HTTPException(status_code=403, detail="Admin access required to view archived tickets")
+    else:
+        stmt = stmt.where(Ticket.is_archived.is_(False))
 
     # ── SEAH visibility gate (DB-level) ──
     if not current_user.can_see_seah:
-        q = q.where(Ticket.is_seah.is_(False))
+        stmt = stmt.where(Ticket.is_seah.is_(False))
     elif is_seah is not None:
-        q = q.where(Ticket.is_seah.is_(is_seah))
+        stmt = stmt.where(Ticket.is_seah.is_(is_seah))
 
     # ── Scope filter: non-admins only see tickets in their jurisdictions ──
     # Admins (super_admin, local_admin) and observers see all; field officers are scoped.
@@ -549,7 +578,7 @@ def list_tickets(
 
         if not scopes:
             # No scope rows → only assigned tickets OR watched tickets
-            q = q.where(or_(
+            stmt = stmt.where(or_(
                 Ticket.assigned_to_user_id == current_user.user_id,
                 Ticket.ticket_id.in_(viewed_ticket_ids),
             ))
@@ -560,7 +589,7 @@ def list_tickets(
             # Also include viewed tickets outside the normal scope
             if viewed_ticket_ids:
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
-            q = q.where(or_(*scope_conditions))
+            stmt = stmt.where(or_(*scope_conditions))
 
     if tab:
         tab_lower = tab.lower()
@@ -570,7 +599,7 @@ def list_tickets(
                 TicketTask.assigned_to_user_id == current_user.user_id,
                 TicketTask.status == "PENDING",
             )
-            q = q.where(or_(
+            stmt = stmt.where(or_(
                 Ticket.assigned_to_user_id == current_user.user_id,
                 Ticket.ticket_id.in_(pending_task_ticket_ids),
             ))
@@ -580,29 +609,50 @@ def list_tickets(
                 TicketViewer.user_id == current_user.user_id,
                 TicketViewer.tier == tab_lower,
             )
-            q = q.where(Ticket.ticket_id.in_(tier_ticket_ids))
+            stmt = stmt.where(Ticket.ticket_id.in_(tier_ticket_ids))
         elif tab_lower == "high_priority":
-            q = q.where(or_(
+            stmt = stmt.where(or_(
                 Ticket.priority.in_(["HIGH", "CRITICAL"]),
                 Ticket.sla_breached.is_(True),
             ))
         # tab="all" or unrecognised: no additional filter
 
     if status_code:
-        q = q.where(Ticket.status_code == status_code)
+        stmt = stmt.where(Ticket.status_code == status_code)
     if organization_id:
-        q = q.where(Ticket.organization_id == organization_id)
+        stmt = stmt.where(Ticket.organization_id == organization_id)
     if location_code:
-        q = q.where(Ticket.location_code == location_code)
+        stmt = stmt.where(Ticket.location_code == location_code)
     if project_code:
-        q = q.where(Ticket.project_code == project_code)
+        stmt = stmt.where(Ticket.project_code == project_code)
+    if package_id:
+        stmt = stmt.where(Ticket.package_id == package_id)
+    if priority:
+        stmt = stmt.where(Ticket.priority == priority.upper())
+    if search:
+        term = search.strip()
+        if term:
+            pattern = f"%{term.replace('%', '').replace('_', '')}%"
+            stmt = stmt.where(
+                or_(
+                    Ticket.grievance_id.ilike(pattern),
+                    Ticket.grievance_summary.ilike(pattern),
+                    Ticket.assigned_to_user_id.ilike(pattern),
+                )
+            )
+    if created_from:
+        start = datetime.combine(created_from, time.min, tzinfo=timezone.utc)
+        stmt = stmt.where(Ticket.created_at >= start)
+    if created_to:
+        end = datetime.combine(created_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        stmt = stmt.where(Ticket.created_at < end)
     if sla_breached is not None:
-        q = q.where(Ticket.sla_breached.is_(sla_breached))
+        stmt = stmt.where(Ticket.sla_breached.is_(sla_breached))
 
-    total = db.execute(select(func.count()).select_from(q.subquery())).scalar_one()
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
 
     tickets = db.execute(
-        q.order_by(Ticket.created_at.desc())
+        stmt.order_by(Ticket.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).scalars().all()
@@ -625,7 +675,6 @@ def list_tickets(
 
     # SLA deadline: step_started_at + step.resolution_time_days per ticket
     # Single bulk query — no N+1
-    from datetime import timedelta
     step_ids = list({t.current_step_id for t in tickets if t.current_step_id})
     step_map: dict[str, WorkflowStep] = {}
     if step_ids:
@@ -812,11 +861,12 @@ def get_ticket(
     summary="List grievance category options from classification taxonomy (TP-14)",
 )
 def list_grievance_categories(
+    db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(get_current_user),
 ) -> list[dict]:
     from ticketing.services.grievance_taxonomy import list_grievance_category_options
 
-    return list_grievance_category_options()
+    return list_grievance_category_options(db)
 
 
 @router.patch(
@@ -1425,6 +1475,12 @@ def perform_action(
         )
         event = events[0]  # first event is the CONVENED event
 
+    # L2: reopen clears archive flags when leaving RESOLVED/CLOSED
+    if old_status in ("RESOLVED", "CLOSED") and ticket.status_code not in ("RESOLVED", "CLOSED"):
+        from ticketing.services.archiving import clear_archive_on_reopen
+
+        clear_archive_on_reopen(db, ticket)
+
     db.commit()
     db.refresh(ticket)
 
@@ -1862,6 +1918,8 @@ def list_ticket_files(
         raise HTTPException(status_code=404, detail="Ticket not found")
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
+    if ticket.is_archived and not current_user.can_view_archived:
+        raise HTTPException(status_code=403, detail="Case is archived")
 
     try:
         rows = db.execute(
@@ -1894,14 +1952,14 @@ def list_ticket_files(
 def download_file(
     file_id: str,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> FileResponse:
     """
     Streams a file from disk using the path stored in public.file_attachments.
     """
     row = db.execute(
         text(
-            "SELECT file_name, file_path, file_type "
+            "SELECT file_name, file_path, file_type, grievance_id "
             "FROM public.file_attachments WHERE file_id = :fid"
         ),
         {"fid": file_id},
@@ -1910,8 +1968,15 @@ def download_file(
     if not row:
         raise HTTPException(status_code=404, detail="File not found")
 
-    file_path = row["file_path"]
-    if not os.path.isfile(file_path):
+    grievance_id = row["grievance_id"]
+    ticket = db.execute(
+        select(Ticket).where(Ticket.grievance_id == grievance_id, Ticket.is_deleted.is_(False))
+    ).scalar_one_or_none()
+    if ticket and ticket.is_archived and not current_user.can_view_archived:
+        raise HTTPException(status_code=403, detail="Case is archived")
+
+    file_path = _resolve_attachment_path(row["file_path"])
+    if not file_path:
         raise HTTPException(status_code=404, detail="File not on disk")
 
     media_type = _media_type_for_path(file_path)
@@ -1937,6 +2002,8 @@ async def upload_officer_attachment(
         raise HTTPException(status_code=404, detail="Ticket not found")
     if ticket.is_seah and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="Access denied")
+    if ticket.is_archived:
+        raise HTTPException(status_code=409, detail="Cannot upload files to an archived case")
 
     # Save file to uploads/ticketing/{ticket_id}/
     upload_dir = Path("uploads") / "ticketing" / ticket_id

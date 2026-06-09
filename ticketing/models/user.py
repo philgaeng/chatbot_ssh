@@ -59,6 +59,10 @@ class Role(Base):
     # field | country | global — how officer_scopes are validated and matched (see jurisdiction.py)
     jurisdiction_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
+    # admin | operational — split catalog vs admin ladder
+    role_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="operational")
+    # system (seed/TOR) | custom (country_admin created)
+    role_origin: Mapped[str] = mapped_column(String(16), nullable=False, default="system")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

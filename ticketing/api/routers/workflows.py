@@ -2,7 +2,7 @@
 Workflow management endpoints — full CRUD for the no-code workflow editor.
 
 Read endpoints: any authenticated officer
-Mutating endpoints: admin only (super_admin, local_admin)
+Mutating endpoints: matrix-aware admin (country_admin by track, super_admin)
 SEAH workflows: additionally gated by can_see_seah
 """
 import re
@@ -13,7 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from ticketing.api.dependencies import get_db, get_current_user, CurrentUser
+from ticketing.api.dependencies import get_db, get_authenticated_user, get_current_user, CurrentUser
+from ticketing.services.admin_access import (
+    SettingsAction,
+    can_mutate_workflow,
+    require_settings_write,
+    workflow_track_from_type,
+)
 from ticketing.api.schemas.workflow import (
     SaveAsTemplateBody,
     StepReorderRequest,
@@ -68,9 +74,13 @@ def _slug(text: str) -> str:
     return s[:64]
 
 
-def _require_admin(current_user: CurrentUser) -> None:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+def _require_workflow_write(current_user: CurrentUser, workflow_type: str) -> None:
+    if not can_mutate_workflow(current_user, workflow_type):
+        track = workflow_track_from_type(workflow_type)
+        raise HTTPException(
+            status_code=403,
+            detail=f"Workflow admin access required for track={track}",
+        )
 
 
 def _require_seah(current_user: CurrentUser) -> None:
@@ -191,9 +201,9 @@ def get_workflow(
 def create_workflow(
     payload: WorkflowCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_admin(current_user)
+    _require_workflow_write(current_user, payload.workflow_type)
     if payload.workflow_type == "seah":
         _require_seah(current_user)
 
@@ -269,10 +279,10 @@ def update_workflow(
     workflow_id: str,
     payload: WorkflowUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_admin(current_user)
     wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
     if payload.display_name is not None:
         wf.display_name = payload.display_name
     if payload.description is not None:
@@ -291,12 +301,19 @@ def update_workflow(
 def publish_workflow(
     workflow_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_admin(current_user)
     wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
     if wf.status == "archived":
         raise HTTPException(status_code=422, detail="Cannot publish an archived workflow")
+    active_steps = [s for s in wf.steps if not s.is_deleted]
+    missing = [s.display_name for s in active_steps if not s.assigned_role_key]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot publish: steps missing assigned role: {', '.join(missing)}",
+        )
     wf.status = "published"
     wf.version = (wf.version or 0) + 1
     wf.updated_by_user_id = current_user.user_id
@@ -312,10 +329,10 @@ def save_as_template(
     workflow_id: str,
     body: SaveAsTemplateBody | None = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_admin(current_user)
     src = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, src.workflow_type)
     if src.is_template:
         raise HTTPException(status_code=422, detail="Workflow is already a template")
 
@@ -360,10 +377,10 @@ def save_as_template(
 def archive_workflow(
     workflow_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_admin(current_user)
     wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
     wf.status = "archived"
     wf.updated_by_user_id = current_user.user_id
     db.commit()
@@ -379,13 +396,13 @@ def archive_workflow(
 def delete_workflow(
     workflow_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    _require_admin(current_user)
     if workflow_id.startswith("__builtin_"):
         raise HTTPException(status_code=403, detail="Built-in templates cannot be deleted")
 
     wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
     ticket_count = db.scalar(
         select(func.count())
         .select_from(Ticket)
@@ -410,10 +427,10 @@ def add_step(
     workflow_id: str,
     payload: WorkflowStepCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowStepResponse:
-    _require_admin(current_user)
-    _load_workflow(workflow_id, db, current_user)  # access check
+    wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
 
     # Append at the end
     max_order = db.execute(
@@ -446,10 +463,10 @@ def update_step(
     step_id: str,
     payload: WorkflowStepUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowStepResponse:
-    _require_admin(current_user)
-    _load_workflow(workflow_id, db, current_user)
+    wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
 
     step = db.get(WorkflowStep, step_id)
     if not step or step.workflow_id != workflow_id or step.is_deleted:
@@ -480,10 +497,10 @@ def delete_step(
     workflow_id: str,
     step_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    _require_admin(current_user)
-    _load_workflow(workflow_id, db, current_user)
+    wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
 
     step = db.get(WorkflowStep, step_id)
     if not step or step.workflow_id != workflow_id or step.is_deleted:
@@ -514,10 +531,10 @@ def reorder_steps(
     workflow_id: str,
     payload: StepReorderRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[WorkflowStepResponse]:
-    _require_admin(current_user)
-    _load_workflow(workflow_id, db, current_user)
+    wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
 
     steps = {
         s.step_id: s
@@ -558,10 +575,10 @@ def add_assignment(
     workflow_id: str,
     payload: WorkflowAssignmentCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowAssignmentResponse:
-    _require_admin(current_user)
     wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
 
     # Conflict check: warn if another published workflow already matches this tuple
     conflict = db.execute(
@@ -604,9 +621,10 @@ def remove_assignment(
     workflow_id: str,
     assignment_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    _require_admin(current_user)
+    wf = _load_workflow(workflow_id, db, current_user)
+    _require_workflow_write(current_user, wf.workflow_type)
     row = db.get(WorkflowAssignment, assignment_id)
     if not row or row.workflow_id != workflow_id:
         raise HTTPException(status_code=404, detail="Assignment not found")

@@ -449,6 +449,12 @@ FILE_TYPE_MAX_SIZES = {file_type: info['max_size_mb'] * 1024 * 1024 for file_typ
 # Default max file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
+# Image compression policy (chatbot complainant uploads — locked 2026-06-05)
+IMAGE_COMPRESS_MAX_LONG_EDGE = 1280
+IMAGE_COMPRESS_JPEG_QUALITY = 80
+IMAGE_COMPRESS_SKIP_MAX_LONG_EDGE = 1280
+IMAGE_COMPRESS_SKIP_MAX_BYTES = 500_000
+
 ############################
 # FIELD CONFIGURATION
 ############################

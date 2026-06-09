@@ -171,10 +171,9 @@ class BaseActionSubmit(BaseAction):
             return normalized
         if not self.LLM_CLASSIFICATION:
             return LLM_SKIPPED
-        if (
-            tracker.get_slot("story_main") == "dust_grievance"
-            or tracker.get_slot("intake_fast_path") == "dust"
-        ):
+        from backend.actions.forms.form_road_hazard import is_road_hazard_intake
+
+        if is_road_hazard_intake(tracker):
             return LLM_SKIPPED
         gid = tracker.get_slot("grievance_id")
         if gid:

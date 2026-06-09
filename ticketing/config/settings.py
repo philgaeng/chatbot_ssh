@@ -69,6 +69,9 @@ class TicketingSettings(BaseSettings):
     # ── LLM (OpenAI — same key used by chatbot backend) ──
     openai_api_key: str = ""
 
+    # ── Archiving (docs/ARCHIVING_AND_RETENTION.md §7) ──
+    archiving_dry_run: bool = False
+
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
         env_file_encoding="utf-8",

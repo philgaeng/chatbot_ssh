@@ -115,18 +115,21 @@ Four-tier model per ticket step:
 - **Production:** Keycloak OIDC. Webhook (`POST /api/v1/webhooks/keycloak`) creates `UserRole` + `OfficerOnboarding` on invite acceptance.
 - **Local/demo:** `NEXT_PUBLIC_BYPASS_AUTH=true` — header role-switcher lists officers from `GET /api/v1/users/roster`.
 - **Officer lifecycle:** `officer_onboarding` table — states: `invited` → `active`.
-- **Roles catalog:** `ticketing.roles` — 9 seeded spec-defined roles (Project Owner, Donor, CSC, etc.) + all GRM roles. `workflow_scope`: `standard` | `seah` | `both`.
-- **OfficerScope:** Each user_role row defines org + location scope; enforced on all ticket queries.
+- **Admin model (locked):** three keys (`super_admin`, `country_admin`, `project_admin`); **`workflow_track`** (`standard` \| `seah`) on country and project **assignment scope** — no `seah_admin` / `seah_project_admin` / `local_admin`. Details: [11_roles_and_permissions.md](11_roles_and_permissions.md).
+- **Operational roles:** `ticketing.roles` — GRM case handlers and observers; configured in Roles & permissions tab, assigned by `project_admin` / `country_admin`.
+- **OfficerScope:** Org + project + package + location scope; enforced on ticket queries and auto-assign.
 
 ---
 
 ## 11. Settings
 
-All configurable via Settings UI (`/settings` — `local_admin` and `super_admin`):
+All configurable via Settings UI (`/settings` — role-gated; see [10_settings_overview.md](10_settings_overview.md)):
 
-- Workflows (steps, SLA per step, tier config, notification rules)
-- Organizations, locations, projects, packages
-- Users / officer roster, invite, role assignment
-- QR tokens (per package)
-- Report limits (max assignments per quarter)
-- `chatbot_webchat_url` (used in QR scan redirect)
+- Workflows (steps, SLA per step, tier config, notification rules) — [12_workflows_configuration.md](12_workflows_configuration.md)
+- GRM roles catalog — [11_roles_and_permissions.md](11_roles_and_permissions.md)
+- Organizations, officers — [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)
+- Projects, packages, go-live — [13_projects_and_packages.md](13_projects_and_packages.md)
+- Locations, project types, quarterly report plan, system JSON — [14_platform_settings.md](14_platform_settings.md)
+- QR tokens (per package) — [13_projects_and_packages.md](13_projects_and_packages.md)
+- Report limits (max assignments per quarter) — [09_reports_and_report_builder.md](09_reports_and_report_builder.md)
+- `chatbot_webchat_url` (env; used in QR scan redirect) — [14_platform_settings.md](14_platform_settings.md)

@@ -86,7 +86,7 @@ async def complete_grievance_details_intake(
     return slots_to_set
 
 
-async def complete_dust_intake_submit(
+async def complete_road_hazard_intake_submit(
     form: BaseFormValidationAction,
     tracker: Tracker,
     dispatcher: CollectingDispatcher,
@@ -95,7 +95,7 @@ async def complete_dust_intake_submit(
     *,
     preset_categories: List[str],
 ) -> Dict[Text, Any]:
-    """Dust fast path: persist description + preset category; no LLM classification."""
+    """Road hazard fast path: persist description + preset category; no LLM classification."""
     from backend.config.classification_status import LLM_SKIPPED
 
     form._initialize_language_and_helpers(tracker)
@@ -149,8 +149,28 @@ async def complete_dust_intake_submit(
         form.logger.error(f"Failed to emit grievance_saved_in_db event: {e}")
 
     form.logger.info(
-        "dust_intake_submitted grievance_id=%s classification=LLM_skipped categories=%s",
+        "road_hazard_intake_submitted grievance_id=%s classification=LLM_skipped categories=%s",
         grievance_id,
         categories,
     )
     return slots_to_set
+
+
+async def complete_dust_intake_submit(
+    form: BaseFormValidationAction,
+    tracker: Tracker,
+    dispatcher: CollectingDispatcher,
+    domain: DomainDict,
+    grievance_description: str,
+    *,
+    preset_categories: List[str],
+) -> Dict[Text, Any]:
+    """Backward-compatible alias."""
+    return await complete_road_hazard_intake_submit(
+        form,
+        tracker,
+        dispatcher,
+        domain,
+        grievance_description,
+        preset_categories=preset_categories,
+    )

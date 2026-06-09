@@ -6,12 +6,21 @@ This is the top-level guide for production and historical docs.
 
 ```
 docs/
+├── ARCHIVING_AND_RETENTION.md   Cross-cutting retention + archive policy (grievances, tickets, attachments)
 ├── deployment/          Ops and deployment runbooks
 ├── services/            Shared backend service contracts (cross-project)
 ├── ticketing_system/    GRM ticketing product and implementation specs
 ├── rest_chatbot/        Chatbot-specific architecture, flow, frontend, operations
 └── sprints/             Historical notes and refactor specs (read-only)
 ```
+
+---
+
+## Cross-cutting policies (`docs/` root)
+
+| Document | Description |
+|---|---|
+| [`ARCHIVING_AND_RETENTION.md`](ARCHIVING_AND_RETENTION.md) | Resolved-case archiving schedule, `archiving_policy` settings JSON, attachment tiering |
 
 ---
 

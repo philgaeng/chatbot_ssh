@@ -121,6 +121,7 @@ slots:
       - status_check
       - new_grievance
       - dust_grievance
+      - road_hazard_grievance
       - seah_intake
       - new_complainant
       - modify_grievance
@@ -531,6 +532,18 @@ slots:
     type: text
     mappings:
       - type: custom
+  road_hazard_subtype:
+    type: text
+    mappings:
+      - type: custom
+  road_hazard_new_detail:
+    type: text
+    mappings:
+      - type: custom
+  road_hazard_description_status:
+    type: text
+    mappings:
+      - type: custom
   grievance_description:
     type: text
     mappings:
@@ -937,6 +950,8 @@ actions:
   - action_ask_complainant_ward
   - action_ask_grievance_new_detail
   - action_ask_dust_new_detail
+  - action_ask_road_hazard_subtype
+  - action_ask_road_hazard_new_detail
   - action_ask_form_seah_1_sensitive_issues_follow_up
   - action_ask_form_seah_1_seah_victim_survivor_role
   - action_ask_form_seah_1_seah_witness_victim_consent_to_file
@@ -1033,6 +1048,7 @@ actions:
   - validate_form_contact
   - validate_form_grievance
   - validate_form_dust
+  - validate_form_road_hazard
   - validate_form_grievance_complainant_review
   - validate_form_grievance_id
   - validate_form_story_main
@@ -1072,6 +1088,11 @@ forms:
   form_dust:
     required_slots:
       - dust_new_detail
+    ignored_intents: *common-ignore-intents
+  form_road_hazard:
+    required_slots:
+      - road_hazard_subtype
+      - road_hazard_new_detail
     ignored_intents: *common-ignore-intents
   form_contact:
     required_slots:

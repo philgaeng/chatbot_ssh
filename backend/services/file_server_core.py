@@ -147,6 +147,25 @@ class FileServerCore(APIManager):
             audio_metadata = self.get_audio_metadata(file_data['file_path'])
             file_data.update(audio_metadata)
 
+        if file_type == 'image':
+            from backend.services.image_compression import compress_image
+
+            compress_result = compress_image(file_data['file_path'])
+            if compress_result.output_path != file_data['file_path']:
+                file_data['file_path'] = compress_result.output_path
+                file_data['file_name'] = os.path.basename(compress_result.output_path)
+            file_data['file_size'] = compress_result.compressed_bytes
+            self.logger.info(
+                "image_compression result status=%s original_bytes=%s compressed_bytes=%s "
+                "width=%s height=%s file=%s",
+                compress_result.status,
+                compress_result.original_bytes,
+                compress_result.compressed_bytes,
+                compress_result.width,
+                compress_result.height,
+                compress_result.output_path,
+            )
+
         client_meta = file_data.get("client_metadata") or {}
         if client_meta:
             from backend.shared_functions.geo_pin import build_file_client_metadata
