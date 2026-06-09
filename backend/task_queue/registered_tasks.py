@@ -56,6 +56,12 @@ from backend.logger.logger import TaskLogger
 from .task_manager import TaskManager, DatabaseTaskManager
 from .celery_app import celery_app
 
+try:
+    from backend.services.image_compression import log_heif_availability
+
+    log_heif_availability()
+except Exception:
+    pass
 
 __all__ = [
     'process_file_upload_task',

@@ -9,6 +9,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    libvips-dev \
+    libvips-tools \
+    libheif1 \
+    libde265-0 \
+    && vips -l foreign | grep -iq heif \
+    || (echo "ERROR: libvips missing HEIF support" && exit 1) \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements.grm.txt /app/

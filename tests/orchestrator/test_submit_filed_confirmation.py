@@ -39,8 +39,8 @@ def test_emit_chat_filed_confirmation_dust_single_message():
     grievance_data = {"grievance_id": "B-GR-20260605-KOJH-1D6C"}
     tracker = MagicMock()
     tracker.get_slot.side_effect = lambda name: {
-        "story_main": "dust_grievance",
-        "intake_fast_path": "dust",
+        "story_main": "road_hazard_grievance",
+        "intake_fast_path": "road_hazard",
     }.get(name)
 
     action._emit_chat_filed_confirmation(dispatcher, grievance_data, tracker=tracker)

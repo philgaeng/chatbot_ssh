@@ -112,7 +112,7 @@ TASK_CONFIG = {
         }
     },
     TASK_TYPE_FILEUPLOAD: {'service': 'file_processor',
-                           'queue': {"priority": "medium", "queue": "default", "bind": False},
+                           'queue': {"priority": "medium", "queue": "file_queue", "bind": False},
                            'retries': {
                             'max_retries': 2,
                             'initial_delay': 1,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 QUEUE_FOLDER = 'task_queue'
 QUEUE_LLM = 'llm_queue'
 QUEUE_DEFAULT = 'default'
+QUEUE_FILE = 'file_queue'
 
 # Redis configuration
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')

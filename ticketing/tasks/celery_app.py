@@ -25,6 +25,7 @@ celery_app = Celery(
         "ticketing.tasks.reports",
         "ticketing.tasks.grievance_sync",
         "ticketing.tasks.llm",
+        "ticketing.tasks.archiving",
     ],
 )
 
@@ -42,6 +43,7 @@ celery_app.conf.update(
         "ticketing.tasks.reports.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.grievance_sync.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.llm.*": {"queue": "grm_ticketing"},
+        "ticketing.tasks.archiving.*": {"queue": "grm_ticketing"},
     },
     # ── Beat schedule ──────────────────────────────────────────────────────────
     beat_schedule={
@@ -65,6 +67,11 @@ celery_app.conf.update(
                 day_of_month=5,
                 month_of_year="1,4,7,10",
             ),
+        },
+        # Archive eligible resolved cases — daily 03:00 Asia/Kathmandu (21:15 UTC)
+        "grm-archive-eligible": {
+            "task": "ticketing.tasks.archiving.archive_eligible_grievances_task",
+            "schedule": crontab(hour=21, minute=15),
         },
     },
 )

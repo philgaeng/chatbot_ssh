@@ -184,6 +184,7 @@ Audit stream ownership:
 - distinct retention profile for SEAH
 - redact/purge jobs for derived artifacts
 - legal hold support for selected cases
+- **resolved-case archiving** (soft retire, not delete): [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) — `ticketing.settings.archiving_policy`, daily Celery job, attachment cold tier; PII retained with tighter access on archived cases
 
 ## Implementation boundaries for this repo
 

@@ -66,13 +66,13 @@
 | CB-01 Voice note intake | `done` | Chatbot P2 / 2026-06-03 | | Record button, 45s cap, composer status banner, voice-only submit |
 | CB-06 Location by pin | `done` | Chatbot P2 / 2026-06-03 | | Consent → manual/map; coords on `complainants.location_geo` at submit |
 | CB-08 Photo EXIF metadata | `done` | Chatbot P2 / 2026-06-03 | | Session consent + exifr; metadata on `file_attachments.client_metadata` |
-| CB-09 Dust fast path | `done` | Chatbot P2 / 2026-06-03 | | Menu `/dust_grievance`, preset Air Pollution, photo prompt after pin |
+| CB-09 Road Hazard fast path | `done` | Chatbot P2 / 2026-06-09 | | Menu: `/road_hazard_grievance` only; 6 subtypes; `/dust_grievance` legacy payload (not in menu) |
 
 **P2 verification (manual)**
 
 - [ ] Android Chrome + iOS Safari: record voice, map pin, photo upload with EXIF consent
 - [ ] Voice-only: record → File as is → grievance filed
-- [ ] Dust: fast path → pin → photos → optional contact → ticket dispatch
+- [ ] Road hazard: subtype → pin → photos → optional contact → ticket dispatch
 
 **P2 test matrix (automated):** `pytest tests/orchestrator/test_chatbot_p2.py`
 

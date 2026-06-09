@@ -307,6 +307,16 @@ def seed_settings(db: Session) -> None:
                 "dor_rep",
             ],
         },
+        "archiving_policy": {
+            "enabled": True,
+            "years_before_archiving": 1,
+            "archive_run_month": 1,
+            "archive_run_day": 2,
+            "timezone": "Asia/Kathmandu",
+            "attachment_tier_on_archive": "none",
+            "allow_complainant_download_when_archived": False,
+            "seah_years_before_archiving": None,
+        },
         "grievance_categories": load_default_catalog(),
         "sla_watchdog_interval_minutes": {"value": 15},
         # ── Tier-based notification rules (spec 12) ───────────────────────────

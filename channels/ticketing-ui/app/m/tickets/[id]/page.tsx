@@ -19,7 +19,8 @@ import React, { use, useCallback, useEffect, useMemo, useRef, useState } from "r
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
-  listTicketFiles, listOfficerAttachments, getFileDownloadUrl, getOfficerAttachmentUrl, uploadOfficerAttachment,
+  listTicketFiles, listOfficerAttachments, uploadOfficerAttachment,
+  complainantFilePath, officerAttachmentPath,
   listOfficerRoster, getGrievancePii,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
   type TicketFile, type OfficerAttachment, type GrievancePii, type RevealSession,
@@ -475,8 +476,8 @@ function AttachmentsSheet({
           <AttachmentListSection
             complainantFiles={chatbotFiles}
             officerFiles={officerFiles}
-            getComplainantUrl={getFileDownloadUrl}
-            getOfficerUrl={getOfficerAttachmentUrl}
+            complainantFilePath={complainantFilePath}
+            officerFilePath={officerAttachmentPath}
             compact
           />
           <div className="py-4">

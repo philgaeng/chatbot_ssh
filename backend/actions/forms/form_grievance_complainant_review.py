@@ -91,9 +91,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
 
             from backend.config.classification_status import LLM_SKIPPED
-            from backend.actions.forms.form_dust import is_dust_intake
+            from backend.actions.forms.form_road_hazard import is_road_hazard_intake
 
-            if is_dust_intake(tracker):
+            if is_road_hazard_intake(tracker):
                 preset_categories = grievance_categories or tracker.get_slot("grievance_categories") or []
                 categories_local = self._get_categories_in_local_language(preset_categories)
                 return [
@@ -116,8 +116,9 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                 tracker.get_slot("grievance_new_detail") == "voice_record"
                 or (
                     grievance_classification_status_db == LLM_SKIPPED
-                    and tracker.get_slot("story_main") != "dust_grievance"
-                    and tracker.get_slot("intake_fast_path") != "dust"
+                    and tracker.get_slot("story_main")
+                    not in ("dust_grievance", "road_hazard_grievance")
+                    and tracker.get_slot("intake_fast_path") not in ("dust", "road_hazard")
                 )
             ):
                 utterance = self.get_utterance(2)
@@ -242,13 +243,12 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
             )
             return []
 
-        # Dust fast path: preset category; no LLM complainant review.
-        if (
-            tracker.get_slot("story_main") == "dust_grievance"
-            or tracker.get_slot("intake_fast_path") == "dust"
-        ):
+        # Road hazard fast path: preset category; no LLM complainant review.
+        from backend.actions.forms.form_road_hazard import is_road_hazard_intake
+
+        if is_road_hazard_intake(tracker):
             self.logger.debug(
-                "form_grievance_complainant_review - dust fast path - form skipped"
+                "form_grievance_complainant_review - road hazard fast path - form skipped"
             )
             return []
 

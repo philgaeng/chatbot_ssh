@@ -40,25 +40,25 @@ export const U = {
       ne: "तपाईं आफ्नो गुनासोसँग सम्बन्धित तस्बिर वा अन्य कागजात संलग्न गर्न सक्नुहुन्छ। यी हाम्रा अधिकारीले हेर्नेछन्। हस्तलिखित उजुरीको फोटो पनि संलग्न गर्न सक्नुहुन्छ।",
     },
     post_upload: {
-      en: "Your voice record is saved. You can add more voice records or go back to the chat.",
-      ne: "तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
+      en: "Your file is saved. You can add more files or go back to the chat.",
+      ne: "तपाईंको फाइल सेव भयो। तपाईं थप फाइलहरू थप्न वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
     /** Shown after upload when orchestrator is already at end of flow (`done`). */
     post_upload_at_flow_end: {
-      en: "Your voice record is saved. You can add more voice records, go back to the chat, file another grievance, or end your session below.",
-      ne: "तपाईंको आवाज रेकर्ड सेव भयो। तपाईं थप आवाज रेकर्ड थप्न, च्याटमा फर्कन, अर्को गुनासो दर्ता गर्न, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
+      en: "Your file is saved. You can add more files, go back to the chat, file another grievance, or end your session below.",
+      ne: "तपाईंको फाइल सेव भयो। तपाईं थप फाइलहरू थप्न, च्याटमा फर्कन, अर्को गुनासो दर्ता गर्न, वा तल सत्र समाप्त गर्न सक्नुहुन्छ।",
     },
     transition: {
-      en: "Your voice record is saved. Here's where we left off.",
-      ne: "तपाईंको आवाज रेकर्ड सेव भयो। यहाँ हामी रोक्यौ।",
+      en: "Your file is saved. Here's where we left off.",
+      ne: "तपाईंको फाइल सेव भयो। यहाँ हामी रोक्यौ।",
     },
     failure: {
-      en: "One or more voice records could not be saved. You can try adding voice records again or go back to the chat.",
-      ne: "एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं आवाज रेकर्ड फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
+      en: "One or more files could not be saved. You can try adding files again or go back to the chat.",
+      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फाइलहरू फेरि थप्न प्रयास गर्न सक्नुहुन्छ वा च्याटमा फर्कन सक्नुहुन्छ।",
     },
     failure_at_flow_end: {
-      en: "We could not save one or more voice records. You can try again, go back to the chat, or use the buttons below.",
-      ne: "एक वा बढी आवाज रेकर्ड सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
+      en: "We could not save one or more files. You can try again, go back to the chat, or use the buttons below.",
+      ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
     },
     no_grievance: {
       en: 'To attach files, start a grievance first: choose "File a grievance" (गुनासो दर्ता गर्नुहोस्) in the chat above and complete the steps. After your grievance is created, you can attach photos or documents here.',
@@ -130,8 +130,8 @@ export const U = {
         ne: "च्याटमा फर्कनुहोस्",
       },
       add_voice_record: {
-        en: "Add a voice record",
-        ne: "आवाज रेकर्ड थप्नुहोस्",
+        en: "Add a file",
+        ne: "फाइल थप्नुहोस्",
       },
       next_step: {
         en: "Next step",

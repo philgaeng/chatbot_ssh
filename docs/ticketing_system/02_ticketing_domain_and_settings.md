@@ -176,10 +176,13 @@ Public endpoint: `GET /api/v1/scan/{token}` — returns package label, location_
 
 Key/value JSON store for system-wide configuration. Managed via Settings UI.
 
+**Full admin UI specs:** [10_settings_overview.md](10_settings_overview.md) (index) → [11](11_roles_and_permissions.md)–[14](14_platform_settings.md).
+
 Key settings:
 - `chatbot_webchat_url` — base URL for QR code scan redirect
 - `notification_rules` — per-event, per-tier notification channel matrix
 - `report_limits` — per-role quarterly email assignment caps (super_admin JSON)
+- `archiving_policy` — resolved-case archiving schedule and attachment tiering (super_admin JSON) — see [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md)
 - Workflow step SLA overrides
 
 ---

@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { listTickets, type TicketListItem } from "@/lib/api";
+import {
+  EMPTY_TICKET_LIST_FILTERS,
+  listTickets,
+  ticketListFiltersActive,
+  ticketListFiltersToApi,
+  type TicketListFilterValues,
+  type TicketListItem,
+} from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, SeahBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import { TicketListFiltersBar } from "@/components/tickets/TicketListFiltersBar";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
   const urgency = ticket.sla_breached ? "overdue" : "ok";
@@ -48,46 +56,51 @@ export default function AllTicketsPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<TicketListFilterValues>(EMPTY_TICKET_LIST_FILTERS);
+  const [debouncedQ, setDebouncedQ] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(filters.q), 300);
+    return () => window.clearTimeout(t);
+  }, [filters.q]);
+
+  const apiFilters = useMemo(
+    () => ticketListFiltersToApi({ ...filters, q: debouncedQ }),
+    [filters, debouncedQ],
+  );
 
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
-    listTickets({ page_size: 100 })
+    listTickets({ page_size: 100, ...apiFilters })
       .then((r) => { setTickets(r.items); setTotal(r.total); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [isAuthenticated]);
-
-  const filtered = search.trim()
-    ? tickets.filter((t) =>
-        t.grievance_id.toLowerCase().includes(search.toLowerCase()) ||
-        (t.grievance_summary ?? "").toLowerCase().includes(search.toLowerCase()),
-      )
-    : tickets;
+  }, [isAuthenticated, apiFilters]);
 
   return (
     <div className="p-6">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-800">All Tickets</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{total} ticket{total !== 1 ? "s" : ""} total</p>
-        </div>
-        <input
-          type="search"
-          placeholder="Search by ID or summary…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="mb-2">
+        <h1 className="text-xl font-semibold text-gray-800">All Tickets</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {ticketListFiltersActive(filters)
+            ? `${total} ticket${total !== 1 ? "s" : ""} matching filters`
+            : `${total} ticket${total !== 1 ? "s" : ""} total`}
+        </p>
       </div>
+
+      <TicketListFiltersBar
+        values={filters}
+        onChange={setFilters}
+        onClear={() => setFilters(EMPTY_TICKET_LIST_FILTERS)}
+      />
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
-        ) : filtered.length === 0 ? (
+        ) : tickets.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">
-            {search ? "No tickets match your search." : "No tickets found."}
+            {ticketListFiltersActive(filters) ? "No tickets match your filters." : "No tickets found."}
           </div>
         ) : (
           <div>
@@ -99,7 +112,7 @@ export default function AllTicketsPage() {
               <div className="shrink-0 w-6" />
               <div className="shrink-0 w-4" />
             </div>
-            {filtered.map((t) => <TicketRow key={t.ticket_id} ticket={t} />)}
+            {tickets.map((t) => <TicketRow key={t.ticket_id} ticket={t} />)}
           </div>
         )}
       </div>

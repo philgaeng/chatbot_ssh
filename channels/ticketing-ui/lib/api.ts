@@ -242,6 +242,12 @@ export interface TicketFilters {
   organization_id?: string;
   location_code?: string;
   project_code?: string;
+  package_id?: string;
+  priority?: string;
+  /** Search grievance ID, summary, or assignee email */
+  q?: string;
+  created_from?: string;
+  created_to?: string;
   sla_breached?: boolean;
   page?: number;
   page_size?: number;
@@ -255,10 +261,148 @@ export function listTickets(filters: TicketFilters = {}): Promise<TicketListResp
   if (filters.organization_id) p.set("organization_id", filters.organization_id);
   if (filters.location_code) p.set("location_code", filters.location_code);
   if (filters.project_code) p.set("project_code", filters.project_code);
+  if (filters.package_id) p.set("package_id", filters.package_id);
+  if (filters.priority) p.set("priority", filters.priority);
+  if (filters.q?.trim()) p.set("q", filters.q.trim());
+  if (filters.created_from) p.set("created_from", filters.created_from);
+  if (filters.created_to) p.set("created_to", filters.created_to);
   if (filters.sla_breached !== undefined) p.set("sla_breached", String(filters.sla_breached));
   p.set("page", String(filters.page ?? 1));
   p.set("page_size", String(filters.page_size ?? 50));
   return apiFetch<TicketListResponse>(`/api/v1/tickets?${p}`);
+}
+
+export type FiledDatePreset = "" | "today" | "2d" | "7d" | "30d" | "month" | "custom";
+
+export type TicketListFilterValues = {
+  q: string;
+  priority: string;
+  sla: string;
+  /** Preset filed-date filter; `custom` uses createdFrom / createdTo. */
+  filedPreset: FiledDatePreset;
+  createdFrom: string;
+  createdTo: string;
+  projectCode: string;
+  packageId: string;
+};
+
+export const EMPTY_TICKET_LIST_FILTERS: TicketListFilterValues = {
+  q: "",
+  priority: "",
+  sla: "",
+  filedPreset: "",
+  createdFrom: "",
+  createdTo: "",
+  projectCode: "",
+  packageId: "",
+};
+
+/** Calendar date in the officer's local timezone (matches ticket detail "Created" display). */
+function localCalendarDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Map created-date preset to API date range (inclusive calendar days). */
+export function filedPresetToDateRange(
+  preset: FiledDatePreset,
+  customFrom: string,
+  customTo: string,
+): { created_from?: string; created_to?: string } {
+  if (preset === "custom") {
+    const out: { created_from?: string; created_to?: string } = {};
+    if (customFrom) out.created_from = customFrom;
+    if (customTo) out.created_to = customTo;
+    return out;
+  }
+  if (!preset) return {};
+
+  const today = new Date();
+  const end = localCalendarDate(today);
+  if (preset === "today") {
+    return { created_from: end, created_to: end };
+  }
+  if (preset === "2d") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 1);
+    return { created_from: localCalendarDate(start), created_to: end };
+  }
+  if (preset === "7d") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { created_from: localCalendarDate(start), created_to: end };
+  }
+  if (preset === "30d") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    return { created_from: localCalendarDate(start), created_to: end };
+  }
+  if (preset === "month") {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { created_from: localCalendarDate(start), created_to: end };
+  }
+  return {};
+}
+
+export function filedPresetLabel(
+  preset: FiledDatePreset,
+  customFrom: string,
+  customTo: string,
+): string | null {
+  switch (preset) {
+    case "today":
+      return "Created today";
+    case "2d":
+      return "Created last 2 days";
+    case "7d":
+      return "Created last 7 days";
+    case "30d":
+      return "Created last 30 days";
+    case "month":
+      return "Created this month";
+    case "custom":
+      if (customFrom && customTo) return `Created ${customFrom} – ${customTo}`;
+      if (customFrom) return `Created from ${customFrom}`;
+      if (customTo) return `Created until ${customTo}`;
+      return "Custom date range";
+    default:
+      return null;
+  }
+}
+
+export function ticketListFiltersToApi(
+  values: TicketListFilterValues,
+): Pick<
+  TicketFilters,
+  "q" | "priority" | "sla_breached" | "created_from" | "created_to" | "project_code" | "package_id"
+> {
+  const out: Pick<
+    TicketFilters,
+    "q" | "priority" | "sla_breached" | "created_from" | "created_to" | "project_code" | "package_id"
+  > = {};
+  if (values.q.trim()) out.q = values.q.trim();
+  if (values.priority) out.priority = values.priority;
+  if (values.sla === "overdue") out.sla_breached = true;
+  if (values.sla === "not_overdue") out.sla_breached = false;
+  const dates = filedPresetToDateRange(values.filedPreset, values.createdFrom, values.createdTo);
+  if (dates.created_from) out.created_from = dates.created_from;
+  if (dates.created_to) out.created_to = dates.created_to;
+  if (values.projectCode) out.project_code = values.projectCode;
+  if (values.packageId) out.package_id = values.packageId;
+  return out;
+}
+
+export function ticketListFiltersActive(values: TicketListFilterValues): boolean {
+  return (
+    !!values.q.trim() ||
+    !!values.priority ||
+    !!values.sla ||
+    !!values.filedPreset ||
+    !!values.projectCode ||
+    !!values.packageId
+  );
 }
 
 export function getTicket(id: string): Promise<TicketDetail> {
@@ -743,8 +887,13 @@ export function listTicketFiles(ticketId: string): Promise<TicketFile[]> {
   return apiFetch<TicketFile[]>(`/api/v1/tickets/${ticketId}/files`);
 }
 
+/** @deprecated Prefer openComplainantFile — plain URLs cannot send Bearer auth in a new tab. */
 export function getFileDownloadUrl(fileId: string): string {
   return `${BASE}/api/v1/files/${fileId}`;
+}
+
+export function complainantFilePath(fileId: string): string {
+  return `/api/v1/files/${fileId}`;
 }
 
 // ── Officer file attachments ──────────────────────────────────────────────────
@@ -763,8 +912,90 @@ export function listOfficerAttachments(ticketId: string): Promise<OfficerAttachm
   return apiFetch<OfficerAttachment[]>(`/api/v1/tickets/${ticketId}/attachments`);
 }
 
+/** @deprecated Prefer openOfficerAttachment — plain URLs cannot send Bearer auth in a new tab. */
 export function getOfficerAttachmentUrl(fileId: string): string {
   return `${BASE}/api/v1/attachments/${fileId}`;
+}
+
+export function officerAttachmentPath(fileId: string): string {
+  return `/api/v1/attachments/${fileId}`;
+}
+
+/** Fetch a protected file with session cookie + Bearer token; returns a blob URL. */
+export async function fetchAuthenticatedBlobUrl(path: string): Promise<string> {
+  const resp = await fetch(`${BASE}${path}`, {
+    credentials: "include",
+    headers: {
+      Accept: "*/*",
+      ...authHeaders(),
+    },
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    if (isSessionExpiredResponse(resp.status, text)) {
+      handleSessionExpired();
+    }
+    let message = text || `File request failed (${resp.status})`;
+    try {
+      const parsed = JSON.parse(text) as { detail?: string };
+      if (parsed.detail) {
+        message = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail);
+      }
+    } catch {
+      /* plain text */
+    }
+    throw new Error(message);
+  }
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
+}
+
+function triggerBlobDownload(blobUrl: string, fileName: string): void {
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Open or download after authenticated fetch.
+ * Pass `previewWindow` opened synchronously on click to avoid popup blockers (PDF etc.).
+ */
+export async function openAuthenticatedAttachment(
+  path: string,
+  fileName: string,
+  opts?: { previewWindow?: Window | null },
+): Promise<void> {
+  const blobUrl = await fetchAuthenticatedBlobUrl(path);
+  const isPdf = /\.pdf$/i.test(fileName);
+  if (isPdf) {
+    const w = opts?.previewWindow;
+    if (w && !w.closed) {
+      w.location.href = blobUrl;
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
+      return;
+    }
+  }
+  triggerBlobDownload(blobUrl, fileName);
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
+}
+
+export function openComplainantFile(
+  fileId: string,
+  fileName: string,
+  opts?: { previewWindow?: Window | null },
+): Promise<void> {
+  return openAuthenticatedAttachment(complainantFilePath(fileId), fileName, opts);
+}
+
+export function openOfficerAttachment(
+  fileId: string,
+  fileName: string,
+  opts?: { previewWindow?: Window | null },
+): Promise<void> {
+  return openAuthenticatedAttachment(officerAttachmentPath(fileId), fileName, opts);
 }
 
 export async function uploadOfficerAttachment(

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
-  listTicketFiles, getFileDownloadUrl, listOfficers, listOfficerRoster, patchTicket,
-  listOfficerAttachments, getOfficerAttachmentUrl, uploadOfficerAttachment,
+  listTicketFiles, listOfficers, listOfficerRoster, patchTicket,
+  listOfficerAttachments, uploadOfficerAttachment,
+  complainantFilePath, officerAttachmentPath,
   generateFindings, listTicketTasks, completeTask, createTask,
   type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
@@ -215,8 +216,8 @@ function FilesPanel({
       <AttachmentListSection
         complainantFiles={complainantFiles}
         officerFiles={officerFiles}
-        getComplainantUrl={getFileDownloadUrl}
-        getOfficerUrl={getOfficerAttachmentUrl}
+        complainantFilePath={complainantFilePath}
+        officerFilePath={officerAttachmentPath}
         onBeforeDownload={onBeforeDownload}
       />
 

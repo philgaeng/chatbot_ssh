@@ -86,15 +86,20 @@ def _get_form() -> Any:
     return _FORM
 
 
-_FORM_DUST = None
+_FORM_ROAD_HAZARD = None
+
+
+def _get_form_road_hazard() -> Any:
+    global _FORM_ROAD_HAZARD
+    if _FORM_ROAD_HAZARD is None:
+        from backend.actions.forms.form_road_hazard import ValidateFormRoadHazard
+        _FORM_ROAD_HAZARD = ValidateFormRoadHazard()
+    return _FORM_ROAD_HAZARD
 
 
 def _get_form_dust() -> Any:
-    global _FORM_DUST
-    if _FORM_DUST is None:
-        from backend.actions.forms.form_dust import ValidateFormDust
-        _FORM_DUST = ValidateFormDust()
-    return _FORM_DUST
+    """Backward-compatible alias."""
+    return _get_form_road_hazard()
 
 
 def _get_status_form_1() -> Any:
@@ -215,6 +220,7 @@ PAYLOAD_TO_INTENT = {
     "set_nepali": "set_nepali",
     "new_grievance": "new_grievance",
     "dust_grievance": "dust_grievance",
+    "road_hazard_grievance": "road_hazard_grievance",
     "location_manual_entry": "location_manual_entry",
     "location_use_map": "location_use_map",
     "location_open_map": "location_open_map",
@@ -417,6 +423,49 @@ async def _begin_map_picker(
     return "map_location"
 
 
+async def _begin_road_hazard_intake(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+    *,
+    prefill_subtype: Optional[str] = None,
+) -> str:
+    """CB-09: road hazard fast path (optional Dust prefill for /dust_grievance alias)."""
+    action_name = (
+        "action_start_dust_grievance_process"
+        if prefill_subtype == "dust"
+        else "action_start_road_hazard_grievance_process"
+    )
+    ask_dispatcher = CollectingDispatcher()
+    tracker = SessionTracker(
+        slots=session.get("slots", {}),
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    events = await invoke_action(action_name, ask_dispatcher, tracker, domain)
+    slot_updates.update(events_to_slot_updates(events))
+    dispatcher.messages.extend(ask_dispatcher.messages)
+    session["slots"].update(slot_updates)
+    session["active_loop"] = "form_road_hazard"
+    session["requested_slot"] = (
+        "road_hazard_new_detail" if prefill_subtype else "road_hazard_subtype"
+    )
+    next_state = "form_road_hazard"
+    session_copy = dict(session)
+    session_copy["slots"] = dict(session["slots"])
+    form = _get_form_road_hazard()
+    msgs, form_updates, completed = await run_form_turn(form, session_copy, None, domain)
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        return await _begin_location_consent(session, dispatcher, domain, slot_updates)
+    return next_state
+
+
 async def _restart_intake_from_done(
     intent: str,
     dispatcher: CollectingDispatcher,
@@ -459,38 +508,15 @@ async def _restart_intake_from_done(
             return await _begin_location_consent(session, dispatcher, domain, slot_updates)
         return next_state
 
-    if intent == "dust_grievance":
-        ask_dispatcher = CollectingDispatcher()
-        tracker = SessionTracker(
-            slots=session.get("slots", {}),
-            sender_id=session.get("user_id", "default"),
-            latest_message=latest_message,
-            active_loop=None,
-            requested_slot=None,
-        )
-        events = await invoke_action(
-            "action_start_dust_grievance_process",
-            ask_dispatcher,
-            tracker,
+    if intent in ("dust_grievance", "road_hazard_grievance"):
+        return await _begin_road_hazard_intake(
+            session,
+            dispatcher,
             domain,
+            slot_updates,
+            latest_message,
+            prefill_subtype="dust" if intent == "dust_grievance" else None,
         )
-        slot_updates.update(events_to_slot_updates(events))
-        dispatcher.messages.extend(ask_dispatcher.messages)
-        session["slots"].update(slot_updates)
-        session["active_loop"] = "form_dust"
-        session["requested_slot"] = "dust_new_detail"
-        next_state = "form_dust"
-        session_copy = dict(session)
-        session_copy["slots"] = dict(session["slots"])
-        form = _get_form_dust()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session_copy, None, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            return await _begin_location_consent(session, dispatcher, domain, slot_updates)
-        return next_state
 
     if intent == "start_seah_intake" and _is_seah_enabled():
         slot_updates["story_main"] = "seah_intake"
@@ -612,7 +638,13 @@ async def run_flow_turn(
             await invoke_action("action_introduce", dispatcher, tracker, domain)
 
     elif state == "main_menu":
-        menu_transition_intents = {"new_grievance", "dust_grievance", "start_seah_intake", "start_status_check"}
+        menu_transition_intents = {
+            "new_grievance",
+            "dust_grievance",
+            "road_hazard_grievance",
+            "start_seah_intake",
+            "start_status_check",
+        }
         # Avoid repeating the main menu utterance when the user already clicked one of its options.
         if intent not in menu_transition_intents:
             await invoke_action("action_main_menu", dispatcher, tracker, domain)
@@ -641,30 +673,15 @@ async def run_flow_turn(
             slot_updates.update(form_updates)
             if completed:
                 next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
-        elif intent == "dust_grievance":
-            ask_dispatcher = CollectingDispatcher()
-            events = await invoke_action(
-                "action_start_dust_grievance_process",
-                ask_dispatcher,
-                tracker,
+        elif intent in ("dust_grievance", "road_hazard_grievance"):
+            next_state = await _begin_road_hazard_intake(
+                session,
+                dispatcher,
                 domain,
+                slot_updates,
+                latest_message,
+                prefill_subtype="dust" if intent == "dust_grievance" else None,
             )
-            slot_updates.update(events_to_slot_updates(events))
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            session["slots"].update(slot_updates)
-            session["active_loop"] = "form_dust"
-            session["requested_slot"] = "dust_new_detail"
-            next_state = "form_dust"
-            session_copy = dict(session)
-            session_copy["slots"] = dict(session["slots"])
-            form = _get_form_dust()
-            msgs, form_updates, completed = await run_form_turn(
-                form, session_copy, None, domain
-            )
-            dispatcher.messages.extend(msgs)
-            slot_updates.update(form_updates)
-            if completed:
-                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
         elif intent == "start_seah_intake" and _is_seah_enabled():
             slot_updates["story_main"] = "seah_intake"
             slot_updates["grievance_sensitive_issue"] = True
@@ -738,9 +755,21 @@ async def run_flow_turn(
             else:
                 next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
 
+    elif state == "form_road_hazard":
+        user_input = latest_message if (text or payload) else None
+        form = _get_form_road_hazard()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session, user_input, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            session["slots"].update(slot_updates)
+            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+
     elif state == "form_dust":
         user_input = latest_message if (text or payload) else None
-        form = _get_form_dust()
+        form = _get_form_road_hazard()
         msgs, form_updates, completed = await run_form_turn(
             form, session, user_input, domain
         )
@@ -844,7 +873,7 @@ async def run_flow_turn(
                 )
                 slot_updates.update(events_to_slot_updates(events))
                 dispatcher.messages.extend(apply_dispatcher.messages)
-                if session.get("slots", {}).get("story_main") == "dust_grievance":
+                if session.get("slots", {}).get("intake_fast_path") in ("road_hazard", "dust"):
                     dispatcher.utter_message(
                         json_message={
                             "data": {
@@ -1013,7 +1042,12 @@ async def run_flow_turn(
             # If the user refused to share any contact information in the grievance flow,
             # skip the OTP form entirely and move directly to grievance submission +
             # review (same path as otp_form completed for new_grievance).
-            elif story_main in ("new_grievance", "dust_grievance", "grievance_submission") and complainant_consent is False:
+            elif story_main in (
+                "new_grievance",
+                "dust_grievance",
+                "road_hazard_grievance",
+                "grievance_submission",
+            ) and complainant_consent is False:
                 session["active_loop"] = None
                 session["requested_slot"] = None
 
@@ -2040,7 +2074,7 @@ async def run_flow_turn(
             )
             dispatcher.messages.extend(ask_dispatcher.messages)
             next_state = "status_check_form"
-        elif intent in ("new_grievance", "dust_grievance", "start_seah_intake"):
+        elif intent in ("new_grievance", "dust_grievance", "road_hazard_grievance", "start_seah_intake"):
             next_state = await _restart_intake_from_done(
                 intent,
                 dispatcher,
@@ -2068,7 +2102,7 @@ async def run_flow_turn(
         "map_location",
     ) else "text"
     form_states = (
-        "form_grievance", "form_dust", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
+        "form_grievance", "form_road_hazard", "form_dust", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
         "contact_form", "otp_form", "grievance_review",
         "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
     )

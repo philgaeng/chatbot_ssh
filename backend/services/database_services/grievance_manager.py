@@ -249,7 +249,27 @@ class GrievanceDbManager(BaseDatabaseManager):
             
             if not success:
                 return False
-            
+
+            # Archive flags on grievances (docs/ARCHIVING_AND_RETENTION.md §5.2)
+            if status_code == "archived":
+                archive_update = """
+                    UPDATE grievances SET
+                        is_archived = TRUE,
+                        archived_at = CURRENT_TIMESTAMP,
+                        grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s
+                """
+                self.execute_update(archive_update, (grievance_id,))
+            else:
+                clear_archive = """
+                    UPDATE grievances SET
+                        is_archived = FALSE,
+                        archived_at = NULL,
+                        grievance_modification_date = CURRENT_TIMESTAMP
+                    WHERE grievance_id = %s AND is_archived = TRUE
+                """
+                self.execute_update(clear_archive, (grievance_id,))
+
             # Update grievance modification date
             update_query = """
                 UPDATE grievances SET
@@ -260,6 +280,35 @@ class GrievanceDbManager(BaseDatabaseManager):
             return True
         except Exception as e:
             self.logger.error(f"Error updating grievance status: {str(e)}")
+            return False
+
+    def is_grievance_archived(self, grievance_id: str) -> bool:
+        """True when grievance is archived (boolean flag or current status)."""
+        try:
+            row = self.execute_query(
+                """
+                SELECT g.is_archived,
+                       (
+                           SELECT h.status_code
+                           FROM grievance_status_history h
+                           WHERE h.grievance_id = g.grievance_id
+                           ORDER BY h.created_at DESC
+                           LIMIT 1
+                       ) AS current_status
+                FROM grievances g
+                WHERE g.grievance_id = %s
+                """,
+                (grievance_id,),
+                "is_grievance_archived",
+            )
+            if not row:
+                return False
+            data = row[0]
+            if data.get("is_archived"):
+                return True
+            return (data.get("current_status") or "").lower() == "archived"
+        except Exception as e:
+            self.logger.error("is_grievance_archived error: %s", e)
             return False
             
     def get_grievance_status_history(self, grievance_id: str, language: str = 'en') -> List[Dict]:

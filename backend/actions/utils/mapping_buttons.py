@@ -42,6 +42,7 @@ BUTTON_EXIT = "/exit"
 BUTTON_GOODBYE = "/nav_goodbye"
 BUTTON_SELECTION_DONE = "/selection_done"
 BUTTON_DUST_GRIEVANCE = "/dust_grievance"
+BUTTON_ROAD_HAZARD_GRIEVANCE = "/road_hazard_grievance"
 BUTTON_LOCATION_MANUAL = "/location_manual_entry"
 BUTTON_LOCATION_USE_MAP = "/location_use_map"
 BUTTON_LOCATION_OPEN_MAP = "/location_open_map"
@@ -227,6 +228,27 @@ BUTTONS_DUST_FILE_AS_IS = {
     ],
     "ne": [
         {"title": "यसै रूपमा दर्ता गर्नुहोस्", "payload": BUTTON_SUBMIT_DETAILS},
+    ],
+}
+
+BUTTONS_ROAD_HAZARD_FILE_AS_IS = BUTTONS_DUST_FILE_AS_IS
+
+BUTTONS_ROAD_HAZARD_SUBTYPES = {
+    "en": [
+        {"title": "Dust", "payload": "/road_hazard_subtype_dust"},
+        {"title": "Flood and Landslide", "payload": "/road_hazard_subtype_flood_landslide"},
+        {"title": "Potholes", "payload": "/road_hazard_subtype_potholes"},
+        {"title": "Accident", "payload": "/road_hazard_subtype_accident"},
+        {"title": "Animal on Road", "payload": "/road_hazard_subtype_animal_on_road"},
+        {"title": "Others", "payload": "/road_hazard_subtype_others"},
+    ],
+    "ne": [
+        {"title": "धुलो", "payload": "/road_hazard_subtype_dust"},
+        {"title": "बाढी र पहिरो", "payload": "/road_hazard_subtype_flood_landslide"},
+        {"title": "खाडल", "payload": "/road_hazard_subtype_potholes"},
+        {"title": "दुर्घटना", "payload": "/road_hazard_subtype_accident"},
+        {"title": "सडकमा जनावर", "payload": "/road_hazard_subtype_animal_on_road"},
+        {"title": "अन्य", "payload": "/road_hazard_subtype_others"},
     ],
 }
 
