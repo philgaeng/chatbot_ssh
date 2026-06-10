@@ -21,6 +21,9 @@ export const MSG_SUPERVISOR_ONLY_ASSIGN =
 export const MSG_SUPERVISOR_ONLY_FIELD_REPORT =
   "Only a supervisor can assign field reports.";
 
+export const MSG_NO_COMPLAINANT_PHONE =
+  "No complainant phone number on file. Check Complainant info or ask them to update their contact details.";
+
 const GENERIC_FAILURE = "Something went wrong. Please try again.";
 
 /** Strip `API 422 /path:` prefix and parse FastAPI JSON `detail`. */

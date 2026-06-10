@@ -27,6 +27,8 @@ import {
 } from "@/lib/api";
 import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
 import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
+import { ComplainantQuickContactButton } from "@/components/tickets/ComplainantQuickContactButton";
+import { useComplainantPhoneHref } from "@/lib/use-complainant-phone-href";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
@@ -71,6 +73,7 @@ import {
   MSG_IMAGE_BEFORE_ESCALATE,
   MSG_IMAGE_BEFORE_RESOLVE,
   MSG_SUPERVISOR_ONLY_ASSIGN,
+  MSG_NO_COMPLAINANT_PHONE,
   type ActionNoticeState,
 } from "@/lib/user-messages";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
@@ -615,16 +618,17 @@ function MoreActionsSheet({
 
 function PrimaryCtaBar({
   ticket,
-  onAction,
   onMore,
   onOpenResolve,
+  onContactUnavailable,
 }: {
   ticket: TicketDetail;
-  onAction: (type: string) => void;
   onMore: () => void;
   onOpenResolve: () => void;
+  onContactUnavailable: () => void;
 }) {
   const { status_code } = ticket;
+  const { tel, sms, loading } = useComplainantPhoneHref(ticket.ticket_id, ticket.is_seah);
 
   if (status_code === "RESOLVED" || status_code === "CLOSED") {
     return (
@@ -636,20 +640,44 @@ function PrimaryCtaBar({
     );
   }
 
-  if (status_code === "OPEN") {
-    return null;
-  }
+  const showWorkflowActions = status_code !== "OPEN";
 
   return (
-    <div className="flex gap-2 px-4 py-2">
-      <button onClick={onOpenResolve}
-        className="flex-1 bg-green-600 active:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm">
-        <Flag size={15} strokeWidth={2} className="inline mr-1.5" />Resolve
-      </button>
-      <button onClick={onMore}
-        className="flex-1 bg-gray-100 active:bg-gray-200 text-gray-800 font-semibold py-3 rounded-xl text-sm inline-flex items-center justify-center gap-1">
-        <ArrowUpCircle size={15} strokeWidth={2} />More ▾
-      </button>
+    <div className="flex gap-2 px-4 py-2 items-stretch">
+      <ComplainantQuickContactButton
+        kind="sms"
+        href={sms}
+        loading={loading}
+        onUnavailable={onContactUnavailable}
+      />
+      {showWorkflowActions ? (
+        <>
+          <button
+            type="button"
+            onClick={onOpenResolve}
+            className="flex-1 bg-green-600 active:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm"
+          >
+            <Flag size={15} strokeWidth={2} className="inline mr-1.5" />
+            Resolve
+          </button>
+          <button
+            type="button"
+            onClick={onMore}
+            className="flex-1 bg-gray-100 active:bg-gray-200 text-gray-800 font-semibold py-3 rounded-xl text-sm inline-flex items-center justify-center gap-1"
+          >
+            <ArrowUpCircle size={15} strokeWidth={2} />
+            More ▾
+          </button>
+        </>
+      ) : (
+        <div className="flex-1" aria-hidden />
+      )}
+      <ComplainantQuickContactButton
+        kind="call"
+        href={tel}
+        loading={loading}
+        onUnavailable={onContactUnavailable}
+      />
     </div>
   );
 }
@@ -1200,9 +1228,11 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
       <div className={`flex-shrink-0 bg-white border-t pb-safe-bottom ${fieldReportOpen ? "border-amber-200" : "border-gray-200"}`}>
         <PrimaryCtaBar
           ticket={ticket}
-          onAction={handleAction}
           onMore={() => setShowMore(true)}
           onOpenResolve={openResolveFlow}
+          onContactUnavailable={() =>
+            setActionNotice({ message: MSG_NO_COMPLAINANT_PHONE, kind: "validation" })
+          }
         />
         <FieldReportComposeCard
           open={fieldReportOpen}
@@ -1223,6 +1253,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         <CallReportComposeCard
           open={callReportOpen}
           submitting={submitting}
+          mobileDialHint
           onClose={() => setCallReportOpen(false)}
           onSubmit={submitCallReport}
         />

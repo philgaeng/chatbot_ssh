@@ -7,11 +7,14 @@ import { nowIsoTime, todayIsoDate, type CallReportFormData } from "@/lib/field-v
 export function CallReportComposeCard({
   open,
   submitting = false,
+  mobileDialHint = false,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   submitting?: boolean;
+  /** Mobile: point officers to the green dial button above this form. */
+  mobileDialHint?: boolean;
   onClose: () => void;
   onSubmit: (data: CallReportFormData) => Promise<void>;
 }) {
@@ -54,7 +57,11 @@ export function CallReportComposeCard({
           <Phone size={17} strokeWidth={2} className="text-sky-700 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-gray-900 leading-tight">Call complainant</p>
-            <p className="text-[11px] text-sky-800/90 mt-0.5">Log phone contact on the case timeline.</p>
+            <p className="text-[11px] text-sky-800/90 mt-0.5">
+              {mobileDialHint
+                ? "Use the SMS or call buttons above, then log the contact here."
+                : "Log phone contact on the case timeline."}
+            </p>
           </div>
         </div>
         <button type="button" onClick={onClose} disabled={submitting} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg shrink-0" aria-label="Close call report form">

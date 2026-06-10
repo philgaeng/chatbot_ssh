@@ -27,10 +27,20 @@ export function complainantContactDisplay(
   return trimmed;
 }
 
-/** `tel:` href for click-to-call on mobile (and desktop softphones). */
-export function phoneTelHref(phone: string | null | undefined): string | null {
+function phoneDigits(phone: string | null | undefined): string | null {
   if (!phone?.trim()) return null;
   const digits = phone.replace(/[^\d+]/g, "");
-  if (!digits) return null;
-  return `tel:${digits}`;
+  return digits || null;
+}
+
+/** `tel:` href for click-to-call on mobile (and desktop softphones). */
+export function phoneTelHref(phone: string | null | undefined): string | null {
+  const digits = phoneDigits(phone);
+  return digits ? `tel:${digits}` : null;
+}
+
+/** `sms:` href — opens the device messaging app with recipient pre-filled. */
+export function phoneSmsHref(phone: string | null | undefined): string | null {
+  const digits = phoneDigits(phone);
+  return digits ? `sms:${digits}` : null;
 }
