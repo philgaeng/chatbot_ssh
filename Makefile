@@ -37,10 +37,12 @@ COMPOSE_AWS_AUTH = $(COMPOSE_AWS) --profile auth
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
 AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
+# Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP). Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
+AWS_DEPLOY_SERVICES ?= grm_ui grm_ui_auth ticketing_api ticketing_api_auth backend celery_default
 
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
-	aws-up aws-deploy \
+	aws-up aws-deploy aws-deploy-full \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -63,7 +65,8 @@ help:
 	@echo ""
 	@echo "AWS (EC2):"
 	@echo "  make aws-up         rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy     SSH to EC2: git pull main, migrate, rebuild grm_ui + grm_ui_auth, up all"
+	@echo "  make aws-deploy      SSH to EC2: pull main, migrate, rebuild AWS_DEPLOY_SERVICES (default GRM+messaging)"
+	@echo "  make aws-deploy-full SSH to EC2: pull main, migrate, rebuild entire stack"
 	@echo ""
 	@echo "DB / optional:"
 	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
@@ -106,8 +109,48 @@ wsl-down:
 aws-up:
 	$(COMPOSE_AWS) up -d --build
 
-# Full remote deploy: pull main, migrations, fresh Node UI builds (demo + auth), full stack up, port check.
+# Remote deploy: pull main, migrations, rebuild selected services (default GRM UI/API + messaging backend).
 aws-deploy:
+	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
+	$(SSH_RUNNING) 'set -e; \
+		cd $(REMOTE_DIR_RUNNING) && \
+		git fetch origin && \
+		git checkout main && \
+		git checkout -- docker-compose.aws.yml && \
+		git pull --ff-only origin main && \
+		echo "aws-deploy: rebuilding $(AWS_DEPLOY_SERVICES)" && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  build --pull $(AWS_DEPLOY_SERVICES) && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  up -d --build $(AWS_DEPLOY_SERVICES) && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
+		ui_port="$$(docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  port grm_ui 3001 2>/dev/null || true)" && \
+		ui_auth_port="$$(docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+		api_port="$$(docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  port ticketing_api 5002 2>/dev/null || true)" && \
+		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
+		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+		echo "aws-deploy OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
+
+# Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
+aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) 'set -e; \
 		cd $(REMOTE_DIR_RUNNING) && \
@@ -143,7 +186,7 @@ aws-deploy:
 		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
 		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
 		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
-		echo "aws-deploy OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
+		echo "aws-deploy-full OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
 
 # ── Migrations (run from repo root; uses POSTGRES_* via backend container) ─────
 migrate_ticketing:
