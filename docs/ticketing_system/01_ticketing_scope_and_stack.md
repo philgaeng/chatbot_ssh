@@ -4,7 +4,7 @@
 
 ## Scope (as implemented)
 
-- **Ticket = Grievance from chatbot.** Created via fire-and-forget webhook when a grievance is submitted. Also creatable manually in UI (future).
+- **Ticket = Grievance from chatbot.** Primary create: fire-and-forget `POST /api/v1/tickets` on every submit path (standard, SEAH, road-hazard). Secondary: `grievance_sync` Celery task (cache UPDATE + delayed backfill if webhook missed).
 - **Two workflows:** Standard GRM (4 escalation levels) and SEAH (dedicated officers, DB-level invisibility to standard roles).
 - **Configurable workflows:** Steps, SLA timers, tier assignments, and notification rules are all DB-driven via Settings UI.
 - **Multi-tenant data model:** `country_code`, `organization_id`, `project_id`, `location_code`. v1 ships with one country (NP), one org (DOR), one project (KL Road).
@@ -73,12 +73,18 @@ ticketing/
 │   ├── project_type.py            ProjectType
 │   └── admin_audit_log.py         AdminAuditLog
 ├── services/
+│   ├── ticket_intake.py           Shared create path (webhook + sync backfill)
+│   ├── project_routing.py         resolve_ticket_organization()
+│   ├── project_go_live.py         Go-live checklist
+│   ├── officer_admin.py           Invite jurisdiction + org apply
+│   ├── grievance_sync_policy.py   Backfill grace-period helpers
 │   ├── report_rows.py             Report query + filtering
 │   ├── pivot_table.py             Pivot crosstab builder
 │   ├── quarterly_assignments.py   Quarterly email assignment logic
 │   ├── quarterly_library.py       Named report library
 │   └── report_limits.py           Per-user rate limiting
 ├── tasks/
+│   ├── grievance_sync.py          Poll public.grievances (2 min Beat)
 │   ├── escalation.py              SLA watchdog (every 15 min)
 │   ├── notifications.py           Complainant notify + in-app badge
 │   └── reports.py                 XLSX generation + email dispatch
@@ -102,6 +108,9 @@ ticketing/
     └── grm_roles.py               Role catalog seed
 
 channels/ticketing-ui/             Next.js 16 officer dashboard
+
+backend/actions/utils/
+└── ticketing_dispatch.py          dispatch_grievance_from_tracker → POST /api/v1/tickets
 ```
 
 ---

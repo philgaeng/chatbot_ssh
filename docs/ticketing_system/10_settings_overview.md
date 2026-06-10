@@ -125,7 +125,6 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 
 | Gap | Notes |
 |-----|-------|
-| `resolve_ticket_organization()` | Set `ticket.organization_id` from project/package actors on create — planned in workflow-settings draft §10 |
 | `workflow_assignments` table | Legacy fallback in `resolve_workflow()`; not exposed in UI; remove when safe |
 | Chatbot `public.projects` Settings tab | Spec written; implementation in ticketing UI TBD — see features doc |
 | Dedicated UI for `complainant_notifications` | Key seeded; officer channel matrix is in workflow editor |

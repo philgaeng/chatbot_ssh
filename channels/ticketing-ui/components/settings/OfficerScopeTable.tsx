@@ -332,6 +332,7 @@ export function OfficerScopeTable({
   officerOrgId,
   defaultRoleKey,
   onEditingChange,
+  hideOrganizationHeader = false,
 }: {
   rows: ScopeDraftRow[];
   onChange: (rows: ScopeDraftRow[]) => void;
@@ -339,6 +340,7 @@ export function OfficerScopeTable({
   officerOrgId: string;
   defaultRoleKey: string;
   onEditingChange?: (editing: boolean) => void;
+  hideOrganizationHeader?: boolean;
 }) {
   const catalog = useScopeCatalog();
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -412,7 +414,7 @@ export function OfficerScopeTable({
 
   return (
     <div className="space-y-3">
-      {officerOrgId && (
+      {officerOrgId && !hideOrganizationHeader && (
         <p className="text-sm text-gray-700">
           <span className="text-gray-500">Organization:</span>{" "}
           <span className="font-medium">{orgDisplayName}</span>

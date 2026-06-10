@@ -33,7 +33,7 @@ grievance_summary           TEXT                          -- non-PII cache
 grievance_categories        TEXT
 grievance_location          TEXT
 country_code                VARCHAR(8)    DEFAULT 'NP'
-organization_id             VARCHAR(64)   NOT NULL
+organization_id             VARCHAR(64)   NOT NULL        -- routing org; resolved from project/package actors on create (see project_routing.py)
 location_code               VARCHAR(64)
 project_id                  VARCHAR(64)   FK → ticketing.projects (SET NULL)
 project_code                VARCHAR(64)                   -- deprecated, kept for compat

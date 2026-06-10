@@ -21,7 +21,7 @@ The central entity. One ticket per grievance submission.
 | `grievance_categories` | Text | Non-PII cache |
 | `grievance_location` | Text | Non-PII cache (district/municipality text) |
 | `country_code` | String(8) | e.g. `NP` |
-| `organization_id` | String(64) | Executing agency (e.g. `DOR`) |
+| `organization_id` | String(64) | Routing org for auto-assign (e.g. `DOR` = implementing agency on KL Road). Set on create by `resolve_ticket_organization()` when `project_code` / `package_id` present; must match `officer_scopes.organization_id`. |
 | `location_code` | String(64) | Canonical location (see `LOCATION_CODES.md`) |
 | `project_id` | String(36) | FK → `ticketing.projects` |
 | `project_code` | String(64) | Deprecated; kept for backwards compat |

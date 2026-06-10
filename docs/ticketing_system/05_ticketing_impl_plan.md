@@ -30,9 +30,12 @@
 
 ## Phase 4 – Integration with chatbot ✅ Complete
 
-- Chatbot webhook: `backend/actions/utils/ticketing_dispatch.py` (fire-and-forget)
-- Wired into standard and SEAH grievance submission paths
-- QR token scan: `GET /api/v1/scan/{token}` public endpoint; chatbot `ActionIntroduce` reads `t` URL param and pre-fills 7 slots
+- Chatbot webhook: `backend/actions/utils/ticketing_dispatch.py` — `dispatch_grievance_from_tracker()` + `dispatch_ticket()` (synchronous HTTP POST, never raises)
+- Wired into **all** grievance submit paths: `BaseActionSubmit`, `ActionSubmitSeah`, and road-hazard fast path (`complete_road_hazard_intake_submit`)
+- Shared ticket intake: `ticketing/services/ticket_intake.py` (`create_ticket_from_intake`) used by webhook and sync backfill
+- Ticket `organization_id`: `ticketing/services/project_routing.py` (`resolve_ticket_organization`) on create when `project_code` / `package_id` present
+- Grievance sync safety net: `ticketing/tasks/grievance_sync.py` — UPDATE cache on existing tickets; delayed backfill CREATE (180s grace) if webhook missed
+- QR token scan: `GET /api/v1/scan/{token}` public endpoint; chatbot `ActionIntroduce` reads `t` URL param and pre-fills slots
 - PII fetch on-demand: `ticketing/clients/grievance_api.py`
 
 ## Phase 5 – Officer UI ✅ Complete
@@ -65,6 +68,7 @@ Built in `channels/ticketing-ui/` (Next.js 16, TypeScript, Tailwind v4).
 | Roles catalog (9 GRM roles) | ✅ | `ticketing.roles`; Settings role editor |
 | Bypass auth + demo roster | ✅ | `NEXT_PUBLIC_BYPASS_AUTH=true`; `grm_bypass_user` cookie |
 | Admin audit log | ✅ | `ticketing.admin_audit_log` |
+| Officer org edit + routing alignment (Fix 3) | ✅ | UI: Manage modal org dropdown; invite defaults to implementing agency; API: `validate_jurisdiction` + `PATCH /users/{id}` |
 
 ## Phase 7 – Remaining / Planned
 
@@ -72,7 +76,7 @@ Built in `channels/ticketing-ui/` (Next.js 16, TypeScript, Tailwind v4).
 |---|---|---|
 | Reports Summary tab (§12) | 🔲 Medium | ADB Project Director quarterly matrix + charts. Specified in `09_reports_and_report_builder.md`. |
 | Staging deploy (`grm.stage.facets-ai.com`) | 🔲 High | Docker + Nginx + SSL on EC2. See `docs/sprints/claude-tickets/DOCKER.md`. |
-| `public.grievances` sync smoke test | 🔲 High | Validate `grievance_sync.py` column names against live public schema. |
+| `public.grievances` sync integration test | 🔲 Medium | Column contract test for `grievance_sync.py` SQL; Option A behaviour covered in `tests/ticketing/test_grievance_sync.py` + `test_project_routing.py`. |
 | Async large report export | 🔲 Low | Currently synchronous; large exports may timeout. |
 | File storage → S3 | 🔲 Low | Currently local filesystem. |
 | Server-Sent Events (SSE) notifications | 🔲 Low | Post-proto upgrade from badge polling. |

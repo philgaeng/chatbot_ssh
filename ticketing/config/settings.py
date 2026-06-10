@@ -65,6 +65,9 @@ class TicketingSettings(BaseSettings):
     # ── Archiving (docs/ARCHIVING_AND_RETENTION.md §7) ──
     archiving_dry_run: bool = False
 
+    # ── Grievance sync: wait before backfill CREATE (seconds; webhook is primary path) ──
+    ticketing_sync_backfill_grace_seconds: int = 180
+
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
         env_file_encoding="utf-8",

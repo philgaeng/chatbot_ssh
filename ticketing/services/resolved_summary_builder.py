@@ -414,9 +414,9 @@ def _resolution_step_at_close(db: Session, ticket_id: str) -> tuple[str, str]:
         .order_by(TicketEvent.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if not ev or not ev.step_id:
+    if not ev or not ev.workflow_step_id:
         return "", ""
-    step = db.get(WorkflowStep, ev.step_id)
+    step = db.get(WorkflowStep, ev.workflow_step_id)
     if not step:
         return "", ""
     level = f"L{step.step_order}" if step.step_order is not None else ""

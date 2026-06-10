@@ -1,5 +1,21 @@
 import type { PackageItem, ProjectItem } from "@/lib/api";
 
+/** Matches backend `project_types.routing_org_role` default and go-live routing. */
+export const DEFAULT_ROUTING_ORG_ROLE = "implementing_agency";
+
+/**
+ * Organization that owns ticket routing for a project (e.g. DOR on KL Road).
+ * Used to default officer invite org so scopes match auto-assign.
+ */
+export function routingOrganizationId(
+  project: ProjectItem | undefined,
+  routingOrgRole: string = DEFAULT_ROUTING_ORG_ROLE,
+): string | null {
+  if (!project) return null;
+  const match = project.organizations.find((o) => o.org_role === routingOrgRole);
+  return match?.organization_id ?? null;
+}
+
 /** Donor org (e.g. ADB) may scope officers to any project on the system. */
 export function isDonorAllProjectsOrg(orgId: string): boolean {
   return orgId === "ADB" || orgId.toUpperCase() === "ADB";

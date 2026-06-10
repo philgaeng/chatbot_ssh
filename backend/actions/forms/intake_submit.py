@@ -11,6 +11,7 @@ from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction
 from backend.actions.grievance_intake.classification import trigger_async_classification
 from backend.actions.grievance_intake.sensitive import get_sensitive_issue_slots_on_submit
+from backend.actions.utils.ticketing_dispatch import dispatch_grievance_from_tracker
 
 
 async def complete_grievance_details_intake(
@@ -153,6 +154,15 @@ async def complete_road_hazard_intake_submit(
         grievance_id,
         categories,
     )
+
+    # Same ticketing webhook as BaseActionSubmit (package_id / location from QR slots).
+    dispatch_grievance_from_tracker(
+        tracker,
+        grievance_data,
+        log=form.logger,
+        is_seah=bool(sensitive_slots.get("grievance_sensitive_issue")),
+    )
+
     return slots_to_set
 
 

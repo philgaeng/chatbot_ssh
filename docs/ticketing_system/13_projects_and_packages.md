@@ -144,9 +144,24 @@ ticket.project_id + is_seah → projects.standard_workflow_id | seah_workflow_id
 2. **Project + location**
 3. **Location only**
 
-### Organization on ticket (gap)
+### Organization on ticket
 
-**Planned:** `resolve_ticket_organization(project_id, package_id?, location_code?)` from actors before `auto_assign_officer()`. Until implemented, `ticket.organization_id` may not match commercial actors.
+**Implemented:** `ticketing.services.project_routing.resolve_ticket_organization()`.
+
+| Step | Lookup |
+|------|--------|
+| Routing role | `project_types.routing_org_role` (default `implementing_agency`) |
+| With `package_id` | `package_organizations` for that role (package override) |
+| Else | `project_organizations` for that role |
+
+**Call sites:**
+
+- `create_ticket_from_intake()` — sets `ticket.organization_id` before workflow + `auto_assign_for_workflow_step()` (webhook and sync backfill).
+- `validate_jurisdiction()` — field operational roles with project/package scope; overrides invite/add-scope org to match routing (observers with `jurisdiction_mode=country` unchanged).
+
+Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing resolves from project config when `project_code` / `package_id` is set.
+
+**UI (invite):** Settings → Officers pre-selects the same org when a project is chosen — see [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) §4.1.
 
 ### Officer assignment
 

@@ -9,9 +9,19 @@ All integration with the ticketing system is API-only. This document covers:
 
 ## 1. Chatbot → Ticketing (Inbound)
 
-### 1.1 Create ticket from grievance submission
+### 1.1 Create ticket from grievance submission (primary path)
 
-Called by `backend/actions/utils/ticketing_dispatch.py` (fire-and-forget Celery task) after OTP verification and DB persistence.
+Called by `backend/actions/utils/ticketing_dispatch.py` after the grievance row is saved — **synchronous HTTP POST**, fire-and-forget (failures are logged; grievance submit never blocks).
+
+**Call sites (all intake paths):**
+
+| Path | Module | When |
+|------|--------|------|
+| Standard submit | `backend/actions/action_submit_grievance.py` (`BaseActionSubmit`) | After DB save |
+| SEAH submit | `backend/actions/action_submit_grievance.py` (`ActionSubmitSeah`) | After DB save |
+| Road-hazard fast path | `backend/actions/forms/intake_submit.py` (`complete_road_hazard_intake_submit`) | After DB save |
+
+Shared helper: `dispatch_grievance_from_tracker()` builds the payload from tracker slots (+ optional grievance dict), then `dispatch_ticket()` POSTs to ticketing.
 
 ```
 POST /api/v1/tickets
@@ -23,11 +33,10 @@ Body:
   "session_id": "...",
   "chatbot_id": "nepal_grievance_bot",
   "country_code": "NP",
-  "organization_id": "DOR",
-  "location_code": "NP_P1_MOR",
-  "project_code": "KL_ROAD",        // deprecated, use project_id
-  "project_id": "...",              // optional, from QR scan
-  "package_id": "...",             // optional, from QR scan
+  "organization_id": "DOR",         // hint only when project_code/package_id set — server resolves (§1.3)
+  "location_code": "P1_MOR",
+  "project_code": "KL_ROAD",
+  "package_id": "...",              // optional, from QR scan
   "priority": "NORMAL",
   "is_seah": false,
   "grievance_summary": "...",
@@ -37,7 +46,42 @@ Body:
 Response: { "ticket_id": "...", "status_code": "OPEN", "created_at": "..." }
 ```
 
-### 1.2 QR token scan (chatbot pre-fill)
+**Server-side intake** (`ticketing/services/ticket_intake.py` → `create_ticket_from_intake()`):
+
+- Resolves workflow, auto-assigns L1, creates `CREATED` event.
+- When `project_code` or `package_id` is present, **`organization_id` is overwritten** by `resolve_ticket_organization()` (see [13_projects_and_packages.md](13_projects_and_packages.md) §6) before workflow lookup and auto-assign.
+- Duplicate `grievance_id` → **409** (sync backfill skips quietly).
+
+Env (orchestrator / backend): `TICKETING_API_URL`, `TICKETING_SECRET_KEY`.
+
+### 1.2 Grievance sync (safety net — secondary path)
+
+Celery Beat task `ticketing.tasks.grievance_sync.sync_grievances` every **2 minutes** (`grm_celery_beat`).
+
+**Option A behaviour (does not race the webhook):**
+
+| Case | Action |
+|------|--------|
+| Ticket exists | **UPDATE** cached fields only (`grievance_summary`, `grievance_categories`, `grievance_location`) |
+| No ticket, grievance age &lt; grace | **Skip** create (`pending_webhook` in task result) |
+| No ticket, age ≥ grace (default **180s**) | **Backfill CREATE** via same `create_ticket_from_intake()` as §1.1 |
+
+Grace period: `ticketing_sync_backfill_grace_seconds` in settings, env `TICKETING_SYNC_BACKFILL_GRACE_SECONDS` (minimum 60).
+
+Backfill payload is best-effort from `public.grievances` (+ complainant `location_code` join); **`package_id` is usually NULL** — QR/webhook path remains authoritative for package-scoped assign.
+
+Policy helpers (no DB): `ticketing/services/grievance_sync_policy.py`.
+
+### 1.3 Ticket routing organization
+
+`ticketing/services/project_routing.py` → `resolve_ticket_organization(db, project_code=…, package_id=…)`:
+
+1. If `package_id` → `package_organizations` for project type **routing role** (default `implementing_agency`).
+2. Else → `project_organizations` for that role.
+
+Used on **ticket create** and on **field-officer invite / add scope** (`validate_jurisdiction` overrides wrong org, e.g. contractor vs DOR). Country/global observer roles (`jurisdiction_mode=country`) keep the submitted org (e.g. ADB).
+
+### 1.4 QR token scan (chatbot pre-fill)
 
 Called by chatbot `ActionIntroduce` when URL parameter `t` is present.
 
@@ -153,9 +197,10 @@ All routes prefixed with `/api/v1` unless noted.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/users/roster` | List all officers (for bypass switcher + Settings) |
-| `POST` | `/users/invite` | Invite officer (creates UserRole + OfficerOnboarding) |
+| `POST` | `/users/invite` | Invite officer (`user_roles` + `officer_scopes`; field roles: org resolved from project — §1.3) |
 | `GET` | `/users/{id}` | Officer detail |
-| `PATCH` | `/users/{id}` | Update officer |
+| `PATCH` | `/users/{id}` | Update officer (org, roles, Keycloak sync); `apply_officer_organization()` updates all `user_roles` + `officer_scopes` |
+| `GET/POST/DELETE` | `/users/{id}/scopes` | Officer jurisdiction rows |
 | `GET` | `/roles` | List roles catalog |
 | `PATCH` | `/roles/{id}` | Update role definition |
 

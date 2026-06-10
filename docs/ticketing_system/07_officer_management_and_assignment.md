@@ -78,8 +78,12 @@ Keycloak: identity + JWT claims. Ticketing DB: routing.
 | Feature | Status |
 | ------- | ------ |
 | Invite with required project / package / location + scope row | ✅ |
+| Invite modal defaults org to project **implementing agency** (project-first flow) | ✅ |
+| API resolves / overrides org for **field** roles when project/package scoped | ✅ (`validate_jurisdiction` → `resolve_ticket_organization`) |
+| Manage modal: edit **organization** on all `user_roles` + `officer_scopes` | ✅ (`PATCH /users/{id}`, `apply_officer_organization`) |
 | Edit / Delete officer on roster | ✅ |
 | `auto_assign_officer` uses `ticket.package_id` when set | ✅ |
+| Ticket `organization_id` from project actors on create | ✅ (`create_ticket_from_intake`) |
 | Package-first workflow/assign resolution (§2 cascade) | ✅ |
 | Location-without-project routes via package coverage | ✅ |
 | Admin audit log for officer changes | ✅ (`ticketing.admin_audit_log`) |
@@ -114,8 +118,17 @@ Uses step `assigned_role_key` + ticket `organization_id`, `location_code`, `proj
 | Minimum jurisdiction | At least **one** of: `project_id`, `package_id`, `location_code` (explicit). |
 | Organization | Required on every scope/role row. |
 | Org-only scope | **Not allowed** for assignable officers. |
+| Org vs ticket routing | For **field** roles with project/package context, API sets org to the project’s **routing role** actor (default `implementing_agency`, e.g. DOR on KL Road). UI pre-selects the same on invite. Country/global roles (e.g. ADB observers) keep the chosen org. |
 
 On **invite**, the modal must collect role + org + (**project** and/or **package** and/or **location**) and create matching `user_roles` + `officer_scopes` in one transaction.
+
+**Entry points:**
+
+| UI | Org behaviour |
+|----|----------------|
+| Settings → Officers → **Invite** | Project-first; org defaults to implementing agency when project selected (`OfficerJurisdictionForm` + `routingOrganizationId()`). |
+| Projects → **Add officer** | Org locked to the project-actor row clicked. |
+| Settings → Officers → **Manage** | Org dropdown; save updates all scope rows + Keycloak (auth stack). |
 
 ### 4.2 Inheritance
 
@@ -158,7 +171,7 @@ Designed for admins with mixed IT literacy (e.g. provincial safeguards focal per
 | Action | Behaviour |
 | ------ | --------- |
 | **+ Invite officer** | Modal: email, role, org, **required** jurisdiction (project and/or package and/or location), include-sub-locations when location set. Creates Keycloak (auth) + `user_roles` + `officer_scopes`. |
-| **Manage** (row) | Opens the officer modal: same fields as invite, list of existing roles/scopes with per-row remove, staged adds, single **Save changes**. Keycloak sync on auth stack. |
+| **Manage** (row) | Opens the officer modal: org selector (fixes mistaken contractor org), roles/scopes table, staged adds, single **Save changes**. Keycloak sync on auth stack. |
 | **Remove** (row) | Confirm, then remove all roles/scopes; disable Keycloak user; audit log. |
 
 **No row expansion.** Do not use a ▶ triangle or inline scope sub-table on the roster. All scope changes go through **Manage**.

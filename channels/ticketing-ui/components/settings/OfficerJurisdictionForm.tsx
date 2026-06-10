@@ -10,9 +10,11 @@ import {
   type PackageItem,
 } from "@/lib/api";
 import {
+  DEFAULT_ROUTING_ORG_ROLE,
   isDonorAllProjectsOrg,
   packagesForOrganizationOnProject,
   projectsForOrganization,
+  routingOrganizationId,
 } from "@/lib/officerJurisdiction";
 import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 import { LocationSearch } from "@/components/LocationSearch";
@@ -99,8 +101,22 @@ export function useOfficerJurisdictionState(
   }, [defaults?.organizationId]);
 
   useEffect(() => {
+    if (projectFirst && !lockProject && !selProject && projects.length === 1) {
+      setSelProject(projects[0].project_id);
+    }
+  }, [projectFirst, lockProject, selProject, projects]);
+
+  useEffect(() => {
     if (projectFirst) {
-      if (!lockOrganization) setOrgId("");
+      if (!lockOrganization) {
+        if (!selProject) {
+          setOrgId("");
+        } else {
+          const project = projects.find((p) => p.project_id === selProject);
+          const routed = routingOrganizationId(project);
+          setOrgId(routed ?? "");
+        }
+      }
       setSelPkg("");
     } else if (!lockProject) {
       setSelProject("");
@@ -108,7 +124,7 @@ export function useOfficerJurisdictionState(
     } else if (!lockOrganization) {
       setSelPkg("");
     }
-  }, [projectFirst, projectFirst ? selProject : orgId, lockProject, lockOrganization]);
+  }, [projectFirst, projectFirst ? selProject : orgId, lockProject, lockOrganization, projects]);
 
   useEffect(() => {
     setSelPkg("");
@@ -234,6 +250,7 @@ export function useOfficerJurisdictionState(
     countryRole,
     projectFirst,
     orgsOnProject,
+    routingOrgId: routingOrganizationId(selectedProject),
     allProjects: projects,
     reset,
     hasJurisdiction,
@@ -266,6 +283,7 @@ type FieldsProps = {
   countryRole?: boolean;
   projectFirst?: boolean;
   orgsOnProject?: OrganizationItem[];
+  routingOrgId?: string | null;
   allProjects?: ProjectItem[];
 };
 
@@ -277,6 +295,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     lockOrganization, lockProject, countryRole = false,
     projectFirst = false,
     orgsOnProject = [],
+    routingOrgId = null,
     allProjects = [],
     singlePackage = null,
   } = props;
@@ -411,6 +430,13 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         {selProject && orgsOnProject.length === 0 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
             Link organizations to this project first (Projects & packages → Project actors), then invite officers.
+          </p>
+        )}
+        {selProject && routingOrgId && orgId === routingOrgId && (
+          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            Organization defaults to the project&apos;s{" "}
+            <span className="font-mono">{DEFAULT_ROUTING_ORG_ROLE.replace(/_/g, " ")}</span>{" "}
+            (same org used for ticket routing). Change only if this officer works for another project actor.
           </p>
         )}
         {locationAndPackage}

@@ -3,11 +3,17 @@
 Called after a grievance is successfully written to the DB.
 Never raises — a ticketing failure must never block grievance submission.
 """
+from __future__ import annotations
+
+import json
 import logging
 import os
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 import requests
+from rasa_sdk import Tracker
+
+from backend.config.constants import CLASSIFICATION_DATA
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +109,84 @@ def _load_grievance_cache_fields(grievance_id: str) -> dict:
             exc,
         )
         return {}
+
+
+def categories_high_priority(grievance_categories: Any) -> bool:
+    """True when any selected category is marked high_priority in CLASSIFICATION_DATA."""
+    categories = grievance_categories
+    if isinstance(categories, str):
+        try:
+            categories = json.loads(categories)
+        except (json.JSONDecodeError, TypeError):
+            categories = [categories]
+    if not isinstance(categories, list):
+        return False
+    for category in categories:
+        if category in CLASSIFICATION_DATA:
+            if CLASSIFICATION_DATA[category].get("high_priority", False):
+                return True
+    return False
+
+
+def dispatch_grievance_from_tracker(
+    tracker: Tracker,
+    grievance_data: Optional[Mapping[str, Any]] = None,
+    *,
+    log: Optional[logging.Logger] = None,
+    organization_id: str = "DOR",
+    grievance_id: Optional[str] = None,
+    complainant_id: Optional[str] = None,
+    is_seah: Optional[bool] = None,
+    priority: Optional[str] = None,
+) -> None:
+    """
+    Build POST /api/v1/tickets payload from tracker slots (+ optional grievance dict).
+
+    Shared by BaseActionSubmit, road-hazard fast path, and other intake helpers.
+    Never raises.
+    """
+    active_log = log or logger
+    g = dict(grievance_data or {})
+
+    gid = grievance_id or g.get("grievance_id") or tracker.get_slot("grievance_id")
+    cid = complainant_id or g.get("complainant_id") or tracker.get_slot("complainant_id")
+    sensitive = (
+        is_seah
+        if is_seah is not None
+        else bool(
+            g.get("grievance_sensitive_issue")
+            or tracker.get_slot("grievance_sensitive_issue")
+        )
+    )
+    categories = g.get("grievance_categories") or tracker.get_slot("grievance_categories")
+    if priority is None:
+        priority = "HIGH" if categories_high_priority(categories) else "NORMAL"
+    if sensitive and priority != "HIGH":
+        priority = "HIGH"
+
+    package_id = tracker.get_slot("package_id")
+    location_code = g.get("location_code") or tracker.get_slot("location_code")
+
+    dispatch_ticket(
+        grievance_id=gid,
+        complainant_id=cid,
+        session_id=tracker.sender_id,
+        is_seah=sensitive,
+        priority=priority,
+        location_code=location_code,
+        project_code=tracker.get_slot("project_code") or "KL_ROAD",
+        grievance_summary=g.get("grievance_summary") or tracker.get_slot("grievance_summary"),
+        grievance_categories=categories,
+        grievance_location=g.get("grievance_location") or tracker.get_slot("grievance_location"),
+        organization_id=organization_id,
+        package_id=package_id,
+    )
+    active_log.info(
+        "ticketing dispatch queued: grievance_id=%s package_id=%s location_code=%s",
+        gid,
+        package_id,
+        location_code,
+    )
 
 
 def dispatch_ticket(

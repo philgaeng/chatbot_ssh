@@ -6,9 +6,12 @@ from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
 import json
 import traceback
-from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES, CLASSIFICATION_DATA
+from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
-from backend.actions.utils.ticketing_dispatch import dispatch_ticket
+from backend.actions.utils.ticketing_dispatch import (
+    categories_high_priority,
+    dispatch_grievance_from_tracker,
+)
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
 from backend.shared_functions.geo_pin import (
@@ -53,14 +56,7 @@ class BaseActionSubmit(BaseAction):
                     grievance_categories = json.loads(grievance_categories)
                 except (json.JSONDecodeError, TypeError):
                     grievance_categories = [grievance_categories]
-            # Check if any of the categories has high_priority = True
-            if isinstance(grievance_categories, list):
-                for category in grievance_categories:
-                    if category in CLASSIFICATION_DATA:
-                        if CLASSIFICATION_DATA[category].get('high_priority', False):
-                            return True
-            
-            return False
+            return categories_high_priority(grievance_categories)
             
         except Exception as e:
             self.logger.error(f"Error checking grievance high priority: {str(e)}")
@@ -411,19 +407,18 @@ class BaseActionSubmit(BaseAction):
             #     await self._send_grievance_recap_email_to_complainant(complainant_email, grievance_data, dispatcher)
 
             # INTEGRATION POINT: chatbot → ticketing webhook (fire-and-forget, never blocks)
-            dispatch_ticket(
+            dispatch_grievance_from_tracker(
+                tracker,
+                grievance_data,
+                log=self.logger,
                 grievance_id=self.grievance_id,
                 complainant_id=self.complainant_id,
-                session_id=tracker.sender_id,
                 is_seah=bool(self.grievance_sensitive_issue),
-                priority="HIGH" if grievance_data.get("grievance_high_priority") else "NORMAL",
-                location_code=grievance_data.get("location_code"),
-                project_code=tracker.get_slot("project_code") or "KL_ROAD",
-                grievance_summary=tracker.get_slot("grievance_summary"),
-                grievance_categories=tracker.get_slot("grievance_categories"),
-                grievance_location=grievance_data.get("grievance_location"),
-                organization_id="DOR",
-                package_id=tracker.get_slot("package_id"),
+                priority=(
+                    "HIGH"
+                    if grievance_data.get("grievance_high_priority")
+                    else None
+                ),
             )
 
             return [
@@ -511,19 +506,14 @@ class ActionSubmitSeah(BaseActionSubmit):
                 or grievance_data.get("complainant_id")
                 or tracker.get_slot("complainant_id")
             )
-            dispatch_ticket(
+            dispatch_grievance_from_tracker(
+                tracker,
+                grievance_data,
+                log=self.logger,
                 grievance_id=result.get("grievance_id") or self.grievance_id,
                 complainant_id=complainant_ref,
-                session_id=tracker.sender_id,
                 is_seah=True,
                 priority="HIGH",
-                location_code=grievance_data.get("location_code"),
-                project_code=tracker.get_slot("project_code") or "KL_ROAD",
-                grievance_summary=tracker.get_slot("grievance_summary"),
-                grievance_categories=tracker.get_slot("grievance_categories"),
-                grievance_location=grievance_data.get("grievance_location"),
-                organization_id="DOR",
-                package_id=tracker.get_slot("package_id"),
             )
 
             grievance_ref = result.get("grievance_id")

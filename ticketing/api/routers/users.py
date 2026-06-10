@@ -1150,10 +1150,18 @@ def update_officer(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ) -> OfficerUpdateResponse:
-    from ticketing.services.officer_admin import keycloak_update_user_attributes, log_admin_audit
+    from ticketing.services.officer_admin import (
+        apply_officer_organization,
+        keycloak_update_user_attributes,
+        log_admin_audit,
+    )
 
     if not db.execute(select(UserRole.user_id).where(UserRole.user_id == user_id).limit(1)).scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Officer not found")
+
+    roles_updated, scopes_updated = apply_officer_organization(
+        db, user_id, body.organization_id
+    )
 
     if body.sync_keycloak:
         keycloak_update_user_attributes(
@@ -1163,12 +1171,17 @@ def update_officer(
             body.location_code,
         )
 
+    audit_payload = {
+        **body.model_dump(),
+        "roles_updated": roles_updated,
+        "scopes_updated": scopes_updated,
+    }
     log_admin_audit(
         db,
         actor_user_id=current_user.user_id,
         action="officer.update",
         target_user_id=user_id,
-        payload=body.model_dump(),
+        payload=audit_payload,
     )
     db.commit()
     return OfficerUpdateResponse(ok=True, user_id=user_id)

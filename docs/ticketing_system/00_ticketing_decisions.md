@@ -10,7 +10,8 @@ It reflects what has actually been built. Questions that drove these decisions a
 - **Country / project scope (v1):** Nepal, KL Road GRM (ADB Loan 52097-003). Data model is multi-tenant ready: `country`, `organization_id`, `project_id`, `location_code`.
 - **Primary users:** Three tiers — ADB (supervisor/observer), Government of Nepal / DOR (implementing officers), external partners (contractors L1, controllers L2).
 - **UI requirement:** Full modern web UI (Next.js 16, Tailwind v4) shipped as part of the system. Not API-only.
-- **Chatbot independence:** Ticketing is optional — chatbot + grievance backend run without ticketing. Integration is API-only, fire-and-forget webhook from chatbot to `POST /api/v1/tickets`.
+- **Chatbot independence:** Ticketing is optional — chatbot + grievance backend run without ticketing. Integration is API-only, fire-and-forget webhook from chatbot to `POST /api/v1/tickets` on **every** grievance submit path (including road-hazard fast intake).
+- **Ticket create redundancy:** Webhook is primary; `grievance_sync` updates cache on existing tickets and backfills missing tickets after a grace period (default 180s) using the same `create_ticket_from_intake()` service.
 
 ---
 
@@ -29,7 +30,8 @@ It reflects what has actually been built. Questions that drove these decisions a
 
 | Decision | Detail |
 |---|---|
-| `grievance_id` | String ref (no FK). Ticket created from grievance at submission time via chatbot webhook. |
+| `grievance_id` | String ref (no FK). Ticket created at submission via chatbot webhook; sync backfill if webhook missed. |
+| `organization_id` on ticket | Resolved from project/package **implementing agency** (routing role) on create — not taken literally from webhook when project context exists. Officer scopes must use the same org for auto-assign. |
 | `session_id` | Stored on ticket at creation — used for complainant notifications via orchestrator `POST /message`. |
 | Non-PII cache | `grievance_summary`, `grievance_categories`, `grievance_location`, `priority` cached at creation. PII never cached. |
 | `project_id` | FK to `ticketing.projects` (replaced legacy `project_code` string). |

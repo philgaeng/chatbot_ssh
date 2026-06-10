@@ -21,6 +21,7 @@ from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.user import Role, UserRole
 from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
+from ticketing.services.project_routing import resolve_ticket_organization
 
 
 class JurisdictionInput(BaseModel):
@@ -86,6 +87,27 @@ def validate_jurisdiction(
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {data.role_key}")
 
+    if scope_requires_field_jurisdiction(db, data.role_key) and (
+        data.project_id or resolved_project_code or data.package_id
+    ):
+        routed = resolve_ticket_organization(
+            db,
+            project_id=data.project_id,
+            project_code=resolved_project_code,
+            package_id=data.package_id,
+            location_code=(data.location_code or "").strip() or None,
+        )
+        if routed and routed != org_id:
+            logger.info(
+                "validate_jurisdiction: organization_id %s -> %s (project routing)",
+                org_id,
+                routed,
+            )
+            org_id = routed
+            data.organization_id = routed
+        elif routed:
+            data.organization_id = routed
+
     return resolved_project_code or ""
 
 
@@ -107,6 +129,34 @@ def create_scope_row(
     )
     db.add(scope)
     return scope
+
+
+def apply_officer_organization(
+    db: Session,
+    user_id: str,
+    organization_id: str,
+) -> tuple[int, int]:
+    """
+    Set organization_id on all user_roles and officer_scopes for an officer.
+    Returns (roles_updated, scopes_updated).
+    """
+    from ticketing.models.officer_scope import OfficerScope
+    from ticketing.models.organization import Organization
+    from ticketing.models.user import UserRole
+
+    org_id = (organization_id or "").strip()
+    if not org_id:
+        raise HTTPException(status_code=422, detail="organization_id is required")
+    if not db.get(Organization, org_id):
+        raise HTTPException(status_code=404, detail=f"Organization {org_id!r} not found")
+
+    roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
+    scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
+    for row in roles:
+        row.organization_id = org_id
+    for scope in scopes:
+        scope.organization_id = org_id
+    return len(roles), len(scopes)
 
 
 def upsert_user_role_row(

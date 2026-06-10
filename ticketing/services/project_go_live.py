@@ -12,6 +12,7 @@ from ticketing.models.package import PackageLocation, PackageOrganization, Proje
 from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.project_type import ProjectType
 from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
+from ticketing.services.project_routing import routing_org_id_for_loaded_project
 from ticketing.services.project_types import (
     get_project_type,
     package_required_role_keys,
@@ -47,14 +48,6 @@ class GoLiveReport:
             "warn": sum(1 for c in self.checks if c.status == "warn"),
             "fail": sum(1 for c in self.checks if c.status == "fail"),
         }
-
-
-def _routing_org_id(project: Project, pt: ProjectType | None) -> str | None:
-    role = (pt.routing_org_role if pt else None) or "implementing_agency"
-    for po in project.organizations:
-        if po.org_role == role:
-            return po.organization_id
-    return None
 
 
 def _workflow_published(db: Session, workflow_id: str | None) -> bool:
@@ -256,7 +249,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             )
 
     # C1 L1 officer for routing org
-    routing_org = _routing_org_id(project, pt)
+    routing_org = routing_org_id_for_loaded_project(db, project)
     l1_role = _first_standard_step_role(db, project)
     c1_ok = False
     if routing_org and l1_role:

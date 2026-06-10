@@ -148,6 +148,15 @@ Example: one custom role `supervision_consultant_oversight` with default `field`
 
 Workflow steps reference **`role_key`** only. Custom roles must be **assigned to a workflow step** before auto-assign can use them.
 
+### 3.2.1 Organization on invite vs ticket routing — as-built
+
+For **`jurisdiction_mode=field`** officers scoped to a project or package:
+
+- **UI** defaults `organization_id` to the project’s **implementing agency** (routing role).
+- **API** (`POST /users/invite`, `POST /users/{id}/scopes`) overrides a mismatched org via `resolve_ticket_organization()` so `officer_scopes.organization_id` matches `tickets.organization_id` on create.
+
+**`jurisdiction_mode=country`** observers (e.g. `adb_national_project_director`) keep the selected org (e.g. ADB). Details: [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) §4.1, [13_projects_and_packages.md](13_projects_and_packages.md) §6.
+
 ### 3.3 Who manages the operational catalog — LOCKED
 
 | Action | `project_admin` | `country_admin` (by scope track) | `super_admin` |

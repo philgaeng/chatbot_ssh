@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   addScope,
   deleteOfficer,
   deleteScope,
   inviteOfficer,
+  listOrganizations,
   listScopes,
   updateOfficerKeycloak,
   type OfficerRosterEntry,
+  type OrganizationItem,
 } from "@/lib/api";
 import {
   OfficerJurisdictionFields,
@@ -162,18 +164,13 @@ export function EditOfficerModal({
   onSaved: () => void;
 }) {
   const [rows, setRows] = useState<ScopeDraftRow[]>([]);
+  const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [rowEditing, setRowEditing] = useState(false);
   const defaultRoleKey = officer.role_keys[0] ?? roleChoices[0]?.key ?? "";
-
-  const officerOrgId = useMemo(() => {
-    if (officer.organization_ids.length >= 1) return officer.organization_ids[0];
-    const active = activeScopeRows(rows);
-    const fromScopes = [...new Set(active.map((s) => s.organization_id))];
-    return fromScopes[0] ?? "";
-  }, [officer.organization_ids, rows]);
 
   const officerHasMultipleOrgs =
     officer.organization_ids.length > 1 ||
@@ -184,18 +181,40 @@ export function EditOfficerModal({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const scopes = await listScopes(officer.user_id);
-      setRows(scopes.map(scopeToDraftRow));
+      const [scopes, orgList] = await Promise.all([
+        listScopes(officer.user_id),
+        listOrganizations(),
+      ]);
+      setOrgs(orgList);
+      const draftRows = scopes.map(scopeToDraftRow);
+      setRows(draftRows);
+      const fromOfficer = officer.organization_ids[0] ?? "";
+      const fromScopes = [...new Set(draftRows.map((s) => s.organization_id).filter(Boolean))][0] ?? "";
+      setSelectedOrgId(fromOfficer || fromScopes);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load scopes");
     } finally {
       setLoading(false);
     }
-  }, [officer.user_id]);
+  }, [officer.user_id, officer.organization_ids]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  function handleOrganizationChange(nextOrgId: string) {
+    setSelectedOrgId(nextOrgId);
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.status === "deleted" || row.organization_id === nextOrgId) return row;
+        return {
+          ...row,
+          organization_id: nextOrgId,
+          status: row.status === "new" ? "new" : row.scopeId ? "edited" : row.status,
+        };
+      }),
+    );
+  }
 
   async function handleSave() {
     setError(null);
@@ -210,33 +229,38 @@ export function EditOfficerModal({
       return;
     }
 
-    const keptForeignOrg = activeRows.filter(
-      (s) => officerOrgId && s.organization_id !== officerOrgId,
-    );
+    if (!selectedOrgId) {
+      setError("Select an organization for this officer.");
+      return;
+    }
+
+    const keptForeignOrg = activeRows.filter((s) => s.organization_id !== selectedOrgId);
     if (keptForeignOrg.length > 0) {
-      setError("Remove scopes from other organizations before saving.");
+      setError("All scopes must use the selected organization before saving.");
       return;
     }
 
     setSaving(true);
     try {
-      for (const scopeId of scopeRowsToDelete(rows)) {
+      const rowsForSave = rows.map((row) =>
+        row.status === "deleted" ? row : { ...row, organization_id: selectedOrgId },
+      );
+      for (const scopeId of scopeRowsToDelete(rowsForSave)) {
         await deleteScope(officer.user_id, scopeId);
       }
-      for (const row of scopeRowsToCreate(rows)) {
+      for (const row of scopeRowsToCreate(rowsForSave)) {
         await addScope(officer.user_id, {
           role_key: row.role_key,
-          organization_id: row.organization_id,
+          organization_id: selectedOrgId,
           location_code: row.location_code,
           project_id: row.project_id,
           package_id: row.package_id,
           includes_children: row.includes_children,
         });
       }
-      const primaryOrg = officerOrgId || activeRows[0]?.organization_id || "";
       await updateOfficerKeycloak(officer.user_id, {
         role_keys: officer.role_keys,
-        organization_id: primaryOrg,
+        organization_id: selectedOrgId,
         location_code: activeRows[0]?.location_code ?? null,
         sync_keycloak: true,
       });
@@ -278,10 +302,29 @@ export function EditOfficerModal({
             <>
               {officerHasMultipleOrgs && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  This officer has scopes in more than one organization. Each officer belongs to one organization
-                  only — delete scopes from other organizations before saving.
+                  This officer has scopes in more than one organization. Pick the correct organization below — saving
+                  will align all roles and scopes to that org.
                 </p>
               )}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => handleOrganizationChange(e.target.value)}
+                  disabled={rowEditing}
+                  className="w-full max-w-md text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+                >
+                  <option value="">Select organization…</option>
+                  {orgs.map((o) => (
+                    <option key={o.organization_id} value={o.organization_id}>
+                      {o.name} ({o.organization_id})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Correct mistaken invites (e.g. contractor org vs DOR). Updates roster, scopes, and Keycloak on save.
+                </p>
+              </div>
               <p className="text-xs text-gray-500">
                 Each row is one jurisdiction scope. Edit or delete a row inline, or add a new row. Changes apply when
                 you click <strong>Save changes</strong>.
@@ -290,9 +333,10 @@ export function EditOfficerModal({
                 rows={rows}
                 onChange={setRows}
                 roleChoices={roleChoices}
-                officerOrgId={officerOrgId}
+                officerOrgId={selectedOrgId}
                 defaultRoleKey={defaultRoleKey}
                 onEditingChange={setRowEditing}
+                hideOrganizationHeader
               />
             </>
           )}

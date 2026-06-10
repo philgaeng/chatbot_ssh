@@ -1,6 +1,6 @@
 # GRM Ticketing System – Documentation Index
 
-> Last updated: June 2026. Reflects as-built state.
+> Last updated: June 2026 (routing org, grievance sync Option A, dispatch on all intake paths). Reflects as-built state.
 
 ---
 
@@ -76,7 +76,9 @@ Moved to `archive/`. Kept for historical reference only; do not update.
 
 ## Quick reference
 
-**Create a ticket from chatbot:** `POST /api/v1/tickets` with `X-Ticketing-Secret` header  
+**Create a ticket from chatbot:** `POST /api/v1/tickets` with `X-Ticketing-Secret` header (`ticketing_dispatch.py` on all submit paths)  
+**Grievance sync (backfill):** Celery `sync_grievances` every 2 min — see `03_ticketing_api_integration.md` §1.2  
+**Ticket / officer org routing:** `ticketing/services/project_routing.py` — see `13_projects_and_packages.md` §6  
 **Public QR scan:** `GET /api/v1/scan/{token}` (no auth)  
 **Run migrations:** `cd ticketing/migrations && alembic upgrade head`  
 **Seed demo data:** `python -m ticketing.seed.kl_road_standard && python -m ticketing.seed.mock_tickets`  

@@ -73,6 +73,11 @@ from ticketing.constants.resolution import (
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.models.ticket_overdue_episode import TicketOverdueEpisode
 from ticketing.services.overdue_episodes import close_open_episode, overdue_days_display
+from ticketing.services.ticket_intake import (
+    DuplicateTicketError,
+    TicketIntakeError,
+    create_ticket_from_intake,
+)
 from ticketing.engine.escalation import (
     convene_grc, escalate_ticket,
     _apply_step_tier_roles, _ensure_viewer,
@@ -429,103 +434,21 @@ def create_ticket(
     db: Session = Depends(get_db),
     _: str = Depends(verify_api_key),
 ) -> TicketCreateResponse:
-    # Guard: don't create duplicate tickets for same grievance
-    existing = db.execute(
-        select(Ticket).where(
-            Ticket.grievance_id == payload.grievance_id,
-            Ticket.is_deleted.is_(False),
+    try:
+        ticket = create_ticket_from_intake(
+            db,
+            payload,
+            source="webhook",
+            created_by_user_id="system",
         )
-    ).scalar_one_or_none()
-    if existing:
+    except DuplicateTicketError as exc:
         logger.warning("Duplicate ticket request for grievance_id=%s", payload.grievance_id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Ticket already exists for grievance_id={payload.grievance_id} (ticket_id={existing.ticket_id})",
-        )
-
-    if payload.project_code:
-        from ticketing.models.project import Project
-        from ticketing.services import project_go_live as go_live_svc
-
-        proj = db.execute(
-            select(Project).where(Project.short_code == payload.project_code)
-        ).scalar_one_or_none()
-        if proj:
-            if not proj.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Project '{payload.project_code}' is not active",
-                )
-            block = go_live_svc.ticket_intake_block_message(db, proj.project_id)
-            if block:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=block,
-                )
-
-    # Workflow lookup
-    workflow = _lookup_workflow(
-        db,
-        organization_id=payload.organization_id,
-        location_code=payload.location_code,
-        project_code=payload.project_code,
-        is_seah=payload.is_seah,
-        priority=payload.priority,
-    )
-    first_step = _first_step(db, workflow.workflow_id)
-
-    # Auto-assign to least-loaded officer for the first workflow step
-    auto_assigned_id: Optional[str] = None
-    if first_step:
-        auto_assigned_id = auto_assign_for_workflow_step(
-            step_role_key=first_step.assigned_role_key,
-            organization_id=payload.organization_id,
-            location_code=payload.location_code,
-            project_code=payload.project_code,
-            db=db,
-            ticket_package_id=payload.package_id,
-        )
-
-    ticket = Ticket(
-        ticket_id=_new_id(),
-        grievance_id=payload.grievance_id,
-        complainant_id=payload.complainant_id,
-        session_id=payload.session_id,
-        chatbot_id=payload.chatbot_id,
-        grievance_summary=payload.grievance_summary,
-        grievance_categories=payload.grievance_categories,
-        grievance_location=payload.grievance_location,
-        country_code=payload.country_code,
-        organization_id=payload.organization_id,
-        location_code=payload.location_code,
-        project_code=payload.project_code,
-        status_code="OPEN",
-        current_workflow_id=workflow.workflow_id,
-        current_step_id=first_step.step_id if first_step else None,
-        assigned_to_user_id=auto_assigned_id,
-        # Spec 12: reply-to-complainant capability defaults to the L1 actor
-        complainant_reply_owner_id=auto_assigned_id,
-        priority=payload.priority,
-        is_seah=payload.is_seah,
-        package_id=payload.package_id,
-        is_deleted=False,
-        sla_breached=False,
-    )
-    db.add(ticket)
-
-    _add_event(
-        db, ticket, "CREATED",
-        new_status="OPEN",
-        step_id=first_step.step_id if first_step else None,
-        payload={"workflow_key": workflow.workflow_key},
-        seen=True,  # creation event is not an unread notification
-        # No summary to regenerate at creation; actor is the inbound chatbot/API key
-        summary_regen_required=False,
-    )
-
-    # Spec 12: seed Informed + Observer tiers from the first step's role configuration
-    if first_step:
-        _apply_step_tier_roles(db, ticket, first_step)
+            detail=exc.detail,
+        ) from exc
+    except TicketIntakeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     db.commit()
     db.refresh(ticket)
@@ -534,8 +457,11 @@ def create_ticket(
         _enqueue_celery(generate_findings, ticket.ticket_id)
 
     logger.info(
-        "Ticket created: ticket_id=%s grievance_id=%s workflow=%s is_seah=%s",
-        ticket.ticket_id, payload.grievance_id, workflow.workflow_key, payload.is_seah,
+        "Ticket created: ticket_id=%s grievance_id=%s is_seah=%s assigned=%s",
+        ticket.ticket_id,
+        payload.grievance_id,
+        payload.is_seah,
+        ticket.assigned_to_user_id,
     )
     return ticket
 
