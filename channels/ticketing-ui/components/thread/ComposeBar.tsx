@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Mic, Send } from "lucide-react";
 import { HASH_COMMANDS, type HashCommand } from "@/lib/mobile-constants";
+import type { ReassignMode } from "@/lib/officer-permissions";
 import { FIELD_WORK_AMBER, INSPECT_SELF_MENTION } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 
@@ -25,6 +26,9 @@ export interface ComposeBarProps {
   onHashCommand?: (cmd: HashCommand) => void;
   fieldReportOpen?: boolean;
   canAssign?: boolean;
+  /** Assigned actor may reassign (#reassign) — supervisor request or direct peer pick. */
+  canReassign?: boolean;
+  reassignMode?: ReassignMode | null;
   disabled?: boolean;
   participants?: MentionParticipant[];
   placeholder?: string;
@@ -49,22 +53,33 @@ function HashCmdIcon({ name, size = 16, strokeWidth = 2, className = "" }: {
       <path strokeLinecap="round" strokeLinejoin="round" d="m16 11 2 2 4-4"/>
     </svg>
   );
+  if (name === "RefreshCw") return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+      stroke="currentColor" strokeWidth={strokeWidth} width={size} height={size} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v5h5"/>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 16h5v5"/>
+    </svg>
+  );
   return <TaskTypeIcon name={name} size={size} strokeWidth={strokeWidth} className={className} />;
 }
 
 function hashCmdRowClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
+  if (cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return FIELD_WORK_AMBER.paletteRow;
   }
   if (cmd.kind === "action") return "text-amber-700 hover:bg-amber-50";
+  if (cmd.kind === "reassign_request") return "text-violet-700 hover:bg-violet-50";
   return "text-gray-700 hover:bg-blue-50";
 }
 
 function hashCmdIconClass(cmd: HashCommand): string {
-  if (cmd.kind === "report" || cmd.kind === "task_assign" || cmd.kind === "call_report") {
+  if (cmd.kind === "task_assign" || cmd.kind === "call_report") {
     return `${FIELD_WORK_AMBER.paletteIcon} shrink-0`;
   }
   if (cmd.kind === "task") return "text-blue-400 shrink-0";
+  if (cmd.kind === "reassign_request") return "text-violet-500 shrink-0";
   return "shrink-0 opacity-80";
 }
 
@@ -78,6 +93,8 @@ export function ComposeBar({
   onHashCommand,
   fieldReportOpen = false,
   canAssign = true,
+  canReassign = false,
+  reassignMode = null,
   disabled,
   participants = [],
   placeholder,
@@ -129,19 +146,26 @@ export function ComposeBar({
       return;
     }
     if (cmd.kind === "task_assign") {
-      if (cmd.hash === "report") {
-        onChange("#report @");
-      } else {
-        onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
-      }
-      setMentionQuery(cmd.hash === "report" ? "" : null);
+      onChange(`#${cmd.hash} ${INSPECT_SELF_MENTION}`);
       textareaRef.current?.focus();
+      onHashCommand?.(cmd);
+      return;
+    }
+    if (cmd.kind === "reassign_request" && reassignMode === "peer") {
+      onChange("#assign @");
+      setMentionQuery("");
+      textareaRef.current?.focus();
+      onHashCommand?.(cmd);
+      return;
+    }
+    if (cmd.kind === "call_report") {
+      onChange("");
       onHashCommand?.(cmd);
       return;
     }
     onChange("");
     onHashCommand?.(cmd);
-  }, [onChange, onHashCommand]);
+  }, [onChange, onHashCommand, reassignMode]);
 
   const filteredMentions = mentionQuery !== null
     ? participants.filter((p) => !mentionQuery || p.user_id.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
@@ -150,14 +174,22 @@ export function ComposeBar({
   const filteredHash = hashQuery !== null
     ? HASH_COMMANDS.filter((c) => {
         if (!canAssign && c.kind === "assign") return false;
+        if (!canReassign && c.kind === "reassign_request") return false;
         return !hashQuery || c.hash.startsWith(hashQuery.toLowerCase());
       })
     : [];
 
-  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "report" || c.kind === "task_assign" || c.kind === "call_report");
+  const fieldWorkCmds = filteredHash.filter((c) => c.kind === "task_assign" || c.kind === "call_report");
   const taskCmds = filteredHash.filter((c) => c.kind === "task");
-  const actionCmds = filteredHash.filter((c) => c.kind === "action" || c.kind === "assign");
+  const actionCmds = filteredHash.filter((c) => c.kind === "action" || c.kind === "assign" || c.kind === "reassign_request");
   const hasText = value.trim().length > 0;
+
+  const hashLabel = (cmd: HashCommand) => {
+    if (cmd.kind === "reassign_request" && reassignMode === "peer") {
+      return "Reassign to teammate…";
+    }
+    return cmd.label;
+  };
 
   const renderHashRow = (cmd: HashCommand) => (
     <button
@@ -167,7 +199,7 @@ export function ComposeBar({
       className={`w-full flex items-center gap-3 px-3 py-2 text-sm ${hashCmdRowClass(cmd)}`}
     >
       <HashCmdIcon name={cmd.icon} size={15} strokeWidth={2} className={hashCmdIconClass(cmd)} />
-      <span className="flex-1 text-left">{cmd.label}</span>
+      <span className="flex-1 text-left">{hashLabel(cmd)}</span>
       <span className="text-[11px] text-gray-300 font-mono">#{cmd.hash}</span>
     </button>
   );

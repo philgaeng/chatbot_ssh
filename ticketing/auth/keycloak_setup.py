@@ -190,7 +190,7 @@ def setup_realm_smtp(admin: KeycloakAdmin) -> None:
 
     smtp = resolved_keycloak_smtp_config()
     if not smtp:
-        missing = ", ".join(missing_smtp_env_fields()) or "KEYCLOAK_SMTP_*"
+        missing = ", ".join(missing_smtp_env_fields()) or "SMTP_*"
         logger.warning("Keycloak realm SMTP not configured — missing: %s. %s", missing, SMTP_SETUP_HINT)
         return
     admin.update_realm(REALM, {"smtpServer": smtp})

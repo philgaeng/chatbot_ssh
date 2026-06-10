@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, ClipboardList } from "lucide-react";
-import { TASK_TYPES } from "@/lib/mobile-constants";
+import { TASK_TYPES, getTaskTypeInfo } from "@/lib/mobile-constants";
 import { FIELD_WORK_AMBER, isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { createTask } from "@/lib/api";
@@ -47,7 +47,7 @@ export function TaskCard({
   const assignedTo = (event.payload?.assigned_to_user_id as string) ?? "—";
   const description = (event.payload?.description as string) ?? "";
   const dueDate = event.payload?.due_date as string | undefined;
-  const typeInfo = TASK_TYPES.find((t) => t.key === taskType);
+  const typeInfo = getTaskTypeInfo(taskType);
   const { user: authUser } = useAuth();
   const isAssignedToMe = assigneeIsCurrentUser(assignedTo, authUser);
   const assigneeLabel =

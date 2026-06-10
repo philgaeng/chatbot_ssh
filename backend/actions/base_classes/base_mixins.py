@@ -1236,7 +1236,7 @@ class ActionMessagingHelpersMixin(ActionHelpersMixin):
 
             if body_name in EMAIL_TEMPLATES:
                 body = EMAIL_TEMPLATES[body_name][self.language_code]
-                # Use separate subject template if available (plain text; SES rejects HTML in subject)
+                # Use separate subject template if available (plain text; keep subject non-HTML)
                 subject_key = f"{body_name}_SUBJECT"
                 if subject_key in EMAIL_TEMPLATES:
                     subject = EMAIL_TEMPLATES[subject_key][self.language_code]

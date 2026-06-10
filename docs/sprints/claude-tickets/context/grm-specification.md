@@ -93,7 +93,7 @@ Same result as auto. `ticket_events` row (type: ESCALATED, auto=False).
 | GRC convening | In-app badge | All GRC members (this project) |
 | Complainant: escalation/resolution | Chatbot (POST /message) | Complainant |
 | Complainant: session expired fallback | SMS (AWS SNS) | Complainant |
-| Quarterly report | Email (SES via Messaging API) | By role |
+| Quarterly report | Email (SMTP via Messaging API) | By role |
 
 **In-app badge:** badge count refreshes on navigation (proto).
 **Post-proto upgrade:** Server-Sent Events (SSE) for real-time push.

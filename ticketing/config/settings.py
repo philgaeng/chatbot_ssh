@@ -54,15 +54,8 @@ class TicketingSettings(BaseSettings):
     keycloak_admin_password: str = ""   # KEYCLOAK_ADMIN_PASSWORD
     # Shared secret for POST /api/v1/webhooks/keycloak (Keycloak HTTP event listener)
     keycloak_webhook_secret: str = ""
-    # Keycloak realm SMTP (officer invite / password-reset emails). Applied by keycloak_setup.
-    # Standard mailbox only — not AWS SES (Messaging API keeps SES/SNS for complainants).
-    keycloak_smtp_host: str = ""
-    keycloak_smtp_port: int = 587
-    keycloak_smtp_user: str = ""
-    keycloak_smtp_password: str = ""
-    keycloak_smtp_from: str = ""
-    keycloak_smtp_from_display: str = "GRM Ticketing"
     # Officer invite email: after required actions, redirect to GRM login (needs client_id).
+    # Realm SMTP uses shared SMTP_* env — see backend/config/smtp_config.py + keycloak_setup.
     keycloak_invite_client_id: str = "ticketing-ui"
     keycloak_invite_redirect_uri: str = "http://localhost:3002/login"
 

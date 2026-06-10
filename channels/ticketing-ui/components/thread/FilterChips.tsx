@@ -24,9 +24,11 @@ export function FilterChips({
   pendingTaskCount: number;
   onChange: (chip: FilterChip) => void;
 }) {
+  const safeEvents = events ?? [];
+
   const noteEvents = useMemo(
-    () => events.filter((e) => !SYSTEM_EVENT_TYPES.has(e.event_type) && !TASK_EVENT_TYPES.has(e.event_type)),
-    [events],
+    () => safeEvents.filter((e) => !SYSTEM_EVENT_TYPES.has(e.event_type) && !TASK_EVENT_TYPES.has(e.event_type)),
+    [safeEvents],
   );
 
   const hasOwner = useMemo(
@@ -52,11 +54,11 @@ export function FilterChips({
     [noteEvents, viewerIds, currentUserId],
   );
 
-  const hasTasks = pendingTaskCount > 0 || events.some((e) => TASK_EVENT_TYPES.has(e.event_type));
+  const hasTasks = pendingTaskCount > 0 || safeEvents.some((e) => TASK_EVENT_TYPES.has(e.event_type));
 
   const complainantCount = useMemo(
-    () => events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type)).length,
-    [events],
+    () => safeEvents.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type)).length,
+    [safeEvents],
   );
 
   const chip = (id: FilterChip, label: string, Icon?: React.ComponentType<{ size?: number; strokeWidth?: number }>, badge?: number) => (

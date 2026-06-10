@@ -16,7 +16,7 @@ export const MSG_IMAGE_BEFORE_RESOLVE =
   "Add at least one photo before resolving. Upload a site photo or ask the complainant to send photos via WhatsApp.";
 
 export const MSG_SUPERVISOR_ONLY_ASSIGN =
-  "Only a supervisor can assign tickets. Use Ask for reassignment if this case is out of scope.";
+  "Only a supervisor can assign tickets. Use #reassign if this case is out of scope.";
 
 export const MSG_SUPERVISOR_ONLY_FIELD_REPORT =
   "Only a supervisor can assign field reports.";

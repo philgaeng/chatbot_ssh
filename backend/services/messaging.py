@@ -1,17 +1,28 @@
+import base64
 import re
+import smtplib
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
+
 import boto3
 from botocore.exceptions import ClientError
 from typing import Any, Text, Dict, List, Optional, Tuple
 from random import randint
 from backend.config.constants import (
     WHITELIST_PHONE_NUMBERS_OTP_TESTING,
-    SMTP_CONFIG,
     ADMIN_EMAILS,
     EMAIL_TEMPLATES,
     DIC_SMS_TEMPLATES,
     DEFAULT_VALUES,
     SMS_ENABLED,
-    AWS_REGION
+    AWS_REGION,
+)
+from backend.config.smtp_config import (
+    SmtpConfig,
+    resolve_smtp_config,
+    smtp_config_summary,
 )
 from backend.logger.logger import TaskLogger
 from backend.services.db_debug_log import email_send_log_summary, mask_phone_for_log, text_len_for_log
@@ -65,18 +76,25 @@ class Messaging:
             self.logger.error(f"Failed to send SMS: {str(e)}")
             return False
 
-    def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
+    def send_email(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
         """
         Send email to the given email addresses.
         Args:
             to_emails: List of email addresses to send to
             subject: Email subject
             body: Email body (HTML)
+            attachments: Optional list of dicts with filename, content_base64, content_type
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            return self.email_client.send_email(to_emails, subject, body)
+            return self.email_client.send_email(to_emails, subject, body, attachments=attachments)
         except Exception as e:
             self.logger.error(f"Failed to send email: {str(e)}")
             return False
@@ -214,69 +232,87 @@ class SMSClient:
 
 class EmailClient:
     def __init__(self):
-        self.task_logger = TaskLogger(service_name='messaging_service')
+        self.task_logger = TaskLogger(service_name="messaging_service")
         self.logger = self.task_logger.logger
         self.log_event = self.task_logger.log_event
+        self.smtp_config: SmtpConfig | None = None
+
         try:
-            self.ses_client = boto3.client('ses',
-                region_name=AWS_REGION,
-                aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-            )
-            self.sender_email = os.getenv('SES_VERIFIED_EMAIL')
-            self.logger.info(f"SES Configuration:")
-            self.logger.info(f"Region: {AWS_REGION}")
-            self.logger.info(f"Sender Email: {self.sender_email}")  # Check if this is None
-            
-            if not self.sender_email:
-                raise ValueError("SES_VERIFIED_EMAIL not set in .env file")
-                
-            self.logger.info("Successfully initialized SES client")
+            self.smtp_config = resolve_smtp_config()
+            if not self.smtp_config:
+                raise ValueError(
+                    "SMTP is not configured. Set SMTP_SERVER, SMTP_USERNAME, "
+                    "SMTP_PASSWORD (and SMTP_FROM)."
+                )
+            self.logger.info("Email transport: SMTP (%s)", smtp_config_summary())
         except Exception as e:
-            self.logger.error(f"Failed to initialize SES client: {str(e)}")
+            self.logger.error("Failed to initialize email client: %s", e)
             raise
-        
+
     def name(self) -> Text:
         return "email_client"
 
-    def send_email(self, to_emails: List[str], subject: str, body: str) -> bool:
+    def send_email(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
         try:
             self.logger.info(
-                "Attempting to send email: %s subject_chars=%s %s",
+                "Attempting to send email via SMTP: %s subject_chars=%s %s",
                 email_send_log_summary(to_emails),
                 len(subject or ""),
                 text_len_for_log("body", body),
             )
-            self.logger.info(f"Using sender email: {self.sender_email}")
-            
-            response = self.ses_client.send_email(
-                Source=self.sender_email,
-                Destination={
-                    'ToAddresses': to_emails
-                },
-                Message={
-                    'Subject': {
-                        'Data': subject,
-                        'Charset': 'UTF-8'
-                    },
-                    'Body': {
-                        'Html': {
-                            'Data': body,
-                            'Charset': 'UTF-8'
-                        }
-                    }
-                }
-            )
-            
-            self.logger.info(f"Email sent successfully! MessageId: {response['MessageId']}")
-            return True
-            
+            return self._send_via_smtp(to_emails, subject, body, attachments=attachments)
         except Exception as e:
-            self.logger.error(f"Failed to send email: {str(e)}")
+            self.logger.error("Failed to send email: %s", e)
             self.logger.error("Email failure: %s", email_send_log_summary(to_emails))
             self.logger.error("%s", text_len_for_log("subject", subject))
             self.logger.error("%s", text_len_for_log("body", body))
             return False
+
+    def _send_via_smtp(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
+        assert self.smtp_config is not None
+        cfg = self.smtp_config
+        from_header = formataddr((cfg.from_display, cfg.from_addr))
+
+        if attachments:
+            msg: MIMEMultipart | MIMEText = MIMEMultipart()
+            msg.attach(MIMEText(body or "", "html", "utf-8"))
+            for item in attachments:
+                filename = str(item.get("filename") or "attachment")
+                raw = base64.b64decode(str(item.get("content_base64") or ""))
+                part = MIMEApplication(raw, Name=filename)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                content_type = item.get("content_type")
+                if content_type:
+                    part.set_type(str(content_type))
+                msg.attach(part)
+        else:
+            msg = MIMEText(body or "", "html", "utf-8")
+
+        msg["Subject"] = subject
+        msg["From"] = from_header
+        msg["To"] = ", ".join(to_emails)
+
+        with smtplib.SMTP(cfg.host, cfg.port, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(cfg.username, cfg.password)
+            smtp.sendmail(cfg.from_addr, to_emails, msg.as_string())
+
+        self.logger.info("SMTP email sent from %s", cfg.from_addr)
+        return True
 
 
 # Global instance for backward compatibility

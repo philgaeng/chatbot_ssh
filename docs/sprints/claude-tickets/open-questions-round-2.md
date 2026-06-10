@@ -300,9 +300,9 @@ You filled in the table partially. Two items need clarification:
 - **Explorer sidebar → "adapt completely"**: Adapt to what exactly?
   The GRM sidebar should show: My Queue | All Tickets | Escalated | Reports | Settings?
 
-- **Email delivery → "No, built service in chatbot already on same SES"**:
+- **Email delivery → Messaging API SMTP** (shared mailbox with Keycloak):
   Confirmed — ticketing uses the chatbot's Messaging API (`POST /api/messaging/send-email`).
-  No direct SES calls from ticketing. ✓ (Just confirming this is correct)
+  No direct SMTP calls from ticketing. ✓
 
 ```
 Answer: confirm sidebar navigation items

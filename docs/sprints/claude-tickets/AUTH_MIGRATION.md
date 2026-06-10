@@ -91,17 +91,17 @@ Before going to staging / production:
 - [ ] **Change admin password**: set `KEYCLOAK_ADMIN_PASSWORD` to something strong in the environment
 - [ ] **Configure realm SMTP** for officer invite execute-actions emails (via `keycloak_setup`).
 
-  Keycloak uses a **standard mailbox SMTP** (local provider in Nepal production; staging may use Infomaniak, etc.).
-  This is **separate** from complainant/report email, which stays on the Messaging API (SES until a local provider is wired there).
+  Uses the **shared mailbox SMTP** (`SMTP_*` in `env.local`) — same as the Messaging API
+  (complainant recap, quarterly reports, officer password reset). See `docs/services/05_messaging_service.md`.
 
   Required in `env.local`:
   ```env
-  KEYCLOAK_SMTP_HOST=mail.example.com
-  KEYCLOAK_SMTP_PORT=587
-  KEYCLOAK_SMTP_USER=grm@example.com
-  KEYCLOAK_SMTP_PASSWORD=...   # if password contains $, use $$ in env.local (Compose escaping)
-  KEYCLOAK_SMTP_FROM=grm@example.com
-  KEYCLOAK_SMTP_FROM_DISPLAY=GRM Ticketing
+  SMTP_SERVER=mail.example.com
+  SMTP_PORT=587
+  SMTP_USERNAME=grm@example.com
+  SMTP_PASSWORD=...   # if password contains $, use $$ in env.local (Compose escaping)
+  SMTP_FROM=grm@example.com
+  SMTP_FROM_DISPLAY=GRM Ticketing
   ```
 
   Apply to the `grm` realm:

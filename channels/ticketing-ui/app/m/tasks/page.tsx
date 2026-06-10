@@ -9,14 +9,14 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { listMyTasks, completeTask, type TicketTask } from "@/lib/api";
-import { TASK_TYPES } from "@/lib/mobile-constants";
+import { getTaskTypeInfo } from "@/lib/mobile-constants";
 import { isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { Check, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 
 function taskTypeInfo(key: string) {
-  return TASK_TYPES.find((t) => t.key === key) ?? { icon: "ClipboardList", label: key.replace(/_/g, " ") };
+  return getTaskTypeInfo(key);
 }
 
 function TaskItem({ task, onComplete }: { task: TicketTask; onComplete: (t: TicketTask) => void }) {

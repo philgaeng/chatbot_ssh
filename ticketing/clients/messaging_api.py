@@ -9,8 +9,8 @@ Base URL: settings.backend_grievance_base_url
 Auth:     x-api-key: TICKETING_SECRET_KEY (or MESSAGING_API_KEY fallback)
 
 INTEGRATION POINT: backend/api/routers/messaging.py
-  POST /api/messaging/send-sms   — AWS SNS, works internationally
-  POST /api/messaging/send-email — AWS SES
+  POST /api/messaging/send-sms   — AWS SNS (when SMS_ENABLED)
+  POST /api/messaging/send-email — SMTP mailbox relay
 """
 from __future__ import annotations
 
@@ -66,9 +66,9 @@ def send_email(
     attachments: list[dict] | None = None,
 ) -> dict:
     """
-    Send email via AWS SES through the backend Messaging API.
+    Send email through the backend Messaging API (SMTP by default).
 
-    Used for quarterly report delivery to senior roles.
+    Used for quarterly report delivery, officer password reset, etc.
     """
     payload: dict = {
         "to": [to] if isinstance(to, str) else to,

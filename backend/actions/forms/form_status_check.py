@@ -377,7 +377,7 @@ class LegacyActionStatusCheckRequestFollowUp(BaseAction):
             self.send_sms(sms_data = {"grievance_id": grievance_id,"complainant_phone": complainant_phone}, body_name="GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP")
 
         # Build email data and send admin recap in the background so a slow/failing email
-        # (e.g. AWS SES timeout) does not block or timeout the chatbot response.
+        # (e.g. SMTP timeout) does not block or timeout the chatbot response.
         email_data = self.collect_grievance_data_from_tracker(tracker)
         if grievance_id:
             grievance = self.db_manager.get_grievance_by_id(grievance_id)

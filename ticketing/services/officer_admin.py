@@ -167,7 +167,7 @@ def keycloak_configured() -> bool:
 def keycloak_invite_preflight() -> dict[str, Any]:
     """
     Read-only readiness check for Keycloak execute-actions invite emails.
-    Requires realm SMTP (KEYCLOAK_SMTP_* env + keycloak_setup).
+    Requires realm SMTP (SMTP_* env + keycloak_setup).
     """
     from ticketing.auth.keycloak_smtp import SMTP_SETUP_HINT, missing_smtp_env_fields
 

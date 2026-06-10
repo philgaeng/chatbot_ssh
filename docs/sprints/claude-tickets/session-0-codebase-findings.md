@@ -355,7 +355,7 @@ celery_app.conf.beat_schedule = {
 | `OPENAI_CLASSIFICATION_TIMEOUT` | `backend/services/LLM_services.py` | ❌ not needed |
 | `AWS_ACCESS_KEY_ID` | `backend/services/messaging.py` | ❌ ticketing uses Messaging API, not direct boto3 |
 | `AWS_SECRET_ACCESS_KEY` | `backend/services/messaging.py` | ❌ same |
-| `SES_VERIFIED_EMAIL` | `backend/services/messaging.py` | ❌ same |
+| `SMTP_*` | `backend/config/smtp_config.py` | ✅ shared with Keycloak realm SMTP |
 | `AWS_REGION` | (implied by boto3) | ❌ ticketing uses Messaging API |
 | `SMTP_SERVER/PORT/USERNAME/PASSWORD` | `backend/config/constants.py` | ❌ not needed |
 | `FLASK_URL` | docker-compose.yml → Celery tasks (calls backend) | ❌ ticketing uses its own `BACKEND_GRIEVANCE_BASE_URL` |

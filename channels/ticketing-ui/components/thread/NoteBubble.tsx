@@ -153,13 +153,14 @@ export function NoteBubble({
   if (event.event_type === "COMPLAINANT_MESSAGE") {
     const intent = (event.payload as Record<string, unknown> | null)?.intent as string | undefined;
     const meta = intent ? INTENT_META[intent] : undefined;
+    const IntentIcon = meta?.Icon;
     const translation = (event.payload as Record<string, unknown> | null)?.translation_en as string | undefined;
 
     return (
       <div className="flex flex-col items-start px-4 my-1.5">
-        {meta && (
+        {meta && IntentIcon && (
           <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-1 ${meta.cls}`}>
-            <meta.Icon size={10} strokeWidth={2.5} />
+            <IntentIcon size={10} strokeWidth={2.5} />
             {meta.label}
           </div>
         )}

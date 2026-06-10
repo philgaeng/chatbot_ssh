@@ -25,6 +25,7 @@ import {
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
   type TicketFile, type OfficerAttachment, type GrievancePii, type RevealSession,
 } from "@/lib/api";
+import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
 import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -34,7 +35,12 @@ import {
   COMPLAINANT_EVENT_TYPES, AUTHORITY_ROLES, type HashCommand,
 } from "@/lib/mobile-constants";
 import { hasImageAttachment } from "@/lib/attachments";
-import { canAssignTicket, canRequestReassignment } from "@/lib/officer-permissions";
+import {
+  canAssignTicket,
+  canSupervisorAssign,
+  getReassignMode,
+  type ReassignMode,
+} from "@/lib/officer-permissions";
 import {
   AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2,
   MoreVertical, User, FileText, Paperclip, ChevronLeft, Download, FileIcon,
@@ -65,7 +71,6 @@ import {
   MSG_IMAGE_BEFORE_ESCALATE,
   MSG_IMAGE_BEFORE_RESOLVE,
   MSG_SUPERVISOR_ONLY_ASSIGN,
-  MSG_SUPERVISOR_ONLY_FIELD_REPORT,
   type ActionNoticeState,
 } from "@/lib/user-messages";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
@@ -301,8 +306,7 @@ function FieldReportsSheet({
           <Flag size={32} strokeWidth={1.5} />
           <p className="text-sm">No field reports yet.</p>
           <p className="text-xs text-center px-8">
-            Assign a field report with <code className="bg-gray-100 px-1 rounded">#report @officer</code> or{" "}
-            <code className="bg-gray-100 px-1 rounded">#inspect @me</code> in the compose bar.
+            Assign an inspection visit with <code className="bg-gray-100 px-1 rounded">#inspect @me</code> in the compose bar, then complete the visit to add a field report.
           </p>
         </div>
       ) : (
@@ -388,6 +392,7 @@ function ComplainantSheet({
   const [pii, setPii] = useState<GrievancePii | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   function loadPii() {
     setLoading(true);
@@ -399,6 +404,7 @@ function ComplainantSheet({
   }
 
   useEffect(() => {
+    setEditOpen(false);
     loadPii();
   }, [ticket.ticket_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -414,18 +420,39 @@ function ComplainantSheet({
               Retry
             </button>
           </div>
-        ) : (
+        ) : editOpen ? (
           <ComplainantEditForm
             ticket={ticket}
             pii={pii}
             variant="mobile"
             onSaved={() => {
               loadPii();
+              setEditOpen(false);
               onComplainantUpdated?.();
             }}
-            onCancel={onClose}
+            onCancel={() => setEditOpen(false)}
             onRevealOriginal={onRevealOriginal}
           />
+        ) : (
+          <div className="pb-4">
+            {ticket.complainant_id && (
+              <div className="px-5 pb-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="text-sm text-blue-600 font-medium"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
+            <ComplainantContactFields
+              ticket={ticket}
+              pii={pii}
+              variant="mobile"
+              onRevealOriginal={onRevealOriginal}
+            />
+          </div>
         )}
       </div>
     </BottomSheet>
@@ -524,6 +551,7 @@ function MoreActionsSheet({
   onReassign,
   canAssign,
   canReassign,
+  reassignMode,
   onClose,
 }: {
   ticket: TicketDetail;
@@ -532,6 +560,7 @@ function MoreActionsSheet({
   onReassign: () => void;
   canAssign: boolean;
   canReassign: boolean;
+  reassignMode: ReassignMode | null;
   onClose: () => void;
 }) {
   const canEscalate = !["RESOLVED", "CLOSED"].includes(ticket.status_code);
@@ -554,7 +583,9 @@ function MoreActionsSheet({
             <button onClick={() => { onReassign(); onClose(); }}
               className="w-full flex items-center gap-4 px-6 py-4 active:bg-gray-50 text-left">
               <ClipboardList size={22} strokeWidth={1.8} className="text-violet-500 shrink-0" />
-              <span className="text-base text-gray-800">Ask for reassignment</span>
+              <span className="text-base text-gray-800">
+                {reassignMode === "peer" ? "Reassign to teammate" : "Ask for reassignment"}
+              </span>
             </button>
           )}
           {canAssign && (
@@ -744,12 +775,16 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         assigneeIsCurrentUser(ticket.assigned_to_user_id, user)),
     [ticket, user],
   );
-  const userCanAssign = useMemo(
-    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin),
+  const userCanSupervisorAssign = useMemo(
+    () => !!ticket && canSupervisorAssign(roleKeys, ticket, isAdmin),
     [ticket, roleKeys, isAdmin],
   );
-  const userCanReassign = useMemo(
-    () => !!ticket && canRequestReassignment(roleKeys, ticket, currentUserId, isAdmin),
+  const userCanAssign = useMemo(
+    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin, currentUserId),
+    [ticket, roleKeys, isAdmin, currentUserId],
+  );
+  const reassignMode = useMemo(
+    () => (ticket ? getReassignMode(roleKeys, ticket, currentUserId, isAdmin) : null),
     [ticket, roleKeys, currentUserId, isAdmin],
   );
   const hasImages = useMemo(
@@ -909,12 +944,16 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
 
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
     if (cmd.kind === "call_report") { setCallReportOpen(true); return; }
+    if (cmd.kind === "reassign_request" && reassignMode === "supervisor") {
+      setReassignOpen(true);
+      return;
+    }
     if (cmd.kind === "action" && cmd.action === "ESCALATE") { openEscalationFlow(); return; }
     if (cmd.kind === "action" && cmd.action) { await handleAction(cmd.action); return; }
     if (cmd.kind === "assign" && !userCanAssign) {
       setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
     }
-  }, [handleAction, openEscalationFlow, userCanAssign]);
+  }, [handleAction, openEscalationFlow, userCanAssign, reassignMode]);
 
   const handleNoteOrReport = useCallback(async () => {
     if (!noteText.trim() || submitting) return;
@@ -923,23 +962,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     setNoteText("");
     try {
       const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
-      const reportAssignMatch = text.match(/^#report\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
       const inspectAssignee = parseInspectAssignCommand(text);
       if (inspectAssignee !== undefined) {
         const assignee = inspectAssignee ?? currentUserId;
         await createTask(ticketId, {
           task_type: "SITE_VISIT",
           assigned_to_user_id: assignee,
-        });
-      } else if (reportAssignMatch) {
-        if (!userCanAssign) {
-          setActionNotice({ message: MSG_SUPERVISOR_ONLY_FIELD_REPORT, kind: "validation" });
-          setNoteText(text);
-          return;
-        }
-        await createTask(ticketId, {
-          task_type: "SYSTEM_NOTE",
-          assigned_to_user_id: reportAssignMatch[1],
         });
       } else if (assignMatch) {
         if (!userCanAssign) {
@@ -1213,7 +1241,9 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           attachUploading={attachUploading}
           onHashCommand={handleHashCommand}
           fieldReportOpen={fieldReportOpen}
-          canAssign={userCanAssign}
+          canAssign={userCanSupervisorAssign}
+          canReassign={!!reassignMode}
+          reassignMode={reassignMode}
           disabled={submitting || fieldReportSubmitting}
           participants={mentionParticipants}
         />
@@ -1276,9 +1306,16 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           ticket={ticket}
           onEscalate={openEscalationFlow}
           onAssignTask={() => setShowAssignTask(true)}
-          onReassign={() => setReassignOpen(true)}
-          canAssign={userCanAssign}
-          canReassign={userCanReassign}
+          onReassign={() => {
+            if (reassignMode === "peer") {
+              setNoteText("#assign @");
+            } else {
+              setReassignOpen(true);
+            }
+          }}
+          canAssign={userCanSupervisorAssign}
+          canReassign={!!reassignMode}
+          reassignMode={reassignMode}
           onClose={() => setShowMore(false)}
         />
       )}

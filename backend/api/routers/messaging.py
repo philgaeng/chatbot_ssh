@@ -11,6 +11,12 @@ from backend.logger.logger import TaskLogger
 router = APIRouter()
 
 
+class EmailAttachment(BaseModel):
+    filename: str
+    content_base64: str
+    content_type: Optional[str] = None
+
+
 class MessageContext(BaseModel):
     source_system: Optional[str] = Field(
         default=None,
@@ -28,6 +34,7 @@ class MessageContext(BaseModel):
         default=None,
         description="Optional idempotency key from caller",
     )
+    attachments: Optional[List[EmailAttachment]] = None
     # Allow arbitrary extra keys for forward compatibility
     extra: Optional[Dict[str, Any]] = None
 
@@ -160,7 +167,15 @@ def send_email(
                 "context": payload.context.dict() if payload.context else None,
             },
         )
-        ok = messaging.send_email(payload.to, payload.subject, payload.html_body)
+        attachments = None
+        if payload.context and payload.context.attachments:
+            attachments = [a.model_dump() for a in payload.context.attachments]
+        ok = messaging.send_email(
+            payload.to,
+            payload.subject,
+            payload.html_body,
+            attachments=attachments,
+        )
         if not ok:
             return MessagingResponse(
                 status="FAILED",

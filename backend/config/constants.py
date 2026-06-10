@@ -119,12 +119,14 @@ EMAIL_PROVIDERS_NEPAL = {
 
 EMAIL_PROVIDERS_NEPAL_LIST = [domain for provider in EMAIL_PROVIDERS_NEPAL.values() for domain in provider]
 
-# Email Configuration
+# Email Configuration (legacy dict — prefer backend.config.smtp_config.resolve_smtp_config)
 SMTP_CONFIG = {
     "SERVER": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
     "PORT": int(os.getenv("SMTP_PORT", "587")),
-    "USERNAME": os.getenv("SMTP_USERNAME", "your-email@domain.com"),
-    "PASSWORD": os.getenv("SMTP_PASSWORD", "your-app-password"),
+    "USERNAME": os.getenv("SMTP_USERNAME", ""),
+    "PASSWORD": os.getenv("SMTP_PASSWORD", ""),
+    "FROM": os.getenv("SMTP_FROM") or os.getenv("SMTP_USERNAME", ""),
+    "FROM_DISPLAY": os.getenv("SMTP_FROM_DISPLAY", "GRM Ticketing"),
 }
 
 # Admin notification emails

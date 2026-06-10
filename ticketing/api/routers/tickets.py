@@ -212,16 +212,6 @@ def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) 
     return False
 
 
-def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
-    """Supervisor for current step or admin may assign (TP-12)."""
-    if current_user.is_admin:
-        return True
-    step = get_current_step(ticket, db)
-    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
-        return True
-    return False
-
-
 def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
     step = get_current_step(ticket, db)
     if not step or not step.supervisor_role:
@@ -234,6 +224,46 @@ def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
         db=db,
     )
     return candidates[0] if candidates else None
+
+
+def _step_supervisor_available(db: Session, ticket: Ticket) -> bool:
+    """True when the current step has a configured supervisor who can be resolved in scope."""
+    return _find_supervisor_user_id(db, ticket) is not None
+
+
+def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
+    """Supervisor for current step, admin, or assigned actor when no supervisor (TP-12)."""
+    if current_user.is_admin:
+        return True
+    step = get_current_step(ticket, db)
+    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
+        return True
+    if not _step_supervisor_available(db, ticket):
+        if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
+            if step and step.assigned_role_key in current_user.role_keys:
+                return True
+    return False
+
+
+def _validate_step_assignee(db: Session, ticket: Ticket, assign_to_user_id: str) -> None:
+    """Assignee must be in the same step role + jurisdiction pool as auto-assign."""
+    step = get_current_step(ticket, db)
+    if not step:
+        return
+    eligible = get_teammates(
+        role_key=step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        exclude_user_id=None,
+        db=db,
+        ticket_package_id=ticket.package_id,
+    )
+    if assign_to_user_id not in eligible:
+        raise HTTPException(
+            status_code=422,
+            detail="Officer is not eligible for this ticket at the current step.",
+        )
 
 
 _IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif")
@@ -853,6 +883,7 @@ def get_ticket(
 
     payload = TicketDetail.model_validate(ticket, from_attributes=True).model_dump()
     payload.update(merged)
+    payload["step_supervisor_available"] = _step_supervisor_available(db, ticket)
     return TicketDetail(**payload)
 
 
@@ -969,6 +1000,7 @@ def patch_ticket(
                 status_code=403,
                 detail="Only a step supervisor or admin may assign tickets to another officer.",
             )
+        _validate_step_assignee(db, ticket, payload.assign_to_user_id)
         ticket.assigned_to_user_id = payload.assign_to_user_id
         ticket.assigned_role_id = payload.assigned_role_id
         ticket.updated_by_user_id = current_user.user_id
@@ -1425,7 +1457,10 @@ def perform_action(
         if not supervisor_id:
             raise HTTPException(
                 status_code=422,
-                detail="No supervisor configured for this workflow step.",
+                detail=(
+                    "No supervisor is available for this step. "
+                    "Reassign directly to a teammate at the same level instead."
+                ),
             )
 
         old_assigned = ticket.assigned_to_user_id

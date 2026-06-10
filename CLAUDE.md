@@ -113,7 +113,7 @@ GET  /api/grievance/statuses
 
 ```
 POST /api/messaging/send-sms    → AWS SNS (works internationally)
-POST /api/messaging/send-email  → AWS SES
+POST /api/messaging/send-email  → SMTP mailbox relay
 Auth: x-api-key header
 ```
 

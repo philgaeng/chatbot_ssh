@@ -24,20 +24,31 @@ import { ViewersBar }                         from "@/components/thread/ViewersB
 import { ComposeBar }                         from "@/components/thread/ComposeBar";
 import { FieldReportComposeCard }             from "@/components/thread/FieldReportComposeCard";
 import { EscalationFormCard }                 from "@/components/thread/EscalationFormCard";
+import { ReassignmentRequestCard, type ReassignmentReasonCode } from "@/components/thread/ReassignmentRequestCard";
+import { CallReportComposeCard } from "@/components/thread/CallReportComposeCard";
 import { ResolutionSheet }                    from "@/components/ResolutionSheet";
 import { ActionNotice }                       from "@/components/ActionNotice";
 import { hasImageAttachment }                 from "@/lib/attachments";
-import { canAssignTicket }                    from "@/lib/officer-permissions";
+import {
+  canAssignTicket,
+  canSupervisorAssign,
+  getReassignMode,
+} from "@/lib/officer-permissions";
 import {
   formatUserFacingError,
   MSG_IMAGE_BEFORE_ESCALATE,
   MSG_IMAGE_BEFORE_RESOLVE,
   MSG_SUPERVISOR_ONLY_ASSIGN,
-  MSG_SUPERVISOR_ONLY_FIELD_REPORT,
   type ActionNoticeState,
 } from "@/lib/user-messages";
 import type { ResolutionCategoryCode }        from "@/lib/resolution";
-import { isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData } from "@/lib/field-visit";
+import {
+  formatCallReportNote,
+  isSiteVisitTask,
+  parseInspectAssignCommand,
+  type CallReportFormData,
+  type FieldVisitFormData,
+} from "@/lib/field-visit";
 import { submitStructuredFieldReport } from "@/lib/submit-field-report";
 import { formatGrievanceCategories } from "@/lib/format-grievance";
 import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
@@ -45,7 +56,7 @@ import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
 import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, TASK_TYPES, AUTHORITY_ROLES,
+  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, getTaskTypeInfo, AUTHORITY_ROLES,
   isThreadTaskEvent,
   type HashCommand,
 } from "@/lib/mobile-constants";
@@ -510,7 +521,7 @@ function FieldReportsCard({ ticket }: { ticket: TicketDetail }) {
       </div>
       {reports.length === 0 ? (
         <p className="text-xs text-gray-400 italic">
-          No field reports yet. Type <span className="font-mono bg-gray-100 px-1 rounded">#report</span> in the compose bar.
+          No field reports yet. Assign an inspection visit with <span className="font-mono bg-gray-100 px-1 rounded">#inspect</span> and complete the visit to add one.
         </p>
       ) : (
         <div className="space-y-3">
@@ -639,7 +650,7 @@ function TasksCard({ tasks, user, onComplete, onAddTask }: {
 
       <div className="space-y-2">
         {pending.map((task) => {
-          const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
+          const typeInfo = getTaskTypeInfo(task.task_type);
           const isAssignedToMe = assigneeIsCurrentUser(task.assigned_to_user_id, user);
           const assigneeLabel = assigneeIsCurrentUser(task.assigned_to_user_id, user)
             ? "You"
@@ -681,7 +692,7 @@ function TasksCard({ tasks, user, onComplete, onAddTask }: {
         {done.length > 0 && (
           <div className="pt-1 border-t border-gray-100 space-y-1.5">
             {done.map((task) => {
-              const typeInfo = TASK_TYPES.find((t) => t.key === task.task_type);
+              const typeInfo = getTaskTypeInfo(task.task_type);
               return (
                 <div key={task.task_id} className="flex items-center gap-2 text-xs text-gray-400">
                   <Check size={12} strokeWidth={2.5} className="text-green-500 shrink-0" />
@@ -726,6 +737,8 @@ export default function TicketDetailPage() {
   const [rosterIds, setRosterIds]               = useState<string[]>([]);
   const [actionNotice, setActionNotice]       = useState<ActionNoticeState | null>(null);
   const [escalationOpen, setEscalationOpen]   = useState(false);
+  const [reassignOpen, setReassignOpen]         = useState(false);
+  const [callReportOpen, setCallReportOpen]     = useState(false);
 
   // ── Top bar actions ────────────────────────────────────────────────────
   const [actLoading, setActLoading]     = useState(false);
@@ -878,9 +891,17 @@ export default function TicketDetailPage() {
     [complainantFiles, officerFiles],
   );
 
-  const userCanAssign = useMemo(
-    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin),
+  const userCanSupervisorAssign = useMemo(
+    () => !!ticket && canSupervisorAssign(roleKeys, ticket, isAdmin),
     [ticket, roleKeys, isAdmin],
+  );
+  const userCanAssign = useMemo(
+    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin, currentUserId),
+    [ticket, roleKeys, isAdmin, currentUserId],
+  );
+  const reassignMode = useMemo(
+    () => (ticket ? getReassignMode(roleKeys, ticket, currentUserId, isAdmin) : null),
+    [ticket, roleKeys, currentUserId, isAdmin],
   );
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -1097,9 +1118,52 @@ export default function TicketDetailPage() {
     }
   }, [ensureAcknowledged, id, load, refreshFiles]);
 
+  const submitReassignment = useCallback(async (reasonCode: ReassignmentReasonCode, notes: string) => {
+    setActLoading(true);
+    setActionNotice(null);
+    try {
+      await performAction(id, {
+        action_type: "REASSIGNMENT_REQUESTED",
+        reassignment_reason_code: reasonCode,
+        reassignment_notes: notes,
+      });
+      setReassignOpen(false);
+      await load();
+    } catch (e) {
+      setActionNotice(formatUserFacingError(e));
+      throw e;
+    } finally {
+      setActLoading(false);
+    }
+  }, [id, load]);
+
+  const submitCallReport = useCallback(async (data: CallReportFormData) => {
+    setActLoading(true);
+    setActionNotice(null);
+    try {
+      await ensureAcknowledged();
+      await performAction(id, {
+        action_type: "NOTE",
+        note: formatCallReportNote(data),
+        is_call_report: true,
+      });
+      setCallReportOpen(false);
+      await load();
+    } catch (e) {
+      setActionNotice(formatUserFacingError(e));
+      throw e;
+    } finally {
+      setActLoading(false);
+    }
+  }, [id, load, ensureAcknowledged]);
+
   const handleHashCommand = useCallback(async (cmd: HashCommand) => {
-    if (cmd.kind === "report") {
-      openFieldReport(null);
+    if (cmd.kind === "call_report") {
+      setCallReportOpen(true);
+      return;
+    }
+    if (cmd.kind === "reassign_request" && reassignMode === "supervisor") {
+      setReassignOpen(true);
       return;
     }
     if (cmd.kind === "action" && cmd.action === "ESCALATE") {
@@ -1121,8 +1185,8 @@ export default function TicketDetailPage() {
     if (cmd.kind === "assign" && !userCanAssign) {
       setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
     }
-    // #assign is handled inline in ComposeBar (text becomes "#assign @…")
-  }, [id, currentUserId, load, openFieldReport, openEscalationFlow, handleSimpleAction, userCanAssign]); // eslint-disable-line react-hooks/exhaustive-deps
+    // #assign / peer #reassign handled inline in ComposeBar (text becomes "#assign @…")
+  }, [id, currentUserId, load, openFieldReport, openEscalationFlow, handleSimpleAction, userCanAssign, reassignMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNoteOrReport = useCallback(async () => {
     const text = noteText.trim();
@@ -1130,7 +1194,6 @@ export default function TicketDetailPage() {
     setSubmitting(true);
 
     const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
-    const reportAssignMatch = text.match(/^#report\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
     const inspectAssignee = parseInspectAssignCommand(text);
 
     setNoteText("");
@@ -1140,16 +1203,6 @@ export default function TicketDetailPage() {
         await createTask(id, {
           task_type: "SITE_VISIT",
           assigned_to_user_id: assignee,
-        });
-      } else if (reportAssignMatch) {
-        if (!userCanAssign) {
-          setActionNotice({ message: MSG_SUPERVISOR_ONLY_FIELD_REPORT, kind: "validation" });
-          setNoteText(text);
-          return;
-        }
-        await createTask(id, {
-          task_type: "SYSTEM_NOTE",
-          assigned_to_user_id: reportAssignMatch[1],
         });
       } else if (assignMatch) {
         if (!userCanAssign) {
@@ -1335,7 +1388,7 @@ export default function TicketDetailPage() {
                   }`}
                 >
                   <IconAssign size={12} strokeWidth={2} />
-                  Assign
+                  {reassignMode === "peer" ? "Reassign" : "Assign"}
                 </button>
                 )}
               </>
@@ -1524,6 +1577,19 @@ export default function TicketDetailPage() {
               onClose={closeFieldReport}
               onSubmit={submitFieldReportForm}
             />
+            <ReassignmentRequestCard
+              open={reassignOpen}
+              ticket={ticket}
+              submitting={actLoading}
+              onClose={() => setReassignOpen(false)}
+              onSubmit={submitReassignment}
+            />
+            <CallReportComposeCard
+              open={callReportOpen}
+              submitting={actLoading}
+              onClose={() => setCallReportOpen(false)}
+              onSubmit={submitCallReport}
+            />
             <ComposeBar
               value={noteText}
               onChange={setNoteText}
@@ -1532,7 +1598,9 @@ export default function TicketDetailPage() {
               onFileSelected={handleAttachFile}
               attachUploading={attachUploading}
               fieldReportOpen={fieldReportOpen}
-              canAssign={userCanAssign}
+              canAssign={userCanSupervisorAssign}
+              canReassign={!!reassignMode}
+              reassignMode={reassignMode}
               disabled={submitting || fieldReportSubmitting}
               participants={mentionParticipants}
             />

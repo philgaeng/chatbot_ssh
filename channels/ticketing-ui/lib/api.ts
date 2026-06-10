@@ -112,6 +112,8 @@ export interface TicketDetail extends TicketListItem {
   ai_summary_updated_at: string | null;
   /** Spec 12: who holds the reply-to-complainant capability. Defaults to L1 actor. */
   complainant_reply_owner_id: string | null;
+  /** Step supervisor role configured and at least one officer resolvable in scope. */
+  step_supervisor_available?: boolean;
 }
 
 export interface SlaStatus {

@@ -58,23 +58,30 @@ export const AUTHORITY_ROLES = new Set([
 // icon = Lucide icon name — rendered by TaskTypeIcon in lib/icons.tsx
 // hash = shortcut trigger in the ComposeBar # command palette
 
+/** Task types officers may assign via # commands or the Assign task sheet. */
 export const TASK_TYPES = [
   { key: "SITE_VISIT",     label: "Inspection visit", icon: "MapPin",   hash: "inspect" },
   { key: "FOLLOW_UP_CALL", label: "Call complainant", icon: "Phone",    hash: "call"    },
-  { key: "SYSTEM_NOTE",    label: "Field report",     icon: "FileText", hash: "report"  },
 ] as const;
 
 export type TaskTypeKey = (typeof TASK_TYPES)[number]["key"];
+
+/** Display label/icon for a task row (includes legacy types no longer assignable). */
+export function getTaskTypeInfo(taskType: string): { label: string; icon: string } {
+  const found = TASK_TYPES.find((t) => t.key === taskType);
+  if (found) return { label: found.label, icon: found.icon };
+  if (taskType === "SYSTEM_NOTE") return { label: "Field report", icon: "FileText" };
+  return { label: taskType.replace(/_/g, " "), icon: "ClipboardList" };
+}
 
 // ── # command palette ─────────────────────────────────────────────────────────
 // Shown when the officer types # in the ComposeBar.
 // Two groups separated by a divider:
 //   "task"   — creates a TicketTask assigned to the current user
-//   "report" — switches compose bar to report mode (submits as FIELD_REPORT action)
 //   "action" — performs an immediate ticket action (ESCALATE)
 //   "assign" — triggers @mention autocomplete to pick the assignee
 
-export type HashCommandKind = "task" | "task_assign" | "report" | "call_report" | "action" | "assign";
+export type HashCommandKind = "task" | "task_assign" | "call_report" | "action" | "assign" | "reassign_request";
 
 export interface HashCommand {
   hash: string;
@@ -90,10 +97,10 @@ export interface HashCommand {
 export const HASH_COMMANDS: HashCommand[] = [
   // ── Field / inspection (#inspect @me default; #inspect @officer for others) ──
   { hash: "inspect",  label: "Assign inspection visit", icon: "MapPin",        kind: "task_assign", taskKey: "SITE_VISIT" },
-  { hash: "report",   label: "Assign field report",     icon: "FileText",      kind: "task_assign", taskKey: "SYSTEM_NOTE" },
   { hash: "call",     label: "Call complainant",        icon: "Phone",         kind: "call_report" },
   // ── Direct actions ────────────────────────────────────────
   { hash: "escalate", label: "Escalate ticket",         icon: "ArrowUpCircle", kind: "action", action: "ESCALATE" },
+  { hash: "reassign", label: "Ask for reassignment",    icon: "RefreshCw",     kind: "reassign_request" },
   { hash: "assign",   label: "Assign ticket to…",       icon: "UserCheck",     kind: "assign" },
 ];
 

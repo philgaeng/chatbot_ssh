@@ -51,7 +51,7 @@ The ticketing system is **independent** of the chatbot: it integrates via REST A
 ┌─────────────────┐   webhook    ┌──────────────────────┐   SMS/email   ┌──────────────────┐
 │  Chatbot        │ ──────────► │  Ticketing API        │ ──────────── ► │  Messaging API   │
 │  (Orchestrator  │             │  FastAPI :5002         │               │  FastAPI :5001   │
-│   + backend)    │  reply      │  Celery (grm_ticketing)│               │  AWS SNS/SES     │
+│   + backend)    │  reply      │  Celery (grm_ticketing)│               │  SMTP / AWS SNS    │
 │                 │ ◄────────── │  PostgreSQL ticketing.*│               └──────────────────┘
 └─────────────────┘             └──────────────────────┘
                                          │

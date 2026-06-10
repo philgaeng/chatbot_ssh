@@ -198,6 +198,8 @@ class TicketDetail(BaseModel):
     complainant_reply_owner_id: Optional[str] = None
     # QR token context — UUID of the package this ticket was filed from (null = no QR)
     package_id: Optional[str] = None
+    # Resolved supervisor for current step (role configured + officer in scope)
+    step_supervisor_available: bool = False
 
     class Config:
         from_attributes = True
