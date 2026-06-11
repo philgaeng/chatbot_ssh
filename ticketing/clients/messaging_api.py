@@ -9,7 +9,7 @@ Base URL: settings.backend_grievance_base_url
 Auth:     x-api-key: TICKETING_SECRET_KEY (or MESSAGING_API_KEY fallback)
 
 INTEGRATION POINT: backend/api/routers/messaging.py
-  POST /api/messaging/send-sms   — AWS SNS (when SMS_ENABLED)
+  POST /api/messaging/send-sms   — DOIT gateway (Nepal) or AWS SNS fallback
   POST /api/messaging/send-email — SMTP mailbox relay
 """
 from __future__ import annotations

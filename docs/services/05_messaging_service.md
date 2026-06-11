@@ -23,7 +23,15 @@ Request body:
 - `text` (string, required)
 - `context` (optional object)
 
-SMS delivery uses **AWS SNS** when `SMS_ENABLED` is true in `backend/config/constants.py` (off by default in proto).
+SMS delivery provider is selected via env (`backend/config/sms_config.py`):
+
+| `SMS_PROVIDER` | Transport | Notes |
+|----------------|-----------|--------|
+| `doit` (default when `DOIT_SMS_BEARER_TOKEN` is set) | [DOIT SMS gateway](https://sms.doit.gov.np/developer-guide/) | Production Nepal — `POST /api/sms` |
+| `aws_sns` | AWS SNS | Dev / international fallback; PH `+63` numbers, whitelist gate |
+| `disabled` | — | No outbound SMS |
+
+Set `SMS_ENABLED=true` to allow sends. AWS SNS path still respects `WHITELIST_PHONE_NUMBERS_OTP_TESTING` when `SMS_WHITELIST_ONLY` is true (default for `aws_sns`).
 
 ### `POST /api/messaging/send-email`
 
@@ -132,4 +140,10 @@ Ticketing callers use `ticketing.clients.messaging_api` (HTTP to the same backen
 - **No self-hosted mail server** — use your provider's SMTP relay (Infomaniak, Nepal local provider, Google Workspace, etc.).
 - API callers should treat messaging as best-effort and handle failed delivery gracefully.
 - Quarterly report XLSX attachments are sent via `context.attachments`.
-- SMS remains on AWS SNS when enabled; email and SMS are independent.
+| `DOIT_SMS_BEARER_TOKEN` | yes (doit) | Bearer token from [newsms.doit.gov.np](https://newsms.doit.gov.np) |
+| `DOIT_SMS_BASE_URL` | no | default `https://sms.doit.gov.np` |
+| `SMS_PROVIDER` | no | `doit` \| `aws_sns` \| `disabled` |
+| `SMS_ENABLED` | no | `true` to send (falls back to `constants.SMS_ENABLED` if unset) |
+| `SMS_WHITELIST_ONLY` | no | default `true` for `aws_sns`, `false` for `doit` |
+
+- Email and SMS are independent transports.

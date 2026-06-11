@@ -1,5 +1,4 @@
 import base64
-import re
 import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -7,17 +6,19 @@ from email.mime.text import MIMEText
 from email.utils import formataddr
 
 import boto3
+import requests
 from botocore.exceptions import ClientError
-from typing import Any, Text, Dict, List, Optional, Tuple
-from random import randint
+from typing import Any, Text, Dict, List, Optional, Protocol
 from backend.config.constants import (
     WHITELIST_PHONE_NUMBERS_OTP_TESTING,
-    ADMIN_EMAILS,
-    EMAIL_TEMPLATES,
-    DIC_SMS_TEMPLATES,
-    DEFAULT_VALUES,
-    SMS_ENABLED,
     AWS_REGION,
+)
+from backend.config.sms_config import (
+    SmsConfig,
+    format_philippines_e164,
+    normalize_nepal_mobile,
+    resolve_sms_config,
+    sms_config_summary,
 )
 from backend.config.smtp_config import (
     SmtpConfig,
@@ -46,12 +47,16 @@ class Messaging:
     def __init__(self):
         if not Messaging._initialized:
             try:
-                self.sms_client = SMSClient()
+                self.sms_config = resolve_sms_config()
+                self.sms_client = _build_sms_client(self.sms_config)
                 self.email_client = EmailClient()
                 self.task_logger = TaskLogger(service_name='messaging_service')
                 self.logger = self.task_logger.logger
                 self.log_event = self.task_logger.log_event
-                self.logger.info("Successfully initialized Messaging repository")
+                self.logger.info(
+                    "Successfully initialized Messaging repository (%s)",
+                    sms_config_summary(),
+                )
                 Messaging._initialized = True
             except Exception as e:
                 # Create a basic logger for error reporting if the main one failed
@@ -115,25 +120,159 @@ class Messaging:
 
     def format_phone_number(self, phone_number: str) -> str:
         """
-        Format phone number to E.164 format.
-        Args:
-            phone_number: Phone number to format
-        Returns:
-            str: Formatted phone number
+        Format phone number for the active SMS provider.
         """
         try:
-            return self.sms_client._format_phone_number(phone_number)
+            return self.sms_client.format_phone_number(phone_number)
         except Exception as e:
             self.logger.error(f"Failed to format phone number: {str(e)}")
             raise
 
-class SMSClient:
-    def __init__(self):
+
+class SmsTransport(Protocol):
+    def send_sms(self, phone_number: str, message: str) -> bool: ...
+
+    def test_connection(self, test_phone_number: str) -> bool: ...
+
+    def format_phone_number(self, phone_number: str) -> str: ...
+
+
+def _build_sms_client(config: SmsConfig) -> SmsTransport:
+    if config.provider == "doit":
+        return DoitSmsClient(config)
+    if config.provider == "aws_sns":
+        return SnsSmsClient(config)
+    return DisabledSmsClient()
+
+
+class DisabledSmsClient:
+    def __init__(self) -> None:
+        self.task_logger = TaskLogger(service_name="messaging_service")
+        self.logger = self.task_logger.logger
+
+    def send_sms(self, phone_number: str, message: str) -> bool:
+        self.logger.info("SMS disabled — message not sent to %s", mask_phone_for_log(phone_number))
+        return False
+
+    def test_connection(self, test_phone_number: str) -> bool:
+        return False
+
+    def format_phone_number(self, phone_number: str) -> str:
+        return normalize_nepal_mobile(phone_number)
+
+
+class DoitSmsClient:
+    """Nepal DOIT government SMS gateway (sms.doit.gov.np)."""
+
+    def __init__(self, config: SmsConfig) -> None:
+        self.config = config
+        self.task_logger = TaskLogger(service_name="messaging_service")
+        self.logger = self.task_logger.logger
+        self.log_event = self.task_logger.log_event
+        self.logger.info("DOIT SMS client initialized (base_url=%s)", config.base_url)
+        self._log_balance_on_startup()
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.config.bearer_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def _log_balance_on_startup(self) -> None:
+        try:
+            balance = self.get_balance()
+            if "balance" in balance:
+                self.logger.info(
+                    "DOIT SMS account balance=%s ntc_rate=%s ncell_rate=%s",
+                    balance.get("balance"),
+                    balance.get("ntc_rate"),
+                    balance.get("ncell_rate"),
+                )
+            else:
+                self.logger.warning("DOIT SMS balance check returned: %s", balance)
+        except Exception as exc:
+            self.logger.warning("DOIT SMS balance check failed: %s", exc)
+
+    def get_balance(self) -> dict[str, Any]:
+        response = requests.get(
+            f"{self.config.base_url}/api/balance",
+            headers=self._headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {"raw": payload}
+
+    def test_connection(self, test_phone_number: str) -> bool:
+        try:
+            return self.send_sms(test_phone_number, "DOIT SMS connectivity test from GRM chatbot.")
+        except Exception as e:
+            self.logger.error(
+                "DOIT test SMS to %s failed: %s",
+                mask_phone_for_log(test_phone_number),
+                e,
+            )
+            return False
+
+    def send_sms(self, phone_number: str, message: str) -> bool:
+        if not self.config.enabled:
+            self.logger.info("SMS_ENABLED is false — DOIT message not sent")
+            return False
+
+        try:
+            mobile = normalize_nepal_mobile(phone_number)
+        except ValueError as exc:
+            self.logger.error("DOIT SMS invalid number %s: %s", mask_phone_for_log(phone_number), exc)
+            return False
+
+        if self.config.whitelist_only and mobile not in {
+            normalize_nepal_mobile(p) for p in WHITELIST_PHONE_NUMBERS_OTP_TESTING
+        }:
+            self.logger.warning(
+                "Phone number %s not in whitelist. DOIT SMS not sent.",
+                mask_phone_for_log(mobile),
+            )
+            return False
+
+        try:
+            self.logger.info("Sending SMS via DOIT to %s", mask_phone_for_log(mobile))
+            response = requests.post(
+                f"{self.config.base_url}/api/sms",
+                headers=self._headers(),
+                json={"message": message, "mobile": mobile},
+                timeout=30,
+            )
+            payload = response.json() if response.content else {}
+            if response.ok and isinstance(payload, dict):
+                msg = str(payload.get("message", "")).lower()
+                if "sent successfully" in msg or "queued" in msg:
+                    self.logger.info("DOIT SMS accepted for %s", mask_phone_for_log(mobile))
+                    return True
+            error_detail = payload if isinstance(payload, dict) else response.text
+            self.logger.error(
+                "DOIT SMS failed status=%s detail=%s",
+                response.status_code,
+                error_detail,
+            )
+            return False
+        except requests.RequestException as exc:
+            self.logger.error("DOIT SMS request failed: %s", exc)
+            return False
+
+    def format_phone_number(self, phone_number: str) -> str:
+        return normalize_nepal_mobile(phone_number)
+
+
+class SnsSmsClient:
+    """AWS SNS — dev / international fallback."""
+
+    def __init__(self, config: SmsConfig) -> None:
+        self.config = config
         self.task_logger = TaskLogger(service_name='messaging_service')
         self.logger = self.task_logger.logger
         self.log_event = self.task_logger.log_event
         try:
-            # Initialize SNS (not Pinpoint) client
             self.sns_client = boto3.client('sns', region_name=AWS_REGION)
             self.logger.info("Successfully initialized SNS client")
         except ClientError as e:
@@ -165,70 +304,43 @@ class SMSClient:
             )
             return False
 
-    def send_sms(self, phone_number: str, message: str):
-        """
-        Send SMS to the given phone number.
-        THIS FUNCTION IS CURRENTLY USED FOR TESTING AND ONLY RETURNS TRUE
-        Args:
-            phone_number: Phone number to send SMS to
-            message: Message to send
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def send_sms(self, phone_number: str, message: str) -> bool:
         try:
-            if SMS_ENABLED:
-                formatted_number = self._format_phone_number(phone_number)
-                if formatted_number not in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
-                    self.logger.warning(
-                        "Phone number %s not in whitelist. SMS not sent.",
-                        mask_phone_for_log(formatted_number),
-                    )
-                    return False
-                    
-                self.logger.info(
-                    "Sending SMS via SNS to whitelisted number: %s",
+            if not self.config.enabled:
+                self.logger.info("SMS_ENABLED is false — SNS message not sent")
+                return False
+
+            formatted_number = self.format_phone_number(phone_number)
+            if self.config.whitelist_only and formatted_number not in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
+                self.logger.warning(
+                    "Phone number %s not in whitelist. SMS not sent.",
                     mask_phone_for_log(formatted_number),
                 )
-                
-                response = self.sns_client.publish(
-                    PhoneNumber=formatted_number,
-                    Message=message,
-                    MessageAttributes={
-                        'AWS.SNS.SMS.SMSType': {
-                            'DataType': 'String',
-                            'StringValue': 'Transactional'
-                        }
-                    }
-                )
-                self.logger.info(f"SNS SMS sent successfully: {response['MessageId']}")
-                return True
-        except ClientError as e:
-            self.logger.error(f"Failed to send SMS to: {str(e)}")
-            return False 
+                return False
 
-    def _format_phone_number(self, phone_number: str) -> str:
-        # Remove any non-numeric characters except '+'
-        cleaned_number = re.sub(r'[^\d+]', '', phone_number)
-        
-        # If already in E.164 format (+63XXXXXXXXX), return as is
-        if re.match(r'^\+63\d{10}$', cleaned_number):  # Changed from \d{9} to \d{10}
-            return cleaned_number
-        
-        # Handle different formats
-        if cleaned_number.startswith('09'):
-            formatted_number = '+63' + cleaned_number[1:]
-        elif cleaned_number.startswith('63'):
-            formatted_number = '+' + cleaned_number
-        elif cleaned_number.startswith('0063'):
-            formatted_number = '+' + cleaned_number[2:]
-        else:
-            raise ValueError(f"Invalid phone number format: {phone_number}")
-        
-        # Final validation
-        if not re.match(r'^\+63\d{10}$', formatted_number):  # Changed from \d{9} to \d{10}
-            raise ValueError(f"Invalid phone number format - final: {phone_number}, {formatted_number}")
-            
-        return formatted_number
+            self.logger.info(
+                "Sending SMS via SNS to %s",
+                mask_phone_for_log(formatted_number),
+            )
+
+            response = self.sns_client.publish(
+                PhoneNumber=formatted_number,
+                Message=message,
+                MessageAttributes={
+                    'AWS.SNS.SMS.SMSType': {
+                        'DataType': 'String',
+                        'StringValue': 'Transactional'
+                    }
+                }
+            )
+            self.logger.info("SNS SMS sent successfully: %s", response['MessageId'])
+            return True
+        except (ClientError, ValueError) as e:
+            self.logger.error("Failed to send SMS via SNS: %s", e)
+            return False
+
+    def format_phone_number(self, phone_number: str) -> str:
+        return format_philippines_e164(phone_number)
 
 class EmailClient:
     def __init__(self):
