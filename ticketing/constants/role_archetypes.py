@@ -46,6 +46,10 @@ ARCHETYPE_PERMISSIONS: dict[str, list[str]] = {
         "tickets:read",
         "tickets:note",
     ],
+    "informed": [
+        "tickets:read",
+        "tickets:note",
+    ],
     "observer": [
         "tickets:read",
         "reports:read",
@@ -66,6 +70,7 @@ ARCHETYPE_LABELS: dict[str, str] = {
     "supervisor": "Supervisor (L2 / oversight)",
     "grc_committee": "GRC committee chair",
     "grc_member": "GRC member",
+    "informed": "Informed participant (notes, no workflow actions)",
     "observer": "Observer (read-only)",
     "seah_handler": "SEAH handler",
     "custom": "Custom (pick permissions)",

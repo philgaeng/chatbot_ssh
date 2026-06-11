@@ -192,6 +192,7 @@ For **`jurisdiction_mode=field`** officers scoped to a project or package:
 | **Supervisor** | Field actor + `escalate`, manual reassign | L2 / oversight with escalation |
 | **GRC committee** | Supervisor + `grc:convene`, `grc:decide` | L3 chair |
 | **GRC member** | `read`, `note` | L3 participant |
+| **Informed** | `read`, `note` | Informed tier — contractors, copied team members, oversight with notes |
 | **Observer** | `tickets:read`, `reports:read` | ADB / donor read-only |
 | **SEAH handler** | Field actor + `seah:access`, `escalate` | SEAH track |
 | **Custom** | None — show grouped picker | Expert / `super_admin` only |
