@@ -320,7 +320,10 @@ def _admin_scope_response(
     onboarding_status: str | None = None,
     invite_email_sent: bool = False,
 ) -> AdminScopeResponse:
-    from ticketing.services.officer_admin import officer_eligible_for_invite_resend
+    from ticketing.services.officer_admin import (
+        admin_scope_can_send_setup_email,
+        officer_eligible_for_invite_resend,
+    )
 
     email = scope.user_id.strip().lower()
     return AdminScopeResponse(
@@ -335,6 +338,7 @@ def _admin_scope_response(
         created_at=scope.created_at,
         created_by_user_id=scope.created_by_user_id,
         can_resend_invite=officer_eligible_for_invite_resend(db, email),
+        can_send_setup_email=admin_scope_can_send_setup_email(),
         onboarding_status=onboarding_status,
         invite_email_sent=invite_email_sent,
     )
@@ -436,6 +440,54 @@ def create_admin_scope(
             "workflow_track": body.workflow_track,
             "onboarding_status": onboarding_status,
         },
+    )
+    db.commit()
+    db.refresh(scope)
+    return _admin_scope_response(
+        db,
+        scope,
+        onboarding_status=onboarding_status,
+        invite_email_sent=onboarding_status == "invited",
+    )
+
+
+@router.post(
+    "/admin-scopes/{admin_scope_id}/send-invite",
+    response_model=AdminScopeResponse,
+    summary="Send Keycloak setup email for an admin-scope officer",
+)
+def send_admin_scope_invite(
+    admin_scope_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> AdminScopeResponse:
+    from ticketing.services.officer_admin import log_admin_audit, provision_admin_scope_keycloak
+
+    scope = db.get(AdminScope, admin_scope_id)
+    if not scope:
+        raise HTTPException(status_code=404, detail="Admin scope not found")
+    if scope.role_key == "country_admin" and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only super_admin may manage country_admin")
+    if scope.role_key == "project_admin" and not (
+        current_user.is_super_admin or is_country_admin(current_user, scope.workflow_track)  # type: ignore[arg-type]
+    ):
+        raise HTTPException(status_code=403, detail="Insufficient permissions for this admin scope")
+
+    email = scope.user_id.strip().lower()
+    org_id = (scope.organization_id or "DOR").strip()
+    onboarding_status = provision_admin_scope_keycloak(
+        db,
+        email,
+        scope.role_key,
+        org_id,
+        force_invite=True,
+    )
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="admin_scope.send_invite",
+        target_user_id=email,
+        payload={"admin_scope_id": admin_scope_id, "onboarding_status": onboarding_status},
     )
     db.commit()
     db.refresh(scope)

@@ -798,6 +798,7 @@ export interface AdminScopeRow {
   created_by_user_id?: string | null;
   /** True when Keycloak still has pending setup actions (invite link can be resent). */
   can_resend_invite?: boolean;
+  can_send_setup_email?: boolean;
   onboarding_status?: string | null;
   invite_email_sent?: boolean;
 }
@@ -838,6 +839,12 @@ export function createAdminScope(payload: {
 
 export function deleteAdminScope(adminScopeId: string): Promise<void> {
   return apiFetch(`/api/v1/admin-scopes/${adminScopeId}`, { method: "DELETE" });
+}
+
+export function sendAdminScopeInvite(adminScopeId: string): Promise<AdminScopeRow> {
+  return apiFetch<AdminScopeRow>(`/api/v1/admin-scopes/${adminScopeId}/send-invite`, {
+    method: "POST",
+  });
 }
 
 export function updateRole(

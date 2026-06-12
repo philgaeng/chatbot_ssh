@@ -57,6 +57,7 @@ class AdminScopeResponse(BaseModel):
     created_at: datetime
     created_by_user_id: str | None = None
     can_resend_invite: bool = False
+    can_send_setup_email: bool = False
     onboarding_status: str | None = None
     invite_email_sent: bool = False
 

@@ -14,7 +14,7 @@ from ticketing.services.officer_admin import (
 @pytest.mark.parametrize(
     ("kc_user", "onboarding", "expected"),
     [
-        (None, None, False),
+        (None, None, True),
         ({"enabled": True, "requiredActions": []}, "active", False),
         ({"enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}, None, True),
         ({"enabled": False, "requiredActions": []}, None, True),
@@ -85,20 +85,16 @@ def test_provision_admin_scope_resends_for_pending_keycloak_user():
         "ticketing.services.officer_admin._keycloak_find_user",
         return_value=kc_user,
     ), patch(
-        "ticketing.services.officer_admin.keycloak_update_user_attributes",
-    ), patch(
-        "ticketing.services.officer_admin.keycloak_resend_invite_email",
-        return_value="anish@dor.gov.np",
-    ) as resend, patch(
-        "ticketing.services.officer_admin._upsert_officer_onboarding",
-    ) as upsert_ob:
+        "ticketing.services.officer_admin._keycloak_send_or_create_setup_email",
+    ) as send_setup:
         status = provision_admin_scope_keycloak(
             db, "anishshrestha.dor@gmail.com", "country_admin", "DOR"
         )
 
     assert status == "invited"
-    resend.assert_called_once_with("anishshrestha.dor@gmail.com", db=db)
-    upsert_ob.assert_called_once_with(db, "anishshrestha.dor@gmail.com", "invited")
+    send_setup.assert_called_once_with(
+        db, "anishshrestha.dor@gmail.com", "country_admin", "DOR"
+    )
 
 
 def test_provision_admin_scope_skips_email_for_active_user():
@@ -128,3 +124,31 @@ def test_provision_admin_scope_skips_email_for_active_user():
     assert status == "active"
     resend.assert_not_called()
     upsert_ob.assert_called_once_with(db, "anishshrestha.dor@gmail.com", "active")
+
+
+def test_provision_admin_scope_force_invite_for_active_user():
+    db = MagicMock()
+    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": []}
+
+    with patch(
+        "ticketing.services.officer_admin.keycloak_configured",
+        return_value=True,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_admin",
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_find_user",
+        return_value=kc_user,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_send_or_create_setup_email",
+    ) as send_setup:
+        status = provision_admin_scope_keycloak(
+            db,
+            "anishshrestha.dor@gmail.com",
+            "country_admin",
+            "DOR",
+            force_invite=True,
+        )
+
+    assert status == "invited"
+    send_setup.assert_called_once()

@@ -76,7 +76,7 @@ import {
   listAdminScopes,
   createAdminScope,
   deleteAdminScope,
-  resendOfficerInvite,
+  sendAdminScopeInvite,
   updateRole,
   deleteRole,
   type GrmRole,
@@ -592,16 +592,20 @@ function AdminAccessTab() {
     }
   }
 
-  async function handleResendInvite(email: string) {
+  async function handleSendSetupEmail(adminScopeId: string, email: string) {
     setResendingId(email);
     setResendMsg("");
     setErr("");
     try {
-      const result = await resendOfficerInvite(email);
-      setResendMsg(result.message);
+      const result = await sendAdminScopeInvite(adminScopeId);
+      if (result.invite_email_sent) {
+        setResendMsg(`Setup email sent to ${result.user_id}.`);
+      } else {
+        setResendMsg(`${result.user_id} already has an active Keycloak account.`);
+      }
       await load();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Resend invite failed");
+      setErr(e instanceof Error ? e.message : "Send setup email failed");
     } finally {
       setResendingId(null);
     }
@@ -611,7 +615,7 @@ function AdminAccessTab() {
     <div>
       <p className="text-sm text-gray-500 mb-4">
         Appoint scoped country and project administrators. New officers receive a Keycloak setup email;
-        use <span className="font-medium">Resend invite</span> if it does not arrive.
+        use <span className="font-medium">Send setup email</span> if it does not arrive.
       </p>
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
       {resendMsg && <p className="text-sm text-green-700 mb-3">{resendMsg}</p>}
@@ -664,15 +668,19 @@ function AdminAccessTab() {
                 <td className="px-3 py-2 text-xs">{r.country_code ?? r.project_id ?? "—"}</td>
                 <td className="px-3 py-2">{r.workflow_track}</td>
                 <td className="px-3 py-2 whitespace-nowrap space-x-3">
-                  {r.can_resend_invite && (
+                  {r.can_send_setup_email && (
                     <button
                       type="button"
-                      onClick={() => handleResendInvite(r.user_id)}
+                      onClick={() => handleSendSetupEmail(r.admin_scope_id, r.user_id)}
                       disabled={resendingId === r.user_id}
                       className="text-amber-800 text-xs hover:underline disabled:opacity-50"
-                      title="Send a fresh setup email (7-day link)"
+                      title="Send Keycloak password setup email (7-day link)"
                     >
-                      {resendingId === r.user_id ? "Sending…" : "Resend invite"}
+                      {resendingId === r.user_id
+                        ? "Sending…"
+                        : r.can_resend_invite
+                          ? "Resend invite"
+                          : "Send setup email"}
                     </button>
                   )}
                   <button type="button" onClick={() => handleRevoke(r.admin_scope_id)}

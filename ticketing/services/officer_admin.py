@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
@@ -346,9 +346,19 @@ def _officer_role_keys(db: Session, email: str) -> list[str]:
         db.execute(
             select(Role.role_key)
             .join(UserRole, UserRole.role_id == Role.role_id)
-            .where(UserRole.user_id == normalized)
+            .where(func.lower(UserRole.user_id) == normalized)
         ).scalars().all()
     )
+
+
+def _primary_officer_organization(db: Session, email: str) -> str:
+    normalized = _normalize_officer_email(email)
+    org_id = db.execute(
+        select(UserRole.organization_id)
+        .where(func.lower(UserRole.user_id) == normalized)
+        .limit(1)
+    ).scalar_one_or_none()
+    return (org_id or "DOR").strip() or "DOR"
 
 
 def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
@@ -373,11 +383,39 @@ def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
         return False
     kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
     if not kc_user:
-        return False
+        return True
     if not kc_user.get("enabled", True):
         return True
     pending = kc_user.get("requiredActions") or []
     return bool(pending)
+
+
+def admin_scope_can_send_setup_email() -> bool:
+    """Admin access rows may trigger Keycloak setup email when auth stack is configured."""
+    return keycloak_configured()
+
+
+def _keycloak_send_or_create_setup_email(
+    db: Session,
+    email: str,
+    role_key: str,
+    organization_id: str,
+) -> None:
+    """Create Keycloak user if missing, then send execute-actions setup email."""
+    normalized = _normalize_officer_email(email)
+    org_id = organization_id.strip() or "DOR"
+    admin = _keycloak_admin()
+    kc_user = _keycloak_find_user(admin, normalized)
+    if not kc_user:
+        keycloak_create_user(normalized, role_key, org_id)
+        _upsert_officer_onboarding(db, normalized, "invited")
+        return
+
+    role_keys = _officer_role_keys(db, normalized) or [role_key]
+    keycloak_update_user_attributes(normalized, role_keys, org_id)
+    if not kc_user.get("enabled", True):
+        admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
+    keycloak_resend_invite_email(normalized, db=db)
 
 
 def provision_admin_scope_keycloak(
@@ -385,6 +423,8 @@ def provision_admin_scope_keycloak(
     email: str,
     role_key: str,
     organization_id: str,
+    *,
+    force_invite: bool = False,
 ) -> str:
     """
     Ensure Keycloak account exists for an admin-scope appointee and send invite when needed.
@@ -399,25 +439,12 @@ def provision_admin_scope_keycloak(
         return "active"
 
     org_id = organization_id.strip() or "DOR"
-    admin = _keycloak_admin()
-    kc_user = _keycloak_find_user(admin, normalized)
-
-    if not kc_user:
-        keycloak_create_user(normalized, role_key, org_id)
-        _upsert_officer_onboarding(db, normalized, "invited")
+    if force_invite or officer_eligible_for_invite_resend(db, normalized):
+        _keycloak_send_or_create_setup_email(db, normalized, role_key, org_id)
         return "invited"
 
     role_keys = _officer_role_keys(db, normalized) or [role_key]
     keycloak_update_user_attributes(normalized, role_keys, org_id)
-
-    if officer_eligible_for_invite_resend(db, normalized):
-        kc_user = _keycloak_find_user(admin, normalized)
-        if kc_user and not kc_user.get("enabled", True):
-            admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
-        keycloak_resend_invite_email(normalized, db=db)
-        _upsert_officer_onboarding(db, normalized, "invited")
-        return "invited"
-
     _upsert_officer_onboarding(db, normalized, "active")
     return "active"
 
@@ -441,13 +468,17 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
     admin = _keycloak_admin()
     kc_user = _keycloak_find_user(admin, email)
     if not kc_user:
-        raise HTTPException(status_code=404, detail="Officer not found in Keycloak.")
+        if db is None:
+            raise HTTPException(status_code=404, detail="Officer not found in Keycloak.")
+        role_keys = _officer_role_keys(db, email)
+        if not role_keys:
+            raise HTTPException(status_code=404, detail="Officer not found in Keycloak.")
+        keycloak_create_user(email, role_keys[0], _primary_officer_organization(db, email))
+        _upsert_officer_onboarding(db, email, "invited")
+        return email
 
     if not kc_user.get("enabled", True):
-        raise HTTPException(
-            status_code=409,
-            detail="Officer account is disabled in Keycloak. Remove and invite again.",
-        )
+        admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
 
     try:
         admin.update_user(
