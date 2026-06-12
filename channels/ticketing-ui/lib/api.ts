@@ -796,6 +796,8 @@ export interface AdminScopeRow {
   workflow_track: string;
   created_at: string;
   created_by_user_id?: string | null;
+  /** True when Keycloak still has pending setup actions (invite link can be resent). */
+  can_resend_invite?: boolean;
 }
 
 export interface AdminContext {

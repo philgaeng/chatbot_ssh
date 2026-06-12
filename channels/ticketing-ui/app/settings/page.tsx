@@ -76,6 +76,7 @@ import {
   listAdminScopes,
   createAdminScope,
   deleteAdminScope,
+  resendOfficerInvite,
   updateRole,
   deleteRole,
   type GrmRole,
@@ -539,6 +540,8 @@ function AdminAccessTab() {
   const [countryCode, setCountryCode] = useState("NP");
   const [projectId, setProjectId] = useState("KL_ROAD");
   const [track, setTrack] = useState<"standard" | "seah">("standard");
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendMsg, setResendMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -581,10 +584,26 @@ function AdminAccessTab() {
     }
   }
 
+  async function handleResendInvite(email: string) {
+    setResendingId(email);
+    setResendMsg("");
+    setErr("");
+    try {
+      const result = await resendOfficerInvite(email);
+      setResendMsg(result.message);
+      await load();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Resend invite failed");
+    } finally {
+      setResendingId(null);
+    }
+  }
+
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">Appoint scoped country and project administrators.</p>
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+      {resendMsg && <p className="text-sm text-green-700 mb-3">{resendMsg}</p>}
       <div className="border border-gray-200 rounded-lg p-4 mb-5 bg-gray-50 space-y-3 text-sm">
         <div className="font-medium text-gray-700">+ Appoint admin</div>
         <div className="grid grid-cols-2 gap-3">
@@ -633,7 +652,18 @@ function AdminAccessTab() {
                 <td className="px-3 py-2">{r.role_key}</td>
                 <td className="px-3 py-2 text-xs">{r.country_code ?? r.project_id ?? "—"}</td>
                 <td className="px-3 py-2">{r.workflow_track}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 whitespace-nowrap space-x-3">
+                  {r.can_resend_invite && (
+                    <button
+                      type="button"
+                      onClick={() => handleResendInvite(r.user_id)}
+                      disabled={resendingId === r.user_id}
+                      className="text-amber-800 text-xs hover:underline disabled:opacity-50"
+                      title="Send a fresh setup email (7-day link)"
+                    >
+                      {resendingId === r.user_id ? "Sending…" : "Resend invite"}
+                    </button>
+                  )}
                   <button type="button" onClick={() => handleRevoke(r.admin_scope_id)}
                     className="text-red-600 text-xs hover:underline">Revoke</button>
                 </td>

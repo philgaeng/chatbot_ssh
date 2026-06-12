@@ -18,6 +18,11 @@ class WorkflowStepResponse(BaseModel):
     assigned_role_key: str
     response_time_hours: Optional[int]
     resolution_time_days: Optional[int]
+    # Spec 12 tier model
+    supervisor_role: Optional[str] = None
+    informed_roles: list[str] = []
+    observer_roles: list[str] = []
+    informed_pii_access: bool = False
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -34,6 +39,10 @@ class WorkflowStepCreate(BaseModel):
     assigned_role_key: str
     response_time_hours: Optional[int] = None
     resolution_time_days: Optional[int] = None
+    supervisor_role: Optional[str] = None
+    informed_roles: list[str] = []
+    observer_roles: list[str] = []
+    informed_pii_access: bool = False
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
 
@@ -44,6 +53,10 @@ class WorkflowStepUpdate(BaseModel):
     assigned_role_key: Optional[str] = None
     response_time_hours: Optional[int] = None
     resolution_time_days: Optional[int] = None
+    supervisor_role: Optional[str] = None
+    informed_roles: Optional[list[str]] = None
+    observer_roles: Optional[list[str]] = None
+    informed_pii_access: Optional[bool] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
 

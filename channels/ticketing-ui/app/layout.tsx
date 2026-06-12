@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="h-full">
+      <body className="h-full text-gray-900">
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

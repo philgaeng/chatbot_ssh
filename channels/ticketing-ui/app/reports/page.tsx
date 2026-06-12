@@ -158,7 +158,7 @@ function ReportFilters({
     <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Period</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">Period</label>
           <select
             value={periodPreset}
             onChange={(e) => {
@@ -170,7 +170,7 @@ function ReportFilters({
                 setDateTo(to);
               }
             }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900"
           >
             <option value="this_quarter">This quarter</option>
             <option value="last_quarter">Last quarter</option>
@@ -181,21 +181,21 @@ function ReportFilters({
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">From</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">From</label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => { setDateFrom(e.target.value); setPeriodPreset("custom"); }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900"
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">To</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">To</label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => { setDateTo(e.target.value); setPeriodPreset("custom"); }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900"
           />
         </div>
         {showSeahToggle && (
@@ -214,7 +214,7 @@ function ReportFilters({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Projects (empty = all)</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">Projects (empty = all)</label>
           <select
             multiple
             value={selectedProjectIds}
@@ -222,7 +222,7 @@ function ReportFilters({
               const ids = Array.from(e.target.selectedOptions, (o) => o.value);
               setSelectedProjectIds(ids);
             }}
-            className="w-full border border-gray-300 rounded px-2 py-2 text-sm h-24"
+            className="w-full border border-gray-300 rounded px-2 py-2 text-sm text-gray-900 h-24"
           >
             {projects.map((p) => (
               <option key={p.project_id} value={p.project_id}>{p.name}</option>
@@ -230,12 +230,12 @@ function ReportFilters({
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Packages</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">Packages</label>
           <select
             multiple
             value={selectedPackageIds}
             onChange={(e) => setSelectedPackageIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-            className="w-full border border-gray-300 rounded px-2 py-2 text-sm h-24"
+            className="w-full border border-gray-300 rounded px-2 py-2 text-sm text-gray-900 h-24"
             disabled={packages.length === 0}
           >
             {packages.map((pkg) => (
@@ -244,12 +244,12 @@ function ReportFilters({
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Locations (includes children)</label>
+          <label className="text-xs font-medium text-gray-700 block mb-1">Locations (includes children)</label>
           <select
             multiple
             value={selectedLocationCodes}
             onChange={(e) => setSelectedLocationCodes(Array.from(e.target.selectedOptions, (o) => o.value))}
-            className="w-full border border-gray-300 rounded px-2 py-2 text-sm h-24"
+            className="w-full border border-gray-300 rounded px-2 py-2 text-sm text-gray-900 h-24"
           >
             {locations.map((loc) => (
               <option key={loc.location_code} value={loc.location_code}>
@@ -594,7 +594,7 @@ export default function ReportsPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Reports</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-gray-600 mt-0.5">
             Operational grievance lists, flat export, and shareable report links (Nepal time, max 100 rows per export).
           </p>
         </div>
@@ -645,7 +645,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+              tab === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-600 hover:text-gray-800"
             }`}
           >
             {t.label}

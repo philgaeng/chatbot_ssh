@@ -1,0 +1,7 @@
+email,role_key,organization_id,project_code,package_id,location_code,includes_children,temp_password
+l1.morang@dor.gov.np,site_safeguards_focal_person,DOR,KL_ROAD,,P1_MOR,false,
+l1.jhapa@dor.gov.np,site_safeguards_focal_person,DOR,KL_ROAD,,P1_JHA,false,
+l2.piu@dor.gov.np,pd_piu_safeguards_focal,DOR,KL_ROAD,,P1,true,
+contractor.field1@example.com,contractor_officer,DOR,KL_ROAD,,P1_MOR,false,
+adb.observer@adb.org,adb_hq_safeguards,ADB,,,P1,false,
+grc.member@example.com,grc_member,DOR,KL_ROAD,,P1,false,

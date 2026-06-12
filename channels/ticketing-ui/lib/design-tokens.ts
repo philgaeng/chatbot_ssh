@@ -17,12 +17,11 @@
  *
  * ── WCAG AA compliance ────────────────────────────────────────────────────────
  *
- *   NEVER use text-gray-400 (#9CA3AF) for informational text — contrast 2.8:1
- *   NEVER use text-gray-500 (#6B7280) for informational text — contrast 4.48:1 (fails)
- *   FLOOR: text-gray-600 (#4B5563) = 5.9:1  ✓  muted/secondary labels
+ *   Theme remaps gray-400/500 one step darker in globals.css (@theme inline).
+ *   FLOOR: text-gray-500 (#4B5563) = 5.9:1  ✓  secondary labels, hints
  *   BODY:  text-gray-700 (#374151) = 6.5:1  ✓  default body text, section headers
  *   MAIN:  text-gray-800 (#1F2937) = 9.7:1  ✓  primary headings
- *   text-gray-400/500 ONLY for: placeholder, decorative separator, disabled state
+ *   text-gray-400 (#6B7280) ONLY for: placeholder, decorative separator, disabled state
  *
  * ── Eliminated hue families ───────────────────────────────────────────────────
  *
@@ -44,11 +43,11 @@ export const text = {
   /** Secondary labels (muted but accessible): 5.9:1 */
   secondary:     "text-gray-600",
   /** Decorative / placeholder / disabled ONLY — not for informational text */
-  muted:         "text-gray-400",
+  muted:         "text-gray-500",
   /** Sidebar link inactive */
-  sidebarLink:   "text-slate-300",
+  sidebarLink:   "text-slate-200",
   /** Sidebar label muted */
-  sidebarMuted:  "text-slate-400",
+  sidebarMuted:  "text-slate-300",
 } as const;
 
 // ── Semantic color roles ──────────────────────────────────────────────────────

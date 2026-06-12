@@ -280,7 +280,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
         <div className="px-5 pt-6 pb-4 border-b border-slate-700">
           <div className="text-lg font-bold tracking-tight">GRM Ticketing</div>
           {process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true" && (
-            <div className="text-xs text-slate-400 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
+            <div className="text-xs text-slate-300 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
           )}
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -295,7 +295,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  active ? "bg-slate-600 text-white font-medium" : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                  active ? "bg-slate-600 text-white font-medium" : "text-slate-200 hover:bg-slate-700 hover:text-white"
                 }`}
               >
                 <Icon size={16} strokeWidth={1.75} className="shrink-0" />
@@ -314,7 +314,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-slate-700">
           <button
             onClick={signOut}
-            className="w-full flex items-center gap-2 text-sm text-slate-400 hover:text-red-400 transition-colors px-3 py-2 rounded"
+            className="w-full flex items-center gap-2 text-sm text-slate-300 hover:text-red-400 transition-colors px-3 py-2 rounded"
           >
             <IconSignOut size={14} strokeWidth={1.75} />
             Sign out

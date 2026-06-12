@@ -56,6 +56,7 @@ class AdminScopeResponse(BaseModel):
     workflow_track: str
     created_at: datetime
     created_by_user_id: str | None = None
+    can_resend_invite: bool = False
 
     class Config:
         from_attributes = True

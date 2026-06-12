@@ -313,6 +313,25 @@ def get_my_admin_context(
     return AdminContextResponse(**admin_context_payload(current_user))
 
 
+def _admin_scope_response(db: Session, scope: AdminScope) -> AdminScopeResponse:
+    from ticketing.services.officer_admin import officer_eligible_for_invite_resend
+
+    email = scope.user_id.strip().lower()
+    return AdminScopeResponse(
+        admin_scope_id=scope.admin_scope_id,
+        user_id=scope.user_id,
+        role_key=scope.role_key,
+        country_code=scope.country_code,
+        project_id=scope.project_id,
+        organization_id=scope.organization_id,
+        package_id=scope.package_id,
+        workflow_track=scope.workflow_track,
+        created_at=scope.created_at,
+        created_by_user_id=scope.created_by_user_id,
+        can_resend_invite=officer_eligible_for_invite_resend(db, email),
+    )
+
+
 @router.get(
     "/admin-scopes",
     response_model=list[AdminScopeResponse],
@@ -321,12 +340,14 @@ def get_my_admin_context(
 def list_admin_scopes(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
-) -> list[AdminScope]:
+) -> list[AdminScopeResponse]:
     if current_user.is_super_admin:
-        return db.execute(select(AdminScope).order_by(AdminScope.created_at.desc())).scalars().all()
-    return db.execute(
-        select(AdminScope).where(AdminScope.user_id == current_user.user_id)
-    ).scalars().all()
+        rows = db.execute(select(AdminScope).order_by(AdminScope.created_at.desc())).scalars().all()
+    else:
+        rows = db.execute(
+            select(AdminScope).where(AdminScope.user_id == current_user.user_id)
+        ).scalars().all()
+    return [_admin_scope_response(db, scope) for scope in rows]
 
 
 @router.post(
@@ -339,7 +360,7 @@ def create_admin_scope(
     body: AdminScopeCreate,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
-) -> AdminScope:
+) -> AdminScopeResponse:
     if body.role_key == "country_admin":
         if not current_user.is_super_admin:
             raise HTTPException(status_code=403, detail="Only super_admin may appoint country_admin")
@@ -391,7 +412,7 @@ def create_admin_scope(
         )
     db.commit()
     db.refresh(scope)
-    return scope
+    return _admin_scope_response(db, scope)
 
 
 @router.delete(
@@ -1108,14 +1129,17 @@ def resend_officer_invite(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ) -> OfficerInviteResponse:
-    from ticketing.services.officer_admin import keycloak_resend_invite_email, log_admin_audit
+    from ticketing.services.officer_admin import (
+        keycloak_resend_invite_email,
+        log_admin_audit,
+        officer_eligible_for_invite_resend,
+    )
 
     email = user_id.strip().lower()
-    ob = db.get(OfficerOnboarding, email)
-    if ob and ob.status != "invited":
+    if not officer_eligible_for_invite_resend(db, email):
         raise HTTPException(
             status_code=400,
-            detail="Resend invite is only available while onboarding status is Invited.",
+            detail="Resend invite is only available while Keycloak onboarding is incomplete.",
         )
 
     sent_to = keycloak_resend_invite_email(email, db=db)

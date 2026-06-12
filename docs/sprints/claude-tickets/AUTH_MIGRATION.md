@@ -110,8 +110,9 @@ Before going to staging / production:
   ```
 
   **Invite email UX** (custom `grm` login theme under `deployment/keycloak/themes/grm/`):
-  - Skips the default “Perform the following actions” interstitial (auto-continues to password/profile).
-  - After completion, redirects to GRM login when `KEYCLOAK_INVITE_REDIRECT_URI` is set (default `http://localhost:3002/login`; staging/production: `https://grm-auth…/login`).
+  - Skips the default “Perform the following actions” interstitial (auto-continues via `actionUri` to password/profile).
+  - After completion, redirects to GRM login via `pageRedirectUri` when `KEYCLOAK_INVITE_REDIRECT_URI` is set (default `http://localhost:3002/login`; staging/production: `https://grm-auth…/login`).
+  - **Important:** `info.ftl` must prefer `actionUri` over `pageRedirectUri` on the invite link — both are present at the start of the flow; preferring `pageRedirectUri` sends officers to the login page before they set a password (“wrong password”).
 
   ```env
   KEYCLOAK_INVITE_CLIENT_ID=ticketing-ui

@@ -2,7 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111827; /* gray-900 — primary body text */
 }
 
 @theme inline {
@@ -10,19 +10,38 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Bump muted text one step darker app-wide (labels, hints, inactive tabs) */
+  --color-gray-400: #6b7280; /* was #9ca3af */
+  --color-gray-500: #4b5563; /* was #6b7280 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Light-only app — prevents OS dark mode from lightening form control text on mobile Chrome */
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    color: #111827;
+  }
+
+  select option {
+    color: #111827;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7280;
+  }
 }
 
 /* ── Mobile safe-area helpers ────────────────────────────────────────────── */

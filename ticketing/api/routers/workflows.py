@@ -245,6 +245,10 @@ def create_workflow(
                         "assigned_role_key": s.assigned_role_key,
                         "response_time_hours": s.response_time_hours,
                         "resolution_time_days": s.resolution_time_days,
+                        "supervisor_role": s.supervisor_role,
+                        "informed_roles": s.informed_roles,
+                        "observer_roles": s.observer_roles,
+                        "informed_pii_access": s.informed_pii_access,
                         "stakeholders": s.stakeholders,
                         "expected_actions": s.expected_actions,
                     }
@@ -263,6 +267,10 @@ def create_workflow(
             assigned_role_key=s["assigned_role_key"],
             response_time_hours=s.get("response_time_hours"),
             resolution_time_days=s.get("resolution_time_days"),
+            supervisor_role=s.get("supervisor_role"),
+            informed_roles=s.get("informed_roles") or [],
+            observer_roles=s.get("observer_roles") or [],
+            informed_pii_access=bool(s.get("informed_pii_access")),
             stakeholders=s.get("stakeholders"),
             expected_actions=s.get("expected_actions"),
         ))
@@ -364,6 +372,10 @@ def save_as_template(
                 display_name=s.display_name, assigned_role_key=s.assigned_role_key,
                 response_time_hours=s.response_time_hours,
                 resolution_time_days=s.resolution_time_days,
+                supervisor_role=s.supervisor_role,
+                informed_roles=s.informed_roles or [],
+                observer_roles=s.observer_roles or [],
+                informed_pii_access=s.informed_pii_access,
                 stakeholders=s.stakeholders, expected_actions=s.expected_actions,
             ))
     db.commit()
@@ -448,6 +460,10 @@ def add_step(
         assigned_role_key=payload.assigned_role_key,
         response_time_hours=payload.response_time_hours,
         resolution_time_days=payload.resolution_time_days,
+        supervisor_role=payload.supervisor_role,
+        informed_roles=payload.informed_roles or [],
+        observer_roles=payload.observer_roles or [],
+        informed_pii_access=payload.informed_pii_access,
         stakeholders=payload.stakeholders,
         expected_actions=payload.expected_actions,
     )
@@ -472,19 +488,28 @@ def update_step(
     if not step or step.workflow_id != workflow_id or step.is_deleted:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    if payload.display_name is not None:
+    fields_set = payload.model_fields_set
+    if "display_name" in fields_set:
         step.display_name = payload.display_name
-    if payload.step_key is not None:
+    if "step_key" in fields_set:
         step.step_key = payload.step_key
-    if payload.assigned_role_key is not None:
+    if "assigned_role_key" in fields_set:
         step.assigned_role_key = payload.assigned_role_key
-    if payload.response_time_hours is not None:
+    if "response_time_hours" in fields_set:
         step.response_time_hours = payload.response_time_hours
-    if payload.resolution_time_days is not None:
+    if "resolution_time_days" in fields_set:
         step.resolution_time_days = payload.resolution_time_days
-    if payload.stakeholders is not None:
+    if "supervisor_role" in fields_set:
+        step.supervisor_role = payload.supervisor_role
+    if "informed_roles" in fields_set:
+        step.informed_roles = payload.informed_roles or []
+    if "observer_roles" in fields_set:
+        step.observer_roles = payload.observer_roles or []
+    if "informed_pii_access" in fields_set:
+        step.informed_pii_access = bool(payload.informed_pii_access)
+    if "stakeholders" in fields_set:
         step.stakeholders = payload.stakeholders
-    if payload.expected_actions is not None:
+    if "expected_actions" in fields_set:
         step.expected_actions = payload.expected_actions
 
     db.commit()
