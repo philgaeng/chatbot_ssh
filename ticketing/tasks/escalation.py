@@ -71,8 +71,23 @@ def escalate_single_ticket(self, ticket_id: str, triggered_by: str = "MANUAL", n
             logger.warning("escalate_single_ticket: ticket_id=%s not found", ticket_id)
             return {"ticket_id": ticket_id, "escalated": False, "reason": "not_found"}
 
+        old_assigned = ticket.assigned_to_user_id
         result = escalate_ticket(ticket, db, triggered_by=triggered_by, note=note)
         db.commit()
+        if (
+            result
+            and ticket.assigned_to_user_id
+            and ticket.assigned_to_user_id != old_assigned
+        ):
+            from ticketing.tasks.notifications import enqueue_assignment_notifications
+
+            enqueue_assignment_notifications(
+                ticket.ticket_id,
+                ticket.assigned_to_user_id,
+                ticket.current_step_id,
+                old_assigned=old_assigned,
+                event="escalation",
+            )
         return {
             "ticket_id": ticket_id,
             "escalated": result is not None,

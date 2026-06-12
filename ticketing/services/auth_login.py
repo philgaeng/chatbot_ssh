@@ -303,7 +303,8 @@ def request_invite_setup_link(email: str, db) -> None:
         logger.error("Invite setup link failed for %s: %s", normalized, exc)
 
 
-def reset_password_with_token(token: str, new_password: str) -> None:
+def reset_password_with_token(token: str, new_password: str) -> str:
+    """Reset password via signed token. Returns normalized officer email."""
     email = _verify_reset_token(token)
     if len(new_password) < 8:
         raise AuthLoginError("weak_password", "Password must be at least 8 characters.", 422)
@@ -322,3 +323,4 @@ def reset_password_with_token(token: str, new_password: str) -> None:
             "emailVerified": True,
         },
     )
+    return email

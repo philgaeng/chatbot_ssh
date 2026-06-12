@@ -52,6 +52,43 @@ def instantiate_project_from_type(db: Session, project: Project, type_key: str) 
     project.standard_workflow_id = pt.standard_workflow_id
     project.seah_workflow_id = pt.seah_workflow_id
 
+    from ticketing.services import project_workflows as pw_svc
+
+    bindings = list(pt.workflow_bindings or [])
+    if bindings:
+        pw_svc.apply_workflow_bindings_from_type(db, project, bindings)
+    else:
+        legacy_bindings: list[dict] = []
+        if pt.standard_workflow_id:
+            legacy_bindings.append(
+                {
+                    "display_label": "Safeguards GRM",
+                    "workflow_id": pt.standard_workflow_id,
+                    "is_default": True,
+                    "classifications": [],
+                    "intake_routes": ["standard_grievance", "grievance_new", "new_grievance"],
+                    "sort_order": 10,
+                }
+            )
+        if pt.seah_workflow_id:
+            legacy_bindings.append(
+                {
+                    "display_label": "SEAH",
+                    "workflow_id": pt.seah_workflow_id,
+                    "is_default": False,
+                    "classifications": [
+                        "Gender",
+                        "Gender, Social",
+                        "Malicious Behavior",
+                        "Malicious Behavior, Environmental",
+                    ],
+                    "intake_routes": ["seah_intake"],
+                    "sort_order": 30,
+                }
+            )
+        if legacy_bindings:
+            pw_svc.apply_workflow_bindings_from_type(db, project, legacy_bindings)
+
     roles_payload = type_actor_roles_for_project_seed(pt)
     if roles_payload:
         actor_roles_svc.replace_project_actor_roles(db, project.project_id, roles_payload)

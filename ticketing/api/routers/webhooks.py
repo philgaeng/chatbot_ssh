@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -17,12 +16,12 @@ from sqlalchemy.orm import Session
 
 from ticketing.api.dependencies import get_db
 from ticketing.config.settings import get_settings
-from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.services.keycloak_webhook import (
     keycloak_admin_from_settings,
     resolve_ticketing_user_id,
     should_activate_onboarding,
 )
+from ticketing.services.officer_admin import activate_officer_onboarding
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +89,7 @@ async def keycloak_event_webhook(request: Request, db: Session = Depends(get_db)
             processed.append({"ignored": True, "reason": "unresolved_identity"})
             continue
 
-        row = db.get(OfficerOnboarding, tid)
-        now = datetime.now(timezone.utc)
-        if row:
-            if row.status != "active":
-                row.status = "active"
-                row.updated_at = now
-        else:
-            db.add(OfficerOnboarding(user_id=tid, status="active", updated_at=now))
+        activate_officer_onboarding(db, tid)
 
         processed.append({"ok": True, "user_id": tid, "status": "active"})
         logger.info("Officer onboarding activated via Keycloak event user_id=%s", tid)

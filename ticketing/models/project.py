@@ -8,10 +8,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, PrimaryKeyConstraint, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+_DEFAULT_OFFICER_MESSAGING = {
+    "sms_enabled": False,
+    "sms_levels": [],
+    "whatsapp_levels": [],
+}
 
 
 def _now() -> datetime:
@@ -59,6 +65,11 @@ class Project(Base):
         ForeignKey("ticketing.project_types.type_key", ondelete="SET NULL"),
         nullable=True,
     )
+    officer_messaging: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=lambda: dict(_DEFAULT_OFFICER_MESSAGING),
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
@@ -71,6 +82,12 @@ class Project(Base):
     )
     actor_roles: Mapped[list["ProjectActorRole"]] = relationship(
         "ProjectActorRole", back_populates="project", cascade="all, delete-orphan"
+    )
+    workflow_links: Mapped[list["ProjectWorkflow"]] = relationship(
+        "ProjectWorkflow",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="ProjectWorkflow.sort_order",
     )
 
 

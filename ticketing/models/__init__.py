@@ -10,6 +10,7 @@ from .ticket_overdue_episode import TicketOverdueEpisode
 from .ticket_file import TicketFile
 from .officer_scope import OfficerScope
 from .project import Project, ProjectActorRole, ProjectOrganization, ProjectLocation
+from .project_workflow import ProjectWorkflow
 from .project_type import ProjectType
 from .package import ProjectPackage, PackageOrganization, PackageLocation
 from .settings import Settings
@@ -41,6 +42,7 @@ __all__ = [
     "ProjectActorRole",
     "ProjectOrganization",
     "ProjectLocation",
+    "ProjectWorkflow",
     "ProjectType",
     "ProjectPackage",
     "PackageOrganization",

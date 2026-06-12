@@ -66,7 +66,8 @@ One **`role_key`** for all country-tier admins. **`workflow_track` on the assign
 | Capability | `workflow_track: standard` | `workflow_track: seah` |
 |------------|---------------------------|------------------------|
 | Settings (no platform tab) | ✅ country | ✅ country |
-| Create / edit **projects**, **packages**, **orgs**, **locations** | ✅ | ❌ — structure owned by **standard** track |
+| Create / edit **projects** | ✅ country | ✅ country |
+| Create / edit **packages**, **orgs**, **locations** | ✅ | ❌ — detail structure owned by **standard** track |
 | Create / edit **workflows** | ✅ standard templates | ✅ SEAH templates only |
 | Create **custom operational roles** (§3) | ✅ standard track | ✅ SEAH track only |
 | Appoint **`project_admin`** (same track on child scope) | ✅ `track=standard` | ✅ `track=seah` |
@@ -261,7 +262,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §5.1.
 |----------|---------------|-----------------|-----------------|
 | Organizations & officers | ✅ | ✅ per scope track | ✅ per scope track, project |
 | Workflows, roles & permissions | ✅ | ✅ per scope track | ✅ invite only |
-| Projects & packages | ✅ | ✅ standard: structure; SEAH: SEAH fields | ✅ assigned project(s) |
+| Projects & packages | ✅ | ✅ create projects (both tracks); standard: packages/orgs/locations; SEAH: SEAH fields | ✅ assigned project(s) |
 | **Settings** (platform) | ✅ | ❌ | ❌ |
 
 ### Platform sub-tabs (`super_admin` only)
@@ -333,8 +334,9 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | Permission | Typical holders |
 |------------|-----------------|
 | `*` | `super_admin` |
-| `settings:write`, `projects:manage`, `locations:manage`, `workflows:manage` | `country_admin` (standard track) |
-| Same bundle, SEAH-filtered | `country_admin` + `workflow_track: seah` |
+| `projects:create`, `projects:manage` | `country_admin` (either track, country scope) |
+| `settings:write`, `locations:manage`, `workflows:manage` | `country_admin` (standard track) |
+| SEAH workflow / officer settings (no packages/orgs/locations) | `country_admin` + `workflow_track: seah` |
 | `users:invite`, `users:manage`, `settings:project` | `project_admin` |
 | `tickets:*`, `grc:*` | Operational roles |
 
@@ -363,7 +365,7 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | SEAH operational | No | Yes |
 | `super_admin`, `adb_hq_exec` | Yes | Yes |
 
-SEAH workflow/officer management: **`country_admin`** with **`workflow_track: seah`**. Standard-track `country_admin` owns project creation; SEAH workflow link may come from project type template or SEAH-track country admin edit.
+SEAH workflow/officer management: **`country_admin`** with **`workflow_track: seah`**. **Any** scoped `country_admin` may **create projects** in their country; standard track additionally owns packages, orgs, and locations. SEAH workflow link may come from project type template or SEAH-track country admin edit on the project.
 
 ---
 
@@ -387,7 +389,7 @@ Officer assignment: [07_officer_management_and_assignment.md](07_officer_managem
 2. **`workflow_track`** (`standard` \| `seah`) on country and project admin assignments; API enforces on every mutation.
 3. `local_admin`, `seah_admin` deprecated → scoped `country_admin` / `project_admin`.
 4. Operational Roles tab lists operational keys only; admin assignments in platform **Admin access**.
-5. Standard-track `country_admin` owns country **structure**; SEAH-track cannot create projects/orgs/locations.
+5. Scoped `country_admin` may **create projects** (either track); standard-track owns packages/orgs/locations; SEAH-track cannot create packages/orgs/locations.
 6. Scoped `country_admin` can **create** custom operational roles (own track); `project_admin` cannot.
 7. Country-wide vs project-scoped officers: **default jurisdiction on role** + **officer_scopes** at assignment.
 8. Permissions allocated via **archetype templates** + grouped overrides; admin caps cannot leak onto operational roles.

@@ -13,7 +13,7 @@ This document covers **`ticketing.projects`** and related package/QR configurati
 
 A **project** is the routing hub for a financed infrastructure intervention (e.g. KL Road):
 
-- Which **workflows** apply (Standard + SEAH)
+- Which **workflow streams** apply (safeguards, hazards, CA, SEAH, + custom)
 - Which **organizations** play commercial **actor roles**
 - Which **locations** and **packages** (lots/segments) exist
 - Whether the project is **active** and can **accept tickets**
@@ -22,9 +22,10 @@ A **project** is the routing hub for a financed infrastructure intervention (e.g
 
 | Action | `country_admin` `track=standard` | `country_admin` `track=seah` | `project_admin` |
 |--------|-------------------------------|------------------------------|-----------------|
-| Create project / package | ✅ country | ❌ | ❌ |
-| Edit **standard** workflow on project | ✅ | ❌ | ❌ (read) |
-| Edit **SEAH** workflow / SEAH staffing | ❌ | ✅ country | ✅ if scope `track=seah` |
+| Create **project** | ✅ country | ✅ country | ❌ |
+| Create **package** | ✅ country | ❌ | ❌ |
+| Edit **safeguards / hazards / CA** workflows on project | ✅ | ✅ `track=standard` | ❌ |
+| Edit **SEAH** workflow / SEAH staffing | ✅ | ✅ `track=seah` | ✅ if scope `track=seah` |
 | Link orgs to **party roles** | ✅ | ❌ | ✅ on assigned project (standard track) |
 | Invite **standard** officers (Staffing) | ✅ | ❌ | ✅ scoped, `track=standard` |
 | Invite **SEAH** officers | ❌ | ✅ | ✅ scoped, `track=seah` |
@@ -46,8 +47,13 @@ See [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.
 | `description` | Optional |
 | `project_type_key` | FK → `ticketing.project_types` (archetype) |
 | `is_active` | Gated by go-live checks |
-| `standard_workflow_id` | Published Standard workflow |
-| `seah_workflow_id` | Published SEAH workflow |
+| `officer_messaging` | JSON: `sms_enabled`, `sms_levels[]`, `whatsapp_levels[]` — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §6 |
+| `standard_workflow_id` | Legacy mirror of `safeguards` slot |
+| `seah_workflow_id` | Legacy mirror of `seah` slot |
+
+### `ticketing.project_workflows`
+
+N rows per project: `(slot_key, workflow_id)` — see [12_workflows_configuration.md](12_workflows_configuration.md).
 | `chatbot_url` | Optional override for QR redirect |
 
 ### `ticketing.project_organizations`
@@ -108,12 +114,13 @@ List columns: name, short code, actor org summary, location count.
 |---|---------|---------|
 | 1 | **Metadata** | Name, short code, description, active toggle |
 | 2 | **Go-live panel** | Readiness checks with pass/warn/fail — see §7 |
-| 3 | **Grievance workflows** | Pick published Standard + SEAH workflows |
-| 4 | **Actor roles** | Per-project commercial role labels (keys locked on typed projects) |
-| 5 | **Project actors** | Org + role for whole project; **Add officer** per row |
-| 6 | **Staffing** | Officers scoped to this project; gap warnings |
-| 7 | **Linked locations** | Province / district / municipality coverage |
-| 8 | **Packages** | Lots: metadata, package actors, locations, QR tokens |
+| 3 | **Grievance workflows** | Pick a published workflow per stream (safeguards, hazards, CA, SEAH, …) |
+| 4 | **Messaging** | Officer assignment SMS: master toggle + per-level L1–Ln checkboxes — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5 |
+| 5 | **Actor roles** | Per-project commercial role labels (keys locked on typed projects) |
+| 6 | **Project actors** | Org + role for whole project; **Add officer** per row |
+| 7 | **Staffing** | Officers scoped to this project; gap warnings |
+| 8 | **Linked locations** | Province / district / municipality coverage |
+| 9 | **Packages** | Lots: metadata, package actors, locations, QR tokens |
 
 Components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal`, `ProjectActorAddRow`.
 
@@ -135,8 +142,11 @@ Components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal
 ### Workflow selection
 
 ```
-ticket.project_id + is_seah → projects.standard_workflow_id | seah_workflow_id
+ticket.project_id + workflow_slot | is_seah | intake_fast_path
+  → project_workflows[slot] (fallback: standard_workflow_id | seah_workflow_id)
 ```
+
+See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 
 ### Context priority (intake)
 
@@ -186,8 +196,10 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 | ID | Check | Severity |
 |----|-------|----------|
-| A1 | `standard_workflow_id` → published workflow | Warn |
-| A2 | `seah_workflow_id` → published SEAH workflow | Warn |
+| A1 | `safeguards` slot → published workflow | Warn |
+| A2 | `seah` slot → published SEAH workflow | Warn |
+| A3h | `hazards` slot → published workflow | Warn |
+| A3c | `ca` slot → published workflow | Warn |
 | A3 | Project actor `implementing_agency` has an org | **Block** for activation |
 | B1 | Required actor slots filled | Warn |
 | B2 | Each active package has ≥1 location | Warn |
@@ -197,6 +209,7 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 | C4 | SEAH L1 officer scoped to project | Warn |
 | D1 | ≥1 project location linked | Warn |
 | D2 | Package QR token present | Info |
+| F1 | SMS-enabled levels: scoped officers have phones in Keycloak | Warn — [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5.8 |
 | E1 | Name + short code set | Warn |
 
 Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is false.
@@ -209,6 +222,8 @@ Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is fal
 |--------|------|-------|
 | `GET/POST` | `/projects` | List / create (admin) |
 | `GET/PATCH/DELETE` | `/projects/{id}` | CRUD; activation gated |
+| `GET/PUT` | `/projects/{id}/workflows` | Workflow stream assignments |
+| `GET/PATCH` | `/projects/{id}/messaging` | Officer assignment SMS config — [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
 | `GET` | `/projects/{id}/go-live` | Checklist report |
 | `GET/PUT` | `/projects/{id}/actor-roles` | Commercial role vocabulary |
 | `GET/POST/PATCH/DELETE` | `/projects/{id}/organizations/...` | Project actors |

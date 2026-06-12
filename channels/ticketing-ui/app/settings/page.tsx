@@ -47,6 +47,9 @@ import {
   setGrievanceCategoriesCatalog,
   getProjectActorRoles,
   setProjectActorRoles,
+  getProjectMessaging,
+  patchProjectMessaging,
+  type ProjectMessagingConfig,
   addPackageOrg,
   removePackageOrg,
   updateOrganization,
@@ -66,8 +69,12 @@ import {
   type CountryItem,
   type LocationNode,
   type ProjectItem,
+  type ProjectWorkflowSlot,
+  type WorkflowRoutingOptions,
   type ProjectOrgItem,
   type OrgRole,
+  listWorkflowRoutingOptions,
+  replaceProjectWorkflows,
   type PackageItem,
   type PackageCreate,
   listRoles,
@@ -1008,6 +1015,275 @@ function ProjectWorkflowSelect({
       </select>
       {selected && (
         <p className="text-xs text-gray-500 mt-1 font-mono">{selected.workflow_key}</p>
+      )}
+    </div>
+  );
+}
+
+type WorkflowBindingDraft = {
+  localId: string;
+  display_label: string;
+  workflow_id: string;
+  classifications: string[];
+  intake_routes: string[];
+  is_default: boolean;
+  sort_order: number;
+};
+
+function emptyBinding(sortOrder: number, isDefault = false): WorkflowBindingDraft {
+  return {
+    localId: `new-${Date.now()}-${sortOrder}`,
+    display_label: "",
+    workflow_id: "",
+    classifications: [],
+    intake_routes: [],
+    is_default: isDefault,
+    sort_order: sortOrder,
+  };
+}
+
+function bindingsFromProject(slots: ProjectWorkflowSlot[]): WorkflowBindingDraft[] {
+  if (!slots.length) return [emptyBinding(10, true)];
+  return slots.map((s, i) => ({
+    localId: s.project_workflow_id,
+    display_label: s.display_label,
+    workflow_id: s.workflow_id,
+    classifications: s.classifications ?? [],
+    intake_routes: s.intake_routes ?? [],
+    is_default: s.is_default,
+    sort_order: s.sort_order || (i + 1) * 10,
+  }));
+}
+
+function ProjectWorkflowsEditor({
+  project,
+  workflows,
+  wfTemplates,
+  routingOptions,
+  canEdit,
+  canEditWorkflowTrack,
+  canSeeSeah,
+  lockTypeConfig,
+  onSaved,
+  flash,
+}: {
+  project: ProjectItem;
+  workflows: WorkflowDefinition[];
+  wfTemplates: WorkflowDefinition[];
+  routingOptions: WorkflowRoutingOptions | null;
+  canEdit: boolean;
+  canEditWorkflowTrack: (track: "standard" | "seah") => boolean;
+  canSeeSeah: boolean;
+  lockTypeConfig: boolean;
+  onSaved: (slots: ProjectWorkflowSlot[]) => void;
+  flash: (msg: string) => void;
+}) {
+  const [rows, setRows] = useState<WorkflowBindingDraft[]>(() =>
+    bindingsFromProject(project.workflow_slots ?? []),
+  );
+  const [saving, setSaving] = useState(false);
+  const [wfModal, setWfModal] = useState<null | { localId: string; track: "standard" | "seah" }>(null);
+
+  useEffect(() => {
+    setRows(bindingsFromProject(project.workflow_slots ?? []));
+  }, [project.project_id, project.workflow_slots]);
+
+  const classifications = routingOptions?.classifications ?? [];
+  const intakeRoutes = routingOptions?.intake_routes ?? [];
+
+  function workflowTrack(wfId: string): "standard" | "seah" {
+    const wf = workflows.find((w) => w.workflow_id === wfId);
+    return wf?.workflow_type === "seah" ? "seah" : "standard";
+  }
+
+  function updateRow(localId: string, patch: Partial<WorkflowBindingDraft>) {
+    setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
+  }
+
+  function setDefault(localId: string) {
+    setRows((prev) => prev.map((r) => ({ ...r, is_default: r.localId === localId })));
+  }
+
+  function removeRow(localId: string) {
+    setRows((prev) => {
+      const next = prev.filter((r) => r.localId !== localId);
+      if (next.length && !next.some((r) => r.is_default)) next[0].is_default = true;
+      return next.length ? next : [emptyBinding(10, true)];
+    });
+  }
+
+  async function saveAll() {
+    const payload = rows
+      .filter((r) => r.display_label.trim() && r.workflow_id)
+      .map((r, i) => ({
+        display_label: r.display_label.trim(),
+        workflow_id: r.workflow_id,
+        classifications: r.classifications,
+        intake_routes: r.intake_routes,
+        is_default: r.is_default,
+        sort_order: r.sort_order || (i + 1) * 10,
+      }));
+    if (!payload.length) {
+      flash("Add at least one workflow with a label and published workflow");
+      return;
+    }
+    if (payload.filter((p) => p.is_default).length !== 1) {
+      flash("Exactly one workflow must be marked Default");
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await replaceProjectWorkflows(project.project_id, payload);
+      onSaved(saved);
+      flash("Workflows saved ✓");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Failed to save workflows");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const readOnly = !canEdit || lockTypeConfig;
+
+  return (
+    <div className="space-y-4">
+      {rows.map((row) => {
+        const track = row.workflow_id ? workflowTrack(row.workflow_id) : "standard";
+        const editable = !readOnly && canEditWorkflowTrack(track);
+        const wfOptions = workflows.filter(
+          (w) => !w.is_template && w.status !== "archived"
+            && (w.workflow_type === track || !row.workflow_id),
+        );
+        return (
+          <div key={row.localId} className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
+            <div className="flex flex-wrap gap-3 items-start">
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-xs font-medium text-gray-600 block mb-1">Label</label>
+                <input
+                  type="text"
+                  value={row.display_label}
+                  disabled={!editable || saving}
+                  onChange={(e) => updateRow(row.localId, { display_label: e.target.value })}
+                  placeholder="e.g. Road hazard"
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 disabled:opacity-50"
+                />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-xs font-medium text-gray-600 block mb-1">Published workflow</label>
+                <select
+                  value={row.workflow_id}
+                  disabled={!editable || saving}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__new__") {
+                      setWfModal({ localId: row.localId, track });
+                      return;
+                    }
+                    updateRow(row.localId, { workflow_id: v });
+                  }}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 disabled:opacity-50"
+                >
+                  <option value="">— Select —</option>
+                  {wfOptions.map((w) => (
+                    <option key={w.workflow_id} value={w.workflow_id}>
+                      {w.display_name} ({w.status})
+                    </option>
+                  ))}
+                  {editable && <option value="__new__">+ Create new workflow…</option>}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-gray-600 pt-6">
+                <input
+                  type="radio"
+                  name={`default-wf-${project.project_id}`}
+                  checked={row.is_default}
+                  disabled={!editable || saving}
+                  onChange={() => setDefault(row.localId)}
+                />
+                Default
+              </label>
+              {editable && rows.length > 1 && (
+                <button
+                  type="button"
+                  className="text-xs text-red-600 hover:underline pt-6"
+                  onClick={() => removeRow(row.localId)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Classifications (taxonomy groups)</label>
+              <select
+                multiple
+                value={row.classifications}
+                disabled={!editable || saving}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+                  updateRow(row.localId, { classifications: selected });
+                }}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 h-24 disabled:opacity-50"
+              >
+                {classifications.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple. Leave empty on Default row.</p>
+            </div>
+            <div>
+              <span className="text-xs font-medium text-gray-600 block mb-1">Intake paths (manual / fast-track)</span>
+              <div className="flex flex-wrap gap-3">
+                {intakeRoutes.map((ir) => (
+                  <label key={ir.key} className="flex items-center gap-1.5 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={row.intake_routes.includes(ir.key)}
+                      disabled={!editable || saving}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...row.intake_routes, ir.key]
+                          : row.intake_routes.filter((k) => k !== ir.key);
+                        updateRow(row.localId, { intake_routes: next });
+                      }}
+                    />
+                    {ir.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {!readOnly && (
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="text-sm text-blue-600 hover:underline"
+            onClick={() => setRows((prev) => [...prev, emptyBinding((prev.length + 1) * 10)])}
+          >
+            + Add workflow
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void saveAll()}
+            className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save workflows"}
+          </button>
+        </div>
+      )}
+      {wfModal && (
+        <NewWorkflowModal
+          templates={wfTemplates}
+          canSeeSeah={!!canSeeSeah}
+          fixedWorkflowType={wfModal.track}
+          onCreated={(w) => {
+            updateRow(wfModal.localId, { workflow_id: w.workflow_id });
+            setWfModal(null);
+          }}
+          onClose={() => setWfModal(null)}
+        />
       )}
     </div>
   );
@@ -2394,11 +2670,21 @@ function ProjectsSection({
   initialEditId = null,
   grmRoleChoices,
   isSuperAdmin,
+  isCountryAdmin,
+  adminWorkflowTracks,
+  canCreateProject,
+  canManageStructure,
 }: {
   initialEditId?: string | null;
   grmRoleChoices: { key: string; label: string }[];
   isSuperAdmin: boolean;
+  isCountryAdmin: boolean;
+  adminWorkflowTracks: ("standard" | "seah")[];
+  canCreateProject: boolean;
+  canManageStructure: boolean;
 }) {
+  const canManageProjectCatalog = isSuperAdmin || isCountryAdmin;
+  const isProjectScopedOnly = !canManageProjectCatalog;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
   const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
@@ -2432,11 +2718,11 @@ function ProjectsSection({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEditId, projects]);
 
-  // Local admins: land directly on their project when there is only one
+  // Project-scoped admins only: land on their sole project (country_admin keeps the catalog view)
   useEffect(() => {
-    if (isSuperAdmin || loading || editing || projects.length !== 1) return;
+    if (!isProjectScopedOnly || loading || editing || projects.length !== 1) return;
     setEditing(projects[0]);
-  }, [isSuperAdmin, loading, editing, projects]);
+  }, [isProjectScopedOnly, loading, editing, projects]);
 
   async function handleRemoveProject(p: ProjectItem) {
     if (!confirm(`Remove project "${p.name}" (${p.short_code})? Packages and links will be deleted.`)) return;
@@ -2457,7 +2743,11 @@ function ProjectsSection({
         orgRoles={orgRoles}
         grmRoleChoices={grmRoleChoices}
         isSuperAdmin={isSuperAdmin}
-        showBack={isSuperAdmin || projects.length > 1}
+        isCountryAdmin={isCountryAdmin}
+        canManageProjectCatalog={canManageProjectCatalog}
+        canManageStructure={canManageStructure}
+        adminWorkflowTracks={adminWorkflowTracks}
+        showBack={canManageProjectCatalog || projects.length > 1}
         onBack={() => { setEditing(null); load(); }}
         onUpdated={(p) => setEditing(p)}
         onOrganizationCreated={(org) => setOrgs((prev) => (prev.some((o) => o.organization_id === org.organization_id) ? prev : [...prev, org]))}
@@ -2469,7 +2759,7 @@ function ProjectsSection({
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
-        {isSuperAdmin && (
+        {canCreateProject && (
           <button
             onClick={() => setShowCreate(true)}
             className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition font-medium"
@@ -2479,7 +2769,7 @@ function ProjectsSection({
         )}
       </div>
 
-      {isSuperAdmin && showCreate && (
+      {canCreateProject && showCreate && (
         <ProjectCreateModal
           onCreated={(p) => { setShowCreate(false); setProjects((prev) => [...prev, p]); setEditing(p); }}
           onClose={() => setShowCreate(false)}
@@ -2514,9 +2804,9 @@ function ProjectsSection({
                   </div>
                 </div>
                 <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">
-                  {isSuperAdmin ? "Edit" : "Set up"}
+                  {canManageProjectCatalog ? "Edit" : "Set up"}
                 </button>
-                {isSuperAdmin && (
+                {(isSuperAdmin || canManageStructure) && (
                   <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
                     Remove
                   </button>
@@ -2650,6 +2940,10 @@ function ProjectEditor({
   orgRoles,
   grmRoleChoices,
   isSuperAdmin,
+  isCountryAdmin,
+  canManageProjectCatalog,
+  canManageStructure,
+  adminWorkflowTracks,
   showBack = true,
   onBack,
   onUpdated,
@@ -2660,6 +2954,10 @@ function ProjectEditor({
   orgRoles: OrgRole[];
   grmRoleChoices: { key: string; label: string }[];
   isSuperAdmin: boolean;
+  isCountryAdmin: boolean;
+  canManageProjectCatalog: boolean;
+  canManageStructure: boolean;
+  adminWorkflowTracks: ("standard" | "seah")[];
   showBack?: boolean;
   onBack: () => void;
   onUpdated: (p: ProjectItem) => void;
@@ -2677,13 +2975,23 @@ function ProjectEditor({
   const [rolesSaving, setRolesSaving] = useState(false);
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
   const [wfTemplates, setWfTemplates] = useState<WorkflowDefinition[]>([]);
-  const [wfModal, setWfModal] = useState<null | "standard" | "seah">(null);
+  const [routingOptions, setRoutingOptions] = useState<WorkflowRoutingOptions | null>(null);
   const [wfSaving, setWfSaving] = useState(false);
   const [goLiveKey, setGoLiveKey] = useState(0);
+  const [messaging, setMessaging] = useState<ProjectMessagingConfig | null>(null);
+  const [messagingSaving, setMessagingSaving] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const typedProject = Boolean(p.project_type_key);
   const lockTypeConfig = typedProject && !isSuperAdmin;
+  const canEditProjectWorkflows = isSuperAdmin || isCountryAdmin;
+  const canEditMessaging = isSuperAdmin || isCountryAdmin;
+
+  function canEditWorkflowTrack(track: "standard" | "seah") {
+    if (isSuperAdmin) return true;
+    if (!isCountryAdmin) return false;
+    return adminWorkflowTracks.includes(track);
+  }
 
   function jumpToSection(section: string) {
     sectionRefs.current[section]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2704,6 +3012,7 @@ function ProjectEditor({
   useEffect(() => {
     listWorkflows().then((r) => setWorkflows(r.items)).catch(() => {});
     listTemplates().then((r) => setWfTemplates(r.items)).catch(() => {});
+    listWorkflowRoutingOptions().then(setRoutingOptions).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -2712,22 +3021,11 @@ function ProjectEditor({
       .catch(() => setProjectActorRolesState(orgRoles));
   }, [p.project_id, orgRoles]);
 
-  async function saveProjectWorkflow(
-    field: "standard_workflow_id" | "seah_workflow_id",
-    workflowId: string | null,
-  ) {
-    setWfSaving(true);
-    try {
-      const updated = await updateProject(p.project_id, { [field]: workflowId });
-      setP(updated);
-      onUpdated(updated);
-      flash("Workflow saved ✓");
-    } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Failed to save workflow");
-    } finally {
-      setWfSaving(false);
-    }
-  }
+  useEffect(() => {
+    getProjectMessaging(p.project_id)
+      .then(setMessaging)
+      .catch(() => setMessaging(null));
+  }, [p.project_id]);
 
   function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 2500); }
 
@@ -2853,12 +3151,12 @@ function ProjectEditor({
         {showBack && (
           <>
             <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">
-              {isSuperAdmin ? "← Projects" : "← All projects"}
+              {canManageProjectCatalog ? "← Projects" : "← All projects"}
             </button>
             <span className="text-gray-300">/</span>
           </>
         )}
-        {isSuperAdmin && editingName ? (
+        {canManageProjectCatalog && editingName ? (
           <div className="flex items-center gap-2">
             <input autoFocus value={nameVal} onChange={(e) => setNameVal(e.target.value)}
               onBlur={saveMeta} onKeyDown={(e) => e.key === "Enter" && saveMeta()}
@@ -2866,9 +3164,9 @@ function ProjectEditor({
           </div>
         ) : (
           <h2
-            className={`text-lg font-semibold text-gray-800${isSuperAdmin ? " cursor-pointer hover:text-blue-600" : ""}`}
-            onClick={isSuperAdmin ? () => setEditingName(true) : undefined}
-            title={isSuperAdmin ? "Click to rename" : undefined}
+            className={`text-lg font-semibold text-gray-800${canManageProjectCatalog ? " cursor-pointer hover:text-blue-600" : ""}`}
+            onClick={canManageProjectCatalog ? () => setEditingName(true) : undefined}
+            title={canManageProjectCatalog ? "Click to rename" : undefined}
           >
             {p.name}
           </h2>
@@ -2878,7 +3176,7 @@ function ProjectEditor({
           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{p.project_type_key}</span>
         )}
         {!p.is_active && <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Inactive</span>}
-        {isSuperAdmin && (
+        {canManageProjectCatalog && (
           <button
             type="button"
             onClick={() => void toggleActive()}
@@ -2905,8 +3203,8 @@ function ProjectEditor({
           className="w-full max-w-lg text-sm border border-gray-200 rounded px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400" />
       </div>
 
-      {/* Grievance workflows — super admin only */}
-      {isSuperAdmin && (
+      {/* Grievance workflows — super_admin + country_admin (per workflow_track) */}
+      {(canEditProjectWorkflows || (p.workflow_slots?.length ?? 0) > 0) && (
       <div
         ref={(el) => { sectionRefs.current.workflows = el; }}
         className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
@@ -2914,57 +3212,132 @@ function ProjectEditor({
         <div>
           <h3 className="text-sm font-semibold text-gray-700">Grievance workflows</h3>
           <p className="text-xs text-gray-500 mt-1">
-            New tickets for project <span className="font-mono">{p.short_code}</span> use these workflows.
+            Add published workflows and map taxonomy <strong>classifications</strong> and intake paths.
+            One row must be <strong>Default</strong> (catch-all). Officers match each step&apos;s role via project staffing.
             {lockTypeConfig
-              ? " Set by project type (super admin edits the type under Settings → Project types)."
-              : " Configure steps under Settings → Workflows."}
+              ? " Defaults come from the project type; super admin may override."
+              : " Edit step chains under Settings → Workflows."}
           </p>
         </div>
-        <ProjectWorkflowSelect
-          label="Standard GRM workflow"
-          hint="Used for normal grievances on this project."
-          workflowType="standard"
-          value={p.standard_workflow_id ?? null}
+        <ProjectWorkflowsEditor
+          project={p}
           workflows={workflows}
-          disabled={wfSaving || lockTypeConfig}
-          onChange={(id) => void saveProjectWorkflow("standard_workflow_id", id)}
-          onCreateNew={() => setWfModal("standard")}
+          wfTemplates={wfTemplates}
+          routingOptions={routingOptions}
+          canEdit={canEditProjectWorkflows}
+          canEditWorkflowTrack={canEditWorkflowTrack}
+          canSeeSeah={!!canSeeSeah}
+          lockTypeConfig={lockTypeConfig}
+          flash={flash}
+          onSaved={(slots) => {
+            const defaultRow = slots.find((s) => s.is_default);
+            const seahRow = slots.find((s) => s.workflow_track === "seah");
+            const updated: ProjectItem = {
+              ...p,
+              workflow_slots: slots,
+              standard_workflow_id: defaultRow?.workflow_id ?? null,
+              seah_workflow_id: seahRow?.workflow_id ?? null,
+            };
+            setP(updated);
+            onUpdated(updated);
+          }}
         />
-        {canSeeSeah && (
-          <ProjectWorkflowSelect
-            label="SEAH workflow"
-            hint="Used when the grievance is marked SEAH-sensitive."
-            workflowType="seah"
-            value={p.seah_workflow_id ?? null}
-            workflows={workflows}
-            disabled={wfSaving || lockTypeConfig}
-            onChange={(id) => void saveProjectWorkflow("seah_workflow_id", id)}
-            onCreateNew={() => setWfModal("seah")}
-          />
-        )}
       </div>
       )}
 
-      {isSuperAdmin && wfModal && (
-        <NewWorkflowModal
-          templates={wfTemplates}
-          canSeeSeah={!!canSeeSeah}
-          fixedWorkflowType={wfModal}
-          onCreated={(w) => {
-            setWorkflows((prev) =>
-              prev.some((x) => x.workflow_id === w.workflow_id) ? prev : [...prev, w],
-            );
-            void saveProjectWorkflow(
-              wfModal === "seah" ? "seah_workflow_id" : "standard_workflow_id",
-              w.workflow_id,
-            );
-            setWfModal(null);
-          }}
-          onClose={() => setWfModal(null)}
-        />
-      )}
+      {/* Messaging — officer SMS on assignment */}
+      <div
+        ref={(el) => { sectionRefs.current.messaging = el; }}
+        className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Messaging</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Officers receive a link-only SMS when assigned at checked levels. No complainant details are included.
+          </p>
+        </div>
+        {!messaging ? (
+          <p className="text-xs text-gray-400 italic">Loading messaging settings…</p>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={messaging.sms_enabled}
+                disabled={!canEditMessaging || messagingSaving}
+                onChange={(e) =>
+                  setMessaging({ ...messaging, sms_enabled: e.target.checked })
+                }
+              />
+              Officer SMS enabled
+            </label>
+            {messaging.max_levels > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-500">SMS at workflow level</p>
+                <div className="flex flex-wrap gap-3">
+                  {Array.from({ length: messaging.max_levels }, (_, i) => i + 1).map((level) => (
+                    <label key={level} className="flex items-center gap-1.5 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={messaging.sms_levels.includes(level)}
+                        disabled={!canEditMessaging || !messaging.sms_enabled || messagingSaving}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...messaging.sms_levels, level].sort((a, b) => a - b)
+                            : messaging.sms_levels.filter((l) => l !== level);
+                          setMessaging({ ...messaging, sms_levels: next });
+                        }}
+                      />
+                      L{level}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs font-medium text-gray-500 pt-1">WhatsApp (coming soon)</p>
+                <div className="flex flex-wrap gap-3 opacity-50 pointer-events-none">
+                  {Array.from({ length: messaging.max_levels }, (_, i) => i + 1).map((level) => (
+                    <label key={`wa-${level}`} className="flex items-center gap-1.5 text-sm text-gray-500">
+                      <input type="checkbox" disabled readOnly />
+                      L{level}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-700">
+                Link a published workflow above to configure per-level SMS.
+              </p>
+            )}
+            {canEditMessaging && (
+              <button
+                type="button"
+                disabled={messagingSaving || messaging.max_levels === 0}
+                onClick={async () => {
+                  setMessagingSaving(true);
+                  try {
+                    const saved = await patchProjectMessaging(p.project_id, {
+                      sms_enabled: messaging.sms_enabled,
+                      sms_levels: messaging.sms_levels,
+                      whatsapp_levels: messaging.whatsapp_levels,
+                    });
+                    setMessaging(saved);
+                    setGoLiveKey((k) => k + 1);
+                    flash("Messaging saved ✓");
+                  } catch (e: unknown) {
+                    flash(e instanceof Error ? e.message : "Failed to save messaging");
+                  } finally {
+                    setMessagingSaving(false);
+                  }
+                }}
+                className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {messagingSaving ? "Saving…" : "Save messaging"}
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
-      {isSuperAdmin && (
+      {(isSuperAdmin || canManageStructure) && (
       <ProjectActorRolesEditor
         roles={projectActorRoles}
         saving={rolesSaving}
@@ -4018,9 +4391,12 @@ export default function SettingsPage() {
     isCountryAdmin,
     isProjectAdmin,
     canAccessPlatformSettings,
+    canCreateProject,
+    canManageStructure,
     canCreateOperationalRoles,
     adminWorkflowTracks,
   } = useAuth();
+  const canManageProjectCatalog = isSuperAdmin || isCountryAdmin;
   const mainTabs = useMemo(() => {
     if (isSuperAdmin) return MAIN_TABS;
     if (isCountryAdmin) {
@@ -4107,9 +4483,9 @@ export default function SettingsPage() {
   return (
     <div className="p-6">
       <div className="mb-5">
-        <h1 className="text-xl font-semibold text-gray-800">{isSuperAdmin ? "Settings" : "Project setup"}</h1>
+        <h1 className="text-xl font-semibold text-gray-800">{canManageProjectCatalog ? "Settings" : "Project setup"}</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {isSuperAdmin
+          {canManageProjectCatalog
             ? "Admin configuration — organizations, projects, workflows, and platform data"
             : "Add partner organizations, invite officers, link locations, and complete go-live checks."}
         </p>
@@ -4180,7 +4556,15 @@ export default function SettingsPage() {
       )}
 
       {activeMain === "projects" && (
-        <ProjectsSection initialEditId={jumpProjectId} grmRoleChoices={grmRoleChoices} isSuperAdmin={isSuperAdmin} />
+        <ProjectsSection
+          initialEditId={jumpProjectId}
+          grmRoleChoices={grmRoleChoices}
+          isSuperAdmin={isSuperAdmin}
+          isCountryAdmin={isCountryAdmin}
+          adminWorkflowTracks={adminWorkflowTracks}
+          canCreateProject={canCreateProject}
+          canManageStructure={canManageStructure}
+        />
       )}
 
       {activeMain === "platform" && (

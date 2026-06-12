@@ -3,7 +3,7 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: 2026-05-26 — operational reports, pivot, quarterly email plan; Summary tab spec §12 (not built)
+> Last updated: 2026-06-12 — project-level officer SMS on assignment (Messaging section + F1 go-live)
 
 ---
 
@@ -12,6 +12,7 @@
 ### What's done
 - ✅ **Week 1 backend complete** — schema, models, migrations, CRUD API, escalation engine, Celery tasks, seed
 - ✅ **Settings UI** — full admin panel: workflows, users (scopes), organisations, locations, projects, packages
+- ✅ **Project-level officer SMS** (2026-06-12) — `officer_messaging` on `ticketing.projects`; `GET/PATCH /projects/{id}/messaging`; Celery `notify_officer_assignment`; wired on create / escalate / reassign; Settings → Projects → Messaging UI; go-live check **F1**
 - ✅ **Demo DB seeded** — 6 tickets across both demo scenarios, all 12 roles, 2 workflows
 - ✅ **Escalation gaps closed** — auto-assign on escalation + automatic complainant notification on RESOLVE/ESCALATE
 - ✅ **LLM translation + findings** — per-note translation to English (gpt-4, Celery); AI case-findings card (role-gated); `POST /tickets/{id}/findings` endpoint; Alembic migration `c1d5f8a2e047`

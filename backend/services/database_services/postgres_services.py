@@ -16,6 +16,7 @@ DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 # Import base manager for inheritance
 from .base_manager import BaseDatabaseManager
 from backend.logger import logger
+from backend.shared_functions.seah_service_providers import _norm_place
 
 
 def seah_party_role_from_victim_survivor_role(
@@ -324,6 +325,114 @@ class DatabaseManager(BaseDatabaseManager):
                 ),
             )
 
+    def _ensure_seah_service_providers_table(self) -> None:
+        ddl = """
+            CREATE TABLE IF NOT EXISTS seah_service_providers (
+                seah_service_provider_id TEXT PRIMARY KEY,
+                country_code TEXT NOT NULL DEFAULT 'NP',
+                province_code TEXT,
+                district_code TEXT,
+                municipality_code TEXT,
+                province TEXT,
+                district TEXT,
+                municipality TEXT,
+                ward TEXT,
+                seah_center_name TEXT NOT NULL,
+                address TEXT,
+                phone TEXT,
+                opening_days TEXT,
+                opening_hours TEXT,
+                remarks TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+        self.execute_update(ddl, ())
+
+    def find_seah_service_providers(
+        self,
+        *,
+        municipality_code: Optional[str] = None,
+        municipality: Optional[str] = None,
+        district_code: Optional[str] = None,
+        district: Optional[str] = None,
+        province_code: Optional[str] = None,
+        province: Optional[str] = None,
+        level_3_code: Optional[str] = None,
+        level_2_code: Optional[str] = None,
+        location_code: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return all active SEAH centres matching municipality, else district-wide rows."""
+        self._ensure_seah_service_providers_table()
+
+        muni_code = (municipality_code or level_3_code or "").strip() or None
+        dist_code = (district_code or level_2_code or "").strip() or None
+        loc_code = (location_code or "").strip() or None
+        if not muni_code and loc_code:
+            if loc_code.count("_") >= 2:
+                muni_code = loc_code
+            elif loc_code.count("_") == 1:
+                dist_code = loc_code
+
+        muni_name = _norm_place(municipality)
+        dist_name = _norm_place(district)
+        prov_name = _norm_place(province)
+
+        try:
+            rows = self.execute_query(
+                """
+                SELECT *
+                FROM seah_service_providers
+                WHERE is_active = TRUE
+                ORDER BY sort_order NULLS LAST, seah_center_name
+                """,
+                (),
+            )
+        except Exception as e:
+            self.logger.error(f"find_seah_service_providers: {e}")
+            return []
+
+        if not rows:
+            return []
+
+        def _matches_municipality(row: Dict[str, Any]) -> bool:
+            if muni_code and row.get("municipality_code") == muni_code:
+                return True
+            row_muni = _norm_place(row.get("municipality"))
+            if muni_name and row_muni and row_muni == muni_name:
+                row_dist = _norm_place(row.get("district"))
+                if not dist_name or row_dist == dist_name:
+                    return True
+            return False
+
+        def _matches_district_wide(row: Dict[str, Any]) -> bool:
+            if row.get("municipality_code") or _norm_place(row.get("municipality")):
+                return False
+            if dist_code and row.get("district_code") == dist_code:
+                return True
+            row_dist = _norm_place(row.get("district"))
+            if dist_name and row_dist == dist_name:
+                row_prov = _norm_place(row.get("province"))
+                if not prov_name or row_prov == prov_name:
+                    return True
+            return False
+
+        municipality_rows = [r for r in rows if _matches_municipality(r)]
+        if municipality_rows:
+            return municipality_rows
+
+        district_rows = [r for r in rows if _matches_district_wide(r)]
+        if district_rows:
+            return district_rows
+
+        if dist_code:
+            return [r for r in rows if r.get("district_code") == dist_code]
+        if dist_name:
+            return [r for r in rows if _norm_place(r.get("district")) == dist_name]
+        return []
+
     def _ensure_seah_contact_points_table(self) -> None:
         """Reference rows for SEAH center / referral text (spec 08)."""
         ddl = """
@@ -372,8 +481,28 @@ class DatabaseManager(BaseDatabaseManager):
         municipality: Optional[str] = None,
         ward: Optional[str] = None,
         project_uuid: Optional[str] = None,
+        municipality_code: Optional[str] = None,
+        district_code: Optional[str] = None,
+        location_code: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Best-effort lookup for outro referral block (spec 08)."""
+        provider_rows = self.find_seah_service_providers(
+            municipality_code=municipality_code,
+            municipality=municipality,
+            district_code=district_code,
+            district=district,
+            province=province,
+            location_code=location_code,
+        )
+        if provider_rows:
+            if ward:
+                ward_matches = [
+                    r for r in provider_rows if str(r.get("ward") or "").strip() == str(ward).strip()
+                ]
+                if ward_matches:
+                    return ward_matches[0]
+            return provider_rows[0]
+
         self._ensure_seah_contact_points_table()
         p = (province or "").strip().lower()
         rows: List[Dict[str, Any]] = []

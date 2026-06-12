@@ -1,22 +1,30 @@
 # Workflows configuration
 
-**Status:** As-built reference (June 2026)  
-**UI:** Settings → Workflows, roles & permissions → **Workflows**  
-**Code:** `ticketing/api/routers/workflows.py`, `ticketing/engine/workflow_engine.py`, `ticketing/tasks/escalation.py`  
+**Status:** Target architecture (June 2026) — multi-stream per project  
+**UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
+**Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_slots.py`, `ticketing/services/project_workflows.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
 
 ---
 
 ## 1. Purpose
 
-Workflows define the **linear escalation chain** for grievances: ordered steps, SLA timers, GRM role per step, and optional stakeholder/action metadata. Two workflow **types** exist:
+Workflows define the **linear escalation chain** for grievances: ordered steps, SLA timers, GRM role per step, and optional stakeholder/action metadata.
 
-| `workflow_type` | Used when |
-|-----------------|-----------|
-| `standard` | Normal GRM cases (`is_seah = false`) |
-| `seah` | SEAH-sensitive cases (`is_seah = true`) |
+A **single project** may attach **N workflow streams** (not just one Standard + one SEAH). Each stream is a **slot** with its own published workflow definition. Different officers handle different steps within each workflow; scoping is unchanged (`officer_scopes` + step `assigned_role_key`).
 
-Workflows are **linked on projects** (`projects.standard_workflow_id`, `projects.seah_workflow_id`), not via the legacy `workflow_assignments` UI.
+### Built-in intake streams (minimum on road projects)
+
+| `slot_key` | Label | `workflow_type` | Routed when |
+|------------|-------|-----------------|-------------|
+| `safeguards` | Safeguards GRM | `standard` | Default grievance intake |
+| `hazards` | Road hazards | `standard` | Chatbot `intake_fast_path` = `road_hazard` or `dust` |
+| `ca` | Contract administration | `standard` | Explicit `workflow_slot=ca` (or future CA intake) |
+| `seah` | SEAH | `seah` | `is_seah=true` or `workflow_slot=seah` |
+
+Admins may add **custom** `slot_key` values (slug) on a project via `PUT /projects/{id}/workflows`.
+
+`workflow_type` (`standard` \| `seah`) still controls **visibility** and the SEAH gate — it is not the routing dimension anymore.
 
 ---
 
@@ -30,7 +38,7 @@ Workflows are **linked on projects** (`projects.standard_workflow_id`, `projects
 | `workflow_key` | Slug (auto from name) |
 | `display_name` | Admin-facing name |
 | `description` | Optional |
-| `workflow_type` | `standard` \| `seah` |
+| `workflow_type` | `standard` \| `seah` (visibility / SEAH gate) |
 | `status` | `draft` \| `published` \| `archived` |
 | `version` | Incremented on publish |
 | `is_template` | Reusable blueprint; not assigned to tickets directly |
@@ -45,10 +53,24 @@ Workflows are **linked on projects** (`projects.standard_workflow_id`, `projects
 | `display_name` | e.g. "Level 1 — Site Safeguards" |
 | `assigned_role_key` | GRM role from [11_roles_and_permissions.md](11_roles_and_permissions.md) |
 | `response_time_hours` | First-response SLA (optional) |
-| `resolution_time_days` | Escalation trigger; `NULL` = no auto-escalation (e.g. L4 legal) |
-| `stakeholders` | JSON array — descriptive |
-| `expected_actions` | JSON array — descriptive |
+| `resolution_time_days` | Escalation trigger; `NULL` = no auto-escalation |
+| `supervisor_role`, `informed_roles`, `observer_roles` | Tier model (spec 12) |
 | `is_deleted` | Soft delete; blocked if active tickets on step |
+
+### `ticketing.project_workflows` (project ↔ stream ↔ workflow)
+
+| Field | Notes |
+|-------|-------|
+| `project_workflow_id` | UUID PK |
+| `project_id` | FK → `ticketing.projects` |
+| `slot_key` | e.g. `safeguards`, `hazards`, `ca`, `seah`, or custom slug |
+| `workflow_id` | FK → published `workflow_definitions` |
+| `label` | Optional display override |
+| `sort_order` | UI ordering |
+
+Unique: `(project_id, slot_key)`.
+
+**Legacy columns** on `ticketing.projects` (`standard_workflow_id`, `seah_workflow_id`) are **mirrors** of the `safeguards` and `seah` slots for backward compatibility.
 
 ### `ticketing.tickets.workflow_version`
 
@@ -60,7 +82,20 @@ Maps (org, project_code, location, priority) → workflow. **Not configured in U
 
 ---
 
-## 3. Built-in templates
+## 3. Who can create workflows and assign them
+
+| Action | `super_admin` | `country_admin` `track=standard` | `country_admin` `track=seah` |
+|--------|---------------|----------------------------------|------------------------------|
+| Create / edit / publish workflows | ✅ all tracks | ✅ `standard` workflows | ✅ `seah` workflows |
+| Assign `safeguards` / `hazards` / `ca` on project | ✅ | ✅ | ❌ |
+| Assign `seah` on project | ✅ | ❌ | ✅ |
+| Add custom slot on project | ✅ | ✅ (standard track slots) | ✅ (seah slots only) |
+
+`project_admin`: read project workflow links; manage officers for their track ([13_projects_and_packages.md](13_projects_and_packages.md)).
+
+---
+
+## 4. Built-in templates
 
 Returned by `GET /api/v1/workflows/templates` (includes virtual built-ins):
 
@@ -69,11 +104,13 @@ Returned by `GET /api/v1/workflows/templates` (includes virtual built-ins):
 | **Default GRM** | `standard` | L1 Site (2d) → L2 PIU (7d) → L3 GRC (21d) → L4 Legal (no SLA) |
 | **Default SEAH** | `seah` | L1 National (7d) → L2 HQ (14d) |
 
-Admin flow: clone template → edit → publish → link on project.
+Admin flow: clone template → edit steps / roles → publish → link on project per slot.
+
+Slot catalog: `GET /api/v1/workflows/slots`.
 
 ---
 
-## 4. Workflow lifecycle
+## 5. Workflow lifecycle
 
 ```
 draft → publish → (in use on projects) → archive
@@ -82,132 +119,114 @@ draft → publish → (in use on projects) → archive
 
 | Action | API | Rules |
 |--------|-----|-------|
-| Create | `POST /workflows` | Optional `clone_from_id` |
+| Create | `POST /workflows` | Optional `clone_from_id`; `super_admin` or `country_admin` (matching track) |
 | Edit metadata | `PATCH /workflows/{id}` | Draft or published |
 | Add/edit/reorder steps | `POST/PATCH/DELETE/POST reorder` | Delete blocked if tickets on step |
-| Publish | `POST /workflows/{id}/publish` | Increments version |
+| Publish | `POST /workflows/{id}/publish` | Increments version; every step needs `assigned_role_key` |
 | Save as template | `POST /workflows/{id}/save-as-template` | Copies steps |
-| Archive | `POST /workflows/{id}/archive` | Published only; unlinks from new tickets |
+| Archive | `POST /workflows/{id}/archive` | Published only |
 | Delete | `DELETE /workflows/{id}` | Draft only |
 
 **SEAH gate:** mutating SEAH workflows requires `canSeeSeah`.
 
 ---
 
-## 5. Settings UI — Workflows tab
+## 6. Settings UI — Workflows tab
 
-### List view
+- List active workflows + templates; **Clone** creates a draft.
+- Step editor: role dropdown, SLAs, tier fields.
+- Footer: *Assign streams on a project under Settings → Projects & packages → Grievance workflows.*
 
-- Active workflows (non-template) with type badge, step count, version, status.
-- Templates section: built-in + admin-created; **Clone** creates a new draft workflow.
-- SEAH rows hidden when `!canSeeSeah`.
-- No "assigned to org/project" column (assignments deprecated).
-
-### Editor
-
-- Vertical step list with up/down reorder.
-- Inline accordion per step: display name, **assigned role** (`assigned_role_key`), response/resolution SLA, stakeholders, actions.
-- Footer: *Assign this workflow on a project under Settings → Projects & packages.*
-- **Notification rules** collapsible panel (per workflow type slug) — see §6.
-
-### 5.1 Role picker on each step (workflows-first)
+### 6.1 Role picker on each step
 
 Admins edit workflows **more often** than they create roles. The step editor is the **primary** place where roles meet escalation paths.
 
 | Control | Behaviour |
-|---------|-------------|
-| **Role dropdown** | Lists operational roles for this workflow’s track (Standard / SEAH); group *System* vs *Custom* |
-| **+ Create role…** | Opens role archetype wizard ([11_roles_and_permissions.md](11_roles_and_permissions.md) §3.4); on save, returns to step with new `role_key` selected |
+|---------|-----------|
+| **Role dropdown** | Operational roles for this workflow's track (Standard / SEAH) |
+| **+ Create role…** | Role archetype wizard; returns with new `role_key` selected |
 | **Step without role** | Block publish until every step has `assigned_role_key` |
 
-**Typical flow:** Clone **Default GRM** template → tweak SLAs / step labels → change assigned role on one step if a custom position is needed → publish → link on project.
+---
 
-New roles are **not** created inside “New workflow” step 1 — only on demand from the step dropdown or from the Roles tab.
+## 7. Settings UI — Project grievance workflows
 
-### Removed from editor
+Section lists **all built-in slots** (safeguards, hazards, CA, SEAH) plus any custom slots already on the project.
 
-- **Assigned to** panel (`workflow_assignments`) — use project workflow pickers instead.
+| Control | Behaviour |
+|---------|-----------|
+| Per-slot workflow picker | Published workflows filtered by `workflow_type` |
+| **+ Create new workflow…** | Opens clone modal; on save, assigns to that slot |
+| Save | `PUT /api/v1/projects/{id}/workflows` |
+
+Officers for the same project can hold **different roles on different steps** across streams — e.g. L1 safeguards focal on `safeguards`, a contractor liaison on `ca`, a rapid-response role on `hazards`. Staffing is configured under **Project actors** and **Staffing** ([07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)).
 
 ---
 
-## 6. Notification rules (`settings.notification_rules`)
-
-JSON shape:
-
-```json
-{
-  "standard": {
-    "ticket_created": { "actor": ["app"], "supervisor": ["app"], "informed": [], "observer": [] },
-    "sla_breach": { "actor": ["app", "email"], ... }
-  },
-  "seah": { ... }
-}
-```
-
-| Dimension | Values |
-|-----------|--------|
-| **Events** | `ticket_created`, `ticket_escalated`, `ticket_resolved`, `sla_breach`, `grc_convened`, `assignment`, `quarterly_report` |
-| **Tiers** | `actor`, `supervisor`, `informed`, `observer` |
-| **Channels** | `app` (in-app badge), `email`, `sms` |
-
-SEAH panel omits `grc_convened` and `quarterly_report`.
-
-**Runtime:** `ticketing/tasks/notifications.py` → `should_notify(workflow_slug, event, tier, channel)`.
-
-**UI:** Workflow editor → Notification rules — expand, toggle matrix, save → `PUT /api/v1/settings/notification_rules`.
-
-**Proto note:** Officer notifications are in-app first; email/SMS columns exist for future use.
-
----
-
-## 7. Workflow resolution at ticket creation
+## 8. Workflow resolution at ticket creation
 
 ```
-if ticket.project_id:
-    use project.standard_workflow_id  (or seah_workflow_id if is_seah)
+if ticket.project_id / project_code:
+    slot = workflow_slot
+        ?? (is_seah → seah)
+        ?? (intake_fast_path → hazards | ca)
+        ?? safeguards
+    workflow_id = project_workflows[slot]
+    fallback: projects.standard_workflow_id | seah_workflow_id
 else:
-    legacy fallback → workflow_assignments table
+    legacy workflow_assignments
 ```
 
 Implemented in `ticketing/engine/workflow_engine.py` → `resolve_workflow()`.
 
----
+**Webhook fields** (`POST /api/v1/tickets`):
 
-## 8. SLA and escalation (runtime)
-
-Configured per step; behaviour specified in [Escalation_rules.md](Escalation_rules.md):
-
-- Timer starts at `ticket.step_started_at` when step is entered.
-- Celery Beat every 15 min checks `resolution_time_days`.
-- On breach: auto-escalate, open `ticket_overdue_episodes` row, `notify_complainant` on escalate.
-- GRC L3: `GRC_CONVENE` → `GRC_DECIDE` two-step actions.
-- L4: no `resolution_time_days` → manual only.
+| Field | Purpose |
+|-------|---------|
+| `workflow_slot` | Explicit stream (overrides inference) |
+| `intake_fast_path` | `road_hazard`, `dust`, `ca`, … |
+| `is_seah` | Maps to `seah` when `workflow_slot` omitted |
 
 ---
 
-## 9. API summary
+## 9. Notification rules (`settings.notification_rules`)
+
+Still keyed by workflow **track slug** `standard` / `seah` (not per slot). SEAH panel omits `grc_convened` and `quarterly_report`.
+
+**Runtime:** `ticketing/tasks/notifications.py` → `should_notify(workflow_slug, event, tier, channel)` for **app / email** tiers.
+
+**Officer assignment SMS** is **not** controlled here — it is configured per project under **Messaging** ([06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5).
+
+---
+
+## 10. SLA and escalation (runtime)
+
+Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket follows **one** workflow graph for its lifetime.
+
+---
+
+## 11. API summary
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET` | `/workflows` | List workflows (`?include_templates=`) |
+| `GET` | `/workflows` | List workflows |
+| `GET` | `/workflows/slots` | Built-in slot catalog |
 | `GET` | `/workflows/templates` | Templates only |
-| `GET` | `/workflows/{id}` | Detail + steps + assignments |
-| `POST` | `/workflows` | Create (`clone_from_id`, `is_template`) |
+| `GET` | `/workflows/{id}` | Detail + steps |
+| `POST` | `/workflows` | Create |
 | `PATCH` | `/workflows/{id}` | Metadata |
 | `POST` | `/workflows/{id}/publish` | Publish |
-| `POST` | `/workflows/{id}/archive` | Archive |
-| `POST` | `/workflows/{id}/save-as-template` | Clone as template |
-| `DELETE` | `/workflows/{id}` | Draft delete |
-| `POST/PATCH/DELETE` | `/workflows/{id}/steps/...` | Step CRUD + reorder |
-| `GET/POST/DELETE` | `/workflows/{id}/assignments` | **Legacy** — avoid |
+| `GET` | `/projects/{id}/workflows` | Slots on project |
+| `PUT` | `/projects/{id}/workflows` | Replace all slot assignments |
+| `PATCH` | `/projects/{id}` | Legacy `standard_workflow_id` / `seah_workflow_id` (syncs slots) |
 
 ---
 
-## 10. Acceptance criteria
+## 12. Acceptance criteria
 
-1. Admin can create, edit, publish, and archive Standard workflows; SEAH admins can manage SEAH workflows.
-2. Each step binds exactly one `assigned_role_key` from the GRM catalog.
-3. Published workflow can be selected on a project's Grievance workflows section.
-4. Notification rules save per `standard` / `seah` slug without overwriting the other.
-5. Active tickets retain `workflow_version` at creation; publishing does not rewrite open ticket step graphs.
+1. `super_admin` and scoped `country_admin` can create, publish, and assign workflows on their track.
+2. A project can link **at least three** standard streams (safeguards, hazards, CA) plus SEAH.
+3. Each step binds exactly one `assigned_role_key`; different streams may use different roles on the same project.
+4. Ticket intake selects the correct workflow from slot inference or explicit `workflow_slot`.
+5. Published workflow version is snapshotted on the ticket; publishing does not rewrite open tickets.
 6. Auto-escalation respects `resolution_time_days` on the current step.

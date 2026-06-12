@@ -14,7 +14,7 @@ All mutations happen in escalation.py (which calls these helpers).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -153,26 +153,41 @@ def resolve_workflow(
     is_seah: bool,
     priority: str,
     db: Session,
+    *,
+    grievance_categories: Optional[Any] = None,
+    intake_route: Optional[str] = None,
+    intake_fast_path: Optional[str] = None,
 ) -> Optional[WorkflowDefinition]:
     """
     Resolve the workflow for a new ticket.
 
-    1. Project-linked workflow (Settings → Projects): standard_workflow_id or
-       seah_workflow_id on ticketing.projects when project_code is set.
-    2. Legacy ticketing.workflow_assignments (org / location / project / priority).
+    1. Project workflow bindings (classifications + intake routes + default).
+    2. Legacy projects.standard_workflow_id / seah_workflow_id columns.
+    3. Legacy ticketing.workflow_assignments (org / location / project / priority).
     """
     from ticketing.models.project import Project
+    from ticketing.services.workflow_routing import resolve_project_workflow
 
     if project_code:
         project = db.execute(
             select(Project).where(Project.short_code == project_code)
         ).scalar_one_or_none()
         if project:
-            wf_id = project.seah_workflow_id if is_seah else project.standard_workflow_id
-            if wf_id:
-                wf = db.get(WorkflowDefinition, wf_id)
-                if wf:
-                    return wf
+            wf = resolve_project_workflow(
+                db,
+                project.project_id,
+                grievance_categories=grievance_categories,
+                intake_route=intake_route,
+                intake_fast_path=intake_fast_path,
+                legacy_is_seah=is_seah,
+            )
+            if wf:
+                return wf
+            for wf_id in (project.standard_workflow_id, project.seah_workflow_id):
+                if wf_id:
+                    legacy = db.get(WorkflowDefinition, wf_id)
+                    if legacy:
+                        return legacy
 
     lookup_priority = "SEAH" if is_seah else priority
 
@@ -291,6 +306,15 @@ def _location_codes_in_province(province_code: str, db: Session) -> list[str]:
     return list(rows)
 
 
+def _optional_project_code_match(project_code: Optional[str]):
+    """SQL NULL-safe match for optional project_code on officer scopes."""
+    from ticketing.models.officer_scope import OfficerScope
+
+    if project_code is None:
+        return OfficerScope.project_code.is_(None)
+    return OfficerScope.project_code == project_code
+
+
 def _add_province_level_fallback(
     result: list[str],
     seen: set[str],
@@ -325,7 +349,6 @@ def _add_province_level_fallback(
 
     base = (
         OfficerScope.role_key == role_key,
-        OfficerScope.organization_id == organization_id,
         OfficerScope.package_id.is_(None),
     )
     for proj in ([project_code, None] if project_code else [None]):
@@ -333,7 +356,7 @@ def _add_province_level_fallback(
             select(OfficerScope.user_id).where(
                 *base,
                 OfficerScope.location_code.in_(pool),
-                OfficerScope.project_code == proj,
+                _optional_project_code_match(proj),
             )
         ).scalars().all()
         _add(rows)
@@ -368,7 +391,6 @@ def _scope_country_fallback_candidates(
 
     base = (
         OfficerScope.role_key == role_key,
-        OfficerScope.organization_id == organization_id,
         OfficerScope.location_code.is_(None),
         OfficerScope.package_id.is_(None),
     )
@@ -376,7 +398,7 @@ def _scope_country_fallback_candidates(
         rows = db.execute(
             select(OfficerScope.user_id).where(
                 *base,
-                OfficerScope.project_code == proj,
+                _optional_project_code_match(proj),
                 OfficerScope.project_id.is_(None),
             )
         ).scalars().all()
@@ -390,7 +412,6 @@ def _scope_country_fallback_candidates(
             rows = db.execute(
                 select(OfficerScope.user_id).where(
                     OfficerScope.role_key == role_key,
-                    OfficerScope.organization_id == organization_id,
                     OfficerScope.project_id == proj.project_id,
                     OfficerScope.location_code.is_(None),
                     OfficerScope.package_id.is_(None),
@@ -412,7 +433,10 @@ def _scope_candidates(
     assignment_tier: AssignmentTier = "field",
 ) -> list[str]:
     """
-    Return user_ids whose scopes cover (role, org, location, project, package).
+    Return user_ids whose scopes cover (role, location, project, package).
+
+    organization_id is accepted for call-site compatibility but is not used to
+    filter candidates — assignment is by workflow role + jurisdiction only.
 
     assignment_tier='field' (default):
       District/municipality → ancestor includes_children → package paths →
@@ -446,10 +470,7 @@ def _scope_candidates(
                 seen.add(uid)
                 result.append(uid)
 
-    base = (
-        OfficerScope.role_key == role_key,
-        OfficerScope.organization_id == organization_id,
-    )
+    base = (OfficerScope.role_key == role_key,)
 
     # ── D. Ticket has explicit package_id (spec §4.4) ─────────────────────────
     if ticket_package_id:
@@ -492,7 +513,7 @@ def _scope_candidates(
                 select(OfficerScope.user_id).where(
                     *base,
                     OfficerScope.location_code == location_code,
-                    OfficerScope.project_code == proj,
+                    _optional_project_code_match(proj),
                     OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
@@ -503,7 +524,7 @@ def _scope_candidates(
                 select(OfficerScope.user_id).where(
                     *base,
                     OfficerScope.location_code.is_(None),
-                    OfficerScope.project_code == proj,
+                    _optional_project_code_match(proj),
                     OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
@@ -549,7 +570,7 @@ def _scope_candidates(
                         *base,
                         OfficerScope.location_code.in_(ancestor_only),
                         OfficerScope.includes_children.is_(True),
-                        OfficerScope.project_code == proj,
+                        _optional_project_code_match(proj),
                         OfficerScope.package_id.is_(None),
                     )
                 ).scalars().all()
@@ -653,10 +674,14 @@ def auto_assign_for_workflow_step(
     project_code: Optional[str],
     db: Session,
     ticket_package_id: Optional[str] = None,
+    *,
+    supervisor_role: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Assign using field geographic cascade, then country_l1_fallback if configured
-    for this step role and no field officer matched.
+    Assign using field geographic cascade, then optional fallbacks:
+      1. Step role (field tier)
+      2. country_l1_fallback when configured for this step role
+      3. supervisor_role from the workflow step (e.g. L2 when no L1)
     """
     from ticketing.constants.assignment import country_fallback_for_step_role
 
@@ -673,18 +698,31 @@ def auto_assign_for_workflow_step(
         return assigned
 
     fallback_role = country_fallback_for_step_role(step_role_key)
-    if not fallback_role:
-        return None
+    if fallback_role:
+        assigned = auto_assign_officer(
+            fallback_role,
+            organization_id,
+            location_code,
+            project_code,
+            db,
+            ticket_package_id=ticket_package_id,
+            assignment_tier="country_fallback",
+        )
+        if assigned:
+            return assigned
 
-    return auto_assign_officer(
-        fallback_role,
-        organization_id,
-        location_code,
-        project_code,
-        db,
-        ticket_package_id=ticket_package_id,
-        assignment_tier="country_fallback",
-    )
+    if supervisor_role and supervisor_role != step_role_key:
+        return auto_assign_officer(
+            supervisor_role,
+            organization_id,
+            location_code,
+            project_code,
+            db,
+            ticket_package_id=ticket_package_id,
+            assignment_tier="field",
+        )
+
+    return None
 
 
 def get_teammates(

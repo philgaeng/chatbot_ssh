@@ -228,6 +228,11 @@ def get_authenticated_user(
     user: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
     """Identity + admin_scopes loaded from ticketing.admin_scopes."""
+    if user.user_id and "@" in user.user_id:
+        from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+        if sync_officer_onboarding_status(db, user.user_id):
+            db.commit()
     return enrich_user(db, user)
 
 

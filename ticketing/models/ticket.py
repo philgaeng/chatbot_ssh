@@ -81,8 +81,11 @@ class Ticket(Base):
     )
     priority: Mapped[str] = mapped_column(String(32), nullable=False, default="NORMAL")
 
-    # ── SEAH flag — DB-level visibility filter ──
+    # ── SEAH flag — DB-level visibility filter (derived from workflow_type at create/reroute) ──
     is_seah: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Intake path signals stored for workflow re-resolution after classification edits.
+    intake_route: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    intake_fast_path: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # ── Assignment ──
     assigned_to_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)

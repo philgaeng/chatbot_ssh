@@ -135,6 +135,23 @@ def list_workflows(
     )
 
 
+@router.get("/workflows/routing-options", summary="Classifications + intake routes for project workflow editor")
+def list_workflow_routing_options(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    from ticketing.constants.workflow_routing import INTAKE_ROUTE_CATALOG
+    from ticketing.services.workflow_routing import list_catalog_classifications
+
+    intake_routes = list(INTAKE_ROUTE_CATALOG)
+    if not current_user.can_see_seah:
+        intake_routes = [r for r in intake_routes if r["key"] != "seah_intake"]
+    return {
+        "classifications": list_catalog_classifications(db),
+        "intake_routes": intake_routes,
+    }
+
+
 @router.get("/workflows/templates", response_model=WorkflowListResponse, summary="List templates")
 def list_templates(
     db: Session = Depends(get_db),

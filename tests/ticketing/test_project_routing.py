@@ -34,7 +34,7 @@ class TestResolveTicketOrganization:
 
 
 class TestInviteOrgResolution:
-    def test_validate_jurisdiction_overrides_field_officer_org(self, db):
+    def test_validate_jurisdiction_keeps_officer_employer_org(self, db):
         project = db.execute(
             select(Project).where(Project.short_code == PROJECT_KL_ROAD)
         ).scalar_one()
@@ -46,4 +46,4 @@ class TestInviteOrgResolution:
             location_code="P1_MOR",
         )
         validate_jurisdiction(db, juris, require_jurisdiction=True)
-        assert juris.organization_id == ORG_DOR
+        assert juris.organization_id == "NP_DC"

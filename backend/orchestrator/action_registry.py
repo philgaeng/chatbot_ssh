@@ -110,6 +110,8 @@ def _get_action(action_name: str) -> Any:
             ActionAskFormGrievanceComplainantReviewGrievanceCatModify,
             ActionAskFormGrievanceComplainantReviewGrievanceSummaryStatus,
             ActionAskFormGrievanceComplainantReviewGrievanceSummaryTemp,
+            ActionAskFormGrievanceComplainantReviewGenderFollowUp,
+            ActionAskFormGrievanceComplainantReviewSensitiveIssuesFollowUp,
             ActionUpdateGrievanceCategorization,
         )
         from backend.actions.action_submit_grievance import (
@@ -241,6 +243,8 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_cat_modify"] = ActionAskFormGrievanceComplainantReviewGrievanceCatModify()
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_summary_status"] = ActionAskFormGrievanceComplainantReviewGrievanceSummaryStatus()
         _ACTIONS["action_ask_form_grievance_complainant_review_grievance_summary_temp"] = ActionAskFormGrievanceComplainantReviewGrievanceSummaryTemp()
+        _ACTIONS["action_ask_form_grievance_complainant_review_grievance_gender_follow_up"] = ActionAskFormGrievanceComplainantReviewGenderFollowUp()
+        _ACTIONS["action_ask_form_grievance_complainant_review_sensitive_issues_follow_up"] = ActionAskFormGrievanceComplainantReviewSensitiveIssuesFollowUp()
         _ACTIONS["action_update_grievance_categorization"] = ActionUpdateGrievanceCategorization()
         _ACTIONS["action_grievance_outro"] = ActionGrievanceOutro()
     return _ACTIONS.get(action_name)

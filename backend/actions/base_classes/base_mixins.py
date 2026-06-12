@@ -13,6 +13,11 @@ import asyncio
 import inspect
 import logging
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base, SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS, UTTERANCE_MAPPING
+from backend.shared_functions.seah_service_providers import (
+    format_details_utterance,
+    format_recommendation_utterance,
+    resolve_location_codes,
+)
 from backend.actions.utils.mapping_buttons import VALIDATION_SKIP, BUTTON_SKIP, BUTTON_AFFIRM, BUTTON_DENY, BUTTONS_SEAH_PROJECT_IDENTIFICATION
 from backend.shared_functions.helpers_repo import helpers_repo
 from backend.clients.messaging_api import send_sms as send_sms_via_api
@@ -312,15 +317,60 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
             }
         return {}
 
-    def dispatch_sensitive_content_utterances_and_buttons(self, dispatcher: CollectingDispatcher) -> None:
-        for i in range(1, len(self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['utterances']) + 1):
-            dispatcher.utter_message(
-                text=self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['utterances'][i][self.language_code]
+    def find_seah_service_providers_for_tracker(self, tracker: Tracker) -> List[Dict[str, Any]]:
+        """Resolve SEAH support centres from complainant location slots."""
+        province = tracker.get_slot("complainant_province")
+        district = tracker.get_slot("complainant_district")
+        municipality = tracker.get_slot("complainant_municipality")
+        codes = resolve_location_codes(province, district, municipality)
+        try:
+            return self.db_manager.find_seah_service_providers(
+                municipality_code=tracker.get_slot("level_3_code") or codes.get("municipality_code"),
+                municipality=municipality,
+                district_code=tracker.get_slot("level_2_code") or codes.get("district_code"),
+                district=district,
+                province_code=tracker.get_slot("level_1_code") or codes.get("province_code"),
+                province=province,
+                location_code=tracker.get_slot("location_code"),
             )
-        buttons = self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS['buttons'][1][self.language_code]
-        dispatcher.utter_message(
-            buttons=buttons
-        )
+        except Exception as e:
+            self.logger.warning(f"{self.name()}: SEAH service provider lookup failed: {e}")
+            return []
+
+    def build_sensitive_issues_utterance(
+        self,
+        utter_index: int,
+        tracker: Optional[Tracker] = None,
+    ) -> str:
+        """Utterances 1–2 are location-aware; 3–5 stay on static copy."""
+        static = self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS["utterances"][utter_index][self.language_code]
+        if utter_index not in (1, 2) or tracker is None:
+            return static
+
+        providers = self.find_seah_service_providers_for_tracker(tracker)
+        municipality = tracker.get_slot("complainant_municipality")
+        district = tracker.get_slot("complainant_district")
+        if utter_index == 1:
+            return format_recommendation_utterance(
+                providers,
+                self.language_code,
+                municipality=municipality,
+                district=district,
+            )
+        return format_details_utterance(providers, self.language_code)
+
+    def dispatch_sensitive_content_utterances_and_buttons(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Optional[Tracker] = None,
+    ) -> None:
+        utterance_count = len(self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS["utterances"])
+        for i in range(1, utterance_count + 1):
+            dispatcher.utter_message(
+                text=self.build_sensitive_issues_utterance(i, tracker)
+            )
+        buttons = self.SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS["buttons"][1][self.language_code]
+        dispatcher.utter_message(buttons=buttons)
 
     def get_available_seah_contact_channels(
         self,
@@ -519,13 +569,20 @@ class SensitiveContentHelpersMixin(ActionCommonMixin):
 
     def find_seah_contact_point(self, tracker: Tracker) -> Optional[Dict[str, Any]]:
         """Resolve best-matching SEAH contact centre from current complainant/project slots."""
+        province = tracker.get_slot("complainant_province")
+        district = tracker.get_slot("complainant_district")
+        municipality = tracker.get_slot("complainant_municipality")
+        codes = resolve_location_codes(province, district, municipality)
         try:
             return self.db_manager.find_seah_contact_point(
-                province=tracker.get_slot("complainant_province"),
-                district=tracker.get_slot("complainant_district"),
-                municipality=tracker.get_slot("complainant_municipality"),
+                province=province,
+                district=district,
+                municipality=municipality,
                 ward=str(tracker.get_slot("complainant_ward") or ""),
                 project_uuid=tracker.get_slot("project_uuid"),
+                municipality_code=tracker.get_slot("level_3_code") or codes.get("municipality_code"),
+                district_code=tracker.get_slot("level_2_code") or codes.get("district_code"),
+                location_code=tracker.get_slot("location_code"),
             )
         except Exception as e:
             self.logger.warning(f"{self.name()}: contact point lookup failed: {e}")

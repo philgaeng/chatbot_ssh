@@ -84,6 +84,7 @@ class AdminContextResponse(BaseModel):
     admin_country_codes: list[str]
     can_access_platform_settings: bool
     can_manage_structure: bool
+    can_create_project: bool
     admin_scopes: list[dict]
 
 

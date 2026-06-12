@@ -8,6 +8,7 @@ from ticketing.services.admin_access import (
     AdminScopeRow,
     SettingsAction,
     can_create_operational_role,
+    can_create_project,
     can_manage_structure,
     is_country_admin,
     is_project_admin,
@@ -50,6 +51,23 @@ def test_seah_country_admin_cannot_manage_structure():
     )
     assert not can_manage_structure(user)
     assert is_country_admin(user, "seah")
+
+
+def test_country_admin_can_create_project_either_track():
+    standard = CurrentUser(
+        user_id="c@grm.local",
+        role_keys=["country_admin"],
+        admin_scopes=[_scope(workflow_track="standard")],
+    )
+    seah = CurrentUser(
+        user_id="seah@grm.local",
+        role_keys=["country_admin"],
+        admin_scopes=[_scope(workflow_track="seah")],
+    )
+    assert can_create_project(standard)
+    assert can_create_project(seah)
+    require_settings_write(standard, SettingsAction.CREATE_PROJECT)
+    require_settings_write(seah, SettingsAction.CREATE_PROJECT)
 
 
 def test_project_admin_scope():

@@ -15,7 +15,8 @@
 | [`03_ticketing_api_integration.md`](03_ticketing_api_integration.md) | Full API endpoint reference (inbound + outbound + all routes) | ✅ Current |
 | [`04_ticketing_schema.md`](04_ticketing_schema.md) | Postgres schema for all ~25 `ticketing.*` tables + migration history | ✅ Current |
 | [`05_ticketing_impl_plan.md`](05_ticketing_impl_plan.md) | As-built status by phase; remaining/planned work | ✅ Current |
-| [`06_messaging_rules_whatsapp_sms.md`](06_messaging_rules_whatsapp_sms.md) | Staff messaging policy (WhatsApp/SMS rules) | ✅ Current |
+| [`06_messaging_rules_whatsapp_sms.md`](06_messaging_rules_whatsapp_sms.md) | Staff messaging policy + project officer SMS | ✅ Current |
+| [`agents/officer_sms_project_messaging.md`](agents/officer_sms_project_messaging.md) | **Agent runbook:** implement project officer SMS in one pass | 📋 Runbook |
 | [`Escalation_rules.md`](Escalation_rules.md) | SLA rules, escalation levels, as-implemented summary | ✅ Current |
 | [`LOCATION_CODES.md`](LOCATION_CODES.md) | Canonical Nepal location codes scheme | ✅ Current |
 

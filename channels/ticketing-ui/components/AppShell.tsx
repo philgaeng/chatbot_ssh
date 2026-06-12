@@ -225,7 +225,7 @@ function NotificationPanel({
 function DesktopShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin, isSuperAdmin } = useAuth();
+  const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin, isSuperAdmin, isCountryAdmin } = useAuth();
   const [unseenCount, setUnseenCount] = useState(0);
   const [bellOpen, setBellOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -300,7 +300,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={16} strokeWidth={1.75} className="shrink-0" />
                 <span className="flex-1">
-                  {item.href === "/settings" && isAdmin && !isSuperAdmin ? "Project setup" : item.label}
+                  {item.href === "/settings" && isAdmin && !isSuperAdmin && !isCountryAdmin ? "Project setup" : item.label}
                 </span>
                 {badgeCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">

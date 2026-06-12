@@ -1,0 +1,44 @@
+seah_service_provider_id,country_code,province_code,district_code,municipality_code,province,district,municipality,ward,seah_center_name,address,phone,opening_days,opening_hours,remarks,is_active,sort_order
+p1-jha-jagaran-nepal-jn-1,NP,P1,P1_JHA,,Koshi,Jhapa,,,Jagaran Nepal (JN),,01-5705439,,,Kathmandu phone number,true,1
+p1-jha-shakti-samuha-2,NP,P1,P1_JHA,,Koshi,Jhapa,,,Shakti Samuha,,01-4578117,,,Kathmandu phone number,true,2
+p1-jha-dam-caritas-nepal-3,NP,P1,P1_JHA,P1_JHA_DAM,Koshi,Jhapa,Damak Municipality,,Caritas Nepal,,023-583609,,,,true,3
+p1-jha-mec-women-children-and-senior-citize-w6-4,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,6,"Women, Children and Senior Citizen Service Centre, Nepal Police",Karkarvitta,977-9849540513; 977-9843503148,,,Cell phone numbers,true,4
+p1-jha-mec-women-children-and-senior-citize-w9-5,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,9,"Women, Children and Senior Citizen Service Centre, Nepal Police",Dhulabari,977-9852090224,,,Cell phone number,true,5
+p1-jha-bha-one-stop-crisis-management-centr-w8-6,NP,P1,P1_JHA,P1_JHA_BHA,Koshi,Jhapa,Bhadrapur Municipality,8,"One Stop Crisis Management Centre (OCMC), Provincial Hospital",Chandragadhi,023-523024; 023-523172; 977-9852620024,,,Landline plus cell no,true,6
+p1-jha-dam-one-stop-crisis-management-centr-w2-7,NP,P1,P1_JHA,P1_JHA_DAM,Koshi,Jhapa,Damak Municipality,2,"One Stop Crisis Management Centre (OCMC), Amda Community Hospital",Kharkhare,023-580186,,,,true,7
+p1-jha-mec-nawa-aviyan-nepal-w6-8,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,6,Nawa Aviyan Nepal,"Pragati Tole, Kakarvitta",01-5922323,,,Kathmandu phone number,true,8
+p1-jha-mec-aafanta-nepal-kin-w6-9,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,6,Aafanta Nepal (KIN),Salghari Marga,977-9812359949,,,Cell phone number,true,9
+p1-jha-mec-good-friends-nepal-w6-10,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,6,Good Friends Nepal,Salghari Marga,977-9861705951,,,Cell phone number,true,10
+p1-jha-mec-maiti-nepal-w6-11,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,6,Maiti Nepal,"Purano Bhansar, Kakarvitta",023-562053,,,,true,11
+p1-jha-mec-mahila-jana-chetana-kendra-12,NP,P1,P1_JHA,P1_JHA_MEC,Koshi,Jhapa,Mechinagar Municipality,,Mahila Jana Chetana Kendra,"Pragati Tole, Kakarvitta",023-567833,,,,true,12
+p1-jha-amkas-nepal-aaprabasi-kaamdar-ma-13,NP,P1,P1_JHA,,Koshi,Jhapa,,,AMKAS NEPAL (Aaprabasi Kaamdar Mahila Samuha),,01-4373963,,,Kathmandu phone number,true,13
+p1-jha-lacc-legal-aid-and-consultancy-c-14,NP,P1,P1_JHA,,Koshi,Jhapa,,,LACC (Legal Aid and Consultancy Center),,977-9842773255,,,Cell phone number,true,14
+p1-jha-bir-marie-stopes-nepal-15,NP,P1,P1_JHA,P1_JHA_BIR,Koshi,Jhapa,Birtamod Municipality,,Marie Stopes Nepal,"Behind Ilam Taxi Stand, Birtamode",023-540948,,,,true,15
+p1-jha-bha-nepal-bar-association-16,NP,P1,P1_JHA,P1_JHA_BHA,Koshi,Jhapa,Bhadrapur Municipality,,Nepal Bar Association,,023-455731,,,,true,16
+p1-mor-jagaran-nepal-jn-17,NP,P1,P1_MOR,,Koshi,Morang,,,Jagaran Nepal (JN),,01-5705439,,,Can't confirm location in Koshi Province; phone number is Kathmandu-based office,true,17
+p1-mor-bir-commom-platform-for-common-goal--w6-18,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,6,Commom Platform for Common Goal Nepal (CoCoN),Munal Path,021-526512; 977-9852028661,,,Landline plus cell no,true,18
+p1-mor-tpo-nepal-transcultural-psychoso-19,NP,P1,P1_MOR,,Koshi,Morang,,,TPO Nepal (Transcultural Psychosocial Organization),,021-545782,,,,true,19
+p1-mor-bir-abc-nepal-agroforestry-basic-hea-20,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,"ABC Nepal (Agroforestry, Basic health and Cooperative)",,021-472174,,,,true,20
+p1-mor-bir-advocacy-forum-21,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,Advocacy Forum,Traffic Chowk,021-530666,,,,true,21
+p1-mor-bir-cwin-child-workers-in-nepal-w1-22,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,1,CWIN (Child Workers in Nepal),Thulo Mill Chowk,021-535700; 021-528620; 021-534905; 021-462700,,,,true,22
+p1-mor-bir-fwld-forum-for-women-law-and-dev-23,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,"FWLD (Forum for Women, Law and Development)",Gaheli Tole,977-9842045843,,,,true,23
+p1-mor-bir-maiti-nepal-w19-24,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,19,Maiti Nepal,Sainik Tole,021-435794,,,,true,24
+p1-mor-bir-marie-stopes-nepal-w8-25,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,8,Marie Stopes Nepal,"Mangladevi Bishal Bazar, Sani Mandir",021-523280,,,,true,25
+p1-mor-bir-nepal-bar-association-26,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,Nepal Bar Association,,021-522642,,,,true,26
+p1-mor-bir-ocmc-one-stop-crisis-management--w10-27,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,10,"OCMC (One Stop Crisis Management Centres), Koshi Hospital",Hospital Chowk,021-530103; 977-9852044660,,Landline plus cell no,,true,27
+p1-mor-public-defender-society-of-nepal-28,NP,P1,P1_MOR,,Koshi,Morang,,,Public Defender Society of Nepal (PDS-Nepal),,01-5318468; 01-5323545,,Kathmandu phone number,,true,28
+p1-mor-bir-worec-women-s-rehabilitation-cen-29,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,WOREC (Women's Rehabilitation Center),Biratnagar Bus Park,977-9852023429,,Cell phone number,,true,29
+p1-mor-bir-aafanta-nepal-kin-30,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,Aafanta Nepal (KIN),,021-415161,,,,true,30
+p1-mor-bir-district-police-office-31,NP,P1,P1_MOR,P1_MOR_BIR,Koshi,Morang,Biratnagar Metropolitan City,,District Police Office,Santi Chowk,021-5462158; 021-525401; 977-985-2037902,,Landline plus cell no,,true,31
+p1-sun-ita-mitini-nepal-w4-32,NP,P1,P1_SUN,P1_SUN_ITA,Koshi,Sunsari,Itahari Sub-Metropolitan city,4,Mitini Nepal,Gopal Tole,01-4957590,,,Kathmandu phone number,true,32
+p1-sun-ina-commom-platform-for-common-goal--w3-33,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,3,Commom Platform for Common Goal Nepal (CoCoN),Near Agriculture Development Bank,025-561836; 977-9852029852,,,Landline plus cell no,true,33
+p1-sun-ina-hamro-sahayatra-manch-w3-34,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,3,Hamro Sahayatra Manch,,,,,Phone number not available online,true,34
+p1-sun-ina-one-stop-crisis-management-centr-w1-35,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,1,"One Stop Crisis Management Centre (OCMC), Provincial Hospital",,025-561951,,,,true,35
+p1-sun-worec-women-s-rehabilitation-cen-36,NP,P1,P1_SUN,,Koshi,Sunsari,Rautamai Rural Municipality,,WOREC (Women's Rehabilitation Center) Sunsari,,025-561079,,,,true,36
+p1-sun-amkas-nepal-aaprabasi-kaamdar-ma-37,NP,P1,P1_SUN,,Koshi,Sunsari,,,AMKAS NEPAL (Aaprabasi Kaamdar Mahila Samuha),,01-4373963,,,Kathmandu phone number,true,37
+p1-sun-ina-district-police-office-38,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,,District Police Office,,025-565100; 025-560728,,,,true,38
+p1-sun-ita-maiti-nepal-39,NP,P1,P1_SUN,P1_SUN_ITA,Koshi,Sunsari,Itahari Sub-Metropolitan city,,Maiti Nepal,,025-475803; 9802771552,,,,true,39
+p1-sun-ita-marie-stopes-nepal-w1-40,NP,P1,P1_SUN,P1_SUN_ITA,Koshi,Sunsari,Itahari Sub-Metropolitan city,1,Marie Stopes Nepal,RCT Market,025-586587,,,,true,40
+p1-sun-ina-nepal-bar-association-41,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,,Nepal Bar Association,,025-560952,,,,true,41
+p1-sun-ina-nepal-mediator-society-42,NP,P1,P1_SUN,P1_SUN_INA,Koshi,Sunsari,Inaruwa Municipality,,Nepal Mediator Society,,,,,,true,42
+p1-sun-raksha-nepal-43,NP,P1,P1_SUN,,Koshi,Sunsari,,,Raksha Nepal,,01-4537552; 977-9767657833,,,Kathmandu phone number,true,43

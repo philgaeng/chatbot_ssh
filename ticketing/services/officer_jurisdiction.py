@@ -10,6 +10,7 @@ from ticketing.constants.jurisdiction import (
     JURISDICTION_GLOBAL,
     resolve_jurisdiction_mode,
 )
+from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.ticket import Ticket
@@ -58,6 +59,19 @@ def scope_requires_field_jurisdiction(db: Session, role_key: str) -> bool:
     return mode == "field"
 
 
+def _location_matches(scope_loc: str | None, ticket_loc: str | None, db: Session) -> bool:
+    if not scope_loc:
+        return True
+    if not ticket_loc:
+        return False
+    if scope_loc == ticket_loc:
+        return True
+    child_locs = db.execute(
+        select(Location.location_code).where(Location.parent_location_code == scope_loc)
+    ).scalars().all()
+    return ticket_loc in child_locs
+
+
 def ticket_matches_scope(db: Session, scope: OfficerScope, ticket: Ticket) -> bool:
     """Python-side check (tests / admin tools). List API uses SQL builders below."""
     if is_global_scope(db, scope):
@@ -65,12 +79,13 @@ def ticket_matches_scope(db: Session, scope: OfficerScope, ticket: Ticket) -> bo
     if is_country_wide_scope(db, scope):
         codes = _project_short_codes_for_org(db, scope.organization_id)
         return bool(ticket.project_code and ticket.project_code in codes)
-    parts = [ticket.organization_id == scope.organization_id]
+    if scope.package_id and ticket.package_id != scope.package_id:
+        return False
     if scope.project_code and ticket.project_code != scope.project_code:
         return False
-    if scope.location_code and ticket.location_code != scope.location_code:
+    if scope.project_id and ticket.project_id and ticket.project_id != scope.project_id:
         return False
-    return parts[0]
+    return _location_matches(scope.location_code, ticket.location_code, db)
 
 
 def scope_ticket_filter(db: Session, scope: OfficerScope):
@@ -83,9 +98,15 @@ def scope_ticket_filter(db: Session, scope: OfficerScope):
             return false()
         return Ticket.project_code.in_(codes)
 
-    from ticketing.models.country import Location
+    parts: list = []
 
-    parts: list = [Ticket.organization_id == scope.organization_id]
+    if scope.package_id:
+        parts.append(Ticket.package_id == scope.package_id)
+    elif scope.project_id:
+        parts.append(Ticket.project_id == scope.project_id)
+    elif scope.project_code:
+        parts.append(Ticket.project_code == scope.project_code)
+
     if scope.location_code:
         child_locs = select(Location.location_code).where(
             Location.parent_location_code == scope.location_code
@@ -96,6 +117,8 @@ def scope_ticket_filter(db: Session, scope: OfficerScope):
                 Ticket.location_code.in_(child_locs),
             )
         )
-    if scope.project_code:
-        parts.append(Ticket.project_code == scope.project_code)
+
+    if not parts:
+        return false()
+
     return and_(*parts)

@@ -7,12 +7,14 @@ from typing import Literal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from ticketing.constants.assignment import COUNTRY_L1_FALLBACK_ROLE
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
 from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.project_type import ProjectType
 from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
-from ticketing.services.project_routing import routing_org_id_for_loaded_project
+from ticketing.services.keycloak_users import list_grm_officer_profiles
+from ticketing.services.officer_messaging import get_officer_messaging, role_keys_at_level
 from ticketing.services.project_types import (
     get_project_type,
     package_required_role_keys,
@@ -57,38 +59,87 @@ def _workflow_published(db: Session, workflow_id: str | None) -> bool:
     return bool(wf and wf.status == "published")
 
 
-def _first_standard_step_role(db: Session, project: Project) -> str | None:
-    if not project.standard_workflow_id:
+def _step_role_at_order(db: Session, workflow_id: str | None, step_order: int) -> str | None:
+    if not workflow_id:
         return None
     step = db.execute(
         select(WorkflowStep)
-        .where(WorkflowStep.workflow_id == project.standard_workflow_id)
+        .where(WorkflowStep.workflow_id == workflow_id)
         .order_by(WorkflowStep.step_order)
+        .offset(step_order - 1)
         .limit(1)
     ).scalar_one_or_none()
     return step.assigned_role_key if step else None
 
 
-def _has_l1_officer_for_org(
+def _first_standard_step_role(db: Session, project: Project) -> str | None:
+    return _step_role_at_order(db, project.standard_workflow_id, 1)
+
+
+def _second_standard_step_role(db: Session, project: Project) -> str | None:
+    return _step_role_at_order(db, project.standard_workflow_id, 2)
+
+
+def _has_officer_on_package(db: Session, *, package_id: str, grm_role_key: str) -> bool:
+    return (
+        db.execute(
+            select(OfficerScope.user_id).where(
+                OfficerScope.role_key == grm_role_key,
+                OfficerScope.package_id == package_id,
+            ).limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _has_officer_on_project_wide(
     db: Session,
     *,
     project: Project,
-    organization_id: str,
     grm_role_key: str,
 ) -> bool:
-    stmt = (
-        select(OfficerScope.user_id)
-        .where(
-            OfficerScope.role_key == grm_role_key,
-            OfficerScope.organization_id == organization_id,
-            or_(
-                OfficerScope.project_id == project.project_id,
-                OfficerScope.project_code == project.short_code,
-            ),
-        )
-        .limit(1)
+    return (
+        db.execute(
+            select(OfficerScope.user_id)
+            .where(
+                OfficerScope.role_key == grm_role_key,
+                OfficerScope.package_id.is_(None),
+                or_(
+                    OfficerScope.project_id == project.project_id,
+                    OfficerScope.project_code == project.short_code,
+                ),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
     )
-    return db.execute(stmt).scalar_one_or_none() is not None
+
+
+def _has_project_l1_fallback(db: Session, project: Project, l1_role: str) -> bool:
+    """Project-wide L1 or country fallback covers every package."""
+    if _has_officer_on_project_wide(db, project=project, grm_role_key=l1_role):
+        return True
+    return _has_officer_on_project_wide(
+        db, project=project, grm_role_key=COUNTRY_L1_FALLBACK_ROLE
+    )
+
+
+def _packages_missing_role(
+    db: Session,
+    *,
+    project: Project,
+    packages: list[ProjectPackage],
+    grm_role_key: str,
+    project_wide_covers: bool,
+) -> list[str]:
+    if project_wide_covers or not grm_role_key:
+        return []
+    gaps: list[str] = []
+    for pkg in packages:
+        if _has_officer_on_package(db, package_id=pkg.package_id, grm_role_key=grm_role_key):
+            continue
+        gaps.append(pkg.package_code or pkg.package_id[:8])
+    return gaps
 
 
 def _project_org_has_role(project: Project, role_key: str) -> bool:
@@ -120,22 +171,35 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     pt = get_project_type(db, project.project_type_key) if project.project_type_key else None
     checks: list[GoLiveCheck] = []
 
-    # A1 Standard workflow
-    a1_ok = _workflow_published(db, project.standard_workflow_id)
+    from ticketing.services.project_workflows import list_project_workflows
+    from ticketing.services.workflow_routing import uncovered_classifications
+
+    bindings = list_project_workflows(db, project_id)
+    default_binding = next((b for b in bindings if b.is_default), None)
+    a1_ok = bool(
+        default_binding and _workflow_published(db, default_binding.workflow_id)
+    )
     checks.append(
         GoLiveCheck(
             id="A1",
-            label="Standard workflow",
+            label="Default workflow",
             group="routing",
             severity="warn",
             status="pass" if a1_ok else "warn",
-            message="Published Standard workflow linked" if a1_ok else "Set a published Standard workflow",
+            message="Default published workflow set"
+            if a1_ok
+            else "Mark exactly one workflow binding as Default (catch-all)",
             section="workflows",
         )
     )
 
-    # A2 SEAH workflow (bundled on typed projects)
-    a2_ok = _workflow_published(db, project.seah_workflow_id)
+    seah_bindings = [
+        b for b in bindings
+        if _workflow_published(db, b.workflow_id)
+        and db.get(WorkflowDefinition, b.workflow_id)
+        and (db.get(WorkflowDefinition, b.workflow_id).workflow_type or "").lower() == "seah"
+    ]
+    a2_ok = len(seah_bindings) > 0
     checks.append(
         GoLiveCheck(
             id="A2",
@@ -143,10 +207,25 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             group="routing",
             severity="warn",
             status="pass" if a2_ok else "warn",
-            message="Published SEAH workflow linked" if a2_ok else "Set a published SEAH workflow",
+            message="SEAH workflow binding configured" if a2_ok else "Add a SEAH workflow binding",
             section="workflows",
         )
     )
+
+    missing_cls = uncovered_classifications(db, bindings)
+    if missing_cls:
+        checks.append(
+            GoLiveCheck(
+                id="A4",
+                label="Classification coverage",
+                group="routing",
+                severity="warn",
+                status="warn",
+                message=f"Classifications not mapped to a non-default workflow: {', '.join(missing_cls[:5])}"
+                + ("…" if len(missing_cls) > 5 else ""),
+                section="workflows",
+            )
+        )
 
     # A3 Implementing agency (block for activation)
     routing_role = (pt.routing_org_role if pt else "implementing_agency")
@@ -248,52 +327,71 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 )
             )
 
-    # C1 L1 officer for routing org
-    routing_org = routing_org_id_for_loaded_project(db, project)
+    # C1 L1 officer per package (or project-wide / country fallback)
     l1_role = _first_standard_step_role(db, project)
-    c1_ok = False
-    if routing_org and l1_role:
-        c1_ok = _has_l1_officer_for_org(
-            db, project=project, organization_id=routing_org, grm_role_key=l1_role
-        )
+    l1_project_fallback = bool(l1_role and _has_project_l1_fallback(db, project, l1_role))
+    l1_gaps = _packages_missing_role(
+        db,
+        project=project,
+        packages=packages,
+        grm_role_key=l1_role or "",
+        project_wide_covers=l1_project_fallback,
+    )
+    c1_ok = bool(l1_role) and not l1_gaps
     checks.append(
         GoLiveCheck(
             id="C1",
             label="L1 officer coverage",
             group="officers",
             severity="block",
-            status="pass" if c1_ok else ("fail" if routing_org and l1_role else "warn"),
-            message="Officer scoped for L1 role and implementing agency"
-            if c1_ok
-            else "Add an officer with L1 GRM role scoped to the implementing agency on this project",
+            status="pass" if c1_ok else ("fail" if l1_role else "warn"),
+            message=(
+                "Every package has an L1 officer (or project-wide L1 / country fallback)"
+                if c1_ok
+                else (
+                    f"Add L1 ({l1_role}) for packages: {', '.join(l1_gaps[:5])}"
+                    if l1_gaps
+                    else "Link a standard workflow with an L1 step"
+                )
+            ),
             section="staffing",
         )
     )
 
-    # C2 org alignment (informational when C1 passes)
+    # C2 L2 officer per package (or project-wide) — warn; also used as assign fallback
+    l2_role = _second_standard_step_role(db, project)
+    l2_project_wide = bool(l2_role and _has_officer_on_project_wide(db, project=project, grm_role_key=l2_role))
+    l2_gaps = _packages_missing_role(
+        db,
+        project=project,
+        packages=packages,
+        grm_role_key=l2_role or "",
+        project_wide_covers=l2_project_wide,
+    )
+    c2_ok = bool(l2_role) and not l2_gaps
     checks.append(
         GoLiveCheck(
             id="C2",
-            label="Officer org alignment",
+            label="L2 officer coverage",
             group="officers",
             severity="warn",
-            status="pass" if c1_ok else "warn",
-            message="Scope organization matches implementing agency"
-            if c1_ok
-            else "Align officer scope org with implementing agency",
+            status="pass" if c2_ok else ("warn" if l2_role else "info"),
+            message=(
+                "Every package has an L2 officer (or project-wide L2 fallback)"
+                if c2_ok
+                else (
+                    f"Add L2 ({l2_role}) for packages: {', '.join(l2_gaps[:5])}"
+                    if l2_gaps
+                    else "Link a standard workflow with an L2 step"
+                )
+            ),
             section="staffing",
         )
     )
 
     # C4 SEAH L1 (when seah workflow set)
     if project.seah_workflow_id:
-        seah_step = db.execute(
-            select(WorkflowStep)
-            .where(WorkflowStep.workflow_id == project.seah_workflow_id)
-            .order_by(WorkflowStep.step_order)
-            .limit(1)
-        ).scalar_one_or_none()
-        seah_l1 = seah_step.assigned_role_key if seah_step else None
+        seah_l1 = _step_role_at_order(db, project.seah_workflow_id, 1)
         c4_ok = False
         if seah_l1:
             c4_ok = (
@@ -357,6 +455,52 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 if not missing_qr
                 else f"Optional: add QR for {', '.join(missing_qr[:5])}",
                 section="packages",
+            )
+        )
+
+    # F1 Officer SMS phone coverage (warn only)
+    messaging = get_officer_messaging(db, project_id)
+    f1_gaps: list[str] = []
+    if messaging.sms_enabled and messaging.sms_levels:
+        profiles = list_grm_officer_profiles()
+        for level in sorted(messaging.sms_levels):
+            role_keys = role_keys_at_level(db, project_id, level)
+            if not role_keys:
+                f1_gaps.append(f"L{level}")
+                continue
+            level_ok = False
+            for role_key in role_keys:
+                user_ids = db.execute(
+                    select(OfficerScope.user_id).where(
+                        OfficerScope.role_key == role_key,
+                        or_(
+                            OfficerScope.project_id == project.project_id,
+                            OfficerScope.project_code == project.short_code,
+                        ),
+                    )
+                ).scalars().all()
+                for uid in user_ids:
+                    prof = profiles.get(uid.lower())
+                    if prof and prof.phone_number.strip():
+                        level_ok = True
+                        break
+                if level_ok:
+                    break
+            if not level_ok:
+                f1_gaps.append(f"L{level}")
+        checks.append(
+            GoLiveCheck(
+                id="F1",
+                label="Officer SMS phones",
+                group="officers",
+                severity="warn",
+                status="pass" if not f1_gaps else "warn",
+                message=(
+                    "SMS-enabled levels have officers with phones"
+                    if not f1_gaps
+                    else f"Add phones for SMS levels: {', '.join(f1_gaps[:5])}"
+                ),
+                section="messaging",
             )
         )
 

@@ -38,6 +38,8 @@ class ProjectType(Base):
     routing_org_role: Mapped[str] = mapped_column(String(64), nullable=False, default="implementing_agency")
     # List[{key, label, description, required, scope: project|package}]
     actor_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # List[{display_label, workflow_id, is_default, classifications, intake_routes, sort_order}]
+    workflow_bindings: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)

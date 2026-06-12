@@ -122,6 +122,7 @@ export interface AuthContextValue {
   adminCountryCode: string | null;
   canAccessPlatformSettings: boolean;
   canManageStructure: boolean;
+  canCreateProject: boolean;
   canCreateOperationalRoles: boolean;
   signIn: () => void;
   signOut: () => void;
@@ -406,6 +407,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         adminCountryCode: adminContext?.admin_country_codes[0] ?? null,
         canAccessPlatformSettings: adminContext?.can_access_platform_settings ?? perms.isSuperAdmin,
         canManageStructure: adminContext?.can_manage_structure ?? perms.isSuperAdmin,
+        canCreateProject: adminContext?.can_create_project ?? perms.isSuperAdmin,
         canCreateOperationalRoles,
         signIn,
         signOut,

@@ -142,6 +142,9 @@ def create_ticket_from_intake(
         is_seah=payload.is_seah,
         priority=payload.priority,
         db=db,
+        grievance_categories=payload.grievance_categories,
+        intake_route=payload.intake_route,
+        intake_fast_path=payload.intake_fast_path,
     )
     if not workflow:
         raise TicketIntakeError(
@@ -152,6 +155,10 @@ def create_ticket_from_intake(
             ),
             status_code=422,
         )
+    from ticketing.services.workflow_routing import workflow_is_seah
+
+    ticket_is_seah = workflow_is_seah(workflow)
+
     first_step = _first_step(db, workflow.workflow_id)
 
     auto_assigned_id: Optional[str] = None
@@ -163,6 +170,7 @@ def create_ticket_from_intake(
             project_code=payload.project_code,
             db=db,
             ticket_package_id=payload.package_id,
+            supervisor_role=first_step.supervisor_role,
         )
 
     ticket = Ticket(
@@ -184,7 +192,9 @@ def create_ticket_from_intake(
         assigned_to_user_id=auto_assigned_id,
         complainant_reply_owner_id=auto_assigned_id,
         priority=payload.priority,
-        is_seah=payload.is_seah,
+        is_seah=ticket_is_seah,
+        intake_route=payload.intake_route,
+        intake_fast_path=payload.intake_fast_path,
         package_id=payload.package_id,
         is_deleted=False,
         sla_breached=False,
@@ -214,7 +224,7 @@ def create_ticket_from_intake(
         seen=True,
         created_by_user_id=created_by_user_id,
         created_at=_now(),
-        case_sensitivity="seah" if payload.is_seah else "standard",
+        case_sensitivity="seah" if ticket_is_seah else "standard",
     )
     db.add(event)
 

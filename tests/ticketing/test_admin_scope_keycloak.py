@@ -19,6 +19,8 @@ from ticketing.services.officer_admin import (
         ({"enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}, None, True),
         ({"enabled": False, "requiredActions": []}, None, True),
         (None, "invited", True),
+        ({"enabled": True, "requiredActions": []}, "invited", False),
+        ({"enabled": True, "requiredActions": ["UPDATE_PROFILE"]}, "invited", True),
     ],
 )
 def test_officer_eligible_for_invite_resend(kc_user, onboarding, expected):
@@ -39,10 +41,7 @@ def test_officer_eligible_for_invite_resend(kc_user, onboarding, expected):
         "ticketing.services.officer_admin._keycloak_find_user",
         return_value=kc_user,
     ):
-        if onboarding == "invited":
-            assert officer_eligible_for_invite_resend(db, "User@Example.com") is True
-        else:
-            assert officer_eligible_for_invite_resend(db, "user@example.com") is expected
+        assert officer_eligible_for_invite_resend(db, "user@example.com") is expected
 
 
 def test_provision_admin_scope_creates_keycloak_user_when_missing():
@@ -124,6 +123,39 @@ def test_provision_admin_scope_skips_email_for_active_user():
     assert status == "active"
     resend.assert_not_called()
     upsert_ob.assert_called_once_with(db, "anishshrestha.dor@gmail.com", "active")
+
+
+def test_provision_admin_scope_promotes_stale_invited_db_row():
+    """DB still says invited after Keycloak onboarding — sync to active, no resend."""
+    db = MagicMock()
+    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": []}
+    ob = MagicMock()
+    ob.status = "invited"
+    db.get.return_value = ob
+
+    with patch(
+        "ticketing.services.officer_admin.keycloak_configured",
+        return_value=True,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_admin",
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_find_user",
+        return_value=kc_user,
+    ), patch(
+        "ticketing.services.officer_admin.keycloak_update_user_attributes",
+    ), patch(
+        "ticketing.services.officer_admin.keycloak_resend_invite_email",
+    ) as resend, patch(
+        "ticketing.services.officer_admin._upsert_officer_onboarding",
+    ) as upsert_ob:
+        status = provision_admin_scope_keycloak(
+            db, "philgaeng@gmail.com", "country_admin", "DOR"
+        )
+
+    assert status == "active"
+    resend.assert_not_called()
+    upsert_ob.assert_called_once_with(db, "philgaeng@gmail.com", "active")
 
 
 def test_provision_admin_scope_force_invite_for_active_user():

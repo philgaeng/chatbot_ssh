@@ -40,7 +40,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import CurrentUser, get_authenticated_user, require_admin, require_super_admin
-from ticketing.services.admin_access import SettingsAction, require_settings_write
+from ticketing.services.admin_access import (
+    SettingsAction,
+    can_assign_project_workflow,
+    require_settings_write,
+)
+from ticketing.services import project_workflows as pw_svc
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
@@ -52,6 +57,11 @@ from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
 from ticketing.models.project import Project, ProjectActorRole, ProjectLocation, ProjectOrganization
 from ticketing.services import project_actor_roles as actor_roles_svc
+from ticketing.api.schemas.project_messaging import (
+    ProjectMessagingPatch,
+    ProjectMessagingResponse,
+)
+from ticketing.services import officer_messaging as msg_svc
 from ticketing.services import project_go_live as go_live_svc
 from ticketing.services import project_types as types_svc
 from ticketing.models.ticket import Ticket
@@ -124,6 +134,30 @@ class ProjectOrgItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProjectWorkflowItem(BaseModel):
+    project_workflow_id: str
+    workflow_id: str
+    display_label: str
+    classifications: list[str] = []
+    intake_routes: list[str] = []
+    is_default: bool = False
+    workflow_track: str = "standard"
+    sort_order: int = 0
+
+
+class ProjectWorkflowUpsert(BaseModel):
+    display_label: str = Field(..., max_length=200)
+    workflow_id: str = Field(..., max_length=36)
+    classifications: list[str] = []
+    intake_routes: list[str] = []
+    is_default: bool = False
+    sort_order: int | None = None
+
+
+class ProjectWorkflowsReplace(BaseModel):
+    items: list[ProjectWorkflowUpsert]
+
+
 class ProjectResponse(BaseModel):
     project_id: str
     country_code: str
@@ -134,6 +168,8 @@ class ProjectResponse(BaseModel):
     project_type_key: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+    workflow_slots: list[ProjectWorkflowItem] = []
+    officer_messaging: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
     organizations: list[ProjectOrgItem] = []
@@ -619,7 +655,11 @@ def _validate_project_workflow(
         )
 
 
-def _project_to_response(p: Project) -> dict:
+def _project_to_response(p: Project, db: Session) -> dict:
+    slots = [
+        ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(link, db))
+        for link in (p.workflow_links or [])
+    ]
     return {
         "project_id":    p.project_id,
         "country_code":  p.country_code,
@@ -630,6 +670,8 @@ def _project_to_response(p: Project) -> dict:
         "project_type_key": p.project_type_key,
         "standard_workflow_id": p.standard_workflow_id,
         "seah_workflow_id": p.seah_workflow_id,
+        "workflow_slots": slots,
+        "officer_messaging": p.officer_messaging or msg_svc.default_officer_messaging(),
         "created_at":    p.created_at,
         "updated_at":    p.updated_at,
         "organizations": [
@@ -638,6 +680,18 @@ def _project_to_response(p: Project) -> dict:
         ],
         "location_codes": [pl.location_code for pl in p.locations],
     }
+
+
+def _load_project(db: Session, project_id: str) -> Project | None:
+    return db.execute(
+        select(Project)
+        .options(
+            selectinload(Project.organizations),
+            selectinload(Project.locations),
+            selectinload(Project.workflow_links),
+        )
+        .where(Project.project_id == project_id)
+    ).scalar_one_or_none()
 
 
 @router.get("/projects", response_model=list[ProjectResponse])
@@ -652,6 +706,7 @@ def list_projects(
         .options(
             selectinload(Project.organizations),
             selectinload(Project.locations),
+            selectinload(Project.workflow_links),
         )
         .order_by(Project.country_code, Project.short_code)
     )
@@ -660,7 +715,7 @@ def list_projects(
     if active_only:
         stmt = stmt.where(Project.is_active.is_(True))
     rows = db.execute(stmt).scalars().all()
-    return [_project_to_response(p) for p in rows]
+    return [_project_to_response(p, db) for p in rows]
 
 
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
@@ -669,8 +724,8 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new project. Standard-track country admin or super_admin only."""
-    require_settings_write(current_user, SettingsAction.MANAGE_STRUCTURE, track="standard")
+    """Create a new project. Country admin (any track) or super_admin."""
+    require_settings_write(current_user, SettingsAction.CREATE_PROJECT)
 
     # Validate country exists
     if not db.get(Country, body.country_code):
@@ -720,13 +775,9 @@ def create_project(
     db.commit()
     db.refresh(project)
 
-    # Reload with relationships
-    p = db.execute(
-        select(Project)
-        .options(selectinload(Project.organizations), selectinload(Project.locations))
-        .where(Project.project_id == project.project_id)
-    ).scalar_one()
-    return _project_to_response(p)
+    p = _load_project(db, project.project_id)
+    assert p is not None
+    return _project_to_response(p, db)
 
 
 @router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse)
@@ -754,17 +805,94 @@ def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse)
+def get_project_messaging(project_id: str, db: Session = Depends(get_db)):
+    """Officer SMS/WhatsApp config for a project plus computed max workflow levels."""
+    config = msg_svc.get_officer_messaging(db, project_id)
+    max_levels = msg_svc.max_workflow_levels_for_project(db, project_id)
+    return ProjectMessagingResponse(
+        sms_enabled=config.sms_enabled,
+        sms_levels=config.sms_levels,
+        whatsapp_levels=config.whatsapp_levels,
+        max_levels=max_levels,
+    )
+
+
+@router.patch("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse)
+def patch_project_messaging(
+    project_id: str,
+    body: ProjectMessagingPatch,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Update officer messaging config. Country admin or super admin only."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    msg_svc.require_project_messaging_edit(current_user, project)
+    config = msg_svc.update_officer_messaging(db, project_id, body)
+    project.updated_at = _now()
+    db.commit()
+    max_levels = msg_svc.max_workflow_levels_for_project(db, project_id)
+    return ProjectMessagingResponse(
+        sms_enabled=config.sms_enabled,
+        sms_levels=config.sms_levels,
+        whatsapp_levels=config.whatsapp_levels,
+        max_levels=max_levels,
+    )
+
+
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: str, db: Session = Depends(get_db)):
     """Get a single project with all org and location links."""
-    p = db.execute(
-        select(Project)
-        .options(selectinload(Project.organizations), selectinload(Project.locations))
-        .where(Project.project_id == project_id)
-    ).scalar_one_or_none()
+    p = _load_project(db, project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
-    return _project_to_response(p)
+    return _project_to_response(p, db)
+
+
+@router.get("/projects/{project_id}/workflows", response_model=list[ProjectWorkflowItem])
+def list_project_workflow_slots(project_id: str, db: Session = Depends(get_db)):
+    """Workflow streams linked on this project (safeguards, hazards, CA, SEAH, custom)."""
+    p = db.get(Project, project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    rows = pw_svc.list_project_workflows(db, project_id)
+    return [ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(r, db)) for r in rows]
+
+
+@router.put("/projects/{project_id}/workflows", response_model=list[ProjectWorkflowItem])
+def replace_project_workflow_slots(
+    project_id: str,
+    body: ProjectWorkflowsReplace,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Replace all workflow bindings on a project."""
+    p = _load_project(db, project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from ticketing.models.workflow import WorkflowDefinition
+
+    for item in body.items:
+        wf = db.get(WorkflowDefinition, item.workflow_id)
+        wtype = (wf.workflow_type if wf else "standard") or "standard"
+        if not can_assign_project_workflow(current_user, wtype):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Not allowed to assign workflow '{item.display_label}'",
+            )
+
+    rows = pw_svc.replace_project_workflows(
+        db,
+        p,
+        [item.model_dump() for item in body.items],
+    )
+    p.updated_at = _now()
+    db.commit()
+    db.refresh(p)
+    return [ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(r, db)) for r in rows]
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
@@ -772,15 +900,11 @@ def update_project(
     project_id: str,
     body: ProjectUpdate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
     """Update project metadata. Admin only."""
 
-    p = db.execute(
-        select(Project)
-        .options(selectinload(Project.organizations), selectinload(Project.locations))
-        .where(Project.project_id == project_id)
-    ).scalar_one_or_none()
+    p = _load_project(db, project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -797,17 +921,68 @@ def update_project(
                     detail=go_live_svc.activation_block_message(report) or "Cannot activate project yet",
                 )
         p.is_active = body.is_active
-    if "standard_workflow_id" in body.model_fields_set:
-        _validate_project_workflow(db, body.standard_workflow_id, expected_type="standard")
-        p.standard_workflow_id = body.standard_workflow_id
-    if "seah_workflow_id" in body.model_fields_set:
-        _validate_project_workflow(db, body.seah_workflow_id, expected_type="seah")
-        p.seah_workflow_id = body.seah_workflow_id
+    if "standard_workflow_id" in body.model_fields_set or "seah_workflow_id" in body.model_fields_set:
+        bindings = [
+            pw_svc.project_workflow_to_dict(row, db)
+            for row in pw_svc.list_project_workflows(db, project_id)
+        ]
+        if "standard_workflow_id" in body.model_fields_set:
+            if not can_assign_project_workflow(current_user, "standard"):
+                raise HTTPException(status_code=403, detail="Not allowed to edit default workflow")
+            _validate_project_workflow(db, body.standard_workflow_id, expected_type="standard")
+            updated = False
+            for b in bindings:
+                if b.get("is_default"):
+                    b["workflow_id"] = body.standard_workflow_id
+                    updated = True
+            if body.standard_workflow_id and not updated:
+                bindings.append(
+                    {
+                        "display_label": "Safeguards GRM",
+                        "workflow_id": body.standard_workflow_id,
+                        "is_default": True,
+                        "classifications": [],
+                        "intake_routes": ["standard_grievance", "grievance_new", "new_grievance"],
+                        "sort_order": 10,
+                    }
+                )
+        if "seah_workflow_id" in body.model_fields_set:
+            if not can_assign_project_workflow(current_user, "seah"):
+                raise HTTPException(status_code=403, detail="Not allowed to edit SEAH workflow")
+            _validate_project_workflow(db, body.seah_workflow_id, expected_type="seah")
+            if body.seah_workflow_id:
+                seah_row = next(
+                    (b for b in bindings if (b.get("workflow_track") or "") == "seah"),
+                    None,
+                )
+                if seah_row:
+                    seah_row["workflow_id"] = body.seah_workflow_id
+                else:
+                    bindings.append(
+                        {
+                            "display_label": "SEAH",
+                            "workflow_id": body.seah_workflow_id,
+                            "is_default": False,
+                            "classifications": [
+                                "Gender",
+                                "Gender, Social",
+                                "Malicious Behavior",
+                                "Malicious Behavior, Environmental",
+                            ],
+                            "intake_routes": ["seah_intake"],
+                            "sort_order": 30,
+                        }
+                    )
+            else:
+                bindings = [b for b in bindings if (b.get("workflow_track") or "") != "seah"]
+        if bindings:
+            pw_svc.replace_project_workflows(db, p, bindings)
     p.updated_at = _now()
 
     db.commit()
-    db.refresh(p)
-    return _project_to_response(p)
+    p = _load_project(db, project_id)
+    assert p is not None
+    return _project_to_response(p, db)
 
 
 @router.delete("/projects/{project_id}", status_code=204, summary="Delete project (admin)")

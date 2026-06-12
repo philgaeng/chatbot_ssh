@@ -59,11 +59,15 @@ def _http_error(exc: AuthLoginError):
 
 
 @router.post("/auth/login", response_model=LoginResponse, summary="Sign in with email and password")
-def auth_login(body: LoginRequest) -> LoginResponse:
+def auth_login(body: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     try:
         tokens = login_with_password(body.email, body.password)
     except AuthLoginError as exc:
         raise _http_error(exc) from exc
+    from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+    if sync_officer_onboarding_status(db, body.email):
+        db.commit()
     return LoginResponse(
         access_token=tokens["access_token"],
         id_token=tokens.get("id_token"),
@@ -110,9 +114,13 @@ def auth_request_invite_link(
     response_model=MessageResponse,
     summary="Set a new password using a reset token",
 )
-def auth_reset_password(body: ResetPasswordRequest) -> MessageResponse:
+def auth_reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)) -> MessageResponse:
     try:
-        reset_password_with_token(body.token, body.password)
+        email = reset_password_with_token(body.token, body.password)
     except AuthLoginError as exc:
         raise _http_error(exc) from exc
+    from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+    if sync_officer_onboarding_status(db, email):
+        db.commit()
     return MessageResponse(message="Your password has been updated. You can sign in now.")

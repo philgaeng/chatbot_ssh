@@ -51,6 +51,7 @@ class AdminScopeRow:
 
 class SettingsAction(str, Enum):
     PLATFORM_SETTINGS = "platform_settings"
+    CREATE_PROJECT = "create_project"
     MANAGE_STRUCTURE = "manage_structure"
     MANAGE_SEAH_SETTINGS = "manage_seah_settings"
     MANAGE_WORKFLOWS = "manage_workflows"
@@ -135,6 +136,12 @@ def can_access_platform_settings(user: CurrentUser) -> bool:
     return is_super_admin(user)
 
 
+def can_create_project(user: CurrentUser) -> bool:
+    if is_super_admin(user):
+        return True
+    return is_country_admin(user)
+
+
 def can_manage_structure(user: CurrentUser, *, track: str = "standard") -> bool:
     if is_super_admin(user):
         return True
@@ -209,6 +216,14 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
             raise HTTPException(status_code=403, detail="Super admin required for platform settings")
         return
 
+    if action == SettingsAction.CREATE_PROJECT:
+        if not can_create_project(user):
+            raise HTTPException(
+                status_code=403,
+                detail="requires country_admin or super_admin",
+            )
+        return
+
     if action == SettingsAction.MANAGE_STRUCTURE:
         if not can_manage_structure(user, track=track or "standard"):
             raise HTTPException(
@@ -259,6 +274,14 @@ def can_mutate_workflow(user: CurrentUser, workflow_type: str) -> bool:
     return is_country_admin(user, track)
 
 
+def can_assign_project_workflow(user: CurrentUser, workflow_type: str) -> bool:
+    """Country admin may assign bindings on their workflow_track; super_admin all."""
+    if is_super_admin(user):
+        return True
+    track: WorkflowTrack = "seah" if workflow_type == "seah" else "standard"
+    return is_country_admin(user, track)
+
+
 def admin_context_payload(user: CurrentUser) -> dict:
     scopes = getattr(user, "admin_scopes", []) or []
     return {
@@ -270,6 +293,7 @@ def admin_context_payload(user: CurrentUser) -> dict:
         "admin_country_codes": admin_country_codes(user),
         "can_access_platform_settings": can_access_platform_settings(user),
         "can_manage_structure": can_manage_structure(user),
+        "can_create_project": can_create_project(user),
         "admin_scopes": [
             {
                 "admin_scope_id": s.admin_scope_id,

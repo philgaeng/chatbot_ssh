@@ -13,6 +13,25 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+def _keycloak_user_onboarding_complete(admin: Any, ticketing_user_id: str | None) -> bool:
+    """True when Keycloak user is enabled with no pending required actions."""
+    if admin is None or not ticketing_user_id:
+        return False
+    try:
+        found = admin.get_users({"username": ticketing_user_id, "exact": True})
+        if not found:
+            found = admin.get_users({"email": ticketing_user_id, "exact": True})
+        if not found:
+            return False
+        user = found[0]
+        if not user.get("enabled", True):
+            return False
+        return not (user.get("requiredActions") or [])
+    except Exception as exc:
+        logger.warning("Could not read Keycloak user for %s: %s", ticketing_user_id, exc)
+        return False
+
+
 def should_activate_onboarding(
     payload: dict[str, Any],
     admin: Any = None,
@@ -34,23 +53,8 @@ def should_activate_onboarding(
     if payload.get("error"):
         return False
 
-    if t == "UPDATE_PROFILE":
-        return True
-
-    if t == "UPDATE_PASSWORD":
-        # Defer until phone/profile step when invite added UPDATE_PROFILE required action.
-        if admin is not None and ticketing_user_id:
-            try:
-                found = admin.get_users({"username": ticketing_user_id, "exact": True})
-                if not found:
-                    found = admin.get_users({"email": ticketing_user_id, "exact": True})
-                if found:
-                    pending = found[0].get("requiredActions") or []
-                    if "UPDATE_PROFILE" in pending:
-                        return False
-            except Exception as exc:
-                logger.warning("Could not read requiredActions for %s: %s", ticketing_user_id, exc)
-        return True
+    if t in ("LOGIN", "CODE_TO_TOKEN", "UPDATE_PROFILE", "UPDATE_PASSWORD"):
+        return _keycloak_user_onboarding_complete(admin, ticketing_user_id)
 
     return False
 

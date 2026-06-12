@@ -21,9 +21,6 @@ from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.user import Role, UserRole
 from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
-from ticketing.services.project_routing import resolve_ticket_organization
-
-
 class JurisdictionInput(BaseModel):
     organization_id: str
     role_key: str
@@ -87,26 +84,9 @@ def validate_jurisdiction(
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {data.role_key}")
 
-    if scope_requires_field_jurisdiction(db, data.role_key) and (
-        data.project_id or resolved_project_code or data.package_id
-    ):
-        routed = resolve_ticket_organization(
-            db,
-            project_id=data.project_id,
-            project_code=resolved_project_code,
-            package_id=data.package_id,
-            location_code=(data.location_code or "").strip() or None,
-        )
-        if routed and routed != org_id:
-            logger.info(
-                "validate_jurisdiction: organization_id %s -> %s (project routing)",
-                org_id,
-                routed,
-            )
-            org_id = routed
-            data.organization_id = routed
-        elif routed:
-            data.organization_id = routed
+    # organization_id is the officer's employer (contractor, CSC, etc.) — not rewritten
+    # to the project implementing agency; auto-assign matches role + package/project only.
+    data.organization_id = org_id
 
     return resolved_project_code or ""
 
@@ -373,14 +353,57 @@ def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
         db.add(OfficerOnboarding(user_id=normalized, status=status))
 
 
-def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
-    """True if officer has not finished Keycloak onboarding (invited or pending required actions)."""
+def keycloak_onboarding_complete(email: str) -> bool:
+    """True when Keycloak user is enabled with no pending required actions."""
+    if not keycloak_configured():
+        return True
+    normalized = _normalize_officer_email(email)
+    kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
+    if not kc_user:
+        return False
+    if not kc_user.get("enabled", True):
+        return False
+    return not (kc_user.get("requiredActions") or [])
+
+
+def activate_officer_onboarding(db: Session, email: str) -> bool:
+    """Set officer_onboarding to active. Returns True when a row was created or updated."""
+    from datetime import datetime, timezone
+
+    normalized = _normalize_officer_email(email)
+    row = db.get(OfficerOnboarding, normalized)
+    now = datetime.now(timezone.utc)
+    if row:
+        if row.status == "active":
+            return False
+        row.status = "active"
+        row.updated_at = now
+        return True
+    db.add(OfficerOnboarding(user_id=normalized, status="active", updated_at=now))
+    return True
+
+
+def sync_officer_onboarding_status(db: Session, email: str) -> bool:
+    """
+    Promote invited → active when Keycloak onboarding is complete.
+
+    Fallback when the Keycloak event webhook is unavailable. Returns True if DB changed.
+    """
     normalized = _normalize_officer_email(email)
     ob = db.get(OfficerOnboarding, normalized)
-    if ob and ob.status == "invited":
-        return True
-    if not keycloak_configured():
+    if ob and ob.status == "active":
         return False
+    if not keycloak_onboarding_complete(normalized):
+        return False
+    return activate_officer_onboarding(db, normalized)
+
+
+def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
+    """True if officer has not finished Keycloak onboarding (pending required actions)."""
+    normalized = _normalize_officer_email(email)
+    if not keycloak_configured():
+        ob = db.get(OfficerOnboarding, normalized)
+        return bool(ob and ob.status == "invited")
     kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
     if not kc_user:
         return True

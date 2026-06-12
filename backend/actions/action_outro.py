@@ -44,13 +44,21 @@ class ActionSeahOutro(BaseAction):
         variant = self.resolve_seah_outro_variant(slots)
         language_code = tracker.get_slot("language_code") or "en"
 
-        row = self.find_seah_contact_point(tracker)
+        providers = self.find_seah_service_providers_for_tracker(tracker)
+        row = providers[0] if providers else self.find_seah_contact_point(tracker)
 
         contact_block = ""
         events: List[Dict[Text, Any]] = []
-        if row:
+        if providers:
+            from backend.shared_functions.seah_service_providers import format_details_utterance
+
+            contact_block = "\n\n" + format_details_utterance(providers, language_code)
+            cid = providers[0].get("seah_service_provider_id")
+            if cid:
+                events.append(SlotSet("seah_contact_point_id", cid))
+        elif row:
             contact_block = "\n\n" + self.format_seah_contact_point_block(row, language_code)
-            cid = row.get("seah_contact_point_id")
+            cid = row.get("seah_contact_point_id") or row.get("seah_service_provider_id")
             if cid:
                 events.append(SlotSet("seah_contact_point_id", cid))
 

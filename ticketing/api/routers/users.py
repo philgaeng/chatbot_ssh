@@ -678,6 +678,18 @@ def list_officer_roster(
         ).scalars().all()
         onboard_map = {o.user_id: o.status for o in ob_rows}
 
+    from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+    roster_synced = False
+    for uid in order:
+        if onboard_map.get(uid) != "invited":
+            continue
+        if sync_officer_onboarding_status(db, uid):
+            onboard_map[uid] = "active"
+            roster_synced = True
+    if roster_synced:
+        db.commit()
+
     proj_by: dict[str, set[str]] = defaultdict(set)
     pkg_by: dict[str, set[str]] = defaultdict(set)
     if order:

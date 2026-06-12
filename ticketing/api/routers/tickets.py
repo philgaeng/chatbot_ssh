@@ -82,7 +82,7 @@ from ticketing.engine.escalation import (
     convene_grc, escalate_ticket,
     _apply_step_tier_roles, _ensure_viewer,
 )
-from ticketing.tasks.notifications import notify_complainant
+from ticketing.tasks.notifications import enqueue_assignment_notifications, notify_complainant
 from ticketing.tasks.llm import (
     generate_findings,
     generate_resolved_case_summary,
@@ -453,6 +453,14 @@ def create_ticket(
     db.commit()
     db.refresh(ticket)
 
+    if ticket.assigned_to_user_id:
+        enqueue_assignment_notifications(
+            ticket.ticket_id,
+            ticket.assigned_to_user_id,
+            ticket.current_step_id,
+            event="assignment",
+        )
+
     if (payload.grievance_summary or "").strip():
         _enqueue_celery(generate_findings, ticket.ticket_id)
 
@@ -758,25 +766,9 @@ def get_ticket(
                 ).scalars().all()
 
                 # Pre-fetch child locations for any scope that has a location_code
-                in_scope = False
-                for s in scopes:
-                    if s.organization_id != ticket.organization_id:
-                        continue
-                    if s.project_code and s.project_code != ticket.project_code:
-                        continue
-                    # Exact location match or no location restriction
-                    if s.location_code is None or s.location_code == ticket.location_code:
-                        in_scope = True
-                        break
-                    # Hierarchical match: scope covers a parent location
-                    child_loc_codes = db.execute(
-                        select(Location.location_code).where(
-                            Location.parent_location_code == s.location_code
-                        )
-                    ).scalars().all()
-                    if ticket.location_code in child_loc_codes:
-                        in_scope = True
-                        break
+                from ticketing.services.officer_jurisdiction import ticket_matches_scope
+
+                in_scope = any(ticket_matches_scope(db, s, ticket) for s in scopes)
 
                 if not in_scope:
                     raise HTTPException(status_code=403, detail="Access denied")
@@ -877,6 +869,15 @@ def validate_ticket_classification(
     ticket.updated_at = _now()
     ticket.updated_by_user_id = current_user.user_id
 
+    from ticketing.services.ticket_workflow_reroute import maybe_reroute_ticket_workflow
+
+    rerouted = maybe_reroute_ticket_workflow(
+        db,
+        ticket,
+        actor_user_id=current_user.user_id,
+        note="Workflow re-resolved after officer classification update",
+    )
+
     event = _add_event(
         db,
         ticket,
@@ -956,6 +957,19 @@ def patch_ticket(
 
     db.commit()
     db.refresh(ticket)
+
+    if (
+        payload.assign_to_user_id is not None
+        and payload.assign_to_user_id != old_assigned
+    ):
+        enqueue_assignment_notifications(
+            ticket.ticket_id,
+            payload.assign_to_user_id,
+            ticket.current_step_id,
+            old_assigned=old_assigned,
+            event="reassign",
+        )
+
     return ticket
 
 
@@ -1132,6 +1146,7 @@ def perform_action(
     _generate_findings: bool = False
     _generate_resolved_summary: bool = False
     _translate_resolution_event_id: Optional[str] = None
+    _assignment_notify: tuple[str, str | None, str] | None = None
 
     if action == "ACKNOWLEDGE":
         g_row = fetch_grievance_row(db, ticket.grievance_id)
@@ -1174,6 +1189,7 @@ def perform_action(
                 status_code=422,
                 detail="escalation_notes is required for ESCALATE",
             )
+        _old_assigned_escalate = ticket.assigned_to_user_id
         # Delegate to engine — single code path for manual + auto escalation
         result = escalate_ticket(
             ticket, db,
@@ -1191,6 +1207,15 @@ def perform_action(
                 detail="No next step available — ticket is already at the final escalation level",
             )
         event = result
+        if (
+            ticket.assigned_to_user_id
+            and ticket.assigned_to_user_id != _old_assigned_escalate
+        ):
+            _assignment_notify = (
+                ticket.assigned_to_user_id,
+                _old_assigned_escalate,
+                "escalation",
+            )
         _notify_complainant_text = (
             "Your grievance is being reviewed at the next level. "
             "We will continue to keep you updated."
@@ -1423,6 +1448,8 @@ def perform_action(
             actor_role=_actor_role(current_user),
             summary_regen_required=False,
         )
+        if supervisor_id != old_assigned:
+            _assignment_notify = (supervisor_id, old_assigned, "reassign")
 
     elif action == "GRC_CONVENE":
         # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
@@ -1444,6 +1471,16 @@ def perform_action(
 
     db.commit()
     db.refresh(ticket)
+
+    if _assignment_notify:
+        new_uid, old_uid, assign_event = _assignment_notify
+        enqueue_assignment_notifications(
+            ticket.ticket_id,
+            new_uid,
+            ticket.current_step_id,
+            old_assigned=old_uid,
+            event=assign_event,
+        )
 
     # Fire async complainant notification after commit so the task sees the updated ticket
     if _notify_complainant_text:

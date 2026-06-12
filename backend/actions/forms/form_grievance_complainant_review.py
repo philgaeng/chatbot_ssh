@@ -746,15 +746,21 @@ class ActionAskFormGrievanceComplainantReviewGrievanceSummaryTemp(BaseAction):
 class ActionAskFormGrievanceComplainantReviewGenderFollowUp(BaseAction):
     def name(self) -> Text:
         return "action_ask_form_grievance_complainant_review_gender_follow_up"
-    
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
-        language_code = tracker.get_slot("language_code") or "en"
-        for i in range(1, 4):
-            utterance = self.get_utterance(i)
-            dispatcher.utter_message(text=utterance)
-        utterance = self.get_utterance(4)
-        buttons = self.get_buttons(1)
-        dispatcher.utter_message(text=utterance, buttons=buttons)
+        self._initialize_language_and_helpers(tracker)
+        self.dispatch_sensitive_content_utterances_and_buttons(dispatcher, tracker)
+        return []
+
+
+class ActionAskFormGrievanceComplainantReviewSensitiveIssuesFollowUp(BaseAction):
+    def name(self) -> Text:
+        return "action_ask_form_grievance_complainant_review_sensitive_issues_follow_up"
+
+    async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: DomainDict) -> List[Dict[Text, Any]]:
+        self._initialize_language_and_helpers(tracker)
+        self.dispatch_sensitive_content_utterances_and_buttons(dispatcher, tracker)
+        return []
 
 
 ############# ACTION UPDATE CATEGORIZATION ############################

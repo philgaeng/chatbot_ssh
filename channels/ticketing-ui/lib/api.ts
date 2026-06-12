@@ -812,6 +812,7 @@ export interface AdminContext {
   admin_country_codes: string[];
   can_access_platform_settings: boolean;
   can_manage_structure: boolean;
+  can_create_project: boolean;
   admin_scopes: AdminScopeRow[];
 }
 
@@ -1613,6 +1614,22 @@ export interface ProjectOrgItem {
   org_role: string | null;
 }
 
+export interface ProjectWorkflowSlot {
+  project_workflow_id: string;
+  workflow_id: string;
+  display_label: string;
+  classifications: string[];
+  intake_routes: string[];
+  is_default: boolean;
+  workflow_track: "standard" | "seah";
+  sort_order: number;
+}
+
+export interface WorkflowRoutingOptions {
+  classifications: string[];
+  intake_routes: { key: string; label: string }[];
+}
+
 export interface ProjectItem {
   project_id: string;
   country_code: string;
@@ -1621,10 +1638,11 @@ export interface ProjectItem {
   description: string | null;
   is_active: boolean;
   project_type_key: string | null;
-  /** Workflow used for standard (non-SEAH) grievances on this project. */
+  /** @deprecated use workflow_slots — mirrors safeguards slot */
   standard_workflow_id: string | null;
-  /** Workflow used when case_sensitivity is SEAH. */
+  /** @deprecated use workflow_slots — mirrors seah slot */
   seah_workflow_id: string | null;
+  workflow_slots?: ProjectWorkflowSlot[];
   created_at: string;
   updated_at: string;
   /** Organizations linked to this project, each with an optional role. */
@@ -1778,6 +1796,33 @@ export function createProject(payload: ProjectCreate): Promise<ProjectItem> {
   });
 }
 
+export interface ProjectMessagingConfig {
+  sms_enabled: boolean;
+  sms_levels: number[];
+  whatsapp_levels: number[];
+  max_levels: number;
+}
+
+export interface ProjectMessagingPatch {
+  sms_enabled?: boolean;
+  sms_levels?: number[];
+  whatsapp_levels?: number[];
+}
+
+export function getProjectMessaging(projectId: string): Promise<ProjectMessagingConfig> {
+  return apiFetch<ProjectMessagingConfig>(`/api/v1/projects/${projectId}/messaging`);
+}
+
+export function patchProjectMessaging(
+  projectId: string,
+  body: ProjectMessagingPatch,
+): Promise<ProjectMessagingConfig> {
+  return apiFetch<ProjectMessagingConfig>(`/api/v1/projects/${projectId}/messaging`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export function getProjectGoLive(projectId: string): Promise<GoLiveReport> {
   return apiFetch<GoLiveReport>(`/api/v1/projects/${projectId}/go-live`);
 }
@@ -1809,6 +1854,27 @@ export function updateProject(
   return apiFetch<ProjectItem>(`/api/v1/projects/${projectId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function listWorkflowRoutingOptions(): Promise<WorkflowRoutingOptions> {
+  return apiFetch("/api/v1/workflows/routing-options");
+}
+
+export function replaceProjectWorkflows(
+  projectId: string,
+  items: {
+    display_label: string;
+    workflow_id: string;
+    classifications?: string[];
+    intake_routes?: string[];
+    is_default?: boolean;
+    sort_order?: number;
+  }[],
+): Promise<ProjectWorkflowSlot[]> {
+  return apiFetch(`/api/v1/projects/${projectId}/workflows`, {
+    method: "PUT",
+    body: JSON.stringify({ items }),
   });
 }
 

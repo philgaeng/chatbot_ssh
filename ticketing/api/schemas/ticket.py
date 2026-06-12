@@ -28,7 +28,12 @@ class TicketCreate(BaseModel):
     # Omit (or null) for walk-in / phone intake; always null for SEAH tickets.
     package_id: Optional[str] = Field(None, max_length=36)
     priority: str = Field("NORMAL", max_length=32)  # NORMAL | HIGH | SENSITIVE
+    # Legacy chatbot flag — used as intake hint until story_main is sent on webhook.
     is_seah: bool = False
+    # Chatbot story / menu path: seah_intake, new_grievance, road_hazard_grievance, …
+    intake_route: Optional[str] = Field(None, max_length=64)
+    # Fast-path subtype: road_hazard, dust, …
+    intake_fast_path: Optional[str] = Field(None, max_length=64)
 
     # Non-PII grievance data cached at ticket creation (CLAUDE.md rule 4)
     grievance_summary: Optional[str] = None

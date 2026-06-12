@@ -1,9 +1,9 @@
 """
 Celery tasks: officer + complainant notifications.
 
-Officer notifications (proto): in-app badge only (no email/SMS to officers).
-  - Unseen TicketEvent rows drive the badge count (already created by the engine)
-  - This task is available for future SSE push upgrade
+Officer notifications:
+  - In-app badge via ASSIGNMENT_NOTIFICATION TicketEvent
+  - Project-level SMS on assignment (link-only, no PII) via notify_officer_assignment
 
 Complainant notifications:
   - Primary: POST /message to orchestrator (session_id stored on ticket)
@@ -166,22 +166,78 @@ def notify_complainant(
         db.close()
 
 
+def enqueue_assignment_notifications(
+    ticket_id: str,
+    assigned_to_user_id: str | None,
+    step_id: str | None,
+    *,
+    old_assigned: str | None = None,
+    event: str = "assignment",
+) -> None:
+    """Queue in-app badge + officer SMS after assignment commit."""
+    if not assigned_to_user_id:
+        return
+    if old_assigned is not None and old_assigned == assigned_to_user_id:
+        return
+    try:
+        notify_assignment.delay(ticket_id, assigned_to_user_id, step_id, event)
+    except Exception as exc:
+        logger.warning("Celery enqueue notify_assignment failed (non-fatal): %s", exc)
+
+
+@celery_app.task(
+    name="ticketing.tasks.notifications.notify_officer_assignment",
+    bind=True,
+    max_retries=2,
+)
+def notify_officer_assignment(
+    self,
+    ticket_id: str,
+    assigned_to_user_id: str,
+    step_id: str | None,
+    event: str = "assignment",
+) -> dict:
+    """Send link-only officer SMS when project messaging config allows."""
+    from ticketing.models.base import SessionLocal
+    from ticketing.services.officer_messaging import notify_officer_assignment_sync
+
+    db = SessionLocal()
+    try:
+        return notify_officer_assignment_sync(
+            db,
+            ticket_id,
+            assigned_to_user_id,
+            step_id,
+            event=event,
+        )
+    except Exception as exc:
+        db.rollback()
+        raise self.retry(exc=exc)
+    finally:
+        db.close()
+
+
 @celery_app.task(
     name="ticketing.tasks.notifications.notify_assignment",
     bind=True,
     max_retries=2,
 )
-def notify_assignment(self, ticket_id: str, assigned_to_user_id: str) -> dict:
+def notify_assignment(
+    self,
+    ticket_id: str,
+    assigned_to_user_id: str,
+    step_id: str | None = None,
+    event: str = "assignment",
+) -> dict:
     """
     Create an unread notification event for the newly assigned officer.
-    Badge count in officer UI is driven by unseen TicketEvent rows.
+    Also queues officer SMS when project messaging is enabled for the step level.
 
     INTEGRATION POINT: trigger SSE push here in v2 for real-time badge update.
     """
     from ticketing.models.base import SessionLocal
     from ticketing.models.ticket import Ticket, TicketEvent
     import uuid
-    from datetime import datetime, timezone
 
     db = SessionLocal()
     try:
@@ -189,7 +245,7 @@ def notify_assignment(self, ticket_id: str, assigned_to_user_id: str) -> dict:
         if not ticket:
             return {"ticket_id": ticket_id, "notified": False}
 
-        event = TicketEvent(
+        ev = TicketEvent(
             event_id=str(uuid.uuid4()),
             ticket_id=ticket_id,
             event_type="ASSIGNMENT_NOTIFICATION",
@@ -198,8 +254,19 @@ def notify_assignment(self, ticket_id: str, assigned_to_user_id: str) -> dict:
             assigned_to_user_id=assigned_to_user_id,
             created_by_user_id="system",
         )
-        db.add(event)
+        db.add(ev)
         db.commit()
+
+        try:
+            notify_officer_assignment.delay(
+                ticket_id, assigned_to_user_id, step_id, event
+            )
+        except Exception as exc:
+            logger.warning(
+                "Celery enqueue notify_officer_assignment failed (non-fatal): %s",
+                exc,
+            )
+
         return {"ticket_id": ticket_id, "notified": True, "user_id": assigned_to_user_id}
     except Exception as exc:
         db.rollback()
