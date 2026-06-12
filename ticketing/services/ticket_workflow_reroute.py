@@ -11,7 +11,11 @@ from ticketing.engine.escalation import _apply_step_tier_roles
 from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_first_step
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
-from ticketing.services.workflow_routing import resolve_project_workflow, workflow_is_seah
+from ticketing.services.workflow_routing import (
+    effective_intake_route_for_reroute,
+    resolve_project_workflow,
+    workflow_is_seah,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +44,18 @@ def maybe_reroute_ticket_workflow(
     if not project:
         return False
 
+    effective_route = effective_intake_route_for_reroute(
+        db,
+        ticket.grievance_categories,
+        stored_intake_route=ticket.intake_route,
+    )
     new_wf = resolve_project_workflow(
         db,
         project.project_id,
         grievance_categories=ticket.grievance_categories,
-        intake_route=ticket.intake_route,
-        intake_fast_path=ticket.intake_fast_path,
+        intake_route=effective_route,
         legacy_is_seah=False,
+        use_classification_rules=True,
     )
     if not new_wf or new_wf.workflow_id == ticket.current_workflow_id:
         new_is_seah = workflow_is_seah(new_wf)

@@ -617,6 +617,15 @@ class OfficerBrief(BaseModel):
     location_code: str | None = None
 
 
+class OfficerRosterScopeBrief(BaseModel):
+    role_key: str
+    organization_id: str
+    project_code: str | None = None
+    project_id: str | None = None
+    package_id: str | None = None
+    location_code: str | None = None
+
+
 class OfficerRosterEntry(BaseModel):
     """One officer identity with all role rows aggregated from ticketing.user_roles."""
 
@@ -629,6 +638,7 @@ class OfficerRosterEntry(BaseModel):
     location_codes: list[str]
     project_codes: list[str] = []
     package_ids: list[str] = []
+    scopes: list[OfficerRosterScopeBrief] = []
     onboarding_status: str = "active"  # invited | active
 
 
@@ -692,22 +702,7 @@ def list_officer_roster(
 
     proj_by: dict[str, set[str]] = defaultdict(set)
     pkg_by: dict[str, set[str]] = defaultdict(set)
-    if order:
-        scope_rows = db.execute(
-            select(
-                OfficerScope.user_id,
-                OfficerScope.project_code,
-                OfficerScope.package_id,
-                OfficerScope.location_code,
-            ).where(OfficerScope.user_id.in_(order))
-        ).all()
-        for uid, pcode, pkg_id, scope_loc in scope_rows:
-            if pcode:
-                proj_by[uid].add(pcode)
-            if pkg_id:
-                pkg_by[uid].add(pkg_id)
-            if scope_loc:
-                locs_by[uid].add(scope_loc)
+    scope_detail_by: dict[str, list[OfficerRosterScopeBrief]] = defaultdict(list)
 
     # Include enabled Keycloak officers not yet in user_roles (invited, pending DB sync).
     for email, profile in kc_profiles.items():
@@ -716,6 +711,36 @@ def list_officer_roster(
             order.append(email)
             if profile.organization_id:
                 orgs_by[email].add(profile.organization_id)
+
+    if order:
+        scope_rows = db.execute(
+            select(
+                OfficerScope.user_id,
+                OfficerScope.role_key,
+                OfficerScope.organization_id,
+                OfficerScope.project_code,
+                OfficerScope.project_id,
+                OfficerScope.package_id,
+                OfficerScope.location_code,
+            ).where(OfficerScope.user_id.in_(order))
+        ).all()
+        for uid, role_key, org_id, pcode, proj_id, pkg_id, scope_loc in scope_rows:
+            scope_detail_by[uid].append(
+                OfficerRosterScopeBrief(
+                    role_key=role_key,
+                    organization_id=org_id,
+                    project_code=pcode,
+                    project_id=proj_id,
+                    package_id=pkg_id,
+                    location_code=scope_loc,
+                )
+            )
+            if pcode:
+                proj_by[uid].add(pcode)
+            if pkg_id:
+                pkg_by[uid].add(pkg_id)
+            if scope_loc:
+                locs_by[uid].add(scope_loc)
 
     def _entry(uid: str) -> OfficerRosterEntry:
         kc = kc_profiles.get(uid.lower()) if "@" in uid else None
@@ -729,6 +754,7 @@ def list_officer_roster(
             location_codes=sorted(locs_by[uid]),
             project_codes=sorted(proj_by.get(uid, set())),
             package_ids=sorted(pkg_by.get(uid, set())),
+            scopes=scope_detail_by.get(uid, []),
             onboarding_status=onboard_map.get(uid, "active"),
         )
 

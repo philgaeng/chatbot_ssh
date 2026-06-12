@@ -1,4 +1,4 @@
-"""Resolve project workflow from classifications + intake signals."""
+"""Resolve project workflow from intake_route (story_main) + optional classification re-route."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ticketing.constants.workflow_routing import (
+    INTAKE_ROUTE_NEW_GRIEVANCE,
+    INTAKE_ROUTE_PRIORITY,
+    INTAKE_ROUTE_ROAD_HAZARD,
+    INTAKE_ROUTE_SEAH,
+    intake_route_from_payload,
     normalize_classification,
-    intake_signals_from_payload,
+    normalize_intake_route,
 )
 from ticketing.models.project_workflow import ProjectWorkflow
 from ticketing.models.workflow import WorkflowDefinition
@@ -18,18 +23,88 @@ from ticketing.services.project_workflows import list_project_workflows
 
 logger = logging.getLogger(__name__)
 
+_SEAH_CLASSIFICATIONS = frozenset(
+    normalize_classification(c)
+    for c in (
+        "Gender",
+        "Gender, Social",
+        "Malicious Behavior",
+        "Malicious Behavior, Environmental",
+    )
+)
+_ROAD_HAZARD_CLASSIFICATION = normalize_classification("Road Hazard")
 
-def _category_key_index(db: Session) -> dict[str, str]:
-    """Map category_key → normalized classification."""
+
+def _category_catalog_index(db: Session) -> dict[str, dict]:
+    """Map category_key (case variants) → catalog entry."""
     catalog = load_grievance_categories_catalog(db)
-    out: dict[str, str] = {}
+    out: dict[str, dict] = {}
     for entry in catalog.get("categories") or []:
         key = (entry.get("category_key") or "").strip()
-        cls = normalize_classification(entry.get("classification") or "")
-        if key and cls:
-            out[key] = cls
-            out[key.lower()] = cls
+        if not key:
+            continue
+        out[key] = entry
+        out[key.lower()] = entry
     return out
+
+
+def _default_intake_route_for_entry(entry: dict) -> str:
+    explicit = normalize_intake_route(entry.get("intake_route"))
+    if explicit:
+        return explicit
+    cls = normalize_classification(entry.get("classification") or "")
+    if cls == _ROAD_HAZARD_CLASSIFICATION:
+        return INTAKE_ROUTE_ROAD_HAZARD
+    if cls in _SEAH_CLASSIFICATIONS:
+        return INTAKE_ROUTE_SEAH
+    return INTAKE_ROUTE_NEW_GRIEVANCE
+
+
+def intake_route_from_categories(db: Session, grievance_categories: Any) -> str:
+    """Derive effective intake_route from selected category keys (tie-break: SEAH > road > safeguards)."""
+    routes: list[str] = []
+    index = _category_catalog_index(db)
+    for key in _coerce_category_keys(grievance_categories):
+        entry = index.get(key) or index.get(key.lower())
+        if entry:
+            routes.append(_default_intake_route_for_entry(entry))
+    if not routes:
+        return INTAKE_ROUTE_NEW_GRIEVANCE
+    return min(routes, key=lambda r: INTAKE_ROUTE_PRIORITY.get(r, 99))
+
+
+def effective_intake_route_for_reroute(
+    db: Session,
+    grievance_categories: Any,
+    *,
+    stored_intake_route: str | None,
+) -> str:
+    """
+    Re-route only from safeguards (new_grievance) path when categories imply another stream.
+    SEAH and road-hazard menu paths stay on their original intake_route.
+    """
+    stored = normalize_intake_route(stored_intake_route)
+    if stored and stored != INTAKE_ROUTE_NEW_GRIEVANCE:
+        return stored
+    return intake_route_from_categories(db, grievance_categories)
+
+
+def _coerce_category_keys(grievance_categories: Any) -> list[str]:
+    if grievance_categories is None:
+        return []
+    cats = grievance_categories
+    if isinstance(cats, str):
+        raw = cats.strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+            cats = parsed if isinstance(parsed, list) else [raw]
+        except json.JSONDecodeError:
+            cats = [c.strip() for c in raw.split(",") if c.strip()]
+    if not isinstance(cats, list):
+        return []
+    return [str(item).strip() for item in cats if str(item).strip()]
 
 
 def classifications_from_categories(
@@ -37,30 +112,15 @@ def classifications_from_categories(
     grievance_categories: Any,
 ) -> set[str]:
     """Derive taxonomy classifications from ticket category keys."""
-    if grievance_categories is None:
-        return set()
-    cats = grievance_categories
-    if isinstance(cats, str):
-        raw = cats.strip()
-        if not raw:
-            return set()
-        try:
-            parsed = json.loads(raw)
-            cats = parsed if isinstance(parsed, list) else [raw]
-        except json.JSONDecodeError:
-            cats = [c.strip() for c in raw.split(",") if c.strip()]
-    if not isinstance(cats, list):
-        return set()
-
-    index = _category_key_index(db)
+    index = _category_catalog_index(db)
     found: set[str] = set()
-    for item in cats:
-        key = str(item).strip()
-        if not key:
+    for key in _coerce_category_keys(grievance_categories):
+        entry = index.get(key) or index.get(key.lower())
+        if not entry:
             continue
-        cls = index.get(key) or index.get(key.lower())
-        if cls:
-            found.add(cls)
+        raw = (entry.get("classification") or "").strip()
+        if raw:
+            found.add(normalize_classification(raw))
     return found
 
 
@@ -82,28 +142,23 @@ def _binding_classifications(row: ProjectWorkflow) -> set[str]:
     return {normalize_classification(c) for c in raw if str(c).strip()}
 
 
-def _binding_intake_routes(row: ProjectWorkflow) -> set[str]:
-    raw = row.intake_routes or []
-    return {str(r).strip().lower() for r in raw if str(r).strip()}
-
-
 def _workflow_for_binding(db: Session, row: ProjectWorkflow) -> WorkflowDefinition | None:
     return db.get(WorkflowDefinition, row.workflow_id)
 
 
 def pick_project_workflow_binding(
     bindings: list[ProjectWorkflow],
-    db: Session,
     *,
-    ticket_classifications: set[str],
-    intake_signals: set[str],
+    intake_route: str | None,
+    ticket_classifications: set[str] | None = None,
+    use_classification_rules: bool = False,
 ) -> ProjectWorkflow | None:
     """
     Select the best project workflow binding.
 
     Priority:
-      1. Intake signal match (non-default rows; narrowest intake_routes list wins)
-      2. Classification match (non-default; smallest classification rule set wins)
+      1. intake_route match on non-default rows
+      2. (re-route only) classification match on non-default rows
       3. Default row (is_default=true)
     """
     if not bindings:
@@ -111,17 +166,18 @@ def pick_project_workflow_binding(
 
     defaults = [b for b in bindings if b.is_default]
     non_default = [b for b in bindings if not b.is_default]
+    route = normalize_intake_route(intake_route)
 
-    intake_matches: list[ProjectWorkflow] = []
-    for row in non_default:
-        routes = _binding_intake_routes(row)
-        if routes and intake_signals & routes:
-            intake_matches.append(row)
+    if route:
+        route_matches = [
+            r
+            for r in non_default
+            if normalize_intake_route(r.intake_route) == route
+        ]
+        if route_matches:
+            return sorted(route_matches, key=lambda r: r.sort_order)[0]
 
-    if intake_matches:
-        return min(intake_matches, key=lambda r: (len(_binding_intake_routes(r)), r.sort_order))
-
-    if ticket_classifications:
+    if use_classification_rules and ticket_classifications:
         class_matches: list[ProjectWorkflow] = []
         for row in non_default:
             rules = _binding_classifications(row)
@@ -133,7 +189,6 @@ def pick_project_workflow_binding(
     if defaults:
         return sorted(defaults, key=lambda r: r.sort_order)[0]
 
-    # No default flagged — fall back to first binding
     return sorted(bindings, key=lambda r: r.sort_order)[0]
 
 
@@ -143,25 +198,27 @@ def resolve_project_workflow(
     *,
     grievance_categories: Any = None,
     intake_route: str | None = None,
-    intake_fast_path: str | None = None,
     legacy_is_seah: bool = False,
+    use_classification_rules: bool = False,
 ) -> WorkflowDefinition | None:
     bindings = list_project_workflows(db, project_id)
     if not bindings:
         return None
 
-    ticket_cls = classifications_from_categories(db, grievance_categories)
-    signals = intake_signals_from_payload(
+    route = intake_route_from_payload(
         intake_route=intake_route,
-        intake_fast_path=intake_fast_path,
         legacy_is_seah=legacy_is_seah,
     )
+    if not route and not use_classification_rules:
+        route = intake_route_from_categories(db, grievance_categories)
+
+    ticket_cls = classifications_from_categories(db, grievance_categories)
 
     picked = pick_project_workflow_binding(
         bindings,
-        db,
+        intake_route=route,
         ticket_classifications=ticket_cls,
-        intake_signals=signals,
+        use_classification_rules=use_classification_rules,
     )
     if not picked:
         return None
@@ -188,7 +245,6 @@ def uncovered_classifications(
     missing_norm = all_cls - covered
     if not missing_norm:
         return []
-    # Warn even when a default workflow exists — admin should map explicitly.
     catalog = load_grievance_categories_catalog(db)
     display: dict[str, str] = {}
     for entry in catalog.get("categories") or []:

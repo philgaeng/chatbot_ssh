@@ -1,5 +1,6 @@
 import { type SlaUrgency } from "@/lib/api";
 import { STATUS_BADGE, STATUS_LABELS, PRIORITY_BADGE, SLA_DOT } from "@/lib/design-tokens";
+import { intakeRouteBadgeSpec } from "@/lib/intakeRouteBadge";
 import { IconLock } from "@/lib/icons";
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -24,15 +25,35 @@ export function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
-// ── SEAH badge ────────────────────────────────────────────────────────────────
+// ── Intake route badge (story_main) ───────────────────────────────────────────
 
-export function SeahBadge() {
+export function IntakeRouteBadge({
+  intakeRoute,
+  size = "sm",
+}: {
+  intakeRoute: string | null | undefined;
+  size?: "xs" | "sm";
+}) {
+  const spec = intakeRouteBadgeSpec(intakeRoute);
+  if (!spec) return null;
+
+  const isXs = size === "xs";
+  const base = isXs
+    ? `inline-flex items-center gap-0.5 text-[10px] font-bold px-1 py-0.5 rounded ${spec.classNameXs}`
+    : `inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${spec.className}`;
+  const iconSize = isXs ? 8 : 10;
+
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white">
-      <IconLock size={10} />
-      SEAH
+    <span className={base}>
+      {spec.showLock && <IconLock size={iconSize} strokeWidth={2.5} />}
+      {spec.label}
     </span>
   );
+}
+
+/** @deprecated Use IntakeRouteBadge with intake_route */
+export function SeahBadge() {
+  return <IntakeRouteBadge intakeRoute="seah_intake" />;
 }
 
 // ── SLA urgency dot ───────────────────────────────────────────────────────────

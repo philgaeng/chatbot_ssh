@@ -14,7 +14,8 @@
       "follow_up_question_description_ne": "\"जग्गा मुआवजामा तपाईंले के के चुनौतीहरू सामना गर्नुभयो?\"",
       "follow_up_question_quantification": "\"What is the size of the land affected (in sq. meters or hectares)?\"",
       "follow_up_question_quantification_ne": "\"प्रभावित जग्गाको आकार कति छ (वर्ग मिटर वा हेक्टरमा)?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Relocation Of Public Utilities - Access To Electricity",
@@ -30,7 +31,8 @@
       "follow_up_question_description_ne": "\"बिजुली पहुँच कति लामो समयदेखि बाधित छ?\"",
       "follow_up_question_quantification": "\"How many households or businesses are impacted by the outage?\"",
       "follow_up_question_quantification_ne": "\"कति घरधुरी वा व्यापारहरू यस बिजुली बाधाको प्रभावमा छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Relocation Of Public Utilities - Access To Water",
@@ -46,7 +48,8 @@
       "follow_up_question_description_ne": "\"पानी पहुँच कति लामो समयदेखि बाधित छ?\"",
       "follow_up_question_quantification": "\"How many people or households lack water access?\"",
       "follow_up_question_quantification_ne": "\"कति मानिस वा घरधुरीहरूको पानी पहुँच छैन?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Wildlife, Environmental - Wildlife Passage",
@@ -62,7 +65,8 @@
       "follow_up_question_description_ne": "\"क्रसिङको अभावमा कुन प्रजातिहरू सबैभन्दा बढी प्रभावित छन्?\"",
       "follow_up_question_quantification": "\"How many wildlife accidents have occurred?\"",
       "follow_up_question_quantification_ne": "\"कति वन्यजन्तु दुर्घटनाहरू भएका छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Wildlife, Environmental - Wildlife Destruction",
@@ -78,7 +82,8 @@
       "follow_up_question_description_ne": "\"कुन वन्यजन्तु आवासहरू प्रभावित भएका छन्?\"",
       "follow_up_question_quantification": "\"Which endangered species have been affected?\"",
       "follow_up_question_quantification_ne": "\"कुन लोपोन्मुख प्रजातिहरू प्रभावित भएका छन्?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Environmental - Air Pollution",
@@ -94,7 +99,8 @@
       "follow_up_question_description_ne": "\"यसले तपाईंका नातेदारहरूको स्वास्थ्यलाई कसरी असर गर्छ?\"",
       "follow_up_question_quantification": "\"How many people are affected, can you list them?\"",
       "follow_up_question_quantification_ne": "\"कति मानिसहरू प्रभावित छन्, तपाईं तिनीहरूलाई सूचीबद्ध गर्न सक्नुहुन्छ?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Environmental - Noise Pollution",
@@ -110,7 +116,8 @@
       "follow_up_question_description_ne": "\"ध्वनि प्रदूषणका लागि कुन समयावधि सबैभन्दा खराब छ?\"",
       "follow_up_question_quantification": "\"How many hours per day are noise levels intolerable?\"",
       "follow_up_question_quantification_ne": "\"दिनको कति घण्टा ध्वनि स्तर असहनीय छ?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Economic, Social - Employment Opportunities",
@@ -126,7 +133,8 @@
       "follow_up_question_description_ne": "\"तपाईं वा अरूले रोजगारीका लागि आवेदन गर्नुभयो? नतिजा के भयो?\"",
       "follow_up_question_quantification": "\"How many people have been affected by lack of employment opportunities?\"",
       "follow_up_question_quantification_ne": "\"रोजगारी अवसरको कमीले कति मानिसहरूलाई प्रभावित गरेको छ?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Cultural, Social - Cultural Site Disturbances",
@@ -142,7 +150,8 @@
       "follow_up_question_description_ne": "\"कुन सांस्कृतिक वा धार्मिक स्थलहरू प्रभावित भएका छन्?\"",
       "follow_up_question_quantification": "\"How many cultural events or practices have been impacted?\"",
       "follow_up_question_quantification_ne": "\"कति सांस्कृतिक कार्यक्रम वा प्रथाहरू प्रभावित भएका छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Gender, Social - Gender Based Access Issues",
@@ -158,7 +167,8 @@
       "follow_up_question_description_ne": "\"के विशिष्ट घटना वा जोखिमहरू पहिचान गरिएका छन्, तपाईं तिनीहरूलाई सूचीबद्ध गर्न सक्नुहुन्छ?\"",
       "follow_up_question_quantification": "\"How many events have been reported to you?\"",
       "follow_up_question_quantification_ne": "\"तपाईंलाई कति घटनाहरू रिपोर्ट गरिएका छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "seah_intake"
     },
     {
       "category_key": "Relocation Issues - Forced Relocation Issues",
@@ -174,7 +184,8 @@
       "follow_up_question_description_ne": "\"स्थानान्तरणमा तपाईंले के के विशिष्ट समस्याहरू सामना गर्नुभयो?\"",
       "follow_up_question_quantification": "\"How many individuals or families have been displaced?\"",
       "follow_up_question_quantification_ne": "\"कति व्यक्ति वा परिवारहरू विस्थापित भएका छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Environmental - Drainage And Sewage Management",
@@ -190,7 +201,8 @@
       "follow_up_question_description_ne": "\"कुन क्षेत्रहरू बाढी वा जलजमावले प्रभावित छन्?\"",
       "follow_up_question_quantification": "\"What is the estimated damage area (in sq. meters or hectares)?\"",
       "follow_up_question_quantification_ne": "\"अनुमानित क्षति क्षेत्र कति छ (वर्ग मिटर वा हेक्टरमा)?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Safety - Road Safety Provisions",
@@ -206,7 +218,8 @@
       "follow_up_question_description_ne": "\"कुन क्षेत्रहरूमा पैदल यात्रीहरूका लागि सुरक्षा व्यवस्था छैन?\"",
       "follow_up_question_quantification": "\"How many accidents or near misses have occurred?\"",
       "follow_up_question_quantification_ne": "\"कति दुर्घटना वा नजिकैको घटनाहरू भएका छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Destruction Of Agrarian Resources - Soil Pollution",
@@ -222,7 +235,8 @@
       "follow_up_question_description_ne": "\"कुन प्रकारका प्रदूषकहरू अवलोकन गरिएका छन्?\"",
       "follow_up_question_quantification": "\"What is the size of the affected farmland (in hectares)?\"",
       "follow_up_question_quantification_ne": "\"प्रभावित कृषि जग्गाको आकार कति छ (हेक्टरमा)?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Destruction Of Agrarian Resources - Destruction Of Agrarian Soils",
@@ -238,7 +252,8 @@
       "follow_up_question_description_ne": "\"माटोमा के के विशिष्ट क्षति भएको छ?\"",
       "follow_up_question_quantification": "\"How much farmland has been rendered unusable (in hectares)?\"",
       "follow_up_question_quantification_ne": "\"कति कृषि जग्गा प्रयोग नहुने बनाइएको छ (हेक्टरमा)?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Environmental, Social - Cutting Of Trees",
@@ -254,7 +269,8 @@
       "follow_up_question_description_ne": "\"कुन प्रकारका रूखहरू काटिएका छन्, र किन?\"",
       "follow_up_question_quantification": "\"How many trees have been felled in total?\"",
       "follow_up_question_quantification_ne": "\"जम्मा कति रूखहरू काटिएका छन्?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Destruction Of Agrarian Resources - Crop Destruction",
@@ -270,7 +286,8 @@
       "follow_up_question_description_ne": "\"कुन बालीहरू प्रभावित भएका छन्, र कसरी?\"",
       "follow_up_question_quantification": "\"What is the total loss in yield (in kg or tons)?\"",
       "follow_up_question_quantification_ne": "\"उत्पादनमा जम्मा कति हानि भएको छ (किलो वा टनमा)?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Malicious Behavior - Theft Of Crops",
@@ -286,7 +303,8 @@
       "follow_up_question_description_ne": "\"कुन प्रकारका बाली वा पशुधन चोरिएका छन्?\"",
       "follow_up_question_quantification": "\"What is the estimated value of the stolen crops or livestock (in currency)?\"",
       "follow_up_question_quantification_ne": "\"चोरिएका बाली वा पशुधनको अनुमानित मूल्य कति छ (मुद्रामा)?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "seah_intake"
     },
     {
       "category_key": "Malicious Behavior - Theft Of Tools Or Equipment",
@@ -302,7 +320,8 @@
       "follow_up_question_description_ne": "\"कुन विशिष्ट सामान वा उपकरणहरू चोरिएका छन्?\"",
       "follow_up_question_quantification": "\"What is the estimated value of the stolen tools (in currency)?\"",
       "follow_up_question_quantification_ne": "\"चोरिएका सामानहरूको अनुमानित मूल्य कति छ (मुद्रामा)?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "seah_intake"
     },
     {
       "category_key": "Malicious Behavior, Environmental - Fire Incidents",
@@ -318,7 +337,8 @@
       "follow_up_question_description_ne": "\"आगोको कारण के थियो, र कुन सम्पत्ति प्रभावित भएको थियो?\"",
       "follow_up_question_quantification": "\"What is the total area or value of damage caused by the fire?\"",
       "follow_up_question_quantification_ne": "\"आगोका कारण भएको क्षतिको जम्मा क्षेत्र वा मूल्य कति छ?\"",
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "seah_intake"
     },
     {
       "category_key": "Relocation Issues - Poor Housing Quality Of The Resettlement Site",
@@ -334,7 +354,8 @@
       "follow_up_question_description_ne": "\"तपाईंले आफ्नो आवास र यसको अवस्था वर्णन गर्न सक्नुहुन्छ?\"",
       "follow_up_question_quantification": "\"How would you rate your new house compare to what you were promised from 1 to 5, 1 being the worse and 5 what you expected?\"",
       "follow_up_question_quantification_ne": "\"तपाईंले वचन दिइएको भन्दा तपाईंको नयाँ घरलाई १ देखि ५ को स्केलमा कसरी मूल्याङ्कन गर्नुहुन्छ, १ सबैभन्दा खराब र ५ तपाईंले आशा गरेको?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Relocation Issues - Lack Of Infrastructure Of The Resettlement Site",
@@ -350,7 +371,8 @@
       "follow_up_question_description_ne": "\"आधारभूत संरचनाको कमीका कारण तपाईंले सामना गर्ने समस्याहरू वर्णन गर्न सक्नुहुन्छ?\"",
       "follow_up_question_quantification": "\"What are the lacking infrastructures?\"",
       "follow_up_question_quantification_ne": "\"कुन कुन आधारभूत संरचनाहरू कमी छन्?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Relocation Issues - Poor Location Of The Resettlement Site",
@@ -366,7 +388,8 @@
       "follow_up_question_description_ne": "\"स्थानका कारण तपाईंले सामना गर्ने समस्याहरू वर्णन गर्न सक्नुहुन्छ?\"",
       "follow_up_question_quantification": "\"How long does it take to go to your farm site or village or school?\"",
       "follow_up_question_quantification_ne": "\"तपाईंको फार्म साइट वा गाउँ वा स्कूल जान कति लामो समय लाग्छ?\"",
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "new_grievance"
     },
     {
       "category_key": "Road Hazard - Dust",
@@ -382,7 +405,8 @@
       "follow_up_question_description_ne": "\"धुलोले तपाईं वा तपाईंको परिवारलाई कसरी असर गर्छ?\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Road Hazard - Flood And Landslide",
@@ -398,7 +422,8 @@
       "follow_up_question_description_ne": "\"तपाईंले पहिलो पटक कहिले समस्या देख्नुभयो?\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Road Hazard - Potholes",
@@ -414,7 +439,8 @@
       "follow_up_question_description_ne": "\"सडकको कुन ठाउँमा क्षति छ?\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Road Hazard - Accident",
@@ -430,7 +456,8 @@
       "follow_up_question_description_ne": "\"के कसै घाइते भए?\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": true
+      "high_priority": true,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Road Hazard - Animal On Road",
@@ -446,7 +473,8 @@
       "follow_up_question_description_ne": "\"कस्तो जनावर र कति पटक देख्नुहुन्छ?\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Road Hazard - Others",
@@ -462,7 +490,8 @@
       "follow_up_question_description_ne": "\"कृपया खतरा वर्णन गर्नुहोस्।\"",
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "road_hazard_grievance"
     },
     {
       "category_key": "Gender - Gender Discrimination And Harrassment",
@@ -478,7 +507,8 @@
       "follow_up_question_description_ne": null,
       "follow_up_question_quantification": null,
       "follow_up_question_quantification_ne": null,
-      "high_priority": false
+      "high_priority": false,
+      "intake_route": "seah_intake"
     }
   ]
 }

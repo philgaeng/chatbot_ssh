@@ -49,10 +49,9 @@ infrastructure projects (KL Road / Kakarbhitta-Laukahi Road, ADB Loan 52097-003)
 
 ## HARD BOUNDARIES — READ BEFORE WRITING ANY CODE
 
-### NEVER modify these:
+### NEVER modify these (unless explicitly integrating chatbot ↔ ticketing):
 
 ```
-backend/actions/           → DO NOT TOUCH
 backend/orchestrator/      → DO NOT TOUCH
 backend/api/               → DO NOT TOUCH
 backend/services/          → DO NOT TOUCH
@@ -69,21 +68,21 @@ requirements.txt           → DO NOT TOUCH (use requirements.grm.txt)
 .env / env.local           → DO NOT TOUCH
 ```
 
-### New code lives ONLY in:
+### Chatbot ↔ ticketing integration (in scope):
 
 ```
-ticketing/                 → all new backend code
-channels/ticketing-ui/     → all new frontend code (Next.js 16, Cursor handles)
-requirements.grm.txt       → new Python dependencies only
+backend/actions/utils/ticketing_dispatch.py  → POST /api/v1/tickets webhook (intake_route = story_main)
+backend/actions/                           → other intake/submit paths only when wiring GRM
+ticketing/                                 → ticketing API, schema, routing
+channels/ticketing-ui/                     → officer UI
+requirements.grm.txt                       → new Python dependencies only
 ```
 
-### Integration points — leave comments, do NOT wire:
+### New feature code defaults to:
 
-```python
-# INTEGRATION POINT: backend/api/routers/messaging.py
-# POST /api/messaging/send-sms  OR  POST /api/messaging/send-email
-# Auth: x-api-key header
-# To be wired by Cursor in WSL
+```
+ticketing/                 → ticketing backend
+channels/ticketing-ui/     → officer frontend (Next.js 16)
 ```
 
 ---

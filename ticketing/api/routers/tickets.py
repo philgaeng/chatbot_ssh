@@ -692,6 +692,7 @@ def list_tickets(
             status_code=t.status_code,
             priority=t.priority,
             is_seah=t.is_seah,
+            intake_route=t.intake_route,
             organization_id=t.organization_id,
             location_code=t.location_code,
             project_code=t.project_code,

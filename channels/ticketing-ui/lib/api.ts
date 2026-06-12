@@ -19,6 +19,7 @@ export interface TicketListItem {
   status_code: string;
   priority: string;
   is_seah: boolean;
+  intake_route: string | null;
   organization_id: string;
   location_code: string | null;
   project_code: string | null;
@@ -867,6 +868,16 @@ export function deleteRole(roleId: string): Promise<void> {
   return apiFetch(`/api/v1/roles/${roleId}`, { method: "DELETE" });
 }
 
+/** Per-scope row for roster display (role → projects grouping). */
+export interface OfficerRosterScope {
+  role_key: string;
+  organization_id: string;
+  project_code: string | null;
+  project_id: string | null;
+  package_id: string | null;
+  location_code: string | null;
+}
+
 /** Settings → Officers (admin): aggregated ticketing.user_roles — no Keycloak sync. */
 export interface OfficerRosterEntry {
   user_id: string;
@@ -878,6 +889,7 @@ export interface OfficerRosterEntry {
   location_codes: string[];
   project_codes?: string[];
   package_ids?: string[];
+  scopes?: OfficerRosterScope[];
   /** invited until Keycloak webhook confirms password update */
   onboarding_status?: string;
 }
@@ -1619,7 +1631,8 @@ export interface ProjectWorkflowSlot {
   workflow_id: string;
   display_label: string;
   classifications: string[];
-  intake_routes: string[];
+  /** Chatbot story_main — null on the default (catch-all) row. */
+  intake_route: string | null;
   is_default: boolean;
   workflow_track: "standard" | "seah";
   sort_order: number;
@@ -1845,6 +1858,7 @@ export function updateProject(
   projectId: string,
   payload: {
     name?: string;
+    short_code?: string;
     description?: string | null;
     is_active?: boolean;
     standard_workflow_id?: string | null;
@@ -1867,7 +1881,7 @@ export function replaceProjectWorkflows(
     display_label: string;
     workflow_id: string;
     classifications?: string[];
-    intake_routes?: string[];
+    intake_route?: string | null;
     is_default?: boolean;
     sort_order?: number;
   }[],
@@ -2008,13 +2022,14 @@ export interface PackageItem {
 }
 
 export interface PackageCreate {
-  package_code:      string;
+  package_code?:     string | null;
   name:              string;
   description?:      string | null;
   is_active?:        boolean;
 }
 
 export interface PackageUpdate {
+  package_code?:      string;
   name?:              string;
   description?:       string | null;
   is_active?:         boolean;

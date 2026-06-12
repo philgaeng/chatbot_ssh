@@ -14,7 +14,7 @@ import {
 import { useAuth } from "@/app/providers/AuthProvider";
 import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
-import { StatusBadge, PriorityBadge, SeahBadge } from "@/components/ui/Badge";
+import { StatusBadge, PriorityBadge, IntakeRouteBadge } from "@/components/ui/Badge";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
 import { SystemPill }                         from "@/components/thread/SystemPill";
@@ -1260,7 +1260,7 @@ export default function TicketDetailPage() {
           </button>
           <div className="w-px h-4 bg-gray-200 shrink-0" />
           <h1 className="text-base font-semibold text-gray-900 shrink-0">{ticket.grievance_id}</h1>
-          {ticket.is_seah && <SeahBadge />}
+          <IntakeRouteBadge intakeRoute={ticket.intake_route} />
           <StatusBadge code={ticket.status_code} />
           <PriorityBadge priority={ticket.priority} />
 

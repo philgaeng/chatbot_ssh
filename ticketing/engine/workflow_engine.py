@@ -156,7 +156,7 @@ def resolve_workflow(
     *,
     grievance_categories: Optional[Any] = None,
     intake_route: Optional[str] = None,
-    intake_fast_path: Optional[str] = None,
+    intake_fast_path: Optional[str] = None,  # deprecated — story_main intake_route only
 ) -> Optional[WorkflowDefinition]:
     """
     Resolve the workflow for a new ticket.
@@ -178,7 +178,6 @@ def resolve_workflow(
                 project.project_id,
                 grievance_categories=grievance_categories,
                 intake_route=intake_route,
-                intake_fast_path=intake_fast_path,
                 legacy_is_seah=is_seah,
             )
             if wf:

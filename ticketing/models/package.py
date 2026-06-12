@@ -47,8 +47,8 @@ class ProjectPackage(Base):
         ForeignKey("ticketing.projects.project_id", ondelete="CASCADE"),
         nullable=False,
     )
-    # Official lot/contract number, e.g. 'SHEP/OCB/KL/01'
-    package_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Short lot id within project, e.g. '01' — max 8 chars, A-Z 0-9 _
+    package_code: Mapped[str] = mapped_column(String(8), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 

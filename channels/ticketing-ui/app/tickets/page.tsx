@@ -11,7 +11,7 @@ import {
   type TicketListItem,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { StatusBadge, PriorityBadge, SeahBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
+import { StatusBadge, PriorityBadge, IntakeRouteBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
 import { TicketListFiltersBar } from "@/components/tickets/TicketListFiltersBar";
 
@@ -20,13 +20,13 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
   return (
     <Link
       href={`/tickets/${ticket.ticket_id}`}
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition border-b border-gray-100 last:border-0 ${ticket.is_seah ? "border-l-2 border-l-red-400" : ""}`}
+      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition border-b border-gray-100 last:border-0"
     >
       <UrgencyDot urgency={urgency} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-400 font-mono">{ticket.grievance_id}</span>
-          {ticket.is_seah && <SeahBadge />}
+          <IntakeRouteBadge intakeRoute={ticket.intake_route} />
           <StatusBadge code={ticket.status_code} />
           <PriorityBadge priority={ticket.priority} />
         </div>

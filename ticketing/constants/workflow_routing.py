@@ -1,26 +1,41 @@
-"""Intake signals and seed defaults for project workflow routing."""
+"""Intake routes (chatbot story_main) and seed defaults for project workflow routing."""
 from __future__ import annotations
 
-# Chatbot / webhook intake signals (match project_workflows.intake_routes).
-INTAKE_ROUTE_FAST_TRACK = "fast_track"
-INTAKE_ROUTE_ROAD_HAZARD = "road_hazard"
-INTAKE_ROUTE_DUST = "dust"
-INTAKE_ROUTE_SEAH = "seah_intake"
-INTAKE_ROUTE_STANDARD = "standard_grievance"
-INTAKE_ROUTE_GRIEVANCE_NEW = "grievance_new"
+# Canonical values — match chatbot story_main slot.
 INTAKE_ROUTE_NEW_GRIEVANCE = "new_grievance"
+INTAKE_ROUTE_SEAH = "seah_intake"
+INTAKE_ROUTE_ROAD_HAZARD = "road_hazard_grievance"
+
+ACTIVE_INTAKE_ROUTES = frozenset({
+    INTAKE_ROUTE_NEW_GRIEVANCE,
+    INTAKE_ROUTE_SEAH,
+    INTAKE_ROUTE_ROAD_HAZARD,
+})
 
 INTAKE_ROUTE_CATALOG: list[dict[str, str]] = [
-    {"key": INTAKE_ROUTE_FAST_TRACK, "label": "Fast track (road hazard menu)"},
-    {"key": INTAKE_ROUTE_ROAD_HAZARD, "label": "Road hazard intake"},
-    {"key": INTAKE_ROUTE_DUST, "label": "Legacy dust path"},
+    {"key": INTAKE_ROUTE_NEW_GRIEVANCE, "label": "File a grievance (safeguards GRM)"},
+    {"key": INTAKE_ROUTE_ROAD_HAZARD, "label": "Report a road hazard (fast path)"},
     {"key": INTAKE_ROUTE_SEAH, "label": "SEAH intake"},
-    {"key": INTAKE_ROUTE_STANDARD, "label": "Standard new grievance"},
-    {"key": INTAKE_ROUTE_GRIEVANCE_NEW, "label": "Grievance details (manual / LLM off)"},
-    {"key": INTAKE_ROUTE_NEW_GRIEVANCE, "label": "New grievance story"},
 ]
 
-# Seed bindings for construction_road (overwritable in admin UI).
+# Tie-break when categories imply multiple routes (lower = wins).
+INTAKE_ROUTE_PRIORITY: dict[str, int] = {
+    INTAKE_ROUTE_SEAH: 0,
+    INTAKE_ROUTE_ROAD_HAZARD: 1,
+    INTAKE_ROUTE_NEW_GRIEVANCE: 2,
+}
+
+_LEGACY_INTAKE_ALIASES: dict[str, str] = {
+    "grievance_new": INTAKE_ROUTE_NEW_GRIEVANCE,
+    "standard_grievance": INTAKE_ROUTE_NEW_GRIEVANCE,
+    "grievance_submission": INTAKE_ROUTE_NEW_GRIEVANCE,
+    "seah": INTAKE_ROUTE_SEAH,
+    "dust": INTAKE_ROUTE_ROAD_HAZARD,
+    "dust_grievance": INTAKE_ROUTE_ROAD_HAZARD,
+    "fast_track": INTAKE_ROUTE_ROAD_HAZARD,
+    "road_hazard": INTAKE_ROUTE_ROAD_HAZARD,
+}
+
 SEED_ROAD_HAZARD_CLASSIFICATIONS = ["Road Hazard"]
 SEED_SEAH_CLASSIFICATIONS = [
     "Gender",
@@ -29,46 +44,36 @@ SEED_SEAH_CLASSIFICATIONS = [
     "Malicious Behavior, Environmental",
 ]
 
-SEED_ROAD_HAZARD_INTAKE_ROUTES = [
-    INTAKE_ROUTE_FAST_TRACK,
-    INTAKE_ROUTE_ROAD_HAZARD,
-    INTAKE_ROUTE_DUST,
-]
-SEED_SEAH_INTAKE_ROUTES = [INTAKE_ROUTE_SEAH]
-SEED_SAFEGUARDS_INTAKE_ROUTES = [
-    INTAKE_ROUTE_STANDARD,
-    INTAKE_ROUTE_GRIEVANCE_NEW,
-    INTAKE_ROUTE_NEW_GRIEVANCE,
-]
+SEED_ROAD_HAZARD_INTAKE_ROUTE = INTAKE_ROUTE_ROAD_HAZARD
+SEED_SEAH_INTAKE_ROUTE = INTAKE_ROUTE_SEAH
+SEED_SAFEGUARDS_INTAKE_ROUTE = INTAKE_ROUTE_NEW_GRIEVANCE
 
 
 def normalize_classification(value: str) -> str:
     return " ".join((value or "").strip().lower().split())
 
 
-def intake_signals_from_payload(
+def normalize_intake_route(value: str | None) -> str | None:
+    """Map webhook / legacy values to canonical story_main intake_route."""
+    if value is None:
+        return None
+    key = str(value).strip().lower()
+    if not key:
+        return None
+    if key in ACTIVE_INTAKE_ROUTES:
+        return key
+    return _LEGACY_INTAKE_ALIASES.get(key)
+
+
+def intake_route_from_payload(
     *,
     intake_route: str | None = None,
-    intake_fast_path: str | None = None,
     legacy_is_seah: bool = False,
-) -> set[str]:
-    """Build intake signal set from webhook fields (chatbot may send subset)."""
-    signals: set[str] = set()
-    for raw in (intake_route, intake_fast_path):
-        if not raw:
-            continue
-        key = raw.strip().lower()
-        signals.add(key)
-        if key in ("road_hazard", "dust", "road_hazard_grievance"):
-            signals.add(INTAKE_ROUTE_FAST_TRACK)
-            signals.add(INTAKE_ROUTE_ROAD_HAZARD)
-        if key == "dust":
-            signals.add(INTAKE_ROUTE_DUST)
-        if key in ("seah_intake", "seah"):
-            signals.add(INTAKE_ROUTE_SEAH)
-        if key in ("new_grievance",):
-            signals.add(INTAKE_ROUTE_NEW_GRIEVANCE)
-            signals.add(INTAKE_ROUTE_STANDARD)
+) -> str | None:
+    """Build canonical intake_route from webhook fields."""
+    route = normalize_intake_route(intake_route)
+    if route:
+        return route
     if legacy_is_seah:
-        signals.add(INTAKE_ROUTE_SEAH)
-    return signals
+        return INTAKE_ROUTE_SEAH
+    return None

@@ -70,16 +70,29 @@ async function proxy(
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
 
-  const upstream = await fetch(target, {
-    method: req.method,
-    headers: fwdHeaders,
-    // Pass the raw body stream through (handles JSON, multipart, binary)
-    body: hasBody ? req.body : undefined,
-    // Required for streaming request body in Node.js ≥ 18
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — duplex is a Node fetch option, not in TS types
-    duplex: "half",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers: fwdHeaders,
+      // Pass the raw body stream through (handles JSON, multipart, binary)
+      body: hasBody ? req.body : undefined,
+      // Required for streaming request body in Node.js ≥ 18
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — duplex is a Node fetch option, not in TS types
+      duplex: "half",
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Ticketing API request failed";
+    console.error("[grm-api-proxy] upstream fetch failed:", target, message);
+    return NextResponse.json(
+      {
+        detail: `Ticketing API unreachable (${UPSTREAM}). Is ticketing_api running? ${message}`,
+      },
+      { status: 502 },
+    );
+  }
 
   return new NextResponse(upstream.body, {
     status: upstream.status,

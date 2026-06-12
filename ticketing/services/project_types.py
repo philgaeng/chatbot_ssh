@@ -66,7 +66,7 @@ def instantiate_project_from_type(db: Session, project: Project, type_key: str) 
                     "workflow_id": pt.standard_workflow_id,
                     "is_default": True,
                     "classifications": [],
-                    "intake_routes": ["standard_grievance", "grievance_new", "new_grievance"],
+                    "intake_route": "new_grievance",
                     "sort_order": 10,
                 }
             )
@@ -82,7 +82,7 @@ def instantiate_project_from_type(db: Session, project: Project, type_key: str) 
                         "Malicious Behavior",
                         "Malicious Behavior, Environmental",
                     ],
-                    "intake_routes": ["seah_intake"],
+                    "intake_route": "seah_intake",
                     "sort_order": 30,
                 }
             )

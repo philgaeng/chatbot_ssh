@@ -153,13 +153,13 @@ def kl_road_project(db) -> Project:
 
 @pytest.fixture
 def jhapa_lot_package_id(db, kl_road_project) -> str:
-    """Lot 1 package (SHEP/OCB/KL/01) — linked to P1_JHA in package_locations."""
+    """Lot 1 package (01) — linked to P1_JHA in package_locations."""
     from ticketing.models.package import ProjectPackage
 
     pkg = db.execute(
         select(ProjectPackage).where(
             ProjectPackage.project_id == kl_road_project.project_id,
-            ProjectPackage.package_code == "SHEP/OCB/KL/01",
+            ProjectPackage.package_code == "01",
         )
     ).scalar_one()
     return pkg.package_id

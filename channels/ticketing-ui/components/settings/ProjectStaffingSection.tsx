@@ -9,6 +9,7 @@ import {
   type ProjectItem,
   type ProjectOrgItem,
 } from "@/lib/api";
+import { projectStaffingCoverageLine } from "@/lib/officerRosterDisplay";
 import { EditOfficerModal } from "@/components/settings/OfficerModals";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 
@@ -40,19 +41,20 @@ function officerEmail(o: OfficerRosterEntry): string {
   return o.email ?? o.user_id;
 }
 
-function coverageLine(o: OfficerRosterEntry, pkgById: Record<string, PackageItem>): string {
-  const parts: string[] = [];
-  if (o.project_codes?.length) parts.push(...o.project_codes);
-  (o.package_ids ?? []).forEach((id) => {
-    const code = pkgById[id]?.package_code;
-    if (code) parts.push(code);
-  });
-  if (o.location_codes.length) parts.push(...o.location_codes);
-  return parts.length ? parts.join(", ") : "—";
+function coverageLine(
+  o: OfficerRosterEntry,
+  project: ProjectItem,
+  pkgById: Record<string, PackageItem>,
+): string {
+  return projectStaffingCoverageLine(o, project, pkgById);
 }
 
 /** Coverage tokens for filter matching (project codes, package codes, locations). */
-function coverageTokens(o: OfficerRosterEntry, pkgById: Record<string, PackageItem>): string[] {
+function coverageTokens(
+  o: OfficerRosterEntry,
+  project: ProjectItem,
+  pkgById: Record<string, PackageItem>,
+): string[] {
   const tokens: string[] = [];
   (o.project_codes ?? []).forEach((c) => tokens.push(`proj:${c}`));
   (o.package_ids ?? []).forEach((id) => {
@@ -61,6 +63,12 @@ function coverageTokens(o: OfficerRosterEntry, pkgById: Record<string, PackageIt
     if (code) tokens.push(`pkgcode:${code}`);
   });
   o.location_codes.forEach((c) => tokens.push(`loc:${c}`));
+  // Match composite labels used in the Coverage column
+  projectStaffingCoverageLine(o, project, pkgById)
+    .split(", ")
+    .forEach((label) => {
+      if (label && label !== "—") tokens.push(`label:${label}`);
+    });
   return tokens;
 }
 
@@ -178,7 +186,7 @@ export function ProjectStaffingSection({
     packages.forEach((pkg) => {
       opts.push({
         value: `pkg:${pkg.package_id}`,
-        label: pkg.package_code,
+        label: `${project.short_code}/${pkg.package_code}`,
         group: "Package",
       });
     });
@@ -196,20 +204,20 @@ export function ProjectStaffingSection({
     return onProject.filter((o) => {
       if (orgFilter && !o.organization_ids.includes(orgFilter)) return false;
       if (roleFilter && !o.role_keys.includes(roleFilter)) return false;
-      if (coverageFilter && !coverageTokens(o, pkgById).includes(coverageFilter)) return false;
+      if (coverageFilter && !coverageTokens(o, project, pkgById).includes(coverageFilter)) return false;
       if (!q) return true;
       const hay = [
         o.display_name,
         officerEmail(o),
         ...o.organization_ids.map(orgName),
         ...o.role_keys.map(roleLabel),
-        coverageLine(o, pkgById),
+        coverageLine(o, project, pkgById),
       ]
         .join(" ")
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [onProject, searchQ, orgFilter, roleFilter, coverageFilter, pkgById, orgName, roleLabel]);
+  }, [onProject, searchQ, orgFilter, roleFilter, coverageFilter, project, pkgById, orgName, roleLabel]);
 
   const sorted = useMemo(() => {
     const rows = [...filtered];
@@ -235,8 +243,8 @@ export function ProjectStaffingSection({
           bv = b.role_keys.map(roleLabel).join(", ");
           break;
         case "coverage":
-          av = coverageLine(a, pkgById);
-          bv = coverageLine(b, pkgById);
+          av = coverageLine(a, project, pkgById);
+          bv = coverageLine(b, project, pkgById);
           break;
         default:
           break;
@@ -244,7 +252,7 @@ export function ProjectStaffingSection({
       return av.localeCompare(bv, undefined, { sensitivity: "base" }) * dir;
     });
     return rows;
-  }, [filtered, sortColumn, sortDir, orgName, roleLabel, pkgById]);
+  }, [filtered, sortColumn, sortDir, orgName, roleLabel, project, pkgById]);
 
   function handleSort(column: SortColumn) {
     if (sortColumn === column) {
@@ -414,7 +422,7 @@ export function ProjectStaffingSection({
                   <td className="px-3 py-2.5 text-xs text-gray-600">
                     {o.role_keys.map((k) => roleLabel(k)).join(", ")}
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-gray-500 font-mono">{coverageLine(o, pkgById)}</td>
+                  <td className="px-3 py-2.5 text-xs text-gray-500 font-mono">{coverageLine(o, project, pkgById)}</td>
                   <td className="px-3 py-2.5 text-right">
                     <button
                       type="button"

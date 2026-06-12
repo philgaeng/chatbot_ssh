@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ticketing.constants.workflow_routing import normalize_intake_route
 from ticketing.models.project import Project
 from ticketing.models.project_workflow import ProjectWorkflow
 from ticketing.models.workflow import WorkflowDefinition
@@ -55,17 +56,35 @@ def _sync_legacy_columns(project: Project, links: list[ProjectWorkflow], db: Ses
             break
 
 
+def _resolve_intake_route(item: dict[str, Any], *, is_default: bool) -> str | None:
+    if is_default:
+        return None
+    raw = item.get("intake_route")
+    if raw is None and item.get("intake_routes"):
+        # Legacy API clients may still send intake_routes[].
+        routes = item.get("intake_routes") or []
+        raw = routes[0] if routes else None
+    route = normalize_intake_route(str(raw).strip() if raw else None)
+    if not route:
+        raise HTTPException(
+            status_code=422,
+            detail="intake_route is required on non-default workflow bindings",
+        )
+    return route
+
+
 def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
     label = str(item.get("display_label") or "").strip()
     if not label:
         raise HTTPException(status_code=422, detail="display_label is required")
     wf_id = str(item["workflow_id"])
+    is_default = bool(item.get("is_default"))
     return {
         "display_label": label,
         "workflow_id": wf_id,
         "classifications": list(item.get("classifications") or []),
-        "intake_routes": list(item.get("intake_routes") or []),
-        "is_default": bool(item.get("is_default")),
+        "intake_route": _resolve_intake_route(item, is_default=is_default),
+        "is_default": is_default,
         "sort_order": int(item.get("sort_order") or 0),
     }
 
@@ -98,7 +117,7 @@ def replace_project_workflows(
             workflow_id=n["workflow_id"],
             display_label=n["display_label"],
             classifications=n["classifications"],
-            intake_routes=n["intake_routes"],
+            intake_route=n["intake_route"],
             is_default=n["is_default"],
             sort_order=n["sort_order"] if n["sort_order"] else (i + 1) * 10,
         )
@@ -133,7 +152,7 @@ def project_workflow_to_dict(row: ProjectWorkflow, db: Session | None = None) ->
         "workflow_id": row.workflow_id,
         "display_label": row.display_label,
         "classifications": row.classifications or [],
-        "intake_routes": row.intake_routes or [],
+        "intake_route": row.intake_route,
         "is_default": row.is_default,
         "workflow_track": wf_type,
         "sort_order": row.sort_order,

@@ -12,7 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.actions.utils.ticketing_dispatch import dispatch_ticket, fetch_qr_scan
+from backend.actions.utils.ticketing_dispatch import (
+    dispatch_ticket,
+    fetch_qr_scan,
+    normalize_story_main_intake_route,
+)
 from backend.shared_functions.location_mapping import resolve_location_code_to_names
 
 
@@ -223,3 +227,54 @@ def test_dispatch_ticket_omits_package_id_when_absent():
 
     body = mock_post.call_args.kwargs["json"]
     assert body["package_id"] is None
+
+
+def test_normalize_story_main_intake_route():
+    assert normalize_story_main_intake_route("new_grievance") == "new_grievance"
+    assert normalize_story_main_intake_route("seah_intake") == "seah_intake"
+    assert normalize_story_main_intake_route("road_hazard_grievance") == "road_hazard_grievance"
+    assert normalize_story_main_intake_route("dust_grievance") == "road_hazard_grievance"
+    assert normalize_story_main_intake_route("status_check") is None
+    assert normalize_story_main_intake_route(None) is None
+
+
+def test_dispatch_ticket_forwards_intake_route():
+    with patch(
+        "backend.actions.utils.ticketing_dispatch.requests.post",
+        return_value=_stub_response(200, {"ticket_id": "TKT-3"}),
+    ) as mock_post:
+        dispatch_ticket(
+            grievance_id="GRV-003",
+            complainant_id="C3",
+            session_id="S3",
+            is_seah=False,
+            priority="NORMAL",
+            location_code="P1_JHA",
+            project_code="KL_ROAD",
+            grievance_summary="pothole",
+            intake_route="road_hazard_grievance",
+        )
+
+    body = mock_post.call_args.kwargs["json"]
+    assert body["intake_route"] == "road_hazard_grievance"
+
+
+def test_dispatch_ticket_omits_intake_route_when_absent():
+    with patch(
+        "backend.actions.utils.ticketing_dispatch.requests.post",
+        return_value=_stub_response(200, {"ticket_id": "TKT-4"}),
+    ) as mock_post:
+        dispatch_ticket(
+            grievance_id="GRV-004",
+            complainant_id="C4",
+            session_id="S4",
+            is_seah=False,
+            priority="NORMAL",
+            location_code=None,
+            project_code="KL_ROAD",
+            grievance_summary=None,
+        )
+
+    body = mock_post.call_args.kwargs["json"]
+    assert "intake_route" not in body
+

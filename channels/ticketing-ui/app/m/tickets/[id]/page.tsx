@@ -43,8 +43,9 @@ import {
   getReassignMode,
   type ReassignMode,
 } from "@/lib/officer-permissions";
+import { IntakeRouteBadge } from "@/lib/icons";
 import {
-  AlertTriangle, ArrowUpCircle, Flag, Lock, ClipboardList, CheckCircle2,
+  AlertTriangle, ArrowUpCircle, Flag, ClipboardList, CheckCircle2,
   MoreVertical, User, FileText, Paperclip, ChevronLeft, Download, FileIcon,
   ClipboardCheck, BookOpen, X,
 } from "lucide-react";
@@ -1106,11 +1107,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-900 truncate">{ticket.grievance_id}</span>
-              {ticket.is_seah && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
-                  <Lock size={9} strokeWidth={2.5} />SEAH
-                </span>
-              )}
+              <IntakeRouteBadge intakeRoute={ticket.intake_route} size="xs" />
             </div>
             <div className="text-xs text-gray-400 truncate leading-tight">
               {ticket.grievance_summary ?? "No summary"}

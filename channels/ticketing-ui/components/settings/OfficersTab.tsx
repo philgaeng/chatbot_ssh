@@ -11,39 +11,14 @@ import {
   type ProjectItem,
   type PackageItem,
 } from "@/lib/api";
+import {
+  officerHasScopeJurisdiction,
+  officerLocationsSummary,
+  roleProjectsLines,
+} from "@/lib/officerRosterDisplay";
 import { InviteOfficerModal, EditOfficerModal } from "@/components/settings/OfficerModals";
 
 type RoleEntry = { key: string; label: string };
-
-function officerRoleLabels(roleKeys: string[], catalog: RoleEntry[]): string {
-  return roleKeys.map((k) => catalog.find((x) => x.key === k)?.label ?? k).join(", ");
-}
-
-function compactList(items: string[], max = 2): string {
-  if (items.length === 0) return "";
-  if (items.length <= max) return items.join(", ");
-  return `${items.slice(0, max).join(", ")} +${items.length - max}`;
-}
-
-function hasJurisdiction(o: OfficerRosterEntry): boolean {
-  return (
-    (o.project_codes?.length ?? 0) > 0 ||
-    (o.package_ids?.length ?? 0) > 0 ||
-    o.location_codes.length > 0
-  );
-}
-
-function coverageSummary(o: OfficerRosterEntry, pkgById: Record<string, PackageItem>): string {
-  const parts: string[] = [];
-  if (o.project_codes?.length) parts.push(...o.project_codes);
-  const pkgCodes = (o.package_ids ?? [])
-    .map((id) => pkgById[id]?.package_code)
-    .filter((c): c is string => Boolean(c));
-  if (pkgCodes.length) parts.push(...pkgCodes);
-  if (o.location_codes.length) parts.push(...o.location_codes);
-  if (parts.length === 0) return "No area set";
-  return compactList(parts, 3) || parts[0];
-}
 
 export function OfficersTab({
   roleCatalog,
@@ -68,6 +43,11 @@ export function OfficersTab({
   const [projectFilter, setProjectFilter] = useState("");
   const [packageFilter, setPackageFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+
+  const projectById = useMemo(
+    () => Object.fromEntries(projects.map((p) => [p.project_id, p])),
+    [projects],
+  );
 
   const loadRoster = useCallback(async () => {
     setLoading(true);
@@ -112,13 +92,20 @@ export function OfficersTab({
 
   const locationOptions = useMemo(() => {
     const codes = new Set<string>();
-    officerList.forEach((o) => o.location_codes.forEach((c) => codes.add(c)));
+    officerList.forEach((o) => {
+      (o.scopes ?? []).forEach((s) => {
+        if (s.location_code) codes.add(s.location_code);
+      });
+      o.location_codes.forEach((c) => codes.add(c));
+    });
     return [...codes].sort();
   }, [officerList]);
 
   const filtered = useMemo(() => {
     const q = searchQ.trim().toLowerCase();
     return officerList.filter((o) => {
+      const roleLines = roleProjectsLines(o, roleCatalog, projectById);
+      const locSummary = officerLocationsSummary(o);
       const hay = [
         o.display_name,
         o.user_id,
@@ -127,21 +114,42 @@ export function OfficersTab({
         ...o.role_keys,
         ...o.organization_ids,
         ...o.location_codes,
-        ...o.project_codes ?? [],
+        ...(o.project_codes ?? []),
         ...(o.package_ids ?? []).map((id) => pkgById[id]?.package_code ?? id),
-        coverageSummary(o, pkgById),
+        ...roleLines,
+        locSummary,
       ]
         .join(" ")
         .toLowerCase();
       const matchesQ = !q || hay.includes(q);
       const matchesR = !roleFilter || o.role_keys.includes(roleFilter);
       const projCode = projects.find((p) => p.project_id === projectFilter)?.short_code;
-      const matchesProj = !projectFilter || (o.project_codes ?? []).includes(projCode ?? "");
+      const matchesProj =
+        !projectFilter ||
+        (o.project_codes ?? []).includes(projCode ?? "") ||
+        (o.scopes ?? []).some(
+          (s) =>
+            s.project_code === projCode ||
+            (s.project_id && projectById[s.project_id]?.short_code === projCode),
+        );
       const matchesPkg = !packageFilter || (o.package_ids ?? []).includes(packageFilter);
-      const matchesLoc = !locationFilter || o.location_codes.includes(locationFilter);
+      const scopeLocs = (o.scopes ?? []).map((s) => s.location_code).filter(Boolean) as string[];
+      const locs = scopeLocs.length > 0 ? scopeLocs : o.location_codes;
+      const matchesLoc = !locationFilter || locs.includes(locationFilter);
       return matchesQ && matchesR && matchesProj && matchesPkg && matchesLoc;
     });
-  }, [officerList, searchQ, roleFilter, projectFilter, packageFilter, locationFilter, projects, pkgById]);
+  }, [
+    officerList,
+    searchQ,
+    roleFilter,
+    projectFilter,
+    packageFilter,
+    locationFilter,
+    projects,
+    pkgById,
+    roleCatalog,
+    projectById,
+  ]);
 
   function handleInviteSuccess(email: string) {
     setShowInvite(false);
@@ -205,7 +213,7 @@ export function OfficersTab({
       )}
 
       <p className="text-sm text-gray-600 mb-3">
-        Use <strong>Manage</strong> to edit roles, work areas, and account settings. Filters match project, package, or location on each officer&apos;s record.
+        Use <strong>Manage</strong> to edit roles, work areas, and account settings. Filters match project, package, or location on each officer&apos;s scopes.
       </p>
 
       {!allowGlobalInvite && (
@@ -298,13 +306,13 @@ export function OfficersTab({
 
       {!loading && !loadError && filtered.length > 0 && (
         <div className="border border-gray-200 rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[820px]">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="bg-slate-700 text-slate-100 text-left text-sm">
                 <th className="px-3 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Email</th>
                 <th className="px-3 py-2.5 font-medium">Phone</th>
-                <th className="px-3 py-2.5 font-medium">Role</th>
+                <th className="px-3 py-2.5 font-medium">Role: projects</th>
                 <th className="px-3 py-2.5 font-medium">Area covered</th>
                 <th className="px-3 py-2.5 font-medium w-24">Status</th>
                 <th className="px-3 py-2.5 font-medium w-40">Actions</th>
@@ -312,8 +320,9 @@ export function OfficersTab({
             </thead>
             <tbody>
               {filtered.map((o) => {
-                const coverage = coverageSummary(o, pkgById);
-                const missingArea = !hasJurisdiction(o);
+                const roleLines = roleProjectsLines(o, roleCatalog, projectById);
+                const locations = officerLocationsSummary(o);
+                const missingArea = !officerHasScopeJurisdiction(o);
                 const status = o.onboarding_status ?? "active";
                 return (
                   <tr
@@ -329,15 +338,21 @@ export function OfficersTab({
                     <td className="px-3 py-2.5 text-gray-600 font-mono text-xs">
                       {o.phone_number ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-gray-700 max-w-[12rem]" title={officerRoleLabels(o.role_keys, roleCatalog)}>
-                      {officerRoleLabels(o.role_keys, roleCatalog)}
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[16rem]">
+                      <ul className="space-y-0.5">
+                        {roleLines.map((line) => (
+                          <li key={line} className="text-xs leading-snug" title={line}>
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={missingArea ? "text-amber-800 font-medium" : "text-gray-700"}
-                        title={missingArea ? "Open Manage to set project, package, or location" : coverage}
+                        className={missingArea ? "text-amber-800 font-medium text-xs" : "text-gray-700 text-xs font-mono"}
+                        title={missingArea ? "Open Manage to set project, package, or location" : locations}
                       >
-                        {coverage}
+                        {locations}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">

@@ -128,6 +128,36 @@ def categories_high_priority(grievance_categories: Any) -> bool:
     return False
 
 
+_ACTIVE_INTAKE_ROUTES = frozenset({
+    "new_grievance",
+    "seah_intake",
+    "road_hazard_grievance",
+})
+
+_INTAKE_ROUTE_ALIASES = {
+    "grievance_new": "new_grievance",
+    "standard_grievance": "new_grievance",
+    "grievance_submission": "new_grievance",
+    "seah": "seah_intake",
+    "dust": "road_hazard_grievance",
+    "dust_grievance": "road_hazard_grievance",
+    "fast_track": "road_hazard_grievance",
+    "road_hazard": "road_hazard_grievance",
+}
+
+
+def normalize_story_main_intake_route(story_main: Any) -> Optional[str]:
+    """Map chatbot story_main slot to ticketing intake_route (canonical story_main values)."""
+    if story_main is None:
+        return None
+    key = str(story_main).strip().lower()
+    if not key:
+        return None
+    if key in _ACTIVE_INTAKE_ROUTES:
+        return key
+    return _INTAKE_ROUTE_ALIASES.get(key)
+
+
 def dispatch_grievance_from_tracker(
     tracker: Tracker,
     grievance_data: Optional[Mapping[str, Any]] = None,
@@ -166,6 +196,7 @@ def dispatch_grievance_from_tracker(
 
     package_id = tracker.get_slot("package_id")
     location_code = g.get("location_code") or tracker.get_slot("location_code")
+    intake_route = normalize_story_main_intake_route(tracker.get_slot("story_main"))
 
     dispatch_ticket(
         grievance_id=gid,
@@ -180,10 +211,12 @@ def dispatch_grievance_from_tracker(
         grievance_location=g.get("grievance_location") or tracker.get_slot("grievance_location"),
         organization_id=organization_id,
         package_id=package_id,
+        intake_route=intake_route,
     )
     active_log.info(
-        "ticketing dispatch queued: grievance_id=%s package_id=%s location_code=%s",
+        "ticketing dispatch queued: grievance_id=%s intake_route=%s package_id=%s location_code=%s",
         gid,
+        intake_route,
         package_id,
         location_code,
     )
@@ -202,6 +235,7 @@ def dispatch_ticket(
     grievance_location: str | None = None,
     organization_id: str = "DOR",
     package_id: str | None = None,
+    intake_route: str | None = None,
 ) -> None:
     """POST to /api/v1/tickets.  Never raises; logs warning on failure."""
     if not _clean(grievance_summary) and grievance_categories in (None, "", []):
@@ -235,6 +269,8 @@ def dispatch_ticket(
         "grievance_location": _clean(grievance_location),
         "package_id": _clean(package_id),
     }
+    if intake_route:
+        payload["intake_route"] = intake_route
 
     url = f"{_TICKETING_API_URL}/api/v1/tickets"
     try:

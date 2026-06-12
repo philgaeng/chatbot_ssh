@@ -357,7 +357,7 @@ class TestSupervisorFallback:
         pkg = db.execute(
             select(ProjectPackage).where(
                 ProjectPackage.project_id == kl_road_project.project_id,
-                ProjectPackage.package_code == "SHEP/OCB/KL/03",
+                ProjectPackage.package_code == "03",
             )
         ).scalar_one()
         l2_officer = _uid("l2-supervisor")

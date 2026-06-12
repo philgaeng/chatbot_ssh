@@ -30,9 +30,9 @@ class TicketCreate(BaseModel):
     priority: str = Field("NORMAL", max_length=32)  # NORMAL | HIGH | SENSITIVE
     # Legacy chatbot flag — used as intake hint until story_main is sent on webhook.
     is_seah: bool = False
-    # Chatbot story / menu path: seah_intake, new_grievance, road_hazard_grievance, …
+    # Chatbot story_main: new_grievance | seah_intake | road_hazard_grievance
     intake_route: Optional[str] = Field(None, max_length=64)
-    # Fast-path subtype: road_hazard, dust, …
+    # Deprecated — use intake_route (= story_main) only.
     intake_fast_path: Optional[str] = Field(None, max_length=64)
 
     # Non-PII grievance data cached at ticket creation (CLAUDE.md rule 4)
@@ -102,6 +102,7 @@ class TicketListItem(BaseModel):
     status_code: str
     priority: str
     is_seah: bool
+    intake_route: Optional[str] = None
     organization_id: str
     location_code: Optional[str]
     project_code: Optional[str]
@@ -183,6 +184,7 @@ class TicketDetail(BaseModel):
     status_code: str
     priority: str
     is_seah: bool
+    intake_route: Optional[str] = None
     assigned_to_user_id: Optional[str]
     assigned_role_id: Optional[str]
     step_started_at: Optional[datetime]

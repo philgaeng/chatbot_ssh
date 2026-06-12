@@ -10,7 +10,7 @@ import Link from "next/link";
 import { listTickets, getSla, type TicketListItem, type SlaStatus } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { urgencyDotCls, urgencyTextCls, type SlaUrgency } from "@/lib/mobile-constants";
-import { SeahBadge, UrgencyDot } from "@/lib/icons";
+import { IntakeRouteBadge, UrgencyDot } from "@/lib/icons";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,9 +47,7 @@ function QueueRow({ ticket }: { ticket: TicketListItem }) {
   return (
     <Link
       href={`/m/tickets/${ticket.ticket_id}`}
-      className={`flex items-center gap-3 px-4 py-3 active:bg-gray-50 border-b border-gray-100 last:border-0 ${
-        isSeah ? "border-l-4 border-l-red-500" : ""
-      }`}
+      className="flex items-center gap-3 px-4 py-3 active:bg-gray-50 border-b border-gray-100 last:border-0"
     >
       {/* Urgency dot — leftmost, seen before reading anything (spec §2.1) */}
       <UrgencyDot urgency={urgency} className="w-2.5 h-2.5" />
@@ -58,9 +56,7 @@ function QueueRow({ ticket }: { ticket: TicketListItem }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-xs text-gray-400 font-mono truncate">{ticket.grievance_id}</span>
-          {isSeah && (
-            <SeahBadge size="xs" />
-          )}
+          <IntakeRouteBadge intakeRoute={ticket.intake_route} size="xs" />
           {ticket.unseen_event_count > 0 && (
             <span className="ml-auto flex-shrink-0 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
               {ticket.unseen_event_count}

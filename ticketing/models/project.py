@@ -42,7 +42,7 @@ class Project(Base):
         ForeignKey("ticketing.countries.country_code", ondelete="RESTRICT"),
         nullable=False,
     )
-    short_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # e.g. 'KL_ROAD'
+    short_code: Mapped[str] = mapped_column(String(8), nullable=False, unique=True)  # e.g. 'KL_ROAD'
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # URL of the local chatbot backend for this project (e.g. http://backend:5001).

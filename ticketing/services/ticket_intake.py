@@ -144,7 +144,6 @@ def create_ticket_from_intake(
         db=db,
         grievance_categories=payload.grievance_categories,
         intake_route=payload.intake_route,
-        intake_fast_path=payload.intake_fast_path,
     )
     if not workflow:
         raise TicketIntakeError(
@@ -194,7 +193,6 @@ def create_ticket_from_intake(
         priority=payload.priority,
         is_seah=ticket_is_seah,
         intake_route=payload.intake_route,
-        intake_fast_path=payload.intake_fast_path,
         package_id=payload.package_id,
         is_deleted=False,
         sla_breached=False,

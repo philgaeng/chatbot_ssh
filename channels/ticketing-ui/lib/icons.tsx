@@ -117,16 +117,19 @@ export function UrgencyDot({ urgency, className = "" }: { urgency: SlaUrgency; c
 // ── SeahBadge component ───────────────────────────────────────────────────────
 
 import { Lock } from "lucide-react";
+import { IntakeRouteBadge as DesktopIntakeRouteBadge } from "@/components/ui/Badge";
 
+export function IntakeRouteBadge({
+  intakeRoute,
+  size = "sm",
+}: {
+  intakeRoute: string | null | undefined;
+  size?: "xs" | "sm";
+}) {
+  return <DesktopIntakeRouteBadge intakeRoute={intakeRoute} size={size} />;
+}
+
+/** @deprecated Use IntakeRouteBadge */
 export function SeahBadge({ size = "sm" }: { size?: "xs" | "sm" }) {
-  const cls = size === "xs"
-    ? "inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded"
-    : "inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded";
-  const iconSize = size === "xs" ? 8 : 10;
-  return (
-    <span className={cls}>
-      <Lock size={iconSize} strokeWidth={2.5} />
-      SEAH
-    </span>
-  );
+  return <IntakeRouteBadge intakeRoute="seah_intake" size={size} />;
 }

@@ -90,7 +90,14 @@ import {
   type AdminScopeRow,
   type RoleArchetype,
 } from "@/lib/api";
+import {
+  normalizeEntityCodeInput,
+  suggestNextPackageCode,
+  validateEntityCode,
+  ENTITY_CODE_MAX_LEN,
+} from "@/lib/entityCodes";
 import { OfficersTab } from "@/components/settings/OfficersTab";
+import { OrganizationsTab } from "@/components/settings/OrganizationsTab";
 import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
@@ -1025,7 +1032,7 @@ type WorkflowBindingDraft = {
   display_label: string;
   workflow_id: string;
   classifications: string[];
-  intake_routes: string[];
+  intake_route: string | null;
   is_default: boolean;
   sort_order: number;
 };
@@ -1036,10 +1043,14 @@ function emptyBinding(sortOrder: number, isDefault = false): WorkflowBindingDraf
     display_label: "",
     workflow_id: "",
     classifications: [],
-    intake_routes: [],
+    intake_route: isDefault ? null : "new_grievance",
     is_default: isDefault,
     sort_order: sortOrder,
   };
+}
+
+function workflowTrackOf(w: WorkflowDefinition): "standard" | "seah" {
+  return (w.workflow_type || "standard").toLowerCase() === "seah" ? "seah" : "standard";
 }
 
 function bindingsFromProject(slots: ProjectWorkflowSlot[]): WorkflowBindingDraft[] {
@@ -1049,10 +1060,28 @@ function bindingsFromProject(slots: ProjectWorkflowSlot[]): WorkflowBindingDraft
     display_label: s.display_label,
     workflow_id: s.workflow_id,
     classifications: s.classifications ?? [],
-    intake_routes: s.intake_routes ?? [],
+    intake_route: s.intake_route ?? null,
     is_default: s.is_default,
     sort_order: s.sort_order || (i + 1) * 10,
   }));
+}
+
+function publishedWorkflowOptions(
+  workflows: WorkflowDefinition[],
+  canEditWorkflowTrack: (track: "standard" | "seah") => boolean,
+  selectedId?: string,
+): WorkflowDefinition[] {
+  const published = workflows.filter(
+    (w) =>
+      !w.is_template
+      && (w.status || "").toLowerCase() === "published"
+      && canEditWorkflowTrack(workflowTrackOf(w)),
+  );
+  if (selectedId && !published.some((w) => w.workflow_id === selectedId)) {
+    const current = workflows.find((w) => w.workflow_id === selectedId);
+    if (current) return [current, ...published];
+  }
+  return published;
 }
 
 function ProjectWorkflowsEditor({
@@ -1091,17 +1120,18 @@ function ProjectWorkflowsEditor({
   const classifications = routingOptions?.classifications ?? [];
   const intakeRoutes = routingOptions?.intake_routes ?? [];
 
-  function workflowTrack(wfId: string): "standard" | "seah" {
-    const wf = workflows.find((w) => w.workflow_id === wfId);
-    return wf?.workflow_type === "seah" ? "seah" : "standard";
-  }
-
   function updateRow(localId: string, patch: Partial<WorkflowBindingDraft>) {
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
   }
 
   function setDefault(localId: string) {
-    setRows((prev) => prev.map((r) => ({ ...r, is_default: r.localId === localId })));
+    setRows((prev) =>
+      prev.map((r) => ({
+        ...r,
+        is_default: r.localId === localId,
+        intake_route: r.localId === localId ? null : r.intake_route ?? "new_grievance",
+      })),
+    );
   }
 
   function removeRow(localId: string) {
@@ -1119,7 +1149,7 @@ function ProjectWorkflowsEditor({
         display_label: r.display_label.trim(),
         workflow_id: r.workflow_id,
         classifications: r.classifications,
-        intake_routes: r.intake_routes,
+        intake_route: r.is_default ? null : r.intake_route,
         is_default: r.is_default,
         sort_order: r.sort_order || (i + 1) * 10,
       }));
@@ -1147,13 +1177,20 @@ function ProjectWorkflowsEditor({
 
   return (
     <div className="space-y-4">
+      {workflows.length === 0 && !readOnly && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          No workflows loaded. Publish a workflow under Settings → Workflows first, then return here.
+        </p>
+      )}
       {rows.map((row) => {
-        const track = row.workflow_id ? workflowTrack(row.workflow_id) : "standard";
-        const editable = !readOnly && canEditWorkflowTrack(track);
-        const wfOptions = workflows.filter(
-          (w) => !w.is_template && w.status !== "archived"
-            && (w.workflow_type === track || !row.workflow_id),
+        const selected = workflows.find((w) => w.workflow_id === row.workflow_id);
+        const track = selected ? workflowTrackOf(selected) : "standard";
+        const editable = !readOnly && (
+          row.workflow_id
+            ? canEditWorkflowTrack(track)
+            : canEditWorkflowTrack("standard") || canEditWorkflowTrack("seah")
         );
+        const wfOptions = publishedWorkflowOptions(workflows, canEditWorkflowTrack, row.workflow_id);
         return (
           <div key={row.localId} className="border border-gray-200 rounded-lg p-3 bg-white space-y-3">
             <div className="flex flex-wrap gap-3 items-start">
@@ -1186,7 +1223,8 @@ function ProjectWorkflowsEditor({
                   <option value="">— Select —</option>
                   {wfOptions.map((w) => (
                     <option key={w.workflow_id} value={w.workflow_id}>
-                      {w.display_name} ({w.status})
+                      {w.display_name}
+                      {workflowTrackOf(w) === "seah" ? " · SEAH" : ""}
                     </option>
                   ))}
                   {editable && <option value="__new__">+ Create new workflow…</option>}
@@ -1212,8 +1250,29 @@ function ProjectWorkflowsEditor({
                 </button>
               )}
             </div>
+            {!row.is_default && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Chatbot intake route</label>
+                <select
+                  value={row.intake_route ?? ""}
+                  disabled={!editable || saving}
+                  onChange={(e) => updateRow(row.localId, { intake_route: e.target.value || null })}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 disabled:opacity-50"
+                >
+                  <option value="">— Select —</option>
+                  {intakeRoutes.map((ir) => (
+                    <option key={ir.key} value={ir.key}>{ir.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Matches chatbot story_main at ticket creation (menu path after language).
+                </p>
+              </div>
+            )}
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Classifications (taxonomy groups)</label>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Classifications (re-route after category edit)
+              </label>
               <select
                 multiple
                 value={row.classifications}
@@ -1228,28 +1287,9 @@ function ProjectWorkflowsEditor({
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple. Leave empty on Default row.</p>
-            </div>
-            <div>
-              <span className="text-xs font-medium text-gray-600 block mb-1">Intake paths (manual / fast-track)</span>
-              <div className="flex flex-wrap gap-3">
-                {intakeRoutes.map((ir) => (
-                  <label key={ir.key} className="flex items-center gap-1.5 text-xs text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={row.intake_routes.includes(ir.key)}
-                      disabled={!editable || saving}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...row.intake_routes, ir.key]
-                          : row.intake_routes.filter((k) => k !== ir.key);
-                        updateRow(row.localId, { intake_routes: next });
-                      }}
-                    />
-                    {ir.label}
-                  </label>
-                ))}
-              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Optional. Used when an officer reclassifies a safeguards (new_grievance) ticket.
+              </p>
             </div>
           </div>
         );
@@ -2073,45 +2113,19 @@ function WorkflowsTab({
 // ── Organizations section ─────────────────────────────────────────────────────
 
 function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string) => void }) {
-  const [orgs, setOrgs]           = useState<OrganizationItem[]>([]);
   const [countries, setCountries] = useState<CountryItem[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing]     = useState<OrganizationItem | null>(null);
+  const [editing, setEditing] = useState<OrganizationItem | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [o, c] = await Promise.all([listOrganizations(), listCountries()]);
-      setOrgs(o);
-      setCountries(c);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function handleRemoveOrg(o: OrganizationItem) {
-    if (!confirm(`Remove organization "${o.name}" (${o.organization_id})? This cannot be undone.`)) return;
-    try {
-      await deleteOrganization(o.organization_id);
-      if (editing?.organization_id === o.organization_id) setEditing(null);
-      setOrgs((prev) => prev.filter((x) => x.organization_id !== o.organization_id));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Remove failed");
-    }
-  }
+  useEffect(() => {
+    listCountries().then(setCountries).catch(() => {});
+  }, []);
 
   if (editing) {
     return (
       <OrgEditor
         org={editing}
         countries={countries}
-        onBack={() => { setEditing(null); load(); }}
+        onBack={() => setEditing(null)}
         onUpdated={(updated) => setEditing(updated)}
         onNavigateToProject={onNavigateToProject}
       />
@@ -2119,70 +2133,10 @@ function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{orgs.length} organization{orgs.length !== 1 ? "s" : ""}</p>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded font-medium hover:bg-blue-700 transition"
-        >
-          + Add Organization
-        </button>
-      </div>
-
-      {showCreate && (
-        <OrgCreateModal
-          countries={countries}
-          existingOrganizationIds={new Set(orgs.map((o) => o.organization_id))}
-          onCreated={(org) => { setShowCreate(false); setOrgs((prev) => [...prev, org]); setEditing(org); }}
-          onClose={() => setShowCreate(false)}
-        />
-      )}
-
-      {loading && <p className="text-sm text-gray-400 animate-pulse">Loading…</p>}
-      {error   && <p className="text-sm text-red-500">{error}</p>}
-
-      {!loading && !error && (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-700 text-slate-100 text-left">
-                <th className="px-4 py-2.5 font-medium">ID</th>
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Country</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orgs.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">No organizations yet.</td></tr>
-              )}
-              {orgs.map((o) => (
-                <tr key={o.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{o.organization_id}</td>
-                  <td className="px-4 py-2.5 font-medium text-gray-800">{o.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{o.country_code ?? <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`text-xs font-medium ${o.is_active ? "text-green-600" : "text-gray-400"}`}>
-                      {o.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button type="button" onClick={() => setEditing(o)} className="text-xs text-blue-600 hover:underline mr-3">
-                      Edit
-                    </button>
-                    <button type="button" onClick={() => handleRemoveOrg(o)} className="text-xs text-red-600 hover:underline">
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <OrganizationsTab
+      onEdit={setEditing}
+      onNavigateToProject={onNavigateToProject}
+    />
   );
 }
 
@@ -2848,13 +2802,15 @@ function ProjectCreateModal({
   }, []);
 
   async function handleCreate() {
-    if (!name.trim() || !shortCode.trim()) { setError("Name and short code are required."); return; }
+    if (!name.trim()) { setError("Project name is required."); return; }
+    const codeErr = validateEntityCode(shortCode, "Project code");
+    if (codeErr) { setError(codeErr); return; }
     if (!typeKey) { setError("Select a project type."); return; }
     setCreating(true); setError("");
     try {
       const p = await createProject({
         name: name.trim(),
-        short_code: shortCode.trim().toUpperCase(),
+        short_code: normalizeEntityCodeInput(shortCode),
         country_code: country,
         description: desc.trim() || null,
         project_type_key: typeKey,
@@ -2903,10 +2859,12 @@ function ProjectCreateModal({
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 block mb-1">Short code * <span className="font-normal text-gray-400">(unique)</span></label>
-              <input value={shortCode} onChange={(e) => setShortCode(e.target.value.toUpperCase())}
+              <label className="text-xs font-medium text-gray-500 block mb-1">Project code * <span className="font-normal text-gray-400">(unique, max {ENTITY_CODE_MAX_LEN})</span></label>
+              <input value={shortCode} onChange={(e) => setShortCode(normalizeEntityCodeInput(e.target.value))}
                 placeholder="KL_ROAD"
+                maxLength={ENTITY_CODE_MAX_LEN}
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" />
+              <p className="text-xs text-gray-400 mt-1">A–Z, 0–9, underscore only.</p>
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500 block mb-1">Country</label>
@@ -2965,7 +2923,9 @@ function ProjectEditor({
 }) {
   const [p, setP]             = useState<ProjectItem>(initial);
   const [editingName, setEditingName] = useState(false);
+  const [editingShortCode, setEditingShortCode] = useState(false);
   const [nameVal, setNameVal] = useState(p.name);
+  const [shortCodeVal, setShortCodeVal] = useState(p.short_code);
   const [descVal, setDescVal] = useState(p.description ?? "");
   const [msg, setMsg]         = useState("");
   const [working, setWorking] = useState(false);
@@ -3027,6 +2987,12 @@ function ProjectEditor({
       .catch(() => setMessaging(null));
   }, [p.project_id]);
 
+  useEffect(() => {
+    setNameVal(p.name);
+    setShortCodeVal(p.short_code);
+    setDescVal(p.description ?? "");
+  }, [p.project_id, p.name, p.short_code, p.description]);
+
   function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 2500); }
 
   async function saveMeta() {
@@ -3035,6 +3001,27 @@ function ProjectEditor({
       setP(updated); onUpdated(updated); flash("Saved ✓");
     } catch { flash("Save failed"); }
     setEditingName(false);
+  }
+
+  async function saveShortCode() {
+    const codeErr = validateEntityCode(shortCodeVal, "Project code");
+    if (codeErr) { flash(codeErr); return; }
+    const normalized = normalizeEntityCodeInput(shortCodeVal);
+    if (normalized === p.short_code) {
+      setEditingShortCode(false);
+      return;
+    }
+    try {
+      const updated = await updateProject(p.project_id, { short_code: normalized });
+      setP(updated);
+      onUpdated(updated);
+      setShortCodeVal(updated.short_code);
+      flash("Project code updated ✓");
+    } catch (e: unknown) {
+      flash(e instanceof Error ? e.message : "Save failed");
+      setShortCodeVal(p.short_code);
+    }
+    setEditingShortCode(false);
   }
 
   async function linkProjectActor(organizationId: string, orgRole: string) {
@@ -3171,7 +3158,31 @@ function ProjectEditor({
             {p.name}
           </h2>
         )}
-        <span className="font-mono text-sm text-gray-400">{p.short_code}</span>
+        {canManageProjectCatalog && editingShortCode ? (
+          <input
+            autoFocus
+            value={shortCodeVal}
+            onChange={(e) => setShortCodeVal(normalizeEntityCodeInput(e.target.value))}
+            onBlur={() => void saveShortCode()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveShortCode();
+              if (e.key === "Escape") {
+                setShortCodeVal(p.short_code);
+                setEditingShortCode(false);
+              }
+            }}
+            maxLength={ENTITY_CODE_MAX_LEN}
+            className="font-mono text-sm text-gray-600 border-b-2 border-blue-400 bg-transparent focus:outline-none w-24"
+          />
+        ) : (
+          <span
+            className={`font-mono text-sm text-gray-400${canManageProjectCatalog ? " cursor-pointer hover:text-blue-600" : ""}`}
+            onClick={canManageProjectCatalog ? () => setEditingShortCode(true) : undefined}
+            title={canManageProjectCatalog ? "Click to edit project code" : undefined}
+          >
+            {p.short_code}
+          </span>
+        )}
         {p.project_type_key && (
           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{p.project_type_key}</span>
         )}
@@ -3507,6 +3518,7 @@ function ProjectEditor({
         {showCreatePkg && (
           <PackageCreateModal
             projectId={p.project_id}
+            existingCodes={packages.map((pk) => pk.package_code)}
             onCreated={(pkg) => { setPackages((prev) => [...prev, pkg]); setShowCreatePkg(false); setExpandedPkg(pkg.package_id); }}
             onClose={() => setShowCreatePkg(false)}
           />
@@ -3693,6 +3705,7 @@ function PackageRow({
   onAddLoc:     (code: string) => Promise<void>;
   onRemoveLoc:  (code: string) => Promise<void>;
 }) {
+  const [codeVal, setCodeVal]       = useState(pkg.package_code);
   const [nameVal, setNameVal]       = useState(pkg.name);
   const [descVal, setDescVal]       = useState(pkg.description ?? "");
   const [addingOrg, setAddingOrg]   = useState("");
@@ -3704,10 +3717,11 @@ function PackageRow({
   const organizations = pkg.organizations ?? [];
 
   React.useEffect(() => {
+    setCodeVal(pkg.package_code);
     setNameVal(pkg.name);
     setDescVal(pkg.description ?? "");
     setDirty(false);
-  }, [pkg.package_id, pkg.name, pkg.description]);
+  }, [pkg.package_id, pkg.package_code, pkg.name, pkg.description]);
 
   React.useEffect(() => {
     if (actorRoles.length && !actorRoles.some((r) => r.key === addingRole)) {
@@ -3716,8 +3730,14 @@ function PackageRow({
   }, [actorRoles, addingRole]);
 
   async function handleSave() {
+    const codeErr = validateEntityCode(codeVal, "Package code");
+    if (codeErr) return;
     setSaving(true);
-    await onUpdate({ name: nameVal.trim(), description: descVal.trim() || null });
+    await onUpdate({
+      package_code: normalizeEntityCodeInput(codeVal),
+      name: nameVal.trim(),
+      description: descVal.trim() || null,
+    });
     setDirty(false);
     setSaving(false);
   }
@@ -3798,6 +3818,15 @@ function PackageRow({
       {expanded && (
         <div className="border-t border-gray-100 px-4 py-4 bg-gray-50 space-y-4 rounded-b-lg">
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Package code</label>
+              <input
+                value={codeVal}
+                onChange={(e) => { setCodeVal(normalizeEntityCodeInput(e.target.value)); setDirty(true); }}
+                maxLength={ENTITY_CODE_MAX_LEN}
+                className="w-full text-sm font-mono border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Name</label>
               <input
@@ -3922,24 +3951,27 @@ function PackageRow({
 // ── Package create modal ──────────────────────────────────────────────────────
 
 function PackageCreateModal({
-  projectId, onCreated, onClose,
+  projectId, existingCodes, onCreated, onClose,
 }: {
   projectId: string;
+  existingCodes: string[];
   onCreated: (pkg: PackageItem) => void;
   onClose: () => void;
 }) {
-  const [code, setCode]       = useState("");
+  const [code, setCode]       = useState(() => suggestNextPackageCode(existingCodes));
   const [name, setName]       = useState("");
   const [desc, setDesc]       = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError]     = useState("");
 
   async function handleCreate() {
-    if (!code.trim() || !name.trim()) { setError("Package code and name are required."); return; }
+    if (!name.trim()) { setError("Package name is required."); return; }
+    const codeErr = validateEntityCode(code, "Package code");
+    if (codeErr) { setError(codeErr); return; }
     setCreating(true); setError("");
     try {
       const pkg = await createPackage(projectId, {
-        package_code: code.trim(),
+        package_code: normalizeEntityCodeInput(code),
         name: name.trim(),
         description: desc.trim() || null,
       });
@@ -3961,10 +3993,12 @@ function PackageCreateModal({
         <div className="p-6 space-y-4">
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Package / lot code *</label>
-            <input autoFocus value={code} onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. SHEP/OCB/KL/01"
+            <label className="text-xs font-medium text-gray-500 block mb-1">Package code * <span className="font-normal text-gray-400">(unique within project)</span></label>
+            <input autoFocus value={code} onChange={(e) => setCode(normalizeEntityCodeInput(e.target.value))}
+              placeholder="01"
+              maxLength={ENTITY_CODE_MAX_LEN}
               className="w-full text-sm font-mono border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            <p className="text-xs text-gray-400 mt-1">Default is next lot number. A–Z, 0–9, underscore, max {ENTITY_CODE_MAX_LEN}.</p>
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Name *</label>

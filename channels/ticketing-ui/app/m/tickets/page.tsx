@@ -10,7 +10,7 @@ import Link from "next/link";
 import { listTickets, type TicketListItem } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { urgencyDotCls, type SlaUrgency } from "@/lib/mobile-constants";
-import { UrgencyDot, SeahBadge } from "@/lib/icons";
+import { UrgencyDot, IntakeRouteBadge } from "@/lib/icons";
 import { Search } from "lucide-react";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
@@ -18,17 +18,13 @@ function TicketRow({ ticket }: { ticket: TicketListItem }) {
   return (
     <Link
       href={`/m/tickets/${ticket.ticket_id}`}
-      className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 ${
-        ticket.is_seah ? "border-l-4 border-l-red-500" : ""
-      }`}
+      className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50"
     >
       <UrgencyDot urgency={urgency} className="w-2.5 h-2.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-xs text-gray-400 font-mono truncate">{ticket.grievance_id}</span>
-          {ticket.is_seah && (
-            <SeahBadge size="xs" />
-          )}
+          <IntakeRouteBadge intakeRoute={ticket.intake_route} size="xs" />
         </div>
         <div className="text-sm text-gray-800 truncate">
           {ticket.is_seah ? "[SEAH — restricted]" : (ticket.grievance_summary ?? "No summary")}

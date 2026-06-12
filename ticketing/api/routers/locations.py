@@ -35,11 +35,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import CurrentUser, get_authenticated_user, require_admin, require_super_admin
+from ticketing.constants.entity_codes import EntityCodeError, validate_entity_code
+from ticketing.services import entity_codes as entity_codes_svc
 from ticketing.services.admin_access import (
     SettingsAction,
     can_assign_project_workflow,
@@ -108,7 +110,7 @@ class LocationResponse(BaseModel):
 
 class ProjectCreate(BaseModel):
     country_code: str = Field(..., max_length=8)
-    short_code: str   = Field(..., max_length=64)
+    short_code: str = Field(..., max_length=8)
     name: str
     description: str | None = None
     is_active: bool | None = None
@@ -117,13 +119,32 @@ class ProjectCreate(BaseModel):
         description="Archetype to instantiate (e.g. construction_road). Defaults workflows and actor roles.",
     )
 
+    @field_validator("short_code", mode="before")
+    @classmethod
+    def _normalize_short_code(cls, v: object) -> str:
+        try:
+            return validate_entity_code(str(v) if v is not None else "", field="Project code")
+        except EntityCodeError as exc:
+            raise ValueError(str(exc)) from exc
+
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
+    short_code: str | None = Field(None, max_length=8)
     description: str | None = None
     is_active: bool | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+
+    @field_validator("short_code", mode="before")
+    @classmethod
+    def _normalize_short_code(cls, v: object) -> str | None:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        try:
+            return validate_entity_code(str(v), field="Project code")
+        except EntityCodeError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class ProjectOrgItem(BaseModel):
@@ -139,7 +160,7 @@ class ProjectWorkflowItem(BaseModel):
     workflow_id: str
     display_label: str
     classifications: list[str] = []
-    intake_routes: list[str] = []
+    intake_route: str | None = None
     is_default: bool = False
     workflow_track: str = "standard"
     sort_order: int = 0
@@ -149,7 +170,7 @@ class ProjectWorkflowUpsert(BaseModel):
     display_label: str = Field(..., max_length=200)
     workflow_id: str = Field(..., max_length=36)
     classifications: list[str] = []
-    intake_routes: list[str] = []
+    intake_route: str | None = None
     is_default: bool = False
     sort_order: int | None = None
 
@@ -910,6 +931,14 @@ def update_project(
 
     if body.name is not None:
         p.name = body.name
+    if body.short_code is not None:
+        try:
+            entity_codes_svc.rename_project_short_code(db, p, body.short_code)
+        except ValueError as exc:
+            msg = str(exc)
+            if "already in use" in msg:
+                raise HTTPException(status_code=409, detail=msg) from exc
+            raise HTTPException(status_code=422, detail=msg) from exc
     if body.description is not None:
         p.description = body.description
     if body.is_active is not None:
@@ -942,7 +971,7 @@ def update_project(
                         "workflow_id": body.standard_workflow_id,
                         "is_default": True,
                         "classifications": [],
-                        "intake_routes": ["standard_grievance", "grievance_new", "new_grievance"],
+                        "intake_route": "new_grievance",
                         "sort_order": 10,
                     }
                 )
@@ -969,7 +998,7 @@ def update_project(
                                 "Malicious Behavior",
                                 "Malicious Behavior, Environmental",
                             ],
-                            "intake_routes": ["seah_intake"],
+                            "intake_route": "seah_intake",
                             "sort_order": 30,
                         }
                     )
@@ -1274,16 +1303,37 @@ class PackageResponse(BaseModel):
 
 
 class PackageCreate(BaseModel):
-    package_code:      str = Field(..., max_length=128)
+    package_code:      str | None = Field(None, max_length=8)
     name:              str
     description:       str | None = None
     is_active:         bool = True
 
+    @field_validator("package_code", mode="before")
+    @classmethod
+    def _normalize_package_code(cls, v: object) -> str | None:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        try:
+            return validate_entity_code(str(v), field="Package code")
+        except EntityCodeError as exc:
+            raise ValueError(str(exc)) from exc
+
 
 class PackageUpdate(BaseModel):
+    package_code:      str | None = Field(None, max_length=8)
     name:              str | None = None
     description:       str | None = None
     is_active:         bool | None = None
+
+    @field_validator("package_code", mode="before")
+    @classmethod
+    def _normalize_package_code(cls, v: object) -> str | None:
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        try:
+            return validate_entity_code(str(v), field="Package code")
+        except EntityCodeError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 def _package_to_dict(pkg: ProjectPackage) -> dict:
@@ -1349,18 +1399,20 @@ def create_package(
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
 
+    package_code = body.package_code or entity_codes_svc.next_package_code(db, project_id)
+
     existing = db.execute(
         select(ProjectPackage).where(
             ProjectPackage.project_id == project_id,
-            ProjectPackage.package_code == body.package_code,
+            ProjectPackage.package_code == package_code,
         )
     ).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=409, detail=f"Package '{body.package_code}' already exists in this project")
+        raise HTTPException(status_code=409, detail=f"Package '{package_code}' already exists in this project")
 
     pkg = ProjectPackage(
         project_id=project_id,
-        package_code=body.package_code,
+        package_code=package_code,
         name=body.name,
         description=body.description,
         is_active=body.is_active,
@@ -1383,6 +1435,20 @@ def update_package(
     """Update package metadata. Admin only."""
     pkg = _get_package_or_404(db, project_id, package_id)
 
+    if body.package_code is not None and body.package_code != pkg.package_code:
+        conflict = db.execute(
+            select(ProjectPackage).where(
+                ProjectPackage.project_id == project_id,
+                ProjectPackage.package_code == body.package_code,
+                ProjectPackage.package_id != package_id,
+            )
+        ).scalar_one_or_none()
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Package '{body.package_code}' already exists in this project",
+            )
+        pkg.package_code = body.package_code
     if body.name              is not None: pkg.name              = body.name
     if body.description       is not None: pkg.description       = body.description
     if body.is_active         is not None: pkg.is_active         = body.is_active
