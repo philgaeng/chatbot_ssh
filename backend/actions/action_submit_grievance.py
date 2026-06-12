@@ -1,31 +1,15 @@
-from typing import Any, Dict, List, Optional, Text, Tuple
-from datetime import datetime, timedelta
-import re
+from typing import Any, Dict, List, Optional, Text
+import traceback
 from .base_classes.base_classes import BaseAction
 from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
-import json
-import traceback
-from backend.config.constants import ADMIN_EMAILS, EMAIL_TEMPLATES
+from backend.actions.services.submit import collect as submit_collect
+from backend.actions.services.submit import confirmation as submit_confirmation
+from backend.actions.services.submit import storage as submit_storage
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_OUTRO
-from backend.actions.utils.ticketing_dispatch import (
-    categories_high_priority,
-    dispatch_grievance_from_tracker,
-)
+from backend.actions.utils.ticketing_dispatch import dispatch_grievance_from_tracker
 from backend.config.database_constants import GRIEVANCE_STATUS
 from rasa_sdk.events import SlotSet
-from backend.shared_functions.geo_pin import (
-    apply_location_enrichment_for_submit,
-    slots_for_location_resolve,
-)
-from backend.shared_functions.location_mapping import resolve_location_payload
-from backend.config.classification_status import (
-    COMPLAINANT_CONFIRMED,
-    LLM_GENERATED,
-    LLM_SKIPPED,
-    normalize_classification_status,
-)
-from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 
 
 
@@ -38,305 +22,47 @@ class BaseActionSubmit(BaseAction):
 
     
     def check_grievance_high_priority(self, grievance_categories: Any) -> bool:
-        """
-        Check if any of the grievance categories has high_priority set to True.
-        
-        Args:
-            grievance_categories: List of category names (e.g., ["Economic, Social - Land Acquisition Issues"])
-            
-        Returns:
-            bool: True if at least one category has high_priority = True, False otherwise
-        """
-        try:
-            # Check if any of the grievance categories has high priority
-            
-            if isinstance(grievance_categories, str):
-                # If it's a string, try to parse it as JSON
-                try:
-                    grievance_categories = json.loads(grievance_categories)
-                except (json.JSONDecodeError, TypeError):
-                    grievance_categories = [grievance_categories]
-            return categories_high_priority(grievance_categories)
-            
-        except Exception as e:
-            self.logger.error(f"Error checking grievance high priority: {str(e)}")
-            return False
-    
-
-
+        return submit_confirmation.check_grievance_high_priority(grievance_categories)
 
     def collect_grievance_data(self, tracker: Tracker, review: bool = False) -> Dict[str, Any]:
-        """Collect and separate user and grievance data from slots."""
-        # set up the timestamp and timeline
-        
-
-        keys = ["complainant_id",
-                 "complainant_phone",
-                 "complainant_email",
-                 "complainant_full_name",
-                 "complainant_gender",
-                 "complainant_province",
-                 "complainant_district",
-                 "complainant_municipality",
-                 "complainant_village",
-                 "complainant_address",
-                 "grievance_id",
-                 "grievance_description",
-                 "otp_verified",
-                 "active_party_role",
-                 "party_contacts",
-                 "party_victim_survivor",
-                 "party_witness",
-                 "party_relative",
-                 "party_seah_focal_point",
-                 "party_other_reporter",
-                 ]
-
-        if review:
-            review_keys = [
-                "grievance_categories",
-                "grievance_summary",
-                "grievance_sensitive_issue",
-                "grievance_classification_status",
-            ]
-            keys = keys + review_keys
-        
-        
-        # collect the data from the tracker
-        grievance_data={k : tracker.get_slot(k) for k in keys}
-        location_payload = resolve_location_payload(
+        return submit_collect.collect_grievance_data(
+            tracker,
             db_manager=self.db_manager,
-            slots=slots_for_location_resolve(grievance_data),
-            country_code=tracker.get_slot("country_code") or "NP",
+            helpers_repo=self.helpers_repo,
+            grievance_status_submitted=self.GRIEVANCE_STATUS["SUBMITTED"],
+            skip_value=self.SKIP_VALUE,
+            not_provided=self.NOT_PROVIDED,
+            llm_classification_enabled=self.LLM_CLASSIFICATION,
+            grievance_classification_status=self.GRIEVANCE_CLASSIFICATION_STATUS,
+            review=review,
+            check_high_priority=self.check_grievance_high_priority,
         )
-        grievance_data.update(location_payload)
-        grievance_data.update(
-            apply_location_enrichment_for_submit(
-                grievance_data,
-                geo_lat=tracker.get_slot("geo_lat"),
-                geo_lng=tracker.get_slot("geo_lng"),
-                location_pin_status=tracker.get_slot("location_pin_status"),
-                location_code=tracker.get_slot("location_code")
-                or location_payload.get("location_code"),
-            )
-        )
-        self.logger.info(
-            "submission_location_resolution country_code=%s status=%s deepest_level=%s",
-            location_payload.get("country_code"),
-            location_payload.get("location_resolution_status"),
-            location_payload.get("location_deepest_mapped_level", 0),
-        )
-        grievance_timestamp = self.helpers_repo.get_current_datetime()
-        grievance_data["grievance_status"] = self.GRIEVANCE_STATUS["SUBMITTED"]
-        if review:
-            grievance_data["grievance_high_priority"] = self.check_grievance_high_priority(grievance_data["grievance_categories"])
-        
-        grievance_timeline = self.helpers_repo.get_timeline_by_status_code(status_update_code=self.GRIEVANCE_STATUS["SUBMITTED"],
-        grievance_high_priority=grievance_data.get("grievance_high_priority", False),
-        sensitive_issues_detected=grievance_data.get("grievance_sensitive_issue", False))
-        
-
-        grievance_data["submission_type"] = "new_grievance"
-        grievance_data["grievance_timestamp"] = grievance_timestamp
-        grievance_data["grievance_timeline"] = grievance_timeline
-        # change all the values of the slots_skipped or None to "NOT_PROVIDED"
-        grievance_data = self._update_key_values_for_db_storage(grievance_data)
-        if grievance_data.get("party_contacts") == self.NOT_PROVIDED:
-            grievance_data["party_contacts"] = {}
-        grievance_data["grievance_classification_status"] = (
-            self._classification_status_for_submit(tracker, grievance_data)
-        )
-        self.logger.info(f"Grievance data: {grievance_data}")
-                
-        return grievance_data
-
-    def _classification_status_for_submit(
-        self, tracker: Tracker, grievance_data: Dict[str, Any]
-    ) -> str:
-        """Map session slots to DB classification status on final submit."""
-        slot_status = tracker.get_slot("grievance_classification_status")
-        cm = self.GRIEVANCE_CLASSIFICATION_STATUS.get("complainant_confirmed", COMPLAINANT_CONFIRMED)
-        if slot_status == cm:
-            return COMPLAINANT_CONFIRMED
-        cat_st = tracker.get_slot("grievance_categories_status")
-        sum_st = tracker.get_slot("grievance_summary_status")
-        if cat_st == cm and sum_st == cm:
-            return COMPLAINANT_CONFIRMED
-        normalized = normalize_classification_status(slot_status)
-        if normalized and normalized not in (self.SKIP_VALUE, self.NOT_PROVIDED, "pending"):
-            return normalized
-        if not self.LLM_CLASSIFICATION:
-            return LLM_SKIPPED
-        from backend.actions.forms.form_road_hazard import is_road_hazard_intake
-
-        if is_road_hazard_intake(tracker):
-            return LLM_SKIPPED
-        gid = tracker.get_slot("grievance_id")
-        if gid:
-            row = self.db_manager.get_grievance_by_id(gid) or {}
-            db_status = normalize_classification_status(
-                row.get("grievance_classification_status")
-            )
-            if db_status:
-                return db_status
-        return "pending"
-
-    def _update_key_values_for_db_storage(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update the values of the grievance data for the database storage."""
-        for key, value in grievance_data.items():
-            if value == self.SKIP_VALUE or value is None:
-                grievance_data[key] = self.NOT_PROVIDED
-        return grievance_data
 
     def _merge_role_party_payloads(self, grievance_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Normalize and merge role-specific party slots into party_contacts.
-        This guarantees submit sees every role payload collected in slots.
-        """
-        role_slot_map = {
-            "victim_survivor": "party_victim_survivor",
-            "witness": "party_witness",
-            "relative": "party_relative",
-            "seah_focal_point": "party_seah_focal_point",
-            "other_reporter": "party_other_reporter",
-        }
+        return submit_storage.merge_role_party_payloads(grievance_data)
 
-        raw_party_contacts = grievance_data.get("party_contacts")
-        party_contacts: Dict[str, Any] = raw_party_contacts if isinstance(raw_party_contacts, dict) else {}
-
-        for role_key, slot_name in role_slot_map.items():
-            slot_payload = grievance_data.get(slot_name)
-            if isinstance(slot_payload, dict) and slot_payload:
-                party_contacts[role_key] = slot_payload
-
-        grievance_data["party_contacts"] = party_contacts
-        return grievance_data
-    
-    
-
-        
-    def create_confirmation_message(self, 
-                                    grievance_data: Dict[str, Any]) -> str:
-        """Create a formatted confirmation message."""
-
-        allowed_keys = ['grievance_id',
-                        'grievance_timestamp',
-                        'grievance_description',
-                        'complainant_email',
-                        'complainant_phone',
-                        'grievance_outro',
-                        'grievance_timeline']
-        
-        message_keys = [i for i in allowed_keys if grievance_data.get(i) and grievance_data.get(i) != self.NOT_PROVIDED]
-
-        all_message_elements =  {
-                'grievance_id': {
-                    'en': "Your grievance has been filed successfully.\n**Grievance ID: {grievance_id} **",
-                    'ne': "तपाईंको गुनासो सफलतापूर्वक दर्ता गरिएको छ।\n**गुनासो ID:** {grievance_id}"
-                },
-                'grievance_timestamp': {
-                    'en': "Grievance filed on: {grievance_timestamp}",
-                    'ne': "गुनासो दर्ता गरिएको: {grievance_timestamp}"
-                },
-                'grievance_summary': {
-                    'en': "**Summary: {grievance_summary}**",
-                    'ne': "**सारांश: {grievance_summary}**"
-                },
-                'grievance_categories': {
-                    'en': "**Category: {grievance_categories}**",
-                    'ne': "**श्रेणी: {grievance_categories}**"
-                },
-                'grievance_description': {
-                    'en': "**Details: {grievance_description}**",
-                    'ne': "**विवरण: {grievance_description}**"
-                },
-                'complainant_email': {
-                    'en': "\nA confirmation email will be sent to {complainant_email}",
-                    'ne': "\nतपाईंको इमेलमा सुनिश्चित गर्ने ईमेल भेटिन्छ। {complainant_email}"
-                },
-                'complainant_phone': {
-                    'en': "**A confirmation SMS will be sent to your phone: {complainant_phone}**",
-                    'ne': "**तपाईंको फोनमा सुनिश्चित गर्ने संदेश भेटिन्छ। {complainant_phone}**"
-                },
-                'grievance_outro': {
-                    'en': "Our team will review it shortly and contact you if more information is needed.",
-                    'ne': "हाम्रो टीमले त्यो गुनासोको लागि कल गर्दैछु र तपाईंलाई यदि अधिक जानकारी आवश्यक हुन्छ भने सम्पर्क गर्नेछ।"
-                },
-                'grievance_timeline': {
-                    'en': "The standard resolution time for a grievance is 15 days. Expected resolution date: {grievance_timeline}",
-                    'ne': "गुनासोको मानक समयावधि 15 दिन हुन्छ। अपेक्षित समाधान तिथि: {grievance_timeline}"
-                },
-                'grievance_status': {
-                    'en': "**Status:**",
-                    'ne': "**स्थिति:**"
-                }
-            }
-
-        message_elements = [all_message_elements[i][self.language_code] for i in message_keys]
-
-        # Get attached files information using the helper function
-        has_files = self._get_attached_files_info(grievance_data['grievance_id'])["has_files"]
-        files_info = self._get_attached_files_info(grievance_data['grievance_id'])["files_info"]
-        
-
-        
-        message = "\n".join(message_elements).format(grievance_id=grievance_data['grievance_id'], 
-                                            grievance_timestamp=grievance_data['grievance_timestamp'],
-                                            grievance_description=grievance_data['grievance_description'],
-                                            complainant_email=grievance_data['complainant_email'],
-                                            complainant_phone=grievance_data['complainant_phone'],
-                                            grievance_timeline=grievance_data['grievance_timeline']
-                                           )
-
-        # Add files information to the message
-        if has_files:
-            message = message + files_info
-        return message
-
-    def _emit_chat_filed_confirmation(
-        self,
-        dispatcher: CollectingDispatcher,
-        grievance_data: Dict[str, Any],
-        *,
-        tracker: Optional[Tracker] = None,
-    ) -> None:
-        """CB-07 Phase A: filed confirmation only (categorization comes after LLM retrieve)."""
-        lang = self.language_code or "en"
-        gid = grievance_data.get("grievance_id") or ""
-
-        filed_line = get_utterance_base(
-            "action_submit_grievance", "action_submit_grievance", 6, lang
-        ).format(grievance_id=gid)
-        from backend.actions.forms.form_dust import is_dust_intake
-
-        dust = tracker is not None and is_dust_intake(tracker)
-
-        dispatcher.utter_message(text=filed_line)
-        if not dust:
-            on_record = get_utterance_base(
-                "action_submit_grievance", "action_submit_grievance", 5, lang
-            )
-            dispatcher.utter_message(text=on_record)
-        dispatcher.utter_message(
-            json_message={
-                "data": {
-                    "event_type": "grievance_filed",
-                    "grievance_id": gid,
-                }
-            }
+    def create_confirmation_message(self, grievance_data: Dict[str, Any]) -> str:
+        return submit_confirmation.create_confirmation_message(
+            grievance_data,
+            language_code=self.language_code,
+            not_provided=self.NOT_PROVIDED,
+            db_manager=self.db_manager,
         )
-    
-    async def _send_grievance_recap_sms(self, 
-                                  grievance_data: Dict[str, Any],
-                                  dispatcher: CollectingDispatcher,
-                                  tracker: Tracker) -> None:
-        """Send filed confirmation in chat (3 bubbles) and optional SMS recap."""
-        try:
-            confirmation_message = self.create_confirmation_message(
-                grievance_data
-            )
 
-            self._emit_chat_filed_confirmation(dispatcher, grievance_data, tracker=tracker)
+    async def _send_grievance_recap_sms(
+        self,
+        grievance_data: Dict[str, Any],
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+    ) -> None:
+        try:
+            confirmation_message = self.create_confirmation_message(grievance_data)
+            submit_confirmation.emit_chat_filed_confirmation(
+                dispatcher,
+                grievance_data,
+                language_code=self.language_code,
+                tracker=tracker,
+            )
             
             if grievance_data.get('otp_verified') == True:
                 #send sms
