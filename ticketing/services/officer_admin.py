@@ -336,18 +336,90 @@ def _keycloak_send_invite_email(admin, kc_id: str) -> None:
     )
 
 
+def _normalize_officer_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _officer_role_keys(db: Session, email: str) -> list[str]:
+    normalized = _normalize_officer_email(email)
+    return list(
+        db.execute(
+            select(Role.role_key)
+            .join(UserRole, UserRole.role_id == Role.role_id)
+            .where(UserRole.user_id == normalized)
+        ).scalars().all()
+    )
+
+
+def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
+    from datetime import datetime, timezone
+
+    normalized = _normalize_officer_email(email)
+    ob = db.get(OfficerOnboarding, normalized)
+    if ob:
+        ob.status = status
+        ob.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(OfficerOnboarding(user_id=normalized, status=status))
+
+
 def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
     """True if officer has not finished Keycloak onboarding (invited or pending required actions)."""
-    ob = db.get(OfficerOnboarding, email)
+    normalized = _normalize_officer_email(email)
+    ob = db.get(OfficerOnboarding, normalized)
     if ob and ob.status == "invited":
         return True
     if not keycloak_configured():
         return False
-    kc_user = _keycloak_find_user(_keycloak_admin(), email)
-    if not kc_user or not kc_user.get("enabled", True):
+    kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
+    if not kc_user:
         return False
+    if not kc_user.get("enabled", True):
+        return True
     pending = kc_user.get("requiredActions") or []
     return bool(pending)
+
+
+def provision_admin_scope_keycloak(
+    db: Session,
+    email: str,
+    role_key: str,
+    organization_id: str,
+) -> str:
+    """
+    Ensure Keycloak account exists for an admin-scope appointee and send invite when needed.
+    Returns officer_onboarding status: invited | active
+    """
+    normalized = _normalize_officer_email(email)
+    if "@" not in normalized:
+        raise HTTPException(status_code=422, detail="Admin appoint requires an email user id.")
+
+    if not keycloak_configured():
+        _upsert_officer_onboarding(db, normalized, "active")
+        return "active"
+
+    org_id = organization_id.strip() or "DOR"
+    admin = _keycloak_admin()
+    kc_user = _keycloak_find_user(admin, normalized)
+
+    if not kc_user:
+        keycloak_create_user(normalized, role_key, org_id)
+        _upsert_officer_onboarding(db, normalized, "invited")
+        return "invited"
+
+    role_keys = _officer_role_keys(db, normalized) or [role_key]
+    keycloak_update_user_attributes(normalized, role_keys, org_id)
+
+    if officer_eligible_for_invite_resend(db, normalized):
+        kc_user = _keycloak_find_user(admin, normalized)
+        if kc_user and not kc_user.get("enabled", True):
+            admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
+        keycloak_resend_invite_email(normalized, db=db)
+        _upsert_officer_onboarding(db, normalized, "invited")
+        return "invited"
+
+    _upsert_officer_onboarding(db, normalized, "active")
+    return "active"
 
 
 def keycloak_resend_invite_email(user_id: str, db=None) -> str:
@@ -395,11 +467,7 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
 
     sent_to = (kc_user.get("email") or email).strip().lower()
     if db is not None:
-        from datetime import datetime, timezone
-
-        ob = db.get(OfficerOnboarding, sent_to)
-        if ob:
-            ob.updated_at = datetime.now(timezone.utc)
+        _upsert_officer_onboarding(db, sent_to, "invited")
     return sent_to
 
 

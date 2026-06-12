@@ -798,6 +798,8 @@ export interface AdminScopeRow {
   created_by_user_id?: string | null;
   /** True when Keycloak still has pending setup actions (invite link can be resent). */
   can_resend_invite?: boolean;
+  onboarding_status?: string | null;
+  invite_email_sent?: boolean;
 }
 
 export interface AdminContext {

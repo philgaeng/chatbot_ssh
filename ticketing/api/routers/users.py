@@ -313,13 +313,19 @@ def get_my_admin_context(
     return AdminContextResponse(**admin_context_payload(current_user))
 
 
-def _admin_scope_response(db: Session, scope: AdminScope) -> AdminScopeResponse:
+def _admin_scope_response(
+    db: Session,
+    scope: AdminScope,
+    *,
+    onboarding_status: str | None = None,
+    invite_email_sent: bool = False,
+) -> AdminScopeResponse:
     from ticketing.services.officer_admin import officer_eligible_for_invite_resend
 
     email = scope.user_id.strip().lower()
     return AdminScopeResponse(
         admin_scope_id=scope.admin_scope_id,
-        user_id=scope.user_id,
+        user_id=email,
         role_key=scope.role_key,
         country_code=scope.country_code,
         project_id=scope.project_id,
@@ -329,6 +335,8 @@ def _admin_scope_response(db: Session, scope: AdminScope) -> AdminScopeResponse:
         created_at=scope.created_at,
         created_by_user_id=scope.created_by_user_id,
         can_resend_invite=officer_eligible_for_invite_resend(db, email),
+        onboarding_status=onboarding_status,
+        invite_email_sent=invite_email_sent,
     )
 
 
@@ -382,8 +390,11 @@ def create_admin_scope(
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {body.role_key}")
 
+    from ticketing.services.officer_admin import log_admin_audit, provision_admin_scope_keycloak
+
+    email = body.user_id.strip().lower()
     scope = AdminScope(
-        user_id=body.user_id.strip(),
+        user_id=email,
         role_key=body.role_key,
         country_code=body.country_code,
         project_id=project_ref,
@@ -397,7 +408,7 @@ def create_admin_scope(
     org_id = (body.organization_id or "DOR").strip()
     existing_ur = db.execute(
         select(UserRole).where(
-            UserRole.user_id == body.user_id,
+            UserRole.user_id == email,
             UserRole.role_id == role.role_id,
             UserRole.organization_id == org_id,
         )
@@ -405,14 +416,35 @@ def create_admin_scope(
     if not existing_ur:
         db.add(
             UserRole(
-                user_id=body.user_id.strip(),
+                user_id=email,
                 role_id=role.role_id,
                 organization_id=org_id,
             )
         )
+    db.flush()
+    onboarding_status = provision_admin_scope_keycloak(db, email, body.role_key, org_id)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="admin_scope.appoint",
+        target_user_id=email,
+        payload={
+            "role_key": body.role_key,
+            "country_code": body.country_code,
+            "project_id": project_ref,
+            "organization_id": org_id,
+            "workflow_track": body.workflow_track,
+            "onboarding_status": onboarding_status,
+        },
+    )
     db.commit()
     db.refresh(scope)
-    return _admin_scope_response(db, scope)
+    return _admin_scope_response(
+        db,
+        scope,
+        onboarding_status=onboarding_status,
+        invite_email_sent=onboarding_status == "invited",
+    )
 
 
 @router.delete(

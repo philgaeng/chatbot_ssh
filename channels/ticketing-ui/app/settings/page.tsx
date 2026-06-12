@@ -559,8 +559,9 @@ function AdminAccessTab() {
 
   async function handleAppoint() {
     if (!userId.trim()) return;
+    setResendMsg("");
     try {
-      await createAdminScope({
+      const created = await createAdminScope({
         user_id: userId.trim(),
         role_key: roleKey,
         country_code: roleKey === "country_admin" ? countryCode : undefined,
@@ -568,6 +569,13 @@ function AdminAccessTab() {
         workflow_track: track,
       });
       setUserId("");
+      if (created.invite_email_sent) {
+        setResendMsg(
+          `Setup email sent to ${created.user_id}. They can use Resend invite if it does not arrive.`,
+        );
+      } else if (created.onboarding_status === "active") {
+        setResendMsg(`${created.user_id} already has an active Keycloak account — no invite email sent.`);
+      }
       await load();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Appoint failed");
@@ -601,7 +609,10 @@ function AdminAccessTab() {
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">Appoint scoped country and project administrators.</p>
+      <p className="text-sm text-gray-500 mb-4">
+        Appoint scoped country and project administrators. New officers receive a Keycloak setup email;
+        use <span className="font-medium">Resend invite</span> if it does not arrive.
+      </p>
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
       {resendMsg && <p className="text-sm text-green-700 mb-3">{resendMsg}</p>}
       <div className="border border-gray-200 rounded-lg p-4 mb-5 bg-gray-50 space-y-3 text-sm">
