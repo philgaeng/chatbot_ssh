@@ -29,21 +29,24 @@ _KEY_OPEN_RE = re.compile(r"""^['"]([^'"]+)['"]:\s*\{\s*$""")
 _UTTERANCES_OPEN_RE = re.compile(r"""^['"]utterances['"]:\s*\{\s*$""")
 _UTTER_NUM_RE = re.compile(r"^(\d+):\s*\{\s*$")
 _NE_LINE_RE = re.compile(r"""^['"]ne['"]:\s*(.+?)\s*,?\s*$""")
+_SENSITIVE_CONST_RE = re.compile(
+    r"^SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS\s*=\s*\{", re.MULTILINE
+)
 
 
 def load_updates(xlsx_path: Path) -> dict[tuple[str, str, int], str]:
     wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
     ws = wb.active
     updates: dict[tuple[str, str, int], str] = {}
-    for row in range(2, ws.max_row + 1):
-        if ws.cell(row, 6).value != "To update":
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or row[0] is None:
             continue
-        ne_reviewed = ws.cell(row, 5).value
+        if len(row) < 6 or row[5] != "To update":
+            continue
+        ne_reviewed = row[4]
         if ne_reviewed is None or not str(ne_reviewed).strip():
             continue
-        form = ws.cell(row, 1).value
-        action = ws.cell(row, 2).value
-        num = ws.cell(row, 3).value
+        form, action, num = row[0], row[1], row[2]
         if not form or not action or num is None:
             continue
         updates[(str(form), str(action), int(num))] = str(ne_reviewed)
@@ -62,6 +65,117 @@ def _format_ne_literal(value: str) -> str:
 def _parse_ne_value(raw: str) -> str:
     node = ast.parse(f"x = {raw}", mode="exec")
     return node.body[0].value.value  # type: ignore[attr-defined]
+
+
+def _skip_string(source: str, index: int) -> int:
+    quote = source[index]
+    if source[index : index + 3] in ("'''", '"""'):
+        triple = source[index : index + 3]
+        end = source.find(triple, index + 3)
+        return end + 3 if end >= 0 else len(source)
+    index += 1
+    while index < len(source):
+        if source[index] == "\\":
+            index += 2
+            continue
+        if source[index] == quote:
+            return index + 1
+        index += 1
+    return len(source)
+
+
+def _skip_paren(source: str, index: int) -> int:
+    depth = 0
+    while index < len(source):
+        char = source[index]
+        if char in ("'", '"'):
+            index = _skip_string(source, index)
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        index += 1
+    return len(source)
+
+
+def _brace_block(source: str, open_index: int) -> tuple[int, int]:
+    depth = 0
+    index = open_index
+    while index < len(source):
+        char = source[index]
+        if char in ("'", '"'):
+            index = _skip_string(source, index)
+            continue
+        if char == "(":
+            index = _skip_paren(source, index)
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return open_index, index + 1
+        index += 1
+    raise ValueError(f"Unclosed '{{' at index {open_index}")
+
+
+def _find_key_block(
+    source: str, key: str, start: int = 0, end: int | None = None
+) -> tuple[int, int] | None:
+    end = end if end is not None else len(source)
+    pattern = re.compile(rf"(['\"]){re.escape(key)}\1\s*:\s*\{{")
+    match = pattern.search(source, start, end)
+    if not match:
+        return None
+    return _brace_block(source, match.end() - 1)
+
+
+def _find_utterances_block(source: str, action_block: tuple[int, int]) -> tuple[int, int] | None:
+    action_start, action_end = action_block
+    match = re.search(
+        r"""['"]utterances['"]\s*:\s*\{""", source[action_start:action_end]
+    )
+    if not match:
+        return None
+    return _brace_block(source, action_start + match.end() - 1)
+
+
+def _find_utterance_block(
+    source: str, utterances_block: tuple[int, int], num: int
+) -> tuple[int, int] | None:
+    utterances_start, utterances_end = utterances_block
+    region = source[utterances_start:utterances_end]
+    for pattern in (rf"\{{{num}\s*:\s*\{{", rf"\b{num}\s*:\s*\{{"):
+        match = re.search(pattern, region)
+        if match:
+            open_index = utterances_start + match.end() - 1
+            return _brace_block(source, open_index)
+    return None
+
+
+def _find_ne_value_range(
+    source: str, utterance_block: tuple[int, int]
+) -> tuple[int, int, str] | None:
+    block_start, block_end = utterance_block
+    match = re.search(r"""['"]ne['"]\s*:\s*""", source[block_start:block_end])
+    if not match:
+        return None
+    value_start = block_start + match.end()
+    first = source[value_start]
+    if first in ("'", '"'):
+        value_end = _skip_string(source, value_start)
+    elif first == "(":
+        value_end = _skip_paren(source, value_start)
+    else:
+        return None
+    return value_start, value_end, source[value_start:value_end]
+
+
+def _replace_ne_value(source: str, value_start: int, value_end: int, new_ne: str) -> str:
+    return source[:value_start] + _format_ne_literal(new_ne) + source[value_end:]
 
 
 def _resolve_target_action(action: str) -> str:
@@ -266,6 +380,64 @@ def apply_updates_to_source(
             idx += 1
             continue
 
+        if (
+            (stripped.startswith("'ne':") or stripped.startswith('"ne":'))
+            and "(" in stripped
+            and current_form
+            and current_action
+            and current_utter_num is not None
+            and utter_block_indent is not None
+            and utter_block_indent <= indent <= utter_block_indent + 8
+        ):
+            form = current_form
+            action_name = current_action
+            num = current_utter_num
+            key = (form, action_name, num)
+            if current_form == "__sensitive_issues__":
+                for (f, a, n), val in list(updates.items()):
+                    if _resolve_target_action(a) == action_name and n == num:
+                        key = (f, a, n)
+                        new_ne = val
+                        break
+                else:
+                    idx += 1
+                    continue
+            elif key not in updates:
+                key = next(
+                    (
+                        k
+                        for k in updates
+                        if k[2] == num
+                        and _resolve_target_action(k[1]) == action_name
+                        and k[0] == form
+                    ),
+                    key,
+                )
+            if key not in updates:
+                idx += 1
+                continue
+            new_ne = updates[key]
+            start = idx
+            block = [line]
+            idx += 1
+            paren_depth = stripped.count("(") - stripped.count(")")
+            while idx < len(lines) and paren_depth > 0:
+                block.append(lines[idx])
+                paren_depth += lines[idx].count("(") - lines[idx].count(")")
+                idx += 1
+            old_raw = "".join(block).split(":", 1)[1].strip().rstrip(",")
+            try:
+                if _parse_ne_value(old_raw) != new_ne:
+                    prefix = line[:indent]
+                    lines[start] = f"{prefix}'ne': {_format_ne_literal(new_ne)},\n"
+                    for clear_i in range(start + 1, idx):
+                        lines[clear_i] = ""
+                    applied.append(f"{key[0]}/{key[1]}/{key[2]}")
+                    updates.pop(key, None)
+            except SyntaxError:
+                skipped.append(f"{key[0]}/{key[1]}/{key[2]}: paren parse error")
+            continue
+
         for key, new_ne in list(updates.items()):
             if _try_apply_key(
                 lines,
@@ -332,6 +504,37 @@ def classify_remaining(
     return already_applied, needs_update, lookup_errors
 
 
+def _locate_ne_range(
+    source: str, form: str, action: str, num: int
+) -> tuple[int, int, str] | None:
+    if action in _SENSITIVE_ISSUES_ACTIONS:
+        const_match = _SENSITIVE_CONST_RE.search(source)
+        if not const_match:
+            return None
+        const_block = _brace_block(source, const_match.end() - 1)
+        utterances_block = _find_utterances_block(source, const_block)
+        if not utterances_block:
+            return None
+        utterance_block = _find_utterance_block(source, utterances_block, num)
+        if not utterance_block:
+            return None
+        return _find_ne_value_range(source, utterance_block)
+
+    form_block = _find_key_block(source, form)
+    if not form_block:
+        return None
+    action_block = _find_key_block(source, action, form_block[0], form_block[1])
+    if not action_block:
+        return None
+    utterances_block = _find_utterances_block(source, action_block)
+    if not utterances_block:
+        return None
+    utterance_block = _find_utterance_block(source, utterances_block, num)
+    if not utterance_block:
+        return None
+    return _find_ne_value_range(source, utterance_block)
+
+
 def apply_inline_fallback(
     source: str,
     updates: dict[tuple[str, str, int], str],
@@ -340,25 +543,17 @@ def apply_inline_fallback(
     remaining = dict(updates)
     for key, new_ne in list(remaining.items()):
         form, action, num = key
-        target = _resolve_target_action(action)
-        pattern = re.compile(
-            rf"((?:'|\"){re.escape(target)}(?:'|\")\s*:\s*\{{[^{{}}]*?"
-            rf"['\"]utterances['\"]\s*:\s*\{{{num}\s*:\s*\{{[^{{}}]*?"
-            rf"['\"]en['\"]\s*:\s*[^,]+,\s*['\"]ne['\"]\s*:\s*)"
-            rf"((?:\"\"\"[\s\S]*?\"\"\"|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'))(\s*\}})",
-            re.DOTALL,
-        )
-        match = pattern.search(source)
-        if not match:
+        located = _locate_ne_range(source, form, action, num)
+        if not located:
             continue
+        value_start, value_end, old_raw = located
         try:
-            if _parse_ne_value(match.group(2)) == new_ne:
+            if _parse_ne_value(old_raw) == new_ne:
                 del remaining[key]
                 continue
         except SyntaxError:
             continue
-        replacement = match.group(1) + _format_ne_literal(new_ne) + match.group(3)
-        source = source[: match.start()] + replacement + source[match.end() :]
+        source = _replace_ne_value(source, value_start, value_end, new_ne)
         applied.append(f"{form}/{action}/{num}")
         del remaining[key]
     return source, applied, remaining
@@ -399,10 +594,17 @@ def main() -> int:
                 print(f"  {key}")
 
     if args.dry_run:
-        _, still_need, lookup_errors = classify_remaining(all_updates)
+        if parser_missed:
+            _, still_need, lookup_errors = classify_remaining(
+                {k: all_updates[k] for k in parser_missed}
+            )
+        else:
+            still_need, lookup_errors = [], []
         if not applied and not still_need and not lookup_errors:
             print("Nothing to do — all reviewed translations are already in utterance_mapping_rasa.py.")
             return 0
+        if applied:
+            print(f"Ready to apply {len(applied)} change(s) on write.")
         return 1 if still_need or lookup_errors else 0
 
     if not applied:
