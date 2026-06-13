@@ -45,6 +45,7 @@ BUTTON_DUST_GRIEVANCE = "/dust_grievance"
 BUTTON_ROAD_HAZARD_GRIEVANCE = "/road_hazard_grievance"
 BUTTON_LOCATION_MANUAL = "/location_manual_entry"
 BUTTON_LOCATION_USE_MAP = "/location_use_map"
+BUTTON_LOCATION_USE_PHONE = "/location_use_phone"
 BUTTON_LOCATION_OPEN_MAP = "/location_open_map"
 
 BUTTON_SKIP_EN = {"title": "Skip", "payload": BUTTON_SKIP}
@@ -299,10 +300,12 @@ BUTTONS_RESTART_OPTIONS = {
 
 BUTTONS_LOCATION_METHOD = {
     "en": [
+        {"title": "Use my phone location", "payload": BUTTON_LOCATION_USE_PHONE},
         {"title": "Use the map", "payload": BUTTON_LOCATION_USE_MAP},
         {"title": "Enter location manually", "payload": BUTTON_LOCATION_MANUAL},
     ],
     "ne": [
+        {"title": "मेरो फोनको स्थान प्रयोग गर्नुहोस्", "payload": BUTTON_LOCATION_USE_PHONE},
         {"title": "नक्सा प्रयोग गर्नुहोस्", "payload": BUTTON_LOCATION_USE_MAP},
         {"title": "स्थान आफैं टाइप गर्नुहोस्", "payload": BUTTON_LOCATION_MANUAL},
     ],

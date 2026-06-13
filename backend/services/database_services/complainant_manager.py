@@ -192,6 +192,7 @@ class ComplainantDbManager(BaseDatabaseManager):
                 'contact_id', 'country_code', 'location_code', 'location_resolution_status',
                 'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
                 'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
+                'location_geo',
             ]
 
             data = {k: v for k, v in data.items() if k in allowed_fields}
@@ -226,6 +227,7 @@ class ComplainantDbManager(BaseDatabaseManager):
                 'contact_id', 'country_code', 'location_code', 'location_resolution_status',
                 'level_1_name', 'level_2_name', 'level_3_name', 'level_4_name', 'level_5_name', 'level_6_name',
                 'level_1_code', 'level_2_code', 'level_3_code', 'level_4_code', 'level_5_code', 'level_6_code',
+                'location_geo',
             ]
             # ensure the phone number is standardized
             if data.get('complainant_phone'):

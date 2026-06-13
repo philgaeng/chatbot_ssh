@@ -197,9 +197,10 @@ class DatabaseManager(BaseDatabaseManager):
                 self.logger.error(f"Error - submitting_grievance_to_db: grievance_id not found in db: {grievance_id}")
                 return False
 
-            data = self.get_complainant_and_grievance_fields(data)
-            complainant_data = data['complainant_fields']
-            grievance_data = data['grievance_fields']
+            submit_payload = data
+            split = self.get_complainant_and_grievance_fields(data)
+            complainant_data = split['complainant_fields']
+            grievance_data = split['grievance_fields']
 
             if complainant_data:
                 self.complainant.update_complainant(complainant_id, complainant_data)
@@ -208,7 +209,7 @@ class DatabaseManager(BaseDatabaseManager):
                 self.grievance.update_grievance(grievance_id, grievance_data)
                 self.logger.info(f"Grievance updated in db: {grievance_id}")
 
-            party_contacts = data.get("party_contacts")
+            party_contacts = submit_payload.get("party_contacts")
             if isinstance(party_contacts, dict) and party_contacts:
                 self._replace_grievance_parties_from_payloads(
                     grievance_id=grievance_id,
@@ -254,12 +255,46 @@ class DatabaseManager(BaseDatabaseManager):
                     self.logger.info(f"Status history updated for grievance: {grievance_id}")
                 else:
                     self.logger.warning(f"Failed to update status history for grievance: {grievance_id}")
+
+            self._enqueue_map_pin_geocode_if_needed(submit_payload)
             
             return True
         except Exception as e:
             self.logger.error(f"Error submitting grievance to db: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+
+    def _enqueue_map_pin_geocode_if_needed(self, data: Dict[str, Any]) -> None:
+        """Queue async Nominatim reverse geocode after map-pin submit (non-fatal)."""
+        try:
+            from backend.shared_functions.geo_pin import parse_location_geo
+            from backend.shared_functions.map_pin_geocode import (
+                enqueue_map_pin_geocode,
+                should_enqueue_map_pin_geocode,
+            )
+        except Exception as exc:
+            self.logger.warning("map_pin_geocode import failed (non-fatal): %s", exc)
+            return
+
+        if not should_enqueue_map_pin_geocode(data):
+            return
+
+        complainant_id = data.get("complainant_id")
+        grievance_id = data.get("grievance_id")
+        geo = parse_location_geo(data.get("location_geo"))
+        lat = geo.get("lat")
+        lng = geo.get("lng")
+        if not (complainant_id and grievance_id and lat is not None and lng is not None):
+            return
+
+        lang_code = data.get("language_code") or DEFAULT_LANGUAGE_CODE
+        enqueue_map_pin_geocode(
+            complainant_id=str(complainant_id),
+            grievance_id=str(grievance_id),
+            lat=float(lat),
+            lng=float(lng),
+            lang_code=str(lang_code),
+        )
 
     def _replace_grievance_parties_from_payloads(
         self,

@@ -19,5 +19,6 @@ import ticketing.tasks.escalation   # noqa: F401 — registers tasks
 import ticketing.tasks.notifications  # noqa: F401
 import ticketing.tasks.reports       # noqa: F401
 import ticketing.tasks.archiving     # noqa: F401
+import ticketing.tasks.location_geocode  # noqa: F401
 
 __all__ = ["celery_app"]

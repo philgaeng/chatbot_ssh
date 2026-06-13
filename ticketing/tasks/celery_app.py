@@ -26,6 +26,7 @@ celery_app = Celery(
         "ticketing.tasks.grievance_sync",
         "ticketing.tasks.llm",
         "ticketing.tasks.archiving",
+        "ticketing.tasks.location_geocode",
     ],
 )
 
@@ -44,6 +45,7 @@ celery_app.conf.update(
         "ticketing.tasks.grievance_sync.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.llm.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.archiving.*": {"queue": "grm_ticketing"},
+        "ticketing.tasks.location_geocode.*": {"queue": "grm_geocode"},
     },
     # ── Beat schedule ──────────────────────────────────────────────────────────
     beat_schedule={

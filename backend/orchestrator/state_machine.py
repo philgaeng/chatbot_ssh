@@ -223,6 +223,7 @@ PAYLOAD_TO_INTENT = {
     "road_hazard_grievance": "road_hazard_grievance",
     "location_manual_entry": "location_manual_entry",
     "location_use_map": "location_use_map",
+    "location_use_phone": "location_use_phone",
     "location_open_map": "location_open_map",
     "affirm": "affirm",
     "deny": "deny",
@@ -814,6 +815,11 @@ async def run_flow_turn(
             next_state = await _begin_map_picker(
                 session, dispatcher, domain, slot_updates, open_picker=True
             )
+        elif intent == "location_use_phone":
+            slot_updates["complainant_location_consent"] = True
+            session["slots"].update(slot_updates)
+            # Client reads GPS and sends map_pin_set; no map modal.
+            next_state = "map_location"
         else:
             next_state = await _begin_location_method(
                 session, dispatcher, domain, slot_updates
@@ -879,6 +885,8 @@ async def run_flow_turn(
                             "data": {
                                 "event_type": "open_upload_modal",
                                 "grievance_id": session.get("slots", {}).get("grievance_id"),
+                                # Prompt only — do not auto-open native file picker after map confirm.
+                                "auto_open": False,
                             }
                         }
                     )
@@ -896,6 +904,8 @@ async def run_flow_turn(
             next_state = await _begin_contact_form(
                 session, dispatcher, domain, slot_updates
             )
+        elif intent == "location_use_phone":
+            next_state = "map_location"
         elif intent == "location_open_map":
             await _invoke_ask_action(
                 "action_open_map_picker",
@@ -1711,6 +1721,7 @@ async def run_flow_turn(
                     "data": {
                         "event_type": "open_upload_modal",
                         "grievance_id": grievance_id,
+                        "auto_open": True,
                     }
                 }
             )
@@ -2003,6 +2014,7 @@ async def run_flow_turn(
                     "data": {
                         "event_type": "open_upload_modal",
                         "grievance_id": grievance_id,
+                        "auto_open": True,
                     }
                 }
             )

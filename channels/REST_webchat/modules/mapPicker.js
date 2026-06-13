@@ -15,7 +15,7 @@ function getModalElements() {
 }
 
 /** Block taps/clicks from reaching the composer right after the modal closes. */
-function suppressComposerPointerEvents(ms = 400) {
+function suppressComposerPointerEvents(ms = 900) {
   const chatWidget = document.getElementById("chat-widget");
   if (!chatWidget) return;
   suppressComposerUntil = Date.now() + ms;
@@ -71,8 +71,9 @@ export function openMapPicker({ defaultLat = 27.7172, defaultLng = 85.324, onCon
     event.stopPropagation();
     if (!marker || !onConfirmCallback) return;
     const { lat, lng } = marker.getLatLng();
+    suppressComposerPointerEvents();
     onConfirmCallback({ lat, lng });
-    closeMapPicker();
+    window.requestAnimationFrame(() => closeMapPicker());
   };
 
   const handleCancel = (event) => {
@@ -95,6 +96,10 @@ export function closeMapPicker() {
   modal.setAttribute("aria-hidden", "true");
   onConfirmCallback = null;
   suppressComposerPointerEvents();
+}
+
+export function extendComposerInteractionSuppression(ms = 900) {
+  suppressComposerPointerEvents(ms);
 }
 
 export function initMapPicker() {

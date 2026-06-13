@@ -6,8 +6,30 @@ import {
   VOICE_ADD_PAYLOAD,
   VOICE_NEXT_STEP_PAYLOAD,
 } from "../utterances.js";
+import {
+  PHONE_LOCATION_PAYLOAD,
+  usePhoneLocation,
+} from "./phoneLocation.js";
 
 // REST-specific helpers for rendering orchestrator responses
+
+function handleOpenUploadModal(data) {
+  const grievanceId = data.grievance_id;
+  if (!grievanceId) return;
+
+  uiActions.setGrievanceId(grievanceId);
+  uiActions.setGrievanceCreatedInDb(true);
+
+  const shouldAutoOpen = data.auto_open === true;
+  if (shouldAutoOpen && typeof window.openFileUploadModal === "function") {
+    window.openFileUploadModal();
+    return;
+  }
+
+  if (typeof window.showFileUploadInvitation === "function") {
+    window.showFileUploadInvitation();
+  }
+}
 
 export function renderQuickReplies(buttons) {
   if (!Array.isArray(buttons) || buttons.length === 0) {
@@ -69,20 +91,12 @@ export function handleCustomPayload(custom) {
     uiActions.setGrievanceCreatedInDb(true);
   }
 
-  // Modify grievance – Add pictures: set grievance for uploads and open file picker (same as clicking attach button)
+  // Enable uploads; auto_open file picker only when user explicitly chose "Add pictures" (modify flow).
   if (custom.event_type === "open_upload_modal" && custom.grievance_id) {
-    uiActions.setGrievanceId(custom.grievance_id);
-    uiActions.setGrievanceCreatedInDb(true);
-    if (typeof window.openFileUploadModal === "function") {
-      window.openFileUploadModal();
-    }
+    handleOpenUploadModal(custom);
   }
   if (custom.data?.event_type === "open_upload_modal" && custom.data?.grievance_id) {
-    uiActions.setGrievanceId(custom.data.grievance_id);
-    uiActions.setGrievanceCreatedInDb(true);
-    if (typeof window.openFileUploadModal === "function") {
-      window.openFileUploadModal();
-    }
+    handleOpenUploadModal(custom.data);
   }
 
   if (custom.data?.event_type === "open_map_picker") {
@@ -245,6 +259,10 @@ export function handleQuickReplyClick(payload) {
     if (typeof window.handleFileAnotherGrievance === "function") {
       void window.handleFileAnotherGrievance();
     }
+    return true;
+  }
+  if (payload === PHONE_LOCATION_PAYLOAD) {
+    void usePhoneLocation(window.safeSendMessage);
     return true;
   }
   if (

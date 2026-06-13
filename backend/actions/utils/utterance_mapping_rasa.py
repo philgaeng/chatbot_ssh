@@ -1069,8 +1069,8 @@ UTTERANCE_MAPPING = {
         'action_apply_map_pin': {
             'utterances': {
                 1: {
-                    'en': "Location saved from map pin ({lat}, {lng}).",
-                    'ne': "नक्सा पिनबाट घटना भएको स्थान सेव भयो ({lat}, {lng})।",
+                    'en': "Location saved ({lat}, {lng}).",
+                    'ne': "स्थान सेव भयो ({lat}, {lng})।",
                 }
             }
         },

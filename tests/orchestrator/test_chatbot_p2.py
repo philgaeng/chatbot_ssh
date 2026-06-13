@@ -36,6 +36,10 @@ def test_derive_intent_location_use_map():
     assert derive_intent("", "/location_use_map") == "location_use_map"
 
 
+def test_derive_intent_location_use_phone():
+    assert derive_intent("", "/location_use_phone") == "location_use_phone"
+
+
 def test_derive_intent_location_open_map():
     assert derive_intent("", "/location_open_map") == "location_open_map"
 
@@ -207,8 +211,10 @@ def test_road_hazard_submit_skips_llm_classification(monkeypatch):
     assert result.get("road_hazard_new_detail") == "completed"
     assert result.get("grievance_classification_status") == "LLM_skipped"
     assert result.get("grievance_categories") == [category]
+    assert result.get("grievance_summary") == "Pothole on KL Road"
     assert saved["grievance"]["grievance_classification_status"] == "LLM_skipped"
     assert saved["grievance"]["grievance_categories"] == [category]
+    assert saved["grievance"]["grievance_summary"] == "Pothole on KL Road"
     assert len(dispatched) == 1
     assert dispatched[0]["tracker_package"] == package_id
     assert dispatched[0]["grievance_data"]["grievance_id"] == "G-RH-1"
@@ -261,8 +267,10 @@ def test_dust_submit_skips_llm_classification(monkeypatch):
     assert result.get("road_hazard_new_detail") == "completed"
     assert result.get("grievance_classification_status") == "LLM_skipped"
     assert result.get("grievance_categories") == [DUST_CATEGORY]
+    assert result.get("grievance_summary") == DUST_DEFAULT_DESCRIPTION
     assert saved["grievance"]["grievance_classification_status"] == "LLM_skipped"
     assert saved["grievance"]["grievance_categories"] == [DUST_CATEGORY]
+    assert saved["grievance"]["grievance_summary"] == DUST_DEFAULT_DESCRIPTION
 
 
 def test_validate_subtype_sets_category():

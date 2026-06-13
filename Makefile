@@ -39,10 +39,12 @@ TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
 AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 # Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP). Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
 AWS_DEPLOY_SERVICES ?= grm_ui grm_ui_auth ticketing_api ticketing_api_auth backend celery_default
+# UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
+AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
 
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
-	aws-up aws-deploy aws-deploy-full \
+	aws-up aws-deploy aws-deploy-light aws-deploy-full \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -65,8 +67,9 @@ help:
 	@echo ""
 	@echo "AWS (EC2):"
 	@echo "  make aws-up         rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy      SSH to EC2: pull main, migrate, rebuild AWS_DEPLOY_SERVICES (default GRM+messaging)"
-	@echo "  make aws-deploy-full SSH to EC2: pull main, migrate, rebuild entire stack"
+	@echo "  make aws-deploy       SSH to EC2: pull main, migrate, rebuild AWS_DEPLOY_SERVICES (default GRM+messaging)"
+	@echo "  make aws-deploy-light SSH to EC2: pull main, rebuild UI (+ nginx restart); no migrations"
+	@echo "  make aws-deploy-full  SSH to EC2: pull main, migrate, rebuild entire stack"
 	@echo ""
 	@echo "DB / optional:"
 	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
@@ -148,6 +151,33 @@ aws-deploy:
 		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
 		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
 		echo "aws-deploy OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
+
+# Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
+aws-deploy-light:
+	$(SSH_RUNNING) 'set -e; \
+		cd $(REMOTE_DIR_RUNNING) && \
+		git fetch origin && \
+		git checkout main && \
+		git reset --hard origin/main && \
+		git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
+		echo "aws-deploy-light: rebuilding $(AWS_DEPLOY_LIGHT_SERVICES)" && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  build $(filter-out nginx,$(AWS_DEPLOY_LIGHT_SERVICES)) && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  up -d --build $(filter-out nginx,$(AWS_DEPLOY_LIGHT_SERVICES)) && \
+		docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth \
+		  up -d nginx && \
+		ui_auth_port="$$(docker compose --env-file env.local \
+		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+		  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+		echo "aws-deploy-light OK: grm_ui_auth=$$ui_auth_port nginx=restarted"'
 
 # Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
 aws-deploy-full:

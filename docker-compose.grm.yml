@@ -171,7 +171,7 @@ services:
       celery
       -A ticketing.tasks.celery_app.celery_app
       worker
-      -Q grm_ticketing
+      -Q grm_ticketing,grm_geocode
       --loglevel=info
       --concurrency=2
       --without-gossip --without-mingle --without-heartbeat
@@ -186,6 +186,7 @@ services:
       POSTGRES_DB: app_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy

@@ -633,6 +633,13 @@ function setupEventListeners() {
     });
   }
 
+  window.showFileUploadInvitation = function () {
+    if (window.grievanceId && !attachmentInvitationShown) {
+      uiActions.appendMessage(get("file_upload.invitation"), "received");
+      attachmentInvitationShown = true;
+    }
+  };
+
   // Allow backend to open the file picker (e.g. "Add pictures and documents" in Modify grievance)
   window.openFileUploadModal = function () {
     if (isComposerInteractionSuppressed() || !fileInput) return;

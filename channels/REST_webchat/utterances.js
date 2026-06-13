@@ -257,12 +257,50 @@ export const U = {
       ne: "नक्साको स्थान सेव गर्दैछ…",
     },
     map_saved: {
-      en: "Location saved from map pin ({lat}, {lng}).",
-      ne: "नक्सा पिनबाट स्थान सेव भयो ({lat}, {lng})।",
+      en: "Location saved ({lat}, {lng}).",
+      ne: "स्थान सेव भयो ({lat}, {lng})।",
     },
     map_failed: {
       en: "Could not save map location. Please try again.",
       ne: "नक्साको स्थान सेव गर्न सकिएन। कृपया फेरि प्रयास गर्नुहोस्।",
+    },
+    phone_location_getting: {
+      en: "Getting your phone location…",
+      ne: "फोनको स्थान पत्ता लगाउँदैछ…",
+    },
+    phone_location_denied: {
+      en: "Location access was denied. Try the map or enter your area manually.",
+      ne: "स्थान अनुमति अस्वीकार भयो। नक्सा प्रयोग गर्नुहोस् वा स्थान आफैं टाइप गर्नुहोस्।",
+    },
+    phone_location_unavailable: {
+      en: "Could not detect your location. Try the map or enter your area manually.",
+      ne: "स्थान पत्ता लागेन। नक्सा प्रयोग गर्नुहोस् वा स्थान आफैं टाइप गर्नुहोस्।",
+    },
+    phone_location_timeout: {
+      en: "Location took too long. Try again, use the map, or enter manually.",
+      ne: "स्थान पत्ता लगाउन धेरै समय लाग्यो। फेरि प्रयास गर्नुहोस्, नक्सा प्रयोग गर्नुहोस्, वा आफैं टाइप गर्नुहोस्।",
+    },
+    phone_location_unsupported: {
+      en: "This browser cannot use phone location. Try the map or enter manually.",
+      ne: "यो ब्राउजरले फोनको स्थान प्रयोग गर्न सक्दैन। नक्सा प्रयोग गर्नुहोस् वा आफैं टाइप गर्नुहोस्।",
+    },
+    phone_location_failed: {
+      en: "Could not use phone location. Try the map or enter manually.",
+      ne: "फोनको स्थान प्रयोग गर्न सकिएन। नक्सा प्रयोग गर्नुहोस् वा आफैं टाइप गर्नुहोस्।",
+    },
+  },
+  location_buttons: {
+    use_phone: {
+      en: "Use my phone location",
+      ne: "मेरो फोनको स्थान प्रयोग गर्नुहोस्",
+    },
+    use_map: {
+      en: "Use the map",
+      ne: "नक्सा प्रयोग गर्नुहोस्",
+    },
+    manual: {
+      en: "Enter location manually",
+      ne: "स्थान आफैं टाइप गर्नुहोस्",
     },
   },
   voice_note: {
