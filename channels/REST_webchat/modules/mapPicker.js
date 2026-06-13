@@ -3,6 +3,7 @@
 let mapInstance = null;
 let marker = null;
 let onConfirmCallback = null;
+let suppressComposerUntil = 0;
 
 function getModalElements() {
   return {
@@ -11,6 +12,23 @@ function getModalElements() {
     confirmBtn: document.getElementById("map-picker-confirm"),
     cancelBtn: document.getElementById("map-picker-cancel"),
   };
+}
+
+/** Block taps/clicks from reaching the composer right after the modal closes. */
+function suppressComposerPointerEvents(ms = 400) {
+  const chatWidget = document.getElementById("chat-widget");
+  if (!chatWidget) return;
+  suppressComposerUntil = Date.now() + ms;
+  chatWidget.style.pointerEvents = "none";
+  window.setTimeout(() => {
+    if (Date.now() >= suppressComposerUntil) {
+      chatWidget.style.pointerEvents = "";
+    }
+  }, ms);
+}
+
+export function isComposerInteractionSuppressed() {
+  return Date.now() < suppressComposerUntil;
 }
 
 function ensureMap(lat, lng) {
@@ -48,14 +66,20 @@ export function openMapPicker({ defaultLat = 27.7172, defaultLng = 85.324, onCon
     mapInstance?.invalidateSize();
   }, 80);
 
-  const handleConfirm = () => {
+  const handleConfirm = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (!marker || !onConfirmCallback) return;
     const { lat, lng } = marker.getLatLng();
     onConfirmCallback({ lat, lng });
     closeMapPicker();
   };
 
-  const handleCancel = () => closeMapPicker();
+  const handleCancel = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeMapPicker();
+  };
 
   confirmBtn?.replaceWith(confirmBtn.cloneNode(true));
   cancelBtn?.replaceWith(cancelBtn.cloneNode(true));
@@ -70,12 +94,20 @@ export function closeMapPicker() {
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
   onConfirmCallback = null;
+  suppressComposerPointerEvents();
 }
 
 export function initMapPicker() {
   const { modal } = getModalElements();
   if (!modal) return;
   modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeMapPicker();
+    if (e.target !== modal) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeMapPicker();
+  });
+  const panel = modal.querySelector(".map-picker-panel");
+  panel?.addEventListener("click", (e) => {
+    e.stopPropagation();
   });
 }

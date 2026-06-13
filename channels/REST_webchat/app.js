@@ -8,7 +8,7 @@ import {
 // Import modules
 import * as eventHandlers from "./modules/eventHandlers.js";
 import * as uiActions from "./modules/uiActions.js";
-import { initMapPicker, openMapPicker, closeMapPicker } from "./modules/mapPicker.js";
+import { initMapPicker, openMapPicker, closeMapPicker, isComposerInteractionSuppressed } from "./modules/mapPicker.js";
 import { buildFileMetadataList, setExifConsent } from "./modules/exifHelper.js";
 import { initVoiceNote, MAX_RECORD_SECONDS } from "./modules/voiceNote.js";
 import {
@@ -51,6 +51,10 @@ let persistentCloseBrowserButton;
 let persistentCloseSessionButton;
 let invalidSendTooltip;
 let invalidSendTooltipTimer = null;
+/** True while a file batch is uploading/processing on the server. */
+let uploadInProgress = false;
+/** Incremented to cancel in-flight pollFileStatus loops. */
+let pollGeneration = 0;
 
 // Session and State Variables
 let messageRetryCount = 0;
@@ -448,6 +452,18 @@ function setupTaskStatusSocket() {
       taskStatusSocket.emit("join", { room: roomId });
     });
 
+    taskStatusSocket.on("file_status_update", (data) => {
+      console.log("REST_webchat received file_status_update:", data);
+      const payload = data?.data || {};
+      const fileId = payload.file_id;
+      if (!fileId) return;
+      updateFileStatus(fileId, {
+        status: data.status || payload.status,
+        result: payload,
+        error: payload.error,
+      });
+    });
+
     taskStatusSocket.on("task_status", (data) => {
       console.log("REST_webchat received task_status:", data);
       const { status, data: taskData, grievance_id, task_name } = data || {};
@@ -588,7 +604,12 @@ function setupEventListeners() {
   });
 
   // File attachment handling
-  attachmentButton.addEventListener("click", () => {
+  attachmentButton.addEventListener("click", (event) => {
+    if (isComposerInteractionSuppressed()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (window.grievanceId && !attachmentInvitationShown) {
       uiActions.appendMessage(get("file_upload.invitation"), "received");
       attachmentInvitationShown = true;
@@ -614,7 +635,8 @@ function setupEventListeners() {
 
   // Allow backend to open the file picker (e.g. "Add pictures and documents" in Modify grievance)
   window.openFileUploadModal = function () {
-    if (fileInput) fileInput.click();
+    if (isComposerInteractionSuppressed() || !fileInput) return;
+    fileInput.click();
   };
 
   // Form submission
@@ -699,6 +721,10 @@ function resetFrontendState() {
   }
 
   selectedFiles = [];
+  uploadInProgress = false;
+  pollGeneration++;
+  currentUploadFileIds = [];
+  currentUploadStatuses = {};
   if (fileInput) fileInput.value = "";
   if (messageInput) {
     messageInput.value = "";
@@ -709,6 +735,7 @@ function resetFrontendState() {
   uiActions.setGrievanceCreatedInDb(false);
   uiActions.setVoiceNoteEnabled(false);
   uiActions.clearVoiceStatusBanner();
+  uiActions.setInputLocked(false);
   uiActions.clearMessages();
 }
 
@@ -784,12 +811,10 @@ async function handleMessageSubmit(e) {
     messageInput.style.height = "44px";
   }
 
-  // Handle file upload if files are selected: lock input, upload, then unlock when done or on failure
+  // Handle file upload if files are selected: lock input only once upload actually starts
   if (selectedFiles.length > 0) {
-    uiActions.setInputLocked(true);
     const uploaded = await handleFileUpload(selectedFiles);
     if (!uploaded) {
-      uiActions.setInputLocked(false);
       // Keep files in preview so user can retry
       return;
     }
@@ -821,22 +846,25 @@ function takeFileUploadSnapshot() {
 }
 
 // Handle selected files
-function handleSelectedFiles(files) {
-  selectedFiles = [];
+async function handleSelectedFiles(files) {
+  // Recover from a stale input lock (e.g. failed status polling on a prior attempt).
+  if (!uploadInProgress) {
+    pollGeneration++;
+    currentUploadFileIds = [];
+    currentUploadStatuses = {};
+    uiActions.setInputLocked(false);
+  }
 
-  files.forEach((file) => {
-    const maxFileSize = FILE_UPLOAD_CONFIG.MAX_SIZE_MB * 1024 * 1024;
-    if (file.size > maxFileSize) {
-      compressFile(file).then((compressedFile) => {
-        selectedFiles.push(compressedFile);
-        takeFileUploadSnapshot();
-        displayFilePreview();
-      });
-    } else {
-      selectedFiles.push(file);
-    }
-  });
-
+  const maxFileSize = FILE_UPLOAD_CONFIG.MAX_SIZE_MB * 1024 * 1024;
+  const processed = await Promise.all(
+    Array.from(files).map(async (file) => {
+      if (file.size > maxFileSize) {
+        return compressFile(file);
+      }
+      return file;
+    })
+  );
+  selectedFiles = processed;
   takeFileUploadSnapshot();
   displayFilePreview();
 }
@@ -855,53 +883,73 @@ function displayFilePreview() {
   if (previewContainer) {
     messageForm.parentNode.insertBefore(previewContainer, messageForm);
   }
+  if (!uploadInProgress && selectedFiles.length > 0) {
+    uiActions.setInputLocked(false);
+  }
 }
 
-// Compress file if needed
+function isImageFile(file) {
+  if (file?.type?.startsWith("image/")) return true;
+  const ext = file?.name?.split(".").pop()?.toLowerCase() || "";
+  return FILE_TYPES.IMAGE.extensions.includes(ext);
+}
+
+// Compress file if needed (falls back to original when browser cannot decode, e.g. HEIC on some Android builds)
 function compressFile(file) {
   return new Promise((resolve) => {
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = function (e) {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = function () {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
+    const finish = (result) => resolve(result || file);
 
-          let width = img.width;
-          let height = img.height;
-          const maxSize = 1200;
-
-          if (width > height && width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          } else if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              const compressedFile = new File([blob], file.name, {
-                type: file.type,
-                lastModified: file.lastModified,
-              });
-              resolve(compressedFile);
-            },
-            file.type,
-            0.7
-          );
-        };
-      };
-    } else {
-      resolve(file);
+    if (!isImageFile(file)) {
+      finish(file);
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onerror = () => finish(file);
+    reader.onload = function (e) {
+      const img = new Image();
+      img.onerror = () => finish(file);
+      img.onload = function () {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        let width = img.width;
+        let height = img.height;
+        const maxSize = 1200;
+
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const outputType = file.type?.startsWith("image/") ? file.type : "image/jpeg";
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              finish(file);
+              return;
+            }
+            finish(
+              new File([blob], file.name, {
+                type: outputType,
+                lastModified: file.lastModified,
+              })
+            );
+          },
+          outputType,
+          0.7
+        );
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 
@@ -1000,6 +1048,9 @@ async function handleFileUpload(files) {
     uiActions.setVoiceStatusBanner(get("status_banner.files_detected"));
   }
 
+  uploadInProgress = true;
+  uiActions.setInputLocked(true);
+
   try {
     console.log("Sending file upload request...");
     const response = await fetch(FILE_UPLOAD_CONFIG.URL, {
@@ -1033,12 +1084,16 @@ async function handleFileUpload(files) {
       }
       return true;
     } else {
+      uploadInProgress = false;
+      uiActions.setInputLocked(false);
       const errMsg = data.error || data.detail || data.message || `Upload failed (${response.status})`;
       console.error("Upload failed:", errMsg);
       eventHandlers.handleApiError(errMsg, "File upload");
       return false;
     }
   } catch (error) {
+    uploadInProgress = false;
+    uiActions.setInputLocked(false);
     console.error("Error uploading files:", error);
     eventHandlers.handleApiError(error, "File upload");
     return false;
@@ -1049,8 +1104,12 @@ async function handleFileUpload(files) {
 async function pollFileStatus(fileIds) {
   const maxAttempts = 30; // 5 minutes total (10s * 30)
   let attempts = 0;
+  const generation = pollGeneration;
 
   const poll = async () => {
+    if (generation !== pollGeneration) {
+      return;
+    }
     try {
       console.log(
         `Polling file status (attempt ${attempts + 1}/${maxAttempts}):`,
@@ -1072,6 +1131,9 @@ async function pollFileStatus(fileIds) {
           })
         )
       );
+      if (generation !== pollGeneration) {
+        return;
+      }
       console.log("File status response:", statuses);
 
       // Update status for each file
@@ -1093,6 +1155,7 @@ async function pollFileStatus(fileIds) {
         setTimeout(poll, delayMs);
       } else if (!allProcessed) {
         console.log("Max polling attempts reached");
+        uploadInProgress = false;
         uiActions.setVoiceStatusBanner(get("status_banner.processing_long"));
         uiActions.setInputLocked(false);
         currentUploadFileIds = [];
@@ -1100,6 +1163,16 @@ async function pollFileStatus(fileIds) {
       }
     } catch (error) {
       console.error("Error polling file status:", error);
+      if (generation !== pollGeneration) {
+        return;
+      }
+      if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(poll, attempts <= 3 ? 2000 : 10000);
+      } else {
+        uploadInProgress = false;
+        uiActions.setInputLocked(false);
+      }
     }
   };
 
@@ -1147,6 +1220,7 @@ function buildPostUploadQuickReplies() {
 }
 
 function showPostUploadMessageAndUnlock() {
+  uploadInProgress = false;
   uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(
@@ -1186,6 +1260,7 @@ function checkUploadBatchComplete() {
 
 // On upload failure: inform user and offer Add more / Go back (same flow as success so user can recover)
 function showFailureMessageAndUnlock() {
+  uploadInProgress = false;
   uiActions.clearVoiceStatusBanner();
   const atFlowEnd = window.lastOrchestratorNextState === "done";
   uiActions.appendMessage(

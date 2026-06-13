@@ -2681,8 +2681,13 @@ function ProjectsSection({
   async function load() {
     setLoading(true);
     try {
-      const [p, o] = await Promise.all([listProjects(), listOrganizations()]);
+      // Include inactive/draft projects — typed projects are created is_active=false until go-live.
+      const [p, o] = await Promise.all([listProjects(undefined, false), listOrganizations()]);
       const r = await getOrgRoles().catch(() => [] as OrgRole[]);
+      p.sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return a.short_code.localeCompare(b.short_code);
+      });
       setProjects(p);
       setOrgs(o);
       setOrgRoles(r);
@@ -2743,7 +2748,15 @@ function ProjectsSection({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-gray-500">
+          {projects.length} project{projects.length !== 1 ? "s" : ""}
+          {projects.some((p) => !p.is_active) && (
+            <span className="text-gray-400">
+              {" "}
+              · {projects.filter((p) => !p.is_active).length} inactive (awaiting setup / go-live)
+            </span>
+          )}
+        </p>
         {canCreateProject && (
           <button
             onClick={() => setShowCreate(true)}
@@ -2756,7 +2769,13 @@ function ProjectsSection({
 
       {canCreateProject && showCreate && (
         <ProjectCreateModal
-          onCreated={(p) => { setShowCreate(false); setProjects((prev) => [...prev, p]); setEditing(p); }}
+          onCreated={(p) => {
+            setShowCreate(false);
+            setProjects((prev) => (
+              prev.some((x) => x.project_id === p.project_id) ? prev : [...prev, p]
+            ));
+            setEditing(p);
+          }}
           onClose={() => setShowCreate(false)}
         />
       )}
@@ -2820,6 +2839,7 @@ function ProjectCreateModal({
   const [types, setTypes]       = useState<{ type_key: string; label: string }[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
+  const [resumeProject, setResumeProject] = useState<ProjectItem | null>(null);
 
   useEffect(() => {
     listProjectTypes(true)
@@ -2837,11 +2857,14 @@ function ProjectCreateModal({
     const codeErr = validateEntityCode(shortCode, "Project code");
     if (codeErr) { setError(codeErr); return; }
     if (!typeKey) { setError("Select a project type."); return; }
-    setCreating(true); setError("");
+    setCreating(true);
+    setError("");
+    setResumeProject(null);
+    const code = normalizeEntityCodeInput(shortCode);
     try {
       const p = await createProject({
         name: name.trim(),
-        short_code: normalizeEntityCodeInput(shortCode),
+        short_code: code,
         country_code: country,
         description: desc.trim() || null,
         project_type_key: typeKey,
@@ -2849,9 +2872,30 @@ function ProjectCreateModal({
       });
       onCreated(p);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Create failed");
+      const msg = e instanceof Error ? e.message : "Create failed";
+      if (msg.includes("already exists")) {
+        try {
+          const existing = (await listProjects(undefined, false)).find((p) => p.short_code === code) ?? null;
+          setResumeProject(existing);
+          if (existing) {
+            setError(
+              `Project code “${code}” is already in use (${existing.is_active ? "active" : "inactive, awaiting setup"}).`,
+            );
+          } else {
+            setError(`${msg} Refresh the project list or contact an administrator.`);
+          }
+        } catch {
+          setError(msg);
+        }
+      } else {
+        setError(msg);
+      }
       setCreating(false);
     }
+  }
+
+  function handleResumeSetup() {
+    if (resumeProject) onCreated(resumeProject);
   }
 
   return (
@@ -2862,7 +2906,21 @@ function ProjectCreateModal({
           <button onClick={onClose} className="text-slate-300 hover:text-white text-xl leading-none">×</button>
         </div>
         <div className="p-6 space-y-4">
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 space-y-2">
+              <p>{error}</p>
+              {resumeProject && (
+                <button
+                  type="button"
+                  onClick={handleResumeSetup}
+                  className="text-sm font-medium text-blue-700 hover:text-blue-900 underline"
+                >
+                  Resume setup — {resumeProject.short_code}
+                  {!resumeProject.is_active ? " (inactive)" : ""}
+                </button>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Project type *</label>
@@ -2881,6 +2939,7 @@ function ProjectCreateModal({
               </select>
               <p className="text-xs text-gray-400 mb-2">
                 Workflows and actor roles come from the type. Project starts inactive until go-live checks pass.
+                Clicking Create saves the project immediately — use Set up to finish configuration before activating.
               </p>
             </div>
             <div className="col-span-2">
@@ -2891,7 +2950,11 @@ function ProjectCreateModal({
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500 block mb-1">Project code * <span className="font-normal text-gray-400">(unique, max {ENTITY_CODE_MAX_LEN})</span></label>
-              <input value={shortCode} onChange={(e) => setShortCode(normalizeEntityCodeInput(e.target.value))}
+              <input value={shortCode} onChange={(e) => {
+                setShortCode(normalizeEntityCodeInput(e.target.value));
+                setResumeProject(null);
+                setError("");
+              }}
                 placeholder="KL_ROAD"
                 maxLength={ENTITY_CODE_MAX_LEN}
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" />
