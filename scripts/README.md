@@ -11,6 +11,7 @@ This repository now uses a Docker-first operational model.
   - `migrate_seah_demo_catalog.py`, `import_seah_demo_seed_csv.py`, `seeds/`: optional SEAH demo seed flow.
 - `scripts/ops/`
   - Operational helper scripts (for example TLS renewal cron install).
+  - `test-smtp.sh` / `test_smtp.py`: verify SMTP env, TCP reachability, and optional test send (runs in `backend` container).
 
 ## Removed Legacy Areas
 

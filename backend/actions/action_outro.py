@@ -100,15 +100,9 @@ class ActionGrievanceOutro(BaseActionSubmit):
     def _prepare_grievance_outro_data(self, tracker: Tracker) -> Dict[str, Any]:
         """Prepare grievance outro data and normalize categories in english."""
         grievance_data = self.collect_grievance_data(tracker, review=True)
-        grievance_categories_local = tracker.get_slot("grievance_categories_local")
-        current_categories = tracker.get_slot("grievance_categories")
-
-        if grievance_categories_local and self.language_code != "en":
-            grievance_categories_en = self._get_categories_in_english(grievance_categories_local)
-            grievance_data["grievance_categories"] = grievance_categories_en
-        elif current_categories:
-            grievance_data["grievance_categories"] = current_categories
-
+        resolved = self._resolve_grievance_categories_for_db(tracker)
+        if resolved:
+            grievance_data["grievance_categories"] = resolved
         return grievance_data
 
     async def execute_action(

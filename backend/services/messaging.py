@@ -1,5 +1,6 @@
 import base64
 import smtplib
+from contextlib import contextmanager
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -386,6 +387,66 @@ class EmailClient:
             self.logger.error("%s", text_len_for_log("body", body))
             return False
 
+    @contextmanager
+    def _smtp_session(self, timeout: int = 30):
+        """Authenticated SMTP session (SMTPS on 465, STARTTLS on other ports)."""
+        assert self.smtp_config is not None
+        cfg = self.smtp_config
+        use_ssl = cfg.port == 465
+        smtp_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+        with smtp_cls(cfg.host, cfg.port, timeout=timeout) as smtp:
+            smtp.ehlo()
+            if not use_ssl:
+                smtp.starttls()
+                smtp.ehlo()
+            smtp.login(cfg.username, cfg.password)
+            yield smtp
+
+    def test_connection(
+        self,
+        *,
+        send_to: Optional[List[str]] = None,
+        check_only: bool = False,
+        timeout: int = 30,
+    ) -> bool:
+        """
+        Verify SMTP reachability and credentials; optionally send a test message.
+        """
+        assert self.smtp_config is not None
+        cfg = self.smtp_config
+        try:
+            with self._smtp_session(timeout=timeout) as smtp:
+                smtp.noop()
+                if check_only:
+                    self.logger.info(
+                        "SMTP check-only OK (%s:%s, transport=%s)",
+                        cfg.host,
+                        cfg.port,
+                        "ssl" if cfg.port == 465 else "starttls",
+                    )
+                    return True
+                if not send_to:
+                    raise ValueError("send_to is required when check_only is False")
+                subject = "GRM SMTP test"
+                body = (
+                    "<p>This is a test message from the GRM chatbot SMTP checker.</p>"
+                    f"<p>From: {cfg.from_addr}</p>"
+                )
+                msg = MIMEText(body, "html", "utf-8")
+                msg["Subject"] = subject
+                msg["From"] = formataddr((cfg.from_display, cfg.from_addr))
+                msg["To"] = ", ".join(send_to)
+                smtp.sendmail(cfg.from_addr, send_to, msg.as_string())
+            self.logger.info(
+                "SMTP test email sent from %s to %s",
+                cfg.from_addr,
+                email_send_log_summary(send_to),
+            )
+            return True
+        except Exception as e:
+            self.logger.error("SMTP test failed: %s", e)
+            return False
+
     def _send_via_smtp(
         self,
         to_emails: List[str],
@@ -416,11 +477,7 @@ class EmailClient:
         msg["From"] = from_header
         msg["To"] = ", ".join(to_emails)
 
-        with smtplib.SMTP(cfg.host, cfg.port, timeout=30) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.ehlo()
-            smtp.login(cfg.username, cfg.password)
+        with self._smtp_session(timeout=30) as smtp:
             smtp.sendmail(cfg.from_addr, to_emails, msg.as_string())
 
         self.logger.info("SMTP email sent from %s", cfg.from_addr)

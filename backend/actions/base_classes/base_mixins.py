@@ -252,29 +252,58 @@ class LanguageHelpersMixin(ActionCommonMixin):
 
     def _get_categories_in_english(self, categories: List[str]) -> List[str]:
         """Get the categories in the English language."""
+        if not categories:
+            return []
         if self.language_code == "en":
-            return categories
-        
+            return list(categories)
+
         key_local_1 = f"classification_{self.language_code}"
         key_local_2 = f"generic_grievance_name_{self.language_code}"
-    
-        categories_en = []
+
+        categories_en: List[str] = []
         for category in categories:
-            # Find the matching item in CLASSIFICATION_DATA
+            if not category or not str(category).strip():
+                continue
+            cat = str(category).strip()
+            matched = False
             for item in CLASSIFICATION_DATA.values():
                 local_classification = item.get(key_local_1, "")
                 local_grievance_name = item.get(key_local_2, "")
                 local_category = f"{local_classification} - {local_grievance_name}"
-                
-                if category == local_category:
-                    # Found match, get the English version
-                    english_classification = item.get('classification', "")
-                    english_grievance_name = item.get('generic_grievance_name', "")
-                    english_category = f"{english_classification} - {english_grievance_name}"
+                english_classification = item.get("classification", "")
+                english_grievance_name = item.get("generic_grievance_name", "")
+                english_category = f"{english_classification} - {english_grievance_name}"
+
+                if cat in (local_category, english_category):
                     categories_en.append(english_category)
+                    matched = True
                     break
-        
+            if not matched:
+                # UI may show English taxonomy labels even when language_code is ne.
+                categories_en.append(cat)
         return categories_en
+
+    def _resolve_grievance_categories_for_db(self, tracker: Tracker) -> List[str]:
+        """Best-effort English category list for DB/ticketing from review slots."""
+        local = tracker.get_slot("grievance_categories_local")
+        current = tracker.get_slot("grievance_categories")
+
+        local_list: List[str] = []
+        if isinstance(local, list):
+            local_list = [str(c).strip() for c in local if c and str(c).strip()]
+        elif local and str(local).strip() not in (self.SKIP_VALUE, self.NOT_PROVIDED):
+            local_list = [str(local).strip()]
+
+        if local_list:
+            resolved = self._get_categories_in_english(local_list)
+            if resolved:
+                return resolved
+
+        if isinstance(current, list):
+            return [str(c).strip() for c in current if c and str(c).strip()]
+        if current and str(current).strip() not in (self.SKIP_VALUE, self.NOT_PROVIDED, "N/A"):
+            return [str(current).strip()]
+        return []
 
     def is_valid_email(self, email: str) -> bool:
         """Check if the provided string is a valid email address."""

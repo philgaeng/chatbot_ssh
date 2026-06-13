@@ -778,8 +778,8 @@ class ActionUpdateGrievanceCategorization(BaseAction):
             self.logger.info("No changes made to the grievance categorization")
             return []
         else:
-            grievance_id = tracker.get_slot("grievance_id") 
-            grievance_categories = tracker.get_slot("grievance_categories")
+            grievance_id = tracker.get_slot("grievance_id")
+            grievance_categories = self._resolve_grievance_categories_for_db(tracker)
             grievance_summary = tracker.get_slot("grievance_summary")
 
             grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
