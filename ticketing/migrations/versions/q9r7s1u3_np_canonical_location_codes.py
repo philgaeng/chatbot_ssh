@@ -19,6 +19,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Data migration only — invoked by Alembic; helper uses raw SQL (no ORM) for schema safety.
     from ticketing.seed.migrate_np_legacy_location_codes import migrate
 
     bind = op.get_bind()

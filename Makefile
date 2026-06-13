@@ -6,6 +6,7 @@
 #
 #   WSL:  wsl-up | wsl-demo-bypass | wsl-auth | wsl-chatbot | wsl-nginx | wsl-down
 #   AWS:  aws-up | aws-deploy
+#   Prod: prod-deploy (VPN + password SSH → 103.175.193.226)
 #
 #   Also: migrate_all, wsl-auth, wsl-auth-ps, wsl-keycloak-ps, keycloak-setup, wsl-seed
 
@@ -19,13 +20,42 @@ REMOTE_DIR_TRAINING = /home/ubuntu/$(PROJECT_NAME)
 KEY_NAME_TRAINING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_TRAINING = ssh -i $(KEY_NAME_TRAINING) $(TRAIN_SERVER_USER)@$(REMOTE_HOST_TRAINING)
 
-# Running server (staging / prod EC2)
+# Staging server (AWS EC2 — key-based SSH)
 RUN_SERVER_USER = ubuntu
 REMOTE_HOST_RUNNING = 52.76.171.73
 REMOTE_DIR_RUNNING = /home/ubuntu/$(PROJECT_DIRECTORY)
 KEY_NAME_RUNNING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING)
 SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
+
+# Production server (Nepal — VPN required, password SSH; no -i key)
+#
+# Configure in env.local (gitignored), not in this file:
+#   PROD_SERVER_USER=your_username
+#   PROD_HOST=103.175.193.226
+#   # optional — omit PROD_REMOTE_DIR to default to /home/<user>/nepal_chatbot
+#   PROD_REMOTE_DIR=/home/${PROD_SERVER_USER}/nepal_chatbot
+#   PROD_SSH_KEY=/home/philg/.ssh/nepal_gms_prod   # optional — skips password prompt
+#
+# Without PROD_SSH_KEY, ssh/scp prompt for password.
+#
+# CLI override: make prod-deploy PROD_SERVER_USER=other
+_get_env = $(strip $(shell grep -E '^$(1)=' env.local 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'"))
+_env_prod_user := $(call _get_env,PROD_SERVER_USER)
+_env_prod_host := $(call _get_env,PROD_HOST)
+_env_prod_dir := $(call _get_env,PROD_REMOTE_DIR)
+_env_prod_ssh_key := $(call _get_env,PROD_SSH_KEY)
+PROD_SERVER_USER ?= $(if $(_env_prod_user),$(_env_prod_user),ubuntu)
+PROD_HOST ?= $(if $(_env_prod_host),$(_env_prod_host),103.175.193.226)
+# Expand ${PROD_SERVER_USER} in path (env.local is not shell — Make substitutes after read).
+_prod_remote_dir := $(shell u='$(PROD_SERVER_USER)'; d='$(_env_prod_dir)'; \
+  printf '%s' "$$d" | sed "s|\$${PROD_SERVER_USER}|$$u|g; s|\$$(PROD_SERVER_USER)|$$u|g")
+PROD_REMOTE_DIR ?= $(if $(_env_prod_dir),$(_prod_remote_dir),/home/$(PROD_SERVER_USER)/$(PROJECT_DIRECTORY))
+PROD_SSH_KEY ?= $(_env_prod_ssh_key)
+PROD_SSH_IDENTITY = $(if $(PROD_SSH_KEY),-i $(PROD_SSH_KEY),)
+PROD_SSH_OPTS ?= -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new
+SSH_PROD = ssh $(PROD_SSH_IDENTITY) $(PROD_SSH_OPTS) $(PROD_SERVER_USER)@$(PROD_HOST)
+SCP_PROD = scp $(PROD_SSH_IDENTITY) $(PROD_SSH_OPTS)
 
 DOCKER_COMPOSE = docker compose --env-file env.local
 COMPOSE_WSL = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml
@@ -34,6 +64,11 @@ COMPOSE_AWS = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml 
 # Production officer UI at grm-auth.* uses grm_ui_auth (:3002), not demo grm_ui (:3001).
 COMPOSE_AWS_AUTH = $(COMPOSE_AWS) --profile auth
 
+# Remote hosts (AWS + prod) use the same compose overlay on the server.
+REMOTE_COMPOSE = docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  --profile auth
+
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
 AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
@@ -41,10 +76,75 @@ AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 AWS_DEPLOY_SERVICES ?= grm_ui grm_ui_auth ticketing_api ticketing_api_auth backend celery_default
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
 AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
+PROD_DEPLOY_SERVICES ?= $(AWS_DEPLOY_SERVICES)
+PROD_DEPLOY_LIGHT_SERVICES ?= $(AWS_DEPLOY_LIGHT_SERVICES)
+
+# Shared remote deploy steps (Make expands $(1)=remote dir, $(2)=services, $(3)=label).
+define REMOTE_DEPLOY_CORE
+set -e; \
+	cd $(1) && \
+	git fetch origin && \
+	git checkout main && \
+	git checkout -- docker-compose.aws.yml && \
+	git pull --ff-only origin main && \
+	echo "$(3): rebuilding $(2)" && \
+	$(REMOTE_COMPOSE) build --pull $(2) && \
+	$(REMOTE_COMPOSE) up -d --build $(2) && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+endef
+
+define REMOTE_VERIFY_GRM_PORTS
+ui_port="$$(docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  port grm_ui 3001 2>/dev/null || true)" && \
+ui_auth_port="$$(docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+api_port="$$(docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  port ticketing_api 5002 2>/dev/null || true)" && \
+case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
+case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+echo "$(1) OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"
+endef
+
+define REMOTE_DEPLOY_LIGHT
+set -e; \
+	cd $(1) && \
+	git fetch origin && \
+	git checkout main && \
+	git reset --hard origin/main && \
+	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
+	echo "$(3): rebuilding $(2)" && \
+	$(REMOTE_COMPOSE) build $(filter-out nginx,$(2)) && \
+	$(REMOTE_COMPOSE) up -d --build $(filter-out nginx,$(2)) && \
+	$(REMOTE_COMPOSE) up -d nginx && \
+	ui_auth_port="$$(docker compose --env-file env.local \
+	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+	  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+	case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+	echo "$(3) OK: grm_ui_auth=$$ui_auth_port nginx=restarted"
+endef
+
+define REMOTE_DEPLOY_FULL
+set -e; \
+	cd $(1) && \
+	git fetch origin && \
+	git checkout main && \
+	git checkout -- docker-compose.aws.yml && \
+	git pull --ff-only origin main && \
+	$(REMOTE_COMPOSE) build --pull grm_ui grm_ui_auth && \
+	$(REMOTE_COMPOSE) up -d --build && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+endef
 
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full \
+	prod-deploy prod-deploy-light prod-deploy-full ssh-prod \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -65,11 +165,20 @@ help:
 	@echo "  make wsl-nginx        recreate nginx after editing deployment/nginx/*.conf"
 	@echo "  make wsl-down         stop all containers (base + GRM + auth profile)"
 	@echo ""
-	@echo "AWS (EC2):"
-	@echo "  make aws-up         rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy       SSH to EC2: pull main, migrate, rebuild AWS_DEPLOY_SERVICES (default GRM+messaging)"
-	@echo "  make aws-deploy-light SSH to EC2: pull main, rebuild UI (+ nginx restart); no migrations"
-	@echo "  make aws-deploy-full  SSH to EC2: pull main, migrate, rebuild entire stack"
+	@echo "AWS staging (EC2 key SSH — $(REMOTE_HOST_RUNNING)):"
+	@echo "  make aws-up           rebuild & up on this host (aws + GRM compose files)"
+	@echo "  make aws-deploy       pull main, migrate, rebuild AWS_DEPLOY_SERVICES"
+	@echo "  make aws-deploy-light pull main, rebuild UI (+ nginx); no migrations"
+	@echo "  make aws-deploy-full  pull main, migrate, rebuild entire stack"
+	@echo "  make ssh-running      open SSH session to staging"
+	@echo ""
+	@echo "Production (VPN + password SSH — $(PROD_HOST)):"
+	@echo "  make ssh-prod         open SSH session (prompts for password)"
+	@echo "  make prod-deploy      pull main, migrate, rebuild PROD_DEPLOY_SERVICES"
+	@echo "  make prod-deploy-light UI-only rebuild (+ nginx); no migrations"
+	@echo "  make prod-deploy-full pull main, migrate, rebuild entire stack"
+	@echo "  Override user/dir: PROD_SERVER_USER=... PROD_REMOTE_DIR=/path/to/nepal_chatbot"
+	@echo "  Or set PROD_SERVER_USER, PROD_HOST, PROD_REMOTE_DIR, PROD_SSH_KEY in env.local"
 	@echo ""
 	@echo "DB / optional:"
 	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
@@ -115,108 +224,36 @@ aws-up:
 # Remote deploy: pull main, migrations, rebuild selected services (default GRM UI/API + messaging backend).
 aws-deploy:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
-	$(SSH_RUNNING) 'set -e; \
-		cd $(REMOTE_DIR_RUNNING) && \
-		git fetch origin && \
-		git checkout main && \
-		git checkout -- docker-compose.aws.yml && \
-		git pull --ff-only origin main && \
-		echo "aws-deploy: rebuilding $(AWS_DEPLOY_SERVICES)" && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  build --pull $(AWS_DEPLOY_SERVICES) && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  up -d --build $(AWS_DEPLOY_SERVICES) && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
-		ui_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  port grm_ui 3001 2>/dev/null || true)" && \
-		ui_auth_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
-		api_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  port ticketing_api 5002 2>/dev/null || true)" && \
-		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
-		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
-		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
-		echo "aws-deploy OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
 
 # Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
 aws-deploy-light:
-	$(SSH_RUNNING) 'set -e; \
-		cd $(REMOTE_DIR_RUNNING) && \
-		git fetch origin && \
-		git checkout main && \
-		git reset --hard origin/main && \
-		git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
-		echo "aws-deploy-light: rebuilding $(AWS_DEPLOY_LIGHT_SERVICES)" && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  build $(filter-out nginx,$(AWS_DEPLOY_LIGHT_SERVICES)) && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  up -d --build $(filter-out nginx,$(AWS_DEPLOY_LIGHT_SERVICES)) && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  up -d nginx && \
-		ui_auth_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
-		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
-		echo "aws-deploy-light OK: grm_ui_auth=$$ui_auth_port nginx=restarted"'
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_LIGHT,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_LIGHT_SERVICES),aws-deploy-light)'
 
 # Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
 aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
-	$(SSH_RUNNING) 'set -e; \
-		cd $(REMOTE_DIR_RUNNING) && \
-		git fetch origin && \
-		git checkout main && \
-		git checkout -- docker-compose.aws.yml && \
-		git pull --ff-only origin main && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  build --pull grm_ui grm_ui_auth && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  up -d --build && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-		docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth \
-		  run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
-		ui_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  port grm_ui 3001 2>/dev/null || true)" && \
-		ui_auth_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
-		api_port="$$(docker compose --env-file env.local \
-		  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-		  port ticketing_api 5002 2>/dev/null || true)" && \
-		case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
-		case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
-		case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
-		echo "aws-deploy-full OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"'
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
+
+# ── Production (VPN + password SSH) ───────────────────────────────────────────
+# Requires VPN. No -i key: ssh/scp prompt for PROD_SERVER_USER password.
+ssh-prod:
+	@echo "VPN required. Connecting to $(PROD_SERVER_USER)@$(PROD_HOST) (password prompt)..."
+	$(SSH_PROD)
+
+prod-deploy:
+	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
+	$(SCP_PROD) .dockerignore $(PROD_SERVER_USER)@$(PROD_HOST):$(PROD_REMOTE_DIR)/.dockerignore
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy)'
+
+prod-deploy-light:
+	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_LIGHT,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_LIGHT_SERVICES),prod-deploy-light)'
+
+prod-deploy-full:
+	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
+	$(SCP_PROD) .dockerignore $(PROD_SERVER_USER)@$(PROD_HOST):$(PROD_REMOTE_DIR)/.dockerignore
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy-full)'
 
 # ── Migrations (run from repo root; uses POSTGRES_* via backend container) ─────
 migrate_ticketing:
