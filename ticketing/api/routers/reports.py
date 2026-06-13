@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db
 from ticketing.api.schemas.reports import (
     QuarterlyAssignmentCreate,
     QuarterlyAssignmentOut,
@@ -153,7 +153,7 @@ def query_report(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ReportQueryResponse:
     if date_from is None:
         today = date.today()
@@ -259,7 +259,7 @@ def report_summary(
     chart_package_ids: Optional[str] = Query(None, description="Optional package filter for charts"),
     include_seah: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ReportSummaryResponse:
     payload = _load_summary_payload(
         db,
@@ -287,7 +287,7 @@ def export_summary_report(
     chart_package_ids: Optional[str] = Query(None, description="Optional package filter for charts"),
     include_seah: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> StreamingResponse:
     payload = _load_summary_payload(
         db,
@@ -317,7 +317,7 @@ def export_summary_report(
 def build_report(
     body: ReportBuildRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
     include_seah = body.include_seah
     if include_seah and not current_user.can_see_seah:
@@ -457,7 +457,7 @@ def export_report(
     location_codes: Optional[str] = Query(None),
     include_seah: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> StreamingResponse:
     if date_from is None:
         date_from = date.today() - timedelta(days=90)
@@ -509,7 +509,7 @@ def export_all_data(
     location_codes: Optional[str] = Query(None),
     include_seah: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> StreamingResponse:
     if date_from is None:
         date_from = date.today() - timedelta(days=90)
@@ -547,7 +547,7 @@ def export_all_data(
 def create_report_share_links(
     body: ReportShareCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ReportShareResponse:
     date_from = body.date_from or (date.today() - timedelta(days=90))
     date_to = body.date_to or date.today()
@@ -641,7 +641,7 @@ def _plan_response(db: Session, quarter_key: str) -> QuarterlyPlanResponse:
 def get_quarterly_plan(
     quarter_key: Optional[str] = Query(None, description="e.g. 2026-Q1; default current quarter"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> QuarterlyPlanResponse:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -657,7 +657,7 @@ def get_quarterly_plan(
 def put_quarterly_schedule(
     body: QuarterlyScheduleUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> QuarterlyReportSchedule:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -680,7 +680,7 @@ def put_quarterly_schedule(
 def post_quarterly_assignments(
     body: QuarterlyAssignmentCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[QuarterlyAssignmentOut]:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -730,7 +730,7 @@ def _library_out(raw: dict) -> QuarterlyReportLibraryItem:
 )
 def get_quarterly_library(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[QuarterlyReportLibraryItem]:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -745,7 +745,7 @@ def get_quarterly_library(
 def post_quarterly_library(
     body: QuarterlyReportLibraryCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> QuarterlyReportLibraryItem:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -766,7 +766,7 @@ def post_quarterly_library(
 def remove_quarterly_library_item(
     item_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -785,7 +785,7 @@ def patch_quarterly_assignment(
     assignment_id: str,
     body: QuarterlyAssignmentUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> QuarterlyAssignmentOut:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -811,7 +811,7 @@ def patch_quarterly_assignment(
 def remove_quarterly_assignment(
     assignment_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     if not current_user.is_admin:
         raise HTTPException(403, detail="Admin access required")
@@ -826,7 +826,7 @@ def remove_quarterly_assignment(
     summary="Column catalog for report builder",
 )
 def report_fields(
-    _current_user: CurrentUser = Depends(get_current_user),
+    _current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     return {
         "fields": _field_catalog(),

@@ -559,7 +559,7 @@ def delete_admin_scope(
 def get_user_roles(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[UserRole]:
     # Officers can only see their own roles unless admin
     if user_id != current_user.user_id and not current_user.is_admin:
@@ -579,10 +579,8 @@ def assign_role(
     user_id: str,
     payload: UserRoleCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ) -> UserRole:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
 
     role = db.get(Role, payload.role_id)
     if not role:
@@ -618,10 +616,8 @@ def remove_role(
     user_id: str,
     user_role_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ) -> None:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
     user_role = db.get(UserRole, user_role_id)
     if not user_role or user_role.user_id != user_id:
         raise HTTPException(status_code=404, detail="Role assignment not found")
@@ -874,7 +870,7 @@ class ScopeResponse(BaseModel):
 def get_user_scopes(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[OfficerScope]:
     # Officers can view their own scopes; admins can view any
     if user_id != current_user.user_id and not current_user.is_admin:
@@ -896,11 +892,8 @@ def add_user_scope(
     user_id: str,
     payload: ScopeCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ) -> OfficerScope:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
     from ticketing.services.officer_admin import JurisdictionInput, validate_jurisdiction
 
     juris = JurisdictionInput(
@@ -992,10 +985,8 @@ def remove_user_scope(
     user_id: str,
     scope_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ) -> None:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
     scope = db.get(OfficerScope, scope_id)
     if not scope or scope.user_id != user_id:
         raise HTTPException(status_code=404, detail="Scope not found")

@@ -34,6 +34,8 @@ def _canonicalize_admin_names(
     lang_code: str = "en",
 ) -> Dict[str, Optional[str]]:
     """Fuzzy-match Nominatim labels to ticketing canonical names."""
+    from backend.shared_functions.text_language import detect_app_language
+
     province_raw = raw.get("province")
     district_raw = raw.get("district")
     municipality_raw = raw.get("municipality")
@@ -43,19 +45,24 @@ def _canonicalize_admin_names(
 
     try:
         validator = ContactLocationValidator()
-        validator._initialize_constants(lang_code)
     except Exception as exc:
         logger.warning("map_pin_geocode: validator init failed (%s); using raw names", exc)
         return dict(raw)
 
-    province = validator.check_province(province_raw) if province_raw else None
+    province = None
     district = None
     municipality = None
 
+    if province_raw:
+        validator._initialize_constants(detect_app_language(province_raw, lang_code))
+        province = validator.check_province(province_raw)
+
     if province and district_raw:
+        validator._initialize_constants(detect_app_language(district_raw, lang_code))
         district = validator.check_district(district_raw, province)
 
     if province and district and municipality_raw:
+        validator._initialize_constants(detect_app_language(municipality_raw, lang_code))
         municipality = validator.validate_municipality_input(
             municipality_raw,
             province,

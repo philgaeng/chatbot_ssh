@@ -3,12 +3,11 @@ FastAPI dependency injection for GRM Ticketing.
 
 Auth:
   - verify_api_key: simple secret for chatbot → ticketing inbound calls
-  - get_current_user:
-      • KEYCLOAK_ISSUER not set → dev bypass (mock-super-admin unless
-        x-internal-user-id; optional x-internal-organization-id)
-      • x-internal-user-id header present → trust header (internal service calls)
-      • Otherwise → validate Bearer JWT against Keycloak JWKS
-  - get_authenticated_user: identity + admin_scopes from DB
+  - get_current_user / get_authenticated_user (equivalent):
+      • Resolve identity (Keycloak JWT, dev bypass, or internal x-api-key header)
+      • Always load ticketing.admin_scopes for the user (country/project admin matrix)
+      • Sync Keycloak onboarding status when user_id is an email
+  - require_admin / require_super_admin / require_country_admin: use get_authenticated_user
 """
 from __future__ import annotations
 
@@ -161,16 +160,14 @@ class CurrentUser:
 _bearer = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    x_internal_user_id: str | None = Header(None),
-    x_internal_role: str | None = Header(None),
-    x_internal_organization_id: str | None = Header(None),
-    x_api_key: str | None = Header(None),
+def _resolve_user_identity(
+    credentials: HTTPAuthorizationCredentials | None,
+    x_internal_user_id: str | None,
+    x_internal_role: str | None,
+    x_internal_organization_id: str | None,
+    x_api_key: str | None,
 ) -> CurrentUser:
-    """
-    Resolve the calling officer identity (no DB).
-    """
+    """Resolve officer identity from JWT, dev bypass, or trusted internal headers."""
     settings = get_settings()
 
     if not settings.keycloak_issuer:
@@ -223,17 +220,37 @@ def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
     return user
 
 
-def get_authenticated_user(
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    x_internal_user_id: str | None = Header(None),
+    x_internal_role: str | None = Header(None),
+    x_internal_organization_id: str | None = Header(None),
+    x_api_key: str | None = Header(None),
     db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
-    """Identity + admin_scopes loaded from ticketing.admin_scopes."""
+    """
+    Authenticated officer with admin_scopes loaded from ticketing.admin_scopes.
+    """
+    user = _resolve_user_identity(
+        credentials,
+        x_internal_user_id,
+        x_internal_role,
+        x_internal_organization_id,
+        x_api_key,
+    )
     if user.user_id and "@" in user.user_id:
         from ticketing.services.officer_admin import sync_officer_onboarding_status
 
         if sync_officer_onboarding_status(db, user.user_id):
             db.commit()
     return enrich_user(db, user)
+
+
+def get_authenticated_user(
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Alias for get_current_user — kept for explicit call sites and tests."""
+    return user
 
 
 def require_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:

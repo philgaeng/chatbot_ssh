@@ -30,7 +30,7 @@ from ticketing.models.package import PackageLocation, ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.qr_token import QrToken
 from ticketing.models.officer_scope import OfficerScope
-from ticketing.api.dependencies import get_current_user, CurrentUser
+from ticketing.api.dependencies import get_authenticated_user, CurrentUser
 from ticketing.config.settings import get_settings
 
 router = APIRouter()
@@ -153,7 +153,7 @@ def scan_token(token: str, db: Session = Depends(get_db)) -> ScanResponse:
 )
 def my_packages_qr(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[PackageQrItem]:
     """
     Returns one QR code per package accessible to the requesting user.
@@ -248,7 +248,7 @@ def my_packages_qr(
 def list_tokens(
     package_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[QrTokenOut]:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -284,7 +284,7 @@ def list_tokens(
 def create_token(
     package_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> QrTokenCreateResponse:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -322,7 +322,7 @@ def create_token(
 def revoke_token(
     token: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")

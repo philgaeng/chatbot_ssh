@@ -19,6 +19,7 @@ from backend.config.constants import (
     DIC_LOCATION_WORDS,
     LOCATION_FOLDER_PATH,
 )
+from backend.shared_functions.text_language import detect_app_language, language_candidates
 
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES["DEFAULT_LANGUAGE_CODE"]
 
@@ -292,6 +293,20 @@ class ContactLocationValidator:
         self.locations = self.locations_both_language[language_code]
         self.max_words = self._calculate_max_words()
         self.provinces = [p["name"].strip("Province").strip("प्रदेश") for p in self.locations]
+
+    def _tree_languages_for(self, *texts: Optional[str]) -> List[str]:
+        """Merge detection order for one or more user strings (deduped)."""
+        merged: List[str] = []
+        fallback = getattr(self, "language_code", None) or DEFAULT_LANGUAGE_CODE
+        for text in texts:
+            if not text or not str(text).strip():
+                continue
+            for lang in language_candidates(str(text), fallback):
+                if lang not in merged:
+                    merged.append(lang)
+        if not merged:
+            merged = language_candidates("", fallback)
+        return merged
             
     def _normalize_locations(self, locations):
         """Normalize all names in the locations data to lowercase."""
@@ -405,10 +420,10 @@ class ContactLocationValidator:
                 continue
             
             name = mun["name"].title()
-            # Remove each word and clean up extra spaces
             for word in remove_words:
-                name = name.replace(word, "")
-            name = name.strip()
+                for variant in (word, word.title(), word.upper(), word.lower()):
+                    name = name.replace(variant, " ")
+            name = " ".join(name.split()).strip()
             
             if len(name) > 2:  # Only add non-empty names
                 municipality_names.append(name)
@@ -418,66 +433,68 @@ class ContactLocationValidator:
     def _match_with_qr_data(self, possible_names, qr_province, qr_district):
         """Try to match location using QR-provided data."""
         print(f"######## LocationValidator: QR")
-        province_list = self.locations
-        province_names = [p["name"] for p in province_list]
-        
-        # Match province from QR data
-        matched_province = self._find_best_match(qr_province, province_names) if qr_province else None
-        if not matched_province:
-            return None, None, None
-            
-        # Get province data and match district
-        province_data = self._get_province_data(matched_province)
-        district_names = [d["name"] for d in province_data.get("districts", [])]
-        matched_district = self._find_best_match(qr_district, district_names) if qr_district else None
-        
-        if not matched_district:
-            return matched_province, None, None
-            
-        # Get district data and match municipality
-        district_data = self._get_district_data(province_data, matched_district)
-        municipality_names = self._get_municipality_names(district_data)
-        
-        # Try to match municipality from possible names
-        for possible_name in possible_names:
-            if municipality_names:
-                print(f"######## LocationValidator: Municipality names: {municipality_names}")
-            else:
-                print(f"######## LocationValidator: No municipality names")
-            matched_municipality = self._find_best_match(possible_name, municipality_names)
-            if matched_municipality:
-                return matched_province, matched_district, matched_municipality
-                
-        return matched_province, matched_district, None
+        input_hint = possible_names[0] if possible_names else ""
+        qr_hint = " ".join(x for x in (qr_province, qr_district) if x).strip()
+        tree_langs = self._tree_languages_for(input_hint, qr_hint)
+
+        for tree_lang in tree_langs:
+            self._initialize_constants(tree_lang)
+            province_names = [p["name"] for p in self.locations]
+
+            matched_province = (
+                self._find_best_match(qr_province, province_names) if qr_province else None
+            )
+            if not matched_province:
+                continue
+
+            province_data = self._get_province_data(matched_province)
+            district_names = [d["name"] for d in province_data.get("districts", [])]
+            matched_district = (
+                self._find_best_match(qr_district, district_names) if qr_district else None
+            )
+            if not matched_district:
+                continue
+
+            district_data = self._get_district_data(province_data, matched_district)
+            municipality_names = self._get_municipality_names(district_data)
+
+            for possible_name in possible_names:
+                if municipality_names:
+                    print(f"######## LocationValidator: Municipality names: {municipality_names}")
+                matched_municipality = self._find_best_match(possible_name, municipality_names)
+                if matched_municipality:
+                    return matched_province, matched_district, matched_municipality
+
+        return None, None, None
 
     def _match_from_string(self, possible_names):
         """Try to match location from possible names without QR data."""
         print(f"######## LocationValidator: String")
-        for province in self.locations:
-            for district in province.get("districts", []):
-                municipality_names = self._get_municipality_names(district)
-                print(f"######## LocationValidator: Municipality names: {municipality_names}")
-                
-                # Try municipality match first
+        input_hint = possible_names[0] if possible_names else ""
+        for tree_lang in self._tree_languages_for(input_hint):
+            self._initialize_constants(tree_lang)
+            for province in self.locations:
+                for district in province.get("districts", []):
+                    municipality_names = self._get_municipality_names(district)
+                    for possible_name in possible_names:
+                        matched_municipality = self._find_best_match(
+                            possible_name, municipality_names
+                        )
+                        if matched_municipality:
+                            return province["name"], district["name"], matched_municipality
+
+            for province in self.locations:
+                district_names = [d["name"] for d in province.get("districts", [])]
                 for possible_name in possible_names:
-                    matched_municipality = self._find_best_match(possible_name, municipality_names)
-                    if matched_municipality:
-                        return province["name"], district["name"], matched_municipality
-        
-        # If no municipality match, try district match
-        for province in self.locations:
-            district_names = [d["name"] for d in province.get("districts", [])]
+                    matched_district = self._find_best_match(possible_name, district_names)
+                    if matched_district:
+                        return province["name"], matched_district, None
+
             for possible_name in possible_names:
-                matched_district = self._find_best_match(possible_name, district_names)
-                if matched_district:
-                    return province["name"], matched_district, None
-        
-        # Finally, try province match
-        for possible_name in possible_names:
-            matched_province = self._find_best_match(possible_name, self.provinces)
-            if matched_province:
-                return matched_province, None, None
-                
+                matched_province = self._find_best_match(possible_name, self.provinces)
+                if matched_province:
+                    return matched_province, None, None
+
         return None, None, None
 
     def _format_result(self, province, district, municipality):
@@ -503,24 +520,75 @@ class ContactLocationValidator:
 
     def check_province(self, input_text):
         """Check if the province name is valid."""
-        # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        for possible_name in possible_names:
-            matched_province = self._find_best_match(possible_name, self.provinces)
-            if matched_province:
-                return matched_province
+        for tree_lang in self._tree_languages_for(input_text):
+            self._initialize_constants(tree_lang)
+            for possible_name in possible_names:
+                matched_province = self._find_best_match(possible_name, self.provinces)
+                if matched_province:
+                    return matched_province
         return None
     
     def check_district(self, input_text, province_name):
         """Check if the district name is valid."""
-        # Finally, try province match
         possible_names = self._generate_possible_names(input_text)
-        district_names = self._get_district_names(province_name)
-        for possible_name in possible_names:
-            matched_district = self._find_best_match(possible_name, district_names)
-            if matched_district:
-                return matched_district
+        for tree_lang in self._tree_languages_for(input_text, province_name):
+            self._initialize_constants(tree_lang)
+            district_names = self._get_district_names(province_name)
+            for possible_name in possible_names:
+                matched_district = self._find_best_match(possible_name, district_names)
+                if matched_district:
+                    return matched_district
         return None
+
+    def _validate_municipality_via_db(
+        self,
+        input_text: str,
+        qr_province: Optional[str],
+        qr_district: Optional[str],
+    ) -> Optional[str]:
+        """Cross-script fallback when JSON trees cannot match mixed en/ne input."""
+        from backend.shared_functions.location_mapping import (
+            _resolve_location_code_by_name,
+            resolve_location_hierarchy_from_code,
+            strip_admin_suffix,
+        )
+        from backend.services.database_services.postgres_services import db_manager as dm
+
+        parent_code: Optional[str] = None
+        if qr_province:
+            parent_code = _resolve_location_code_by_name(
+                dm,
+                country_code="NP",
+                level_number=1,
+                candidate_name=qr_province,
+                parent_code=None,
+            )
+        if qr_district:
+            parent_code = _resolve_location_code_by_name(
+                dm,
+                country_code="NP",
+                level_number=2,
+                candidate_name=qr_district,
+                parent_code=parent_code,
+            )
+
+        muni_code = _resolve_location_code_by_name(
+            dm,
+            country_code="NP",
+            level_number=3,
+            candidate_name=input_text,
+            parent_code=parent_code,
+        )
+        if not muni_code:
+            return None
+
+        lang = detect_app_language(input_text, DEFAULT_LANGUAGE_CODE)
+        hierarchy = resolve_location_hierarchy_from_code(dm, muni_code, lang_code=lang)
+        full_name = hierarchy.get("level_3_name")
+        if not full_name:
+            return None
+        return strip_admin_suffix(full_name, 3) or full_name.strip()
     
     def validate_municipality_input(
             self,
@@ -529,21 +597,29 @@ class ContactLocationValidator:
             qr_district: str,
         ) -> str:
             """Validate new municipality input."""
-            
-            validation_result = self._validate_location(
-                input_text.title(), 
-                qr_province, 
-                qr_district
-            )
-            
-            municipality = validation_result.get("municipality")
-            
-            if not municipality:
+            cleaned = (input_text or "").strip()
+            if not cleaned:
                 return None
-            
-            municipality = municipality.title()
-            print(f"✅ Municipality validated: {municipality}")
-            
+
+            for tree_lang in self._tree_languages_for(cleaned, qr_province, qr_district):
+                self._initialize_constants(tree_lang)
+                validation_result = self._validate_location(
+                    cleaned,
+                    qr_province,
+                    qr_district,
+                )
+                municipality = validation_result.get("municipality")
+                if municipality:
+                    if tree_lang == "en":
+                        municipality = municipality.title()
+                    print(f"✅ Municipality validated ({tree_lang}): {municipality}")
+                    return municipality
+
+            municipality = self._validate_municipality_via_db(
+                cleaned, qr_province, qr_district
+            )
+            if municipality:
+                print(f"✅ Municipality validated (db): {municipality}")
             return municipality
 
 
@@ -553,17 +629,21 @@ class ContactLocationValidator:
         qr_municipality: str,
     ) -> tuple[Optional[str], Optional[str]]:
         """Match village + ward for a municipality using fuzzy matching on seeded rows."""
-        qr_municipality = _norm_municipality(qr_municipality)
+        for tree_lang in self._tree_languages_for(input_text, qr_municipality):
+            self._initialize_constants(tree_lang)
+            qr_municipality_norm = _norm_municipality(qr_municipality)
 
-        mun_rows = [r for r in self.municipality_villages if r["municipality"] == qr_municipality]
-        village_names = [r["village"] for r in mun_rows if r.get("village")]
+            mun_rows = [
+                r for r in self.municipality_villages if r["municipality"] == qr_municipality_norm
+            ]
+            village_names = [r["village"] for r in mun_rows if r.get("village")]
 
-        matched_village = self._find_best_match(input_text, village_names)
-        print(f"######## LocationValidator: Matched village: {matched_village}")
-        if matched_village:
-            for r in mun_rows:
-                if r["village"] == matched_village:
-                    return matched_village, str(r["ward"])
+            matched_village = self._find_best_match(input_text, village_names)
+            print(f"######## LocationValidator: Matched village: {matched_village}")
+            if matched_village:
+                for r in mun_rows:
+                    if r["village"] == matched_village:
+                        return matched_village, str(r["ward"])
         return None, None
 
     def get_office_in_charge_info(

@@ -1162,7 +1162,7 @@ def replace_project_actor_roles(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.project_type_key and not (
-        "super_admin" in admin.role_keys or admin.is_country_admin()
+        admin.is_super_admin or admin.is_country_admin()
     ):
         raise HTTPException(
             status_code=403,

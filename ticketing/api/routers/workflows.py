@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from ticketing.api.dependencies import get_db, get_authenticated_user, get_current_user, CurrentUser
+from ticketing.api.dependencies import get_db, get_authenticated_user, CurrentUser
 from ticketing.services.admin_access import (
     SettingsAction,
     can_mutate_workflow,
@@ -112,7 +112,7 @@ def list_workflows(
     status: Optional[str] = Query(None),
     is_template: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowListResponse:
     q = select(WorkflowDefinition).options(
         selectinload(WorkflowDefinition.steps),
@@ -138,7 +138,7 @@ def list_workflows(
 @router.get("/workflows/routing-options", summary="Classifications + intake routes for project workflow editor")
 def list_workflow_routing_options(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.constants.workflow_routing import INTAKE_ROUTE_CATALOG
     from ticketing.services.workflow_routing import list_catalog_classifications
@@ -155,7 +155,7 @@ def list_workflow_routing_options(
 @router.get("/workflows/templates", response_model=WorkflowListResponse, summary="List templates")
 def list_templates(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowListResponse:
     """Returns built-in template definitions + admin-created templates."""
     built_ins = []
@@ -206,7 +206,7 @@ def list_templates(
 def get_workflow(
     workflow_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
     wf = _load_workflow(workflow_id, db, current_user)
     return WorkflowDefinitionResponse.model_validate(wf)
@@ -603,7 +603,7 @@ def reorder_steps(
 def list_assignments(
     workflow_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[WorkflowAssignmentResponse]:
     _load_workflow(workflow_id, db, current_user)
     rows = db.execute(

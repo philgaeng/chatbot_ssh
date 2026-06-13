@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_viewer import TicketViewer
 
@@ -71,7 +71,7 @@ def _viewer_to_dict(v: TicketViewer) -> dict:
 def list_viewers(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -103,7 +103,7 @@ def add_viewer(
     ticket_id: str,
     body: AddViewerRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -169,7 +169,7 @@ def remove_viewer(
     ticket_id: str,
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:

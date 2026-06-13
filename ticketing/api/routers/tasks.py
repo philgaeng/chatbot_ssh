@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_task import TicketTask
 
@@ -104,7 +104,7 @@ def create_task(
     ticket_id: str,
     body: TaskCreateRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     task_type = body.task_type.upper()
     if task_type not in VALID_TASK_TYPES:
@@ -184,7 +184,7 @@ def complete_task(
     ticket_id: str,
     task_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -235,7 +235,7 @@ def complete_task(
 def list_ticket_tasks(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -260,7 +260,7 @@ def list_ticket_tasks(
 )
 def list_my_tasks(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     tasks = db.execute(
         select(TicketTask)

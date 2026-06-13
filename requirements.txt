@@ -48,6 +48,7 @@ pyvips>=2.2.0
 # --- Utilities ---
 python-dotenv==1.1.1
 rapidfuzz==3.13.0
+langdetect==1.0.9
 icecream
 
 # --- Flask / Werkzeug (legacy backend.api.app and a few blueprints; production uses FastAPI only) ---

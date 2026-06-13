@@ -31,7 +31,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
-from ticketing.api.dependencies import CurrentUser, get_current_user, get_db, verify_api_key
+from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db, verify_api_key
 from ticketing.api.schemas.ticket import (
     TicketActionRequest,
     TicketActionResponse,
@@ -510,7 +510,7 @@ def list_tickets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketListResponse:
     stmt = select(Ticket).where(Ticket.is_deleted.is_(False))
 
@@ -721,7 +721,7 @@ def list_tickets(
 def get_ticket(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketDetail:
     ticket = db.execute(
         select(Ticket)
@@ -812,7 +812,7 @@ def get_ticket(
 )
 def list_grievance_categories(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(get_current_user),
+    _current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     from ticketing.services.grievance_taxonomy import list_grievance_category_options
 
@@ -828,7 +828,7 @@ def validate_ticket_classification(
     ticket_id: str,
     payload: ClassificationValidateRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ClassificationValidateResponse:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -912,7 +912,7 @@ def patch_ticket(
     ticket_id: str,
     payload: TicketPatch,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> Ticket:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -999,7 +999,7 @@ def patch_ticket_complainant(
     ticket_id: str,
     payload: ComplainantPatch,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ComplainantPatchResponse:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1088,7 +1088,7 @@ def perform_action(
     ticket_id: str,
     payload: TicketActionRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketActionResponse:
     action = payload.action_type.upper()
     if action not in VALID_ACTIONS:
@@ -1524,7 +1524,7 @@ def reply_to_complainant(
     ticket_id: str,
     payload: TicketReplyRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketReplyResponse:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1683,7 +1683,7 @@ def inbound_complainant_message(
 def get_sla(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1712,7 +1712,7 @@ def get_sla(
 def get_ticket_teammates(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     """
     Returns user_ids of officers in the same role + jurisdiction as the ticket's
@@ -1751,7 +1751,7 @@ def get_ticket_teammates(
 def mark_events_seen(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1787,7 +1787,7 @@ def add_to_informed(
     ticket_id: str,
     payload: AddInformedRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> AddInformedResponse:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1857,7 +1857,7 @@ def update_reply_owner(
     ticket_id: str,
     payload: ReplyOwnerRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -1906,7 +1906,7 @@ def update_reply_owner(
 def list_ticket_files(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     """
     Reads public.file_attachments for the grievance linked to this ticket.
@@ -1951,7 +1951,7 @@ def list_ticket_files(
 def download_file(
     file_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> FileResponse:
     """
     Streams a file from disk using the path stored in public.file_attachments.
@@ -1994,7 +1994,7 @@ async def upload_officer_attachment(
     file: UploadFile = File(...),
     caption: str = Form(""),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -2079,7 +2079,7 @@ async def upload_officer_attachment(
 def list_officer_attachments(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -2116,7 +2116,7 @@ def list_officer_attachments(
 def download_officer_attachment(
     file_id: str,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser = Depends(get_authenticated_user),
 ) -> FileResponse:
     tf = db.get(TicketFile, file_id)
     if not tf:
@@ -2139,7 +2139,7 @@ def download_officer_attachment(
 def get_ticket_pii(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import get_grievance_detail
 
@@ -2206,7 +2206,7 @@ def _has_resolution_record_event(db: Session, ticket_id: str) -> bool:
 def get_resolved_summary(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -2256,7 +2256,7 @@ def trigger_resolved_summary(
     ticket_id: str,
     force: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -2304,7 +2304,7 @@ _FINDINGS_ROLES = {
 def trigger_findings(
     ticket_id: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.is_deleted:
@@ -2366,7 +2366,7 @@ def begin_reveal(
     ticket_id: str,
     body: RevealRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import begin_reveal_session
     from ticketing.services.demo_reveal import ticket_reveal_fallback_grievance
@@ -2429,7 +2429,7 @@ def close_reveal(
     ticket_id: str,
     body: RevealCloseRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import close_reveal_session
 
