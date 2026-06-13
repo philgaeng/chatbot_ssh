@@ -47,7 +47,7 @@ import { IntakeRouteBadge } from "@/lib/icons";
 import {
   AlertTriangle, ArrowUpCircle, Flag, ClipboardList, CheckCircle2,
   MoreVertical, User, FileText, Paperclip, ChevronLeft, Download, FileIcon,
-  ClipboardCheck, BookOpen, X,
+  ClipboardCheck, BookOpen, Lock, X,
 } from "lucide-react";
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
