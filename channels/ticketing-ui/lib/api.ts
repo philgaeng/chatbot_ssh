@@ -831,7 +831,8 @@ export function createAdminScope(payload: {
   country_code?: string;
   project_id?: string;
   organization_id?: string;
-  workflow_track: "standard" | "seah";
+  workflow_track?: "standard" | "seah" | "both";
+  workflow_tracks?: ("standard" | "seah")[];
 }): Promise<AdminScopeRow> {
   return apiFetch<AdminScopeRow>("/api/v1/admin-scopes", {
     method: "POST",

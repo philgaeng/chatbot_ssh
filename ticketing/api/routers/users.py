@@ -373,13 +373,23 @@ def create_admin_scope(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> AdminScopeResponse:
+    try:
+        tracks = AdminScopeCreate.resolved_workflow_tracks(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if body.role_key == "country_admin":
         if not current_user.is_super_admin:
             raise HTTPException(status_code=403, detail="Only super_admin may appoint country_admin")
         if not body.country_code:
             raise HTTPException(status_code=422, detail="country_code required for country_admin")
     elif body.role_key == "project_admin":
-        if not (current_user.is_super_admin or is_country_admin(current_user, body.workflow_track)):  # type: ignore[arg-type]
+        if len(tracks) != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="project_admin requires exactly one workflow_track",
+            )
+        if not (current_user.is_super_admin or is_country_admin(current_user, tracks[0])):  # type: ignore[arg-type]
             raise HTTPException(
                 status_code=403,
                 detail="country_admin (matching track) or super_admin required",
@@ -397,19 +407,38 @@ def create_admin_scope(
     from ticketing.services.officer_admin import log_admin_audit, provision_admin_scope_keycloak
 
     email = body.user_id.strip().lower()
-    scope = AdminScope(
-        user_id=email,
-        role_key=body.role_key,
-        country_code=body.country_code,
-        project_id=project_ref,
-        organization_id=body.organization_id,
-        package_id=body.package_id,
-        workflow_track=body.workflow_track,
-        created_by_user_id=current_user.user_id,
-    )
-    db.add(scope)
-
     org_id = (body.organization_id or "DOR").strip()
+    created_scopes: list[AdminScope] = []
+    onboarding_status = "active"
+
+    for track in tracks:
+        dup_stmt = select(AdminScope).where(
+            AdminScope.user_id == email,
+            AdminScope.role_key == body.role_key,
+            AdminScope.workflow_track == track,
+        )
+        if body.role_key == "country_admin":
+            dup_stmt = dup_stmt.where(AdminScope.country_code == body.country_code)
+        else:
+            dup_stmt = dup_stmt.where(AdminScope.project_id == project_ref)
+        existing = db.execute(dup_stmt).scalar_one_or_none()
+        if existing:
+            created_scopes.append(existing)
+            continue
+
+        scope = AdminScope(
+            user_id=email,
+            role_key=body.role_key,
+            country_code=body.country_code,
+            project_id=project_ref,
+            organization_id=body.organization_id,
+            package_id=body.package_id,
+            workflow_track=track,
+            created_by_user_id=current_user.user_id,
+        )
+        db.add(scope)
+        created_scopes.append(scope)
+
     existing_ur = db.execute(
         select(UserRole).where(
             UserRole.user_id == email,
@@ -437,15 +466,16 @@ def create_admin_scope(
             "country_code": body.country_code,
             "project_id": project_ref,
             "organization_id": org_id,
-            "workflow_track": body.workflow_track,
+            "workflow_tracks": tracks,
             "onboarding_status": onboarding_status,
         },
     )
     db.commit()
-    db.refresh(scope)
+    primary = created_scopes[0]
+    db.refresh(primary)
     return _admin_scope_response(
         db,
-        scope,
+        primary,
         onboarding_status=onboarding_status,
         invite_email_sent=onboarding_status == "invited",
     )

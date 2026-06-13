@@ -143,9 +143,10 @@ def can_create_project(user: CurrentUser) -> bool:
 
 
 def can_manage_structure(user: CurrentUser, *, track: str = "standard") -> bool:
+    """Country admins manage project structure same as super_admin on Settings → Projects."""
     if is_super_admin(user):
         return True
-    return is_country_admin(user, "standard") and track == "standard"
+    return is_country_admin(user)
 
 
 def can_manage_seah_settings(user: CurrentUser) -> bool:

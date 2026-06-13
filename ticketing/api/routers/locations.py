@@ -1161,10 +1161,12 @@ def replace_project_actor_roles(
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if project.project_type_key and "super_admin" not in admin.role_keys:
+    if project.project_type_key and not (
+        "super_admin" in admin.role_keys or admin.is_country_admin()
+    ):
         raise HTTPException(
             status_code=403,
-            detail="Actor role keys are defined by the project type; super admin only",
+            detail="Actor role keys are defined by the project type; admin only",
         )
     try:
         rows = actor_roles_svc.replace_project_actor_roles(

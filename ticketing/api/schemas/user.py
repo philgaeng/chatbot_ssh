@@ -72,7 +72,30 @@ class AdminScopeCreate(BaseModel):
     project_id: str | None = Field(None, max_length=64)
     organization_id: str | None = Field(None, max_length=64)
     package_id: str | None = Field(None, max_length=64)
-    workflow_track: str = Field(..., pattern="^(standard|seah)$")
+    workflow_track: str | None = Field(None, pattern="^(standard|seah|both)$")
+    workflow_tracks: list[str] | None = None
+
+    @classmethod
+    def resolved_workflow_tracks(cls, body: "AdminScopeCreate") -> list[str]:
+        """Expand workflow_track=both or workflow_tracks[] into distinct track keys."""
+        from ticketing.models.admin_scope import WORKFLOW_TRACKS
+
+        if body.workflow_tracks:
+            tracks: list[str] = []
+            for raw in body.workflow_tracks:
+                t = raw.strip().lower()
+                if t not in WORKFLOW_TRACKS:
+                    raise ValueError(f"Invalid workflow_track: {raw}")
+                if t not in tracks:
+                    tracks.append(t)
+            if not tracks:
+                raise ValueError("workflow_tracks must include at least one track")
+            return tracks
+        if body.workflow_track == "both":
+            return ["standard", "seah"]
+        if body.workflow_track in WORKFLOW_TRACKS:
+            return [body.workflow_track]
+        raise ValueError("Provide workflow_track or workflow_tracks")
 
 
 class AdminContextResponse(BaseModel):

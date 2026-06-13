@@ -554,6 +554,7 @@ function AdminAccessTab() {
   const [countryCode, setCountryCode] = useState("NP");
   const [projectId, setProjectId] = useState("KL_ROAD");
   const [track, setTrack] = useState<"standard" | "seah">("standard");
+  const [countryTracks, setCountryTracks] = useState({ standard: true, seah: false });
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendMsg, setResendMsg] = useState("");
 
@@ -574,13 +575,21 @@ function AdminAccessTab() {
   async function handleAppoint() {
     if (!userId.trim()) return;
     setResendMsg("");
+    const workflow_tracks: ("standard" | "seah")[] =
+      roleKey === "country_admin"
+        ? (["standard", "seah"] as const).filter((t) => countryTracks[t])
+        : [track];
+    if (workflow_tracks.length === 0) {
+      setErr("Select at least one workflow track.");
+      return;
+    }
     try {
       const created = await createAdminScope({
         user_id: userId.trim(),
         role_key: roleKey,
         country_code: roleKey === "country_admin" ? countryCode : undefined,
         project_id: roleKey === "project_admin" ? projectId : undefined,
-        workflow_track: track,
+        workflow_tracks,
       });
       setUserId("");
       if (created.invite_email_sent) {
@@ -628,7 +637,8 @@ function AdminAccessTab() {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        Appoint scoped country and project administrators. New officers receive a Keycloak setup email;
+        Appoint scoped country and project administrators. For <span className="font-medium">country_admin</span>,
+        you may assign Standard, SEAH, or both tracks (two scope rows). New officers receive a Keycloak setup email;
         use <span className="font-medium">Send setup email</span> if it does not arrive.
       </p>
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
@@ -643,11 +653,32 @@ function AdminAccessTab() {
             <option value="country_admin">country_admin</option>
             <option value="project_admin">project_admin</option>
           </select>
-          <select value={track} onChange={(e) => setTrack(e.target.value as typeof track)}
-            className="border border-gray-300 rounded px-2 py-1.5">
-            <option value="standard">standard</option>
-            <option value="seah">seah</option>
-          </select>
+          {roleKey === "country_admin" ? (
+            <div className="flex items-center gap-4 px-1">
+              <label className="flex items-center gap-1.5 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={countryTracks.standard}
+                  onChange={(e) => setCountryTracks((t) => ({ ...t, standard: e.target.checked }))}
+                />
+                Standard
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={countryTracks.seah}
+                  onChange={(e) => setCountryTracks((t) => ({ ...t, seah: e.target.checked }))}
+                />
+                SEAH
+              </label>
+            </div>
+          ) : (
+            <select value={track} onChange={(e) => setTrack(e.target.value as typeof track)}
+              className="border border-gray-300 rounded px-2 py-1.5">
+              <option value="standard">standard</option>
+              <option value="seah">seah</option>
+            </select>
+          )}
           {roleKey === "country_admin" ? (
             <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country code"
               className="border border-gray-300 rounded px-2 py-1.5" />
@@ -2760,7 +2791,7 @@ function ProjectsSection({
                 <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">
                   {canManageProjectCatalog ? "Edit" : "Set up"}
                 </button>
-                {(isSuperAdmin || canManageStructure) && (
+                {canManageProjectCatalog && (
                   <button type="button" onClick={() => handleRemoveProject(p)} className="text-sm text-red-600 hover:underline shrink-0">
                     Remove
                   </button>
@@ -2943,7 +2974,7 @@ function ProjectEditor({
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const typedProject = Boolean(p.project_type_key);
-  const lockTypeConfig = typedProject && !isSuperAdmin;
+  const lockTypeConfig = typedProject && !isSuperAdmin && !isCountryAdmin;
   const canEditProjectWorkflows = isSuperAdmin || isCountryAdmin;
   const canEditMessaging = isSuperAdmin || isCountryAdmin;
 
@@ -3348,7 +3379,7 @@ function ProjectEditor({
         )}
       </div>
 
-      {(isSuperAdmin || canManageStructure) && (
+      {canEditProjectWorkflows && (
       <ProjectActorRolesEditor
         roles={projectActorRoles}
         saving={rolesSaving}
@@ -4556,7 +4587,7 @@ export default function SettingsPage() {
           />
           {orgSub === "organizations" && <OrgsSection onNavigateToProject={navigateToProject} />}
           {orgSub === "officers" && (
-            <OfficersTab roleCatalog={roleCatalog} allowGlobalInvite={isSuperAdmin} />
+            <OfficersTab roleCatalog={roleCatalog} allowGlobalInvite={isSuperAdmin || isCountryAdmin} />
           )}
         </>
       )}
