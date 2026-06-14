@@ -12,6 +12,7 @@ import {
   type PackageItem,
 } from "@/lib/api";
 import {
+  officerHasRoleKey,
   officerHasScopeJurisdiction,
   officerLocationsSummary,
   roleProjectsLines,
@@ -112,6 +113,7 @@ export function OfficersTab({
         o.email ?? "",
         o.phone_number ?? "",
         ...o.role_keys,
+        ...(o.scopes ?? []).map((s) => s.role_key),
         ...o.organization_ids,
         ...o.location_codes,
         ...(o.project_codes ?? []),
@@ -122,7 +124,7 @@ export function OfficersTab({
         .join(" ")
         .toLowerCase();
       const matchesQ = !q || hay.includes(q);
-      const matchesR = !roleFilter || o.role_keys.includes(roleFilter);
+      const matchesR = officerHasRoleKey(o, roleFilter);
       const projCode = projects.find((p) => p.project_id === projectFilter)?.short_code;
       const matchesProj =
         !projectFilter ||

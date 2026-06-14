@@ -432,6 +432,14 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
         except KeycloakPostError as exc:
             if exc.response_code == 409:
                 logger.info("User '%s' already exists (race) — skipping", officer["username"])
+            elif exc.response_code == 400 and "error-person-name-invalid-character" in str(exc):
+                logger.warning(
+                    "User '%s' skipped — Keycloak rejected first/last name (%s / %s): %s",
+                    officer["username"],
+                    officer["firstName"],
+                    officer["lastName"],
+                    exc,
+                )
             else:
                 raise
 

@@ -24,6 +24,9 @@ export const MSG_SUPERVISOR_ONLY_FIELD_REPORT =
 export const MSG_NO_COMPLAINANT_PHONE =
   "No complainant phone number on file. Check Complainant info or ask them to update their contact details.";
 
+export const MSG_UPLOAD_TOO_LARGE =
+  "This file is too large (maximum 20 MB). Try a smaller photo or take a new picture at lower resolution.";
+
 const GENERIC_FAILURE = "Something went wrong. Please try again.";
 
 /** Strip `API 422 /path:` prefix and parse FastAPI JSON `detail`. */
@@ -144,6 +147,10 @@ export function formatUserFacingError(
   context?: FormatErrorContext,
 ): ActionNoticeState {
   const raw = e instanceof Error ? e.message : String(e);
+
+  if (context === "upload" && /413|Request Entity Too Large/i.test(raw)) {
+    return { message: MSG_UPLOAD_TOO_LARGE, kind: "validation" };
+  }
 
   if (raw === MSG_IMAGE_BEFORE_ESCALATE) {
     return { message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" };

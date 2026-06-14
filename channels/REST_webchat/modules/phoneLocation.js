@@ -72,6 +72,9 @@ export async function usePhoneLocation(restSendMessage) {
   uiActions.setInputLocked(true);
   uiActions.setVoiceStatusBanner(get("status_banner.phone_location_getting"));
 
+  // Start GPS during the user gesture (required on iOS Safari before async work).
+  const coordsPromise = getGeolocationPosition();
+
   const transitioned = await restSendMessage(PHONE_LOCATION_PAYLOAD);
   if (!transitioned) {
     uiActions.setVoiceStatusBanner(get("status_banner.phone_location_failed"), {
@@ -83,7 +86,7 @@ export async function usePhoneLocation(restSendMessage) {
   }
 
   try {
-    const coords = await getGeolocationPosition();
+    const coords = await coordsPromise;
     uiActions.setVoiceStatusBanner(get("status_banner.map_saving"));
     const ok = await restSendMessage("", {
       map_pin: { lat: coords.lat, lng: coords.lng },

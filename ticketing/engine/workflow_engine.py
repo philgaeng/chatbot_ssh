@@ -165,13 +165,11 @@ def resolve_workflow(
     2. Legacy projects.standard_workflow_id / seah_workflow_id columns.
     3. Legacy ticketing.workflow_assignments (org / location / project / priority).
     """
-    from ticketing.models.project import Project
+    from ticketing.services.project_routing import load_project_by_code
     from ticketing.services.workflow_routing import resolve_project_workflow
 
     if project_code:
-        project = db.execute(
-            select(Project).where(Project.short_code == project_code)
-        ).scalar_one_or_none()
+        project = load_project_by_code(db, project_code)
         if project:
             wf = resolve_project_workflow(
                 db,
@@ -305,13 +303,11 @@ def _location_codes_in_province(province_code: str, db: Session) -> list[str]:
     return list(rows)
 
 
-def _optional_project_code_match(project_code: Optional[str]):
-    """SQL NULL-safe match for optional project_code on officer scopes."""
-    from ticketing.models.officer_scope import OfficerScope
+def _optional_project_code_match(db: Session, project_ref: Optional[str]):
+    """SQL match for optional project on officer scopes (stable id + legacy codes)."""
+    from ticketing.services.project_routing import officer_scope_project_match
 
-    if project_code is None:
-        return OfficerScope.project_code.is_(None)
-    return OfficerScope.project_code == project_code
+    return officer_scope_project_match(db, project_ref)
 
 
 def _add_province_level_fallback(
@@ -355,7 +351,7 @@ def _add_province_level_fallback(
             select(OfficerScope.user_id).where(
                 *base,
                 OfficerScope.location_code.in_(pool),
-                _optional_project_code_match(proj),
+                _optional_project_code_match(db, proj),
             )
         ).scalars().all()
         _add(rows)
@@ -377,7 +373,10 @@ def _scope_country_fallback_candidates(
     Never used for field roles — see assignment_tier='field'.
     """
     from ticketing.models.officer_scope import OfficerScope
-    from ticketing.models.project import Project
+    from ticketing.services.project_routing import (
+        load_project_ref,
+        officer_scope_project_code_match,
+    )
 
     seen: set[str] = set()
     result: list[str] = []
@@ -397,16 +396,14 @@ def _scope_country_fallback_candidates(
         rows = db.execute(
             select(OfficerScope.user_id).where(
                 *base,
-                _optional_project_code_match(proj),
+                officer_scope_project_code_match(db, proj),
                 OfficerScope.project_id.is_(None),
             )
         ).scalars().all()
         _add(rows)
 
     if project_code:
-        proj = db.execute(
-            select(Project).where(Project.short_code == project_code)
-        ).scalar_one_or_none()
+        proj = load_project_ref(db, project_code)
         if proj:
             rows = db.execute(
                 select(OfficerScope.user_id).where(
@@ -512,7 +509,7 @@ def _scope_candidates(
                 select(OfficerScope.user_id).where(
                     *base,
                     OfficerScope.location_code == location_code,
-                    _optional_project_code_match(proj),
+                    _optional_project_code_match(db, proj),
                     OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
@@ -523,7 +520,7 @@ def _scope_candidates(
                 select(OfficerScope.user_id).where(
                     *base,
                     OfficerScope.location_code.is_(None),
-                    _optional_project_code_match(proj),
+                    _optional_project_code_match(db, proj),
                     OfficerScope.package_id.is_(None),
                 )
             ).scalars().all()
@@ -531,12 +528,11 @@ def _scope_candidates(
 
     # ── A2. Country-wide scopes on project actor orgs (e.g. ADB donor on KL_ROAD) ─
     if project_code:
-        from ticketing.models.project import Project, ProjectOrganization
+        from ticketing.models.project import ProjectOrganization
         from ticketing.services.officer_jurisdiction import is_country_wide_scope
+        from ticketing.services.project_routing import load_project_ref
 
-        proj = db.execute(
-            select(Project).where(Project.short_code == project_code)
-        ).scalar_one_or_none()
+        proj = load_project_ref(db, project_code)
         if proj:
             actor_org_ids = db.execute(
                 select(ProjectOrganization.organization_id).where(
@@ -569,7 +565,7 @@ def _scope_candidates(
                         *base,
                         OfficerScope.location_code.in_(ancestor_only),
                         OfficerScope.includes_children.is_(True),
-                        _optional_project_code_match(proj),
+                        _optional_project_code_match(db, proj),
                         OfficerScope.package_id.is_(None),
                     )
                 ).scalars().all()
@@ -594,9 +590,9 @@ def _scope_candidates(
 
     # ── E. Project-wide scope (all packages under project) ────────────────────
     if project_code:
-        proj = db.execute(
-            select(Project).where(Project.short_code == project_code)
-        ).scalar_one_or_none()
+        from ticketing.services.project_routing import load_project_ref
+
+        proj = load_project_ref(db, project_code)
         if proj:
             rows = db.execute(
                 select(OfficerScope.user_id).where(

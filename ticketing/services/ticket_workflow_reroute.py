@@ -4,12 +4,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ticketing.engine.escalation import _apply_step_tier_roles
 from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_first_step
-from ticketing.models.project import Project
+from ticketing.services.project_routing import load_project_for_ticket
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.services.workflow_routing import (
     effective_intake_route_for_reroute,
@@ -35,12 +34,10 @@ def maybe_reroute_ticket_workflow(
     Re-resolve workflow from categories + stored intake signals.
     Returns True if workflow changed (resets to L1 of new workflow).
     """
-    if not ticket.project_code:
+    if not ticket.project_id and not ticket.project_code:
         return False
 
-    project = db.execute(
-        select(Project).where(Project.short_code == ticket.project_code)
-    ).scalar_one_or_none()
+    project = load_project_for_ticket(db, ticket)
     if not project:
         return False
 

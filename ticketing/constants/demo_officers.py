@@ -71,11 +71,11 @@ DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
         OFFICER_ADMIN, "GRM", "Admin", "super_admin", "DOR",
     ),
     DemoOfficerSpec(
-        OFFICER_COUNTRY_ADMIN_STD, "Country", "Admin (Standard)", "country_admin", "DOR",
+        OFFICER_COUNTRY_ADMIN_STD, "Country", "Admin Standard", "country_admin", "DOR",
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_COUNTRY_ADMIN_SEAH, "Country", "Admin (SEAH)", "country_admin", "DOR",
+        OFFICER_COUNTRY_ADMIN_SEAH, "Country", "Admin SEAH", "country_admin", "DOR",
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(

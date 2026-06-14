@@ -546,6 +546,7 @@ def keycloak_create_user(
         "attributes": {
             "grm_roles": [role_key],
             "organization_id": [organization_id],
+            "phone_number": ["9800000000"],
         },
         "credentials": [{
             "type": "password",

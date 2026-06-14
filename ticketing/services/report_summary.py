@@ -183,11 +183,14 @@ def build_report_summary(
     if not project:
         raise ValueError("Project not found")
 
+    from ticketing.services.project_routing import project_ref_match_clause
+
     q = select(Ticket).where(
         Ticket.is_deleted.is_(False),
-        or_(
-            Ticket.project_id == project_id,
-            Ticket.project_code == project.short_code,
+        project_ref_match_clause(
+            project_id_col=Ticket.project_id,
+            project_code_col=Ticket.project_code,
+            project=project,
         ),
     )
     if not include_seah and not current_user.can_see_seah:

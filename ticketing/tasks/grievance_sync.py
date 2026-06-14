@@ -30,6 +30,7 @@ from ticketing.services.ticket_intake import (
     TicketIntakeError,
     build_backfill_payload_from_grievance_row,
     create_ticket_from_intake,
+    refresh_ticket_routing_from_intake,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,9 @@ def _cache_needs_update(ticket: Ticket, g: dict) -> bool:
         return True
     if g.get("grievance_location") and ticket.grievance_location != g.get("grievance_location"):
         return True
+    loc = g.get("location_code")
+    if loc and ticket.location_code != loc:
+        return True
     return False
 
 
@@ -96,7 +100,28 @@ def _apply_cache(ticket: Ticket, g: dict) -> None:
         ticket.grievance_categories = cats
     if g.get("grievance_location"):
         ticket.grievance_location = g.get("grievance_location")
+    loc = g.get("location_code")
+    if loc:
+        ticket.location_code = loc
     ticket.updated_at = _now()
+
+
+def _refresh_existing_ticket(db: Session, ticket: Ticket, g: dict) -> bool:
+    """Sync grievance text/location onto ticket and retry auto-assign when still unassigned."""
+    had_cache = _cache_needs_update(ticket, g)
+    if had_cache:
+        _apply_cache(ticket, g)
+    try:
+        payload = build_backfill_payload_from_grievance_row(g)
+        refresh_ticket_routing_from_intake(db, payload, source="sync_refresh")
+        return True
+    except TicketIntakeError as exc:
+        logger.warning(
+            "grievance_sync: refresh skipped for %s: %s",
+            g.get("grievance_id"),
+            exc.detail,
+        )
+        return had_cache
 
 
 def _backfill_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
@@ -154,10 +179,9 @@ def sync_grievances(self) -> dict:
             try:
                 existing = tickets_by_gid.get(gid)
                 if existing:
-                    if _cache_needs_update(existing, g):
-                        _apply_cache(existing, g)
+                    if _refresh_existing_ticket(db, existing, g):
                         updated += 1
-                        logger.info("grievance_sync: updated cache for ticket %s", existing.ticket_id)
+                        logger.info("grievance_sync: refreshed ticket %s", existing.ticket_id)
                     else:
                         skipped += 1
                     continue

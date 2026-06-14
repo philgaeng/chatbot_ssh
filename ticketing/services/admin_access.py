@@ -67,6 +67,25 @@ def load_admin_scopes(db: Session, user_id: str) -> list[AdminScopeRow]:
     return [AdminScopeRow.from_model(r) for r in rows]
 
 
+def load_user_role_keys(db: Session, user_id: str) -> list[str]:
+    """Operational roles from ticketing.user_roles (source of truth for roster)."""
+    from ticketing.models.user import Role, UserRole
+
+    rows = db.execute(
+        select(Role.role_key)
+        .join(UserRole, UserRole.role_id == Role.role_id)
+        .where(UserRole.user_id == user_id)
+        .order_by(Role.role_key)
+    ).scalars().all()
+    seen: set[str] = set()
+    out: list[str] = []
+    for rk in rows:
+        if rk not in seen:
+            seen.add(rk)
+            out.append(rk)
+    return out
+
+
 def _normalize_track(track: str | None) -> WorkflowTrack | None:
     if track is None:
         return None

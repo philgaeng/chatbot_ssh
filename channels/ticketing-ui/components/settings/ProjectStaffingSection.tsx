@@ -9,7 +9,7 @@ import {
   type ProjectItem,
   type ProjectOrgItem,
 } from "@/lib/api";
-import { projectStaffingCoverageLine } from "@/lib/officerRosterDisplay";
+import { officerHasRoleKey, projectStaffingCoverageLine } from "@/lib/officerRosterDisplay";
 import { EditOfficerModal } from "@/components/settings/OfficerModals";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 
@@ -174,7 +174,10 @@ export function ProjectStaffingSection({
 
   const roleFilterOptions = useMemo(() => {
     const keys = new Set<string>();
-    onProject.forEach((o) => o.role_keys.forEach((k) => keys.add(k)));
+    onProject.forEach((o) => {
+      o.role_keys.forEach((k) => keys.add(k));
+      (o.scopes ?? []).forEach((s) => keys.add(s.role_key));
+    });
     return [...keys]
       .map((key) => ({ key, label: roleLabel(key) }))
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -203,7 +206,7 @@ export function ProjectStaffingSection({
     const q = searchQ.trim().toLowerCase();
     return onProject.filter((o) => {
       if (orgFilter && !o.organization_ids.includes(orgFilter)) return false;
-      if (roleFilter && !o.role_keys.includes(roleFilter)) return false;
+      if (roleFilter && !officerHasRoleKey(o, roleFilter)) return false;
       if (coverageFilter && !coverageTokens(o, project, pkgById).includes(coverageFilter)) return false;
       if (!q) return true;
       const hay = [

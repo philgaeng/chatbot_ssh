@@ -6,8 +6,10 @@ from typing import Literal
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from ticketing.constants.assignment import COUNTRY_L1_FALLBACK_ROLE
+from ticketing.services.project_routing import project_ref_match_clause
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
 from ticketing.models.project import Project, ProjectOrganization
@@ -24,6 +26,16 @@ from ticketing.services.project_types import (
 CheckSeverity = Literal["block", "warn", "info"]
 CheckStatus = Literal["pass", "warn", "fail", "info"]
 CheckGroup = Literal["routing", "commercial", "officers", "geography", "metadata"]
+
+
+def _officer_scope_for_project(project: Project) -> ColumnElement:
+    from ticketing.models.officer_scope import OfficerScope
+
+    return project_ref_match_clause(
+        project_id_col=OfficerScope.project_id,
+        project_code_col=OfficerScope.project_code,
+        project=project,
+    )
 
 
 @dataclass
@@ -104,10 +116,7 @@ def _has_officer_on_project_wide(
             .where(
                 OfficerScope.role_key == grm_role_key,
                 OfficerScope.package_id.is_(None),
-                or_(
-                    OfficerScope.project_id == project.project_id,
-                    OfficerScope.project_code == project.short_code,
-                ),
+                _officer_scope_for_project(project),
             )
             .limit(1)
         ).scalar_one_or_none()
@@ -399,10 +408,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                     select(OfficerScope.user_id)
                     .where(
                         OfficerScope.role_key == seah_l1,
-                        or_(
-                            OfficerScope.project_id == project.project_id,
-                            OfficerScope.project_code == project.short_code,
-                        ),
+                        _officer_scope_for_project(project),
                     )
                     .limit(1)
                 ).scalar_one_or_none()
@@ -473,10 +479,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 user_ids = db.execute(
                     select(OfficerScope.user_id).where(
                         OfficerScope.role_key == role_key,
-                        or_(
-                            OfficerScope.project_id == project.project_id,
-                            OfficerScope.project_code == project.short_code,
-                        ),
+                        _officer_scope_for_project(project),
                     )
                 ).scalars().all()
                 for uid in user_ids:

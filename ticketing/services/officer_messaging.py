@@ -134,12 +134,12 @@ def require_project_messaging_edit(user: CurrentUser, project: Project) -> None:
 
 
 def resolve_project_id(db: Session, ticket: Ticket) -> str | None:
-    if not ticket.project_code:
-        return None
-    row = db.execute(
-        select(Project.project_id).where(Project.short_code == ticket.project_code)
-    ).scalar_one_or_none()
-    return row
+    if ticket.project_id:
+        return ticket.project_id
+    from ticketing.services.project_routing import load_project_for_ticket
+
+    project = load_project_for_ticket(db, ticket)
+    return project.project_id if project else None
 
 
 def _step_order(db: Session, step_id: str | None) -> int | None:

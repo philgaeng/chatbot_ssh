@@ -1360,8 +1360,8 @@ async function promptExifConsent() {
 
 window.openMapPickerFromBot = ({ defaultLat, defaultLng }) => {
   openMapPicker({
-    defaultLat: defaultLat ?? 27.7172,
-    defaultLng: defaultLng ?? 85.324,
+    defaultLat,
+    defaultLng,
     onConfirm: async ({ lat, lng }) => {
       uiActions.setVoiceStatusBanner(get("status_banner.map_saving"));
       const ok = await restSendMessage("", {

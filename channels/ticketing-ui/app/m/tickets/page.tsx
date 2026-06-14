@@ -7,11 +7,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { listTickets, type TicketListItem } from "@/lib/api";
+import {
+  EMPTY_TICKET_LIST_FILTERS,
+  listTickets,
+  ticketListFiltersActive,
+  ticketListFiltersToApi,
+  type TicketListFilterValues,
+  type TicketListItem,
+} from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { urgencyDotCls, type SlaUrgency } from "@/lib/mobile-constants";
+import { type SlaUrgency } from "@/lib/mobile-constants";
 import { UrgencyDot, IntakeRouteBadge } from "@/lib/icons";
 import { Search } from "lucide-react";
+import { MobileAppHeader } from "@/components/mobile/MobileAppHeader";
+import { MobileTicketFiltersSheet } from "@/components/mobile/MobileTicketFiltersSheet";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
   const urgency: SlaUrgency = ticket.sla_breached ? "overdue" : "none";
@@ -48,58 +57,88 @@ export default function MobileAllTicketsPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [listFilters, setListFilters] = useState<TicketListFilterValues>(EMPTY_TICKET_LIST_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const load = useCallback(() => {
-    if (!isAuthenticated) return;
-    setLoading(true);
-    listTickets({ page_size: 100 })
-      .then((r) => { setTickets(r.items); setTotal(r.total); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+  const filtersActive = ticketListFiltersActive(listFilters) || !!search.trim();
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(
+    (showRefresh = false) => {
+      if (!isAuthenticated) return;
+      if (showRefresh) setRefreshing(true);
+      else setLoading(true);
 
-  const filtered = search.trim()
-    ? tickets.filter((t) =>
-        t.grievance_id.toLowerCase().includes(search.toLowerCase()) ||
-        (t.grievance_summary ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : tickets;
+      const apiFilters = ticketListFiltersToApi(listFilters);
+      if (search.trim() && !apiFilters.q) {
+        apiFilters.q = search.trim();
+      }
+
+      listTickets({ ...apiFilters, page_size: 100 })
+        .then((r) => {
+          setTickets(r.items);
+          setTotal(r.total);
+        })
+        .catch(console.error)
+        .finally(() => {
+          setLoading(false);
+          setRefreshing(false);
+        });
+    },
+    [isAuthenticated, listFilters, search],
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 pt-safe-top pb-2">
-        <div className="flex items-center justify-between py-3">
-          <h1 className="text-lg font-semibold text-gray-900">All Tickets</h1>
-          <span className="text-xs text-gray-400">{total} total</span>
-        </div>
-        {/* Search */}
-        <div className="relative mb-1">
+      <MobileAppHeader
+        title="All Tickets"
+        onRefresh={() => load(true)}
+        refreshing={refreshing}
+        showFilterButton
+        filtersActive={filtersActive}
+        onOpenFilters={() => setFiltersOpen(true)}
+        trailing={<span className="text-xs text-gray-400 px-1">{total}</span>}
+      />
+
+      <MobileTicketFiltersSheet
+        open={filtersOpen}
+        values={listFilters}
+        onChange={setListFilters}
+        onClose={() => setFiltersOpen(false)}
+        onApply={() => load()}
+      />
+
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 pb-2">
+        <div className="relative">
           <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
-            type="text"
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ID or summary…"
-            className="w-full bg-gray-100 rounded-xl pl-8 pr-4 py-2 text-sm focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") load();
+            }}
+            placeholder="Quick search ID or summary…"
+            className="w-full bg-gray-100 rounded-xl pl-8 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto bg-white">
         {loading ? (
           <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
-        ) : filtered.length === 0 ? (
+        ) : tickets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
             <Search size={32} strokeWidth={1.25} className="text-gray-200" />
             <span className="text-sm text-gray-400">No tickets found</span>
           </div>
         ) : (
-          filtered.map((t) => <TicketRow key={t.ticket_id} ticket={t} />)
+          tickets.map((t) => <TicketRow key={t.ticket_id} ticket={t} />)
         )}
       </div>
     </div>

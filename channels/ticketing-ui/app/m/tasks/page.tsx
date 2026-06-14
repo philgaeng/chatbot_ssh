@@ -14,6 +14,7 @@ import { isSiteVisitTask } from "@/lib/field-visit";
 import { TaskTypeIcon } from "@/lib/icons";
 import { Check, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { MobileAppHeader } from "@/components/mobile/MobileAppHeader";
 
 function taskTypeInfo(key: string) {
   return getTaskTypeInfo(key);
@@ -89,15 +90,23 @@ export default function MobileTasksPage() {
   const { isAuthenticated } = useAuth();
   const [tasks, setTasks] = useState<TicketTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => {
-    if (!isAuthenticated) return;
-    setLoading(true);
-    listMyTasks()
-      .then(setTasks)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+  const load = useCallback(
+    (showRefresh = false) => {
+      if (!isAuthenticated) return;
+      if (showRefresh) setRefreshing(true);
+      else setLoading(true);
+      listMyTasks()
+        .then(setTasks)
+        .catch(console.error)
+        .finally(() => {
+          setLoading(false);
+          setRefreshing(false);
+        });
+    },
+    [isAuthenticated],
+  );
 
   useEffect(() => { load(); }, [load]);
 
@@ -107,13 +116,7 @@ export default function MobileTasksPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 pt-safe-top">
-        <div className="flex items-center justify-between py-3">
-          <h1 className="text-lg font-semibold text-gray-900">My Tasks</h1>
-          <button onClick={load} className="text-sm text-blue-600 font-medium">Refresh</button>
-        </div>
-      </div>
+      <MobileAppHeader title="My Tasks" onRefresh={() => load(true)} refreshing={refreshing} />
 
       {/* Task list */}
       <div className="flex-1 overflow-y-auto py-2">

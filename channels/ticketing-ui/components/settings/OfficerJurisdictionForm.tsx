@@ -5,16 +5,25 @@ import {
   listOrganizations,
   listProjects,
   listPackages,
+  getOrgRoles,
   type OrganizationItem,
+  type OrgRole,
   type ProjectItem,
   type PackageItem,
 } from "@/lib/api";
 import {
   DEFAULT_ROUTING_ORG_ROLE,
+  collectOrganizationScopeAssignments,
   isDonorAllProjectsOrg,
+  organizationsForScopeFilter,
+  organizationsOnProject,
+  organizationsOnProjectForScope,
+  orgRoleKeysForOrganization,
   packagesForOrganizationOnProject,
   projectsForOrganization,
   routingOrganizationId,
+  scopeOptionsFromAssignments,
+  type OrgScopeAssignment,
 } from "@/lib/officerJurisdiction";
 import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 import { LocationSearch } from "@/components/LocationSearch";
@@ -51,6 +60,8 @@ export function useOfficerJurisdictionState(
   const [selPkg, setSelPkg] = useState(defaults?.packageId ?? "");
   const [inclChildren, setInclChildren] = useState(false);
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
+  const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
+  const [scopeFilter, setScopeFilter] = useState("");
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [packagesByProject, setPackagesByProject] = useState<Record<string, PackageItem[]>>({});
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -60,12 +71,14 @@ export function useOfficerJurisdictionState(
     setCatalogLoading(true);
     (async () => {
       try {
-        const [orgRows, projectRows] = await Promise.all([
+        const [orgRows, projectRows, roleRows] = await Promise.all([
           listOrganizations(),
           listProjects(undefined, false),
+          getOrgRoles().catch(() => [] as OrgRole[]),
         ]);
         if (cancelled) return;
         setOrgs(orgRows);
+        setOrgRoles(roleRows);
         setProjects(projectRows);
         const pkgEntries = await Promise.all(
           projectRows.map(async (p) => {
@@ -114,7 +127,15 @@ export function useOfficerJurisdictionState(
         } else {
           const project = projects.find((p) => p.project_id === selProject);
           const routed = routingOrganizationId(project);
-          setOrgId(routed ?? "");
+          if (!routed) {
+            setOrgId("");
+          } else if (scopeFilter) {
+            const pkgs = packagesByProject[selProject] ?? [];
+            const allowed = organizationsOnProjectForScope(project, orgs, pkgs, scopeFilter);
+            setOrgId(allowed.some((o) => o.organization_id === routed) ? routed : "");
+          } else {
+            setOrgId(routed);
+          }
         }
       }
       setSelPkg("");
@@ -124,7 +145,7 @@ export function useOfficerJurisdictionState(
     } else if (!lockOrganization) {
       setSelPkg("");
     }
-  }, [projectFirst, projectFirst ? selProject : orgId, lockProject, lockOrganization, projects]);
+  }, [projectFirst, projectFirst ? selProject : orgId, lockProject, lockOrganization, projects, scopeFilter, orgs, packagesByProject]);
 
   useEffect(() => {
     setSelPkg("");
@@ -147,11 +168,54 @@ export function useOfficerJurisdictionState(
     [projects, selProject],
   );
 
-  const orgsOnProject = useMemo(() => {
-    if (!selectedProject) return [];
-    const linked = new Set(selectedProject.organizations.map((o) => o.organization_id));
-    return orgs.filter((o) => linked.has(o.organization_id));
-  }, [selectedProject, orgs]);
+  const scopeAssignments = useMemo(
+    () => collectOrganizationScopeAssignments(projects, packagesByProject),
+    [projects, packagesByProject],
+  );
+
+  const scopeOptions = useMemo(
+    () =>
+      scopeOptionsFromAssignments(
+        scopeAssignments,
+        orgRoles,
+        projectFirst ? selProject || null : null,
+      ),
+    [scopeAssignments, orgRoles, projectFirst, selProject],
+  );
+
+  const orgsOnProject = useMemo(
+    () => organizationsOnProject(selectedProject, orgs, packagesByProject[selProject] ?? []),
+    [selectedProject, orgs, selProject, packagesByProject],
+  );
+
+  const orgsOnProjectFiltered = useMemo(
+    () =>
+      organizationsOnProjectForScope(
+        selectedProject,
+        orgs,
+        packagesByProject[selProject] ?? [],
+        scopeFilter,
+      ),
+    [selectedProject, orgs, selProject, packagesByProject, scopeFilter],
+  );
+
+  const orgsFilteredByScope = useMemo(
+    () => organizationsForScopeFilter(orgs, scopeAssignments, scopeFilter),
+    [orgs, scopeAssignments, scopeFilter],
+  );
+
+  useEffect(() => {
+    if (scopeFilter && orgId) {
+      const allowed = projectFirst
+        ? orgsOnProjectFiltered.some((o) => o.organization_id === orgId)
+        : orgsFilteredByScope.some((o) => o.organization_id === orgId);
+      if (!allowed) setOrgId("");
+    }
+  }, [scopeFilter, orgId, projectFirst, orgsOnProjectFiltered, orgsFilteredByScope]);
+
+  useEffect(() => {
+    setScopeFilter("");
+  }, [projectFirst ? selProject : orgId]);
 
   const filteredPackages = useMemo(
     () =>
@@ -241,15 +305,21 @@ export function useOfficerJurisdictionState(
     inclChildren,
     setInclChildren,
     orgs,
+    orgsFilteredByScope,
     filteredProjects,
     filteredPackages,
     catalogLoading,
+    scopeFilter,
+    setScopeFilter,
+    scopeOptions,
+    scopeAssignments,
     isDonorOrg: isDonorAllProjectsOrg(orgId),
     lockOrganization,
     lockProject,
     countryRole,
     projectFirst,
     orgsOnProject,
+    orgsOnProjectFiltered,
     routingOrgId: routingOrganizationId(selectedProject),
     allProjects: projects,
     reset,
@@ -274,27 +344,83 @@ type FieldsProps = {
   inclChildren: boolean;
   setInclChildren: (v: boolean) => void;
   orgs: OrganizationItem[];
+  orgsFilteredByScope?: OrganizationItem[];
   filteredProjects: ProjectItem[];
   filteredPackages: PackageItem[];
   catalogLoading?: boolean;
+  scopeFilter?: string;
+  setScopeFilter?: (v: string) => void;
+  scopeOptions?: { key: string; label: string }[];
+  scopeAssignments?: OrgScopeAssignment[];
   isDonorOrg?: boolean;
   lockOrganization?: boolean;
   lockProject?: boolean;
   countryRole?: boolean;
   projectFirst?: boolean;
   orgsOnProject?: OrganizationItem[];
+  orgsOnProjectFiltered?: OrganizationItem[];
   routingOrgId?: string | null;
   allProjects?: ProjectItem[];
 };
+
+function orgPickerLabel(
+  org: OrganizationItem,
+  scopeFilter: string,
+  scopeAssignments: OrgScopeAssignment[],
+  projectId?: string | null,
+): string {
+  if (scopeFilter) return org.name;
+  const roles = orgRoleKeysForOrganization(org.organization_id, scopeAssignments, projectId);
+  if (roles.length === 0) return org.name;
+  return `${org.name} (${roles.join(", ")})`;
+}
+
+function OrgScopeFilterSelect({
+  value,
+  onChange,
+  options,
+  disabled,
+  hint,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { key: string; label: string }[];
+  disabled?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-gray-500 block mb-1">Filter by scope</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled || options.length === 0}
+        className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+      >
+        <option value="">
+          {options.length === 0 ? "No scoped organizations yet" : "All scopes"}
+        </option>
+        {options.map((opt) => (
+          <option key={opt.key} value={opt.key}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
 
 export function OfficerJurisdictionFields(props: FieldsProps) {
   const {
     orgId, setOrgId, selProject, setSelProject, selLocs, addLocation, removeLocation,
     selPkg, setSelPkg, inclChildren, setInclChildren,
-    orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
+    orgs, orgsFilteredByScope = orgs, filteredProjects, filteredPackages, catalogLoading, isDonorOrg,
+    scopeFilter = "", setScopeFilter, scopeOptions = [], scopeAssignments = [],
     lockOrganization, lockProject, countryRole = false,
     projectFirst = false,
     orgsOnProject = [],
+    orgsOnProjectFiltered = orgsOnProject,
     routingOrgId = null,
     allProjects = [],
     singlePackage = null,
@@ -386,22 +512,32 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
   );
 
   if (projectFirst) {
+    const orgPickerList = scopeFilter ? orgsOnProjectFiltered : orgsOnProject;
     return (
       <div className="space-y-3">
+        <select
+          value={selProject}
+          onChange={(e) => setSelProject(e.target.value)}
+          disabled={Boolean(lockProject) || catalogLoading}
+          className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+        >
+          <option value="">
+            {catalogLoading ? "Loading projects…" : "Project *"}
+          </option>
+          {allProjects.map((p) => (
+            <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
+          ))}
+        </select>
+        {selProject && setScopeFilter && (
+          <OrgScopeFilterSelect
+            value={scopeFilter}
+            onChange={setScopeFilter}
+            options={scopeOptions}
+            disabled={catalogLoading}
+            hint="Organizations appear under each scope they hold on this project (project actor or package role)."
+          />
+        )}
         <div className="flex items-center gap-2">
-          <select
-            value={selProject}
-            onChange={(e) => setSelProject(e.target.value)}
-            disabled={Boolean(lockProject) || catalogLoading}
-            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-          >
-            <option value="">
-              {catalogLoading ? "Loading projects…" : "Project *"}
-            </option>
-            {allProjects.map((p) => (
-              <option key={p.project_id} value={p.project_id}>{p.short_code} — {p.name}</option>
-            ))}
-          </select>
           {lockOrganization && orgId ? (
             <div className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 bg-gray-50 text-gray-700">
               {lockedOrgName}
@@ -417,19 +553,23 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
               <option value="">
                 {!selProject
                   ? "Select project first"
-                  : orgsOnProject.length === 0
-                    ? "No orgs on project — add under Project actors"
+                  : orgPickerList.length === 0
+                    ? scopeFilter
+                      ? "No organizations with this scope on project"
+                      : "No orgs on project — add under Project actors or packages"
                     : "Organization *"}
               </option>
-              {orgsOnProject.map((o) => (
-                <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+              {orgPickerList.map((o) => (
+                <option key={o.organization_id} value={o.organization_id}>
+                  {orgPickerLabel(o, scopeFilter, scopeAssignments, selProject)}
+                </option>
               ))}
             </select>
           )}
         </div>
-        {selProject && orgsOnProject.length === 0 && (
+        {selProject && orgPickerList.length === 0 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Link organizations to this project first (Projects & packages → Project actors), then invite officers.
+            Link organizations to this project first (Projects & packages → Project actors or package contractors), then invite officers.
           </p>
         )}
         {selProject && routingOrgId && orgId === routingOrgId && (
@@ -447,8 +587,19 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     );
   }
 
+  const orgPickerList = scopeFilter ? orgsFilteredByScope : orgs;
+
   return (
     <div className="space-y-3">
+      {setScopeFilter && (
+        <OrgScopeFilterSelect
+          value={scopeFilter}
+          onChange={setScopeFilter}
+          options={scopeOptions}
+          disabled={catalogLoading}
+          hint="Pick a project role (e.g. implementing agency, contractor) to narrow the organization list."
+        />
+      )}
       <div className="flex items-center gap-2">
         {lockOrganization && orgId ? (
           <div className="w-full text-sm border border-gray-200 rounded px-3 py-1.5 bg-gray-50 text-gray-700">
@@ -462,9 +613,15 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             disabled={lockOrganization}
             className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
           >
-            <option value="">Organization *</option>
-            {orgs.map((o) => (
-              <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+            <option value="">
+              {scopeFilter && orgPickerList.length === 0
+                ? "No organizations with this scope"
+                : "Organization *"}
+            </option>
+            {orgPickerList.map((o) => (
+              <option key={o.organization_id} value={o.organization_id}>
+                {orgPickerLabel(o, scopeFilter, scopeAssignments)}
+              </option>
             ))}
           </select>
         )}

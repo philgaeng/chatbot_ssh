@@ -18,7 +18,7 @@ from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.workflow import WorkflowStep
 from ticketing.services.grievance_content import _coerce_categories
-from ticketing.services.project_routing import resolve_ticket_organization
+from ticketing.services.project_routing import load_project_by_code, resolve_ticket_organization
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +93,9 @@ def _validate_project_intake(db: Session, project_code: Optional[str]) -> None:
     if not project_code:
         return
     from ticketing.services import project_go_live as go_live_svc
+    from ticketing.services.project_routing import load_project_by_code
 
-    proj = db.execute(
-        select(Project).where(Project.short_code == project_code)
-    ).scalar_one_or_none()
+    proj = load_project_by_code(db, project_code)
     if not proj:
         return
     if not proj.is_active:
@@ -107,6 +106,168 @@ def _validate_project_intake(db: Session, project_code: Optional[str]) -> None:
     block = go_live_svc.ticket_intake_block_message(db, proj.project_id)
     if block:
         raise TicketIntakeError(block, status_code=422)
+
+
+def _maybe_auto_assign(
+    db: Session,
+    ticket: Ticket,
+    *,
+    organization_id: str,
+    project_code: Optional[str],
+) -> Optional[str]:
+    """Assign L1 officer when ticket is still unassigned."""
+    if ticket.assigned_to_user_id or not ticket.current_step_id:
+        return None
+    step = db.get(WorkflowStep, ticket.current_step_id)
+    if not step:
+        return None
+    return auto_assign_for_workflow_step(
+        step_role_key=step.assigned_role_key,
+        organization_id=organization_id,
+        location_code=ticket.location_code,
+        project_code=project_code or ticket.project_code,
+        db=db,
+        ticket_package_id=ticket.package_id,
+        supervisor_role=step.supervisor_role,
+    )
+
+
+def _apply_intake_routing_fields(
+    db: Session,
+    ticket: Ticket,
+    payload: TicketCreate,
+    *,
+    project: Optional[Project],
+) -> bool:
+    """Merge routing/geo fields from a later webhook/sync pass. Returns True if changed."""
+    changed = False
+    if payload.location_code and ticket.location_code != payload.location_code:
+        ticket.location_code = payload.location_code
+        changed = True
+    if payload.package_id and ticket.package_id != payload.package_id:
+        ticket.package_id = payload.package_id
+        changed = True
+    if payload.grievance_location and ticket.grievance_location != payload.grievance_location:
+        ticket.grievance_location = payload.grievance_location
+        changed = True
+    if payload.grievance_summary and ticket.grievance_summary != payload.grievance_summary:
+        ticket.grievance_summary = payload.grievance_summary
+        changed = True
+    if payload.session_id and ticket.session_id != payload.session_id:
+        ticket.session_id = payload.session_id
+        changed = True
+    if project is not None:
+        if project.project_id and ticket.project_id != project.project_id:
+            ticket.project_id = project.project_id
+            changed = True
+        if project.short_code and ticket.project_code != project.short_code:
+            ticket.project_code = project.short_code
+            changed = True
+    if changed:
+        ticket.updated_at = _now()
+    return changed
+
+
+def refresh_ticket_routing_from_intake(
+    db: Session,
+    payload: TicketCreate,
+    *,
+    source: str = "webhook_refresh",
+) -> Ticket:
+    """
+    Update an existing ticket with package/location from a later chatbot submit.
+    Re-runs auto-assign when still unassigned.
+    """
+    ticket = db.execute(
+        select(Ticket).where(
+            Ticket.grievance_id == payload.grievance_id,
+            Ticket.is_deleted.is_(False),
+        )
+    ).scalar_one_or_none()
+    if not ticket:
+        raise TicketIntakeError(
+            f"No ticket for grievance_id={payload.grievance_id}",
+            status_code=404,
+        )
+
+    project = load_project_by_code(db, payload.project_code) if payload.project_code else None
+    changed = _apply_intake_routing_fields(db, ticket, payload, project=project)
+
+    organization_id = _effective_organization_id(db, payload)
+    assigned = _maybe_auto_assign(
+        db,
+        ticket,
+        organization_id=organization_id,
+        project_code=payload.project_code,
+    )
+    if assigned:
+        ticket.assigned_to_user_id = assigned
+        ticket.complainant_reply_owner_id = assigned
+        changed = True
+
+    if changed:
+        event = TicketEvent(
+            event_id=_new_id(),
+            ticket_id=ticket.ticket_id,
+            event_type="ROUTING_UPDATED",
+            new_status_code=ticket.status_code,
+            workflow_step_id=ticket.current_step_id,
+            note="Intake routing refreshed (package/location/assign)",
+            payload={
+                "source": source,
+                "location_code": ticket.location_code,
+                "package_id": ticket.package_id,
+                "assigned_to_user_id": ticket.assigned_to_user_id,
+            },
+            seen=True,
+            created_by_user_id="system",
+            created_at=_now(),
+            case_sensitivity="seah" if ticket.is_seah else "standard",
+        )
+        db.add(event)
+        logger.info(
+            "ticket_intake refreshed ticket_id=%s grievance_id=%s package=%s location=%s assigned=%s",
+            ticket.ticket_id,
+            payload.grievance_id,
+            ticket.package_id,
+            ticket.location_code,
+            ticket.assigned_to_user_id,
+        )
+    return ticket
+
+
+def create_or_refresh_ticket_from_intake(
+    db: Session,
+    payload: TicketCreate,
+    *,
+    source: str = "webhook",
+    created_by_user_id: str = "system",
+) -> tuple[Ticket, bool]:
+    """Create ticket, or refresh routing on duplicate grievance_id. Returns (ticket, created)."""
+    existing = db.execute(
+        select(Ticket).where(
+            Ticket.grievance_id == payload.grievance_id,
+            Ticket.is_deleted.is_(False),
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return (
+            refresh_ticket_routing_from_intake(
+                db,
+                payload,
+                source=f"{source}_refresh",
+            ),
+            False,
+        )
+    return (
+        create_ticket_from_intake(
+            db,
+            payload,
+            source=source,
+            created_by_user_id=created_by_user_id,
+        ),
+        True,
+    )
 
 
 def create_ticket_from_intake(
@@ -134,6 +295,8 @@ def create_ticket_from_intake(
     _validate_project_intake(db, payload.project_code)
 
     organization_id = _effective_organization_id(db, payload)
+
+    project = load_project_by_code(db, payload.project_code) if payload.project_code else None
 
     workflow = resolve_workflow(
         organization_id=organization_id,
@@ -184,7 +347,8 @@ def create_ticket_from_intake(
         country_code=payload.country_code,
         organization_id=organization_id,
         location_code=payload.location_code,
-        project_code=payload.project_code,
+        project_id=project.project_id if project else None,
+        project_code=project.short_code if project else payload.project_code,
         status_code="OPEN",
         current_workflow_id=workflow.workflow_id,
         current_step_id=first_step.step_id if first_step else None,

@@ -176,6 +176,13 @@ export function officerLocationsSummary(officer: OfficerRosterEntry): string {
   return compactList(unique, 4) || unique[0];
 }
 
+/** True when role appears on user_roles or any officer_scopes row (roster filter). */
+export function officerHasRoleKey(officer: OfficerRosterEntry, roleKey: string): boolean {
+  if (!roleKey) return true;
+  if (officer.role_keys.includes(roleKey)) return true;
+  return (officer.scopes ?? []).some((s) => s.role_key === roleKey);
+}
+
 export function officerHasScopeJurisdiction(officer: OfficerRosterEntry): boolean {
   const scopes = officer.scopes ?? [];
   if (scopes.length > 0) {

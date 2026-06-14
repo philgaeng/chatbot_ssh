@@ -105,6 +105,80 @@ def _find_keycloak_user(email: str) -> dict[str, Any] | None:
     return None
 
 
+def _names_from_email(email: str) -> tuple[str, str]:
+    local = email.split("@", 1)[0]
+    parts = local.replace(".", " ").replace("-", " ").split()
+    first = parts[0].title() if parts else local
+    last = parts[-1].title() if len(parts) > 1 else "Officer"
+    return first, last
+
+
+def _ensure_keycloak_profile_ready(admin, user: dict[str, Any], email: str) -> None:
+    """
+    Keycloak rejects password grant with 'Account is not fully set up' when required
+    declarative profile fields are missing (email, name, phone_number on grm realm).
+    """
+    uid = user["id"]
+    first, last = _names_from_email(email)
+    attrs = {k: list(v) for k, v in (user.get("attributes") or {}).items()}
+    phone = (attrs.get("phone_number") or [""])[0].strip()
+
+    payload: dict[str, Any] = {
+        "requiredActions": [],
+        "emailVerified": True,
+    }
+    changed = bool(user.get("requiredActions"))
+
+    if not user.get("email"):
+        changed = True
+    if not user.get("firstName"):
+        changed = True
+    if not user.get("lastName"):
+        changed = True
+    if len(phone) < 8:
+        # Placeholder until officer completes profile in Settings (Keycloak requires min 8).
+        attrs["phone_number"] = ["9800000000"]
+        changed = True
+
+    if changed:
+        payload["email"] = user.get("email") or email
+        payload["firstName"] = user.get("firstName") or first
+        payload["lastName"] = user.get("lastName") or last
+        if attrs:
+            payload["attributes"] = attrs
+        admin.update_user(uid, payload)
+
+
+def _password_token_request(
+    token_url: str,
+    client_id: str,
+    client_secret: str,
+    username: str,
+    password: str,
+) -> httpx.Response:
+    return httpx.post(
+        token_url,
+        data={
+            "grant_type": "password",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "username": username,
+            "password": password,
+            "scope": "openid email profile",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=15.0,
+    )
+
+
+def _parse_token_error(resp: httpx.Response) -> tuple[str, str]:
+    try:
+        body = resp.json()
+        return str(body.get("error") or ""), str(body.get("error_description") or body.get("error") or "")
+    except Exception:
+        return "", resp.text[:200]
+
+
 def login_with_password(email: str, password: str) -> dict[str, Any]:
     """Resource-owner password grant via confidential ticketing-api client."""
     if not keycloak_configured():
@@ -117,26 +191,37 @@ def login_with_password(email: str, password: str) -> dict[str, Any]:
     realm_base = _keycloak_realm_base()
     settings = get_settings()
     token_url = f"{realm_base}/protocol/openid-connect/token"
+    client_secret = _api_client_secret()
 
     try:
-        resp = httpx.post(
+        resp = _password_token_request(
             token_url,
-            data={
-                "grant_type": "password",
-                "client_id": settings.keycloak_client_id,
-                "client_secret": _api_client_secret(),
-                "username": normalized,
-                "password": password,
-                "scope": "openid email profile",
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=15.0,
+            settings.keycloak_client_id,
+            client_secret,
+            normalized,
+            password,
         )
     except httpx.HTTPError as exc:
         logger.error("Keycloak token request failed: %s", exc)
         raise AuthLoginError("auth_unavailable", "Sign-in service is temporarily unavailable.", 503) from exc
 
     if resp.status_code == 401:
+        err, desc = _parse_token_error(resp)
+        desc_lower = desc.lower()
+        if err == "unauthorized_client" or "invalid client credentials" in desc_lower:
+            logger.error("Keycloak client authentication failed: %s", desc or err)
+            raise AuthLoginError(
+                "auth_unavailable",
+                "Sign-in service is misconfigured. Contact your administrator.",
+                503,
+            )
+        if err == "invalid_grant" and "invalid user credentials" in desc_lower:
+            raise AuthLoginError(
+                "invalid_credentials",
+                "Incorrect password. Try again or use Forgot password.",
+                401,
+            )
+        logger.warning("Keycloak login unauthorized (%s): %s", err, desc)
         raise AuthLoginError(
             "invalid_credentials",
             "Incorrect password. Try again or use Forgot password.",
@@ -144,17 +229,36 @@ def login_with_password(email: str, password: str) -> dict[str, Any]:
         )
 
     if not resp.is_success:
-        try:
-            body = resp.json()
-            desc = str(body.get("error_description") or body.get("error") or "")
-        except Exception:
-            desc = resp.text[:200]
+        err, desc = _parse_token_error(resp)
         desc_lower = desc.lower()
-        if "not fully set up" in desc_lower or "account is disabled" in desc_lower:
+        if "not fully set up" in desc_lower:
+            user = _find_keycloak_user(normalized)
+            if user:
+                try:
+                    admin = _keycloak_admin()
+                    _ensure_keycloak_profile_ready(admin, user, normalized)
+                    resp = _password_token_request(
+                        token_url,
+                        settings.keycloak_client_id,
+                        client_secret,
+                        normalized,
+                        password,
+                    )
+                    if resp.is_success:
+                        data = resp.json()
+                        if data.get("access_token"):
+                            return data
+                except Exception as exc:
+                    logger.warning("Keycloak profile auto-repair failed for %s: %s", normalized, exc)
             raise AuthLoginError(
                 "account_setup_required",
-                "Your account needs a one-time profile update before you can sign in. "
-                "Use Forgot password to receive a setup link by email.",
+                "Your account profile is incomplete. Use Forgot password once more, or contact your administrator.",
+                403,
+            )
+        if "account is disabled" in desc_lower:
+            raise AuthLoginError(
+                "account_setup_required",
+                "Your account is disabled. Contact your administrator.",
                 403,
             )
         if "user not found" in desc_lower or "invalid user" in desc_lower:
@@ -315,12 +419,5 @@ def reset_password_with_token(token: str, new_password: str) -> str:
 
     admin = _keycloak_admin()
     admin.set_user_password(user["id"], new_password, temporary=False)
-    # Clear required actions so login succeeds after reset.
-    admin.update_user(
-        user["id"],
-        {
-            "requiredActions": [],
-            "emailVerified": True,
-        },
-    )
+    _ensure_keycloak_profile_ready(admin, user, email)
     return email

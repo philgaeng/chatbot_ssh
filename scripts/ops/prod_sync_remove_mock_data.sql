@@ -36,9 +36,6 @@ DELETE FROM grievance_parties
   WHERE grievance_id LIKE 'GRV-2025-%'
      OR complainant_id LIKE 'CPL-2025-%';
 
-DELETE FROM status_update_timeline
-  WHERE grievance_id LIKE 'GRV-2025-%';
-
 DELETE FROM task_entities
   WHERE entity_id LIKE 'GRV-2025-%'
      OR entity_id LIKE 'CPL-2025-%';
@@ -49,15 +46,8 @@ DELETE FROM file_attachments
 DELETE FROM grievance_status_history
   WHERE grievance_id LIKE 'GRV-2025-%';
 
-DELETE FROM grievances_seah
-  WHERE seah_case_id LIKE 'GRV-2025-%'
-     OR complainant_id LIKE 'CPL-2025-%';
-
 DELETE FROM grievances
   WHERE grievance_id LIKE 'GRV-2025-%';
-
-DELETE FROM complainants_seah
-  WHERE complainant_id LIKE 'CPL-2025-%';
 
 DELETE FROM complainants
   WHERE complainant_id LIKE 'CPL-2025-%';

@@ -31,6 +31,30 @@ export function isComposerInteractionSuppressed() {
   return Date.now() < suppressComposerUntil;
 }
 
+const DEFAULT_MAP_CENTER = { lat: 27.7172, lng: 85.324 };
+
+function resolveDeviceMapCenter() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(DEFAULT_MAP_CENTER);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
+      () => resolve(DEFAULT_MAP_CENTER),
+      {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 300000,
+      }
+    );
+  });
+}
+
 function ensureMap(lat, lng) {
   const { mapEl } = getModalElements();
   if (!mapEl || !globalThis.L) return;
@@ -53,7 +77,7 @@ function ensureMap(lat, lng) {
   });
 }
 
-export function openMapPicker({ defaultLat = 27.7172, defaultLng = 85.324, onConfirm }) {
+export function openMapPicker({ defaultLat, defaultLng, onConfirm }) {
   const { modal, confirmBtn, cancelBtn } = getModalElements();
   if (!modal) return;
 
@@ -61,10 +85,18 @@ export function openMapPicker({ defaultLat = 27.7172, defaultLng = 85.324, onCon
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
 
-  setTimeout(() => {
-    ensureMap(defaultLat, defaultLng);
-    mapInstance?.invalidateSize();
-  }, 80);
+  const openWithCenter = (lat, lng) => {
+    setTimeout(() => {
+      ensureMap(lat, lng);
+      mapInstance?.invalidateSize();
+    }, 80);
+  };
+
+  if (defaultLat != null && defaultLng != null) {
+    openWithCenter(defaultLat, defaultLng);
+  } else {
+    resolveDeviceMapCenter().then(({ lat, lng }) => openWithCenter(lat, lng));
+  }
 
   const handleConfirm = (event) => {
     event.preventDefault();

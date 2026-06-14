@@ -119,12 +119,11 @@ class ActionOpenMapPicker(BaseAction):
         tracker: Tracker,
         domain: Dict[Text, Any],
     ) -> List[Dict[Text, Any]]:
+        # Omit default_lat/lng so the web client centers on device GPS (mapPicker.js).
         dispatcher.utter_message(
             json_message={
                 "data": {
                     "event_type": "open_map_picker",
-                    "default_lat": 27.7172,
-                    "default_lng": 85.324,
                 }
             }
         )

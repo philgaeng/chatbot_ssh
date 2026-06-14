@@ -1,17 +1,29 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addScope,
   deleteOfficer,
   deleteScope,
+  getOrgRoles,
   inviteOfficer,
   listOrganizations,
+  listPackages,
+  listProjects,
   listScopes,
   updateOfficerKeycloak,
   type OfficerRosterEntry,
   type OrganizationItem,
+  type OrgRole,
+  type PackageItem,
+  type ProjectItem,
 } from "@/lib/api";
+import {
+  collectOrganizationScopeAssignments,
+  orgRoleKeysForOrganization,
+  organizationsForScopeFilter,
+  scopeOptionsFromAssignments,
+} from "@/lib/officerJurisdiction";
 import {
   OfficerJurisdictionFields,
   useOfficerJurisdictionState,
@@ -102,7 +114,7 @@ export function InviteOfficerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="bg-slate-700 text-white px-6 py-4 flex items-center justify-between">
           <div className="font-semibold">Invite Officer</div>
           <button type="button" onClick={onClose} className="text-slate-300 hover:text-white text-xl">×</button>
@@ -165,6 +177,10 @@ export function EditOfficerModal({
 }) {
   const [rows, setRows] = useState<ScopeDraftRow[]>([]);
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
+  const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [packagesByProject, setPackagesByProject] = useState<Record<string, PackageItem[]>>({});
+  const [scopeFilter, setScopeFilter] = useState("");
   const [selectedOrgId, setSelectedOrgId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,11 +197,25 @@ export function EditOfficerModal({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [scopes, orgList] = await Promise.all([
+      const [scopes, orgList, projectRows, roleRows] = await Promise.all([
         listScopes(officer.user_id),
         listOrganizations(),
+        listProjects(undefined, false),
+        getOrgRoles().catch(() => [] as OrgRole[]),
       ]);
       setOrgs(orgList);
+      setOrgRoles(roleRows);
+      setProjects(projectRows);
+      const pkgEntries = await Promise.all(
+        projectRows.map(async (p) => {
+          try {
+            return [p.project_id, await listPackages(p.project_id)] as const;
+          } catch {
+            return [p.project_id, []] as const;
+          }
+        }),
+      );
+      setPackagesByProject(Object.fromEntries(pkgEntries));
       const draftRows = scopes.map(scopeToDraftRow);
       setRows(draftRows);
       const fromOfficer = officer.organization_ids[0] ?? "";
@@ -197,6 +227,29 @@ export function EditOfficerModal({
       setLoading(false);
     }
   }, [officer.user_id, officer.organization_ids]);
+
+  const scopeAssignments = useMemo(
+    () => collectOrganizationScopeAssignments(projects, packagesByProject),
+    [projects, packagesByProject],
+  );
+
+  const scopeOptions = useMemo(
+    () => scopeOptionsFromAssignments(scopeAssignments, orgRoles),
+    [scopeAssignments, orgRoles],
+  );
+
+  const filteredOrgs = useMemo(
+    () => organizationsForScopeFilter(orgs, scopeAssignments, scopeFilter),
+    [orgs, scopeAssignments, scopeFilter],
+  );
+
+  const orgOptions = useMemo(() => {
+    if (!selectedOrgId || filteredOrgs.some((o) => o.organization_id === selectedOrgId)) {
+      return filteredOrgs;
+    }
+    const current = orgs.find((o) => o.organization_id === selectedOrgId);
+    return current ? [current, ...filteredOrgs] : filteredOrgs;
+  }, [filteredOrgs, orgs, selectedOrgId]);
 
   useEffect(() => {
     load();
@@ -306,24 +359,59 @@ export function EditOfficerModal({
                   will align all roles and scopes to that org.
                 </p>
               )}
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
-                <select
-                  value={selectedOrgId}
-                  onChange={(e) => handleOrganizationChange(e.target.value)}
-                  disabled={rowEditing}
-                  className="w-full max-w-md text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
-                >
-                  <option value="">Select organization…</option>
-                  {orgs.map((o) => (
-                    <option key={o.organization_id} value={o.organization_id}>
-                      {o.name} ({o.organization_id})
+              <div className="space-y-3 max-w-md">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Filter by scope</label>
+                  <select
+                    value={scopeFilter}
+                    onChange={(e) => setScopeFilter(e.target.value)}
+                    disabled={rowEditing || scopeOptions.length === 0}
+                    className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+                  >
+                    <option value="">
+                      {scopeOptions.length === 0 ? "No scoped organizations yet" : "All scopes"}
                     </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Correct mistaken invites (e.g. contractor org vs DOR). Updates roster, scopes, and Keycloak on save.
-                </p>
+                    {scopeOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Organizations with multiple project roles appear when you pick each scope.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Organization *</label>
+                  <select
+                    value={selectedOrgId}
+                    onChange={(e) => handleOrganizationChange(e.target.value)}
+                    disabled={rowEditing}
+                    className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+                  >
+                    <option value="">
+                      {scopeFilter && orgOptions.length === 0
+                        ? "No organizations with this scope"
+                        : "Select organization…"}
+                    </option>
+                    {orgOptions.map((o) => {
+                      const roles = orgRoleKeysForOrganization(o.organization_id, scopeAssignments);
+                      const label = scopeFilter
+                        ? `${o.name} (${o.organization_id})`
+                        : roles.length
+                          ? `${o.name} (${o.organization_id}) — ${roles.join(", ")}`
+                          : `${o.name} (${o.organization_id})`;
+                      return (
+                        <option key={o.organization_id} value={o.organization_id}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Correct mistaken invites (e.g. contractor org vs DOR). Updates roster, scopes, and Keycloak on save.
+                  </p>
+                </div>
               </div>
               <p className="text-xs text-gray-500">
                 Each row is one jurisdiction scope. Edit or delete a row inline, or add a new row. Changes apply when
