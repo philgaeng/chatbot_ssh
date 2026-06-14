@@ -12,6 +12,7 @@ This repository now uses a Docker-first operational model.
 - `scripts/ops/`
   - Operational helper scripts (for example TLS renewal cron install).
   - `test-smtp.sh` / `test_smtp.py`: verify SMTP env, TCP reachability, and optional test send (runs in `backend` container).
+  - `aws_to_prod_db_sync.sh` / `prod_sync_remove_mock_data.sql`: replace prod DB from AWS staging (`make prod-sync-db-from-aws CONFIRM=1`).
 
 ## Removed Legacy Areas
 

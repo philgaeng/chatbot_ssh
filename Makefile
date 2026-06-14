@@ -144,7 +144,7 @@ endef
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full \
-	prod-deploy prod-deploy-light prod-deploy-full ssh-prod \
+	prod-deploy prod-deploy-light prod-deploy-full prod-sync-db-from-aws ssh-prod \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -177,6 +177,7 @@ help:
 	@echo "  make prod-deploy      pull main, migrate, rebuild PROD_DEPLOY_SERVICES"
 	@echo "  make prod-deploy-light UI-only rebuild (+ nginx); no migrations"
 	@echo "  make prod-deploy-full pull main, migrate, rebuild entire stack"
+	@echo "  make prod-sync-db-from-aws CONFIRM=1  replace prod DB from AWS (VPN; downtime OK)"
 	@echo "  Override user/dir: PROD_SERVER_USER=... PROD_REMOTE_DIR=/path/to/nepal_chatbot"
 	@echo "  Or set PROD_SERVER_USER, PROD_HOST, PROD_REMOTE_DIR, PROD_SSH_KEY in env.local"
 	@echo ""
@@ -254,6 +255,15 @@ prod-deploy-full:
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
 	$(SCP_PROD) .dockerignore $(PROD_SERVER_USER)@$(PROD_HOST):$(PROD_REMOTE_DIR)/.dockerignore
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy-full)'
+
+# Replace prod Postgres + uploads from AWS staging. Requires CONFIRM=1 (destructive).
+prod-sync-db-from-aws:
+ifndef CONFIRM
+	$(error Set CONFIRM=1 to replace prod DB from AWS — stops prod stack, wipes public/ticketing/keycloak, restores from 52.76.171.73)
+endif
+	@echo "VPN required. Syncing prod DB from AWS ($(REMOTE_HOST_RUNNING)) → $(PROD_HOST)..."
+	@chmod +x scripts/ops/aws_to_prod_db_sync.sh
+	./scripts/ops/aws_to_prod_db_sync.sh
 
 # ── Migrations (run from repo root; uses POSTGRES_* via backend container) ─────
 migrate_ticketing:
