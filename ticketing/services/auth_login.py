@@ -19,7 +19,8 @@ RESET_TTL_SECONDS = 3600
 CLIENT_API = "ticketing-api"
 
 _ALLOWED_REDIRECT = re.compile(
-    r"^https://(grm-auth\.|grm\.stage\.|grm\.)[\w.-]*facets-ai\.com$|^http://localhost:\d+$",
+    r"^https://(grm-auth\.|grm\.stage\.|grm\.)[\w.-]*(?:facets-ai\.com|dor\.gov\.np)$"
+    r"|^http://localhost:\d+$",
     re.I,
 )
 

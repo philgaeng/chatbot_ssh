@@ -23,8 +23,9 @@ from backend.config.sms_config import (
 )
 from backend.config.smtp_config import (
     SmtpConfig,
-    resolve_smtp_config,
-    smtp_config_summary,
+    SmtpProfileLabel,
+    resolve_smtp_delivery_configs,
+    smtp_delivery_summary,
 )
 from backend.logger.logger import TaskLogger
 from backend.services.db_debug_log import email_send_log_summary, mask_phone_for_log, text_len_for_log
@@ -348,16 +349,19 @@ class EmailClient:
         self.task_logger = TaskLogger(service_name="messaging_service")
         self.logger = self.task_logger.logger
         self.log_event = self.task_logger.log_event
+        self.smtp_profiles: list[tuple[SmtpProfileLabel, SmtpConfig]] = []
+        # First profile (primary when set) — kept for callers that read .smtp_config
         self.smtp_config: SmtpConfig | None = None
 
         try:
-            self.smtp_config = resolve_smtp_config()
-            if not self.smtp_config:
+            self.smtp_profiles = resolve_smtp_delivery_configs()
+            if not self.smtp_profiles:
                 raise ValueError(
-                    "SMTP is not configured. Set SMTP_SERVER, SMTP_USERNAME, "
-                    "SMTP_PASSWORD (and SMTP_FROM)."
+                    "SMTP is not configured. Set SMTP_* and/or TEMP_SMTP_* "
+                    "(SERVER, USERNAME, PASSWORD, FROM)."
                 )
-            self.logger.info("Email transport: SMTP (%s)", smtp_config_summary())
+            self.smtp_config = self.smtp_profiles[0][1]
+            self.logger.info("Email transport: SMTP (%s)", smtp_delivery_summary())
         except Exception as e:
             self.logger.error("Failed to initialize email client: %s", e)
             raise
@@ -372,26 +376,41 @@ class EmailClient:
         body: str,
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> bool:
-        try:
-            self.logger.info(
-                "Attempting to send email via SMTP: %s subject_chars=%s %s",
-                email_send_log_summary(to_emails),
-                len(subject or ""),
-                text_len_for_log("body", body),
-            )
-            return self._send_via_smtp(to_emails, subject, body, attachments=attachments)
-        except Exception as e:
-            self.logger.error("Failed to send email: %s", e)
-            self.logger.error("Email failure: %s", email_send_log_summary(to_emails))
-            self.logger.error("%s", text_len_for_log("subject", subject))
-            self.logger.error("%s", text_len_for_log("body", body))
-            return False
+        self.logger.info(
+            "Attempting to send email via SMTP: %s subject_chars=%s %s",
+            email_send_log_summary(to_emails),
+            len(subject or ""),
+            text_len_for_log("body", body),
+        )
+        for index, (label, cfg) in enumerate(self.smtp_profiles):
+            try:
+                self._send_via_smtp(
+                    to_emails, subject, body, attachments=attachments, cfg=cfg
+                )
+                if index > 0:
+                    self.logger.warning(
+                        "Email delivered via %s SMTP (%s:%s)",
+                        label,
+                        cfg.host,
+                        cfg.port,
+                    )
+                return True
+            except Exception as e:
+                self.logger.warning(
+                    "SMTP %s failed (%s:%s): %s",
+                    label,
+                    cfg.host,
+                    cfg.port,
+                    e,
+                )
+        self.logger.error("Email failure (all SMTP profiles): %s", email_send_log_summary(to_emails))
+        self.logger.error("%s", text_len_for_log("subject", subject))
+        self.logger.error("%s", text_len_for_log("body", body))
+        return False
 
     @contextmanager
-    def _smtp_session(self, timeout: int = 30):
+    def _smtp_session(self, cfg: SmtpConfig, timeout: int = 30):
         """Authenticated SMTP session (SMTPS on 465, STARTTLS on other ports)."""
-        assert self.smtp_config is not None
-        cfg = self.smtp_config
         use_ssl = cfg.port == 465
         smtp_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
         with smtp_cls(cfg.host, cfg.port, timeout=timeout) as smtp:
@@ -411,41 +430,58 @@ class EmailClient:
     ) -> bool:
         """
         Verify SMTP reachability and credentials; optionally send a test message.
+        Tries primary SMTP_* first, then TEMP_SMTP_* fallback.
         """
-        assert self.smtp_config is not None
-        cfg = self.smtp_config
-        try:
-            with self._smtp_session(timeout=timeout) as smtp:
-                smtp.noop()
-                if check_only:
-                    self.logger.info(
-                        "SMTP check-only OK (%s:%s, transport=%s)",
+        for index, (label, cfg) in enumerate(self.smtp_profiles):
+            try:
+                with self._smtp_session(cfg, timeout=timeout) as smtp:
+                    smtp.noop()
+                    if check_only:
+                        self.logger.info(
+                            "SMTP check-only OK [%s] (%s:%s, transport=%s)",
+                            label,
+                            cfg.host,
+                            cfg.port,
+                            "ssl" if cfg.port == 465 else "starttls",
+                        )
+                        return True
+                    if not send_to:
+                        raise ValueError("send_to is required when check_only is False")
+                    subject = "GRM SMTP test"
+                    body = (
+                        "<p>This is a test message from the GRM chatbot SMTP checker.</p>"
+                        f"<p>Profile: {label}</p>"
+                        f"<p>From: {cfg.from_addr}</p>"
+                    )
+                    msg = MIMEText(body, "html", "utf-8")
+                    msg["Subject"] = subject
+                    msg["From"] = formataddr((cfg.from_display, cfg.from_addr))
+                    msg["To"] = ", ".join(send_to)
+                    smtp.sendmail(cfg.from_addr, send_to, msg.as_string())
+                self.logger.info(
+                    "SMTP test email sent [%s] from %s to %s",
+                    label,
+                    cfg.from_addr,
+                    email_send_log_summary(send_to),
+                )
+                if index > 0:
+                    self.logger.warning(
+                        "SMTP test used %s profile (%s:%s)",
+                        label,
                         cfg.host,
                         cfg.port,
-                        "ssl" if cfg.port == 465 else "starttls",
                     )
-                    return True
-                if not send_to:
-                    raise ValueError("send_to is required when check_only is False")
-                subject = "GRM SMTP test"
-                body = (
-                    "<p>This is a test message from the GRM chatbot SMTP checker.</p>"
-                    f"<p>From: {cfg.from_addr}</p>"
+                return True
+            except Exception as e:
+                self.logger.warning(
+                    "SMTP test [%s] failed (%s:%s): %s",
+                    label,
+                    cfg.host,
+                    cfg.port,
+                    e,
                 )
-                msg = MIMEText(body, "html", "utf-8")
-                msg["Subject"] = subject
-                msg["From"] = formataddr((cfg.from_display, cfg.from_addr))
-                msg["To"] = ", ".join(send_to)
-                smtp.sendmail(cfg.from_addr, send_to, msg.as_string())
-            self.logger.info(
-                "SMTP test email sent from %s to %s",
-                cfg.from_addr,
-                email_send_log_summary(send_to),
-            )
-            return True
-        except Exception as e:
-            self.logger.error("SMTP test failed: %s", e)
-            return False
+        self.logger.error("SMTP test failed for all configured profiles")
+        return False
 
     def _send_via_smtp(
         self,
@@ -453,9 +489,9 @@ class EmailClient:
         subject: str,
         body: str,
         attachments: Optional[List[Dict[str, Any]]] = None,
-    ) -> bool:
-        assert self.smtp_config is not None
-        cfg = self.smtp_config
+        *,
+        cfg: SmtpConfig,
+    ) -> None:
         from_header = formataddr((cfg.from_display, cfg.from_addr))
 
         if attachments:
@@ -477,11 +513,10 @@ class EmailClient:
         msg["From"] = from_header
         msg["To"] = ", ".join(to_emails)
 
-        with self._smtp_session(timeout=30) as smtp:
+        with self._smtp_session(cfg, timeout=30) as smtp:
             smtp.sendmail(cfg.from_addr, to_emails, msg.as_string())
 
         self.logger.info("SMTP email sent from %s", cfg.from_addr)
-        return True
 
 
 # Global instance for backward compatibility
