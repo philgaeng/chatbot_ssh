@@ -103,7 +103,7 @@ set -e; \
 	cd $(1) && \
 	git fetch origin && \
 	git checkout main && \
-	git checkout -- docker-compose.aws.yml && \
+	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin main && \
 	echo "$(3): rebuilding $(2) (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
 	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(2),$(3)) && \
@@ -152,7 +152,7 @@ set -e; \
 	cd $(1) && \
 	git fetch origin && \
 	git checkout main && \
-	git checkout -- docker-compose.aws.yml && \
+	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin main && \
 	echo "full deploy: building all compose services sequentially" && \
 	for svc in $$($(REMOTE_COMPOSE) config --services); do \
@@ -268,7 +268,6 @@ ssh-prod:
 
 prod-deploy:
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
-	$(SCP_PROD) .dockerignore $(PROD_SERVER_USER)@$(PROD_HOST):$(PROD_REMOTE_DIR)/.dockerignore
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy)'
 
 prod-deploy-light:
@@ -277,7 +276,6 @@ prod-deploy-light:
 
 prod-deploy-full:
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
-	$(SCP_PROD) .dockerignore $(PROD_SERVER_USER)@$(PROD_HOST):$(PROD_REMOTE_DIR)/.dockerignore
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy-full)'
 
 # Replace prod Postgres + uploads from AWS staging. Requires CONFIRM=1 (destructive).
