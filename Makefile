@@ -65,7 +65,8 @@ COMPOSE_AWS = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml 
 COMPOSE_AWS_AUTH = $(COMPOSE_AWS) --profile auth
 
 # Remote hosts (AWS + prod) use the same compose overlay on the server.
-REMOTE_COMPOSE = docker compose --env-file env.local \
+# COMPOSE_PARALLEL_LIMIT=1 — EC2 stalls when multiple Next.js + Python images build at once.
+REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
   --profile auth
 
@@ -73,11 +74,28 @@ CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm ngin
 TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
 AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 # Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP). Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
-AWS_DEPLOY_SERVICES ?= grm_ui grm_ui_auth ticketing_api ticketing_api_auth backend celery_default
+# Build order matters: Python/API images first, Next.js UIs last (sequential loop below).
+AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth grm_ui
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
 AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
 PROD_DEPLOY_SERVICES ?= $(AWS_DEPLOY_SERVICES)
 PROD_DEPLOY_LIGHT_SERVICES ?= $(AWS_DEPLOY_LIGHT_SERVICES)
+
+# $(1)=space-separated service names, $(2)=deploy label — one image at a time (no parallel build).
+define REMOTE_BUILD_SERVICES_SEQUENTIAL
+for svc in $(1); do \
+	echo "$(2): build $$svc" && \
+	$(REMOTE_COMPOSE) build --pull "$$svc" || exit 1; \
+done
+endef
+
+# Same without --pull (light UI-only deploy).
+define REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL
+for svc in $(1); do \
+	echo "$(2): build $$svc" && \
+	$(REMOTE_COMPOSE) build "$$svc" || exit 1; \
+done
+endef
 
 # Shared remote deploy steps (Make expands $(1)=remote dir, $(2)=services, $(3)=label).
 define REMOTE_DEPLOY_CORE
@@ -87,9 +105,10 @@ set -e; \
 	git checkout main && \
 	git checkout -- docker-compose.aws.yml && \
 	git pull --ff-only origin main && \
-	echo "$(3): rebuilding $(2)" && \
-	$(REMOTE_COMPOSE) build --pull $(2) && \
-	$(REMOTE_COMPOSE) up -d --build $(2) && \
+	echo "$(3): rebuilding $(2) (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
+	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(2),$(3)) && \
+	echo "$(3): starting $(2)" && \
+	$(REMOTE_COMPOSE) up -d $(2) && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 endef
@@ -117,9 +136,9 @@ set -e; \
 	git checkout main && \
 	git reset --hard origin/main && \
 	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
-	echo "$(3): rebuilding $(2)" && \
-	$(REMOTE_COMPOSE) build $(filter-out nginx,$(2)) && \
-	$(REMOTE_COMPOSE) up -d --build $(filter-out nginx,$(2)) && \
+	echo "$(3): rebuilding $(2) (sequential)" && \
+	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL,$(filter-out nginx,$(2)),$(3)) && \
+	$(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
 	$(REMOTE_COMPOSE) up -d nginx && \
 	ui_auth_port="$$(docker compose --env-file env.local \
 	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
@@ -135,8 +154,13 @@ set -e; \
 	git checkout main && \
 	git checkout -- docker-compose.aws.yml && \
 	git pull --ff-only origin main && \
-	$(REMOTE_COMPOSE) build --pull grm_ui grm_ui_auth && \
-	$(REMOTE_COMPOSE) up -d --build && \
+	echo "full deploy: building all compose services sequentially" && \
+	for svc in $$($(REMOTE_COMPOSE) config --services); do \
+		echo "full deploy: build $$svc" && \
+		$(REMOTE_COMPOSE) build --pull "$$svc" || exit 1; \
+	done && \
+	echo "full deploy: starting stack" && \
+	$(REMOTE_COMPOSE) up -d && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 endef
@@ -167,9 +191,9 @@ help:
 	@echo ""
 	@echo "AWS staging (EC2 key SSH — $(REMOTE_HOST_RUNNING)):"
 	@echo "  make aws-up           rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy       pull main, migrate, rebuild AWS_DEPLOY_SERVICES"
-	@echo "  make aws-deploy-light pull main, rebuild UI (+ nginx); no migrations"
-	@echo "  make aws-deploy-full  pull main, migrate, rebuild entire stack"
+	@echo "  make aws-deploy       pull main, migrate, rebuild AWS_DEPLOY_SERVICES (one image at a time)"
+	@echo "  make aws-deploy-light pull main, rebuild UI (+ nginx); no migrations (sequential builds)"
+	@echo "  make aws-deploy-full  pull main, migrate, rebuild entire stack (sequential builds)"
 	@echo "  make ssh-running      open SSH session to staging"
 	@echo ""
 	@echo "Production (VPN + password SSH — $(PROD_HOST)):"

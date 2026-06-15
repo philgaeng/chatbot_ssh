@@ -28,3 +28,5 @@ deployment_environment_urls.local.yaml
 **/.rasa
 **/.rasa/cache
 dev-scripts/
+# Certbot/Let's Encrypt on prod — root-owned; never part of image build context
+deployment/certbot
