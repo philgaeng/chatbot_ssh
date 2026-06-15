@@ -546,6 +546,9 @@ def delete_admin_scope(
         if scope.user_id != current_user.user_id:
             raise HTTPException(status_code=403, detail="Cannot revoke this assignment")
     db.delete(scope)
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, scope.user_id)
     db.commit()
 
 
@@ -602,6 +605,9 @@ def assign_role(
         target_user_id=user_id,
         payload={"role_id": str(payload.role_id), "organization_id": payload.organization_id},
     )
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, user_id)
     db.commit()
     db.refresh(user_role)
     return user_role
@@ -631,6 +637,9 @@ def remove_role(
         payload={"user_role_id": user_role_id, "role_id": str(user_role.role_id)},
     )
     db.delete(user_role)
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, user_id)
     db.commit()
 
 
@@ -770,12 +779,22 @@ def list_officer_roster(
 
     def _entry(uid: str) -> OfficerRosterEntry:
         kc = kc_profiles.get(uid.lower()) if "@" in uid else None
+        effective_keys: list[str] = []
+        seen_rk: set[str] = set()
+        for rk in role_keys_by.get(uid, []):
+            if rk not in seen_rk:
+                seen_rk.add(rk)
+                effective_keys.append(rk)
+        for scope in scope_detail_by.get(uid, []):
+            if scope.role_key and scope.role_key not in seen_rk:
+                seen_rk.add(scope.role_key)
+                effective_keys.append(scope.role_key)
         return OfficerRosterEntry(
             user_id=uid,
             display_name=kc.display_name if kc else _display_name_from_user_id(uid),
             email=kc.email if kc else _email_hint(uid),
             phone_number=(kc.phone_number if kc and kc.phone_number else None),
-            role_keys=role_keys_by[uid],
+            role_keys=effective_keys,
             organization_ids=sorted(orgs_by[uid]),
             location_codes=sorted(locs_by[uid]),
             project_codes=sorted(proj_by.get(uid, set())),
@@ -971,6 +990,9 @@ def add_user_scope(
             "location_code": payload.location_code,
         },
     )
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, user_id)
     db.commit()
     db.refresh(scope)
     return scope
@@ -1000,6 +1022,9 @@ def remove_user_scope(
         payload={"scope_id": scope_id, "role_key": scope.role_key},
     )
     db.delete(scope)
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, user_id)
     db.commit()
 
 
@@ -1093,6 +1118,30 @@ def patch_my_preferences(
         preferred_language=body.preferred_language,
         org_default_language=org_default,
         effective_language=effective,
+    )
+
+
+# ── Officer self-service profile (Keycloak) ───────────────────────────────────
+
+class OfficerSessionResponse(BaseModel):
+    """Effective permissions context for the signed-in officer (DB-derived)."""
+    user_id: str
+    role_keys: list[str]
+    organization_id: Optional[str] = None
+
+
+@router.get(
+    "/users/me/session",
+    response_model=OfficerSessionResponse,
+    summary="Current officer session — effective role keys from DB scopes + roster",
+)
+def get_my_session(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> OfficerSessionResponse:
+    return OfficerSessionResponse(
+        user_id=current_user.user_id,
+        role_keys=list(current_user.role_keys),
+        organization_id=current_user.organization_id or None,
     )
 
 
@@ -1251,6 +1300,9 @@ def invite_officer(
         target_user_id=email,
         payload=juris.model_dump(),
     )
+    from ticketing.services.officer_admin import sync_officer_keycloak_roles
+
+    sync_officer_keycloak_roles(db, email)
     db.commit()
 
     msg = (
@@ -1319,8 +1371,8 @@ def update_officer(
 ) -> OfficerUpdateResponse:
     from ticketing.services.officer_admin import (
         apply_officer_organization,
-        keycloak_update_user_attributes,
         log_admin_audit,
+        sync_officer_keycloak_roles,
     )
 
     if not db.execute(select(UserRole.user_id).where(UserRole.user_id == user_id).limit(1)).scalar_one_or_none():
@@ -1331,12 +1383,7 @@ def update_officer(
     )
 
     if body.sync_keycloak:
-        keycloak_update_user_attributes(
-            user_id,
-            body.role_keys,
-            body.organization_id,
-            body.location_code,
-        )
+        sync_officer_keycloak_roles(db, user_id)
 
     audit_payload = {
         **body.model_dump(),

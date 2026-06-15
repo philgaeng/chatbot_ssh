@@ -550,7 +550,9 @@ def list_tickets(
             from ticketing.services.officer_jurisdiction import scope_ticket_filter
 
             scope_conditions = [scope_ticket_filter(db, scope) for scope in scopes]
-            # Also include viewed tickets outside the normal scope
+            # Assigned / watched tickets stay visible even when jurisdiction is narrower
+            # (e.g. package-scoped officer auto-assigned a project-wide ticket).
+            scope_conditions.append(Ticket.assigned_to_user_id == current_user.user_id)
             if viewed_ticket_ids:
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
             stmt = stmt.where(or_(*scope_conditions))

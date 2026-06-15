@@ -321,14 +321,22 @@ def _normalize_officer_email(email: str) -> str:
 
 
 def _officer_role_keys(db: Session, email: str) -> list[str]:
+    """Effective role keys for Keycloak sync (user_roles + scopes + admin_scopes)."""
+    from ticketing.services.admin_access import load_effective_role_keys
+
+    return load_effective_role_keys(db, _normalize_officer_email(email))
+
+
+def sync_officer_keycloak_roles(db: Session, email: str) -> None:
+    """Push effective DB role keys to Keycloak grm_roles attribute."""
+    if not keycloak_configured():
+        return
     normalized = _normalize_officer_email(email)
-    return list(
-        db.execute(
-            select(Role.role_key)
-            .join(UserRole, UserRole.role_id == Role.role_id)
-            .where(func.lower(UserRole.user_id) == normalized)
-        ).scalars().all()
-    )
+    role_keys = _officer_role_keys(db, normalized)
+    if not role_keys:
+        return
+    org_id = _primary_officer_organization(db, normalized)
+    keycloak_update_user_attributes(normalized, role_keys, org_id)
 
 
 def _primary_officer_organization(db: Session, email: str) -> str:

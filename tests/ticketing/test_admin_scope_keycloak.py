@@ -7,6 +7,7 @@ import pytest
 
 from ticketing.services.officer_admin import (
     officer_eligible_for_invite_resend,
+    officer_invite_setup_pending,
     provision_admin_scope_keycloak,
 )
 
@@ -42,6 +43,36 @@ def test_officer_eligible_for_invite_resend(kc_user, onboarding, expected):
         return_value=kc_user,
     ):
         assert officer_eligible_for_invite_resend(db, "user@example.com") is expected
+
+
+@pytest.mark.parametrize(
+    ("kc_user", "onboarding", "expected"),
+    [
+        ({"enabled": True, "requiredActions": []}, "invited", True),
+        ({"enabled": True, "requiredActions": []}, "active", False),
+        ({"enabled": True, "requiredActions": []}, None, False),
+        ({"enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}, None, True),
+    ],
+)
+def test_officer_invite_setup_pending(kc_user, onboarding, expected):
+    db = MagicMock()
+    if onboarding:
+        ob = MagicMock()
+        ob.status = onboarding
+        db.get.return_value = ob
+    else:
+        db.get.return_value = None
+
+    with patch(
+        "ticketing.services.officer_admin.keycloak_configured",
+        return_value=True,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_admin",
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_find_user",
+        return_value=kc_user,
+    ):
+        assert officer_invite_setup_pending(db, "user@example.com") is expected
 
 
 def test_provision_admin_scope_creates_keycloak_user_when_missing():

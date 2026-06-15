@@ -68,21 +68,76 @@ def load_admin_scopes(db: Session, user_id: str) -> list[AdminScopeRow]:
 
 
 def load_user_role_keys(db: Session, user_id: str) -> list[str]:
-    """Operational roles from ticketing.user_roles (source of truth for roster)."""
+    """Role keys from ticketing.user_roles only (roster membership rows)."""
+    from sqlalchemy import func
+
     from ticketing.models.user import Role, UserRole
 
+    normalized = user_id.strip().lower()
     rows = db.execute(
         select(Role.role_key)
         .join(UserRole, UserRole.role_id == Role.role_id)
-        .where(UserRole.user_id == user_id)
+        .where(func.lower(UserRole.user_id) == normalized)
         .order_by(Role.role_key)
     ).scalars().all()
     seen: set[str] = set()
     out: list[str] = []
     for rk in rows:
-        if rk not in seen:
+        if rk and rk not in seen:
             seen.add(rk)
             out.append(rk)
+    return out
+
+
+def load_effective_role_keys(db: Session, user_id: str) -> list[str]:
+    """
+    Operational + admin role keys for permissions, JWT sync, and UI.
+
+    Source of truth (union, de-duplicated):
+      - ticketing.user_roles (roster membership)
+      - ticketing.officer_scopes.role_key (jurisdiction / workflow eligibility)
+      - ticketing.admin_scopes.role_key (scoped admin ladder)
+
+    Workflow step assigned_role_key references the same ticketing.roles.role_key
+    catalog; officer_scopes must use keys bound to workflow steps for auto-assign.
+    """
+    from sqlalchemy import func
+
+    from ticketing.models.officer_scope import OfficerScope
+    from ticketing.models.user import Role, UserRole
+
+    normalized = user_id.strip().lower()
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def _add(keys) -> None:
+        for rk in keys:
+            if rk and rk not in seen:
+                seen.add(rk)
+                out.append(rk)
+
+    _add(
+        db.execute(
+            select(Role.role_key)
+            .join(UserRole, UserRole.role_id == Role.role_id)
+            .where(func.lower(UserRole.user_id) == normalized)
+            .order_by(Role.role_key)
+        ).scalars().all()
+    )
+    _add(
+        db.execute(
+            select(OfficerScope.role_key)
+            .where(func.lower(OfficerScope.user_id) == normalized)
+            .order_by(OfficerScope.role_key)
+        ).scalars().all()
+    )
+    _add(
+        db.execute(
+            select(AdminScope.role_key)
+            .where(func.lower(AdminScope.user_id) == normalized)
+            .order_by(AdminScope.role_key)
+        ).scalars().all()
+    )
     return out
 
 

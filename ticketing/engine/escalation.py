@@ -94,6 +94,26 @@ def _add_event(
 
 # ── Tier management helpers ───────────────────────────────────────────────────
 
+def _get_viewer(db: Session, ticket_id: str, user_id: str) -> TicketViewer | None:
+    """Return viewer row from DB or pending session inserts (pre-flush)."""
+    existing = db.execute(
+        select(TicketViewer).where(
+            TicketViewer.ticket_id == ticket_id,
+            TicketViewer.user_id == user_id,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    for pending in db.new:
+        if (
+            isinstance(pending, TicketViewer)
+            and pending.ticket_id == ticket_id
+            and pending.user_id == user_id
+        ):
+            return pending
+    return None
+
+
 def _ensure_viewer(
     db: Session,
     ticket_id: str,
@@ -106,13 +126,7 @@ def _ensure_viewer(
     If the row already exists, updates tier to the new value.
     Returns the viewer row.
     """
-    from sqlalchemy import select
-    existing = db.execute(
-        select(TicketViewer).where(
-            TicketViewer.ticket_id == ticket_id,
-            TicketViewer.user_id == user_id,
-        )
-    ).scalar_one_or_none()
+    existing = _get_viewer(db, ticket_id, user_id)
 
     if existing:
         if existing.tier != tier:
@@ -169,12 +183,7 @@ def _apply_step_tier_roles(
         )
         for uid in candidates:
             # Don't demote an existing Informed to Observer
-            existing = db.execute(
-                select(TicketViewer).where(
-                    TicketViewer.ticket_id == ticket.ticket_id,
-                    TicketViewer.user_id == uid,
-                )
-            ).scalar_one_or_none()
+            existing = _get_viewer(db, ticket.ticket_id, uid)
             if existing is None or existing.tier == "observer":
                 _ensure_viewer(db, ticket.ticket_id, uid, "observer", "system")
 
@@ -188,12 +197,7 @@ def _apply_step_tier_roles(
             project_code=ticket.project_code,
             db=db,
         ):
-            existing = db.execute(
-                select(TicketViewer).where(
-                    TicketViewer.ticket_id == ticket.ticket_id,
-                    TicketViewer.user_id == uid,
-                )
-            ).scalar_one_or_none()
+            existing = _get_viewer(db, ticket.ticket_id, uid)
             # Add as supervisor; don't demote someone who is already Informed (higher tier)
             if existing is None or existing.tier == "observer":
                 _ensure_viewer(db, ticket.ticket_id, uid, "supervisor", "system")

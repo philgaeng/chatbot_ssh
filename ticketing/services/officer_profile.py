@@ -63,7 +63,9 @@ def _attrs(user: dict) -> dict[str, list[str]]:
 
 
 def get_officer_profile(db: Session, user_id: str) -> OfficerProfileResponse:
-    role_keys = _db_role_keys(db, user_id)
+    from ticketing.services.admin_access import load_effective_role_keys
+
+    role_keys = load_effective_role_keys(db, user_id)
     email = user_id if "@" in user_id else user_id
     first_name = ""
     last_name = ""

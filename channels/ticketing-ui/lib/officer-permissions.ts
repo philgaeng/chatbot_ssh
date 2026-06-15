@@ -16,14 +16,14 @@ function supervisorAvailable(ticket: TicketLike): boolean {
 function isAssignedActor(
   ticket: TicketLike,
   currentUserId: string,
-  roleKeys: string[],
+  _roleKeys: string[],
 ): boolean {
   if (ticket.status_code === "RESOLVED" || ticket.status_code === "CLOSED") return false;
-  const actorRole = ticket.current_step?.assigned_role_key;
-  if (!actorRole || !roleKeys.includes(actorRole)) return false;
   if (!ticket.assigned_to_user_id) return false;
   const uid = currentUserId.toLowerCase();
   const assignee = ticket.assigned_to_user_id.toLowerCase();
+  // Assignee is the actor for case actions even when JWT user_roles holds a
+  // different org identity (e.g. csc_officer) than the operational scope role.
   return uid === assignee || ticket.assigned_to_user_id === currentUserId;
 }
 

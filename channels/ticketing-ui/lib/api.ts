@@ -2409,6 +2409,16 @@ export interface OfficerProfile {
   role_labels: string[];
 }
 
+export interface OfficerSession {
+  user_id: string;
+  role_keys: string[];
+  organization_id: string | null;
+}
+
+export function getMySession(): Promise<OfficerSession> {
+  return apiFetch<OfficerSession>("/api/v1/users/me/session");
+}
+
 export function getMyProfile(): Promise<OfficerProfile> {
   return apiFetch<OfficerProfile>("/api/v1/users/me/profile");
 }

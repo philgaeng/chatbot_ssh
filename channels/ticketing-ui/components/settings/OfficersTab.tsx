@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  listOfficerRoster,
+  EditOfficerModal,
+  InviteOfficerModal,
+} from "@/components/settings/OfficerModals";
+import {
   deleteOfficer,
-  resendOfficerInvite,
-  listProjects,
+  listOfficerRoster,
   listPackages,
+  listProjects,
+  resendOfficerInvite,
   type OfficerRosterEntry,
-  type ProjectItem,
   type PackageItem,
+  type ProjectItem,
 } from "@/lib/api";
 import {
   officerHasRoleKey,
@@ -17,7 +20,7 @@ import {
   officerLocationsSummary,
   roleProjectsLines,
 } from "@/lib/officerRosterDisplay";
-import { InviteOfficerModal, EditOfficerModal } from "@/components/settings/OfficerModals";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RoleEntry = { key: string; label: string };
 
@@ -35,7 +38,9 @@ export function OfficersTab({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
-  const [editOfficer, setEditOfficer] = useState<OfficerRosterEntry | null>(null);
+  const [editOfficer, setEditOfficer] = useState<OfficerRosterEntry | null>(
+    null,
+  );
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
@@ -125,17 +130,23 @@ export function OfficersTab({
         .toLowerCase();
       const matchesQ = !q || hay.includes(q);
       const matchesR = officerHasRoleKey(o, roleFilter);
-      const projCode = projects.find((p) => p.project_id === projectFilter)?.short_code;
+      const projCode = projects.find(
+        (p) => p.project_id === projectFilter,
+      )?.short_code;
       const matchesProj =
         !projectFilter ||
         (o.project_codes ?? []).includes(projCode ?? "") ||
         (o.scopes ?? []).some(
           (s) =>
             s.project_code === projCode ||
-            (s.project_id && projectById[s.project_id]?.short_code === projCode),
+            (s.project_id &&
+              projectById[s.project_id]?.short_code === projCode),
         );
-      const matchesPkg = !packageFilter || (o.package_ids ?? []).includes(packageFilter);
-      const scopeLocs = (o.scopes ?? []).map((s) => s.location_code).filter(Boolean) as string[];
+      const matchesPkg =
+        !packageFilter || (o.package_ids ?? []).includes(packageFilter);
+      const scopeLocs = (o.scopes ?? [])
+        .map((s) => s.location_code)
+        .filter(Boolean) as string[];
       const locs = scopeLocs.length > 0 ? scopeLocs : o.location_codes;
       const matchesLoc = !locationFilter || locs.includes(locationFilter);
       return matchesQ && matchesR && matchesProj && matchesPkg && matchesLoc;
@@ -177,7 +188,12 @@ export function OfficersTab({
 
   async function handleDeleteOfficer(o: OfficerRosterEntry) {
     const label = o.email ?? o.display_name ?? o.user_id;
-    if (!confirm(`Remove officer ${label} from the system? This cannot be undone.`)) return;
+    if (
+      !confirm(
+        `Remove officer ${label} from the system? This cannot be undone.`,
+      )
+    )
+      return;
     try {
       await deleteOfficer(o.user_id);
       if (editOfficer?.user_id === o.user_id) setEditOfficer(null);
@@ -215,16 +231,20 @@ export function OfficersTab({
       )}
 
       <p className="text-sm text-gray-600 mb-3">
-        Use <strong>Manage</strong> to edit roles, work areas, and account settings. Filters match project, package, or location on each officer&apos;s scopes.
+        Use <strong>Manage</strong> to edit roles, work areas, and account
+        settings. Filters match project, package, or location on each
+        officer&apos;s scopes.
       </p>
 
       {!allowGlobalInvite && (
         <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <p className="font-medium mb-1">Invite officers from the project</p>
           <p className="text-blue-800 text-xs">
-            Open <strong>Projects & packages</strong> → your project → add organizations under <strong>Project actors</strong>,
-            then use <strong>Add officer</strong> on a row or the <strong>Staffing</strong> section.
-            Organizations must be on the project before officers can be scoped there.
+            Open <strong>Projects & packages</strong> → your project → add
+            organizations under <strong>Project actors</strong>, then use{" "}
+            <strong>Add officer</strong> on a row or the{" "}
+            <strong>Staffing</strong> section. Organizations must be on the
+            project before officers can be scoped there.
           </p>
         </div>
       )}
@@ -245,7 +265,9 @@ export function OfficersTab({
         >
           <option value="">All roles</option>
           {roleCatalog.map((r) => (
-            <option key={r.key} value={r.key}>{r.label}</option>
+            <option key={r.key} value={r.key}>
+              {r.label}
+            </option>
           ))}
         </select>
         <select
@@ -259,7 +281,9 @@ export function OfficersTab({
         >
           <option value="">All projects</option>
           {projects.map((p) => (
-            <option key={p.project_id} value={p.project_id}>{p.short_code}</option>
+            <option key={p.project_id} value={p.project_id}>
+              {p.short_code}
+            </option>
           ))}
         </select>
         <select
@@ -271,7 +295,9 @@ export function OfficersTab({
         >
           <option value="">All packages</option>
           {packageOptions.map((pkg) => (
-            <option key={pkg.package_id} value={pkg.package_id}>{pkg.package_code}</option>
+            <option key={pkg.package_id} value={pkg.package_id}>
+              {pkg.package_code}
+            </option>
           ))}
         </select>
         <select
@@ -282,10 +308,16 @@ export function OfficersTab({
         >
           <option value="">All locations</option>
           {locationOptions.map((code) => (
-            <option key={code} value={code}>{code}</option>
+            <option key={code} value={code}>
+              {code}
+            </option>
           ))}
         </select>
-        <button type="button" onClick={() => loadRoster()} className="text-sm text-blue-600 hover:underline py-1.5">
+        <button
+          type="button"
+          onClick={() => loadRoster()}
+          className="text-sm text-blue-600 hover:underline py-1.5"
+        >
           Refresh
         </button>
         {allowGlobalInvite && (
@@ -303,7 +335,9 @@ export function OfficersTab({
       {loadError && <p className="text-sm text-red-600 mb-3">{loadError}</p>}
 
       {!loading && !loadError && filtered.length === 0 && (
-        <p className="text-sm text-gray-500 mb-3">No officers match the current filters.</p>
+        <p className="text-sm text-gray-500 mb-3">
+          No officers match the current filters.
+        </p>
       )}
 
       {!loading && !loadError && filtered.length > 0 && (
@@ -322,7 +356,11 @@ export function OfficersTab({
             </thead>
             <tbody>
               {filtered.map((o) => {
-                const roleLines = roleProjectsLines(o, roleCatalog, projectById);
+                const roleLines = roleProjectsLines(
+                  o,
+                  roleCatalog,
+                  projectById,
+                );
                 const locations = officerLocationsSummary(o);
                 const missingArea = !officerHasScopeJurisdiction(o);
                 const status = o.onboarding_status ?? "active";
@@ -334,7 +372,10 @@ export function OfficersTab({
                     <td className="px-3 py-2.5 font-medium text-gray-800">
                       {o.display_name}
                     </td>
-                    <td className="px-3 py-2.5 text-gray-600 truncate max-w-[14rem]" title={o.email ?? o.user_id}>
+                    <td
+                      className="px-3 py-2.5 text-gray-600 truncate max-w-[14rem]"
+                      title={o.email ?? o.user_id}
+                    >
                       {o.email ?? o.user_id}
                     </td>
                     <td className="px-3 py-2.5 text-gray-600 font-mono text-xs">
@@ -343,7 +384,11 @@ export function OfficersTab({
                     <td className="px-3 py-2.5 text-gray-700 max-w-[16rem]">
                       <ul className="space-y-0.5">
                         {roleLines.map((line) => (
-                          <li key={line} className="text-xs leading-snug" title={line}>
+                          <li
+                            key={line}
+                            className="text-xs leading-snug"
+                            title={line}
+                          >
                             {line}
                           </li>
                         ))}
@@ -351,8 +396,16 @@ export function OfficersTab({
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={missingArea ? "text-amber-800 font-medium text-xs" : "text-gray-700 text-xs font-mono"}
-                        title={missingArea ? "Open Manage to set project, package, or location" : locations}
+                        className={
+                          missingArea
+                            ? "text-amber-800 font-medium text-xs"
+                            : "text-gray-700 text-xs font-mono"
+                        }
+                        title={
+                          missingArea
+                            ? "Open Manage to set project, package, or location"
+                            : locations
+                        }
                       >
                         {locations}
                       </span>
@@ -377,7 +430,9 @@ export function OfficersTab({
                           className="text-sm text-amber-800 hover:underline font-medium mr-3 disabled:opacity-50"
                           title="Send a new setup email (12-hour link; check spam)"
                         >
-                          {resendingId === o.user_id ? "Sending…" : "Resend invite"}
+                          {resendingId === o.user_id
+                            ? "Sending…"
+                            : "Resend invite"}
                         </button>
                       )}
                       <button

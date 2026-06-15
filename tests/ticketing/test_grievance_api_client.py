@@ -43,3 +43,37 @@ def test_patch_grievance_classification_uses_ticketing_secret_key():
     client.patch.assert_called_once()
     _, kwargs = client.patch.call_args
     assert kwargs["headers"]["x-api-key"] == "ticketing-secret"
+
+
+def test_update_grievance_status_uses_backend_body_keys():
+    """POST body must match UpdateStatusBody (status_code, notes) — not status/note."""
+    settings = MagicMock()
+    settings.backend_grievance_base_url = "http://backend:5001"
+
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json.return_value = {"status": "SUCCESS"}
+
+    client = MagicMock()
+    client.post.return_value = response
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=False)
+
+    with patch("ticketing.clients.grievance_api.get_settings", return_value=settings), patch.object(
+        grievance_api, "_client", return_value=client
+    ):
+        grievance_api.update_grievance_status(
+            "B-GR-20260614-KOJH-AAB8",
+            "RESOLVED",
+            note="Officer resolution notes",
+            created_by="officer@grm.local",
+        )
+
+    client.post.assert_called_once_with(
+        "/api/grievance/B-GR-20260614-KOJH-AAB8/status",
+        json={
+            "status_code": "RESOLVED",
+            "notes": "Officer resolution notes",
+            "created_by": "officer@grm.local",
+        },
+    )

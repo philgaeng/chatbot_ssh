@@ -6,7 +6,7 @@ import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
-import { getUserPreferences, getMyProfile, listOfficerRoster, getAdminContext, type OfficerRosterEntry, type AdminContext } from "@/lib/api";
+import { getUserPreferences, getMyProfile, getMySession, listOfficerRoster, getAdminContext, type OfficerRosterEntry, type AdminContext } from "@/lib/api";
 
 const BYPASS_DEFAULT_EMAIL = "admin@grm.local";
 
@@ -134,6 +134,7 @@ export interface AuthContextValue {
   switchBypassUser: (entry: OfficerRosterEntry) => void;
   refreshDisplayName: () => Promise<void>;
   refreshAdminContext: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -178,6 +179,26 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const [bypassRoster, setBypassRoster] = useState<OfficerRosterEntry[] | null>(bypass ? null : []);
   const [bypassRosterError, setBypassRosterError] = useState<string | null>(null);
   const [adminContext, setAdminContext] = useState<AdminContext | null>(null);
+  const [effectiveRoleKeys, setEffectiveRoleKeys] = useState<string[]>([]);
+
+  const refreshSession = useCallback(async () => {
+    if (bypass) return;
+    try {
+      const session = await getMySession();
+      setEffectiveRoleKeys(session.role_keys);
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              "custom:grm_roles": session.role_keys.join(","),
+              "custom:organization_id": session.organization_id ?? prev["custom:organization_id"],
+            }
+          : prev,
+      );
+    } catch {
+      setEffectiveRoleKeys([]);
+    }
+  }, [bypass]);
 
   const client = !bypass
     ? new OIDCAuthClient(
@@ -230,6 +251,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         if (chosen) {
           setBypassUserCookie(chosen);
           setUser(tokenFromRosterRow(chosen));
+          setEffectiveRoleKeys(chosen.role_keys);
         } else {
           clearCookie(BYPASS_COOKIE);
           setUser(fallbackBypassToken());
@@ -250,7 +272,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated || isLoading) return;
     refreshAdminContext();
-  }, [isAuthenticated, isLoading, user?.sub, refreshAdminContext]);
+    refreshSession();
+  }, [isAuthenticated, isLoading, user?.sub, refreshAdminContext, refreshSession]);
 
   useEffect(() => {
     if (bypass) return;
@@ -342,6 +365,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const switchBypassUser = useCallback((entry: OfficerRosterEntry) => {
     setBypassUserCookie(entry);
     setUser(tokenFromRosterRow(entry));
+    setEffectiveRoleKeys(entry.role_keys);
     window.location.href = "/queue";
   }, []);
 
@@ -379,10 +403,13 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     }
   }, [bypass]);
 
-  const roleKeys = ((user?.["custom:grm_roles"] as string | undefined) ?? "")
-    .split(",")
-    .map((r) => r.trim())
-    .filter(Boolean);
+  const roleKeys =
+    effectiveRoleKeys.length > 0
+      ? effectiveRoleKeys
+      : ((user?.["custom:grm_roles"] as string | undefined) ?? "")
+          .split(",")
+          .map((r) => r.trim())
+          .filter(Boolean);
   const perms = derivePermissions(roleKeys, adminContext);
   const adminWorkflowTracks = (adminContext?.admin_workflow_tracks ?? []) as ("standard" | "seah")[];
   const canCreateOperationalRoles =
@@ -419,6 +446,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         switchBypassUser,
         refreshDisplayName,
         refreshAdminContext,
+        refreshSession,
       }}
     >
       {children}

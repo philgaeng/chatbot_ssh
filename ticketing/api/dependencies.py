@@ -37,6 +37,7 @@ from ticketing.services.admin_access import (
     is_project_admin,
     is_super_admin,
     load_admin_scopes,
+    load_effective_role_keys,
     load_user_role_keys,
     require_settings_write,
     require_track_for_mutation,
@@ -219,16 +220,12 @@ def _resolve_user_identity(
 def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
     user.admin_scopes = load_admin_scopes(db, user.user_id)
     if user.user_id and "@" in user.user_id:
-        db_roles = load_user_role_keys(db, user.user_id)
-        if db_roles:
-            if not user.role_keys:
-                user.role_keys = db_roles
-            else:
-                merged = list(user.role_keys)
-                for rk in db_roles:
-                    if rk not in merged:
-                        merged.append(rk)
-                user.role_keys = merged
+        effective = load_effective_role_keys(db, user.user_id)
+        if effective:
+            # DB scopes + roster supersede stale JWT grm_roles claims.
+            user.role_keys = effective
+        elif not user.role_keys:
+            user.role_keys = load_user_role_keys(db, user.user_id)
     return user
 
 

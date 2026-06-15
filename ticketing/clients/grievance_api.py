@@ -56,17 +56,26 @@ def get_grievance_statuses() -> list[dict[str, Any]]:
         return resp.json()
 
 
-def update_grievance_status(grievance_id: str, status: str, note: str = "") -> dict[str, Any]:
+def update_grievance_status(
+    grievance_id: str,
+    status: str,
+    note: str = "",
+    *,
+    created_by: str | None = None,
+) -> dict[str, Any]:
     """
     Update the grievance status on the backend (e.g. when ticket is resolved).
 
-    INTEGRATION POINT: backend/api/routers/grievances.py
-    POST /api/grievance/{grievance_id}/status
+    POST /api/grievance/{grievance_id}/status — body must use status_code + notes
+    (see backend/api/routers/grievance.py UpdateStatusBody).
     """
+    body: dict[str, Any] = {"status_code": status, "notes": note}
+    if created_by:
+        body["created_by"] = created_by
     with _client() as client:
         resp = client.post(
             f"/api/grievance/{grievance_id}/status",
-            json={"status": status, "note": note},
+            json=body,
         )
         resp.raise_for_status()
         return resp.json()
