@@ -53,25 +53,29 @@ def _probe_tcp(host: str, port: int, timeout: float) -> tuple[bool, str]:
 
 
 def _print_config() -> None:
-    from backend.config.smtp_config import missing_smtp_env_fields, resolve_smtp_config, smtp_config_summary
+    from backend.config.smtp_config import (
+        missing_smtp_env_fields,
+        resolve_smtp_delivery_configs,
+        smtp_delivery_summary,
+    )
 
-    missing = missing_smtp_env_fields()
-    if missing:
-        print(f"FAIL: missing SMTP env: {', '.join(missing)}")
+    profiles = resolve_smtp_delivery_configs()
+    if not profiles:
+        missing = missing_smtp_env_fields()
+        hint = f"missing primary SMTP env: {', '.join(missing)}" if missing else "no SMTP_* or TEMP_SMTP_*"
+        print(f"FAIL: {hint}")
         sys.exit(1)
 
-    cfg = resolve_smtp_config()
-    if not cfg:
-        print("FAIL: SMTP is not configured")
-        sys.exit(1)
-
-    summary = smtp_config_summary()
-    transport = "ssl (SMTPS)" if cfg.port == 465 else "starttls"
-    print("SMTP configuration:")
-    print(f"  host:      {summary['host']}")
-    print(f"  port:      {summary['port']} ({transport})")
-    print(f"  username:  {summary['username']}")
-    print(f"  from:      {summary['from_addr']} ({summary['from_display']})")
+    summary = smtp_delivery_summary()
+    print("SMTP delivery profiles (primary → fallback):")
+    for item in summary.get("profiles", []):
+        label = item["label"]
+        transport = "ssl (SMTPS)" if item["port"] == 465 else "starttls"
+        print(f"  [{label}]")
+        print(f"    host:      {item['host']}")
+        print(f"    port:      {item['port']} ({transport})")
+        print(f"    username:  {item['username']}")
+        print(f"    from:      {item['from_addr']} ({item['from_display']})")
 
 
 def main() -> int:
@@ -105,15 +109,14 @@ def main() -> int:
 
     _print_config()
 
-    from backend.config.smtp_config import resolve_smtp_config
     from backend.services.messaging import EmailClient
 
-    cfg = resolve_smtp_config()
-    assert cfg is not None
+    client = EmailClient()
+    primary = client.smtp_profiles[0][1]
 
     print()
-    print(f"Step 1/2: TCP probe {cfg.host}:{cfg.port} ...")
-    ok, detail = _probe_tcp(cfg.host, cfg.port, args.timeout)
+    print(f"Step 1/2: TCP probe {primary.host}:{primary.port} (primary) ...")
+    ok, detail = _probe_tcp(primary.host, primary.port, args.timeout)
     if ok:
         print(f"  OK: {detail}")
     else:
