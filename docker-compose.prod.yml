@@ -1,0 +1,17 @@
+# Nepal production overlay (/opt/grms on VPN host).
+# Use with the AWS + GRM stack:
+#   docker compose --env-file env.local \
+#     -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+#     -f docker-compose.prod.yml --profile auth up -d nginx
+#
+# TLS: after certbot for grm-chatbot.dor.gov.np, switch the nginx conf mount
+# from webchat_rest_compose_prod.conf (HTTP bootstrap) to webchat_rest_compose_prod.tls.conf
+
+services:
+  nginx:
+    volumes: !override
+      - ./deployment/nginx/webchat_rest_compose_prod.tls.conf:/etc/nginx/conf.d/webchat_rest_compose_prod.tls.conf:ro
+      - ./channels/REST_webchat:/app/channels/REST_webchat:ro
+      - ./channels/shared:/app/channels/shared:ro
+      - ./deployment/certbot/www:/var/www/certbot:ro
+      - ./deployment/certbot/conf:/etc/letsencrypt:ro
