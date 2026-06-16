@@ -301,7 +301,7 @@ def _post_logout_redirect_uris() -> str:
         "http://localhost:3001/login",
         "http://localhost:3002/login",
         "https://grm-auth.nepal-gms-chatbot.facets-ai.com/login",
-        "https://grm-auth.grm-chatbot.dor.gov.np/login",
+        "https://grm-chatbot.dor.gov.np/login",
         "https://grm.stage.facets-ai.com/login",
         "https://grm.facets-ai.com/login",
     ])
@@ -320,7 +320,7 @@ def setup_clients(admin: KeycloakAdmin) -> str:
         # EC2: dedicated auth subdomain (Pattern B). Avoids Next.js basePath
         # surgery and keeps the demo UI at the original hostname intact.
         "https://grm-auth.nepal-gms-chatbot.facets-ai.com/*",
-        "https://grm-auth.grm-chatbot.dor.gov.np/*",
+        "https://grm-chatbot.dor.gov.np/*",
         "https://grm.stage.facets-ai.com/*",
         "https://grm.facets-ai.com/*",
     ]
