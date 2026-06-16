@@ -78,8 +78,8 @@ AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
 AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth grm_ui
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
 AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
-PROD_DEPLOY_SERVICES ?= $(AWS_DEPLOY_SERVICES)
-PROD_DEPLOY_LIGHT_SERVICES ?= $(AWS_DEPLOY_LIGHT_SERVICES)
+PROD_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth
+PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui_auth nginx
 
 # $(1)=space-separated service names, $(2)=deploy label — one image at a time (no parallel build).
 define REMOTE_BUILD_SERVICES_SEQUENTIAL
@@ -111,6 +111,18 @@ set -e; \
 	$(REMOTE_COMPOSE) up -d $(2) && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+endef
+
+define REMOTE_VERIFY_GRM_PORTS_PROD
+ui_auth_port="$$(docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  -f docker-compose.prod.yml --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+api_port="$$(docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  -f docker-compose.prod.yml port ticketing_api 5002 2>/dev/null || true)" && \
+case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+echo "$(1) OK: grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port (no demo grm_ui on prod)"
 endef
 
 define REMOTE_VERIFY_GRM_PORTS
@@ -268,7 +280,7 @@ ssh-prod:
 
 prod-deploy:
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
-	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy)'
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy)'
 
 prod-deploy-light:
 	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
@@ -276,7 +288,7 @@ prod-deploy-light:
 
 prod-deploy-full:
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
-	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS,prod-deploy-full)'
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy-full)'
 
 # Replace prod Postgres + uploads from AWS staging. Requires CONFIRM=1 (destructive).
 prod-sync-db-from-aws:

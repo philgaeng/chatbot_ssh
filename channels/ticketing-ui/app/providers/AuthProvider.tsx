@@ -316,6 +316,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
             return;
           }
         } else {
+          clearCookie(BYPASS_COOKIE);
+          clearCookie(LEGACY_MOCK_COOKIE);
           setUser(existing);
           setAccessToken(token);
           setIsAuthenticated(true);
@@ -345,6 +347,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     const tokens = await loginWithPasswordApi(email, password);
     const u = persistAuthTokens(tokens);
     rememberLoginEmail(email);
+    clearCookie(BYPASS_COOKIE);
+    clearCookie(LEGACY_MOCK_COOKIE);
     setUser(u);
     setAccessToken(tokens.access_token);
     setIsAuthenticated(true);
@@ -358,6 +362,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       setBypassUserCookie(null);
       window.location.href = "/login";
     } else {
+      clearCookie(BYPASS_COOKIE);
+      clearCookie(LEGACY_MOCK_COOKIE);
       client!.signOut();
     }
   };

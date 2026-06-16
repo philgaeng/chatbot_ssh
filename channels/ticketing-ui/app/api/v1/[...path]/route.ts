@@ -46,8 +46,11 @@ async function proxy(
     fwdHeaders.set(k, v);
   }
 
-  // Dev-bypass identity (demo build): grm_bypass_user from BypassRoleSwitcher.
-  const bypassCookieRaw = req.cookies.get("grm_bypass_user")?.value;
+  // Dev-bypass identity (demo build only): grm_bypass_user from BypassRoleSwitcher.
+  // On auth builds (NEXT_PUBLIC_BYPASS_AUTH=false) ignore stale demo cookies — otherwise
+  // Keycloak mode rejects x-internal-user-id without x-api-key (401).
+  const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+  const bypassCookieRaw = bypassAuth ? req.cookies.get("grm_bypass_user")?.value : undefined;
   if (bypassCookieRaw) {
     try {
       const identity = JSON.parse(bypassCookieRaw) as {

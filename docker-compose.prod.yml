@@ -2,12 +2,23 @@
 # Use with the AWS + GRM stack:
 #   docker compose --env-file env.local \
 #     -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-#     -f docker-compose.prod.yml --profile auth up -d nginx
+#     -f docker-compose.prod.yml --profile auth up -d
 #
-# TLS: after certbot for grm-chatbot.dor.gov.np, switch the nginx conf mount
-# from webchat_rest_compose_prod.conf (HTTP bootstrap) to webchat_rest_compose_prod.tls.conf
+# Prod env (env.local) — single-host auth on grm-chatbot.dor.gov.np:
+#   KC_HOSTNAME_URL=https://grm-chatbot.dor.gov.np/keycloak
+#   KC_HTTP_RELATIVE_PATH=/keycloak
+#   KEYCLOAK_ISSUER=https://grm-chatbot.dor.gov.np/keycloak/realms/grm
+#   KEYCLOAK_JWKS_URL=http://keycloak:8080/keycloak/realms/grm/protocol/openid-connect/certs
+#   KEYCLOAK_INVITE_REDIRECT_URI=https://grm-chatbot.dor.gov.np/login
+#   NEXT_PUBLIC_OIDC_ISSUER=https://grm-chatbot.dor.gov.np/keycloak/realms/grm
+#
+# TLS: after certbot for grm-chatbot.dor.gov.np, mount webchat_rest_compose_prod.tls.conf
 
 services:
+  # Demo/bypass UI — not used on DOR prod (auth UI serves /queue on the main host).
+  grm_ui:
+    profiles: [demo]
+
   nginx:
     volumes: !override
       - ./deployment/nginx/webchat_rest_compose_prod.tls.conf:/etc/nginx/conf.d/webchat_rest_compose_prod.tls.conf:ro

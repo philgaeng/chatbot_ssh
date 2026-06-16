@@ -182,6 +182,27 @@ def _resolve_user_identity(
             keycloak_sub=uid,
         )
 
+    # Prefer JWT when the browser sent one — stale demo bypass cookies must not
+    # override Keycloak auth via x-internal-user-id injected by the Next proxy.
+    if credentials:
+        from ticketing.auth.keycloak_jwt import user_id_from_keycloak_claims, verify_keycloak_token
+        try:
+            claims = verify_keycloak_token(credentials.credentials)
+        except JWTError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}")
+
+        user_id = user_id_from_keycloak_claims(claims)
+        role_raw = claims.get("custom:grm_roles", "")
+        role_keys = [r.strip() for r in role_raw.split(",") if r.strip()]
+        sub = claims.get("sub")
+        return CurrentUser(
+            user_id=user_id,
+            role_keys=role_keys,
+            organization_id=claims.get("custom:organization_id", ""),
+            location_code=claims.get("custom:location_code"),
+            keycloak_sub=sub if isinstance(sub, str) else None,
+        )
+
     if x_internal_user_id and settings.ticketing_secret_key:
         if x_api_key == settings.ticketing_secret_key:
             return CurrentUser(
@@ -195,26 +216,7 @@ def _resolve_user_identity(
             detail="x-internal-user-id requires a valid x-api-key",
         )
 
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    from ticketing.auth.keycloak_jwt import user_id_from_keycloak_claims, verify_keycloak_token
-    try:
-        claims = verify_keycloak_token(credentials.credentials)
-    except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}")
-
-    user_id = user_id_from_keycloak_claims(claims)
-    role_raw = claims.get("custom:grm_roles", "")
-    role_keys = [r.strip() for r in role_raw.split(",") if r.strip()]
-    sub = claims.get("sub")
-    return CurrentUser(
-        user_id=user_id,
-        role_keys=role_keys,
-        organization_id=claims.get("custom:organization_id", ""),
-        location_code=claims.get("custom:location_code"),
-        keycloak_sub=sub if isinstance(sub, str) else None,
-    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 
 def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
