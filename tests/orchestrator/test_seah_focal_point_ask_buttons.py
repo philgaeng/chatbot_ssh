@@ -1,11 +1,8 @@
-import asyncio
+import pytest
 
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+from tests.orchestrator.conftest import run_async
 
 
 def test_focal_point_2_survivor_risks_ask_includes_buttons(domain):
@@ -14,7 +11,7 @@ def test_focal_point_2_survivor_risks_ask_includes_buttons(domain):
         slots={"language_code": "en"},
         sender_id="focal-risk-test",
     )
-    _run(
+    run_async(
         invoke_action(
             "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks",
             dispatcher,
@@ -42,7 +39,7 @@ def test_focal_point_2_survivor_risks_hides_selected_option(domain):
         },
         sender_id="focal-risk-selected-test",
     )
-    _run(
+    run_async(
         invoke_action(
             "action_ask_form_seah_focal_point_2_seah_focal_survivor_risks",
             dispatcher,

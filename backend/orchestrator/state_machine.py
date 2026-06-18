@@ -262,6 +262,7 @@ PAYLOAD_TO_INTENT = {
     "anonymous": "anonymous",
     "anonymous_with_phone": "anonymous_with_phone",
     "exit": "exit",
+    "attachment_ids_sync": "attachment_ids_sync",
 }
 
 LANGUAGE_TEXT_TO_INTENT = {
@@ -320,6 +321,28 @@ def build_latest_message(text: str, payload: Optional[str], intent: str) -> Dict
     else:
         msg_text = text or (payload or "")
     return {"text": msg_text, "intent": {"name": intent}}
+
+
+_SKIP_PAYLOADS = frozenset({"/skip", "/affirm_skip"})
+
+
+def _buttons_from_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for m in messages or []:
+        for b in m.get("buttons") or []:
+            if b.get("payload"):
+                out.append(b)
+    return out
+
+
+def _derive_expected_input_type(messages: List[Dict[str, Any]]) -> str:
+    """buttons when the turn offers quick replies without Skip; else free text."""
+    buttons = _buttons_from_messages(messages)
+    if not buttons:
+        return "text"
+    if any((b.get("payload") or "") in _SKIP_PAYLOADS for b in buttons):
+        return "text"
+    return "buttons"
 
 
 async def _begin_contact_form(
@@ -424,6 +447,116 @@ async def _begin_map_picker(
     return "map_location"
 
 
+async def _begin_seah_intake(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> str:
+    """Dedicated SEAH intake: mint/reuse IDs, then form_seah_1."""
+    ask_dispatcher = CollectingDispatcher()
+    tracker = SessionTracker(
+        slots=session.get("slots", {}),
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    events = await invoke_action("action_start_seah_intake", ask_dispatcher, tracker, domain)
+    slot_updates.update(events_to_slot_updates(events))
+    dispatcher.messages.extend(ask_dispatcher.messages)
+    session["slots"].update(slot_updates)
+    session["active_loop"] = "form_seah_1"
+    session["requested_slot"] = None
+    next_state = "form_seah_1"
+    session_copy = dict(session)
+    session_copy["slots"] = dict(session["slots"])
+    sensitive_form = _get_form_seah_1()
+    msgs, form_updates, completed = await run_form_turn(
+        sensitive_form, session_copy, None, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        next_state = "contact_form"
+        session["active_loop"] = "form_contact"
+        session["requested_slot"] = None
+    return next_state
+
+
+async def _handle_attachment_ids_sync(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], str, str]:
+    """Sync grievance/complainant IDs after client upload; return to main_menu if no story yet."""
+    sync = (metadata or {}).get("attachment_sync") or {}
+    slots = session.get("slots", {})
+    grievance_id = sync.get("grievance_id") or slots.get("grievance_id")
+    complainant_id = sync.get("complainant_id") or slots.get("complainant_id")
+    if not grievance_id:
+        return (
+            dispatcher.messages,
+            session.get("state", "intro"),
+            _derive_expected_input_type(dispatcher.messages),
+        )
+
+    slot_updates["grievance_id"] = grievance_id
+    if complainant_id:
+        slot_updates["complainant_id"] = complainant_id
+    session["slots"].update(slot_updates)
+
+    story_main = session["slots"].get("story_main")
+    lang = session["slots"].get("language_code") or "en"
+    state = session.get("state", "intro")
+
+    if story_main:
+        if lang == "ne":
+            dispatcher.utter_message(
+                text="तपाईंको फाइल सुरक्षित भयो। तलबाट जारी राख्नुहोस्।"
+            )
+        else:
+            dispatcher.utter_message(
+                text="Your file has been saved. Continue below when you are ready."
+            )
+        return (
+            dispatcher.messages,
+            state,
+            _derive_expected_input_type(dispatcher.messages),
+        )
+
+    session["state"] = "main_menu"
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    if lang == "ne":
+        dispatcher.utter_message(
+            text="तपाईंको फाइल सुरक्षित भयो। कृपया अगाडि बढ्न एउटा विकल्प छान्नुहोस्।"
+        )
+    else:
+        dispatcher.utter_message(
+            text="Your file has been saved. Please choose how you would like to proceed."
+        )
+    main_dispatcher = CollectingDispatcher()
+    main_tracker = SessionTracker(
+        slots=session["slots"],
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    await invoke_action("action_main_menu", main_dispatcher, main_tracker, domain)
+    dispatcher.messages.extend(main_dispatcher.messages)
+    return (
+        dispatcher.messages,
+        "main_menu",
+        _derive_expected_input_type(dispatcher.messages),
+    )
+
+
 async def _begin_road_hazard_intake(
     session: Dict[str, Any],
     dispatcher: CollectingDispatcher,
@@ -520,25 +653,13 @@ async def _restart_intake_from_done(
         )
 
     if intent == "start_seah_intake" and _is_seah_enabled():
-        slot_updates["story_main"] = "seah_intake"
-        slot_updates["grievance_sensitive_issue"] = True
-        session["slots"].update(slot_updates)
-        session["active_loop"] = "form_seah_1"
-        session["requested_slot"] = None
-        next_state = "form_seah_1"
-        session_copy = dict(session)
-        session_copy["slots"] = dict(session["slots"])
-        sensitive_form = _get_form_seah_1()
-        msgs, form_updates, completed = await run_form_turn(
-            sensitive_form, session_copy, None, domain
+        return await _begin_seah_intake(
+            session,
+            dispatcher,
+            domain,
+            slot_updates,
+            latest_message,
         )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            next_state = "contact_form"
-            session["active_loop"] = "form_contact"
-            session["requested_slot"] = None
-        return next_state
 
     return "done"
 
@@ -548,6 +669,7 @@ async def run_flow_turn(
     text: str,
     payload: Optional[str],
     domain: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], str, str]:
     """
     Run one turn of the flow.
@@ -599,7 +721,24 @@ async def run_flow_turn(
         )
         slot_updates.update(events_to_slot_updates(events))
         session["slots"].update(slot_updates)
-        return (dispatcher.messages, next_state, "buttons")
+        return (
+            dispatcher.messages,
+            next_state,
+            _derive_expected_input_type(dispatcher.messages),
+        )
+
+    if intent == "attachment_ids_sync" or (metadata and metadata.get("attachment_sync")):
+        messages, next_state, expected = await _handle_attachment_ids_sync(
+            session,
+            dispatcher,
+            domain,
+            metadata,
+            slot_updates,
+            latest_message,
+        )
+        session["slots"].update(slot_updates)
+        session["state"] = next_state
+        return (messages, next_state, expected)
 
     if state == "intro":
         # First turn: show language selection intro. On subsequent turns, when the
@@ -684,24 +823,13 @@ async def run_flow_turn(
                 prefill_subtype="dust" if intent == "dust_grievance" else None,
             )
         elif intent == "start_seah_intake" and _is_seah_enabled():
-            slot_updates["story_main"] = "seah_intake"
-            slot_updates["grievance_sensitive_issue"] = True
-            session["slots"].update(slot_updates)
-            session["active_loop"] = "form_seah_1"
-            session["requested_slot"] = None
-            next_state = "form_seah_1"
-            session_copy = dict(session)
-            session_copy["slots"] = dict(session["slots"])
-            sensitive_form = _get_form_seah_1()
-            msgs, form_updates, completed = await run_form_turn(
-                sensitive_form, session_copy, None, domain
+            next_state = await _begin_seah_intake(
+                session,
+                dispatcher,
+                domain,
+                slot_updates,
+                latest_message,
             )
-            dispatcher.messages.extend(msgs)
-            slot_updates.update(form_updates)
-            if completed:
-                next_state = "contact_form"
-                session["active_loop"] = "form_contact"
-                session["requested_slot"] = None
         elif intent == "start_seah_intake" and not _is_seah_enabled():
             # Feature-flag off: keep legacy behavior and do not enter dedicated SEAH flow.
             next_state = "main_menu"
@@ -2106,19 +2234,6 @@ async def run_flow_turn(
     if "requested_slot" in slot_updates:
         session["requested_slot"] = slot_updates["requested_slot"]
 
-    expected = "buttons" if next_state in (
-        "intro",
-        "main_menu",
-        "location_consent",
-        "location_method",
-        "map_location",
-    ) else "text"
-    form_states = (
-        "form_grievance", "form_road_hazard", "form_dust", "form_seah_1", "form_seah_2", "form_seah_focal_point_1", "form_seah_focal_point_2",
-        "contact_form", "otp_form", "grievance_review",
-        "status_check_form", "add_more_info_flow", "add_missing_info_flow", "add_missing_info_otp_flow",
-    )
-    if next_state in form_states and session.get("requested_slot"):
-        expected = "text"
+    expected = _derive_expected_input_type(dispatcher.messages)
 
     return (dispatcher.messages, next_state, expected)

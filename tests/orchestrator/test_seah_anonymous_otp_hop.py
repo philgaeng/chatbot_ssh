@@ -1,13 +1,8 @@
 """SEAH anonymous + sensitive: OTP hop should ask for phone (no silent completion)."""
 
-import asyncio
-
 from backend.orchestrator.form_loop import run_form_turn
 from backend.actions.forms.form_otp import ValidateFormOtp
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+from tests.orchestrator.conftest import run_async
 
 
 def test_otp_form_seah_sensitive_anonymous_prompts_for_phone(domain):
@@ -31,7 +26,7 @@ def test_otp_form_seah_sensitive_anonymous_prompts_for_phone(domain):
             "otp_status": None,
         },
     }
-    messages, slot_updates, completed = _run(
+    messages, slot_updates, completed = run_async(
         run_form_turn(form=form, session=session, user_input=None, domain=domain)
     )
     assert completed is False

@@ -111,14 +111,54 @@ def test_task_status_validation_missing_ids(client: TestClient):
 # --- upload-files ---
 
 
-def test_upload_files_no_grievance(client: TestClient):
-    """POST /upload-files without grievance_id returns 400."""
-    r = client.post(
-        "/upload-files",
-        data={"grievance_id": ""},
-        files={"files[]": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
-    )
-    assert r.status_code == 400
+@patch("backend.api.routers.files.process_file_upload_task")
+def test_upload_files_no_grievance_id_auto_mints(mock_task: MagicMock, client: TestClient):
+    """POST /upload-files without grievance_id mints IDs and returns 202."""
+    mock_task.delay.return_value = MagicMock(id="mock-task-id")
+    with patch(
+        "backend.api.routers.files.ensure_intake_records_for_attachment",
+        return_value={
+            "grievance_id": "GR-AUTO-001-B",
+            "complainant_id": "CP-AUTO-001-B",
+        },
+    ) as ensure_mock, patch(
+        "backend.api.routers.files.db_manager.is_grievance_archived",
+        return_value=False,
+    ):
+        r = client.post(
+            "/upload-files",
+            data={"flask_session_id": "sess-auto"},
+            files=[("files[]", ("test.txt", io.BytesIO(b"hello"), "text/plain"))],
+        )
+    assert r.status_code == 202
+    body = r.json()
+    assert body.get("grievance_id") == "GR-AUTO-001-B"
+    assert body.get("complainant_id") == "CP-AUTO-001-B"
+    ensure_mock.assert_called_once()
+    mock_task.delay.assert_called_once()
+
+
+@patch("backend.api.routers.files.process_file_upload_task")
+def test_upload_files_empty_grievance_id_auto_mints(mock_task: MagicMock, client: TestClient):
+    """POST /upload-files with empty grievance_id delegates to auto-mint path."""
+    mock_task.delay.return_value = MagicMock(id="mock-task-id")
+    with patch(
+        "backend.api.routers.files.ensure_intake_records_for_attachment",
+        return_value={
+            "grievance_id": "GR-AUTO-002-B",
+            "complainant_id": "CP-AUTO-002-B",
+        },
+    ) as ensure_mock, patch(
+        "backend.api.routers.files.db_manager.is_grievance_archived",
+        return_value=False,
+    ):
+        r = client.post(
+            "/upload-files",
+            data={"grievance_id": "", "flask_session_id": "sess-123"},
+            files=[("files[]", ("test.txt", io.BytesIO(b"hello"), "text/plain"))],
+        )
+    assert r.status_code == 202
+    ensure_mock.assert_called_once()
 
 
 def test_upload_files_no_files(client: TestClient):

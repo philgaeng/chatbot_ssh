@@ -74,6 +74,8 @@ window.lastBotQuickReplies = null;
 window.lastOrchestratorNextState = null;
 /** `session` = Close session only; `browser` = Close browser only (SEAH / sensitive). */
 window.closeControlsMode = "session";
+/** Last POST /message `expected_input_type` — drives composer mode (`buttons` | `text`). */
+window.lastExpectedInputType = "text";
 /** True after server emits grievance_filed (submit); banner stays through review. */
 window.grievanceFiledPhase = false;
 
@@ -297,7 +299,12 @@ function hideFiledBanner() {
 }
 
 function handleOrchestratorResponse(response) {
-  const { messages = [], next_state, close_controls_mode } = response || {};
+  const {
+    messages = [],
+    next_state,
+    expected_input_type,
+    close_controls_mode,
+  } = response || {};
   const prevOrchestratorState = window.lastOrchestratorNextState;
   window.lastOrchestratorNextState =
     typeof next_state === "string" ? next_state : null;
@@ -359,6 +366,14 @@ function handleOrchestratorResponse(response) {
   ) {
     uiActions.clearVoiceStatusBanner();
   }
+
+  window.lastExpectedInputType =
+    typeof expected_input_type === "string" ? expected_input_type : "text";
+  const composerMode = uiActions.resolveComposerModeFromTurn(
+    window.lastExpectedInputType,
+    window.lastBotQuickReplies
+  );
+  uiActions.setComposerMode(composerMode);
 }
 
 window.updateCloseControlsVisibility = updateCloseControlsVisibility;
@@ -592,7 +607,12 @@ function setupEventListeners() {
   chatLauncher.addEventListener("click", () => {
     chatWidget.style.display = "flex";
     setChatLauncherVisible(false);
-    messageInput.focus();
+    if (
+      !uiActions.isComposerLocked() &&
+      uiActions.getComposerMode() === "text"
+    ) {
+      messageInput.focus();
+    }
     if (!window.introductionSent) {
       void sendIntroduceMessage();
     }
@@ -712,6 +732,7 @@ function resetFrontendState() {
   window.lastBotMessageText = "";
   window.lastBotQuickReplies = null;
   window.lastOrchestratorNextState = null;
+  window.lastExpectedInputType = "text";
   window.closeControlsMode = "session";
   window.grievanceFiledPhase = false;
   attachmentInvitationShown = false;
@@ -728,6 +749,7 @@ function resetFrontendState() {
   }
 
   selectedFiles = [];
+  pendingClientFiles = [];
   uploadInProgress = false;
   pollGeneration++;
   currentUploadFileIds = [];
@@ -743,6 +765,7 @@ function resetFrontendState() {
   uiActions.setVoiceNoteEnabled(false);
   uiActions.clearVoiceStatusBanner();
   uiActions.setInputLocked(false);
+  uiActions.setComposerMode("text");
   uiActions.clearMessages();
 }
 
@@ -767,6 +790,7 @@ window.handleFileAnotherGrievance = async function () {
   window.lastBotQuickReplies = null;
   attachmentInvitationShown = false;
   selectedFiles = [];
+  pendingClientFiles = [];
   if (fileInput) fileInput.value = "";
   uiActions.setGrievanceId(null);
   uiActions.setGrievanceCreatedInDb(false);
@@ -798,6 +822,13 @@ async function handleMessageSubmit(e) {
   e.preventDefault();
   const message = messageInput.value.trim();
   const hasFiles = selectedFiles.length > 0;
+
+  if (
+    !hasFiles &&
+    (uiActions.isComposerLocked() || uiActions.getComposerMode() === "buttons")
+  ) {
+    return;
+  }
 
   if (!message && !hasFiles) {
     showInvalidSendTooltip();
@@ -849,6 +880,7 @@ function takeFileUploadSnapshot() {
     lastBotQuickReplies: Array.isArray(window.lastBotQuickReplies)
       ? window.lastBotQuickReplies.map((r) => ({ ...r }))
       : [],
+    lastExpectedInputType: window.lastExpectedInputType || "text",
   };
 }
 
@@ -962,6 +994,36 @@ function compressFile(file) {
 
 // Global variables
 let selectedFiles = [];
+/** Status-check path: files held until a grievance_id is selected. */
+let pendingClientFiles = [];
+
+function isStatusCheckAwaitingCaseId() {
+  return (
+    window.lastOrchestratorNextState === "status_check_form" &&
+    !window.grievanceId
+  );
+}
+
+window.getPendingAttachmentCount = function getPendingAttachmentCount() {
+  return pendingClientFiles.length;
+};
+
+async function syncAttachmentIdsToSession(grievanceId, complainantId) {
+  if (!grievanceId) return;
+  await restSendMessage("/attachment_ids_sync", {
+    attachment_sync: {
+      grievance_id: grievanceId,
+      complainant_id: complainantId || undefined,
+    },
+  });
+}
+
+window.flushPendingAttachments = async function flushPendingAttachments() {
+  if (!pendingClientFiles.length || !window.grievanceId) return;
+  const batch = pendingClientFiles.splice(0);
+  uiActions.refreshAttachButtonState();
+  await handleFileUpload(batch);
+};
 
 // File upload robustness: snapshot of chat state before user enters file flow (persisted across "Add more" rounds)
 let fileUploadSnapshot = null;
@@ -974,9 +1036,11 @@ async function handleFileUpload(files) {
   console.log("Starting file upload process...", files);
   console.log("Current window.grievanceId:", window.grievanceId);
 
-  if (!window.grievanceId) {
-    uiActions.appendMessage(get("file_upload.no_grievance"), "received");
-    return false;
+  if (isStatusCheckAwaitingCaseId()) {
+    pendingClientFiles.push(...Array.from(files));
+    uiActions.refreshAttachButtonState();
+    uiActions.appendMessage(get("file_upload.queued_until_case"), "received");
+    return true;
   }
 
   const isVoiceOnlyUpload =
@@ -985,14 +1049,12 @@ async function handleFileUpload(files) {
       files[0].name.split(".").pop()?.toLowerCase() || ""
     );
   window.lastUploadWasVoiceOnly = isVoiceOnlyUpload;
-  if (!window.grievanceCreatedInDb && !isVoiceOnlyUpload) {
-    uiActions.appendMessage(get("attach_button.saving"), "received");
-    return false;
-  }
 
   const formData = new FormData();
   const sessionId = window.getSessionId();
-  formData.append("grievance_id", window.grievanceId);
+  if (window.grievanceId) {
+    formData.append("grievance_id", window.grievanceId);
+  }
   if (window.complainantId) {
     formData.append("complainant_id", window.complainantId);
   }
@@ -1077,6 +1139,14 @@ async function handleFileUpload(files) {
     console.log("File upload response:", data);
 
     if (response.ok) {
+      if (data.grievance_id) {
+        if (data.complainant_id) {
+          window.complainantId = data.complainant_id;
+        }
+        uiActions.setGrievanceId(data.grievance_id);
+        uiActions.setGrievanceCreatedInDb(true);
+        await syncAttachmentIdsToSession(data.grievance_id, data.complainant_id);
+      }
       eventHandlers.handleFileUploadApiResponse({
         ok: true,
         data: data,
@@ -1244,6 +1314,7 @@ function showPostUploadMessageAndUnlock() {
   uiActions.replaceQuickReplies(
     filterCloseQuickReplies(buildPostUploadQuickReplies())
   );
+  uiActions.setComposerMode("buttons");
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -1279,6 +1350,7 @@ function showFailureMessageAndUnlock() {
   uiActions.replaceQuickReplies(
     filterCloseQuickReplies(buildPostUploadQuickReplies())
   );
+  uiActions.setComposerMode("buttons");
   uiActions.setInputLocked(false);
   currentUploadFileIds = [];
   currentUploadStatuses = {};
@@ -1328,6 +1400,8 @@ function handleAddVoiceRecord() {
 // "Go back to chat": restore snapshot, transition message, unlock (no orchestrator call)
 function handleGoBackToChat() {
   uiActions.appendMessage(get("file_upload.transition"), "received");
+  let restoredButtons = null;
+  let restoredExpected = window.lastExpectedInputType || "text";
   if (fileUploadSnapshot) {
     if (fileUploadSnapshot.lastBotMessageText) {
       uiActions.appendMessage(fileUploadSnapshot.lastBotMessageText, "received");
@@ -1336,13 +1410,20 @@ function handleGoBackToChat() {
       Array.isArray(fileUploadSnapshot.lastBotQuickReplies) &&
       fileUploadSnapshot.lastBotQuickReplies.length > 0
     ) {
-      uiActions.replaceQuickReplies(fileUploadSnapshot.lastBotQuickReplies);
+      restoredButtons = fileUploadSnapshot.lastBotQuickReplies;
+      uiActions.replaceQuickReplies(restoredButtons);
     }
+    restoredExpected = fileUploadSnapshot.lastExpectedInputType || restoredExpected;
     fileUploadSnapshot = null;
   } else {
     uiActions.replaceQuickReplies([]); // Clear Add more / Go back buttons
     uiActions.appendMessage(get("file_upload.continue_below"), "received");
   }
+  const mode = uiActions.resolveComposerModeFromTurn(
+    restoredExpected,
+    restoredButtons
+  );
+  uiActions.setComposerMode(mode);
   uiActions.setInputLocked(false);
 }
 

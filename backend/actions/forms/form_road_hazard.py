@@ -12,6 +12,10 @@ from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
 from backend.actions.forms.form_grievance import ValidateFormGrievance
 from backend.actions.forms.intake_submit import complete_road_hazard_intake_submit
+from backend.actions.grievance_intake.ensure_records import (
+    grievance_id_set_json,
+    resolve_intake_slot_ids,
+)
 
 ROAD_HAZARD_CLASSIFICATION = "Road Hazard"
 
@@ -156,23 +160,17 @@ class ActionStartRoadHazardGrievanceProcess(BaseAction):
         prefill_subtype: Optional[str],
     ) -> List[SlotSet]:
         BaseFormValidationAction.message_display_list_cat = True
-        set_id_data = {
-            "complainant_province": tracker.get_slot("complainant_province") or self.province,
-            "complainant_district": tracker.get_slot("complainant_district") or self.district,
-            "complainant_office": tracker.get_slot("complainant_office") or None,
-            "source": "bot",
-        }
-        complainant_id = self.db_manager.generate_complainant_id(set_id_data)
-        grievance_id = self.db_manager.generate_grievance_id(set_id_data)
-        dispatcher.utter_message(
-            json_message={
-                "data": {
-                    "grievance_id": grievance_id,
-                    "complainant_id": complainant_id,
-                    "event_type": "grievance_id_set",
-                }
-            }
+        self._initialize_language_and_helpers(tracker)
+        grievance_id, complainant_id = resolve_intake_slot_ids(
+            self.db_manager,
+            existing_grievance_id=tracker.get_slot("grievance_id"),
+            existing_complainant_id=tracker.get_slot("complainant_id"),
+            complainant_province=tracker.get_slot("complainant_province") or self.province,
+            complainant_district=tracker.get_slot("complainant_district") or self.district,
+            complainant_office=tracker.get_slot("complainant_office"),
+            reuse_existing=tracker.get_slot("story_main") is None,
         )
+        dispatcher.utter_message(json_message=grievance_id_set_json(grievance_id, complainant_id))
         return [
             SlotSet("grievance_id", grievance_id),
             SlotSet("complainant_id", complainant_id),

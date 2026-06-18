@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from tests.orchestrator.flow_helpers import all_button_payloads, intro_english, post_turn
+
 
 def test_health_endpoint(client: TestClient):
     resp = client.get("/health")
@@ -8,53 +10,19 @@ def test_health_endpoint(client: TestClient):
     assert data.get("status") == "ok"
 
 
-def test_full_happy_path_flow(client: TestClient):
+def test_full_happy_path_flow(client: TestClient, mock_flow_db):
+    """Regression: submit_details enters location consent before contact_form."""
     user_id = "orchestrator-e2e-1"
-
-    # 1) Intro
-    r1 = client.post("/message", json={"user_id": user_id, "text": ""})
-    assert r1.status_code == 200
-    body1 = r1.json()
-    assert body1["next_state"] in ("intro", "main_menu")
-
-    # 2) Set English
-    r2 = client.post(
-        "/message", json={"user_id": user_id, "payload": "/set_english"}
+    intro_english(client, user_id)
+    post_turn(client, user_id, payload="/new_grievance")
+    post_turn(
+        client,
+        user_id,
+        text="My complaint is about delayed services",
     )
-    assert r2.status_code == 200
-    body2 = r2.json()
-    assert body2["next_state"] in ("main_menu", "form_grievance")
-
-    # 3) New grievance
-    r3 = client.post(
-        "/message", json={"user_id": user_id, "payload": "/new_grievance"}
-    )
-    assert r3.status_code == 200
-    body3 = r3.json()
-    assert body3["next_state"] == "form_grievance"
-    # expect a custom json_message with grievance_id_set at some point
-    assert isinstance(body3["messages"], list)
-
-    # 4) Grievance text
-    r4 = client.post(
-        "/message",
-        json={
-            "user_id": user_id,
-            "text": "My complaint is about delayed services",
-        },
-    )
-    assert r4.status_code == 200
-    body4 = r4.json()
-    assert body4["next_state"] == "form_grievance"
-
-    # 5) Submit details -> should move into contact_form (new grievance flow)
-    r5 = client.post(
-        "/message", json={"user_id": user_id, "payload": "/submit_details"}
-    )
-    assert r5.status_code == 200
-    body5 = r5.json()
-    assert body5["next_state"] == "contact_form"
-    assert len(body5["messages"]) > 0, "contact_form first ask should be in response"
+    body = post_turn(client, user_id, payload="/submit_details")
+    assert body["next_state"] == "location_consent"
+    assert any(p in ("/affirm", "/deny") for p in all_button_payloads(body))
 
 
 def test_status_check_entry_flow(client: TestClient):

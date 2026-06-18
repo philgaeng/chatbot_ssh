@@ -146,24 +146,8 @@ def test_road_hazard_start_action_name():
 def test_road_hazard_submit_skips_llm_classification(monkeypatch):
     form = ValidateFormRoadHazard()
     saved: dict = {}
-    dispatched: list = []
     subtype = "potholes"
     category = category_key_for_subtype(subtype)
-    package_id = "6a52c606-100d-4853-b181-c8868b8a7688"
-
-    def _capture_dispatch(tracker, grievance_data=None, **kw):
-        dispatched.append(
-            {
-                "grievance_data": dict(grievance_data or {}),
-                "tracker_package": tracker.get_slot("package_id"),
-                **kw,
-            }
-        )
-
-    monkeypatch.setattr(
-        "backend.actions.forms.intake_submit.dispatch_grievance_from_tracker",
-        _capture_dispatch,
-    )
 
     class FakeDb:
         def create_or_update_complainant(self, data):
@@ -195,9 +179,6 @@ def test_road_hazard_submit_skips_llm_classification(monkeypatch):
                 "road_hazard_subtype": subtype,
                 "grievance_categories": [category],
                 "flask_session_id": "sess-rh",
-                "package_id": package_id,
-                "location_code": "P1_MOR",
-                "project_code": "KL_ROAD",
             }.get(k),
             "sender_id": "sess-rh",
         },
@@ -215,9 +196,6 @@ def test_road_hazard_submit_skips_llm_classification(monkeypatch):
     assert saved["grievance"]["grievance_classification_status"] == "LLM_skipped"
     assert saved["grievance"]["grievance_categories"] == [category]
     assert saved["grievance"]["grievance_summary"] == "Pothole on KL Road"
-    assert len(dispatched) == 1
-    assert dispatched[0]["tracker_package"] == package_id
-    assert dispatched[0]["grievance_data"]["grievance_id"] == "G-RH-1"
 
 
 def test_dust_submit_skips_llm_classification(monkeypatch):

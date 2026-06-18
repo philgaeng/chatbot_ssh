@@ -21,6 +21,9 @@ from backend.config.constants import MAX_FILE_SIZE
 from backend.config.database_constants import get_task_status_codes
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.file_server_core import FileServerCore
+from backend.actions.grievance_intake.ensure_records import (
+    ensure_intake_records_for_attachment,
+)
 from backend.shared_functions.utterance_mapping_server import get_utterance
 from backend.task_queue.registered_tasks import process_file_upload_task
 from werkzeug.utils import secure_filename
@@ -229,7 +232,7 @@ async def generate_ids(request: Request):
 @router.post("/upload-files")
 async def upload_files(
     request: Request,
-    grievance_id: str = Form(...),
+    grievance_id: Optional[str] = Form(None),
     complainant_id: Optional[str] = Form(None),
     rasa_session_id: Optional[str] = Form(None),
     flask_session_id: Optional[str] = Form(None),
@@ -252,10 +255,25 @@ async def upload_files(
     )
 
     try:
+        grievance_id = (grievance_id or "").strip() or None
+        complainant_id = (complainant_id or "").strip() or None
+
         if not grievance_id:
-            file_server_core.log_event(event_type=FAILED, details={"error": "No grievance_id provided"})
-            error_message = get_utterance("file_server", "upload_files", 1, language_code)
-            return JSONResponse({"error": error_message}, status_code=400)
+            ensured = ensure_intake_records_for_attachment(
+                db_manager,
+                grievance_id=None,
+                complainant_id=complainant_id,
+            )
+            grievance_id = ensured["grievance_id"]
+            complainant_id = ensured["complainant_id"]
+        elif not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
+            ensured = ensure_intake_records_for_attachment(
+                db_manager,
+                grievance_id=grievance_id,
+                complainant_id=complainant_id,
+            )
+            grievance_id = ensured["grievance_id"]
+            complainant_id = ensured.get("complainant_id") or complainant_id
 
         if db_manager.is_grievance_archived(grievance_id):
             file_server_core.log_event(
@@ -278,19 +296,6 @@ async def upload_files(
         uploaded_files, oversized_files, wrong_extensions_list = _validate_files(
             file_server_core, files, grievance_id
         )
-
-        if not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
-            stub: Dict[str, Any] = {
-                "grievance_id": grievance_id,
-                "source": "bot",
-                "grievance_description": "",
-            }
-            if complainant_id:
-                stub["complainant_id"] = complainant_id
-                db_manager.create_or_update_complainant(
-                    {"complainant_id": complainant_id, "source": "bot"}
-                )
-            db_manager.create_or_update_grievance(stub)
 
         if not uploaded_files:
             file_server_core.log_event(event_type=FAILED, details={"error": "All files were invalid"})
@@ -330,6 +335,8 @@ async def upload_files(
         return JSONResponse(
             {
                 "status": STARTED,
+                "grievance_id": grievance_id,
+                "complainant_id": complainant_id,
                 "flask_session_id": flask_session_id,
                 "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
                 "files": [f["file_id"] for f in uploaded_files],

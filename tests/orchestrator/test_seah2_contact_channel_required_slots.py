@@ -1,12 +1,7 @@
-import asyncio
-
 from backend.actions.forms.form_seah_2 import ValidateFormSeah2
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.config.constants import DEFAULT_VALUES
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+from tests.orchestrator.conftest import run_async
 
 
 def test_anonymous_route_with_phone_requires_contact_channel(domain):
@@ -24,7 +19,7 @@ def test_anonymous_route_with_phone_requires_contact_channel(domain):
         },
         sender_id="seah2-anon-with-phone",
     )
-    required = _run(form.required_slots([], dispatcher, tracker, domain))
+    required = run_async(form.required_slots([], dispatcher, tracker, domain))
     assert "seah_contact_consent_channel" in required
 
 
@@ -43,5 +38,5 @@ def test_anonymous_route_without_contact_skips_contact_channel(domain):
         },
         sender_id="seah2-anon-no-contact",
     )
-    required = _run(form.required_slots([], dispatcher, tracker, domain))
+    required = run_async(form.required_slots([], dispatcher, tracker, domain))
     assert "seah_contact_consent_channel" not in required

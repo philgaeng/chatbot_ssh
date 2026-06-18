@@ -46,6 +46,7 @@ def _get_action(action_name: str) -> Any:
             ActionOpenMapPicker,
         )
         from backend.actions.forms.form_seah_1 import (
+            ActionStartSeahIntake,
             ActionAskFormSeah1SensitiveIssuesFollowUp,
             ActionAskFormSeah1SeahVictimSurvivorRole,
             ActionAskFormSeah1SeahWitnessVictimConsentToFile,
@@ -164,6 +165,7 @@ def _get_action(action_name: str) -> Any:
         _ACTIONS["action_submit_seah"] = ActionSubmitSeah()
 
         # SEAH forms
+        _ACTIONS["action_start_seah_intake"] = ActionStartSeahIntake()
         _ACTIONS["action_ask_form_seah_1_sensitive_issues_follow_up"] = ActionAskFormSeah1SensitiveIssuesFollowUp()
         _ACTIONS["action_ask_form_seah_1_seah_victim_survivor_role"] = ActionAskFormSeah1SeahVictimSurvivorRole()
         _ACTIONS["action_ask_form_seah_1_seah_witness_victim_consent_to_file"] = ActionAskFormSeah1SeahWitnessVictimConsentToFile()

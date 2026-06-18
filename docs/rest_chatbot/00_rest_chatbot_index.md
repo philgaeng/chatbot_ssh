@@ -28,6 +28,9 @@ Out of scope for this folder:
 - `docs/rest_chatbot/04_operations_spec.md`  
   Runtime config, environment variables, startup, and production notes.
 
+- `docs/rest_chatbot/agents/composer-input-mode.md`  
+  Agent implementation brief for composer buttons-vs-text UX (§10 of frontend spec).
+
 - `docs/rest_chatbot/workflow_maps/seah_intake_turn_map.json`  
   Structured turn map for SEAH intake.
 

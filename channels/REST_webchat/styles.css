@@ -298,6 +298,43 @@
   cursor: not-allowed;
 }
 
+#form.composer-mode-text #message-input {
+  border: 2px solid var(--primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+#form.composer-mode-buttons #message-input,
+#form.composer-mode-locked #message-input {
+  border: 1px solid #d0d0d0;
+  background: #f0f2f5;
+  color: #888;
+  box-shadow: none;
+}
+
+.composer-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #54656f;
+  padding: 0 4px;
+}
+
+#form.composer-mode-text .composer-hint {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+#form.composer-mode-buttons .composer-hint {
+  color: #888;
+}
+
+#form.composer-mode-buttons .quick-replies {
+  background: #e8f4fd;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 4px;
+}
+
 /* Attach + voice: grey when inactive; light grey bg + blue icon when active */
 .attachment-button,
 .voice-note-button {
@@ -737,6 +774,15 @@ body.high-contrast .chat-launcher-hint {
 body.high-contrast .quick-reply-button {
   background: var(--primary-color);
   border: 2px solid var(--border-color);
+}
+
+body.high-contrast #form.composer-mode-text #message-input {
+  border-width: 3px;
+}
+
+body.high-contrast #form.composer-mode-buttons #message-input,
+body.high-contrast #form.composer-mode-locked #message-input {
+  border-width: 2px;
 }
 
 body.high-contrast .send-button {

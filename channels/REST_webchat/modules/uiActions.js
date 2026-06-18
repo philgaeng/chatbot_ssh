@@ -15,6 +15,63 @@ let grievanceCreatedInDb = false;
 let voiceStatusBanner = null;
 let voiceStatusBannerText = null;
 
+let composerMode = "text";
+let composerLocked = false;
+
+const SKIP_PAYLOADS = new Set(["/skip", "/affirm_skip"]);
+
+function getComposerFormEl() {
+  return document.getElementById("form");
+}
+
+export function resolveComposerModeFromTurn(expectedInputType, quickReplies) {
+  const hasSkip = (quickReplies || []).some((b) =>
+    SKIP_PAYLOADS.has(b.payload)
+  );
+  if (hasSkip) return "text";
+  if (expectedInputType === "buttons") return "buttons";
+  return "text";
+}
+
+function applyComposerModeUI() {
+  const form = getComposerFormEl();
+  const hint = document.getElementById("composer-hint");
+  if (!messageInput) return;
+
+  const isButtons = composerMode === "buttons";
+  form?.classList.remove("composer-mode-text", "composer-mode-buttons");
+  form?.classList.add(isButtons ? "composer-mode-buttons" : "composer-mode-text");
+
+  messageInput.disabled = isButtons;
+  messageInput.classList.toggle("composer-input--active", !isButtons);
+  messageInput.classList.toggle("composer-input--buttons-only", isButtons);
+  messageInput.placeholder = get(
+    isButtons ? "composer.placeholder_buttons" : "composer.placeholder_text"
+  );
+  messageInput.setAttribute("aria-disabled", isButtons ? "true" : "false");
+
+  if (hint) {
+    hint.textContent = get(
+      isButtons ? "composer.hint_buttons" : "composer.hint_text"
+    );
+  }
+  if (sendButton) sendButton.disabled = isButtons;
+}
+
+export function setComposerMode(mode) {
+  composerMode = mode === "buttons" ? "buttons" : "text";
+  if (composerLocked) return;
+  applyComposerModeUI();
+}
+
+export function getComposerMode() {
+  return composerMode;
+}
+
+export function isComposerLocked() {
+  return composerLocked;
+}
+
 // Initialize UI Actions with DOM elements
 export function initializeUIActions(
   messagesElement,
@@ -30,6 +87,7 @@ export function initializeUIActions(
   voiceStatusBanner = document.getElementById("voice-status-banner");
   voiceStatusBannerText = voiceStatusBanner;
   updateAttachButtonState();
+  setComposerMode("text");
 }
 
 /** Light-blue banner above composer toolbar; each call replaces prior text. */
@@ -60,22 +118,24 @@ export function clearVoiceStatusBanner() {
   voiceStatusBanner.classList.add("hidden");
 }
 
-// Update attach button disabled state and tooltip when grievanceId changes
+// Update attach button — always enabled so users can attach at any step.
 function updateAttachButtonState() {
   const hasGrievance = !!grievanceId;
-  const canUploadFiles = hasGrievance && grievanceCreatedInDb;
-  // Voice at description step: allow upload once grievance_id exists (DB row ensured on upload).
+  const pendingCount =
+    typeof window.getPendingAttachmentCount === "function"
+      ? window.getPendingAttachmentCount()
+      : 0;
   const canVoice = hasGrievance && voiceNoteEnabled;
 
   if (attachmentButton) {
-    attachmentButton.disabled = !canUploadFiles;
-    attachmentButton.classList.toggle("is-active", canUploadFiles);
-    if (!hasGrievance) {
-      attachmentButton.title = get("attach_button.start_first");
-    } else if (!grievanceCreatedInDb) {
-      attachmentButton.title = get("attach_button.saving");
-    } else {
+    attachmentButton.disabled = false;
+    attachmentButton.classList.add("is-active");
+    if (pendingCount > 0) {
+      attachmentButton.title = get("attach_button.pending_ready");
+    } else if (hasGrievance) {
       attachmentButton.title = get("attach_button.ready");
+    } else {
+      attachmentButton.title = get("attach_button.ready_anytime");
     }
   }
 
@@ -161,8 +221,21 @@ export function replaceQuickReplies(quickReplies) {
 
 // Lock or unlock message input and send button (e.g. during file upload)
 export function setInputLocked(locked) {
-  if (messageInput) messageInput.disabled = !!locked;
-  if (sendButton) sendButton.disabled = !!locked;
+  const form = getComposerFormEl();
+  if (locked) {
+    composerLocked = true;
+    form?.classList.add("composer-mode-locked");
+    form?.classList.remove("composer-mode-text", "composer-mode-buttons");
+    if (messageInput) {
+      messageInput.disabled = true;
+      messageInput.setAttribute("aria-disabled", "true");
+    }
+    if (sendButton) sendButton.disabled = true;
+    return;
+  }
+  composerLocked = false;
+  form?.classList.remove("composer-mode-locked");
+  applyComposerModeUI();
 }
 
 // Task status display functions
@@ -309,10 +382,17 @@ export function formatTimestamp(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+export function refreshAttachButtonState() {
+  updateAttachButtonState();
+}
+
 export function setGrievanceId(id) {
   grievanceId = id;
   window.grievanceId = grievanceId;
   updateAttachButtonState();
+  if (grievanceId && typeof window.flushPendingAttachments === "function") {
+    void window.flushPendingAttachments();
+  }
 }
 
 export function setGrievanceCreatedInDb(value) {

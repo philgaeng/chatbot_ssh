@@ -101,13 +101,14 @@ Inbound response (`handleOrchestratorResponse`):
   - `custom`
   - `json_message`
 - `next_state`
-- `expected_input_type`
+- `expected_input_type` — **`buttons`** or **`text`** (see §10 Composer input mode)
 
 Frontend caches:
 
 - last bot text
 - last quick replies
 - `lastOrchestratorNextState`
+- `lastExpectedInputType` — drives composer mode after each orchestrator turn (new)
 
 These are used for post-upload restore and end-of-flow button behavior.
 
@@ -202,7 +203,158 @@ Specific handling exists for task:
 
 - `classify_and_summarize_grievance_task` on `SUCCESS` to display summary/categories output to user.
 
-## 10) UI Controls and Error Handling
+## 10) Composer Input Mode (buttons vs text)
+
+### 10.1 Problem
+
+Users often type into the composer when the bot expects a **quick-reply button** tap (main menu, Yes/No, location method, etc.). The textarea staying active and looking identical to “please type” steps causes confusion.
+
+### 10.2 Modes
+
+The composer has three modes. **Locked** always wins over the other two.
+
+| Mode | CSS class on `#form` | Textarea | Send button | When |
+|------|----------------------|----------|-------------|------|
+| `text` | `composer-mode-text` | enabled | enabled | Bot expects free text (forms, skip-able fields, open chat) |
+| `buttons` | `composer-mode-buttons` | disabled | disabled | Bot expects a quick-reply only (no free text) |
+| `locked` | `composer-mode-locked` | disabled | disabled | Upload in progress, map picker suppression, voice next-step handoff, etc. |
+
+`setInputLocked(true)` in existing code maps to **`locked`**. Unlocking must **restore** the last non-locked mode (`text` or `buttons`), not blindly enable text.
+
+### 10.3 Primary signal: `expected_input_type` (backend-aligned)
+
+Orchestrator `POST /message` response includes `expected_input_type`:
+
+- `"buttons"` → composer mode **`buttons`**
+- `"text"` → composer mode **`text`**
+
+Store on `window.lastExpectedInputType` in `handleOrchestratorResponse`.
+
+**Backend derivation (target — replace hardcoded state list):** at end of `run_flow_turn`, derive from the **outgoing turn** (`dispatcher.messages`), not only `next_state`:
+
+```text
+buttons_on_turn = union of all message.buttons on this response
+has_skip = any payload in (/skip, /affirm_skip)
+if buttons_on_turn and not has_skip → expected_input_type = "buttons"
+else → expected_input_type = "text"
+```
+
+Rationale:
+
+- Yes/No review steps (`grievance_review`, bool/category slots) emit buttons without Skip → **buttons**
+- Contact/address/email asks with Skip → **text** (even with buttons visible)
+- Intro / main menu / location method → **buttons** (no skip on turn)
+- Open chat with no buttons → **text**
+
+Keep the existing early return for pure menu states if needed; the message-based rule should subsume most of the `next_state in (...)` tuple in `state_machine.py`.
+
+**Frontend safeguard (keep):** if visible quick-reply payloads include `/skip` or `/affirm_skip`, force mode **`text`** even if backend mislabels a turn (belt-and-suspenders).
+
+Payload constants: `BUTTON_SKIP` in `backend/actions/utils/mapping_buttons.py`.
+
+### 10.4 Confirmed product rules (2026-06)
+
+| Rule | Decision |
+|------|----------|
+| Yes/No without Skip | **Block typing** (buttons mode) |
+| Post-upload local buttons | **Block typing** |
+| Nepali copy | Ship draft strings from agent brief; no product review gate |
+| Backend + frontend alignment | **Yes** — fix `expected_input_type` derivation in orchestrator |
+| Quick-reply pulse/highlight | **P2 only** if field testing shows residual confusion (see §10.11) |
+
+### 10.5 Local-only quick replies (no orchestrator turn)
+
+These flows must set composer mode explicitly when showing buttons:
+
+| Flow | Mode | Notes |
+|------|------|-------|
+| Post-upload (`Add more` / `Go back` / voice follow-ups) | `buttons` | Navigation only |
+| Post-upload restore (`handleGoBackToChat`) | restore from `fileUploadSnapshot.lastExpectedInputType` | extend snapshot |
+| User sends typed message (`handleMessageSubmit`) | `text` until next bot turn | existing quick-reply clear stays |
+| Session reset / file another | `text` | default after clear |
+| `next_state === "done"` with no buttons | `text` | optional; low traffic |
+
+### 10.6 Visual design
+
+Make enabled vs disabled unmistakable on small screens.
+
+**Text mode (`composer-mode-text`)**
+
+- Textarea: **2–3px solid** border using `var(--primary-color)`; optional soft outer glow (`box-shadow: 0 0 0 3px rgba(primary, 0.15)`)
+- Placeholder (i18n `composer.placeholder_text`): e.g. *“Please type your answer here”*
+- Optional hint line below textarea (`#composer-hint`, i18n `composer.hint_text`): *“Type your answer below”*
+- Send button: normal active styling
+
+**Buttons mode (`composer-mode-buttons`)**
+
+- Textarea: `disabled`, grey background (`#f0f2f5`), muted text (`#888`), `cursor: not-allowed`
+- Border: 1px neutral grey (no blue emphasis)
+- Placeholder (i18n `composer.placeholder_buttons`): e.g. *“Please use the buttons above”*
+- Hint (`composer.hint_buttons`): *“Choose one of the options above”*
+- Send button: `disabled`
+- Do **not** steal focus into the textarea when opening the widget in buttons mode
+
+**Locked mode**
+
+- Reuse buttons-mode greys; hint may show upload/processing copy from existing `voice-status-banner` (no duplicate)
+
+**Quick-reply emphasis (buttons mode only, optional P2)**
+
+- Slightly stronger quick-reply container style (e.g. light blue panel behind `.quick-replies`) so buttons read as the primary action
+
+### 10.7 Implementation surface
+
+| File | Change |
+|------|--------|
+| `channels/REST_webchat/modules/uiActions.js` | Add `setComposerMode(mode)`, `getComposerMode()`, skip-aware helper; refactor `setInputLocked` to set/clear `locked` and restore previous mode |
+| `channels/REST_webchat/app.js` | Read `expected_input_type` in `handleOrchestratorResponse`; call `applyComposerModeAfterTurn()`; extend `fileUploadSnapshot`; fix unlock paths |
+| `channels/REST_webchat/utterances.js` | `composer.*` strings (`en` / `ne`) |
+| `channels/REST_webchat/styles.css` | `.composer-mode-text`, `.composer-mode-buttons`, `#composer-hint`, textarea states |
+| `channels/REST_webchat/index.html` | Optional `#composer-hint` element + `aria-describedby` on `#message-input` |
+
+### 10.8 Accessibility
+
+- `aria-disabled="true"` on textarea in buttons/locked modes
+- `aria-describedby="composer-hint"` when hint is visible
+- Invalid-send tooltip must not fire on disabled textarea click (ignore submit when mode is `buttons`)
+
+### 10.9 Backend validation (defense in depth)
+
+Button-only turns already reject stray free text in many forms via `_handle_boolean_and_category_slot_extraction` (returns `{slot_name: None}` unless input starts with `/affirm`, `/deny`, `/skip`, or another `/` payload).
+
+**Do not add per-form `extract_buttons` / `validate_buttons` methods** — that duplicates `get_buttons()` and the existing extractors.
+
+**Do add one shared helper** on `BaseFormValidationAction` (optional small refactor, not blocking frontend UX):
+
+```python
+@staticmethod
+def is_action_payload(message_text: str) -> bool:
+    return bool((message_text or "").strip().startswith("/"))
+```
+
+Use only where a validator needs an explicit early reject + re-prompt; bool/category paths already enforce slash payloads.
+
+Orchestrator `expected_input_type` should **not** call form validators — it only inspects **outgoing** `dispatcher.messages[].buttons` for the turn (see §10.3).
+
+### 10.10 Verification scenarios
+
+1. **Intro / main menu** — textarea grey/disabled; blue quick replies are only path
+2. **Address with Skip** — textarea blue/enabled; user can type or tap Skip
+3. **Yes/No confirm** (no Skip) — textarea disabled once backend/heuristic marks buttons mode
+4. **File upload** — locked during upload; after success, buttons mode for Add more / Go back
+5. **Go back to chat** — restores prior text/buttons mode from snapshot
+6. **Language `ne`** — placeholders and hints in Nepali
+7. **High-contrast** — borders/hints remain visible (`body.high-contrast` rules)
+
+### 10.11 Confidence / P2 pulse
+
+Design confidence with **backend message-derived `expected_input_type` + frontend disable/visuals + skip safeguard: ~92%**.
+
+Ship **without** quick-reply pulse/highlight as P1. Add pulse (subtle animation or light panel on `.quick-replies` in buttons mode) only if pilot users still tap the greyed textarea.
+
+---
+
+## 11) UI Controls and Error Handling
 
 Persistent controls:
 
@@ -211,12 +363,18 @@ Persistent controls:
 
 Input UX:
 
-- Enter sends
+- Enter sends (only when composer mode is `text` and not `locked`)
 - Shift+Enter adds newline
-- tooltip shown when user tries to send empty message with no files
+- tooltip shown when user tries to send empty message with no files (text mode only)
 
 Error UX:
 
 - connection errors from orchestrator API failures
 - upload API and poll errors
 - long-processing notification when polling max attempts is reached
+
+---
+
+## 12) Agent implementation brief
+
+See **`docs/rest_chatbot/agents/composer-input-mode.md`** for step-by-step implementation and test checklist.

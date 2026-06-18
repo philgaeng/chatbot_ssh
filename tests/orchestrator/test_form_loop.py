@@ -1,4 +1,5 @@
 import asyncio
+
 import pytest
 
 from backend.orchestrator.form_loop import run_form_turn
@@ -6,8 +7,11 @@ from backend.actions.forms.form_grievance import ValidateFormGrievance
 from backend.actions.forms.form_status_check import ValidateFormStatusCheck1
 
 
+from tests.orchestrator.conftest import run_async
+
+
 def _run(coro):
-    return asyncio.run(coro)
+    return run_async(coro)
 
 
 def _base_session() -> dict:
