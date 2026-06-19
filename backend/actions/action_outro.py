@@ -41,50 +41,45 @@ class ActionSeahOutro(BaseAction):
     ) -> List[Dict[Text, Any]]:
         self._initialize_language_and_helpers(tracker)
         slots = dict(tracker.current_slot_values())
-        variant = self.resolve_seah_outro_variant(slots)
         language_code = tracker.get_slot("language_code") or "en"
+        is_focal = slots.get("seah_victim_survivor_role") == "focal_point"
 
-        providers = self.find_seah_service_providers_for_tracker(tracker)
-        row = providers[0] if providers else self.find_seah_contact_point(tracker)
-
-        contact_block = ""
         events: List[Dict[Text, Any]] = []
-        if providers:
-            from backend.shared_functions.seah_service_providers import format_details_utterance
 
-            contact_block = "\n\n" + format_details_utterance(providers, language_code)
-            cid = providers[0].get("seah_service_provider_id")
-            if cid:
-                events.append(SlotSet("seah_contact_point_id", cid))
-        elif row:
-            contact_block = "\n\n" + self.format_seah_contact_point_block(row, language_code)
-            cid = row.get("seah_contact_point_id") or row.get("seah_service_provider_id")
-            if cid:
-                events.append(SlotSet("seah_contact_point_id", cid))
+        if is_focal:
+            dispatcher.utter_message(text=self._get_seah_utterance(7))
+        else:
+            contact_provided = slots.get("seah_contact_provided")
+            if contact_provided is None:
+                contact_provided = self.compute_seah_contact_provided(slots)
 
-        order = {
-            "focal_default": 1,
-            "victim_limited_contact": 2,
-            "victim_contact_ok": 3,
-            "not_victim_anonymous": 4,
-            "not_victim_identified": 5,
-        }
-        idx = order.get(variant, 2)
-        body = self._get_seah_utterance(idx)
-        full_text = body + contact_block
-        dispatcher.utter_message(text=full_text)
+            # Thank-you line depends on whether contact details were shared.
+            thank_you_idx = 5 if contact_provided else 4
+            dispatcher.utter_message(text=self._get_seah_utterance(thank_you_idx))
 
+            # Nearest support centre only (not the full district list).
+            from backend.shared_functions.seah_service_providers import format_provider_details_block
+
+            providers = self.find_seah_service_providers_for_tracker(tracker)
+            nearest = providers[0] if providers else self.find_seah_contact_point(tracker)
+
+            if nearest:
+                intro = self._get_seah_utterance(6)
+                if providers:
+                    details = format_provider_details_block(nearest, language_code)
+                else:
+                    details = self.format_seah_contact_point_block(nearest, language_code)
+                dispatcher.utter_message(text=f"{intro}\n\n{details}")
+
+                cid = nearest.get("seah_contact_point_id") or nearest.get("seah_service_provider_id")
+                if cid:
+                    events.append(SlotSet("seah_contact_point_id", cid))
+
+        # Post-submit buttons only (submit already confirms the report is on record).
         lang = language_code if language_code in BUTTONS_CLOSE_BROWSER_ONLY else "en"
         buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(lang, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
         buttons.extend(BUTTONS_FILE_ANOTHER_SEAH.get(lang, BUTTONS_FILE_ANOTHER_SEAH["en"]))
-        dispatcher.utter_message(
-            text=(
-                "You may continue in this chat if needed. Your confidential report is already on record."
-                if language_code == "en"
-                else "आवश्यक परेमा तपाईं यस च्याटमा जारी राख्न सक्नुहुन्छ। तपाईंको गोप्य रिपोर्ट पहिले नै दर्ता भइसकेको छ।"
-            ),
-            buttons=buttons,
-        )
+        dispatcher.utter_message(text="", buttons=buttons)
         return events
 
 

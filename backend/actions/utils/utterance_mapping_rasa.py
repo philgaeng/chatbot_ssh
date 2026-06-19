@@ -664,10 +664,10 @@ UTTERANCE_MAPPING = {
                 5: {
                     'en': (
                         "Type your grievance in the box below. You can also use the **microphone** "
-                        "button beside Send to record a voice note (up to 90 seconds). "
+                        "button beside Send to record a voice note (up to 180 seconds). "
                         "Typing is optional if you record instead."
                     ),
-                    'ne': "तलको बाकसमा आफ्नो गुनासो प्रविष्ट टाइप गर्नुहोस्‌। पठाउनुभन्दा अगाडि ८८माइक्रोफोन८८ बटन (पठाउनुहोस् बटनको छेउमा) बाट आफनो आवाजमा गुनासो रेकर्ड गर्न पनि सक्नुहुन्छ (अधिकतम ९० सेकेन्ड)। ग्ुनासे रेकर्ड गर्नुभएमा गुनासो टाइप गर्न अनिवार्य छैन।",
+                    'ne': "तलको बाकसमा आफ्नो गुनासो प्रविष्ट टाइप गर्नुहोस्‌। पठाउनुभन्दा अगाडि ८८माइक्रोफोन८८ बटन (पठाउनुहोस् बटनको छेउमा) बाट आफनो आवाजमा गुनासो रेकर्ड गर्न पनि सक्नुहुन्छ (अधिकतम १८० सेकेन्ड)। ग्ुनासे रेकर्ड गर्नुभएमा गुनासो टाइप गर्न अनिवार्य छैन।",
                 },
                 4: {
                     'en': """Thank you for your entry: "{grievance_description}\n. 
@@ -875,10 +875,35 @@ UTTERANCE_MAPPING = {
                     'en': "Thank you. Your report is confidential. We may use the contact details you provided as agreed.",
                     'ne': "धन्यवाद। तपाईले सहमति अनुसार यहाँ प्रदान गरि दर्ता गर्नुभएको सम्पर्क विवरणहरू हामी  प्रयोग गर्न सक्छौं। ",
                 },
+                6: {
+                    'en': "This support centre near you can provide confidential care and assistance:",
+                    'ne': "तपाईंको नजिकको यो सहयोग केन्द्रले गोप्य हेरचाह र सहयोग प्रदान गर्न सक्छ:",
+                },
+                7: {
+                    'en': "You can also reach your designated SEAH focal point directly if you need support in the meantime.",
+                    'ne': "तत्काल सहयोग चाहिएमा तपाईं आफ्नो निर्दिष्ट SEAH सम्पर्क बिन्दुमा सिधै सम्पर्क गर्न पनि सक्नुहुन्छ।",
+                },
             },
             'buttons': {
                 1: BUTTONS_SEAH_OUTRO,
                 2: BUTTONS_FILE_ANOTHER_GRIEVANCE,
+            },
+        },
+    },
+    'action_submit_seah': {
+        'action_submit_seah': {
+            'utterances': {
+                1: {
+                    'en': "Your report is on record. You may continue in this chat if needed.",
+                    'ne': (
+                        "तपाईंको रिपोर्ट दर्ता भइसकेको छ। आवश्यक परेमा तपाईं यस च्याटमा "
+                        "जारी राख्न सक्नुहुन्छ।"
+                    ),
+                },
+                2: {
+                    'en': "A SEAH officer will contact you shortly at the phone number you provided: **{phone}**.",
+                    'ne': "SEAH अधिकारीले चाँडै नै तपाईंले प्रदान गर्नुभएको फोन नम्बर **{phone}** मा सम्पर्क गर्नेछ।",
+                },
             },
         },
     },

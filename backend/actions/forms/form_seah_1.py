@@ -4,8 +4,45 @@ from rasa_sdk import Tracker
 from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 
+from rasa_sdk.events import SlotSet
+
 from backend.actions.base_classes.base_classes import BaseAction, BaseFormValidationAction
+from backend.actions.grievance_intake.ensure_records import (
+    grievance_id_set_json,
+    resolve_intake_slot_ids,
+)
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE
+
+
+class ActionStartSeahIntake(BaseAction):
+    """Start SEAH intake: reuse or mint grievance/complainant IDs, then form_seah_1."""
+
+    def name(self) -> Text:
+        return "action_start_seah_intake"
+
+    async def execute_action(
+        self,
+        dispatcher: CollectingDispatcher,
+        tracker: Tracker,
+        domain: Dict[Text, Any],
+    ) -> List[Dict[Text, Any]]:
+        self._initialize_language_and_helpers(tracker)
+        grievance_id, complainant_id = resolve_intake_slot_ids(
+            self.db_manager,
+            existing_grievance_id=tracker.get_slot("grievance_id"),
+            existing_complainant_id=tracker.get_slot("complainant_id"),
+            complainant_province=tracker.get_slot("complainant_province") or self.province,
+            complainant_district=tracker.get_slot("complainant_district") or self.district,
+            complainant_office=tracker.get_slot("complainant_office"),
+            reuse_existing=tracker.get_slot("story_main") is None,
+        )
+        dispatcher.utter_message(json_message=grievance_id_set_json(grievance_id, complainant_id))
+        return [
+            SlotSet("grievance_id", grievance_id),
+            SlotSet("complainant_id", complainant_id),
+            SlotSet("story_main", "seah_intake"),
+            SlotSet("grievance_sensitive_issue", True),
+        ]
 
 
 class ValidateFormSeah1(BaseFormValidationAction):

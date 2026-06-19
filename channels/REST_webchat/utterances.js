@@ -61,8 +61,12 @@ export const U = {
       ne: "एक वा बढी फाइलहरू सेव गर्न सकिएन। तपाईं फेरि प्रयास गर्न, च्याटमा फर्कन, वा तलका बटनहरू प्रयोग गर्न सक्नुहुन्छ।",
     },
     no_grievance: {
-      en: 'To attach files, start a grievance first: choose "File a grievance" (गुनासो दर्ता गर्नुहोस्) in the chat above and complete the steps. After your grievance is created, you can attach photos or documents here.',
-      ne: "फाइल संलग्न गर्न पहिले गुनासो सुरु गर्नुहोस्: माथिको च्याटमा \"गुनासो दर्ता गर्नुहोस्\" छान्नुहोस् र चरणहरू पूरा गर्नुहोस्। गुनासो सिर्जना भएपछि तपाईं यहाँ तस्बिर वा कागजात संलग्न गर्न सक्नुहुन्छ।",
+      en: "Your file will be saved when you continue. Choose how you would like to proceed in the chat.",
+      ne: "तपाईं जारी राख्दा फाइल सुरक्षित हुनेछ। कृपया च्याटमा अगाडि बढ्ने तरिका छान्नुहोस्।",
+    },
+    queued_until_case: {
+      en: "Your file is held here until you select a grievance in the status check flow. It will upload automatically once a case is selected.",
+      ne: "स्थिति जाँच प्रवाहमा गुनासो छान्नुभएपछि फाइल अपलोड हुनेछ। अहिले यो यहाँ राखिएको छ।",
     },
     voice_detected: {
       en: "Voice recording detected. Uploading…",
@@ -200,6 +204,18 @@ export const U = {
       en: "Maximum length ({max}) reached. Uploading…",
       ne: "अधिकतम लम्बाइ ({max}) पुग्यो। अपलोड गर्दैछ…",
     },
+    voice_chunk_uploading: {
+      en: "Uploading voice note…",
+      ne: "आवाज नोट अपलोड गर्दैछ…",
+    },
+    voice_chunk_error: {
+      en: "Could not upload voice note. Check your connection and try again.",
+      ne: "आवाज नोट अपलोड गर्न सकिएन। जडान जाँच गरी पुन: प्रयास गर्नुहोस्।",
+    },
+    voice_max_size: {
+      en: "Voice note is too large. Try a shorter recording.",
+      ne: "आवाज नोट धेरै ठूलो भयो। छोटो रेकर्डिङ प्रयास गर्नुहोस्।",
+    },
     mic_denied: {
       en: "Microphone access is required to record.",
       ne: "रेकर्ड गर्न माइक्रोफोन अनुमति चाहिन्छ।",
@@ -313,8 +329,8 @@ export const U = {
       ne: "गुनासो विवरण बताउँदा मात्र आवाज रेकर्ड उपलब्ध छ।",
     },
     recording: {
-      en: "Recording… tap again to stop (max 45 seconds).",
-      ne: "रेकर्डिङ… रोक्न फेरि थिच्नुहोस् (अधिकतम ४५ सेकेन्ड)।",
+      en: "Recording… tap again to stop (max {max} seconds).",
+      ne: "रेकर्डिङ… रोक्न पुन: थिच्नुहोस् (अधिकतम {max} सेकेन्ड)।",
     },
     max_length: {
       en: "Maximum recording length reached. Uploading your voice note…",
@@ -345,6 +361,38 @@ export const U = {
     allow: { en: "Allow", ne: "अनुमति दिनुहोस्" },
     deny: { en: "Not now", ne: "अहिले होइन" },
   },
+  accessibility: {
+    larger_text_enable: {
+      en: "Use larger text",
+      ne: "ठूलो अक्षर प्रयोग गर्नुहोस्",
+    },
+    larger_text_disable: {
+      en: "Use standard text",
+      ne: "सामान्य अक्षर प्रयोग गर्नुहोस्",
+    },
+  },
+  composer: {
+    placeholder_text: {
+      en: "Please type your answer here",
+      ne: "कृपया यहाँ आफ्नो जवाफ टाइप गर्नुहोस्",
+    },
+    placeholder_buttons: {
+      en: "Please use the buttons above",
+      ne: "कृपया माथिका बटनहरू प्रयोग गर्नुहोस्",
+    },
+    hint_text: {
+      en: "Type your answer above",
+      ne: "माथि आफ्नो जवाफ टाइप गर्नुहोस्",
+    },
+    hint_buttons: {
+      en: "Choose one of the options above",
+      ne: "माथिका विकल्पहरूमध्ये एक छान्नुहोस्",
+    },
+    hint_send_attachment: {
+      en: "Tap Send to upload your attachment",
+      ne: "संलग्न फाइल अपलोड गर्न पठाउनुहोस् थिच्नुहोस्",
+    },
+  },
   attach_button: {
     start_first: {
       en: "Start a grievance first",
@@ -357,6 +405,14 @@ export const U = {
     ready: {
       en: "Files can be uploaded now",
       ne: "फाइलहरू अहिले अपलोड गर्न सकिन्छ",
+    },
+    ready_anytime: {
+      en: "Attach photos, documents, or audio",
+      ne: "तस्बिर, कागजात, वा अडियो संलग्न गर्नुहोस्",
+    },
+    pending_ready: {
+      en: "Files are ready to upload once your case is selected",
+      ne: "केस छानिएपछि फाइलहरू अपलोड गर्न तयार छन्",
     },
   },
 };

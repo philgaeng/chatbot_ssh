@@ -21,6 +21,9 @@ from backend.config.constants import MAX_FILE_SIZE
 from backend.config.database_constants import get_task_status_codes
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.file_server_core import FileServerCore
+from backend.actions.grievance_intake.ensure_records import (
+    ensure_intake_records_for_attachment,
+)
 from backend.shared_functions.utterance_mapping_server import get_utterance
 from backend.task_queue.registered_tasks import process_file_upload_task
 from werkzeug.utils import secure_filename
@@ -134,6 +137,36 @@ def _validate_files(
     return uploaded_files, oversized_files, wrong_extensions_list
 
 
+def _resolve_grievance_for_upload(
+    grievance_id: Optional[str],
+    complainant_id: Optional[str],
+) -> Dict[str, Optional[str]]:
+    grievance_id = (grievance_id or "").strip() or None
+    complainant_id = (complainant_id or "").strip() or None
+
+    if not grievance_id:
+        ensured = ensure_intake_records_for_attachment(
+            db_manager,
+            grievance_id=None,
+            complainant_id=complainant_id,
+        )
+        return {
+            "grievance_id": ensured["grievance_id"],
+            "complainant_id": ensured["complainant_id"],
+        }
+    if not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
+        ensured = ensure_intake_records_for_attachment(
+            db_manager,
+            grievance_id=grievance_id,
+            complainant_id=complainant_id,
+        )
+        return {
+            "grievance_id": ensured["grievance_id"],
+            "complainant_id": ensured.get("complainant_id") or complainant_id,
+        }
+    return {"grievance_id": grievance_id, "complainant_id": complainant_id}
+
+
 # --- Routes (same paths as FileServerAPI) ---
 
 
@@ -229,7 +262,7 @@ async def generate_ids(request: Request):
 @router.post("/upload-files")
 async def upload_files(
     request: Request,
-    grievance_id: str = Form(...),
+    grievance_id: Optional[str] = Form(None),
     complainant_id: Optional[str] = Form(None),
     rasa_session_id: Optional[str] = Form(None),
     flask_session_id: Optional[str] = Form(None),
@@ -252,10 +285,25 @@ async def upload_files(
     )
 
     try:
+        grievance_id = (grievance_id or "").strip() or None
+        complainant_id = (complainant_id or "").strip() or None
+
         if not grievance_id:
-            file_server_core.log_event(event_type=FAILED, details={"error": "No grievance_id provided"})
-            error_message = get_utterance("file_server", "upload_files", 1, language_code)
-            return JSONResponse({"error": error_message}, status_code=400)
+            ensured = ensure_intake_records_for_attachment(
+                db_manager,
+                grievance_id=None,
+                complainant_id=complainant_id,
+            )
+            grievance_id = ensured["grievance_id"]
+            complainant_id = ensured["complainant_id"]
+        elif not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
+            ensured = ensure_intake_records_for_attachment(
+                db_manager,
+                grievance_id=grievance_id,
+                complainant_id=complainant_id,
+            )
+            grievance_id = ensured["grievance_id"]
+            complainant_id = ensured.get("complainant_id") or complainant_id
 
         if db_manager.is_grievance_archived(grievance_id):
             file_server_core.log_event(
@@ -278,19 +326,6 @@ async def upload_files(
         uploaded_files, oversized_files, wrong_extensions_list = _validate_files(
             file_server_core, files, grievance_id
         )
-
-        if not db_manager.check_entry_exists_for_entity_key("grievance_id", grievance_id):
-            stub: Dict[str, Any] = {
-                "grievance_id": grievance_id,
-                "source": "bot",
-                "grievance_description": "",
-            }
-            if complainant_id:
-                stub["complainant_id"] = complainant_id
-                db_manager.create_or_update_complainant(
-                    {"complainant_id": complainant_id, "source": "bot"}
-                )
-            db_manager.create_or_update_grievance(stub)
 
         if not uploaded_files:
             file_server_core.log_event(event_type=FAILED, details={"error": "All files were invalid"})
@@ -330,6 +365,8 @@ async def upload_files(
         return JSONResponse(
             {
                 "status": STARTED,
+                "grievance_id": grievance_id,
+                "complainant_id": complainant_id,
                 "flask_session_id": flask_session_id,
                 "message": "Files are being processed - those listed in oversized_files and wrong_extensions_list will be ignored",
                 "files": [f["file_id"] for f in uploaded_files],
@@ -338,6 +375,179 @@ async def upload_files(
                 "max_file_size": MAX_FILE_SIZE,
                 "task_id": task_ids[0] if task_ids else None,
                 "task_ids": task_ids,
+            },
+            status_code=202,
+        )
+    except Exception as e:
+        file_server_core.log_event(event_type=FAILED, details={"error": str(e)})
+        error_message = get_utterance("file_server", "upload_files", 6, language_code)
+        return JSONResponse(
+            {"error": error_message, "detail": str(e)},
+            status_code=500,
+        )
+
+
+@router.post("/upload-voice-chunk")
+async def upload_voice_chunk(
+    request: Request,
+    chunk_index: int = Form(...),
+    grievance_id: Optional[str] = Form(None),
+    complainant_id: Optional[str] = Form(None),
+    upload_id: Optional[str] = Form(None),
+    file_name: Optional[str] = Form(None),
+    mime_type: Optional[str] = Form(None),
+    rasa_session_id: Optional[str] = Form(None),
+    flask_session_id: Optional[str] = Form(None),
+    chunk: UploadFile = File(...),
+):
+    """Append one voice-note chunk (1s MediaRecorder slice). Idempotent on retry."""
+    language_code = _get_language_code(request)
+    try:
+        resolved = _resolve_grievance_for_upload(grievance_id, complainant_id)
+        grievance_id = resolved["grievance_id"]
+        complainant_id = resolved["complainant_id"]
+
+        if db_manager.is_grievance_archived(grievance_id):
+            return JSONResponse(
+                {
+                    "error": "This grievance has been archived. New uploads are not allowed.",
+                    "grievance_id": grievance_id,
+                },
+                status_code=409,
+            )
+
+        chunk_bytes = await chunk.read()
+        if chunk_index < 0:
+            return JSONResponse({"error": "Invalid chunk_index"}, status_code=400)
+
+        if not upload_id:
+            if chunk_index != 0:
+                return JSONResponse(
+                    {"error": "upload_id required for chunk_index > 0"},
+                    status_code=400,
+                )
+            if not file_name:
+                return JSONResponse({"error": "file_name required on first chunk"}, status_code=400)
+            session = file_server_core.create_voice_chunk_session(
+                grievance_id=grievance_id,
+                file_name=file_name,
+                mime_type=mime_type,
+            )
+            upload_id = session["upload_id"]
+        else:
+            session = None
+
+        try:
+            result = file_server_core.append_voice_chunk(
+                upload_id=upload_id,
+                chunk_index=chunk_index,
+                chunk_bytes=chunk_bytes,
+            )
+            session = result["session"]
+        except ValueError as exc:
+            code = str(exc)
+            if code == "upload_session_not_found":
+                return JSONResponse({"error": "Upload session expired or not found"}, status_code=404)
+            if code == "chunk_out_of_order":
+                return JSONResponse({"error": "Chunk received out of order"}, status_code=409)
+            if code == "empty_chunk":
+                return JSONResponse({"error": "Empty chunk"}, status_code=400)
+            if code == "voice_chunk_size_exceeded":
+                file_server_core.abort_voice_chunk_upload(upload_id)
+                return JSONResponse(
+                    {"error": "Voice note exceeds maximum size"},
+                    status_code=413,
+                )
+            raise
+
+        return JSONResponse(
+            {
+                "status": SUCCESS,
+                "upload_id": upload_id,
+                "file_id": session["file_id"],
+                "chunk_index": chunk_index,
+                "duplicate": result.get("duplicate", False),
+                "bytes_received": len(chunk_bytes),
+                "total_bytes": session["total_bytes"],
+                "chunks_received": session["next_chunk_index"],
+                "grievance_id": grievance_id,
+                "complainant_id": complainant_id,
+                "flask_session_id": flask_session_id,
+                "rasa_session_id": rasa_session_id,
+            }
+        )
+    except ValueError as exc:
+        if str(exc) in {"invalid_voice_filename", "invalid_voice_extension", "invalid_voice_mime_type"}:
+            return JSONResponse({"error": "Invalid voice note file"}, status_code=400)
+        raise
+    except Exception as e:
+        file_server_core.log_event(event_type=FAILED, details={"error": str(e)})
+        error_message = get_utterance("file_server", "upload_files", 6, language_code)
+        return JSONResponse(
+            {"error": error_message, "detail": str(e)},
+            status_code=500,
+        )
+
+
+@router.post("/upload-voice-complete")
+async def upload_voice_complete(
+    request: Request,
+    upload_id: str = Form(...),
+    grievance_id: Optional[str] = Form(None),
+    complainant_id: Optional[str] = Form(None),
+    flask_session_id: Optional[str] = Form(None),
+    rasa_session_id: Optional[str] = Form(None),
+):
+    """Finalize a chunked voice note and queue the standard file-upload task."""
+    language_code = _get_language_code(request)
+    try:
+        resolved = _resolve_grievance_for_upload(grievance_id, complainant_id)
+        grievance_id = resolved["grievance_id"]
+        complainant_id = resolved["complainant_id"]
+
+        if db_manager.is_grievance_archived(grievance_id):
+            return JSONResponse(
+                {
+                    "error": "This grievance has been archived. New uploads are not allowed.",
+                    "grievance_id": grievance_id,
+                },
+                status_code=409,
+            )
+
+        try:
+            file_data = file_server_core.finalize_voice_chunk_upload(
+                upload_id,
+                expected_grievance_id=grievance_id,
+            )
+        except ValueError as exc:
+            code = str(exc)
+            if code == "upload_session_not_found":
+                return JSONResponse({"error": "Upload session expired or not found"}, status_code=404)
+            if code == "no_chunks_received":
+                return JSONResponse({"error": "No audio chunks received"}, status_code=400)
+            if code == "grievance_mismatch":
+                return JSONResponse({"error": "Grievance mismatch for upload session"}, status_code=409)
+            raise
+
+        result = process_file_upload_task.delay(
+            grievance_id=grievance_id,
+            file_data=file_data,
+            session_id=flask_session_id,
+        )
+
+        return JSONResponse(
+            {
+                "status": STARTED,
+                "grievance_id": grievance_id,
+                "complainant_id": complainant_id,
+                "flask_session_id": flask_session_id,
+                "rasa_session_id": rasa_session_id,
+                "message": "Voice note is being processed",
+                "files": [file_data["file_id"]],
+                "upload_id": upload_id,
+                "task_id": result.id,
+                "task_ids": [result.id],
+                "chunked": True,
             },
             status_code=202,
         )

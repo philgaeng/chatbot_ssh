@@ -1,17 +1,12 @@
-import asyncio
-
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+from tests.orchestrator.conftest import run_async
 
 
 def _invoke(action_name, slots, domain):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="ask-profile-test")
-    _run(invoke_action(action_name, dispatcher, tracker, domain))
+    run_async(invoke_action(action_name, dispatcher, tracker, domain))
     assert dispatcher.messages, f"Expected message from {action_name}"
     return dispatcher.messages[-1]
 

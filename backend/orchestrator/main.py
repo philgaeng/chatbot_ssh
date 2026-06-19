@@ -109,17 +109,20 @@ async def post_message(req: MessageRequest) -> MessageResponse:
 
     text = req.text or ""
     payload = req.payload
+    metadata = req.metadata or {}
 
     _log = logging.getLogger(__name__)
     try:
-        if req.metadata and req.metadata.get("map_pin"):
-            pin = req.metadata["map_pin"]
+        if metadata.get("attachment_sync"):
+            payload = payload or "/attachment_ids_sync"
+        if metadata.get("map_pin"):
+            pin = metadata["map_pin"]
             payload = (
                 f'/map_pin_set{{"lat":{pin.get("lat")},"lng":{pin.get("lng")}}}'
             )
 
         messages, next_state, expected_input_type = await run_flow_turn(
-            session, text, payload, _DOMAIN
+            session, text, payload, _DOMAIN, metadata=metadata
         )
     except Exception as e:
         _log.exception(

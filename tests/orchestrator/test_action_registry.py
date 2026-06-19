@@ -1,12 +1,10 @@
-import asyncio
 import re
+
+import pytest
 
 from backend.orchestrator.adapters import CollectingDispatcher, SessionTracker
 from backend.orchestrator.action_registry import invoke_action, events_to_slot_updates
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+from tests.orchestrator.conftest import run_async
 
 
 def test_invoke_action_start_grievance_process_sets_slots(domain):
@@ -18,7 +16,7 @@ def test_invoke_action_start_grievance_process_sets_slots(domain):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="user-1")
 
-    events = _run(
+    events = run_async(
         invoke_action(
             "action_start_grievance_process",
             dispatcher,
@@ -50,7 +48,7 @@ def test_invoke_unknown_action_raises(domain):
     tracker = SessionTracker(slots={}, sender_id="user-1")
 
     try:
-        _run(invoke_action("action_does_not_exist", dispatcher, tracker, domain))
+        run_async(invoke_action("action_does_not_exist", dispatcher, tracker, domain))
     except ValueError as e:
         assert "Unknown action" in str(e)
     else:
@@ -65,7 +63,7 @@ def test_invoke_action_start_status_check_sets_story_main(domain):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="user-status-1")
 
-    events = _run(
+    events = run_async(
         invoke_action(
             "action_start_status_check",
             dispatcher,
@@ -85,7 +83,7 @@ def test_invoke_action_ask_status_check_method_sends_buttons(domain):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="user-status-2")
 
-    _run(
+    run_async(
         invoke_action(
             "action_ask_status_check_method",
             dispatcher,
@@ -138,7 +136,7 @@ def test_invoke_action_submit_seah_uses_dedicated_path(domain, monkeypatch):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="user-seah-1")
 
-    events = _run(invoke_action("action_submit_seah", dispatcher, tracker, domain))
+    events = run_async(invoke_action("action_submit_seah", dispatcher, tracker, domain))
     slot_updates = events_to_slot_updates(events)
     assert slot_updates.get("grievance_id") == "GR-2026-KO-JH-1234"
     assert any("GR-2026-KO-JH-1234" in m.get("text", "") for m in dispatcher.messages)
@@ -164,10 +162,12 @@ def test_invoke_action_seah_outro_registered(domain, monkeypatch):
     dispatcher = CollectingDispatcher()
     tracker = SessionTracker(slots=slots, sender_id="user-seah-outro")
 
-    _run(invoke_action("action_seah_outro", dispatcher, tracker, domain))
+    run_async(invoke_action("action_seah_outro", dispatcher, tracker, domain))
 
     assert dispatcher.messages, "Expected outro message"
-    assert any("focal-point" in m.get("text", "").lower() for m in dispatcher.messages)
+    texts = " ".join(m.get("text", "") for m in dispatcher.messages).lower()
+    assert "seah" in texts and "focal point" in texts
+    assert messages[-1].get("buttons") if (messages := dispatcher.messages) else False
 
 
 def test_submit_seah_case_reference_uses_canonical_grievance_id():
