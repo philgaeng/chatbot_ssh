@@ -16,6 +16,7 @@ def test_attachment_ids_sync_without_story_main_returns_main_menu(orch_client):
     user_id = "attach-sync-user-1"
     session = create_session(user_id)
     session["state"] = "main_menu"
+    session["slots"]["language_code"] = "en"
     save_session(session)
 
     r = orch_client.post(
@@ -38,6 +39,63 @@ def test_attachment_ids_sync_without_story_main_returns_main_menu(orch_client):
     assert updated["slots"]["grievance_id"] == "GR-EARLY-001-B"
     assert updated["slots"]["complainant_id"] == "CP-EARLY-001-B"
     assert any("saved" in (m.get("text") or "").lower() for m in body.get("messages", []))
+
+
+def test_attachment_ids_sync_before_language_stays_intro(orch_client):
+    user_id = "attach-sync-user-intro"
+    session = create_session(user_id)
+    session["state"] = "intro"
+    session["slots"]["complainant_district"] = "Jhapa"
+    session["slots"]["complainant_province"] = "Koshi"
+    save_session(session)
+
+    r = orch_client.post(
+        "/message",
+        json={
+            "user_id": user_id,
+            "payload": "/attachment_ids_sync",
+            "metadata": {
+                "attachment_sync": {
+                    "grievance_id": "GR-EARLY-INTRO-B",
+                    "complainant_id": "CP-EARLY-INTRO-B",
+                }
+            },
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["next_state"] == "intro"
+    assert not any(
+        "Hello! Welcome to the Grievance Management Chatbot." in (m.get("text") or "")
+        for m in body.get("messages", [])
+    )
+
+    r2 = orch_client.post(
+        "/message",
+        json={"user_id": user_id, "payload": "/set_english"},
+    )
+    assert r2.status_code == 200
+    texts = [m.get("text", "") for m in r2.json().get("messages", []) if m.get("text")]
+    assert any("Hello! Welcome to the Grievance Management Chatbot." in t for t in texts)
+    assert r2.json()["next_state"] == "main_menu"
+
+
+def test_set_english_from_main_menu_without_language(orch_client):
+    user_id = "attach-sync-user-lang"
+    session = create_session(user_id)
+    session["state"] = "main_menu"
+    session["slots"]["complainant_district"] = "Jhapa"
+    session["slots"]["complainant_province"] = "Koshi"
+    save_session(session)
+
+    r = orch_client.post(
+        "/message",
+        json={"user_id": user_id, "payload": "/set_english"},
+    )
+    assert r.status_code == 200
+    texts = [m.get("text", "") for m in r.json().get("messages", []) if m.get("text")]
+    assert any("Hello! Welcome to the Grievance Management Chatbot." in t for t in texts)
+    assert get_session(user_id)["slots"]["language_code"] == "en"
 
 
 def test_attachment_ids_sync_with_story_main_keeps_state(orch_client):

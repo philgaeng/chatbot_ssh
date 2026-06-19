@@ -358,12 +358,14 @@ function handleOrchestratorResponse(response) {
     window.introductionWindowTimer = null;
   }
 
+  let turnHasButtons = false;
   messages.forEach((m) => {
     if (m.text) {
       window.lastBotMessageText = m.text;
       uiActions.appendMessage(m.text, "received");
     }
     if (m.buttons && m.buttons.length > 0) {
+      turnHasButtons = true;
       const filtered = filterCloseQuickReplies(m.buttons);
       window.lastBotQuickReplies = filtered.map((btn) => ({
         title: btn.title || btn.text || "",
@@ -378,6 +380,11 @@ function handleOrchestratorResponse(response) {
       eventHandlers.handleCustomPayload(m.json_message);
     }
   });
+
+  if (!turnHasButtons) {
+    window.lastBotQuickReplies = [];
+    uiActions.replaceQuickReplies([]);
+  }
 
   maybeShowFiledBannerForState(next_state);
 
