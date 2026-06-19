@@ -8,7 +8,7 @@
 #   AWS:  aws-up | aws-deploy
 #   Prod: prod-deploy (VPN + password SSH → 103.175.193.226)
 #
-#   Also: migrate_all, wsl-auth, wsl-auth-ps, wsl-keycloak-ps, keycloak-setup, wsl-seed
+#   Also: migrate_all, seed_seah_providers, wsl-auth, wsl-keycloak-ps, keycloak-setup, wsl-seed
 
 PROJECT_NAME = rasa_project
 PROJECT_DIRECTORY ?= nepal_chatbot
@@ -80,6 +80,12 @@ AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default g
 AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
 PROD_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth
 PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui_auth nginx
+
+# SEAH service provider directory (chatbot outro — public.seah_service_providers).
+# Data-only import; schema via migrate_public (pub009). Commit the CSV after refreshing from xlsx.
+SEAH_PROVIDERS_IMPORT_SCRIPT = scripts/database/import_seah_service_providers_xlsx.py
+SEAH_PROVIDERS_CSV = scripts/database/seeds/seah_service_providers_kl_road.csv
+SEAH_PROVIDERS_SEED_CMD = python $(SEAH_PROVIDERS_IMPORT_SCRIPT) --from-csv --csv $(SEAH_PROVIDERS_CSV)
 
 # $(1)=space-separated service names, $(2)=deploy label — one image at a time (no parallel build).
 define REMOTE_BUILD_SERVICES_SEQUENTIAL
@@ -177,12 +183,21 @@ set -e; \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 endef
 
+# $(1)=remote repo directory — upsert SEAH centres from committed CSV (idempotent).
+define REMOTE_SEED_SEAH_PROVIDERS
+set -e; \
+cd $(1) && \
+$(REMOTE_COMPOSE) run --rm --no-deps backend $(SEAH_PROVIDERS_SEED_CMD)
+endef
+
 .PHONY: help \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full \
 	prod-deploy prod-deploy-light prod-deploy-full prod-sync-db-from-aws ssh-prod \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_all reset_public_dev \
+	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
+	aws-seed-seah-providers prod-seed-seah-providers \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
 	compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local \
 	compose_docker_wsl_ticketing compose_docker_wsl_down compose-down-all stop-all \
@@ -218,8 +233,12 @@ help:
 	@echo "  Or set PROD_SERVER_USER, PROD_HOST, PROD_REMOTE_DIR, PROD_SSH_KEY in env.local"
 	@echo ""
 	@echo "DB / optional:"
-	@echo "  make migrate_all    both Alembic streams (ticketing.* + public.*)"
-	@echo "  make wsl-seed       re-seed GRM demo tickets (first-time / reset)"
+	@echo "  make migrate_all              both Alembic streams (ticketing.* + public.*)"
+	@echo "  make seed_seah_providers      upsert SEAH centres from committed CSV (local Docker)"
+	@echo "  make seed_seah_providers_xlsx refresh CSV from Excel + upsert (after workbook update)"
+	@echo "  make aws-seed-seah-providers  upsert SEAH centres on staging EC2"
+	@echo "  make prod-seed-seah-providers upsert SEAH centres on prod (VPN)"
+	@echo "  make wsl-seed                 re-seed GRM demo tickets (first-time / reset)"
 	@echo "  make test-ticketing     pytest tests/ticketing in ticketing_api container"
 	@echo "  make test-ticketing-host pytest on WSL host (needs dev-grm-deps + db :5433)"
 	@echo "  make dev-grm-deps   pip install -r requirements.grm.txt (host conda env)"
@@ -307,6 +326,25 @@ migrate_public:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 
 migrate_all: migrate_ticketing migrate_public
+
+# SEAH service providers (public.seah_service_providers) — data import, not schema.
+# Run after migrate_public on fresh DBs. Idempotent upsert from git-tracked CSV.
+seed_seah_providers:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend $(SEAH_PROVIDERS_SEED_CMD)
+
+# Parse backend/dev-resources/SEAH Service Providers_NEP.xlsx, rewrite CSV, then upsert.
+seed_seah_providers_xlsx:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python $(SEAH_PROVIDERS_IMPORT_SCRIPT)
+
+seed_seah_providers_dry_run:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend $(SEAH_PROVIDERS_SEED_CMD) --dry-run
+
+aws-seed-seah-providers:
+	$(SSH_RUNNING) '$(call REMOTE_SEED_SEAH_PROVIDERS,$(REMOTE_DIR_RUNNING))'
+
+prod-seed-seah-providers:
+	@echo "VPN required. Seeding SEAH providers on $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_SEED_SEAH_PROVIDERS,$(PROD_REMOTE_DIR))'
 
 # Dev-only: wipe public schema then re-migrate both streams.
 reset_public_dev:
