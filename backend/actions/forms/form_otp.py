@@ -102,7 +102,7 @@ class ActionAskOtpInput(BaseOtpAction):
                     resend_count=resend_count + 1, max_attempts=3 - resend_count)
                 message_bot = message_bot + " " + message_bot_retry
             
-            show_otp_in_chat = False
+            sms_sent = False
             try:
                 from backend.clients.messaging_api import send_sms as send_sms_via_api
 
@@ -111,23 +111,19 @@ class ActionAskOtpInput(BaseOtpAction):
                     message_sms,
                     context={"source_system": "chatbot", "purpose": "otp", "channel": "sms"},
                 )
-                show_otp_in_chat = True
+                sms_sent = True
                 self.logger.info(f"{self.name()} - SMS sent successfully")
-            except RuntimeError as e:
-                # Delivery failed/disabled — same as pre-API send_sms() returning False
+            except Exception as e:
                 self.logger.warning(
                     f"{self.name()} - SMS not delivered, using chat fallback: {e}"
                 )
-                show_otp_in_chat = True
-            except Exception as e:
-                self.logger.error(f"{self.name()} - Error sending SMS: {e}")
-                dispatcher.utter_message(text=self.get_utterance(4))
 
-            if show_otp_in_chat:
-                dispatcher.utter_message(text=message_bot, buttons=buttons_otp)
-                dispatcher.utter_message(
-                    text="TEMPORARY MESSAGE FOR TESTING " + message_sms
-                )
+            if not sms_sent:
+                dispatcher.utter_message(text=self.get_utterance(4))
+                dispatcher.utter_message(text=message_sms)
+                message_bot = self.get_utterance(8).format(phone_number=phone_number)
+
+            dispatcher.utter_message(text=message_bot, buttons=buttons_otp)
         
         if otp_status == "resend" and resend_count >= 3:
             message_max_attempts = self.get_utterance(5)

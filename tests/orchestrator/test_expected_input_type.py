@@ -41,6 +41,21 @@ def test_skip_on_any_message_in_turn():
     assert _derive_expected_input_type(messages) == "text"
 
 
+def test_error_after_consent_buttons_in_same_turn_means_text():
+    """OTP consent buttons earlier in the turn must not lock composer after an error-only last message."""
+    messages = [
+        {
+            "text": "You must verify your phone number",
+            "buttons": [
+                {"title": "Validate with OTP", "payload": "/affirm"},
+                {"title": "Skip OTP", "payload": "/deny"},
+            ],
+        },
+        {"text": "Text messages are not available yet. Please use the verification code below."},
+    ]
+    assert _derive_expected_input_type(messages) == "text"
+
+
 def _walk_to_contact_province_ask(client: TestClient, user_id: str) -> None:
     steps = [
         {"text": ""},

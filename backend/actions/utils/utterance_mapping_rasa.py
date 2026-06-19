@@ -1364,8 +1364,12 @@ UTTERANCE_MAPPING = {
                     'ne': "यो तपाईंको {resend_count} प्रयास हो। तपाईंलाई अब {max_attempts} प्रयास बाँचेको छ।"
                 },
                 4: {
-                    'en': "Sorry, we couldn't send the verification code.",
-                    'ne': "मलाई खुशी लाग्यो कि तपाईं अपनो मन बदल्न चाहनुहुन्छ। म तपाईंलाई के मद्दत गर्न सक्छु?"
+                    'en': "Text messages are not available yet. Please use the verification code below.",
+                    'ne': "अहिले SMS उपलब्ध छैन। कृपया तल देखाइएको प्रमाणीकरण कोड प्रयोग गर्नुहोस्।"
+                },
+                8: {
+                    'en': "-------- OTP verification --------\nEnter the 6-digit code shown above to verify your phone number {phone_number}.",
+                    'ne': "-------- OTP प्रमाणीकरण --------\nमाथि देखाइएको ६-अंकीय कोड प्रविष्ट गरेर {phone_number} प्रमाणित गर्नुहोस्।"
                 },
                 5: {
                     'en': "❌ Maximum resend attempts reached. Please try again later or skip verification.",

@@ -336,8 +336,16 @@ def _buttons_from_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any
 
 
 def _derive_expected_input_type(messages: List[Dict[str, Any]]) -> str:
-    """buttons when the turn offers quick replies without Skip; else free text."""
-    buttons = _buttons_from_messages(messages)
+    """buttons when the latest turn message offers quick replies without Skip; else free text."""
+    if not messages:
+        return "text"
+    # Only the last bot message in this turn should drive composer mode. Earlier
+    # messages in the same turn (e.g. OTP consent buttons) must not keep the UI
+    # locked after a follow-up error-only message.
+    last_message = messages[-1]
+    buttons = [
+        b for b in (last_message.get("buttons") or []) if b.get("payload")
+    ]
     if not buttons:
         return "text"
     if any((b.get("payload") or "") in _SKIP_PAYLOADS for b in buttons):
@@ -485,6 +493,52 @@ async def _begin_seah_intake(
     return next_state
 
 
+async def _set_language_and_show_main_menu(
+    session: Dict[str, Any],
+    intent: str,
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> str:
+    """Apply /set_english or /set_nepali then render main menu in that language."""
+    action_name = f"action_{intent}"
+    lang_dispatcher = CollectingDispatcher()
+    events = await invoke_action(
+        action_name,
+        lang_dispatcher,
+        SessionTracker(
+            slots=session["slots"],
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=session.get("active_loop"),
+            requested_slot=session.get("requested_slot"),
+        ),
+        domain,
+    )
+    slot_updates.update(events_to_slot_updates(events))
+    session["slots"].update(slot_updates)
+
+    main_dispatcher = CollectingDispatcher()
+    await invoke_action(
+        "action_main_menu",
+        main_dispatcher,
+        SessionTracker(
+            slots=session["slots"],
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        ),
+        domain,
+    )
+    dispatcher.messages.extend(main_dispatcher.messages)
+    session["state"] = "main_menu"
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    return "main_menu"
+
+
 async def _handle_attachment_ids_sync(
     session: Dict[str, Any],
     dispatcher: CollectingDispatcher,
@@ -511,11 +565,11 @@ async def _handle_attachment_ids_sync(
     session["slots"].update(slot_updates)
 
     story_main = session["slots"].get("story_main")
-    lang = session["slots"].get("language_code") or "en"
+    language_code = session["slots"].get("language_code")
     state = session.get("state", "intro")
 
     if story_main:
-        if lang == "ne":
+        if language_code == "ne":
             dispatcher.utter_message(
                 text="तपाईंको फाइल सुरक्षित भयो। तलबाट जारी राख्नुहोस्।"
             )
@@ -529,10 +583,26 @@ async def _handle_attachment_ids_sync(
             _derive_expected_input_type(dispatcher.messages),
         )
 
-    session["state"] = "main_menu"
     session["active_loop"] = None
     session["requested_slot"] = None
-    if lang == "ne":
+
+    if not language_code:
+        # Early upload before language choice — sync IDs only; stay on intro.
+        session["state"] = "intro"
+        dispatcher.utter_message(
+            text=(
+                "Your file has been saved. Please choose your language to continue.\n\n"
+                "तपाईंको फाइल सुरक्षित भयो। जारी राख्न कृपया भाषा छान्नुहोस्।"
+            )
+        )
+        return (
+            dispatcher.messages,
+            "intro",
+            _derive_expected_input_type(dispatcher.messages),
+        )
+
+    session["state"] = "main_menu"
+    if language_code == "ne":
         dispatcher.utter_message(
             text="तपाईंको फाइल सुरक्षित भयो। कृपया अगाडि बढ्न एउटा विकल्प छान्नुहोस्।"
         )
@@ -745,35 +815,14 @@ async def run_flow_turn(
         # user clicks a language button, set the language and go straight to main
         # menu without re-sending the intro message.
         if intent in ("set_english", "set_nepali"):
-            action_name = f"action_{intent}"  # action_set_english, action_set_nepali
-            lang_dispatcher = CollectingDispatcher()
-            events = await invoke_action(
-                action_name,
-                lang_dispatcher,
-                tracker,
+            next_state = await _set_language_and_show_main_menu(
+                session,
+                intent,
+                dispatcher,
                 domain,
+                slot_updates,
+                latest_message,
             )
-            slot_updates = events_to_slot_updates(events)
-            session["slots"].update(slot_updates)
-
-            # Immediately show the main menu in the selected language so the user
-            # doesn't need to click the language button twice.
-            main_dispatcher = CollectingDispatcher()
-            main_tracker = SessionTracker(
-                slots=session["slots"],
-                sender_id=session.get("user_id", "default"),
-                latest_message=latest_message,
-                active_loop=None,
-                requested_slot=None,
-            )
-            await invoke_action(
-                "action_main_menu",
-                main_dispatcher,
-                main_tracker,
-                domain,
-            )
-            dispatcher.messages.extend(main_dispatcher.messages)
-            next_state = "main_menu"
         else:
             await invoke_action("action_introduce", dispatcher, tracker, domain)
 
@@ -785,8 +834,17 @@ async def run_flow_turn(
             "start_seah_intake",
             "start_status_check",
         }
+        if intent in ("set_english", "set_nepali"):
+            next_state = await _set_language_and_show_main_menu(
+                session,
+                intent,
+                dispatcher,
+                domain,
+                slot_updates,
+                latest_message,
+            )
         # Avoid repeating the main menu utterance when the user already clicked one of its options.
-        if intent not in menu_transition_intents:
+        elif intent not in menu_transition_intents:
             await invoke_action("action_main_menu", dispatcher, tracker, domain)
         if intent == "new_grievance":
             ask_dispatcher = CollectingDispatcher()
