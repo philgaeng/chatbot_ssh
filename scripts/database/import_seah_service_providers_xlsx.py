@@ -152,6 +152,13 @@ def write_csv(rows: List[Dict[str, str]], csv_path: Path) -> None:
         writer.writerows(rows)
 
 
+def read_csv(csv_path: Path) -> List[Dict[str, str]]:
+    if not csv_path.is_file():
+        raise FileNotFoundError(csv_path)
+    with csv_path.open(newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
 def upsert_rows(rows: List[Dict[str, str]]) -> int:
     from backend.services.database_services.postgres_services import db_manager
 
@@ -210,7 +217,26 @@ def main() -> int:
         default=str(SCRIPT_DIR / "seeds/seah_service_providers_kl_road.csv"),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--from-csv",
+        action="store_true",
+        help="Upsert from --csv only (skip Excel parse). Use for demo/prod seeding.",
+    )
     args = parser.parse_args()
+
+    csv_path = Path(args.csv)
+
+    if args.from_csv:
+        rows = read_csv(csv_path)
+        if not rows:
+            raise SystemExit(f"No provider rows in CSV: {csv_path}")
+        print(f"Loaded {len(rows)} rows from {csv_path}")
+        if args.dry_run:
+            print("Dry run — skipping database upsert")
+            return 0
+        count = upsert_rows(rows)
+        print(f"Upserted {count} rows into seah_service_providers")
+        return 0
 
     xlsx_path = Path(args.xlsx)
     if not xlsx_path.is_file():
@@ -220,7 +246,6 @@ def main() -> int:
     if not rows:
         raise SystemExit("No provider rows parsed from workbook")
 
-    csv_path = Path(args.csv)
     write_csv(rows, csv_path)
     print(f"Wrote {len(rows)} rows to {csv_path}")
 

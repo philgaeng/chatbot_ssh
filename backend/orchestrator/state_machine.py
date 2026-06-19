@@ -1582,24 +1582,48 @@ async def run_flow_turn(
             slots_after.update(slot_updates)
 
             if intent == "status_check_request_follow_up":
-                ask_dispatcher = CollectingDispatcher()
-                events = await invoke_action(
-                    "action_status_check_request_follow_up",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
+                from backend.actions.status_check_follow_up import (
+                    follow_up_needs_otp_verification,
                 )
-                slot_updates.update(events_to_slot_updates(events))
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                next_state = "done"
-                session["active_loop"] = None
-                session["requested_slot"] = None
+
+                if follow_up_needs_otp_verification(slots_after):
+                    for otp_slot in (
+                        "otp_consent",
+                        "otp_input",
+                        "otp_status",
+                        "otp_number",
+                    ):
+                        slot_updates[otp_slot] = None
+                    slot_updates["otp_resend_count"] = 0
+                    session["active_loop"] = "form_otp"
+                    session["requested_slot"] = None
+                    session["slots"].update(slot_updates)
+                    otp_form = _get_otp_form()
+                    msgs, form_updates, _ = await run_form_turn(
+                        otp_form, session, None, domain
+                    )
+                    dispatcher.messages.extend(msgs)
+                    slot_updates.update(form_updates)
+                    next_state = "status_check_form"
+                else:
+                    ask_dispatcher = CollectingDispatcher()
+                    events = await invoke_action(
+                        "action_status_check_request_follow_up",
+                        ask_dispatcher,
+                        SessionTracker(
+                            slots=slots_after,
+                            sender_id=session.get("user_id", "default"),
+                            latest_message=latest_message,
+                            active_loop=None,
+                            requested_slot=None,
+                        ),
+                        domain,
+                    )
+                    slot_updates.update(events_to_slot_updates(events))
+                    dispatcher.messages.extend(ask_dispatcher.messages)
+                    next_state = "done"
+                    session["active_loop"] = None
+                    session["requested_slot"] = None
             elif intent == "status_check_modify_grievance":
                 ask_dispatcher = CollectingDispatcher()
                 events = await invoke_action(

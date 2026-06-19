@@ -351,10 +351,10 @@ class LegacyActionStatusCheckRequestFollowUp(BaseAction):
         self._initialize_language_and_helpers(tracker)
         complainant_phone = tracker.get_slot("complainant_phone")
         grievance_id = tracker.get_slot("status_check_grievance_id_selected")
-        if not tracker.get_slot("otp_status") == "verified":
+        issue = self.get_follow_up_phone_issue(tracker)
+        if issue:
             utterance = self.get_utterance(1)
             dispatcher.utter_message(text=utterance)
-            issue = self.get_follow_up_phone_issue(tracker)
             if issue == "no_phone":
                 dispatcher.utter_message(text=self.get_utterance(3))
             else:

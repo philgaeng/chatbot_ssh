@@ -846,18 +846,12 @@ class ActionFlowHelpersMixin(ActionHelpersMixin):
 
     def get_follow_up_phone_issue(self, tracker: Tracker) -> Optional[Literal["no_phone", "not_verified"]]:
         """
-        Determine why follow-up cannot be completed: no phone on file, or phone not verified.
-        Returns None if phone is verified (follow-up can proceed).
-        Reusable by any action that needs to explain "cannot send follow-up" (e.g. status check).
+        Determine why follow-up cannot be completed: no phone on file, or (when SMS is
+        enabled) phone not OTP-verified. Returns None when follow-up may proceed.
         """
-        if tracker.get_slot("otp_status") == "verified":
-            return None
-        complainant_phone = tracker.get_slot("complainant_phone")
-        if not complainant_phone or complainant_phone == self.SKIP_VALUE:
-            return "no_phone"
-        if not self.helpers.is_valid_phone(complainant_phone):
-            return "no_phone"
-        return "not_verified"
+        from backend.actions.status_check_follow_up import get_follow_up_blocker
+
+        return get_follow_up_blocker(dict(tracker.current_slot_values()))
 
     def prepare_grievance_text_for_display(self, grievance: Dict, display_only_short: bool = True) -> str:
         key_mapping_language= {

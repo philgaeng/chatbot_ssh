@@ -191,9 +191,9 @@ class ActionStatusCheckRequestFollowUp(BaseAction):
         complainant_phone = tracker.get_slot("complainant_phone")
         grievance_id = tracker.get_slot("status_check_grievance_id_selected")
 
-        if tracker.get_slot("otp_status") != "verified":
+        issue = self.get_follow_up_phone_issue(tracker)
+        if issue:
             dispatcher.utter_message(text=self._get_status_check_utterance(1))
-            issue = self.get_follow_up_phone_issue(tracker)
             if issue == "no_phone":
                 dispatcher.utter_message(text=self._get_status_check_utterance(3))
             else:

@@ -8,7 +8,8 @@ This repository now uses a Docker-first operational model.
   - `init_db.sh`: container entrypoint used by `db_init` profile.
 - `scripts/database/`
   - `init.py`, `config.sh`: DB bootstrap path used by `scripts/docker/init_db.sh`.
-  - `migrate_seah_demo_catalog.py`, `import_seah_demo_seed_csv.py`, `seeds/`: optional SEAH demo seed flow.
+  - `import_seah_service_providers_xlsx.py`, `seeds/seah_service_providers_kl_road.csv`: SEAH support-centre directory for chatbot outro (`public.seah_service_providers`). Makefile: `make seed_seah_providers` (CSV upsert), `make seed_seah_providers_xlsx` (refresh CSV from Excel).
+  - `migrate_seah_demo_catalog.py`, `import_seah_demo_seed_csv.py`, `seeds/`: legacy SEAH demo catalog (`seah_contact_points`). Makefile: `make compose_seed_seah_catalog`.
 - `scripts/ops/`
   - Operational helper scripts (for example TLS renewal cron install).
   - `test-smtp.sh` / `test_smtp.py`: verify SMTP env, TCP reachability, and optional test send (runs in `backend` container).
