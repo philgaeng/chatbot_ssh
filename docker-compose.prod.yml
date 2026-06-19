@@ -19,6 +19,12 @@ services:
   grm_ui:
     profiles: [demo]
 
+  # Keycloak sends officer invite mail from this container (Java SMTP). Prefer IPv4 —
+  # Docker DNS can return IPv6 first; prod network has no IPv6 route to Infomaniak.
+  keycloak:
+    environment:
+      JAVA_OPTS_APPEND: "-Djava.net.preferIPv4Stack=true"
+
   nginx:
     volumes: !override
       - ./deployment/nginx/webchat_rest_compose_prod.tls.conf:/etc/nginx/conf.d/webchat_rest_compose_prod.tls.conf:ro
