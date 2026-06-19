@@ -204,6 +204,18 @@ export const U = {
       en: "Maximum length ({max}) reached. Uploading…",
       ne: "अधिकतम लम्बाइ ({max}) पुग्यो। अपलोड गर्दैछ…",
     },
+    voice_chunk_uploading: {
+      en: "Uploading voice note…",
+      ne: "आवाज नोट अपलोड गर्दैछ…",
+    },
+    voice_chunk_error: {
+      en: "Could not upload voice note. Check your connection and try again.",
+      ne: "आवाज नोट अपलोड गर्न सकिएन। जडान जाँच गरी पुन: प्रयास गर्नुहोस्।",
+    },
+    voice_max_size: {
+      en: "Voice note is too large. Try a shorter recording.",
+      ne: "आवाज नोट धेरै ठूलो भयो। छोटो रेकर्डिङ प्रयास गर्नुहोस्।",
+    },
     mic_denied: {
       en: "Microphone access is required to record.",
       ne: "रेकर्ड गर्न माइक्रोफोन अनुमति चाहिन्छ।",
@@ -317,8 +329,8 @@ export const U = {
       ne: "गुनासो विवरण बताउँदा मात्र आवाज रेकर्ड उपलब्ध छ।",
     },
     recording: {
-      en: "Recording… tap again to stop (max 45 seconds).",
-      ne: "रेकर्डिङ… रोक्न फेरि थिच्नुहोस् (अधिकतम ४५ सेकेन्ड)।",
+      en: "Recording… tap again to stop (max {max} seconds).",
+      ne: "रेकर्डिङ… रोक्न पुन: थिच्नुहोस् (अधिकतम {max} सेकेन्ड)।",
     },
     max_length: {
       en: "Maximum recording length reached. Uploading your voice note…",
@@ -349,6 +361,16 @@ export const U = {
     allow: { en: "Allow", ne: "अनुमति दिनुहोस्" },
     deny: { en: "Not now", ne: "अहिले होइन" },
   },
+  accessibility: {
+    larger_text_enable: {
+      en: "Use larger text",
+      ne: "ठूलो अक्षर प्रयोग गर्नुहोस्",
+    },
+    larger_text_disable: {
+      en: "Use standard text",
+      ne: "सामान्य अक्षर प्रयोग गर्नुहोस्",
+    },
+  },
   composer: {
     placeholder_text: {
       en: "Please type your answer here",
@@ -359,12 +381,16 @@ export const U = {
       ne: "कृपया माथिका बटनहरू प्रयोग गर्नुहोस्",
     },
     hint_text: {
-      en: "Type your answer below",
-      ne: "तल आफ्नो जवाफ टाइप गर्नुहोस्",
+      en: "Type your answer above",
+      ne: "माथि आफ्नो जवाफ टाइप गर्नुहोस्",
     },
     hint_buttons: {
       en: "Choose one of the options above",
       ne: "माथिका विकल्पहरूमध्ये एक छान्नुहोस्",
+    },
+    hint_send_attachment: {
+      en: "Tap Send to upload your attachment",
+      ne: "संलग्न फाइल अपलोड गर्न पठाउनुहोस् थिच्नुहोस्",
     },
   },
   attach_button: {

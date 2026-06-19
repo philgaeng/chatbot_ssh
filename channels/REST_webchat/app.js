@@ -40,6 +40,7 @@ function setChatLauncherVisible(visible) {
   }
 }
 let closeButton;
+let textSizeToggle;
 let messageForm;
 let messageInput;
 let messages;
@@ -138,6 +139,33 @@ function getUrlParams() {
 }
 
 const LANG_STORAGE_KEY = "rest_webchat_lang";
+const TEXT_SIZE_STORAGE_KEY = "rest_webchat_large_text";
+
+function isLargeTextEnabled() {
+  return localStorage.getItem(TEXT_SIZE_STORAGE_KEY) === "true";
+}
+
+function updateTextSizeToggleUI(enabled) {
+  if (!textSizeToggle) return;
+  const label = get(
+    enabled ? "accessibility.larger_text_disable" : "accessibility.larger_text_enable"
+  );
+  textSizeToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
+  textSizeToggle.setAttribute("aria-label", label);
+  textSizeToggle.title = label;
+  textSizeToggle.textContent = enabled ? "A" : "A+";
+  textSizeToggle.classList.toggle("is-active", enabled);
+}
+
+function applyLargeTextPreference(enabled) {
+  document.body.classList.toggle("chat-text-large", enabled);
+  localStorage.setItem(TEXT_SIZE_STORAGE_KEY, enabled ? "true" : "false");
+  updateTextSizeToggleUI(enabled);
+}
+
+function initializeTextSizePreference() {
+  document.body.classList.toggle("chat-text-large", isLargeTextEnabled());
+}
 
 function normalizeLang(lang) {
   return lang === "en" || lang === "ne" ? lang : null;
@@ -157,6 +185,7 @@ function persistLanguagePreference(lang) {
   if (!normalized) return;
   setLanguage(normalized);
   localStorage.setItem(LANG_STORAGE_KEY, normalized);
+  updateTextSizeToggleUI(isLargeTextEnabled());
 }
 
 // Create a temporary session ID
@@ -374,6 +403,7 @@ function handleOrchestratorResponse(response) {
     window.lastBotQuickReplies
   );
   uiActions.setComposerMode(composerMode);
+  uiActions.refreshComposerSubmitState();
 }
 
 window.updateCloseControlsVisibility = updateCloseControlsVisibility;
@@ -526,6 +556,8 @@ async function initializeChat() {
   chatLauncherZone = document.getElementById("chat-launcher-zone");
   chatLauncher = document.getElementById("chat-launcher");
   closeButton = document.querySelector(".close-button");
+  textSizeToggle = document.getElementById("text-size-toggle");
+  updateTextSizeToggleUI(isLargeTextEnabled());
   messageForm = document.getElementById("form");
   messageInput = document.getElementById("message-input");
   fileInput = document.getElementById("file-input");
@@ -534,6 +566,12 @@ async function initializeChat() {
   initMapPicker();
   initVoiceNote({
     button: voiceNoteButton,
+    getUploadContext: () => ({
+      grievanceId: window.grievanceId,
+      complainantId: window.complainantId,
+      flaskSessionId: window.flaskSessionId || window.getSessionId?.(),
+      rasaSessionId: window.getSessionId?.(),
+    }),
     onStatus: (status) => {
       const maxLabel = formatRecordingClock(MAX_RECORD_SECONDS);
       if (status === "recording") {
@@ -550,12 +588,25 @@ async function initializeChat() {
           format(get("status_banner.max_length"), { max: maxLabel })
         );
       }
+      if (status === "uploading") {
+        uiActions.setVoiceStatusBanner(get("status_banner.voice_chunk_uploading"));
+      }
       if (status === "stopped") {
         voiceNoteButton?.classList.remove("is-recording");
         voiceNoteButton?.setAttribute("aria-pressed", "false");
       }
       if (status === "denied") {
         uiActions.setVoiceStatusBanner(get("status_banner.mic_denied"), {
+          error: true,
+        });
+      }
+      if (status === "upload_error") {
+        uiActions.setVoiceStatusBanner(get("status_banner.voice_chunk_error"), {
+          error: true,
+        });
+      }
+      if (status === "max_size") {
+        uiActions.setVoiceStatusBanner(get("status_banner.voice_max_size"), {
           error: true,
         });
       }
@@ -569,8 +620,13 @@ async function initializeChat() {
         { recording: true }
       );
     },
-    onRecorded: async (file) => {
-      await handleFileUpload([file]);
+    onUploadComplete: async (data) => {
+      await handleVoiceChunkUploadComplete(data);
+    },
+    onUploadError: (error) => {
+      uploadInProgress = false;
+      uiActions.setInputLocked(false);
+      eventHandlers.handleApiError(error, "Voice upload");
     },
   });
   persistentCloseBrowserButton = document.getElementById("persistent-close-browser");
@@ -621,6 +677,10 @@ function setupEventListeners() {
   closeButton.addEventListener("click", () => {
     chatWidget.style.display = "none";
     setChatLauncherVisible(true);
+  });
+
+  textSizeToggle?.addEventListener("click", () => {
+    applyLargeTextPreference(!isLargeTextEnabled());
   });
 
   // File attachment handling
@@ -859,6 +919,7 @@ async function handleMessageSubmit(e) {
     selectedFiles = [];
     if (fileInput) fileInput.value = "";
     displayFilePreview();
+    uiActions.refreshComposerSubmitState();
     // Unlock happens when all files report SUCCESS in updateFileStatus (post-upload message + buttons shown)
   }
 }
@@ -913,6 +974,7 @@ function displayFilePreview() {
   const onFileRemove = (index) => {
     selectedFiles.splice(index, 1);
     displayFilePreview();
+    uiActions.refreshComposerSubmitState();
   };
 
   const previewContainer = uiActions.displayFilePreview(
@@ -925,6 +987,7 @@ function displayFilePreview() {
   if (!uploadInProgress && selectedFiles.length > 0) {
     uiActions.setInputLocked(false);
   }
+  uiActions.refreshComposerSubmitState();
 }
 
 function isImageFile(file) {
@@ -994,6 +1057,10 @@ function compressFile(file) {
 
 // Global variables
 let selectedFiles = [];
+
+window.getSelectedFilesCount = function getSelectedFilesCount() {
+  return selectedFiles.length;
+};
 /** Status-check path: files held until a grievance_id is selected. */
 let pendingClientFiles = [];
 
@@ -1030,6 +1097,35 @@ let fileUploadSnapshot = null;
 // Current upload batch: track file IDs and statuses to know when all are done
 let currentUploadFileIds = [];
 let currentUploadStatuses = {};
+
+// Handle chunked voice upload completion (streams during recording).
+async function handleVoiceChunkUploadComplete(data) {
+  window.lastUploadWasVoiceOnly = true;
+  uploadInProgress = true;
+  uiActions.setInputLocked(true);
+
+  if (data.grievance_id) {
+    if (data.complainant_id) {
+      window.complainantId = data.complainant_id;
+    }
+    uiActions.setGrievanceId(data.grievance_id);
+    uiActions.setGrievanceCreatedInDb(true);
+    await syncAttachmentIdsToSession(data.grievance_id, data.complainant_id);
+  }
+
+  eventHandlers.handleFileUploadApiResponse({
+    ok: true,
+    data: { ...data, audio_files: ["voice_note"] },
+  });
+
+  if (data.files && data.files.length > 0) {
+    currentUploadFileIds = data.files;
+    currentUploadStatuses = {};
+    pollFileStatus(data.files);
+  } else {
+    showPostUploadMessageAndUnlock();
+  }
+}
 
 // Handle file upload. Returns true if upload was attempted and succeeded, false otherwise (caller keeps attachment preview when false).
 async function handleFileUpload(files) {
@@ -1470,6 +1566,7 @@ window.handleQuickReplyClick = eventHandlers.handleQuickReplyClick;
 // Initialize when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   initializeLanguagePreference();
+  initializeTextSizePreference();
   console.log("REST_webchat language initialized:", getLanguage());
   sendButton = document.querySelector("#form .send-button");
   void initializeChat();

@@ -317,6 +317,7 @@ Make enabled vs disabled unmistakable on small screens.
 - `aria-disabled="true"` on textarea in buttons/locked modes
 - `aria-describedby="composer-hint"` when hint is visible
 - Invalid-send tooltip must not fire on disabled textarea click (ignore submit when mode is `buttons`)
+- **Larger text toggle** — header **A+** button sets `body.chat-text-large`, bumps `--chat-font-*` tokens (~19px body), persists in `localStorage` (`rest_webchat_large_text`); labels in `utterances.accessibility.*` (`en` / `ne`)
 
 ### 10.9 Backend validation (defense in depth)
 

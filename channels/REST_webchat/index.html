@@ -42,8 +42,11 @@
 
     <div id="chat-widget" style="display: none;">
         <div class="chat-header">
-            <span>Grievance Management Chatbot</span>
-            <button class="close-button">&times;</button>
+            <span class="chat-header-title">Grievance Management Chatbot</span>
+            <div class="chat-header-actions">
+                <button type="button" id="text-size-toggle" class="text-size-toggle" aria-pressed="false" title="Use larger text" aria-label="Use larger text">A+</button>
+                <button type="button" class="close-button" aria-label="Close chat">&times;</button>
+            </div>
         </div>
         <div id="grievance-filed-banner" class="grievance-filed-banner hidden" role="status" aria-live="polite">
             <span id="grievance-filed-banner-text"></span>

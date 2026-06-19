@@ -244,6 +244,111 @@ def test_grievance_review_post_validation(client: TestClient):
     assert "JSON" in body.get("error", "")
 
 
+# --- chunked voice upload ---
+
+
+@patch("backend.api.routers.files.process_file_upload_task")
+def test_upload_voice_chunk_and_complete(mock_task: MagicMock, client: TestClient, tmp_path):
+    """Chunked voice upload assembles file and queues Celery task on complete."""
+    mock_task.delay.return_value = MagicMock(id="voice-task-id")
+    grievance_id = "GR-20241201-KO-JH-VOICE-B"
+    with patch.object(
+        __import__("backend.api.routers.files", fromlist=["file_server_core"]).file_server_core,
+        "upload_folder",
+        str(tmp_path),
+    ), patch(
+        "backend.api.routers.files.db_manager.is_grievance_archived",
+        return_value=False,
+    ), patch(
+        "backend.api.routers.files.db_manager.check_entry_exists_for_entity_key",
+        return_value=True,
+    ):
+        r1 = client.post(
+            "/upload-voice-chunk",
+            data={
+                "chunk_index": 0,
+                "grievance_id": grievance_id,
+                "file_name": "voice_note_test.webm",
+                "mime_type": "audio/webm",
+                "flask_session_id": "sess-voice",
+            },
+            files=[("chunk", ("chunk0.bin", io.BytesIO(b"webm-header"), "application/octet-stream"))],
+        )
+        assert r1.status_code == 200
+        body1 = r1.json()
+        upload_id = body1["upload_id"]
+        assert body1["chunks_received"] == 1
+
+        r2 = client.post(
+            "/upload-voice-chunk",
+            data={
+                "chunk_index": 1,
+                "upload_id": upload_id,
+                "grievance_id": grievance_id,
+            },
+            files=[("chunk", ("chunk1.bin", io.BytesIO(b"audio-data"), "application/octet-stream"))],
+        )
+        assert r2.status_code == 200
+
+        r3 = client.post(
+            "/upload-voice-complete",
+            data={
+                "upload_id": upload_id,
+                "grievance_id": grievance_id,
+                "flask_session_id": "sess-voice",
+            },
+        )
+        assert r3.status_code == 202
+        body3 = r3.json()
+        assert body3.get("chunked") is True
+        assert body3.get("task_id") == "voice-task-id"
+        assert len(body3.get("files", [])) == 1
+        mock_task.delay.assert_called_once()
+
+        assembled = tmp_path / grievance_id / "voice_note_test.webm"
+        assert assembled.exists()
+        assert assembled.read_bytes() == b"webm-headeraudio-data"
+
+
+def test_upload_voice_chunk_duplicate_is_idempotent(client: TestClient, tmp_path):
+    """Re-posting the same chunk index is accepted for retry safety."""
+    grievance_id = "GR-20241201-KO-JH-VOICE2-B"
+    with patch.object(
+        __import__("backend.api.routers.files", fromlist=["file_server_core"]).file_server_core,
+        "upload_folder",
+        str(tmp_path),
+    ), patch(
+        "backend.api.routers.files.db_manager.is_grievance_archived",
+        return_value=False,
+    ), patch(
+        "backend.api.routers.files.db_manager.check_entry_exists_for_entity_key",
+        return_value=True,
+    ):
+        r1 = client.post(
+            "/upload-voice-chunk",
+            data={
+                "chunk_index": 0,
+                "grievance_id": grievance_id,
+                "file_name": "voice_note_retry.webm",
+                "mime_type": "audio/webm",
+            },
+            files=[("chunk", ("chunk0.bin", io.BytesIO(b"abc"), "application/octet-stream"))],
+        )
+        upload_id = r1.json()["upload_id"]
+
+        r2 = client.post(
+            "/upload-voice-chunk",
+            data={
+                "chunk_index": 0,
+                "upload_id": upload_id,
+                "grievance_id": grievance_id,
+            },
+            files=[("chunk", ("chunk0.bin", io.BytesIO(b"ignored"), "application/octet-stream"))],
+        )
+        assert r2.status_code == 200
+        assert r2.json().get("duplicate") is True
+
+
 # --- test-upload ---
 
 

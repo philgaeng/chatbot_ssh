@@ -20,6 +20,12 @@ const FILE_UPLOAD_CONFIG = {
     MAX_SIZE_MB: 10
 };
 
+// Chunked voice note upload (streams during recording)
+const VOICE_CHUNK_UPLOAD_CONFIG = {
+    CHUNK_URL: '/upload-voice-chunk',
+    COMPLETE_URL: '/upload-voice-complete',
+};
+
 // Session Configuration
 const SESSION_CONFIG = {
     STORAGE_KEY: 'rasa_session_id',
@@ -35,5 +41,6 @@ export {
     SESSION_CONFIG,
     UI_CONFIG,
     FILE_UPLOAD_CONFIG,
+    VOICE_CHUNK_UPLOAD_CONFIG,
     ORCHESTRATOR_CONFIG
 };

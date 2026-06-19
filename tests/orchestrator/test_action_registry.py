@@ -166,7 +166,8 @@ def test_invoke_action_seah_outro_registered(domain, monkeypatch):
 
     assert dispatcher.messages, "Expected outro message"
     texts = " ".join(m.get("text", "") for m in dispatcher.messages).lower()
-    assert "seah" in texts and "report" in texts
+    assert "seah" in texts and "focal point" in texts
+    assert messages[-1].get("buttons") if (messages := dispatcher.messages) else False
 
 
 def test_submit_seah_case_reference_uses_canonical_grievance_id():

@@ -33,29 +33,57 @@ export function resolveComposerModeFromTurn(expectedInputType, quickReplies) {
   return "text";
 }
 
+function pendingAttachmentCount() {
+  if (typeof window.getSelectedFilesCount === "function") {
+    return window.getSelectedFilesCount();
+  }
+  return 0;
+}
+
 function applyComposerModeUI() {
   const form = getComposerFormEl();
   const hint = document.getElementById("composer-hint");
   if (!messageInput) return;
 
   const isButtons = composerMode === "buttons";
+  const pendingFiles = pendingAttachmentCount();
+  const allowSendForAttachment = pendingFiles > 0;
   form?.classList.remove("composer-mode-text", "composer-mode-buttons");
   form?.classList.add(isButtons ? "composer-mode-buttons" : "composer-mode-text");
 
-  messageInput.disabled = isButtons;
+  messageInput.disabled = isButtons && !allowSendForAttachment;
   messageInput.classList.toggle("composer-input--active", !isButtons);
   messageInput.classList.toggle("composer-input--buttons-only", isButtons);
   messageInput.placeholder = get(
-    isButtons ? "composer.placeholder_buttons" : "composer.placeholder_text"
+    allowSendForAttachment && isButtons
+      ? "composer.hint_send_attachment"
+      : isButtons
+        ? "composer.placeholder_buttons"
+        : "composer.placeholder_text"
   );
-  messageInput.setAttribute("aria-disabled", isButtons ? "true" : "false");
+  messageInput.setAttribute(
+    "aria-disabled",
+    isButtons && !allowSendForAttachment ? "true" : "false"
+  );
 
   if (hint) {
-    hint.textContent = get(
-      isButtons ? "composer.hint_buttons" : "composer.hint_text"
-    );
+    if (allowSendForAttachment && isButtons) {
+      hint.textContent = get("composer.hint_send_attachment");
+    } else {
+      hint.textContent = get(
+        isButtons ? "composer.hint_buttons" : "composer.hint_text"
+      );
+    }
   }
-  if (sendButton) sendButton.disabled = isButtons;
+  if (sendButton) {
+    sendButton.disabled = isButtons && !allowSendForAttachment;
+  }
+}
+
+/** Re-apply send/textarea state after file preview changes (e.g. on button-only turns). */
+export function refreshComposerSubmitState() {
+  if (composerLocked) return;
+  applyComposerModeUI();
 }
 
 export function setComposerMode(mode) {

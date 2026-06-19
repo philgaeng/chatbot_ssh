@@ -444,6 +444,22 @@ class ActionSubmitSeah(BaseActionSubmit):
     def name(self) -> Text:
         return "action_submit_seah"
 
+    def _resolve_seah_focal_phone(self, tracker: Tracker) -> Optional[str]:
+        for key in ("complainant_phone", "seah_focal_phone"):
+            value = tracker.get_slot(key)
+            if self._slot_nonempty(value):
+                return str(value).strip()
+        return None
+
+    def _seah_submit_follow_up_text(self, tracker: Tracker, language_code: str) -> str:
+        if tracker.get_slot("seah_victim_survivor_role") == "focal_point":
+            phone = self._resolve_seah_focal_phone(tracker)
+            if phone:
+                return get_utterance_base(
+                    "action_submit_seah", "action_submit_seah", 2, language_code
+                ).format(phone=phone)
+        return get_utterance_base("action_submit_seah", "action_submit_seah", 1, language_code)
+
     async def execute_action(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         try:
             language_code = tracker.get_slot("language_code") or "en"
@@ -517,17 +533,13 @@ class ActionSubmitSeah(BaseActionSubmit):
             )
 
             grievance_ref = result.get("grievance_id")
+            follow_up = self._seah_submit_follow_up_text(tracker, language_code)
             if language_code == "ne":
                 dispatcher.utter_message(text="तपाईंको गोप्य SEAH रिपोर्ट सफलतापूर्वक दर्ता भयो।")
                 dispatcher.utter_message(
                     text=f"तपाईंको सन्दर्भ नम्बर: **{grievance_ref}**"
                 )
-                dispatcher.utter_message(
-                    text=(
-                        "तपाईंको रिपोर्ट दर्ता भइसकेको छ। आवश्यक परेमा तपाईं यस च्याटमा "
-                        "जारी राख्न सक्नुहुन्छ।"
-                    )
-                )
+                dispatcher.utter_message(text=follow_up)
             else:
                 dispatcher.utter_message(
                     text="Your confidential SEAH report has been filed successfully."
@@ -535,11 +547,7 @@ class ActionSubmitSeah(BaseActionSubmit):
                 dispatcher.utter_message(
                     text=f"Your reference number is **{grievance_ref}**."
                 )
-                dispatcher.utter_message(
-                    text=(
-                        "Your report is on record. You may continue in this chat if needed."
-                    )
-                )
+                dispatcher.utter_message(text=follow_up)
             dispatcher.utter_message(
                 json_message={
                     "data": {
