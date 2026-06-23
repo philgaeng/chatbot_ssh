@@ -11,11 +11,10 @@ from backend.actions.base_classes.base_classes import BaseAction
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.forms.form_dust import is_dust_intake
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
-from backend.actions.utils.mapping_buttons import (
-    BUTTONS_CLOSE_BROWSER_ONLY,
-    BUTTONS_FILE_ANOTHER_SEAH,
+from backend.actions.services.outro.buttons import (
+    post_submit_buttons,
+    seah_post_submit_buttons,
 )
-from backend.actions.services.outro.buttons import post_submit_buttons
 
 # Backward-compatible alias for the extracted helper.
 _post_submit_buttons = post_submit_buttons
@@ -71,9 +70,7 @@ class ActionSeahOutro(BaseAction):
                     events.append(SlotSet("seah_contact_point_id", cid))
 
         # Post-submit buttons only (submit already confirms the report is on record).
-        lang = language_code if language_code in BUTTONS_CLOSE_BROWSER_ONLY else "en"
-        buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(lang, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
-        buttons.extend(BUTTONS_FILE_ANOTHER_SEAH.get(lang, BUTTONS_FILE_ANOTHER_SEAH["en"]))
+        buttons = seah_post_submit_buttons(language_code)
         dispatcher.utter_message(text="", buttons=buttons)
         return events
 
@@ -115,10 +112,7 @@ class ActionGrievanceOutro(BaseActionSubmit):
                 )
                 attachment_msg = self._get_grievance_utterance(3)
                 dispatcher.utter_message(text=attachment_msg)
-                buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(language_code, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
-                buttons.extend(
-                    BUTTONS_FILE_ANOTHER_SEAH.get(language_code, BUTTONS_FILE_ANOTHER_SEAH["en"])
-                )
+                buttons = seah_post_submit_buttons(language_code)
                 dispatcher.utter_message(text="", buttons=buttons)
             else:
                 dispatcher.utter_message(text=self._get_grievance_utterance(1))

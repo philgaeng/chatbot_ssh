@@ -9,8 +9,10 @@ from __future__ import annotations
 from typing import Dict, List
 
 from backend.actions.utils.mapping_buttons import (
+    BUTTONS_CLOSE_BROWSER_ONLY,
     BUTTONS_CLOSE_SESSION_ONLY,
     BUTTONS_FILE_ANOTHER_GRIEVANCE,
+    BUTTONS_FILE_ANOTHER_SEAH,
 )
 
 
@@ -19,4 +21,12 @@ def post_submit_buttons(language_code: str) -> List[Dict[str, str]]:
     lang = language_code if language_code in BUTTONS_CLOSE_SESSION_ONLY else "en"
     buttons = list(BUTTONS_CLOSE_SESSION_ONLY.get(lang, BUTTONS_CLOSE_SESSION_ONLY["en"]))
     buttons.extend(BUTTONS_FILE_ANOTHER_GRIEVANCE.get(lang, BUTTONS_FILE_ANOTHER_GRIEVANCE["en"]))
+    return buttons
+
+
+def seah_post_submit_buttons(language_code: str) -> List[Dict[str, str]]:
+    """Close-browser + file-another-SEAH buttons, language-aware (en fallback)."""
+    lang = language_code if language_code in BUTTONS_CLOSE_BROWSER_ONLY else "en"
+    buttons = list(BUTTONS_CLOSE_BROWSER_ONLY.get(lang, BUTTONS_CLOSE_BROWSER_ONLY["en"]))
+    buttons.extend(BUTTONS_FILE_ANOTHER_SEAH.get(lang, BUTTONS_FILE_ANOTHER_SEAH["en"]))
     return buttons
