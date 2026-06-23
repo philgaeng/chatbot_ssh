@@ -353,6 +353,88 @@ def _derive_expected_input_type(messages: List[Dict[str, Any]]) -> str:
     return "buttons"
 
 
+async def _finish_grievance_review(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> None:
+    """Review form already complete — persist categorization and show filing outro."""
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    slots_after_review = dict(session.get("slots", {}))
+    slots_after_review.update(slot_updates)
+    review_tracker = SessionTracker(
+        slots=slots_after_review,
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    outro_dispatcher = CollectingDispatcher()
+    await invoke_action(
+        "action_update_grievance_categorization",
+        outro_dispatcher,
+        review_tracker,
+        domain,
+    )
+    await invoke_action(
+        "action_grievance_outro",
+        outro_dispatcher,
+        review_tracker,
+        domain,
+    )
+    dispatcher.messages.extend(outro_dispatcher.messages)
+
+
+async def _start_grievance_review_after_submit(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> str:
+    """Run review after submit; auto-finish when review is skipped (voice / road hazard / etc.)."""
+    session["active_loop"] = "form_grievance_complainant_review"
+    session["requested_slot"] = None
+
+    retrieve_dispatcher = CollectingDispatcher()
+    retrieve_tracker = SessionTracker(
+        slots=session["slots"],
+        sender_id=session.get("user_id", "default"),
+        latest_message=latest_message,
+        active_loop=None,
+        requested_slot=None,
+    )
+    retrieve_events = await invoke_action(
+        "action_retrieve_classification_results",
+        retrieve_dispatcher,
+        retrieve_tracker,
+        domain,
+    )
+    if retrieve_events:
+        retrieve_updates = events_to_slot_updates(retrieve_events)
+        session["slots"].update(retrieve_updates)
+        slot_updates.update(retrieve_updates)
+    dispatcher.messages.extend(retrieve_dispatcher.messages)
+
+    review_form = _get_review_form()
+    msgs_review, form_updates_review, review_completed = await run_form_turn(
+        review_form, session, None, domain
+    )
+    dispatcher.messages.extend(msgs_review)
+    slot_updates.update(form_updates_review)
+    session["slots"].update(form_updates_review)
+
+    if review_completed:
+        await _finish_grievance_review(
+            session, dispatcher, domain, slot_updates, latest_message
+        )
+        return "done"
+    return "grievance_review"
+
+
 async def _begin_contact_form(
     session: Dict[str, Any],
     dispatcher: CollectingDispatcher,
@@ -1267,36 +1349,9 @@ async def run_flow_turn(
                 session["slots"].update(submit_updates)
                 dispatcher.messages.extend(ask_dispatcher.messages)
 
-                next_state = "grievance_review"
-                session["active_loop"] = "form_grievance_complainant_review"
-                session["requested_slot"] = None
-
-                retrieve_dispatcher = CollectingDispatcher()
-                retrieve_tracker = SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
+                next_state = await _start_grievance_review_after_submit(
+                    session, dispatcher, domain, slot_updates, latest_message
                 )
-                retrieve_events = await invoke_action(
-                    "action_retrieve_classification_results",
-                    retrieve_dispatcher,
-                    retrieve_tracker,
-                    domain,
-                )
-                if retrieve_events:
-                    retrieve_updates = events_to_slot_updates(retrieve_events)
-                    session["slots"].update(retrieve_updates)
-                    slot_updates.update(retrieve_updates)
-                dispatcher.messages.extend(retrieve_dispatcher.messages)
-
-                review_form = _get_review_form()
-                msgs_review, form_updates_review, _ = await run_form_turn(
-                    review_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_review)
-                slot_updates.update(form_updates_review)
             else:
                 next_state = "otp_form"
                 session["active_loop"] = "form_otp"
@@ -1459,35 +1514,10 @@ async def run_flow_turn(
                 )
                 slot_updates = events_to_slot_updates(events)
                 dispatcher.messages.extend(ask_dispatcher.messages)
-                next_state = "grievance_review"
-                session["active_loop"] = "form_grievance_complainant_review"
-                session["requested_slot"] = None
                 session["slots"].update(slot_updates)
-                retrieve_dispatcher = CollectingDispatcher()
-                retrieve_tracker = SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
+                next_state = await _start_grievance_review_after_submit(
+                    session, dispatcher, domain, slot_updates, latest_message
                 )
-                retrieve_events = await invoke_action(
-                    "action_retrieve_classification_results",
-                    retrieve_dispatcher,
-                    retrieve_tracker,
-                    domain,
-                )
-                if retrieve_events:
-                    retrieve_updates = events_to_slot_updates(retrieve_events)
-                    session["slots"].update(retrieve_updates)
-                    slot_updates.update(retrieve_updates)
-                dispatcher.messages.extend(retrieve_dispatcher.messages)
-                review_form = _get_review_form()
-                msgs_review, form_updates_review, _ = await run_form_turn(
-                    review_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_review)
-                slot_updates.update(form_updates_review)
 
     elif state == "submit_grievance":
         ask_dispatcher = CollectingDispatcher()
@@ -1500,38 +1530,13 @@ async def run_flow_turn(
         )
         slot_updates = events_to_slot_updates(events)
         dispatcher.messages.extend(ask_dispatcher.messages)
-        next_state = "grievance_review"
-        session["active_loop"] = "form_grievance_complainant_review"
-        session["requested_slot"] = None
         session["slots"].update(slot_updates)
         await _append_seah_outro_after_submit_if_applicable(
             dispatcher, session, latest_message, domain, slot_updates
         )
-        retrieve_dispatcher = CollectingDispatcher()
-        retrieve_tracker = SessionTracker(
-            slots=session["slots"],
-            sender_id=session.get("user_id", "default"),
-            latest_message=latest_message,
-            active_loop=None,
-            requested_slot=None,
+        next_state = await _start_grievance_review_after_submit(
+            session, dispatcher, domain, slot_updates, latest_message
         )
-        retrieve_events = await invoke_action(
-            "action_retrieve_classification_results",
-            retrieve_dispatcher,
-            retrieve_tracker,
-            domain,
-        )
-        if retrieve_events:
-            retrieve_updates = events_to_slot_updates(retrieve_events)
-            session["slots"].update(retrieve_updates)
-            slot_updates.update(retrieve_updates)
-        dispatcher.messages.extend(retrieve_dispatcher.messages)
-        review_form = _get_review_form()
-        msgs_review, form_updates_review, _ = await run_form_turn(
-            review_form, session, None, domain
-        )
-        dispatcher.messages.extend(msgs_review)
-        slot_updates.update(form_updates_review)
 
     elif state == "grievance_review":
         user_input = latest_message if (text or payload) else None
@@ -1543,32 +1548,9 @@ async def run_flow_turn(
         slot_updates.update(form_updates)
         if completed:
             next_state = "done"
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            # Apply form updates so update/outro actions see confirmed slots
-            slots_after_review = dict(session.get("slots", {}))
-            slots_after_review.update(slot_updates)
-            review_tracker = SessionTracker(
-                slots=slots_after_review,
-                sender_id=session.get("user_id", "default"),
-                latest_message=latest_message,
-                active_loop=None,
-                requested_slot=None,
+            await _finish_grievance_review(
+                session, dispatcher, domain, slot_updates, latest_message
             )
-            outro_dispatcher = CollectingDispatcher()
-            await invoke_action(
-                "action_update_grievance_categorization",
-                outro_dispatcher,
-                review_tracker,
-                domain,
-            )
-            await invoke_action(
-                "action_grievance_outro",
-                outro_dispatcher,
-                review_tracker,
-                domain,
-            )
-            dispatcher.messages.extend(outro_dispatcher.messages)
 
     elif state == "status_check_form":
         user_input = latest_message if (text or payload) else None

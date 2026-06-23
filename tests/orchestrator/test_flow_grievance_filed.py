@@ -73,12 +73,30 @@ def test_road_hazard_fast_path_files_grievance(client: TestClient, mock_flow_db)
     body = submit_map_pin(client, user_id)
 
     body = complete_contact_for_test(client, user_id, body)
-    body = drive_until_filed_or_done(client, user_id, body)
-
-    assert has_json_event(body, "grievance_filed") or body["next_state"] in (
-        "done",
-        "grievance_review",
+    assert body["next_state"] == "done", (
+        f"skipped review should finish on contact deny; got {body.get('next_state')!r}"
     )
+    assert has_json_event(body, "grievance_filed")
+
+
+def test_voice_record_map_anonymous_finishes_on_contact_deny(
+    client: TestClient, mock_flow_db
+):
+    """Voice-only intake skips review; must not stall after map pin + contact deny."""
+    user_id = "flow-voice-map-deny"
+    intro_english(client, user_id)
+    post_turn(client, user_id, payload="/new_grievance")
+    post_turn(client, user_id, text="Brief note before voice.")
+    body = post_turn(client, user_id, payload="/voice_record")
+    assert body["next_state"] == "location_consent"
+
+    body = accept_location_consent(client, user_id)
+    body = choose_location_map(client, user_id)
+    body = submit_map_pin(client, user_id)
+    body = complete_contact_for_test(client, user_id, body)
+
+    assert body["next_state"] == "done"
+    assert has_json_event(body, "grievance_filed")
 
 
 def test_seah_intake_anonymous_victim_files_grievance(client: TestClient, mock_flow_db):
