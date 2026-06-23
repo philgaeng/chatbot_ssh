@@ -577,6 +577,14 @@ UTTERANCE_MAPPING = {
                 }
             }
         },
+        'validate_complainant_phone': {
+            'utterances': {
+                1: {
+                    'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
+                    'ne': "कृपया तपाईंको आधिकारिक फोन नम्बर प्रदान गर्नुहोस् – फोन नम्बर ९ अंक बाट सुरु हुनुपर्छ र १० अंकको हुनुपर्छ"
+                }
+            }
+        },
         'validate_complainant_village_temp': {
             'utterances': {
                 1: {
