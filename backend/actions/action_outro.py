@@ -13,17 +13,12 @@ from backend.actions.forms.form_dust import is_dust_intake
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 from backend.actions.utils.mapping_buttons import (
     BUTTONS_CLOSE_BROWSER_ONLY,
-    BUTTONS_CLOSE_SESSION_ONLY,
-    BUTTONS_FILE_ANOTHER_GRIEVANCE,
     BUTTONS_FILE_ANOTHER_SEAH,
 )
+from backend.actions.services.outro.buttons import post_submit_buttons
 
-
-def _post_submit_buttons(language_code: str) -> List[Dict[str, str]]:
-    lang = language_code if language_code in BUTTONS_CLOSE_SESSION_ONLY else "en"
-    buttons = list(BUTTONS_CLOSE_SESSION_ONLY.get(lang, BUTTONS_CLOSE_SESSION_ONLY["en"]))
-    buttons.extend(BUTTONS_FILE_ANOTHER_GRIEVANCE.get(lang, BUTTONS_FILE_ANOTHER_GRIEVANCE["en"]))
-    return buttons
+# Backward-compatible alias for the extracted helper.
+_post_submit_buttons = post_submit_buttons
 
 
 class ActionSeahOutro(BaseAction):
