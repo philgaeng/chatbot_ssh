@@ -59,7 +59,7 @@ If you **must** keep system Nginx for other sites, do **not** share port 80: cha
 - Docker Desktop (Windows + WSL integration) or Docker Engine on Linux.
 - **`env.local`** in the repo root (same as non-Docker dev). Compose references it via `env_file`; `environment:` blocks override hostnames for Docker (`POSTGRES_HOST=db`, `REDIS_HOST=redis`, etc.).
 - **`DB_ENCRYPTION_KEY`** must be present in `env.local` (or provided as a deployment secret) for sensitive-field encryption paths.
-- Docker runtime expects Redis without AUTH by default in this stack; compose files override `REDIS_PASSWORD` to empty string for app containers.
+- Redis AUTH is **optional and opt-in**: compose now inherits `REDIS_PASSWORD` from the environment (`${REDIS_PASSWORD:-}`). Leave it empty for dev (plain Redis, current behavior). In prod, set a strong `REDIS_PASSWORD` in `env.local` — the `redis` service enables `--requirepass` and every broker/result/socket URL becomes `redis://:<pw>@redis:6379/...` automatically. See `docs/services/12_security_monitoring_service.md` §3 item 1.
 
 ## First-time: create DB schema
 

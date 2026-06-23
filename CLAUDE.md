@@ -20,7 +20,7 @@
 
 # ALL decisions locked through Round 2.
 
-THIS FILE APPLIES ONLY TO THE WORKTREE projects/nepal_chatbot_claude
+**Single-agent workflow (June 2026):** this monorepo is now developed by **one** AI coding system across the whole codebase (chatbot + ticketing + ops) — no longer split between Claude (ticketing) and Cursor (chatbot) in separate parallel worktrees. The boundaries below are therefore **care boundaries** (stable shared services to change deliberately), **not ownership walls** between competing tools. Work in whichever area the task requires; just respect the stability and schema-ownership rules.
 
 ---
 
@@ -47,35 +47,37 @@ infrastructure projects (KL Road / Kakarbhitta-Laukahi Road, ADB Loan 52097-003)
 
 ---
 
-## HARD BOUNDARIES — READ BEFORE WRITING ANY CODE
+## SERVICE BOUNDARIES — CHANGE WITH CARE
 
-### NEVER modify these (unless explicitly integrating chatbot ↔ ticketing):
+These are **stable, production chatbot/infra services**. With the single-agent workflow you **may** modify them when the task genuinely requires it — but do so **deliberately**: understand the service first, run its tests, and avoid regressions to the live chatbot. They are no longer off-limits because "another tool owns them"; the caution is about **stability**, not ownership.
+
+### Stable shared services — modify only with clear intent + tests:
 
 ```
-backend/orchestrator/      → DO NOT TOUCH
-backend/api/               → DO NOT TOUCH
-backend/services/          → DO NOT TOUCH
-backend/task_queue/        → DO NOT TOUCH
-channels/accessible/       → DO NOT TOUCH
-channels/webchat/          → DO NOT TOUCH
-channels/REST_webchat/     → DO NOT TOUCH
-channels/monitoring-gsheet/→ DO NOT TOUCH
-rasa_chatbot/              → DO NOT TOUCH
-scripts/                   → DO NOT TOUCH
-deployment/                → DO NOT TOUCH
-docker-compose.yml         → DO NOT TOUCH
-requirements.txt           → DO NOT TOUCH (use requirements.grm.txt)
-.env / env.local           → DO NOT TOUCH
+backend/orchestrator/      → stable (chatbot state machine)
+backend/api/               → stable (grievance/file/messaging APIs)
+backend/services/          → stable (shared service layer)
+backend/task_queue/        → stable (chatbot Celery: llm/default/file queues)
+channels/accessible/       → stable
+channels/webchat/          → stable
+channels/REST_webchat/     → stable
+channels/monitoring-gsheet/→ stable
+rasa_chatbot/              → stable
+scripts/                   → stable (ops/db scripts — add new under scripts/ops or scripts/database)
+deployment/                → stable (nginx/certbot/keycloak config)
+docker-compose.yml         → stable base stack (overlay new services in *.grm.yml / *.prod.yml where possible)
+requirements.txt           → chatbot deps (add GRM/ops deps to requirements.grm.txt)
+.env / env.local           → edit deliberately; never commit secrets (env.local is gitignored)
 ```
 
-### Chatbot ↔ ticketing integration (in scope):
+### Chatbot ↔ ticketing integration points:
 
 ```
 backend/actions/utils/ticketing_dispatch.py  → POST /api/v1/tickets webhook (intake_route = story_main)
-backend/actions/                           → other intake/submit paths only when wiring GRM
+backend/actions/                           → other intake/submit paths when wiring GRM
 ticketing/                                 → ticketing API, schema, routing
 channels/ticketing-ui/                     → officer UI
-requirements.grm.txt                       → new Python dependencies only
+requirements.grm.txt                       → GRM/ops Python dependencies
 ```
 
 ### New feature code defaults to:
@@ -83,6 +85,7 @@ requirements.grm.txt                       → new Python dependencies only
 ```
 ticketing/                 → ticketing backend
 channels/ticketing-ui/     → officer frontend (Next.js 16)
+ops/                       → platform monitoring/health/backup/reporting (own container + ops.* schema)
 ```
 
 ---
@@ -168,39 +171,38 @@ def include_object(object, name, type_, reflected, compare_to):
 # Does NOT touch: grievances, complainants, or any existing public.* table
 ```
 
-### Migration traceability (two streams)
+### Migration traceability (three streams)
 
-- **Ticketing (`ticketing.*`):** all forward DDL goes through **Alembic** (`ticketing/migrations/alembic.ini`). Any worktree (including Claude-only work on ticketing) should use **only** this stream for ticketing tables so revisions stay linear and visible in git.
-- **Chatbot / public (`public.*`):** **not** migrated by the ticketing Alembic project (see headers and `include_object` above). Use the **second** Alembic project: `migrations/public/alembic.ini` (version table `alembic_version_public`). Some tables may still be **first-created** by app code; **structural changes** go in `migrations/public/versions/`. See **`docs/deployment/MIGRATIONS_POLICY.md`**.
+- **Ticketing (`ticketing.*`):** all forward DDL goes through **Alembic** (`ticketing/migrations/alembic.ini`). Use **only** this stream for ticketing tables so revisions stay linear and visible in git.
+- **Chatbot / public (`public.*`):** **not** migrated by the ticketing Alembic project (see headers and `include_object` above). Use the Alembic project at `migrations/public/alembic.ini` (version table `alembic_version_public`). Some tables may still be **first-created** by app code; **structural changes** go in `migrations/public/versions/`.
+- **Ops / monitoring (`ops.*`):** platform health/monitoring tables (`system_health_checks`, `dependency_findings`) and the scoped `ops_app` role. Use the Alembic project at `ops/migrations/alembic.ini` (version table `alembic_version_ops`, `include_object` scoped to `schema == "ops"`). Owned by the `ops/` module — never the chatbot or ticketing streams.
+- The three streams must **never** share ownership of the same table/schema. See **`docs/deployment/07_migrations_policy.md`** and **`docs/services/11_health_and_monitoring_service.md`** §5.2.
 
-### Worktree + DB operating model (LOCKED)
+### DB operating model (LOCKED)
 
-For parallel development across chatbot and ticketing worktrees:
+Single-agent workflow — parallel chatbot-vs-ticketing worktrees are no longer required. If you do use multiple worktrees/branches, isolate their DBs; otherwise a single local stack is fine.
 
-1. **Keep worktrees separate**
-   - `feature/seah` (chatbot-focused work)
-   - `feature/grm-ticketing` (ticketing/admin work)
-   - integration worktree/branch for merge validation before promoting to `main`
+1. **Branch hygiene**
+   - Feature branches off `main` (e.g. `feature/seah`, `feature/grm-ticketing`); `main` is integration-only (see Git workflow).
+   - Validate migrations + smoke tests before promoting to `main`.
 
-2. **Use isolated local DB instances per worktree**
-   - One Postgres container/volume per worktree (different host ports)
-   - Never share one mutable local DB across active feature worktrees
-   - Purpose: avoid migration collisions and branch-state contamination
+2. **Isolate DBs when running multiple worktrees concurrently**
+   - One Postgres container/volume per active worktree (different host ports) to avoid migration collisions and branch-state contamination.
+   - A single shared local DB is acceptable when only one worktree is active.
 
-3. **Schema ownership must be explicit**
-   - `ticketing.*` schema is owned by ticketing migrations (`ticketing/migrations/alembic.ini`)
-   - Existing chatbot/public schema remains owned by chatbot/backend migration path
-   - Do not let two migration streams own DDL for the same table
+3. **Schema ownership must be explicit (three owners)**
+   - `ticketing.*` → ticketing migrations (`ticketing/migrations/alembic.ini`)
+   - `public.*` → chatbot/public migration path (`migrations/public/alembic.ini`)
+   - `ops.*` → ops migrations (`ops/migrations/alembic.ini`) + the `ops_app` scoped role
+   - Never let two migration streams own DDL for the same table.
 
 4. **Shared admin domain rule (projects/locations/settings)**
-   - Ticketing is the admin UI/backend, but shared entities must have a single schema owner
-   - Ticketing should integrate via stable service/API boundaries for chatbot-consumed data
-   - Avoid direct cross-domain schema edits without ownership agreement
+   - Ticketing is the admin UI/backend, but shared entities must have a single schema owner.
+   - Integrate via stable service/API boundaries for chatbot-consumed data; avoid cross-domain schema edits without a clear owner.
 
-5. **Integration branch requirements**
-   - Merge feature branches in integration worktree first
-   - Run migrations in deterministic order and verify both chatbot + ticketing paths
-   - Promote to `main` only after integration DB + smoke tests pass
+5. **Integration requirements**
+   - Run all relevant migration streams in deterministic order and verify chatbot + ticketing + ops paths.
+   - Promote to `main` only after integration DB + smoke tests pass.
 
 ---
 
@@ -498,6 +500,14 @@ ticketing/
     mock_tickets.py     ← demo scenarios (dust/children + SEAH)
 channels/
   ticketing-ui/         ← fresh Next.js 16 + TypeScript + Tailwind v4
+ops/                    ← platform monitoring (own container, broker-independent APScheduler)
+  scheduler.py          ← APScheduler entrypoint (python -m ops.scheduler)
+  checks.py             ← data-plane health checks → ops.system_health_checks
+  security.py           ← dependency/CVE scan → ops.dependency_findings
+  maintenance.py        ← prune/vacuum/os-update-check
+  reports.py            ← daily ops report (activity + health)
+  alerts.py             ← deduped alerts via Messaging API (HTTP)
+  migrations/           ← ops Alembic stream (ops.* schema + ops_app role)
 requirements.grm.txt
 docs/
   claude-tickets/       ← Claude Code session files (this file lives here)

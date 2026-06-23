@@ -6,7 +6,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
-from random import randint
+from backend.actions.services.otp import verification as otp_verification
 
 class BaseOtpAction(BaseAction):
     def __init__(self):
@@ -66,9 +66,6 @@ class ActionAskOtpInput(BaseOtpAction):
     def name(self) -> Text:
         return "action_ask_otp_input"
 
-    def _generate_otp(self):
-        return ''.join([str(randint(0, 9)) for _ in range(6)])
-    
     async def execute_action(
         self,
         dispatcher: CollectingDispatcher,
@@ -90,7 +87,7 @@ class ActionAskOtpInput(BaseOtpAction):
         #deal with the case where the OTP needs to be generated = first send or resend
         if not otp_status or otp_status == "resend" and resend_count < 3 :
         # OTP already generated
-            otp_number = self._generate_otp()
+            otp_number = otp_verification.generate_otp_code()
             message_sms = self.get_utterance(1)
             message_sms = message_sms.format(otp_number=otp_number)
             message_bot = self.get_utterance(2)
@@ -341,7 +338,7 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
                     "otp_resend_count" : 0}
 
         # Validate OTP format
-        if not self._is_valid_format_otp(slot_value):
+        if not otp_verification.is_valid_otp_format(slot_value):
             self.logger.info(f"{self.name()} - Invalid OTP format: {slot_value}")
             return {"otp_input": None, 
                     "otp_status" : "invalid_format",
@@ -351,7 +348,7 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         expected_otp = tracker.get_slot("otp_number")
         
         
-        if self._is_matching_otp(slot_value, expected_otp):
+        if otp_verification.otp_matches(slot_value, expected_otp):
             message = self.get_utterance(1)
             dispatcher.utter_message(text=message)
             result = {"otp_input": slot_value,
@@ -371,18 +368,6 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
                     "otp_status" : "invalid_otp",
                     "otp_resend_count" : tracker.get_slot("otp_resend_count") or 0}
         return {}
-
-    def _is_valid_format_otp(self, slot_value: str) -> bool:
-        """Validate OTP format (6 digits)."""
-        is_valid = bool(slot_value and slot_value.isdigit() and len(slot_value) == 6)
-        self.logger.debug(f"{self.name()} - OTP format validation: {is_valid} for value: {slot_value}")
-        return is_valid
-
-    def _is_matching_otp(self, input_otp: str, expected_otp: str) -> bool:
-        """Verify if the input OTP matches the expected OTP."""
-        is_matching = bool(input_otp and expected_otp and input_otp == expected_otp)
-        self.logger.debug(f"{self.name()} - OTP match validation: {is_matching} (Input: {input_otp}, Expected: {expected_otp})")
-        return is_matching
 
 
 

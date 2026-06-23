@@ -2,71 +2,28 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional, Text
+from typing import Any, Dict, List, Text
 
 from rasa_sdk import Tracker
 from rasa_sdk.events import SlotSet
 from rasa_sdk.executor import CollectingDispatcher
 
 from backend.actions.base_classes.base_classes import BaseAction
-from backend.actions.base_classes.base_mixins import SKIP_VALUE
+from backend.actions.services.location.map_pin import (
+    build_map_filled_location_slots,
+    location_skip_slot_updates,
+    parse_map_pin_payload,
+)
 
-
-def location_skip_slot_updates() -> Dict[str, Any]:
-    """Skip all location fields when the user declines location consent."""
-    return {
-        "complainant_location_consent": False,
-        "complainant_province": SKIP_VALUE,
-        "complainant_district": SKIP_VALUE,
-        "complainant_municipality_temp": SKIP_VALUE,
-        "complainant_municipality": SKIP_VALUE,
-        "complainant_municipality_confirmed": True,
-        "complainant_village": SKIP_VALUE,
-        "complainant_village_temp": SKIP_VALUE,
-        "complainant_village_confirmed": True,
-        "complainant_ward": SKIP_VALUE,
-        "complainant_address_temp": SKIP_VALUE,
-        "complainant_address": SKIP_VALUE,
-        "complainant_address_confirmed": True,
-        "location_pin_status": "skipped",
-    }
-
-
-def build_map_filled_location_slots(
-    lat: float,
-    lng: float,
-    *,
-    province: Optional[str] = None,
-    district: Optional[str] = None,
-    location_code: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Prefill contact-form slots after a map pin.
-    Coordinates persist on submit as complainant.location_geo (not grievance_location).
-    """
-    address_label = f"Map pin ({lat:.5f}, {lng:.5f})"
-    updates: Dict[str, Any] = {
-        "complainant_location_consent": True,
-        "complainant_province": province or SKIP_VALUE,
-        "complainant_district": district or SKIP_VALUE,
-        "complainant_municipality_temp": SKIP_VALUE,
-        "complainant_municipality": SKIP_VALUE,
-        "complainant_municipality_confirmed": True,
-        "complainant_village_temp": SKIP_VALUE,
-        "complainant_village": SKIP_VALUE,
-        "complainant_village_confirmed": True,
-        "complainant_ward": SKIP_VALUE,
-        "complainant_address_temp": address_label,
-        "complainant_address": address_label,
-        "complainant_address_confirmed": True,
-        "location_pin_status": "map_pin",
-        "geo_lat": lat,
-        "geo_lng": lng,
-    }
-    if location_code:
-        updates["location_code"] = location_code
-    return updates
+__all__ = [
+    "build_map_filled_location_slots",
+    "location_skip_slot_updates",
+    "parse_map_pin_payload",
+    "ActionAskLocationMethod",
+    "ActionAskMapLocation",
+    "ActionOpenMapPicker",
+    "ActionApplyMapPin",
+]
 
 
 class ActionAskLocationMethod(BaseAction):
@@ -166,15 +123,3 @@ class ActionApplyMapPin(BaseAction):
             location_code=tracker.get_slot("location_code"),
         )
         return [SlotSet(k, v) for k, v in filled.items()]
-
-
-def parse_map_pin_payload(payload: str) -> Dict[str, float]:
-    """Parse /map_pin_set{\"lat\":..,\"lng\":..} style payloads."""
-    raw = (payload or "").strip().lstrip("/")
-    if raw.startswith("map_pin_set"):
-        raw = raw[len("map_pin_set") :].strip()
-    brace = raw.find("{")
-    if brace < 0:
-        raise ValueError("invalid map pin payload")
-    data = json.loads(raw[brace:])
-    return {"lat": float(data["lat"]), "lng": float(data["lng"])}

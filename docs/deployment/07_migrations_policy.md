@@ -4,16 +4,17 @@
 
 This project follows a Docker-first runtime. **Schema changes must be traceable in git** so every worktree and branch can see what ran, in what order, against which part of the database.
 
-There are **two migration streams** on the same Postgres instance (`grievance_db` by default). They must **never** both own the same table.
+There are **three migration streams** on the same Postgres instance (`grievance_db` by default). They must **never** share ownership of the same table/schema.
 
 ---
 
-## Two streams (LOCKED)
+## Three streams (LOCKED)
 
 | Stream               | Schema                                                                 | Tooling                                                                                                                                                                                                                                                                                          | Traceability                                                                                                                   |
 | -------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | **Ticketing**        | `ticketing.*`                                                          | **Alembic only** — `ticketing/migrations/alembic.ini`                                                                                                                                                                                                                                            | One linear revision chain in git; use this from **any** worktree (including Claude-only trees) when changing ticketing tables. |
 | **Chatbot / public** | `public.*` (e.g. `grievances`, `complainants`, `complainants_seah`, …) | **Alembic** — `migrations/public/alembic.ini` (version table `alembic_version_public`). **Not** the ticketing Alembic project. Some tables may still be **created** on first use by app code (`CREATE TABLE IF NOT EXISTS`); **evolve** them with new files under `migrations/public/versions/`. | Linear revisions in git; same traceability model as ticketing, separate version chain.                                         |
+| **Ops / monitoring** | `ops.*` (e.g. `system_health_checks`, `dependency_findings`)           | **Alembic** — `ops/migrations/alembic.ini` (version table `alembic_version_ops`, `include_object` scoped to `schema == "ops"`). Owns the `ops` schema **and** the scoped `ops_app` role/grants. See [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) §5.2. | Linear revisions in git; separate version chain. Owned by the platform `ops/` module, not chatbot or ticketing.               |
 
 **Principle:** Where Alembic exists for a schema, **always** use it for forward DDL there — better history across worktrees than ad-hoc SQL or silent `ALTER` in app code.
 
@@ -62,7 +63,7 @@ There are **two migration streams** on the same Postgres instance (`grievance_db
      4. Verify `SELECT version_num FROM alembic_version_public;` returns `pub002_contact_info_and_normalized_location`.
 
 5. **Integration / multiple worktrees**
-   - After pulling a branch, run **both** streams when relevant: `make migrate_all`, or ticketing + public commands separately.
+   - After pulling a branch, run **all** relevant streams: `make migrate_all`, or the ticketing + public + ops commands separately.
    - Use **isolated DB volumes per worktree** where possible (see `CLAUDE.md`) to avoid revision collisions.
 
 6. **Migration seed prerequisites must live in the same revision**
@@ -85,7 +86,11 @@ docker compose -f docker-compose.yml run --rm --no-deps backend \
 docker compose -f docker-compose.yml run --rm --no-deps backend \
   python -m alembic -c migrations/public/alembic.ini upgrade head
 
-# Both streams at once (Makefile shortcut)
+# Ops stream — upgrade to head (creates the ops schema + ops_app role on first run)
+docker compose -f docker-compose.yml run --rm --no-deps backend \
+  python -m alembic -c ops/migrations/alembic.ini upgrade head
+
+# All streams at once (Makefile shortcut — must include the ops stream)
 make migrate_all
 
 # Check current revision (ticketing)
@@ -163,7 +168,9 @@ docker compose -f docker-compose.yml run --rm --no-deps backend \
 
 - `python -m alembic -c ticketing/migrations/alembic.ini heads` returns exactly one head (ticketing stream).
 - `python -m alembic -c migrations/public/alembic.ini heads` returns exactly one head (public stream).
+- `python -m alembic -c ops/migrations/alembic.ini heads` returns exactly one head (ops stream).
 - Ticketing migration files include clear `down_revision` and the standard header: only `ticketing.*`, never `public.*`.
+- Ops migration files include the standard header: only `ops.*`, never `public.*`/`ticketing.*`; the schema-creating revision also provisions the `ops_app` role/grants.
 - **`down_revision` uses the hex ID only** — never the full `<hex>_<slug>` form (causes `KeyError` at runtime).
 - Public migration files include the standard header: only `public.*`, never `ticketing.*`.
 - No new schema-changing script added under `scripts/database/` for ticketing.
