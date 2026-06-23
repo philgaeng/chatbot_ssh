@@ -11,6 +11,7 @@ from backend.actions.grievance_intake.ensure_records import (
     grievance_id_set_json,
     resolve_intake_slot_ids,
 )
+from backend.actions.services.seah import witness_exit as seah_witness_exit
 from backend.actions.utils.mapping_buttons import BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE
 
 
@@ -149,15 +150,19 @@ class ValidateFormSeah1(BaseFormValidationAction):
                     "seah_witness_immediate_danger": value,
                     "seah_witness_exit_without_filing": False,
                 }
-            language_code = tracker.get_slot("language_code") or "en"
-            if language_code == "ne":
-                dispatcher.utter_message(
-                    text="धन्यवाद। यहाँ पीडित/उत्तरजीवीलाई सहयोग गर्न सक्ने सम्भावित सहयोग सेवाहरू छन्: [list to be provided]."
+            self._initialize_language_and_helpers(tracker)
+            language_code = self.language_code
+            if seah_witness_exit.has_location_context(tracker):
+                providers = self.find_seah_service_providers_for_tracker(tracker)
+                text = seah_witness_exit.build_witness_exit_support_message(
+                    language_code,
+                    providers,
+                    municipality=tracker.get_slot("complainant_municipality"),
+                    district=tracker.get_slot("complainant_district") or self.district,
                 )
             else:
-                dispatcher.utter_message(
-                    text="Thank you. Here are the potential support services that can help the victim-survivor: [list to be provided]."
-                )
+                text = seah_witness_exit.build_witness_exit_no_location_message(language_code)
+            dispatcher.utter_message(text=text)
             return {"seah_witness_immediate_danger": value, "seah_witness_exit_without_filing": True}
         return {"seah_witness_immediate_danger": None}
 
