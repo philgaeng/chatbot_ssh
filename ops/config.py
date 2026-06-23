@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,7 +47,16 @@ class OpsSettings(BaseSettings):
     health_alert_email: str = ""
     daily_report_email: str = ""
     daily_report_tz: str = "Asia/Kathmandu"
-    healthchecks_ping_url: str = ""          # external dead-man's switch (L3)
+    # External dead-man's switch (L3): healthchecks.io ping URL (https://hc-ping.com/...).
+    # Accept HEARTBEAT_URL / STRATCON_HEARTBEAT_URL (shared across projects) and the
+    # legacy HEALTHCHECKS_PING_URL. UptimeRobot is NOT used here — its heartbeat/cron
+    # monitors are paid; UptimeRobot only does inbound HTTP(s) uptime checks (see spec 11 §7).
+    heartbeat_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "HEARTBEAT_URL", "STRATCON_HEARTBEAT_URL", "HEALTHCHECKS_PING_URL"
+        ),
+    )
     ops_status_file: str = "/tmp/ops_scheduler.tick"
     alert_dedup_seconds: int = 3600          # max 1 alert per signature / hour
 
@@ -73,6 +83,11 @@ class OpsSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def healthchecks_ping_url(self) -> str:
+        """Backward-compatible alias for the heartbeat ping URL."""
+        return self.heartbeat_url
 
     @property
     def database_url(self) -> str:

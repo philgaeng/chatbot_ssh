@@ -196,9 +196,13 @@ def backup_status_check() -> None:
 
 
 def external_heartbeat() -> None:
-    """L3 dead-man's switch: ping only when the latest checks are green."""
+    """L3 dead-man's switch: ping healthchecks.io only when the latest checks are green.
+
+    UptimeRobot is the inverse tool (it probes our public HTTP endpoints); this is the
+    "we check in" side, so silence here makes healthchecks.io alert the operator.
+    """
     s = get_settings()
-    if not s.healthchecks_ping_url:
+    if not s.heartbeat_url:
         return
     try:
         with session_scope() as db:
@@ -212,7 +216,7 @@ def external_heartbeat() -> None:
         if (bad or 0) > 0:
             logger.warning("External heartbeat skipped: %s critical checks", bad)
             return
-        httpx.get(s.healthchecks_ping_url, timeout=10.0)
+        httpx.get(s.heartbeat_url, timeout=10.0)
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("External heartbeat failed: %s", exc)
 

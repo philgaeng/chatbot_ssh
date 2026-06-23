@@ -20,7 +20,7 @@
 | A0.4 | Revision 1 (`ops001_init`): `CREATE SCHEMA ops` + `ops.system_health_checks` + `ops_app` role/grants (read-only on reporting tables, guarded) | 11 §5.2 | ☑ | password via `OPS_DB_PASSWORD` |
 | A0.5 | `ops` service in compose (same image, `python -m ops.scheduler`, `mem_limit 192m`, **no docker.sock**, no published port, depends on `db`) | 11 §4.6 | ☑ | in `docker-compose.grm.yml` |
 | A0.6 | `make migrate_all` includes the ops stream (`migrate_ops`); `07_migrations_policy.md` updated | 11 §13 | ☑ | |
-| A0.7 | Env: `MESSAGING_API_URL`, `OPS_STATUS_FILE`, `OPS_DB_USER`, `OPS_DB_PASSWORD`, `HEALTH_ALERT_EMAIL`, `DAILY_REPORT_EMAIL`, `HEALTHCHECKS_PING_URL` | 11 §12 | ◐ | wired in compose; still add to env.local example |
+| A0.7 | Env: `MESSAGING_API_URL`, `OPS_STATUS_FILE`, `OPS_DB_USER`, `OPS_DB_PASSWORD`, `HEALTH_ALERT_EMAIL`, `DAILY_REPORT_EMAIL`, `HEARTBEAT_URL` (aliases: `STRATCON_HEARTBEAT_URL`, `HEALTHCHECKS_PING_URL`) | 11 §12 | ◐ | wired in compose; still add to env.local example |
 
 ### A1. L1 — container healthchecks
 | # | Item | Spec | Status | Notes |
@@ -56,8 +56,9 @@
 ### A4. L3 — external dead-man's switch
 | # | Item | Spec | Status | Notes |
 |---|------|------|--------|-------|
-| A4.1 | `external_heartbeat` ping (green-only) → `HEALTHCHECKS_PING_URL` | 11 §7 | ☑ | every 10 min + after daily report |
-| A4.2 | Provider configured (healthchecks.io / UptimeRobot) | 11 §7 | ☐ | ops/manual — set `HEALTHCHECKS_PING_URL` |
+| A4.1 | `external_heartbeat` ping (green-only) → `HEARTBEAT_URL` (healthchecks.io) | 11 §7 | ☑ | every 10 min + after daily report |
+| A4.2 | healthchecks.io check configured (schedule + 2–4h grace + email) → set `HEARTBEAT_URL` | 11 §7.2 | ☐ | ops/manual — *you check in* (dead-man's switch) |
+| A4.3 | UptimeRobot HTTP(s) monitors on public `/health` + UI (5-min, email); **no** paid Heartbeat/Cron | 11 §7.1 | ☐ | ops/manual — *they check you* (uptime) |
 
 ### A5. Backups & maintenance (self-hosted)
 | # | Item | Spec | Status | Notes |

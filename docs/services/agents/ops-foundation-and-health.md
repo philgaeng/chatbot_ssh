@@ -48,7 +48,7 @@ Stand up the **platform monitoring layer** for the self-hosted Nepal GRM stack, 
 ## Implementation — Phase A0: foundation (do first)
 
 1. **`ops/` package skeleton** — create modules with clear function stubs + docstrings:
-   `ops/__init__.py`, `ops/config.py` (pydantic-settings: PG, `MESSAGING_API_URL`, thresholds, `HEALTHCHECKS_PING_URL`, `OPS_STATUS_FILE`), `ops/db.py` (SQLAlchemy engine using `OPS_DB_USER`/`OPS_DB_PASSWORD`), `ops/scheduler.py` (APScheduler `BlockingScheduler`, registers all jobs, writes `ops:scheduler:last_tick` + status file every minute), `ops/checks.py`, `ops/maintenance.py`, `ops/reports.py`, `ops/security.py` (stub for Runbook B), `ops/alerts.py` (dedup + Messaging API), `ops/selfcheck.py` (exit 0 if last tick fresh). **(PROGRESS A0.1)**
+   `ops/__init__.py`, `ops/config.py` (pydantic-settings: PG, `MESSAGING_API_URL`, thresholds, `HEARTBEAT_URL` — aliases `STRATCON_HEARTBEAT_URL`/`HEALTHCHECKS_PING_URL`, `OPS_STATUS_FILE`), `ops/db.py` (SQLAlchemy engine using `OPS_DB_USER`/`OPS_DB_PASSWORD`), `ops/scheduler.py` (APScheduler `BlockingScheduler`, registers all jobs, writes `ops:scheduler:last_tick` + status file every minute), `ops/checks.py`, `ops/maintenance.py`, `ops/reports.py`, `ops/security.py` (stub for Runbook B), `ops/alerts.py` (dedup + Messaging API), `ops/selfcheck.py` (exit 0 if last tick fresh). **(PROGRESS A0.1)**
 2. **`requirements.grm.txt`**: add `apscheduler>=3.10`, `pip-audit` (used by Runbook B). **(A0.2)**
 3. **`ops/migrations/`** — clone the ticketing Alembic project: `alembic.ini`, `env.py` with `version_table="alembic_version_ops"`, `version_table_schema="ops"`, and `include_object` returning `True` only for `object.schema == "ops"`. **(A0.3)**
 4. **Revision 1** (`ops/migrations/versions/ops001_init.py`), header:
@@ -90,7 +90,7 @@ Stand up the **platform monitoring layer** for the self-hosted Nepal GRM stack, 
 
 ## Phase A4 — external heartbeat (L3)
 
-16. `external_heartbeat` job: `curl HEALTHCHECKS_PING_URL` only when latest checks are green; never raises. **(A4.1)** Provider config is ops/manual. **(A4.2)**
+16. `external_heartbeat` job: `curl HEARTBEAT_URL` (healthchecks.io ping URL) only when latest checks are green; never raises. **(A4.1)** healthchecks.io check + UptimeRobot HTTP(s) monitors are ops/manual — two free tools, opposite directions (spec 11 §7). **(A4.2/A4.3)**
 
 ## Phase A5 — backups & maintenance
 

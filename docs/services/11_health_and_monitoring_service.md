@@ -278,14 +278,28 @@ Install via cron (mirror the existing `scripts/ops/install_tls_renew_cron.sh` pa
 
 ---
 
-## 7. L3 — External dead-man's switch
+## 7. L3 — External monitoring (two free tools, opposite directions)
 
-Internal alerting is useless when the whole box is down. Add an external uptime/heartbeat monitor:
+Internal alerting is useless when the whole box is down. We use **two complementary free SaaS tools** — and they do **opposite** things. The rule of thumb:
 
-- **Heartbeat (cron) style** — preferred: an ops job `external_heartbeat` (every 5–15 min) does `curl <HEALTHCHECKS_PING_URL>` **only when the latest local checks are green**. The provider alerts the operator when the ping **stops**. Use [healthchecks.io](https://healthchecks.io) (free tier; self-hostable) or reuse an existing UptimeRobot account.
-- **Inbound probe** — secondary: an external HTTP monitor hits `https://grm-chatbot.dor.gov.np/health` every 1–5 min.
+> **UptimeRobot = *they* check *you*** (inbound uptime probe). **healthchecks.io = *you* check *in*** (outbound cron dead-man's switch).
 
-Env: `HEALTHCHECKS_PING_URL` (treat as a secret; do not commit). Failure to ping must never crash the app.
+Both must be present: an inbound probe catches "the public site is down", and a dead-man's switch catches "the scheduled jobs silently stopped" — neither covers the other.
+
+### 7.1 UptimeRobot — inbound HTTP(s) uptime (they check you)
+
+- **HTTP(s) monitors only.** Point UptimeRobot at the public endpoints — e.g. `https://grm-chatbot.dor.gov.np/health` and the officer UI URL — at a **5-min interval**, with **email on down/recovery**.
+- **Do NOT use UptimeRobot Heartbeat/Cron monitors** — those are **paid** on the free plan. UptimeRobot's job here is strictly the inbound HTTP(s) probe.
+
+### 7.2 healthchecks.io — outbound cron dead-man's switch (you check in)
+
+- Sign up → **Add Check** → name the daily/cron job → set the **schedule** (e.g. daily, or a cron expression) **+ 2–4 h grace** → add an **email alert** → copy the **Ping URL** (`https://hc-ping.com/...`).
+- The ops scheduler job `external_heartbeat` (every 10 min) and the daily report (§11) do a single **`curl`/GET of the ping URL after the job succeeds**, and **only when the latest local checks are green**. If the job never runs (or the host is down), healthchecks.io alerts the operator on silence past the grace window.
+- A failed ping must **never** crash the job — the heartbeat is best-effort.
+
+### 7.3 App/env
+
+Set **`HEARTBEAT_URL`** (canonical) to the healthchecks.io ping URL. The ops config also accepts **`STRATCON_HEARTBEAT_URL`** (shared naming across projects) and the legacy **`HEALTHCHECKS_PING_URL`** as aliases — set **healthchecks.io**, **not** UptimeRobot. Treat the URL as a secret; do not commit it.
 
 ---
 
@@ -393,7 +407,10 @@ Plain HTML email body (tables). Optional XLSX attachment via `openpyxl` (already
 HEALTH_ALERT_EMAIL=philgaeng@pm.me
 DAILY_REPORT_EMAIL=philgaeng@pm.me
 DAILY_REPORT_TZ=Asia/Kathmandu
-HEALTHCHECKS_PING_URL=            # external dead-man's switch (secret)
+# L3 dead-man's switch: healthchecks.io ping URL (https://hc-ping.com/...), NOT UptimeRobot (secret).
+# HEARTBEAT_URL is canonical; STRATCON_HEARTBEAT_URL / HEALTHCHECKS_PING_URL also accepted.
+HEARTBEAT_URL=
+# UptimeRobot needs no app env — it probes /health from outside (configure in its dashboard).
 
 # Thresholds (sensible 8 GiB defaults)
 HEALTH_DISK_WARN_PCT=75
@@ -440,8 +457,9 @@ OPS_DB_PASSWORD=                         # set strong value in env.local
 - [ ] GRM Celery `task_failure` signal handler → deduped immediate alert (business tasks).
 - [ ] Ops inline try/except alerting via `ops/alerts.py`.
 
-**L3 — external**
-- [ ] `ops.checks.external_heartbeat` → `HEALTHCHECKS_PING_URL` (green-only); provider configured.
+**L3 — external (two free tools, §7)**
+- [ ] `ops.checks.external_heartbeat` → `HEARTBEAT_URL` (healthchecks.io, green-only); check + email alert + 2–4 h grace configured in healthchecks.io.
+- [ ] UptimeRobot HTTP(s) monitors on public `/health` + UI URL (5-min, email on down/recovery). **No** UptimeRobot Heartbeat/Cron (paid).
 
 **Backups / maintenance**
 - [ ] `scripts/ops/pg-backup.sh` (encrypt + off-box + prune) + host cron (needs `docker exec`).

@@ -274,7 +274,9 @@ services:
       HEALTH_ALERT_EMAIL: ${HEALTH_ALERT_EMAIL:-}
       DAILY_REPORT_EMAIL: ${DAILY_REPORT_EMAIL:-}
       DAILY_REPORT_TZ: ${DAILY_REPORT_TZ:-Asia/Kathmandu}
-      HEALTHCHECKS_PING_URL: ${HEALTHCHECKS_PING_URL:-}
+      # healthchecks.io ping URL (dead-man's switch). HEARTBEAT_URL is canonical;
+      # STRATCON_HEARTBEAT_URL / HEALTHCHECKS_PING_URL accepted as aliases. NOT UptimeRobot.
+      HEARTBEAT_URL: ${HEARTBEAT_URL:-${STRATCON_HEARTBEAT_URL:-${HEALTHCHECKS_PING_URL:-}}}
       PYTHONPATH: /app
     volumes:
       - backups_data:/var/backups/grms
