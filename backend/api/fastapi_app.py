@@ -65,11 +65,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         content={"error": "Internal server error", "detail": str(exc)},
     )
 
-# Same CORS policy as Flask: allow all origins for /*
+# CORS: env-driven allowlist. Set CORS_ALLOWED_ORIGINS (comma-separated) in prod
+# to lock this down (e.g. https://grm-chatbot.dor.gov.np). When unset (dev), fall
+# back to "*" WITHOUT credentials — "*" + credentials is invalid per the CORS spec
+# and was the prior misconfiguration (see docs/services/12_security_monitoring_service.md §3.2).
+_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+if _cors_env:
+    _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _cors_allow_credentials = True
+else:
+    _cors_origins = ["*"]
+    _cors_allow_credentials = False
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

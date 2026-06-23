@@ -61,11 +61,20 @@ app = FastAPI(
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# INTEGRATION POINT: restrict allow_origins to ticketing-ui domain in production
+# Env-driven allowlist via CORS_ALLOWED_ORIGINS (comma-separated). When unset (dev)
+# fall back to "*" WITHOUT credentials — "*" + credentials is invalid per the CORS
+# spec and was the prior misconfiguration. Set in prod to the officer-UI origin.
+_cors_env = get_settings().cors_allowed_origins.strip()
+if _cors_env:
+    _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _cors_allow_credentials = True
+else:
+    _cors_origins = ["*"]
+    _cors_allow_credentials = False
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

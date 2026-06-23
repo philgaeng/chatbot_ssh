@@ -71,14 +71,16 @@ REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
   --profile auth
 
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
-TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui
+# ops = platform monitor (broker-independent APScheduler); ships with the GRM stack.
+TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui ops
 AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
-# Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP). Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
-# Build order matters: Python/API images first, Next.js UIs last (sequential loop below).
-AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth grm_ui
+# Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP) + ops monitor.
+# Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
+# Build order matters: Python/API images first (ops is a Python image), Next.js UIs last (sequential loop below).
+AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat ops grm_ui_auth grm_ui
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
 AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
-PROD_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat grm_ui_auth
+PROD_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat ops grm_ui_auth
 PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui_auth nginx
 
 # SEAH service provider directory (chatbot outro — public.seah_service_providers).
@@ -116,7 +118,27 @@ set -e; \
 	echo "$(3): starting $(2)" && \
 	$(REMOTE_COMPOSE) up -d $(2) && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
+endef
+
+# Build + migrate + (re)start ONLY the ops monitor on a remote host.
+# $(1)=remote dir, $(2)=label. Runs the ops Alembic stream (creates ops schema +
+# ops_app role) so the container can connect on first deploy.
+define REMOTE_DEPLOY_OPS
+set -e; \
+	cd $(1) && \
+	git fetch origin && \
+	git checkout main && \
+	git checkout -- docker-compose.aws.yml .dockerignore && \
+	git pull --ff-only origin main && \
+	echo "$(2): building ops" && \
+	$(REMOTE_COMPOSE) build --pull ops && \
+	echo "$(2): ops migration (ops.* schema + ops_app role)" && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head && \
+	echo "$(2): starting ops" && \
+	$(REMOTE_COMPOSE) up -d ops && \
+	$(REMOTE_COMPOSE) ps ops
 endef
 
 define REMOTE_VERIFY_GRM_PORTS_PROD
@@ -180,7 +202,8 @@ set -e; \
 	echo "full deploy: starting stack" && \
 	$(REMOTE_COMPOSE) up -d && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
+	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
 endef
 
 # $(1)=remote repo directory — upsert SEAH centres from committed CSV (idempotent).
@@ -191,11 +214,11 @@ $(REMOTE_COMPOSE) run --rm --no-deps backend $(SEAH_PROVIDERS_SEED_CMD)
 endef
 
 .PHONY: help \
-	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-down \
-	aws-up aws-deploy aws-deploy-light aws-deploy-full \
-	prod-deploy prod-deploy-light prod-deploy-full prod-sync-db-from-aws ssh-prod \
+	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
+	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
+	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
-	migrate_ticketing migrate_public migrate_all reset_public_dev \
+	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
 	aws-seed-seah-providers prod-seed-seah-providers \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
@@ -214,26 +237,29 @@ help:
 	@echo "  make wsl-chatbot      chatbot only (db, redis, backend, orchestrator, celery, nginx)"
 	@echo "  make wsl-ticketing    alias for wsl-demo-bypass"
 	@echo "  make wsl-nginx        recreate nginx after editing deployment/nginx/*.conf"
+	@echo "  make wsl-ops          build & (re)start ONLY the ops monitor (run migrate_ops first on fresh DB)"
 	@echo "  make wsl-down         stop all containers (base + GRM + auth profile)"
 	@echo ""
 	@echo "AWS staging (EC2 key SSH — $(REMOTE_HOST_RUNNING)):"
 	@echo "  make aws-up           rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy       pull main, migrate, rebuild AWS_DEPLOY_SERVICES (one image at a time)"
+	@echo "  make aws-deploy       pull main, migrate (incl. ops), rebuild AWS_DEPLOY_SERVICES (one image at a time)"
 	@echo "  make aws-deploy-light pull main, rebuild UI (+ nginx); no migrations (sequential builds)"
 	@echo "  make aws-deploy-full  pull main, migrate, rebuild entire stack (sequential builds)"
+	@echo "  make aws-deploy-ops   build + ops migration + restart ONLY the ops monitor"
 	@echo "  make ssh-running      open SSH session to staging"
 	@echo ""
 	@echo "Production (VPN + password SSH — $(PROD_HOST)):"
 	@echo "  make ssh-prod         open SSH session (prompts for password)"
-	@echo "  make prod-deploy      pull main, migrate, rebuild PROD_DEPLOY_SERVICES"
+	@echo "  make prod-deploy      pull main, migrate (incl. ops), rebuild PROD_DEPLOY_SERVICES"
 	@echo "  make prod-deploy-light UI-only rebuild (+ nginx); no migrations"
 	@echo "  make prod-deploy-full pull main, migrate, rebuild entire stack"
+	@echo "  make prod-deploy-ops  build + ops migration + restart ONLY the ops monitor (VPN)"
 	@echo "  make prod-sync-db-from-aws CONFIRM=1  replace prod DB from AWS (VPN; downtime OK)"
 	@echo "  Override user/dir: PROD_SERVER_USER=... PROD_REMOTE_DIR=/path/to/nepal_chatbot"
 	@echo "  Or set PROD_SERVER_USER, PROD_HOST, PROD_REMOTE_DIR, PROD_SSH_KEY in env.local"
 	@echo ""
 	@echo "DB / optional:"
-	@echo "  make migrate_all              both Alembic streams (ticketing.* + public.*)"
+	@echo "  make migrate_all              all Alembic streams (ticketing.* + public.* + ops.*)"
 	@echo "  make seed_seah_providers      upsert SEAH centres from committed CSV (local Docker)"
 	@echo "  make seed_seah_providers_xlsx refresh CSV from Excel + upsert (after workbook update)"
 	@echo "  make aws-seed-seah-providers  upsert SEAH centres on staging EC2"
@@ -269,6 +295,11 @@ wsl-ticketing: wsl-demo-bypass
 wsl-nginx:
 	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --force-recreate nginx
 
+# Build & (re)start ONLY the ops monitor locally (run `make migrate_ops` first on a fresh DB).
+wsl-ops:
+	$(COMPOSE_WSL) up -d --build ops
+	$(COMPOSE_WSL) ps ops
+
 wsl-down:
 	$(COMPOSE_WSL_AUTH) down $(COMPOSE_DOWN_FLAGS)
 
@@ -291,6 +322,10 @@ aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
 
+# Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on staging.
+aws-deploy-ops:
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_OPS,$(REMOTE_DIR_RUNNING),aws-deploy-ops)'
+
 # ── Production (VPN + password SSH) ───────────────────────────────────────────
 # Requires VPN. No -i key: ssh/scp prompt for PROD_SERVER_USER password.
 ssh-prod:
@@ -309,6 +344,11 @@ prod-deploy-full:
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy-full)'
 
+# Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on prod.
+prod-deploy-ops:
+	@echo "VPN required. Deploying ops monitor to $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_DEPLOY_OPS,$(PROD_REMOTE_DIR),prod-deploy-ops)'
+
 # Replace prod Postgres + uploads from AWS staging. Requires CONFIRM=1 (destructive).
 prod-sync-db-from-aws:
 ifndef CONFIRM
@@ -325,7 +365,15 @@ migrate_ticketing:
 migrate_public:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 
-migrate_all: migrate_ticketing migrate_public
+migrate_ops:
+	$(DOCKER_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
+
+# Security pre-promotion gate (docs/services/12_security_monitoring_service.md §4).
+# Runs on the HOST (reads env.local, TLS cert, backup status). Non-zero exit blocks promotion.
+security-preflight:
+	./scripts/ops/security-preflight.sh $(CURDIR)
+
+migrate_all: migrate_ticketing migrate_public migrate_ops
 
 # SEAH service providers (public.seah_service_providers) — data import, not schema.
 # Run after migrate_public on fresh DBs. Idempotent upsert from git-tracked CSV.

@@ -176,6 +176,8 @@ References: [10_production_server_spec.md](10_production_server_spec.md), [03_op
 | Automated PII pattern blocking in Messaging API | Optional enhancement | `../services/05_messaging_service.md` |
 | Public closure OTP (ref + phone last-4) | Post-v1 option | `../ticketing_system/08_ticket_resolution_and_case_summary.md` §3.9 |
 | SSE/real-time officer notifications | Post-proto | `../ticketing_system/05_ticketing_impl_plan.md` |
+| Health/monitoring (healthchecks, watchdog, daily ops report, self-hosted backups) | Proposed | `../services/11_health_and_monitoring_service.md` |
+| Security monitoring + hardening backlog (Redis auth, CORS, dep/CVE scan, rate limiting, log rotation) | Proposed | `../services/12_security_monitoring_service.md` |
 
 ---
 
@@ -204,3 +206,5 @@ Use before staging/production promotion:
 | Ticketing API auth/integration | [../ticketing_system/03_ticketing_api_integration.md](../ticketing_system/03_ticketing_api_integration.md) |
 | Staff messaging policy | [../ticketing_system/06_messaging_rules_whatsapp_sms.md](../ticketing_system/06_messaging_rules_whatsapp_sms.md) |
 | Messaging service contract | [../services/05_messaging_service.md](../services/05_messaging_service.md) |
+| Health, monitoring & self-hosted backups | [../services/11_health_and_monitoring_service.md](../services/11_health_and_monitoring_service.md) |
+| Security monitoring & hardening backlog | [../services/12_security_monitoring_service.md](../services/12_security_monitoring_service.md) |

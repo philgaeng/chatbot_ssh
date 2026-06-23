@@ -1,3 +1,11 @@
+# Bounded container logs — prevents the json-file driver from filling the 8 GiB
+# host disk (docs/services/12_security_monitoring_service.md §3 item 7).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   orchestrator:
     build:
@@ -10,9 +18,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      REDIS_PASSWORD: ""
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       DATABASE_URL: postgresql://user:password@db:5432/app_db
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -21,10 +29,17 @@ services:
       POSTGRES_PASSWORD: password
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   backend:
     build:
@@ -39,10 +54,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      REDIS_PASSWORD: ""
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-      SOCKETIO_REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
+      SOCKETIO_REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       DATABASE_URL: postgresql://user:password@db:5432/app_db
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -51,10 +66,17 @@ services:
       POSTGRES_PASSWORD: password
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5001/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   # One-shot: create schema in empty Postgres volume. Run:
   #   docker compose --profile init run --rm db_init
@@ -69,7 +91,7 @@ services:
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_DB: app_db
@@ -93,9 +115,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      REDIS_PASSWORD: ""
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       DATABASE_URL: postgresql://user:password@db:5432/app_db
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -104,10 +126,17 @@ services:
       POSTGRES_PASSWORD: password
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A backend.task_queue.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   celery_default:
     build:
@@ -124,9 +153,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      REDIS_PASSWORD: ""
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       DATABASE_URL: postgresql://user:password@db:5432/app_db
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -135,10 +164,17 @@ services:
       POSTGRES_PASSWORD: password
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A backend.task_queue.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   celery_llm:
     build:
@@ -152,9 +188,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      REDIS_PASSWORD: ""
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       DATABASE_URL: postgresql://user:password@db:5432/app_db
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -163,14 +199,32 @@ services:
       POSTGRES_PASSWORD: password
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A backend.task_queue.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   redis:
     image: redis:7
+    # requirepass is enabled only when REDIS_PASSWORD is non-empty (prod); empty
+    # (dev default) starts plain redis so existing WSL flows keep working.
+    command: ["sh", "-c", "exec redis-server $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a \"$$REDIS_PASSWORD\"} ping | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   db:
     image: postgres:15
@@ -186,6 +240,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
 
   nginx:
     image: nginx:stable
@@ -207,8 +262,16 @@ services:
       backend:
         condition: service_started
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "service nginx status >/dev/null 2>&1 || (nginx -t 2>/dev/null && pgrep nginx) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
   uploads_data:
+  backups_data:
 

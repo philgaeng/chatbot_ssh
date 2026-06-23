@@ -8,10 +8,15 @@ Broker:  CELERY_BROKER_URL   (default redis://localhost:6379/1)
 Backend: CELERY_RESULT_BACKEND (default redis://localhost:6379/2)
 Queue:   grm_ticketing
 """
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_failure
 
 from ticketing.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -27,6 +32,7 @@ celery_app = Celery(
         "ticketing.tasks.llm",
         "ticketing.tasks.archiving",
         "ticketing.tasks.location_geocode",
+        "ticketing.tasks.ops_heartbeat",
     ],
 )
 
@@ -46,9 +52,15 @@ celery_app.conf.update(
         "ticketing.tasks.llm.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.archiving.*": {"queue": "grm_ticketing"},
         "ticketing.tasks.location_geocode.*": {"queue": "grm_geocode"},
+        "ticketing.tasks.ops_heartbeat.*": {"queue": "grm_ticketing"},
     },
     # ── Beat schedule ──────────────────────────────────────────────────────────
     beat_schedule={
+        # Beat liveness heartbeat — every minute; ops monitor reads health:beat:last_run
+        "grm-beat-heartbeat": {
+            "task": "ticketing.tasks.ops_heartbeat.beat_heartbeat",
+            "schedule": 60,
+        },
         # Grievance sync: polls public.grievances for new submissions every 2 minutes
         # Creates ticketing.tickets automatically — no chatbot code change needed
         "grm-grievance-sync": {
@@ -77,3 +89,28 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@task_failure.connect
+def _on_grm_task_failure(sender=None, task_id=None, exception=None, **kwargs):
+    """Immediate deduped alert on any GRM business-task failure (spec 11 §5.3).
+
+    Uses the ops alerting path (HTTP Messaging API). The heartbeat task is excluded
+    to avoid noise (its failure is surfaced by grm_beat_liveness_check instead).
+    """
+    task_name = getattr(sender, "name", str(sender))
+    if task_name and task_name.endswith("ops_heartbeat.beat_heartbeat"):
+        return
+    try:
+        from ops.alerts import send_alert
+
+        send_alert(
+            signature=f"grm_task_failure:{task_name}",
+            subject=f"GRM task failed: {task_name}",
+            body_html=(
+                f"<p>Celery task <b>{task_name}</b> failed.</p>"
+                f"<p>task_id: {task_id}</p><pre>{exception}</pre>"
+            ),
+        )
+    except Exception as exc:  # pragma: no cover - alerting must never crash the worker
+        logger.error("task_failure alert hook error: %s", exc)

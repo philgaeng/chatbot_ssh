@@ -12,3 +12,5 @@ python-keycloak>=3.9.0        # Keycloak Admin API (realm setup + officer invite
 httpx>=0.27                   # async-capable HTTP client for outbound API calls
 pytest>=8.0                   # ticketing engine integration tests
 reportlab>=4.0                # complainant closure PDF download
+apscheduler>=3.10             # ops/ monitor scheduler (broker-independent)
+pip-audit>=2.7                # ops security dependency/CVE scan (report-only)

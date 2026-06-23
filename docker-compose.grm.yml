@@ -31,6 +31,14 @@
 # One-shot seed:
 #   python -m ticketing.seed.mock_tickets
 
+# Bounded container logs (same policy as base compose) — see
+# docs/services/12_security_monitoring_service.md §3 item 7.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
 
   # ── Keycloak (OIDC identity provider) — auth profile only ───────────────────
@@ -82,6 +90,7 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       # Keycloak 26 exposes /health/ready on the management port (9000), not 8080.
       # Quarkus management interface starts only when KC_HEALTH_ENABLED=true.
@@ -126,7 +135,7 @@ services:
       - env.local
     environment:
       TICKETING_PORT: "5002"
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Use Docker service names for internal calls (not localhost)
       BACKEND_GRIEVANCE_BASE_URL: http://backend:5001
       ORCHESTRATOR_BASE_URL: http://orchestrator:8000
@@ -136,8 +145,8 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       # Demo API (:5002): always dev bypass — do not inherit env.local Keycloak URLs.
       # Auth stack uses ticketing_api_auth (:5003) with real JWT validation.
       KEYCLOAK_ISSUER: ""
@@ -153,8 +162,9 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5002/health')\" || exit 1"]
       interval: 30s
@@ -178,21 +188,28 @@ services:
     env_file:
       - env.local
     environment:
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A ticketing.tasks.celery_app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   # ── GRM Celery Beat (periodic task scheduler) ─────────────────────────────────
   grm_celery_beat:
@@ -208,17 +225,73 @@ services:
     env_file:
       - env.local
     environment:
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
     depends_on:
       - grm_celery
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      # Beat rewrites its schedule shelve on every tick (heartbeat runs every 60s),
+      # so a fresh mtime means beat is alive.
+      test: ["CMD-SHELL", "find /tmp/grm_celerybeat-schedule* -mmin -5 | grep -q . || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # ── Ops monitor — platform health/backup/security/report (broker-independent) ─
+  # APScheduler in-process (NOT Celery): survives a Redis/worker outage. Connects
+  # to Postgres as the scoped ops_app role (read/write ops.*, read-only reporting
+  # tables). NO Docker socket — container supervision is the host watchdog's job.
+  # Spec: docs/services/11_health_and_monitoring_service.md
+  ops:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m ops.scheduler
+    env_file:
+      - env.local
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: app_db
+      # Admin creds (used only if OPS_DB_* unset; ops_app is the runtime role).
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      # Scoped least-privilege role created by ops001 migration.
+      OPS_DB_USER: ${OPS_DB_USER:-ops_app}
+      OPS_DB_PASSWORD: ${OPS_DB_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      MESSAGING_API_URL: http://backend:5001
+      HEALTH_ALERT_EMAIL: ${HEALTH_ALERT_EMAIL:-}
+      DAILY_REPORT_EMAIL: ${DAILY_REPORT_EMAIL:-}
+      DAILY_REPORT_TZ: ${DAILY_REPORT_TZ:-Asia/Kathmandu}
+      HEALTHCHECKS_PING_URL: ${HEALTHCHECKS_PING_URL:-}
+      PYTHONPATH: /app
+    volumes:
+      - backups_data:/var/backups/grms
+    mem_limit: 192m
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -m ops.selfcheck || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ── GRM Ticketing UI — demo build (port 3001, BYPASS_AUTH=true) ──────────────
   # All API calls are proxied server-side via Next.js rewrites (see next.config.ts).
@@ -243,6 +316,13 @@ services:
     depends_on:
       - ticketing_api
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ── GRM Ticketing UI — auth build (port 3002, BYPASS_AUTH=false) — auth profile
   # Built with real OIDC config baked in. Proxied at /grm-auth/ via nginx.
@@ -269,6 +349,13 @@ services:
     depends_on:
       - ticketing_api_auth
     restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ── Ticketing API — auth instance (port 5003, Keycloak JWT) — auth profile ──
   # Separate instance from ticketing_api so demo (port 5002) stays always-on.
@@ -293,7 +380,7 @@ services:
       - env.local
     environment:
       TICKETING_PORT: "5003"
-      REDIS_PASSWORD: ""
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       BACKEND_GRIEVANCE_BASE_URL: http://backend:5001
       ORCHESTRATOR_BASE_URL: http://orchestrator:8000
       POSTGRES_HOST: db
@@ -301,8 +388,8 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       # `iss` claim validation — must match what the BROWSER sees, i.e. the value
       # of KC_HOSTNAME_URL on the keycloak service plus /realms/grm.
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18080/realms/grm}
@@ -320,10 +407,11 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       keycloak:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5003/health')\" || exit 1"]
       interval: 30s

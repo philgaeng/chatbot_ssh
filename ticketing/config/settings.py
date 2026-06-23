@@ -59,6 +59,10 @@ class TicketingSettings(BaseSettings):
     keycloak_invite_client_id: str = "ticketing-ui"
     keycloak_invite_redirect_uri: str = "http://localhost:3002/login"
 
+    # ── CORS allowlist (comma-separated). Empty → "*" without credentials (dev). ──
+    # Set in prod, e.g. https://grm-chatbot.dor.gov.np — see 12_security_monitoring_service.md §3.2
+    cors_allowed_origins: str = ""
+
     # ── LLM (OpenAI — same key used by chatbot backend) ──
     openai_api_key: str = ""
 

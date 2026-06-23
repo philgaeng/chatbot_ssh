@@ -14,10 +14,18 @@ This folder contains production specs for backend services used across multiple 
 - `docs/services/07_task_queue_service.md`
 - `docs/services/10_database_service.md`
 - `docs/services/09_grm_integration_service.md`
+- `docs/services/11_health_and_monitoring_service.md`
+- `docs/services/12_security_monitoring_service.md`
 
 ## Cross-cutting policies
 
 - [`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) — resolved grievance archiving (touches file processing, task queue, grievance API, ticketing)
+- [`docs/services/11_health_and_monitoring_service.md`](11_health_and_monitoring_service.md) — dedicated `ops` monitor container (broker-independent APScheduler) + host watchdog + container healthchecks, self-hosted backups, daily ops report (self-hosted 8 GiB Docker host)
+- [`docs/services/12_security_monitoring_service.md`](12_security_monitoring_service.md) — dependency/CVE scanning + hardening backlog; companion to [`docs/deployment/13_security.md`](../deployment/13_security.md)
+
+## Build runbooks & progress
+
+- [`docs/services/agents/`](agents/README.md) — agent runbooks to implement specs 11 + 12, with [`agents/PROGRESS.md`](agents/PROGRESS.md) as the single build-progress tracker.
 
 ## Scope Boundary
 
