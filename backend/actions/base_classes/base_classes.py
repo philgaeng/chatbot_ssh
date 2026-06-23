@@ -8,6 +8,7 @@ from rasa_sdk.events import FollowupAction, ActiveLoop
 from typing import Dict, Text, Any, Tuple, List, Callable, Optional
 import inspect
 from .base_mixins import ActionFlowHelpersMixin, ActionMessagingHelpersMixin
+from backend.actions.services.contact.missing_fields import CONTACT_FIELDS_ORDER
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base
 from backend.config.constants import DEFAULT_VALUES
 
@@ -326,47 +327,16 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
             return {}
 
     def base_validate_phone(self, slot_value: Any, dispatcher: CollectingDispatcher) -> Dict[Text, Any]:
-                
-        self.logger.info(f"{self.name()} - Validating phone: {slot_value}")
-        
-        # Handle skip request
-        if self.DEFAULT_VALUES['SKIP_VALUE'] in slot_value:
-            self.logger.info(f"{self.name()} - Phone collection skipped")
-            result = {"complainant_phone": self.DEFAULT_VALUES['SKIP_VALUE']}
-            return result
-        
-        # Handle slash commands (invalid)
-        if slot_value.startswith("/"):
-            self.logger.debug(f"{self.name()} - Invalid phone (slash command)")
-            result = {"complainant_phone": None}
-            return result
-        
-        # Validate phone number format
-        if not self.helpers.is_valid_phone(slot_value):
-            message = self.get_utterance(1)
-            dispatcher.utter_message(text=message)
-            self.logger.info(f"{self.name()} - Invalid phone format: {slot_value}")
-            result = {"complainant_phone": None,
-            "complainant_phone_valid": False}
-            return result
-        
-        # Check for Philippine phone (special case for testing)
-        if self.helpers.is_philippine_phone(slot_value):
-            result = {
-                "complainant_phone": self.helpers.is_philippine_phone(slot_value),
-                "complainant_phone_valid": True
-            }
-            dispatcher.utter_message(text="You entered a PH number for validation.")
-            self.logger.info(f"{self.name()} - Philippine phone detected")
-        else:
-            # Standardize Nepal phone number
-            result = {
-                "complainant_phone": self.helpers.standardize_phone(self.language_code, slot_value),
-                "complainant_phone_valid": True
-            }
-            self.logger.info(f"{self.name()} - Phone validated and standardized")
+        from backend.actions.services.contact import phone as contact_phone
 
-        return result
+        return contact_phone.validate_complainant_phone(
+            slot_value,
+            dispatcher,
+            helpers=self.helpers,
+            language_code=self.language_code,
+            action_name=self.name(),
+            skip_value=self.DEFAULT_VALUES["SKIP_VALUE"],
+        )
 
     def validate_seah_contact_channel_selection(
         self,
@@ -422,121 +392,26 @@ class BaseContactForm(BaseAction):
     Subclassed by ContactFormValidationAction (new grievance) and ValidateFormModifyContact (add missing info).
     """
 
-    # Order of contact/location fields per spec; only missing ones are asked.
-    # For municipality and village, include both *_temp and *_confirmed so
-    # modify-contact flows can mirror the two-step "temp + confirmed" UX.
-    CONTACT_FIELDS_ORDER: List[Text] = [
-        "complainant_phone",
-        "complainant_full_name",
-        "complainant_province",
-        "complainant_district",
-        "complainant_municipality_temp",
-        "complainant_municipality_confirmed",
-        "complainant_village_temp",
-        "complainant_village_confirmed",
-        "complainant_ward",
-        "complainant_address_temp",
-        "complainant_email_temp",
-    ]
+    CONTACT_FIELDS_ORDER = CONTACT_FIELDS_ORDER
 
     def _is_contact_field_empty(self, val: Any, skip_value: str) -> bool:
-        """Check if a contact field value is empty or skipped."""
-        return val is None or val == "" or val == skip_value
+        from backend.actions.services.contact import missing_fields
+
+        return missing_fields.is_contact_field_empty(val, skip_value)
 
     def _has_meaningful_contact_persisted_value(self, val: Any) -> bool:
-        """
-        True if the DB/tracker value counts as "already collected" for modify-missing flow.
-        Treats placeholder strings like "Not provided" as empty so they can be replaced.
-        """
-        if self._is_contact_field_empty(val, self.SKIP_VALUE):
-            return False
-        if isinstance(val, str) and val.strip().lower() in ("not provided", "n/a", "none"):
-            return False
-        return True
+        from backend.actions.services.contact import missing_fields
+
+        return missing_fields.has_meaningful_contact_persisted_value(val, self.SKIP_VALUE)
 
     def get_missing_contact_fields(
         self, tracker: Tracker
     ) -> Tuple[Optional[Dict], List[Text]]:
-        """
-        Load complainant by grievance_id and return (complainant, list of missing field names).
-        Used by ValidateFormModifyContact.required_slots().
-        """
-        grievance_id = tracker.get_slot("status_check_grievance_id_selected")
-        if not grievance_id:
-            return None, []
+        from backend.actions.services.contact import missing_fields
 
-        complainant = self.db_manager.get_complainant_data_by_grievance_id(grievance_id)
-        if not complainant:
-            return None, []
-
-        slots = dict(tracker.slots)
-        for k, v in complainant.items():
-            if k not in slots or slots[k] is None:
-                slots[k] = v
-
-        missing: List[Text] = []
-        for field in self.CONTACT_FIELDS_ORDER:
-            # Wizard slots (*_temp / *_confirmed) are empty even when the row already has
-            # the canonical column filled — only ask when the persisted value is not meaningful.
-            if field == "complainant_municipality_temp":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_municipality")
-                ):
-                    continue
-                val = slots.get(field)
-                if self._is_contact_field_empty(val, self.SKIP_VALUE):
-                    missing.append(field)
-                continue
-            if field == "complainant_municipality_confirmed":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_municipality")
-                ):
-                    continue
-                val = slots.get(field)
-                if val is None:
-                    missing.append(field)
-                continue
-            if field == "complainant_village_temp":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_village")
-                ):
-                    continue
-                val = slots.get(field)
-                if self._is_contact_field_empty(val, self.SKIP_VALUE):
-                    missing.append(field)
-                continue
-            if field == "complainant_village_confirmed":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_village")
-                ):
-                    continue
-                val = slots.get(field)
-                if val is None:
-                    missing.append(field)
-                continue
-            if field == "complainant_address_temp":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_address")
-                ):
-                    continue
-                val = slots.get(field)
-                if self._is_contact_field_empty(val, self.SKIP_VALUE):
-                    missing.append(field)
-                continue
-            if field == "complainant_email_temp":
-                if self._has_meaningful_contact_persisted_value(
-                    slots.get("complainant_email")
-                ):
-                    continue
-                val = slots.get(field)
-                if self._is_contact_field_empty(val, self.SKIP_VALUE):
-                    missing.append(field)
-                continue
-
-            val = slots.get(field)
-            if not self._has_meaningful_contact_persisted_value(val):
-                missing.append(field)
-        return complainant, missing
+        return missing_fields.get_missing_contact_fields(
+            tracker, self.db_manager, skip_value=self.SKIP_VALUE
+        )
 
 # ============================================
 # Exports
