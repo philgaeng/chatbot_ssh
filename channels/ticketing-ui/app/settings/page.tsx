@@ -796,6 +796,9 @@ function StepForm({
   const [showCreateRole, setShowCreateRole]   = useState(false);
   const systemRoles = roleOptions.filter((r) => r.origin !== "custom");
   const customRoles = roleOptions.filter((r) => r.origin === "custom");
+  const assignedRoleMissing =
+    roleKey &&
+    !roleOptions.some((r) => r.key === roleKey);
 
   async function handleSave() {
     if (!displayName.trim() || !roleKey) { setError("Name and role are required."); return; }
@@ -859,6 +862,9 @@ function StepForm({
         }}
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
           <option value="">— select role —</option>
+          {assignedRoleMissing && (
+            <option value={roleKey}>{roleKey} (current)</option>
+          )}
           {systemRoles.length > 0 && (
             <optgroup label="System (TOR)">
               {systemRoles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -1505,7 +1511,7 @@ function WorkflowEditor({
               {wf.display_name}
             </h2>
           )}
-          {wf.workflow_type === "seah" && <span className="inline-flex items-center gap-0.5 text-xs text-red-600"><Lock size={10} strokeWidth={2.5} />SEAH</span>}
+          {workflowTrackOf(wf) === "seah" && <span className="inline-flex items-center gap-0.5 text-xs text-red-600"><Lock size={10} strokeWidth={2.5} />SEAH</span>}
           {isTemplate && <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700">Template</span>}
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -1622,7 +1628,7 @@ function WorkflowEditor({
 
       {/* Notification rules (Spec 12 §4) */}
       {!isTemplate && (
-        <WorkflowNotificationsPanel workflowSlug={wf.workflow_type === "seah" ? "seah" : "standard"} />
+        <WorkflowNotificationsPanel workflowSlug={workflowTrackOf(wf)} />
       )}
     </div>
   );
@@ -1804,7 +1810,7 @@ function NewWorkflowModal({
     { id: "",  label: "Blank (0 steps)",  type: "any" },
   ];
 
-  const adminTemplates = templates.filter(t => canSeeSeah || t.workflow_type !== "seah");
+  const adminTemplates = templates.filter(t => canSeeSeah || workflowTrackOf(t) !== "seah");
 
   async function handleCreate() {
     if (!name.trim()) {
@@ -1961,14 +1967,15 @@ function WorkflowsTab({
   }
 
   const wfRoleOptions: WorkflowRoleOption[] = useMemo(() => {
-    const wfType = editing?.workflow_type ?? "standard";
+    if (!editing) return [];
+    const wfType = workflowTrackOf(editing);
     return roleCatalog
       .filter((r) => {
         if (wfType === "seah") return r.workflow === "SEAH" || r.workflow === "Both";
         return r.workflow === "Standard" || r.workflow === "Both";
       })
       .map((r) => ({ key: r.key, label: r.label, origin: r.role_origin }));
-  }, [roleCatalog, editing?.workflow_type]);
+  }, [roleCatalog, editing]);
 
   // Editor view
   if (editing) {
@@ -1985,13 +1992,13 @@ function WorkflowsTab({
   }
 
   const visible = workflows.filter(w => {
-    if (!canSeeSeah && w.workflow_type === "seah") return false;
+    if (!canSeeSeah && workflowTrackOf(w) === "seah") return false;
     if (search && !w.display_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   // Templates come entirely from the API (built-ins included)
-  const allTemplates = templates.filter(t => canSeeSeah || t.workflow_type !== "seah");
+  const allTemplates = templates.filter(t => canSeeSeah || workflowTrackOf(t) !== "seah");
 
   return (
     <div>
@@ -2048,7 +2055,7 @@ function WorkflowsTab({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-800 text-sm">{wf.display_name}</span>
-                {wf.workflow_type === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
+                {workflowTrackOf(wf) === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
               </div>
               <div className="text-xs text-gray-400 mt-0.5">
                 {wf.steps.filter(s => s && !s.is_deleted).length} steps
@@ -2092,7 +2099,7 @@ function WorkflowsTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-800 text-sm">{tpl.display_name}</span>
-                    {tpl.workflow_type === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
+                    {workflowTrackOf(tpl) === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
                     {tpl.steps.filter(s => s && !s.is_deleted).length} steps · {tpl.workflow_id.startsWith("__builtin_") ? "built-in" : "admin template"}

@@ -99,7 +99,7 @@ def _load_workflow(workflow_id: str, db: Session, current_user: CurrentUser) -> 
     ).scalar_one_or_none()
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if wf.workflow_type == "seah" and not current_user.can_see_seah:
+    if workflow_track_from_type(wf.workflow_type) == "seah" and not current_user.can_see_seah:
         raise HTTPException(status_code=403, detail="SEAH admin access required")
     return wf
 
@@ -120,9 +120,9 @@ def list_workflows(
     )
     # Hide SEAH workflows from non-SEAH users
     if not current_user.can_see_seah:
-        q = q.where(WorkflowDefinition.workflow_type != "seah")
+        q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     if workflow_type:
-        q = q.where(WorkflowDefinition.workflow_type == workflow_type)
+        q = q.where(func.lower(WorkflowDefinition.workflow_type) == workflow_type.lower())
     if status:
         q = q.where(WorkflowDefinition.status == status)
     if is_template is not None:
@@ -190,7 +190,7 @@ def list_templates(
         selectinload(WorkflowDefinition.assignments),
     ).where(WorkflowDefinition.is_template.is_(True))
     if not current_user.can_see_seah:
-        q = q.where(WorkflowDefinition.workflow_type != "seah")
+        q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     db_templates = db.execute(q).scalars().all()
 
     items = [WorkflowDefinitionResponse.model_validate(t) for t in db_templates]
@@ -220,8 +220,9 @@ def create_workflow(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
-    _require_workflow_write(current_user, payload.workflow_type)
-    if payload.workflow_type == "seah":
+    normalized_type = workflow_track_from_type(payload.workflow_type)
+    _require_workflow_write(current_user, normalized_type)
+    if normalized_type == "seah":
         _require_seah(current_user)
 
     wf_id = _new_id()
@@ -235,7 +236,7 @@ def create_workflow(
         workflow_key=wf_key,
         display_name=payload.display_name,
         description=payload.description,
-        workflow_type=payload.workflow_type,
+        workflow_type=normalized_type,
         status="published" if payload.is_template else "draft",
         version=1,
         is_template=payload.is_template,

@@ -57,7 +57,7 @@ def seed_seah_workflow(db: Session) -> None:
             "Confidential — invisible to all standard GRM roles.\n"
             "Managed by dedicated SEAH officers only."
         ),
-        workflow_type="SEAH",
+        workflow_type="seah",
     )
     db.add(workflow)
     logger.info("  + workflow: KL_ROAD_SEAH")
