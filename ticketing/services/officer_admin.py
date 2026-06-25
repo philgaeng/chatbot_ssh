@@ -8,6 +8,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Keycloak execute-actions on invite — password only; profile fields live in GRM Account settings.
+KEYCLOAK_ONBOARDING_ACTIONS = ["UPDATE_PASSWORD"]
+
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -310,7 +313,7 @@ def _keycloak_send_invite_email(admin, kc_id: str) -> None:
     client_id, redirect_uri = _keycloak_invite_email_options()
     admin.send_update_account(
         user_id=kc_id,
-        payload=["UPDATE_PASSWORD", "UPDATE_PROFILE"],
+        payload=list(KEYCLOAK_ONBOARDING_ACTIONS),
         client_id=client_id,
         redirect_uri=redirect_uri,
     )
@@ -362,16 +365,44 @@ def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
 
 
 def keycloak_onboarding_complete(email: str) -> bool:
-    """True when Keycloak user is enabled with no pending required actions."""
+    """True when Keycloak user is enabled with no pending password setup."""
     if not keycloak_configured():
         return True
+    return not officer_invite_setup_pending(None, email)
+
+
+def officer_invite_setup_pending(db: Session | None, email: str) -> bool:
+    """
+    True when the officer has not finished Keycloak password setup.
+
+    Used for roster Invited badge — prefers Keycloak state over stale DB rows
+    (migration backfill marked existing user_roles as active).
+    """
     normalized = _normalize_officer_email(email)
+    if not keycloak_configured():
+        if db is None:
+            return False
+        ob = db.get(OfficerOnboarding, normalized)
+        return bool(ob and ob.status == "invited")
+
     kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
     if not kc_user:
-        return False
+        return True
     if not kc_user.get("enabled", True):
-        return False
-    return not (kc_user.get("requiredActions") or [])
+        return True
+    pending = kc_user.get("requiredActions") or []
+    if pending:
+        return True
+    if not kc_user.get("emailVerified", False):
+        return True
+    return False
+
+
+def officer_roster_onboarding_status(db: Session, uid: str) -> str:
+    """Display status for Settings → Officers roster."""
+    if officer_invite_setup_pending(db, uid):
+        return "invited"
+    return "active"
 
 
 def activate_officer_onboarding(db: Session, email: str) -> bool:
@@ -407,18 +438,8 @@ def sync_officer_onboarding_status(db: Session, email: str) -> bool:
 
 
 def officer_eligible_for_invite_resend(db: Session, email: str) -> bool:
-    """True if officer has not finished Keycloak onboarding (pending required actions)."""
-    normalized = _normalize_officer_email(email)
-    if not keycloak_configured():
-        ob = db.get(OfficerOnboarding, normalized)
-        return bool(ob and ob.status == "invited")
-    kc_user = _keycloak_find_user(_keycloak_admin(), normalized)
-    if not kc_user:
-        return True
-    if not kc_user.get("enabled", True):
-        return True
-    pending = kc_user.get("requiredActions") or []
-    return bool(pending)
+    """True if officer can receive a fresh Keycloak setup (execute-actions) email."""
+    return officer_invite_setup_pending(db, email)
 
 
 def admin_scope_can_send_setup_email() -> bool:
@@ -514,7 +535,7 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
     try:
         admin.update_user(
             user_id=kc_user["id"],
-            payload={"requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"]},
+            payload={"requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS)},
         )
         _keycloak_send_invite_email(admin, kc_user["id"])
     except HTTPException:
@@ -561,7 +582,7 @@ def keycloak_create_user(
             "value": temp_password or "GrmDemo2026!",
             "temporary": True,
         }],
-        "requiredActions": ["UPDATE_PASSWORD", "UPDATE_PROFILE"],
+        "requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS),
     }
     try:
         admin.create_user(create_payload)

@@ -19,7 +19,13 @@ RESET_TTL_SECONDS = 3600
 CLIENT_API = "ticketing-api"
 
 _ALLOWED_REDIRECT = re.compile(
-    r"^https://(grm-auth\.|grm\.stage\.|grm\.)[\w.-]*(?:facets-ai\.com|dor\.gov\.np)$"
+    r"^https://("
+    r"grm-auth\.[\w.-]*facets-ai\.com"
+    r"|grm\.stage\.facets-ai\.com"
+    r"|grm\.facets-ai\.com"
+    r"|grm-chatbot\.dor\.gov\.np"
+    r"|grm\.[\w.-]*dor\.gov\.np"
+    r")$"
     r"|^http://localhost:\d+$",
     re.I,
 )
@@ -124,11 +130,8 @@ def _ensure_keycloak_profile_ready(admin, user: dict[str, Any], email: str) -> N
     attrs = {k: list(v) for k, v in (user.get("attributes") or {}).items()}
     phone = (attrs.get("phone_number") or [""])[0].strip()
 
-    payload: dict[str, Any] = {
-        "requiredActions": [],
-        "emailVerified": True,
-    }
-    changed = bool(user.get("requiredActions"))
+    payload: dict[str, Any] = {"emailVerified": True}
+    changed = False
 
     if not user.get("email"):
         changed = True
@@ -147,6 +150,7 @@ def _ensure_keycloak_profile_ready(admin, user: dict[str, Any], email: str) -> N
         payload["lastName"] = user.get("lastName") or last
         if attrs:
             payload["attributes"] = attrs
+        # Do not clear Keycloak invite onboarding (UPDATE_PASSWORD) here.
         admin.update_user(uid, payload)
 
 
@@ -234,6 +238,13 @@ def login_with_password(email: str, password: str) -> dict[str, Any]:
         desc_lower = desc.lower()
         if "not fully set up" in desc_lower:
             user = _find_keycloak_user(normalized)
+            if user and (user.get("requiredActions") or []):
+                raise AuthLoginError(
+                    "account_setup_required",
+                    "Your account setup is incomplete. Open the invite link from your email, "
+                    "or use “Resend setup link” on the sign-in page.",
+                    403,
+                )
             if user:
                 try:
                     admin = _keycloak_admin()
@@ -253,7 +264,7 @@ def login_with_password(email: str, password: str) -> dict[str, Any]:
                     logger.warning("Keycloak profile auto-repair failed for %s: %s", normalized, exc)
             raise AuthLoginError(
                 "account_setup_required",
-                "Your account profile is incomplete. Use Forgot password once more, or contact your administrator.",
+                "Your account profile is incomplete. Use Forgot password or contact your administrator.",
                 403,
             )
         if "account is disabled" in desc_lower:
