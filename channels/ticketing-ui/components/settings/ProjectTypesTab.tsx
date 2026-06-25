@@ -125,8 +125,10 @@ function TypeEditorForm({
   const [standardWf, setStandardWf] = useState(initial.standard_workflow_id ?? "");
   const [seahWf, setSeahWf] = useState(initial.seah_workflow_id ?? "");
   const [routingRole, setRoutingRole] = useState(initial.routing_org_role);
-  const standardOpts = workflows.filter((w) => w.workflow_type === "standard");
-  const seahOpts = workflows.filter((w) => w.workflow_type === "seah");
+  const workflowTrack = (w: WorkflowDefinition) =>
+    (w.workflow_type || "standard").toLowerCase() === "seah" ? "seah" : "standard";
+  const standardOpts = workflows.filter((w) => workflowTrack(w) === "standard");
+  const seahOpts = workflows.filter((w) => workflowTrack(w) === "seah");
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">

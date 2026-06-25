@@ -339,7 +339,7 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
 
 
 def workflow_track_from_type(workflow_type: str) -> WorkflowTrack:
-    return "seah" if workflow_type == "seah" else "standard"
+    return "seah" if (workflow_type or "").lower() == "seah" else "standard"
 
 
 def can_mutate_workflow(user: CurrentUser, workflow_type: str) -> bool:
@@ -353,7 +353,7 @@ def can_assign_project_workflow(user: CurrentUser, workflow_type: str) -> bool:
     """Country admin may assign bindings on their workflow_track; super_admin all."""
     if is_super_admin(user):
         return True
-    track: WorkflowTrack = "seah" if workflow_type == "seah" else "standard"
+    track: WorkflowTrack = workflow_track_from_type(workflow_type)
     return is_country_admin(user, track)
 
 
