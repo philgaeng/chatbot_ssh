@@ -251,7 +251,6 @@ def setup_officer_phone_profile(admin: KeycloakAdmin) -> None:
             "validations": {"length": {"min": 8, "max": 20}},
             "permissions": {"view": ["admin", "user"], "edit": ["admin", "user"]},
             "multivalued": False,
-            "required": {"roles": ["user"]},
         },
         {
             "name": "job_title",
@@ -263,14 +262,19 @@ def setup_officer_phone_profile(admin: KeycloakAdmin) -> None:
     ]
 
     changed = False
-    existing_names = {a.get("name") for a in attrs}
+    existing_by_name = {a.get("name"): a for a in attrs}
     for decl in declarations:
-        if decl["name"] in existing_names:
-            logger.info("User profile %s attribute already declared", decl["name"])
+        name = decl["name"]
+        if name in existing_by_name:
+            existing = existing_by_name[name]
+            if existing.get("required"):
+                existing.pop("required", None)
+                changed = True
+                logger.info("User profile %s attribute no longer required at login", name)
             continue
         attrs.append(decl)
         changed = True
-        logger.info("User profile %s attribute added", decl["name"])
+        logger.info("User profile %s attribute added", name)
 
     if not changed:
         return

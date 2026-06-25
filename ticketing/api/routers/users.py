@@ -723,7 +723,10 @@ def list_officer_roster(
         ).scalars().all()
         onboard_map = {o.user_id: o.status for o in ob_rows}
 
-    from ticketing.services.officer_admin import sync_officer_onboarding_status
+    from ticketing.services.officer_admin import (
+        officer_roster_onboarding_status,
+        sync_officer_onboarding_status,
+    )
 
     roster_synced = False
     for uid in order:
@@ -800,7 +803,7 @@ def list_officer_roster(
             project_codes=sorted(proj_by.get(uid, set())),
             package_ids=sorted(pkg_by.get(uid, set())),
             scopes=scope_detail_by.get(uid, []),
-            onboarding_status=onboard_map.get(uid, "active"),
+            onboarding_status=officer_roster_onboarding_status(db, uid),
         )
 
     # Keycloak order first (alphabetic by display name), then legacy non-email ids.

@@ -16,11 +16,15 @@ from ticketing.services.officer_admin import (
     ("kc_user", "onboarding", "expected"),
     [
         (None, None, True),
-        ({"enabled": True, "requiredActions": []}, "active", False),
+        ({"enabled": True, "requiredActions": [], "emailVerified": True}, "active", False),
         ({"enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}, None, True),
         ({"enabled": False, "requiredActions": []}, None, True),
         (None, "invited", True),
-        ({"enabled": True, "requiredActions": []}, "invited", False),
+        (
+            {"enabled": True, "requiredActions": [], "emailVerified": True},
+            "invited",
+            False,
+        ),
         ({"enabled": True, "requiredActions": ["UPDATE_PROFILE"]}, "invited", True),
     ],
 )
@@ -48,9 +52,21 @@ def test_officer_eligible_for_invite_resend(kc_user, onboarding, expected):
 @pytest.mark.parametrize(
     ("kc_user", "onboarding", "expected"),
     [
-        ({"enabled": True, "requiredActions": []}, "invited", True),
-        ({"enabled": True, "requiredActions": []}, "active", False),
-        ({"enabled": True, "requiredActions": []}, None, False),
+        (
+            {"enabled": True, "requiredActions": [], "emailVerified": False},
+            "invited",
+            True,
+        ),
+        (
+            {"enabled": True, "requiredActions": [], "emailVerified": True},
+            "active",
+            False,
+        ),
+        (
+            {"enabled": True, "requiredActions": [], "emailVerified": True},
+            None,
+            False,
+        ),
         ({"enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}, None, True),
     ],
 )
@@ -130,7 +146,7 @@ def test_provision_admin_scope_resends_for_pending_keycloak_user():
 def test_provision_admin_scope_skips_email_for_active_user():
     db = MagicMock()
     db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
-    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": []}
+    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
 
     with patch(
         "ticketing.services.officer_admin.keycloak_configured",
@@ -160,7 +176,7 @@ def test_provision_admin_scope_promotes_stale_invited_db_row():
     """DB still says invited after Keycloak onboarding — sync to active, no resend."""
     db = MagicMock()
     db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
-    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": []}
+    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
     ob = MagicMock()
     ob.status = "invited"
     db.get.return_value = ob
@@ -192,7 +208,7 @@ def test_provision_admin_scope_promotes_stale_invited_db_row():
 def test_provision_admin_scope_force_invite_for_active_user():
     db = MagicMock()
     db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
-    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": []}
+    kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
 
     with patch(
         "ticketing.services.officer_admin.keycloak_configured",
