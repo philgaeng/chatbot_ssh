@@ -231,3 +231,49 @@ def test_provision_admin_scope_force_invite_for_active_user():
 
     assert status == "invited"
     send_setup.assert_called_once()
+
+
+def test_resend_invite_repairs_missing_keycloak_email():
+    db = MagicMock()
+    admin = MagicMock()
+    kc_user = {
+        "id": "kc-ankur",
+        "username": "ankur.shrestha@microsave.net",
+        "email": "",
+        "enabled": True,
+        "requiredActions": ["UPDATE_PASSWORD"],
+        "emailVerified": False,
+    }
+    repaired = {**kc_user, "email": "ankur.shrestha@microsave.net"}
+    admin.get_user.return_value = repaired
+
+    with patch(
+        "ticketing.services.officer_admin.keycloak_configured",
+        return_value=True,
+    ), patch(
+        "ticketing.services.officer_admin.keycloak_invite_preflight",
+        return_value={"ok": True},
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_admin",
+        return_value=admin,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_find_user",
+        return_value=kc_user,
+    ), patch(
+        "ticketing.services.officer_admin._keycloak_invite_email_options",
+        return_value=("ticketing-ui", "https://grm-chatbot.dor.gov.np/login"),
+    ), patch(
+        "ticketing.services.officer_admin._upsert_officer_onboarding",
+    ):
+        from ticketing.services.officer_admin import keycloak_resend_invite_email
+
+        sent = keycloak_resend_invite_email("ankur.shrestha@microsave.net", db=db)
+
+    assert sent == "ankur.shrestha@microsave.net"
+    admin.send_update_account.assert_called_once()
+    email_updates = [
+        c.kwargs.get("payload") or c.args[1]
+        for c in admin.update_user.call_args_list
+        if (c.kwargs.get("payload") or (c.args[1] if len(c.args) > 1 else {})).get("email")
+    ]
+    assert email_updates[0]["email"] == "ankur.shrestha@microsave.net"

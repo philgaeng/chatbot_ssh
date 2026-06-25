@@ -309,10 +309,57 @@ def _keycloak_invite_email_options() -> tuple[str, str]:
     return client_id, redirect_uri
 
 
-def _keycloak_send_invite_email(admin, kc_id: str) -> None:
+def _names_from_email(email: str) -> tuple[str, str]:
+    local = email.split("@", 1)[0]
+    name_parts = local.replace(".", " ").replace("-", " ").split()
+    first = name_parts[0].title() if name_parts else local
+    last = name_parts[-1].title() if len(name_parts) > 1 else "Officer"
+    return first, last
+
+
+def _ensure_keycloak_user_email(admin, kc_user: dict, fallback_email: str) -> dict:
+    """
+    Keycloak execute-actions email fails with 'User email missing' when the email
+    field is empty (username may still hold the address).
+    """
+    current = (kc_user.get("email") or "").strip()
+    if current and "@" in current:
+        return kc_user
+
+    repair = _normalize_officer_email(fallback_email)
+    if not repair or "@" not in repair:
+        username = (kc_user.get("username") or "").strip()
+        if "@" in username:
+            repair = username.lower()
+
+    if not repair or "@" not in repair:
+        raise HTTPException(
+            status_code=422,
+            detail="This officer account has no email in Keycloak. Set a valid email before resending invite.",
+        )
+
+    first, last = _names_from_email(repair)
+    payload: dict[str, Any] = {
+        "email": repair,
+        "emailVerified": False,
+    }
+    if not (kc_user.get("firstName") or "").strip():
+        payload["firstName"] = first
+    if not (kc_user.get("lastName") or "").strip():
+        payload["lastName"] = last
+    if not (kc_user.get("username") or "").strip():
+        payload["username"] = repair
+
+    admin.update_user(user_id=kc_user["id"], payload=payload)
+    refreshed = admin.get_user(kc_user["id"])
+    return refreshed if refreshed else {**kc_user, **payload}
+
+
+def _keycloak_send_invite_email(admin, kc_user: dict, fallback_email: str) -> None:
+    kc_user = _ensure_keycloak_user_email(admin, kc_user, fallback_email)
     client_id, redirect_uri = _keycloak_invite_email_options()
     admin.send_update_account(
-        user_id=kc_id,
+        user_id=kc_user["id"],
         payload=list(KEYCLOAK_ONBOARDING_ACTIONS),
         client_id=client_id,
         redirect_uri=redirect_uri,
@@ -537,7 +584,7 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
             user_id=kc_user["id"],
             payload={"requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS)},
         )
-        _keycloak_send_invite_email(admin, kc_user["id"])
+        _keycloak_send_invite_email(admin, kc_user, email)
     except HTTPException:
         raise
     except Exception as exc:
@@ -561,10 +608,7 @@ def keycloak_create_user(
     temp_password: Optional[str] = None,
 ) -> None:
     admin = _keycloak_admin()
-    local = email.split("@", 1)[0]
-    name_parts = local.replace(".", " ").replace("-", " ").split()
-    first_name = name_parts[0].title() if name_parts else local
-    last_name = name_parts[-1].title() if len(name_parts) > 1 else "Officer"
+    first_name, last_name = _names_from_email(email)
     create_payload = {
         "username": email,
         "email": email,
@@ -594,7 +638,7 @@ def keycloak_create_user(
                     "Keycloak user was created but could not be reloaded for invite email dispatch."
                 ),
             )
-        _keycloak_send_invite_email(admin, kc_user["id"])
+        _keycloak_send_invite_email(admin, kc_user, email)
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
@@ -618,7 +662,7 @@ def keycloak_create_user(
                         "credentials": create_payload["credentials"],
                     },
                 )
-                _keycloak_send_invite_email(admin, existing["id"])
+                _keycloak_send_invite_email(admin, existing, email)
                 return
             raise HTTPException(
                 status_code=409,
