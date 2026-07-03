@@ -1,23 +1,24 @@
 # Deployment URLs and paths (dev / stage / prod)
 
-This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/`](../deployment/nginx/). Values **differ by machine** (WSL paths vs EC2 `ubuntu` home, TLS termination, etc.). To avoid drift, maintain a **single manifest** and derive or update Nginx from it.
+This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/`](../../deployment/nginx/). Values **differ by machine** (WSL paths vs EC2 `ubuntu` home, TLS termination, etc.). To avoid drift, maintain a **single manifest** and derive or update Nginx from it.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | This document | **Committed** — workflow + full YAML you can copy into a local file. |
-| `docs/deployment_environment_urls.local.yaml` | **Optional local override** (recommended gitignored) — save the example block below after filling in `REPLACE_ME` / `YOU` paths. |
+| `docs/deployment/deployment_environment_urls.example.yaml` | **Committed** — template manifest. |
+| `docs/deployment/deployment_environment_urls.local.yaml` | **Local override** (intended gitignored). ⚠️ **Drift note (July 2026):** despite the gitignore intent, this file is currently *tracked in git* — do not put secrets in it until that is resolved. |
 
 ## Workflow
 
-1. Copy the **Example manifest (YAML)** block below into `docs/deployment_environment_urls.local.yaml` (or keep editing this doc’s block and paste when needed).
+1. Copy the **Example manifest (YAML)** block below into `docs/deployment/deployment_environment_urls.local.yaml` (or keep editing this doc’s block and paste when needed).
 
 2. Edit your local file with your WSL `repo_root`, stage hostnames, and upstream URLs.
 
 3. When changing Nginx or asking an assistant for config updates, **point to this file** (or paste the relevant `environments.*` block) so `server_name`, `alias` paths, and `proxy_pass` targets stay consistent.
 
-4. After deploy path changes on AWS, update the **`prod_aws`** (or equivalent) section here and the matching file under `deployment/nginx/`.
+4. After deploy path changes on AWS staging or DOR prod, update the **`stage_aws`** / **`prod_dor`** section here and the matching `webchat_rest_compose_*.conf` under `deployment/nginx/`.
 
 ## What belongs here vs elsewhere
 
@@ -33,32 +34,34 @@ If you run the stack in Compose, set `upstreams` to **service names** (e.g. `htt
 To avoid local TLS breakage and make intent explicit, Compose nginx configs are now split by environment:
 
 - `deployment/nginx/webchat_rest_compose_wsl.conf` — **WSL/local compose** (HTTP only, no certs, upstreams by service name)
-- `deployment/nginx/webchat_rest_compose_aws.conf` — **AWS compose** (HTTP->HTTPS redirect + certbot mounts + TLS cert paths)
+- `deployment/nginx/webchat_rest_compose_aws.conf` — **AWS staging compose** (`nepal-gms-chatbot.facets-ai.com` + `grm-auth.` subdomain; HTTP→HTTPS redirect + certbot mounts + TLS cert paths)
+- `deployment/nginx/webchat_rest_compose_prod.conf` / `webchat_rest_compose_prod.tls.conf` — **Nepal DOR production** (`grm-chatbot.dor.gov.np`; TLS variant mounted by `docker-compose.prod.yml`, single-host Keycloak at `/keycloak`)
 
 Compose files:
 
-- `docker-compose.yml` defaults to **WSL/local** behavior and maps only `80:80`.
-- `docker-compose.aws.yml` is an override for AWS TLS deployment.
+- `docker-compose.yml` defaults to **WSL/local** behavior and maps host `8080` → container `80`.
+- `docker-compose.aws.yml` is an override for AWS TLS deployment (host `80`/`443`).
+- `docker-compose.prod.yml` is the DOR-prod overlay on top of aws + grm.
 
 Run commands:
 
 - Local WSL: `docker compose up -d --build`
 - AWS/TLS compose: `docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d --build`
+- DOR prod: `docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml -f docker-compose.prod.yml --profile auth up -d`
 
 ## Related
 
-- Deployment and data architecture (Phase 1 → 2): [`deployment refactor/deployment_and_data_architecture.md`](deployment%20refactor/deployment_and_data_architecture.md)
-- AWS-oriented sample: [`deployment/nginx/webchat_rest_aws.conf`](../deployment/nginx/webchat_rest_aws.conf)
-- Local sample: [`deployment/nginx/webchat_rest.conf`](../deployment/nginx/webchat_rest.conf)
+- Deployment and data architecture (Phase 1 → 2): [`../sprints/archive/deployment refactor/deployment_and_data_architecture.md`](../sprints/archive/deployment%20refactor/deployment_and_data_architecture.md)
+- Nginx configs (the `_compose_*` variants are the live ones): [`deployment/nginx/`](../../deployment/nginx/)
 
 ---
 
 ## Example manifest (YAML)
 
-Copy everything inside the fence into `docs/deployment_environment_urls.local.yaml` (gitignored) and fill in placeholders. Keep in sync when Nginx or public URLs change.
+Copy everything inside the fence into `docs/deployment/deployment_environment_urls.local.yaml` and fill in placeholders. Keep in sync when Nginx or public URLs change.
 
 ```yaml
-# docs/deployment_environment_urls.local.yaml — do not commit secrets
+# docs/deployment/deployment_environment_urls.local.yaml — do not commit secrets
 meta:
   project: nepal_chatbot
   purpose: >-
@@ -117,11 +120,11 @@ environments:
       fastapi_backend: "http://127.0.0.1:5001"
     notes: []
 
-  prod_aws:
-    label: "Production (aligned with webchat_rest_aws.conf)"
+  stage_aws:
+    label: "AWS staging (aligned with webchat_rest_compose_aws.conf)"
     public:
       base_url: "https://nepal-gms-chatbot.facets-ai.com"
-      server_name: "nepal-gms-chatbot.facets-ai.com"
+      server_name: "nepal-gms-chatbot.facets-ai.com"   # + grm-auth.nepal-gms-chatbot.facets-ai.com (auth UI)
     tls:
       terminated_at: alb
     nginx:
@@ -139,7 +142,26 @@ environments:
       - "Docker Compose: use service names, e.g. http://orchestrator:8000"
       - "Nginx aliases: /ticketing/ -> grm_ui:3001 and /ticketing-mobile/ -> backend:5001"
 
-# other_services:
-#   rasa: "http://127.0.0.1:5005"
-#   rasa_actions: "http://127.0.0.1:5055"
+  prod_dor:
+    label: "Nepal DOR production (webchat_rest_compose_prod.tls.conf, docker-compose.prod.yml)"
+    public:
+      base_url: "https://grm-chatbot.dor.gov.np"
+      server_name: "grm-chatbot.dor.gov.np"
+    tls:
+      terminated_at: nginx   # certbot certs mounted into the nginx container
+    nginx:
+      listen_port: 443
+    host_paths:
+      repo_root: "/opt/grms/nepal_chatbot"   # adjust to actual checkout on the VPN host
+      rest_webchat_dir: "channels/REST_webchat"
+      shared_dir: "channels/shared"
+    upstreams:
+      orchestrator: "http://orchestrator:8000"
+      fastapi_backend: "http://backend:5001"
+      ticketing_ui_auth: "http://grm_ui_auth:3001"
+      ticketing_api_auth: "http://ticketing_api_auth:5003"
+      keycloak: "http://keycloak:8080"   # proxied at /keycloak (KC_HTTP_RELATIVE_PATH=/keycloak)
+    notes:
+      - "Reached via Sophos VPN only; auth UI serves the main host (demo grm_ui disabled)"
+      - "KC_HOSTNAME_URL=https://grm-chatbot.dor.gov.np/keycloak"
 ```

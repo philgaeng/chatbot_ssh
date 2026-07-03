@@ -115,9 +115,10 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 | [14_platform_settings.md](14_platform_settings.md) | Locations, quarterly report settings, project types, system JSON |
 | [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) | Officer invite, scopes, auto-assign |
 | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) | Staff WhatsApp/SMS policy |
+| [16_org_chart_and_positions.md](16_org_chart_and_positions.md) | Org unit tree, position types, position→role matrix |
 | [Escalation_rules.md](Escalation_rules.md) | SLA breach behaviour (runtime; configured via workflows) |
 
-**Historical:** `docs/sprints/claude-tickets/workflow-settings-spec.md` was the working draft for tabs 2–3; content is split into docs 10–14 above.
+**Historical:** `docs/sprints/archive/claude-tickets/workflow-settings-spec.md` was the working draft for tabs 2–3; content is split into docs 10–14 above.
 
 ---
 

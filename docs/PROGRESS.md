@@ -2,8 +2,8 @@
 
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
-> For open gaps and future features → **`docs/claude-tickets/TODO.md`**
-> Last updated: 2026-06-12 — project-level officer SMS on assignment (Messaging section + F1 go-live)
+> For open gaps and future features → **`docs/TODO.md`**
+> Last updated: 2026-07-04 — moved from `docs/sprints/claude-tickets/` to `docs/`; stale Cognito-era rows cleaned (auth is Keycloak as-built, see `docs/deployment/16_auth_keycloak.md`). Last substantive entry: 2026-06-12 — project-level officer SMS on assignment (Messaging section + F1 go-live)
 
 ---
 
@@ -66,7 +66,7 @@
   - **API client:** `OfficerRosterEntry` + `listOfficerRoster()` in `lib/api.ts`.
 
 - ✅ **Roles catalog + officer onboarding + Keycloak webhook** (2026-05-12, `c60d8ee` + `578ef24`):
-  - **Alembic:** `n4p6r8t0` → `roles.description`, `roles.workflow_scope`; `o5p7q9r1` → `ticketing.officer_onboarding` (`invited` \| `active`), backfill existing roster users as `active`. Run from repo root: `cd ticketing/migrations && alembic upgrade head` (see `docs/claude-tickets/DOCKER.md`).
+  - **Alembic:** `n4p6r8t0` → `roles.description`, `roles.workflow_scope`; `o5p7q9r1` → `ticketing.officer_onboarding` (`invited` \| `active`), backfill existing roster users as `active`. Run from repo root: `cd ticketing/migrations && alembic upgrade head` (see `docs/deployment/DOCKER.md`).
   - **Backend:** `ticketing/constants/grm_role_catalog.py` + `ticketing/seed/grm_roles.py`; `POST /api/v1/webhooks/keycloak` (header `X-Keycloak-Webhook-Secret` = `KEYCLOAK_WEBHOOK_SECRET`); invite seeds `UserRole` + `OfficerOnboarding`; roster includes `onboarding_status`; `ticketing/utils/organization_identifier.py` for server-allocated org IDs; locations/org create path updated.
   - **Compose:** `KEYCLOAK_WEBHOOK_SECRET` passed into `ticketing_api` and `ticketing_api_auth` (`docker-compose.grm.yml`).
   - **ticketing-ui:** Settings — role catalog editor (`PATCH /api/v1/roles/{id}`), officers roster Invited/Active badges, invite copy; `lib/api.ts` — `GrmRole`, `listRoles`, `updateRole`, optional `organization_id` on org create.
@@ -238,9 +238,9 @@ Things intentionally left incomplete with `# INTEGRATION POINT:` comments. Do no
 
 | File | What | Notes |
 |------|------|-------|
-| `ticketing/api/dependencies.py` | Cognito JWT validation | Stub always returns `mock-super-admin` |
+| ~~`ticketing/api/dependencies.py`~~ | ~~Cognito JWT validation~~ | ✅ Resolved — Keycloak JWT verification live (`ticketing/auth/keycloak_jwt.py`); mock fallback only when `keycloak_issuer` unset |
 | `ticketing/tasks/notifications.py` | SMS fallback phone lookup | Needs `GET /api/grievance/{id}` from backend |
-| `ticketing/tasks/reports.py` | Cognito email dispatch | Needs `ListUsers` call to get officer emails |
+| ~~`ticketing/tasks/reports.py`~~ | ~~Cognito email dispatch~~ | ✅ Resolved — officer emails come from Keycloak-synced accounts; quarterly email dispatch built |
 | `ticketing/tasks/grievance_sync.py` | `session_id` lookup | Needed for chatbot reply; see comment in file |
 | `ticketing/clients/grievance_api.py` | PII fetch | Called from ticket detail to show complainant name |
 
@@ -253,13 +253,13 @@ Things intentionally left incomplete with `# INTEGRATION POINT:` comments. Do no
 | `seed_workflow_assignment` log message still says `PROVINCE_1` | Low | `kl_road_standard.py:340` | Cosmetic only — actual stored value is `NP_P1` |
 | `OfficerScope` seed creates `UserRole` rows only, no `OfficerScope` rows | Medium | `mock_tickets.py` | Auto-assign returns `None` for new tickets created via API; pre-seeded tickets have hardcoded `assigned_to` so demo is unaffected |
 | `_scope_candidates` calls `_location_and_ancestors` twice for branch B + C | Low | `workflow_engine.py` | Minor perf: combine into one call when both branches are active |
-| Cognito user pool not created yet | High (post-proto) | `env.local` | `COGNITO_GRM_USER_POOL_ID` empty; all auth stubs for now |
+| ~~Cognito user pool not created yet~~ | — | — | ✅ Obsolete — Cognito abandoned; Keycloak realm shipped (invites, SMTP, onboarding webhook). See `docs/deployment/16_auth_keycloak.md` |
 
 ---
 
 ## CURSOR HANDOFF
 
-The full frontend brief is at: `docs/claude-tickets/session-3-cursor-handoff.md`
+The full frontend brief is at: `docs/sprints/archive/claude-tickets/session-3-cursor-handoff.md`
 
 That doc has: all API endpoints, request/response shapes, SLA urgency → color mapping, tab query params, action types, SEAH handling rules, and demo data IDs.
 

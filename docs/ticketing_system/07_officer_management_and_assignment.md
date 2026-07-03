@@ -207,7 +207,7 @@ All Remove actions use a confirmation dialog and show the API error message when
 ## 6. Engineering checklist (historical)
 
 - This checklist is retained as implementation history from the original design pass.
-- Current source of truth for completion state is `docs/sprints/claude-tickets/PROGRESS.md` plus the API/model references in this document.
+- Current source of truth for completion state is `docs/sprints/archive/claude-tickets/PROGRESS.md` plus the API/model references in this document.
 
 ---
 

@@ -123,7 +123,9 @@ Examples (`years_before_archiving = 2`):
 
 ---
 
-## 5) Data model changes (to implement)
+## 5) Data model changes (implemented)
+
+> As-built: ticketing migration `ticketing/migrations/versions/z1a3b5c7_ticket_archiving.py` (adds `is_archived`/`archived_at` + `(is_archived, status_code)` index) and public migration `migrations/public/versions/pub008_archiving_retention.py`. Job logic: `ticketing/services/archiving.py` (+ `archiving_policy.py`), task `ticketing/tasks/archiving.py::archive_eligible_grievances_task` (GRM Celery Beat, daily).
 
 ### 5.1 Ticketing (`ticketing/migrations/`)
 
@@ -228,6 +230,8 @@ See also [`docs/services/04_file_processing_service.md`](services/04_file_proces
 
 ## 11) Verification checklist
 
+> Covered by automated tests (`tests/ticketing/test_archiving.py`) at implementation time (2026-06). Boxes are intentionally left unticked: this is a **re-verification checklist** to re-run whenever archiving logic, settings validation, or the related migrations change.
+
 - [ ] **L1:** eligibility uses latest `RESOLVED` event `created_at` (Kathmandu year **N**)
 - [ ] **L2:** ticket moved out of `RESOLVED`/`CLOSED` clears archive flags; new **N** from latest resolve
 - [ ] **L3:** `CLOSED` ticket archives on same schedule as `RESOLVED`
@@ -247,4 +251,4 @@ See also [`docs/services/04_file_processing_service.md`](services/04_file_proces
 
 ## 12) Implementation pointer
 
-Agent prompt: [`docs/sprints/June5/agents/archiving-retention.md`](sprints/June5/agents/archiving-retention.md)
+Agent prompt: [`docs/sprints/archive/June5/agents/archiving-retention.md`](sprints/archive/June5/agents/archiving-retention.md)

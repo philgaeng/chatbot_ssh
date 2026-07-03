@@ -1,3 +1,5 @@
+> **ARCHIVED (July 2026):** the standalone Rasa runtime (server :5005 / action server :5055, `rasa train`) was deleted from the stack. Conversation runs through the Orchestrator + in-process actions in `backend/actions/`. Current flow/forms reference: `docs/rest_chatbot/02_flow_spec.md`. Kept for history only.
+
 # Nepal Chatbot - Rasa Guide
 
 Complete Rasa documentation covering conversation flows, forms, actions, NLU training, and async classification.

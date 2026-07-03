@@ -11,7 +11,8 @@ This spec is implementation-facing and aligned with:
 - `CLAUDE.md` data boundaries
 - `docs/ticketing_system/03_ticketing_api_integration.md`
 - `docs/ticketing_system/04_ticketing_schema.md`
-- `docs/Refactor specs/May5_seah/*`
+- `docs/sprints/archive/Refactor specs/May5_seah/*` (sprint-era SEAH specs)
+- `docs/seah/` — current SEAH documentation set (being consolidated; see [`../seah/README.md`](../seah/README.md))
 
 ## Core decisions (LOCKED)
 

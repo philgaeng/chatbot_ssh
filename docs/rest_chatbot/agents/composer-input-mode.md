@@ -216,7 +216,7 @@ Optional: `.composer-mode-buttons .quick-replies` light panel background.
 
 ### Step 7 — Manual test checklist
 
-Run REST webchat locally (see `docs/claude-tickets/DOCKER.md` or project docker docs for orchestrator + static channel).
+Run REST webchat locally (see `docs/deployment/DOCKER.md` or project docker docs for orchestrator + static channel).
 
 - [ ] Fresh load → intro buttons → textarea disabled, grey, hint says use buttons
 - [ ] File a grievance → reach contact field with Skip → textarea blue, can type

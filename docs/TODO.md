@@ -2,14 +2,14 @@
 
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
-> Last reviewed: 2026-05-05
+> Last reviewed: 2026-07-04 — moved from `docs/sprints/claude-tickets/` to `docs/`; obsolete Cognito rows removed (auth is Keycloak as-built). Entry dates below reflect when items were logged.
 
 ---
 
 ## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
 
 All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):
-- AppShell (sidebar, nav, badge count, SEAH indicator, Cognito + bypass auth)
+- AppShell (sidebar, nav, badge count, SEAH indicator, OIDC + bypass auth — Keycloak as-built)
 - Queue page (tabs, summary tiles, ticket rows, SLA countdown, SEAH red border/badge)
 - All Tickets page (list + search), Escalated page (focused list)
 - Ticket detail (grievance card, workflow stepper, SLA bar, event timeline, complainant PII + phone reveal)
@@ -275,7 +275,7 @@ a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_r
 
 ## 🔴 TP-14 — Classification status + portal sync (P1, spec locked 2026-06-03)
 
-**Specs:** [`docs/sprints/June5/04-classification-status-spec.md`](../June5/04-classification-status-spec.md) · [`03-portal-p1-spec.md`](../June5/03-portal-p1-spec.md) § TP-14
+**Specs:** [`docs/sprints/archive/June5/04-classification-status-spec.md`](sprints/archive/June5/04-classification-status-spec.md) · [`03-portal-p1-spec.md`](sprints/archive/June5/03-portal-p1-spec.md) § TP-14
 
 **Classification codes:** `pending` (default) → `LLM_generated` | `LLM_failed` | `LLM_skipped` → `complainant_confirmed` or `officer_confirmed`. Officer gate for `LLM_*` (not complainant confirmed). Retire `is_temporary`, `slot_skipped`, `LLM_error` in DB.
 
@@ -292,6 +292,16 @@ a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_r
 
 ---
 
+## 🔴 ACTIVE SPRINT — Tier-1 Hardening (July 2026)
+
+HR-01…07 from the adversarial codebase review (fail-closed auth, ticket-access gates, unique ticket index, escalation locking, CI, portal + webchat robustness). Specs, tracker, and agent runbooks: `docs/sprints/2026-07_hardening/` · Source: `docs/reviews/devils_advocate_codebase.md` §3 Tier 1.
+
+## 🟠 QUEUED SPRINT — Tier-2 Quality & Performance (Aug 2026, after Tier-1)
+
+H2-01…08: OIDC refresh-grant, `tickets.py` split + engine extraction, authz/escalation test extensions, grievance-sync watermark, auth-dependency cache, shared `useTicketThread` hook, SEAH form mixin + Nepali copy repair. Specs, tracker, runbooks: `docs/sprints/2026-08_tier2_quality/` · Source: `docs/reviews/devils_advocate_codebase.md` §3 Tier 2.
+
+---
+
 ## 🔵 TECH DEBT (low urgency)
 
 | Item | File | Notes |
@@ -299,7 +309,7 @@ a PII-clean JSON document. Never includes `created_by_user_id` — only `actor_r
 | Seed log message still says `PROVINCE_1` | `kl_road_standard.py:319` | Cosmetic — actual stored value is `NP_P1` |
 | `_scope_candidates` calls `_location_and_ancestors` twice (branches B + C) | `workflow_engine.py` | Minor perf — combine into one call |
 | `OfficerScope` seed creates `UserRole` rows but no `OfficerScope` rows | `mock_tickets.py` | Auto-assign returns `None` for API-created tickets; pre-seeded demo unaffected |
-| Cognito user pool not created | `env.local` | `COGNITO_GRM_USER_POOL_ID` empty; all auth stubs until post-proto |
+| ~~Cognito user pool not created~~ | — | ✅ Obsolete — Keycloak shipped instead (see `docs/deployment/16_auth_keycloak.md`) |
 | `grievance_sync.py` hardcoded column list | `tasks/grievance_sync.py` | Will break if public schema column names change — add integration test |
 
 ---

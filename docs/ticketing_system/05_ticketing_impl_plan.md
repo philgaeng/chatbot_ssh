@@ -1,22 +1,22 @@
-# Ticketing System – As-Built Status (June 2026)
+# Ticketing System – As-Built Status (July 2026)
 
 > This document replaces the original v1 implementation plan. It records what has actually been built.
-> For open/planned work → `docs/sprints/claude-tickets/TODO.md`.
-> For full build log → `docs/sprints/claude-tickets/PROGRESS.md`.
+> For open/planned work → `docs/sprints/archive/claude-tickets/TODO.md`.
+> For full build log → `docs/sprints/archive/claude-tickets/PROGRESS.md`.
 
 ---
 
 ## Phase 1 – Schema and migrations ✅ Complete
 
 - `ticketing.*` schema with ~25 tables (see `04_ticketing_schema.md`)
-- Alembic migration chain: ~30 revisions, scoped to `ticketing.*` only
+- Alembic migration chain: 38 revisions (head `g0h2i4j6`), scoped to `ticketing.*` only
 - `include_object` guard prevents touching `public.*` tables
 
 ## Phase 2 – Core ticketing API ✅ Complete
 
 - FastAPI service (`ticketing/api/main.py`) on port 5002
 - Full CRUD for tickets, workflows, organizations, locations, projects, packages
-- Ticket action engine (`POST /tickets/{id}/actions`): ACKNOWLEDGE, ESCALATE, RESOLVE, CLOSE, NOTE_ADDED, FIELD_REPORT, GRC_CONVENE, GRC_DECIDE, ASSIGN
+- Ticket action engine (`POST /tickets/{id}/actions`): ACKNOWLEDGE, ESCALATE, RESOLVE, NOTE, FIELD_REPORT, GRC_CONVENE, REASSIGNMENT_REQUESTED (CLOSE / GRC_DECIDE / ASSIGN removed in v1 — RESOLVE is the only terminal action, see `08_ticket_resolution_and_case_summary.md`)
 - Role-based access control via `OfficerScope` on all list endpoints
 - SEAH filtering at DB query level (`is_seah` flag)
 
@@ -50,7 +50,7 @@ Built in `channels/ticketing-ui/` (Next.js 16, TypeScript, Tailwind v4).
 - File attachments: complainant read + officer upload
 - Assign / reassign panels
 - Settings page: full admin panel (workflows, users, orgs, locations, projects, packages, QR tokens)
-- Reports page: Overview / Pivot / Quarterly email tabs
+- Reports page: Overview / Pivot / Summary / Quarterly email tabs
 - Badge + SlaCountdown components
 
 ## Phase 6 – Extended features ✅ Complete
@@ -58,7 +58,7 @@ Built in `channels/ticketing-ui/` (Next.js 16, TypeScript, Tailwind v4).
 | Feature | Status | Notes |
 |---|---|---|
 | 4-tier permission model (Actor/Supervisor/Informed/Observer) | ✅ | `ticket_viewers.tier`; ViewersBar in UI |
-| LLM per-note translation (EN) | ✅ | Celery task, GPT-4; `note_en` on ticket_events |
+| LLM per-note translation (EN) | ✅ | Celery `translate_note` task; stored in `ticket_events.payload["translation_en"]` |
 | LLM findings digest (`ai_summary_en`) | ✅ | `POST /tickets/{id}/findings`; role-gated |
 | QR token intake | ✅ | `ticketing.qr_tokens`; QrCodeModal in Settings |
 | Resolved case summary | ✅ | `ticket_resolved_summaries`; LLM generation |
@@ -69,13 +69,17 @@ Built in `channels/ticketing-ui/` (Next.js 16, TypeScript, Tailwind v4).
 | Bypass auth + demo roster | ✅ | `NEXT_PUBLIC_BYPASS_AUTH=true`; `grm_bypass_user` cookie |
 | Admin audit log | ✅ | `ticketing.admin_audit_log` |
 | Officer org edit + routing alignment (Fix 3) | ✅ | UI: Manage modal org dropdown; invite defaults to implementing agency; API: `validate_jurisdiction` + `PATCH /users/{id}` |
+| Reports Summary tab | ✅ | `GET /reports/summary` (+ `/export`), `ticketing/services/report_summary.py`, `components/reports/SummaryTab.tsx` |
+| Keycloak auth (replaces Cognito plan) | ✅ | Direct-grant login (`/auth/login`), invite/reset flows, `POST /webhooks/keycloak`, `deployment/keycloak` config |
+| Project workflow slots + intake routing | ✅ | `ticketing.project_workflows` — classifications + `intake_route` + default; `12_workflows_configuration.md` |
+| Geography reference model + canonical codes | ✅ | `countries` / `location_level_defs` / locations tree / translations; `18_geography_and_locations.md` |
+| Classification validation gate (TP-14) | ✅ | `PATCH /tickets/{id}/classification`; Acknowledge blocked until validated; `17_classification_status.md` |
+| Staging + production deploy | ✅ | Staging `grm.stage.facets-ai.com`; production `grm-chatbot.dor.gov.np` (DOR host — see `docs/deployment/`) |
 
-## Phase 7 – Remaining / Planned
+## Phase 7 – Remaining / Planned (as of July 2026)
 
 | Item | Priority | Notes |
 |---|---|---|
-| Reports Summary tab (§12) | 🔲 Medium | ADB Project Director quarterly matrix + charts. Specified in `09_reports_and_report_builder.md`. |
-| Staging deploy (`grm.stage.facets-ai.com`) | 🔲 High | Docker + Nginx + SSL on EC2. See `docs/sprints/claude-tickets/DOCKER.md`. |
 | `public.grievances` sync integration test | 🔲 Medium | Column contract test for `grievance_sync.py` SQL; Option A behaviour covered in `tests/ticketing/test_grievance_sync.py` + `test_project_routing.py`. |
 | Async large report export | 🔲 Low | Currently synchronous; large exports may timeout. |
 | File storage → S3 | 🔲 Low | Currently local filesystem. |

@@ -140,10 +140,14 @@ Ticketing callers use `ticketing.clients.messaging_api` (HTTP to the same backen
 - **No self-hosted mail server** — use your provider's SMTP relay (Infomaniak, Nepal local provider, Google Workspace, etc.).
 - API callers should treat messaging as best-effort and handle failed delivery gracefully.
 - Quarterly report XLSX attachments are sent via `context.attachments`.
+- Email and SMS are independent transports.
+
+SMS environment variables:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
 | `DOIT_SMS_BEARER_TOKEN` | yes (doit) | Bearer token from [newsms.doit.gov.np](https://newsms.doit.gov.np) |
 | `DOIT_SMS_BASE_URL` | no | default `https://sms.doit.gov.np` |
 | `SMS_PROVIDER` | no | `doit` \| `aws_sns` \| `disabled` |
 | `SMS_ENABLED` | no | `true` to send (falls back to `constants.SMS_ENABLED` if unset) |
 | `SMS_WHITELIST_ONLY` | no | default `true` for `aws_sns`, `false` for `doit` |
-
-- Email and SMS are independent transports.

@@ -2,7 +2,7 @@
 
 **Status:** Product reference (June 2026). **Access:** `super_admin` only for this entire main tab — see [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.  
 **UI:** Settings → **Settings** (platform tab)  
-**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
+**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [18_geography_and_locations.md](18_geography_and_locations.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
 
 The fourth main Settings tab holds **platform-wide** configuration: national reference data, project archetypes, system JSON, and **admin role assignment**. `country_admin` and `project_admin` **cannot** open this tab. Per-project routing stays in [13_projects_and_packages.md](13_projects_and_packages.md).
 
@@ -28,11 +28,12 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ### Data
 
-- `ticketing.locations` — `location_code`, `name`, `name_ne`, `parent_code`, `level`, `country_code`
-- `ticketing.location_translations` — EN/NE display names
+- `ticketing.locations` — `location_code`, `country_code`, `level_number`, `parent_location_code`, `source_id`, `latitude`/`longitude`, `is_active` (names live in translations)
+- `ticketing.location_translations` — per-language display names (`location_code`, `lang_code`, `name`)
+- `ticketing.location_level_defs` — level semantics per country (Province / District / Municipality)
 - `ticketing.countries` — country lookup
 
-Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `NP-KO`, district `NP-KO-JH`).
+Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `P1` = Koshi, district `P1_MOR` = Morang, `P1_JHA` = Jhapa). Full model: [18_geography_and_locations.md](18_geography_and_locations.md).
 
 ### UI (`LocationsSection`)
 
