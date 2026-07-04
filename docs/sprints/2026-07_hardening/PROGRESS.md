@@ -7,7 +7,7 @@
 
 | ID | Title | Workstream | Status | Branch | Commits | Notes |
 |---|---|---|---|---|---|---|
-| HR-05 | CI pipeline (pytest + tsc + eslint + docs-links) | C | review | `dev/hardening` | — (pending orchestrator commit) | Start first. Working-tree changes complete; commit/push/PR/branch-protection are the orchestrator's step, not this agent's (see notes below) |
+| HR-05 | CI pipeline (pytest + tsc + eslint + docs-links) | C | review | `dev/hardening` | `8d22727f` (pushed) | Committed + pushed. **Live Actions verification blocked: `gh` not authenticated in the dev shell.** Pending: first-run status/URL, deliberate-failure checks, branch protection — need `gh auth login` or the repo owner to check the Actions tab. Backend-tests job (Postgres+migrations+seed+pytest) is the one piece not run locally; first CI run confirms it. |
 | HR-01 | Fail-closed auth | A | todo | — | — | |
 | HR-02 | `require_ticket_access` on file/PII endpoints | A | todo | — | — | After HR-01 |
 | HR-03 | Unique partial index `tickets.grievance_id` | B | todo | — | — | Rebase on A (tickets.py) |
