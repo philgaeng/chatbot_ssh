@@ -1,0 +1,170 @@
+name: CI
+
+# HR-05 (2026-07 hardening sprint) — docs/sprints/2026-07_hardening/03-ci-pipeline-spec.md
+#
+# Three independent gates, run in parallel:
+#   backend-tests — Postgres 15 service, all three Alembic streams, pytest (ticketing/orchestrator/actions)
+#   ui-checks     — channels/ticketing-ui: tsc --noEmit, eslint, next build
+#   docs-links    — relative markdown link check under docs/ (excludes archive/)
+#
+# `dev/**` is included in the push triggers because the 2026-07 hardening sprint
+# works off a single shared `dev/hardening` branch (see CLAUDE.md git workflow).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "integration/**"
+      - "dev/**"
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grievance_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Read by backend/config/constants.py (DB_CONFIG), ticketing/config/settings.py
+      # (TicketingSettings) and ops/config.py (OpsSettings) — all three streams and the
+      # app code share these POSTGRES_* names, so one set of values wires everything.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: grievance_db_test
+      # Dev bypass (no live Keycloak in CI) — matches tests/ticketing/_host_env.py default.
+      KEYCLOAK_ISSUER: ""
+      TICKETING_SECRET_KEY: ci-test-secret
+      # Not read by any code yet (HR-01 not landed) — harmless to set now, see spec §1.
+      TICKETING_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10" # matches Dockerfile (python:3.10-slim)
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements.grm.txt
+            requirements-dev.txt
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements.grm.txt -r requirements-dev.txt
+
+      - name: Run migrations (public -> ticketing -> ops)
+        run: |
+          python -m alembic -c migrations/public/alembic.ini upgrade head
+          python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+          python -m alembic -c ops/migrations/alembic.ini upgrade head
+
+      - name: Seed KL Road locations + demo workflows
+        # tests/ticketing/conftest.py and several `pytest.mark.integration` tests
+        # (test_officer_assignment.py, test_project_routing.py, test_entity_codes.py)
+        # read the KL_ROAD project/workflow/location rows seeded here — same commands
+        # as the dev/SSH startup runbook, docs/deployment/03_operations.md §2 step 4.
+        run: |
+          python -m ticketing.seed.import_locations_json \
+            --country NP \
+            --en backend/dev-resources/location_dataset/en_cleaned.json \
+            --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+            --max-level 3
+          python -m ticketing.seed.mock_tickets --reset
+
+      - name: Run pytest (ticketing, orchestrator, actions)
+        run: |
+          pytest tests/ticketing tests/orchestrator tests/actions -q --maxfail=20 --strict-markers
+
+  ui-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: channels/ticketing-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20" # matches channels/ticketing-ui/Dockerfile (node:20-alpine)
+          cache: "npm"
+          cache-dependency-path: channels/ticketing-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint . --max-warnings=-1
+
+      # Verified locally (no backend env vars, no .env.local): completes in ~20s,
+      # well under the ~5 min budget in spec §1 — safe to keep in CI.
+      - name: Build
+        run: npm run build
+
+  docs-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check relative markdown links under docs/ (excludes archive/)
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from urllib.parse import unquote
+
+          DOCS_ROOT = "docs"
+          LINK_RE = re.compile(r"\]\(([^)#\s]+)\)")
+          broken = []
+          checked = 0
+
+          for dirpath, dirnames, filenames in os.walk(DOCS_ROOT):
+              dirnames[:] = [d for d in dirnames if "archive" not in d]
+              if "archive" in dirpath:
+                  continue
+              for fname in filenames:
+                  if not fname.endswith(".md"):
+                      continue
+                  fpath = os.path.join(dirpath, fname)
+                  if "archive" in fpath:
+                      continue
+                  with open(fpath, encoding="utf-8") as f:
+                      text = f.read()
+                  for match in LINK_RE.finditer(text):
+                      target = match.group(1)
+                      if target.startswith(("http://", "https://", "mailto:", "#")):
+                          continue
+                      target = unquote(target)
+                      checked += 1
+                      resolved = os.path.normpath(os.path.join(dirpath, target))
+                      if not os.path.exists(resolved):
+                          broken.append((fpath, target))
+
+          print(f"checked {checked} relative link(s) under {DOCS_ROOT}/ (excluding archive)")
+          if broken:
+              print(f"Found {len(broken)} broken relative link(s):")
+              for fpath, target in broken:
+                  print(f"  {fpath} -> {target}")
+              sys.exit(1)
+          print("All relative markdown links resolve OK.")
+          PY
