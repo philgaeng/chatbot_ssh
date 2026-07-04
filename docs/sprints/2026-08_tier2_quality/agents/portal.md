@@ -1,6 +1,6 @@
 # Agent runbook — H2-01 + H2-06: Portal auth & thread hook
 
-**Branch:** `tier2/h2-01-06-portal` off `integration/seah-claude` · **Spec:** [`../01-portal-auth-and-thread-spec.md`](../01-portal-auth-and-thread-spec.md) · Read [`README.md`](README.md) first. Order: H2-01 → H2-06. All work in `channels/ticketing-ui/`.
+**Branch:** `tier2/h2-01-06-portal` off `integration/seah-claude` · **Model:** Opus (high effort — subtle single-flight OIDC refresh; H2-06 alone is Sonnet-level) · **Spec:** [`../01-portal-auth-and-thread-spec.md`](../01-portal-auth-and-thread-spec.md) · Read [`README.md`](README.md) first. Order: H2-01 → H2-06. All work in `channels/ticketing-ui/`.
 
 ## Mission
 

@@ -1,6 +1,6 @@
 # Agent runbook — HR-06: Portal robustness
 
-**Branch:** `hardening/hr-06-portal` off `integration/seah-claude` · **Spec:** [`../04-portal-robustness-spec.md`](../04-portal-robustness-spec.md) · Read [`README.md`](README.md) common rules first. All work in `channels/ticketing-ui/`.
+**Branch:** `hardening/hr-06-portal` off `integration/seah-claude` · **Model:** Sonnet (medium effort — mechanical UI plumbing) · **Spec:** [`../04-portal-robustness-spec.md`](../04-portal-robustness-spec.md) · Read [`README.md`](README.md) common rules first. All work in `channels/ticketing-ui/`.
 
 ## Mission
 

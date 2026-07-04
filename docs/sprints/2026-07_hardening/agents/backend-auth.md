@@ -1,6 +1,6 @@
 # Agent runbook — HR-01 + HR-02: Auth hardening
 
-**Branch:** `hardening/hr-01-02-auth` off `integration/seah-claude` · **Spec:** [`../01-auth-hardening-spec.md`](../01-auth-hardening-spec.md) · Read [`README.md`](README.md) common rules first. Do HR-01 fully (commit + tests) before starting HR-02.
+**Branch:** `hardening/hr-01-02-auth` off `integration/seah-claude` · **Model:** Opus (high effort — security-critical) · **Spec:** [`../01-auth-hardening-spec.md`](../01-auth-hardening-spec.md) · Read [`README.md`](README.md) common rules first. Do HR-01 fully (commit + tests) before starting HR-02.
 
 ## Mission
 

@@ -1,6 +1,6 @@
 # Agent runbook — HR-05: CI pipeline
 
-**Branch:** `hardening/hr-05-ci` off `integration/seah-claude` · **Spec:** [`../03-ci-pipeline-spec.md`](../03-ci-pipeline-spec.md) · Read [`README.md`](README.md) common rules first.
+**Branch:** `hardening/hr-05-ci` off `integration/seah-claude` · **Model:** Sonnet (medium effort — mechanical CI/config) · **Spec:** [`../03-ci-pipeline-spec.md`](../03-ci-pipeline-spec.md) · Read [`README.md`](README.md) common rules first.
 
 ## Mission
 

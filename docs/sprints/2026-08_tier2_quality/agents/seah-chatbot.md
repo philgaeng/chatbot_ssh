@@ -1,6 +1,6 @@
 # Agent runbook — H2-08: SEAH form mixin + Nepali copy repair
 
-**Branch:** `tier2/h2-08-seah` off `integration/seah-claude` · **Spec:** [`../04-seah-chatbot-quality-spec.md`](../04-seah-chatbot-quality-spec.md) · Read [`README.md`](README.md) first.
+**Branch:** `tier2/h2-08-seah` off `integration/seah-claude` · **Model:** Opus (high effort — introspection-lookup mixin on the most sensitive flow) · **Spec:** [`../04-seah-chatbot-quality-spec.md`](../04-seah-chatbot-quality-spec.md) · Read [`README.md`](README.md) first.
 
 ⚠️ **Live SEAH intake code — the most sensitive flow in the product.** Run the SEAH test suites after every commit. You prepare the Nepali fixes; a human translator signs off before merge. **Never invent Nepali text for `needs_translator` rows.**
 

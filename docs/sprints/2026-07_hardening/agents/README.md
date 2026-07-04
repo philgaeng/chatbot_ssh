@@ -2,13 +2,27 @@
 
 One runbook per workstream; each is a self-contained brief for a single agent run. Give the agent the runbook plus repo access — it should not need anything else.
 
-| Runbook | Tickets | Branch |
+| Runbook | Tickets | Model | Branch |
+|---|---|---|---|
+| [ci.md](ci.md) | HR-05 | **Sonnet** | `hardening/hr-05-ci` — **run first** |
+| [backend-auth.md](backend-auth.md) | HR-01, HR-02 | **Opus** | `hardening/hr-01-02-auth` |
+| [backend-data.md](backend-data.md) | HR-03, HR-04 | **Opus** | `hardening/hr-03-04-data` — after auth lands (shared files) |
+| [portal.md](portal.md) | HR-06 | **Sonnet** | `hardening/hr-06-portal` |
+| [webchat.md](webchat.md) | HR-07 | **Opus** | `hardening/hr-07-webchat` |
+
+## Model selection (per workstream)
+
+Pick the model by **difficulty and blast radius, not diff size**. Rationale per ticket:
+
+| Ticket(s) | Model / reasoning effort | Why |
 |---|---|---|
-| [ci.md](ci.md) | HR-05 | `hardening/hr-05-ci` — **run first** |
-| [backend-auth.md](backend-auth.md) | HR-01, HR-02 | `hardening/hr-01-02-auth` |
-| [backend-data.md](backend-data.md) | HR-03, HR-04 | `hardening/hr-03-04-data` — after auth lands (shared files) |
-| [portal.md](portal.md) | HR-06 | `hardening/hr-06-portal` |
-| [webchat.md](webchat.md) | HR-07 | `hardening/hr-07-webchat` |
+| HR-05 (CI) | **Sonnet**, medium effort | Mechanical CI YAML + migration-order + eslint baseline against an unambiguous spec. Low correctness ambiguity. |
+| HR-01 / HR-02 (auth) | **Opus**, high effort | Security-critical: fail-closed startup and a per-ticket authz class fix on a government PII system. A subtle miss reopens the worst findings in the review. |
+| HR-03 / HR-04 (data) | **Opus**, high effort | DB-enforced invariant + lock-free escalation made crash- and concurrency-safe (savepoints, `FOR UPDATE SKIP LOCKED`). Concurrency-correctness reasoning. |
+| HR-06 (portal) | **Sonnet**, medium effort | React hooks-order fix, error boundaries, list error states, vitest seed — mechanical UI plumbing with a detailed spec. |
+| HR-07 (webchat) | **Opus**, high effort | Only four tiny diffs, **but the live complainant/SEAH intake channel** — judgment about not regressing outweighs line count. Small diff ≠ low risk. |
+
+**Haiku** is not recommended for any workstream in this sprint; reserve it for trivial doc/text edits.
 
 ## Common rules (all agents)
 

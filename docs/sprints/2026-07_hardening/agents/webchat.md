@@ -1,6 +1,6 @@
 # Agent runbook — HR-07: Webchat robustness
 
-**Branch:** `hardening/hr-07-webchat` off `integration/seah-claude` · **Spec:** [`../05-webchat-robustness-spec.md`](../05-webchat-robustness-spec.md) · Read [`README.md`](README.md) common rules first. All work in `channels/REST_webchat/` (+ hash generation only).
+**Branch:** `hardening/hr-07-webchat` off `integration/seah-claude` · **Model:** Opus (high effort — tiny diffs, live SEAH channel) · **Spec:** [`../05-webchat-robustness-spec.md`](../05-webchat-robustness-spec.md) · Read [`README.md`](README.md) common rules first. All work in `channels/REST_webchat/` (+ hash generation only).
 
 ⚠️ **This is the live complainant channel used for SEAH reports. Smallest possible diffs. No refactors, no cleanup, no touching the `window.*` architecture.**
 

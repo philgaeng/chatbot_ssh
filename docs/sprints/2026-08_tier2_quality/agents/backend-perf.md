@@ -1,6 +1,6 @@
 # Agent runbook — H2-04 + H2-05: Backend performance
 
-**Branch:** `tier2/h2-04-05-perf` off `integration/seah-claude`, rebased on the merged backend-refactor branch (shared ticket-router files) · **Spec:** [`../03-backend-performance-spec.md`](../03-backend-performance-spec.md) · Read [`README.md`](README.md) first. Order: H2-04 → H2-05.
+**Branch:** `tier2/h2-04-05-perf` off `integration/seah-claude`, rebased on the merged backend-refactor branch (shared ticket-router files) · **Model:** Opus (high effort — transaction placement + correctness under measurement) · **Spec:** [`../03-backend-performance-spec.md`](../03-backend-performance-spec.md) · Read [`README.md`](README.md) first. Order: H2-04 → H2-05.
 
 ## Mission
 

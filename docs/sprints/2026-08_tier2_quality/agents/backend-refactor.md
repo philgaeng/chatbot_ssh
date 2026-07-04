@@ -1,6 +1,6 @@
 # Agent runbook — H2-02 + H2-03 + H2-07: Backend refactor & test extensions
 
-**Branch:** `tier2/h2-02-03-07-backend` off `integration/seah-claude` · **Spec:** [`../02-backend-router-split-spec.md`](../02-backend-router-split-spec.md) · Read [`README.md`](README.md) first. Strict order: H2-02 → H2-03 → H2-07.
+**Branch:** `tier2/h2-02-03-07-backend` off `integration/seah-claude` · **Model:** Opus (high effort — zero-behavior-change refactor at scale) · **Spec:** [`../02-backend-router-split-spec.md`](../02-backend-router-split-spec.md) · Read [`README.md`](README.md) first. Strict order: H2-02 → H2-03 → H2-07.
 
 ## Mission
 

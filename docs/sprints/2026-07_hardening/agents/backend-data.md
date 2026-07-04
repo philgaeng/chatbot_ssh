@@ -1,6 +1,6 @@
 # Agent runbook — HR-03 + HR-04: Data integrity
 
-**Branch:** `hardening/hr-03-04-data` off `integration/seah-claude` (rebase on the merged auth branch if it landed — shared file `tickets.py`) · **Spec:** [`../02-data-integrity-spec.md`](../02-data-integrity-spec.md) · Read [`README.md`](README.md) common rules first. Do HR-03 fully before HR-04.
+**Branch:** `hardening/hr-03-04-data` off `integration/seah-claude` (rebase on the merged auth branch if it landed — shared file `tickets.py`) · **Model:** Opus (high effort — DB invariant + concurrency correctness) · **Spec:** [`../02-data-integrity-spec.md`](../02-data-integrity-spec.md) · Read [`README.md`](README.md) common rules first. Do HR-03 fully before HR-04.
 
 ## Mission
 
