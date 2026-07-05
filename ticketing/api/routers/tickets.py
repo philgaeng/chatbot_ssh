@@ -32,6 +32,12 @@ from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db, verify_api_key
+from ticketing.api.ticket_access import (
+    FileAccess,
+    assert_ticket_visibility,
+    require_file_access,
+    require_ticket_access,
+)
 from ticketing.api.schemas.ticket import (
     TicketActionRequest,
     TicketActionResponse,
@@ -737,44 +743,9 @@ def get_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    # SEAH visibility gate
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    # Viewer access — allow through even if not in normal scope
-    # (scope enforcement happens at list level; detail allows any authenticated viewer)
-    # Admins, assigned officer, and viewers all have access. Others with no scope
-    # record for this ticket are rejected.
-    if not current_user.is_admin:
-        if (
-            ticket.assigned_to_user_id != current_user.user_id
-            and not _is_viewer(db, ticket_id, current_user.user_id)
-        ):
-            # Task-holder check: officer with a pending task on this ticket always gets access
-            # (task assignment grants implicit read access so the officer can work the task)
-            has_pending_task = db.execute(
-                select(TicketTask).where(
-                    TicketTask.ticket_id == ticket_id,
-                    TicketTask.assigned_to_user_id == current_user.user_id,
-                    TicketTask.status == "PENDING",
-                ).limit(1)
-            ).scalar_one_or_none() is not None
-
-            if not has_pending_task:
-                # Fall back to scope check — mirrors the hierarchical list-endpoint logic:
-                # a province-scoped officer (P1) can access district-level tickets (P1_JHA).
-                from ticketing.models.officer_scope import OfficerScope as _OfficerScope
-                scopes = db.execute(
-                    select(_OfficerScope).where(_OfficerScope.user_id == current_user.user_id)
-                ).scalars().all()
-
-                # Pre-fetch child locations for any scope that has a location_code
-                from ticketing.services.officer_jurisdiction import ticket_matches_scope
-
-                in_scope = any(ticket_matches_scope(db, s, ticket) for s in scopes)
-
-                if not in_scope:
-                    raise HTTPException(status_code=403, detail="Access denied")
+    # Access gate: SEAH + admin/assignee/viewer/pending-task/jurisdiction-scope.
+    # HR-02 single source of truth (was inlined here — this is the reference impl).
+    assert_ticket_visibility(db, ticket, current_user)
 
     # Attach viewer list (used by @mention autocomplete on the client)
     viewers = db.execute(
@@ -829,15 +800,10 @@ def list_grievance_categories(
 def validate_ticket_classification(
     ticket_id: str,
     payload: ClassificationValidateRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ClassificationValidateResponse:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     import json as _json
 
     cats_raw = payload.grievance_categories.strip()
@@ -913,15 +879,10 @@ def validate_ticket_classification(
 def patch_ticket(
     ticket_id: str,
     payload: TicketPatch,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> Ticket:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     old_assigned = ticket.assigned_to_user_id
 
     if payload.assign_to_user_id is not None:
@@ -1000,15 +961,10 @@ _COMPLAINANT_EDIT_ROLES = {
 def patch_ticket_complainant(
     ticket_id: str,
     payload: ComplainantPatch,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> ComplainantPatchResponse:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     # Role check: assigned officer OR whitelisted role (or admin)
     is_assigned = current_user.matches_assignee(ticket.assigned_to_user_id)
     is_editor = current_user.is_admin or bool(
@@ -1089,6 +1045,7 @@ VALID_ACTIONS = {
 def perform_action(
     ticket_id: str,
     payload: TicketActionRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketActionResponse:
@@ -1098,12 +1055,6 @@ def perform_action(
             status_code=422,
             detail=f"Invalid action_type={action!r}. Valid: {sorted(VALID_ACTIONS)}",
         )
-
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
 
     # Assignment guard — only the assigned officer (or admin) may change ticket status.
     # NOTE is always allowed so any officer can add internal notes.
@@ -1525,15 +1476,10 @@ def perform_action(
 def reply_to_complainant(
     ticket_id: str,
     payload: TicketReplyRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> TicketReplyResponse:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     # Only the assigned officer (or admin) may reply to the complainant.
     if not current_user.is_admin:
         if ticket.assigned_to_user_id and ticket.assigned_to_user_id != current_user.user_id:
@@ -1684,15 +1630,10 @@ def inbound_complainant_message(
 )
 def get_sla(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     step = get_current_step(ticket, db)
     info = sla_status(ticket, step)
     return {
@@ -1713,6 +1654,7 @@ def get_sla(
 )
 def get_ticket_teammates(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
@@ -1721,12 +1663,6 @@ def get_ticket_teammates(
     current step, excluding the currently assigned officer.
     Used to populate the Reassign To dropdown in the case view.
     """
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     step = get_current_step(ticket, db)
     if not step:
         return {"ticket_id": ticket_id, "teammates": []}
@@ -1752,13 +1688,12 @@ def get_ticket_teammates(
 )
 def mark_events_seen(
     ticket_id: str,
+    _ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-
+    # HR-02: previously had NO SEAH gate (only a ticket-exists check); the dependency
+    # now enforces SEAH + scope before an officer can clear their badges on a ticket.
     db.execute(
         TicketEvent.__table__.update()
         .where(
@@ -1788,15 +1723,10 @@ def mark_events_seen(
 def add_to_informed(
     ticket_id: str,
     payload: AddInformedRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> AddInformedResponse:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     # SEAH: adding to Informed requires supervisor approval (spec 12 §1 — v2)
     if ticket.is_seah:
         raise HTTPException(
@@ -1858,15 +1788,10 @@ def add_to_informed(
 def update_reply_owner(
     ticket_id: str,
     payload: ReplyOwnerRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     # Permission: Actor (assigned) or admin
     if not current_user.is_admin:
         if ticket.assigned_to_user_id != current_user.user_id:
@@ -1907,6 +1832,7 @@ def update_reply_owner(
 )
 def list_ticket_files(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
@@ -1914,11 +1840,6 @@ def list_ticket_files(
     Reads public.file_attachments for the grievance linked to this ticket.
     Read-only — no join, separate query per architecture rules.
     """
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     if ticket.is_archived and not current_user.can_view_archived:
         raise HTTPException(status_code=403, detail="Case is archived")
 
@@ -1952,36 +1873,26 @@ def list_ticket_files(
 )
 def download_file(
     file_id: str,
-    db: Session = Depends(get_db),
+    fa: FileAccess = Depends(require_file_access),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> FileResponse:
     """
     Streams a file from disk using the path stored in public.file_attachments.
+
+    HR-02: ``require_file_access`` resolves file → owning ticket and enforces the same
+    SEAH + jurisdiction/visibility gate as the ticket detail view *before* streaming.
+    Previously this endpoint only checked ``is_archived`` — any authenticated officer
+    could pull any grievance's chatbot files, piercing the SEAH wall.
     """
-    row = db.execute(
-        text(
-            "SELECT file_name, file_path, file_type, grievance_id "
-            "FROM public.file_attachments WHERE file_id = :fid"
-        ),
-        {"fid": file_id},
-    ).mappings().one_or_none()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    grievance_id = row["grievance_id"]
-    ticket = db.execute(
-        select(Ticket).where(Ticket.grievance_id == grievance_id, Ticket.is_deleted.is_(False))
-    ).scalar_one_or_none()
-    if ticket and ticket.is_archived and not current_user.can_view_archived:
+    if fa.ticket.is_archived and not current_user.can_view_archived:
         raise HTTPException(status_code=403, detail="Case is archived")
 
-    file_path = _resolve_attachment_path(row["file_path"])
+    file_path = _resolve_attachment_path(fa.file_path)
     if not file_path:
         raise HTTPException(status_code=404, detail="File not on disk")
 
     media_type = _media_type_for_path(file_path)
-    return FileResponse(path=file_path, filename=row["file_name"], media_type=media_type)
+    return FileResponse(path=file_path, filename=fa.file_name, media_type=media_type)
 
 
 # ─── POST /tickets/{ticket_id}/attachments — officer file upload ──────────────
@@ -1995,14 +1906,10 @@ async def upload_officer_attachment(
     ticket_id: str,
     file: UploadFile = File(...),
     caption: str = Form(""),
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     if ticket.is_archived:
         raise HTTPException(status_code=409, detail="Cannot upload files to an archived case")
 
@@ -2080,15 +1987,10 @@ async def upload_officer_attachment(
 )
 def list_officer_attachments(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[dict]:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     files = db.execute(
         select(TicketFile)
         .where(TicketFile.ticket_id == ticket_id)
@@ -2117,17 +2019,16 @@ def list_officer_attachments(
 )
 def download_officer_attachment(
     file_id: str,
-    db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_authenticated_user),
+    fa: FileAccess = Depends(require_file_access),
 ) -> FileResponse:
-    tf = db.get(TicketFile, file_id)
-    if not tf:
-        raise HTTPException(status_code=404, detail="Attachment not found")
-    if not os.path.isfile(tf.file_path):
+    # HR-02: was auth-only — ANY authenticated user could download ANY officer
+    # attachment by file_id (no SEAH gate, no scope/viewer check). require_file_access
+    # now resolves file → owning ticket and enforces the full visibility gate.
+    if not os.path.isfile(fa.file_path):
         raise HTTPException(status_code=404, detail="File not on disk")
 
-    media_type = _media_type_for_path(tf.file_path)
-    return FileResponse(path=tf.file_path, filename=tf.file_name, media_type=media_type)
+    media_type = _media_type_for_path(fa.file_path)
+    return FileResponse(path=fa.file_path, filename=fa.file_name, media_type=media_type)
 
 
 # ─── GET /tickets/{ticket_id}/pii — broker complainant PII from backend ──────────
@@ -2140,16 +2041,15 @@ def download_officer_attachment(
 )
 def get_ticket_pii(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import get_grievance_detail
 
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
+    # HR-02: previously SEAH-gated but NOT jurisdiction-gated — any officer could pull
+    # PII for any standard ticket by ID. require_ticket_access adds the scope gate.
+    # PII masking rules (TP-15: standard decrypted / SEAH masked) below are unchanged.
     if not ticket.grievance_id:
         return {}
 
@@ -2207,14 +2107,10 @@ def _has_resolution_record_event(db: Session, ticket_id: str) -> bool:
 @router.get("/tickets/{ticket_id}/resolved-summary")
 def get_resolved_summary(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     row = db.get(TicketResolvedSummary, ticket_id)
     if not row:
         if ticket.status_code in ("RESOLVED", "CLOSED") and not _has_resolution_record_event(db, ticket_id):
@@ -2257,14 +2153,10 @@ def get_resolved_summary(
 def trigger_resolved_summary(
     ticket_id: str,
     force: bool = Query(False),
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     has_findings_role = current_user.is_admin or bool(
         set(current_user.role_keys) & _FINDINGS_ROLES
     )
@@ -2305,15 +2197,10 @@ _FINDINGS_ROLES = {
 )
 def trigger_findings(
     ticket_id: str,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     # Role gate — only supervisors and senior observers may trigger findings
     has_findings_role = current_user.is_admin or bool(
         set(current_user.role_keys) & _FINDINGS_ROLES
@@ -2367,17 +2254,13 @@ class RevealCloseRequest(_BaseModel):
 def begin_reveal(
     ticket_id: str,
     body: RevealRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import begin_reveal_session
     from ticketing.services.demo_reveal import ticket_reveal_fallback_grievance
 
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     if not ticket.grievance_id:
         raise HTTPException(status_code=422, detail="Ticket has no linked grievance_id")
 
@@ -2430,16 +2313,12 @@ def begin_reveal(
 def close_reveal(
     ticket_id: str,
     body: RevealCloseRequest,
+    ticket: Ticket = Depends(require_ticket_access),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> dict:
     from ticketing.clients.grievance_api import close_reveal_session
 
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket or ticket.is_deleted:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.is_seah and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="Access denied")
     if not ticket.grievance_id:
         raise HTTPException(status_code=422, detail="Ticket has no linked grievance_id")
 
