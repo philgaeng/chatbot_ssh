@@ -5,7 +5,7 @@
  * UI_SPEC.md §2.1
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   EMPTY_TICKET_LIST_FILTERS,
@@ -22,6 +22,7 @@ import { urgencyTextCls, type SlaUrgency } from "@/lib/mobile-constants";
 import { IntakeRouteBadge, UrgencyDot } from "@/lib/icons";
 import { MobileAppHeader } from "@/components/mobile/MobileAppHeader";
 import { MobileTicketFiltersSheet } from "@/components/mobile/MobileTicketFiltersSheet";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 
 function slaLabel(sla: SlaStatus | undefined, breached: boolean): string {
   if (breached) return "Overdue";
@@ -104,14 +105,18 @@ export default function MobileQueuePage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const seqRef = useRef(0);
 
   const filtersActive = ticketListFiltersActive(listFilters);
 
   const load = useCallback(
     (showRefresh = false) => {
       if (!isAuthenticated) return;
+      const seq = ++seqRef.current;
       if (showRefresh) setRefreshing(true);
       else setLoading(true);
+      setError(null);
 
       const tabParams =
         filter === "mine" ? { tab: "actor" as const } :
@@ -124,11 +129,17 @@ export default function MobileQueuePage() {
         page_size: 50,
       })
         .then((r) => {
+          if (seq !== seqRef.current) return; // stale response — a newer load has started
           setTickets(r.items);
           setTotal(r.total);
         })
-        .catch(console.error)
+        .catch((e) => {
+          if (seq !== seqRef.current) return;
+          console.error(e);
+          setError(e instanceof Error ? e.message : "Couldn't load tickets.");
+        })
         .finally(() => {
+          if (seq !== seqRef.current) return;
           setLoading(false);
           setRefreshing(false);
         });
@@ -203,6 +214,8 @@ export default function MobileQueuePage() {
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-32 text-sm text-gray-400">Loading…</div>
+        ) : error ? (
+          <ErrorCard message="Couldn't load tickets." onRetry={() => load()} />
         ) : tickets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
             <span className="text-sm text-gray-400">No tickets in this view</span>

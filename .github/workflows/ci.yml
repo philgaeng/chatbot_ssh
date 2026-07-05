@@ -114,6 +114,11 @@ jobs:
       - name: Lint
         run: npx eslint . --max-warnings=-1
 
+      # HR-06: vitest seed (lib/user-messages.test.ts, lib/queueTiles.test.ts) — pure
+      # logic only, no DOM/env needed. Runs in well under a second locally.
+      - name: Unit tests
+        run: npm test
+
       # Verified locally (no backend env vars, no .env.local): completes in ~20s,
       # well under the ~5 min budget in spec §1 — safe to keep in CI.
       - name: Build

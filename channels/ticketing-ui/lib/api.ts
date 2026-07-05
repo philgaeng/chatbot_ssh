@@ -2001,6 +2001,31 @@ export function removeProjectLocation(projectId: string, locationCode: string): 
   return apiFetch<void>(`/api/v1/projects/${projectId}/locations/${locationCode}`, { method: "DELETE" });
 }
 
+// ── Notification rules ────────────────────────────────────────────────────────
+
+/** channel keys ("app" | "email" | "sms") enabled for a given event + tier. */
+export type NotificationRuleChannels = string[];
+/** tier key ("actor" | "supervisor" | "informed" | "observer") -> channels. */
+export type NotificationEventRules = Record<string, NotificationRuleChannels>;
+/** event key (e.g. "ticket_created") -> tier rules, for one workflow. */
+export type NotificationWorkflowRules = Record<string, NotificationEventRules>;
+/** workflow slug ("standard" | "seah") -> per-workflow rules. */
+export type NotificationRulesValue = Record<string, NotificationWorkflowRules>;
+
+/** Admin: per-workflow notification routing rules (ticketing.settings.notification_rules). */
+export function getNotificationRules(): Promise<NotificationRulesValue> {
+  return apiFetch<{ key: string; value: NotificationRulesValue }>(
+    "/api/v1/settings/notification_rules",
+  ).then((r) => r.value ?? {});
+}
+
+export function saveNotificationRules(value: NotificationRulesValue): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/notification_rules", {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+}
+
 // ── Packages ──────────────────────────────────────────────────────────────────
 
 export interface PackageOrgItem {

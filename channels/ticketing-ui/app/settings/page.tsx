@@ -50,6 +50,9 @@ import {
   getProjectMessaging,
   patchProjectMessaging,
   type ProjectMessagingConfig,
+  getNotificationRules,
+  saveNotificationRules,
+  type NotificationRulesValue,
   addPackageOrg,
   removePackageOrg,
   updateOrganization,
@@ -1655,6 +1658,7 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
   const events = workflowSlug === "seah"
     ? NOTIFICATION_EVENTS.filter(e => SEAH_EVENTS.has(e.key))
@@ -1663,11 +1667,8 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    fetch("/api/v1/settings/notification_rules")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.value) setRules(data.value[workflowSlug] ?? {});
-      })
+    getNotificationRules()
+      .then(value => setRules(value[workflowSlug] ?? {}))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open, workflowSlug]);
@@ -1684,16 +1685,17 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
 
   async function handleSave() {
     setSaving(true);
+    setErr("");
     try {
-      const current = await fetch("/api/v1/settings/notification_rules").then(r => r.json());
-      const fullValue = { ...(current?.value ?? {}), [workflowSlug]: rules };
-      await fetch("/api/v1/settings/notification_rules", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: fullValue }),
-      });
+      const current = await getNotificationRules().catch(() => ({} as NotificationRulesValue));
+      const fullValue = { ...current, [workflowSlug]: rules };
+      await saveNotificationRules(fullValue);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch { /* ignore */ } finally { setSaving(false); }
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to save notification rules");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const isChecked = (event: string, tier: string, ch: string) =>
@@ -1760,6 +1762,10 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
                 </tbody>
               </table>
             </div>
+          )}
+
+          {err && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1 mt-3">{err}</p>
           )}
 
           <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
@@ -4587,15 +4593,6 @@ export default function SettingsPage() {
     setActiveMain("projects");
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="p-8 text-center">
-        <Lock size={32} strokeWidth={1.5} className="mx-auto mb-3 text-gray-300" />
-        <p className="text-sm text-gray-500">Settings are only accessible to administrators.</p>
-      </div>
-    );
-  }
-
   const platformTabs: { id: PlatformSub; label: string }[] = useMemo(() => {
     if (canAccessPlatformSettings) {
       return [
@@ -4614,6 +4611,15 @@ export default function SettingsPage() {
       setPlatformSub("locations");
     }
   }, [canAccessPlatformSettings, platformSub]);
+
+  if (!isAdmin) {
+    return (
+      <div className="p-8 text-center">
+        <Lock size={32} strokeWidth={1.5} className="mx-auto mb-3 text-gray-300" />
+        <p className="text-sm text-gray-500">Settings are only accessible to administrators.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

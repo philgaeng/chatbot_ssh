@@ -64,6 +64,7 @@ import { EscalationFormCard }                 from "@/components/thread/Escalati
 import { CallReportComposeCard }              from "@/components/thread/CallReportComposeCard";
 import { ReassignmentRequestCard, type ReassignmentReasonCode } from "@/components/thread/ReassignmentRequestCard";
 import { AttachmentListSection }              from "@/components/AttachmentListSection";
+import { ErrorCard }                          from "@/components/ui/ErrorCard";
 import {
   formatCallReportNote, isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData, type CallReportFormData,
 } from "@/lib/field-visit";
@@ -697,6 +698,8 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const [sla, setSla]                     = useState<SlaStatus | null>(null);
   const [tasks, setTasks]                 = useState<TicketTask[]>([]);
   const [loading, setLoading]             = useState(true);
+  const [loadError, setLoadError]         = useState<string | null>(null);
+  const loadSeqRef = useRef(0);
   const [activeFilter, setActiveFilter]   = useState<FilterChip>("all");
   const [noteText, setNoteText]           = useState("");
   const [submitting, setSubmitting]       = useState(false);
@@ -726,19 +729,26 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadTicket = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    setLoading(true);
+    setLoadError(null);
     try {
       const [t, s, tk] = await Promise.all([
         getTicket(ticketId),
         getSla(ticketId).catch(() => null),
         listTicketTasks(ticketId).catch(() => [] as TicketTask[]),
       ]);
+      if (seq !== loadSeqRef.current) return; // stale response — a newer load has started
       setTicket(t);
       setSla(s);
       setTasks(tk);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       console.error("Failed to load ticket", e);
+      setTicket(null);
+      setLoadError(e instanceof Error ? e.message : "Failed to load ticket");
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [ticketId]);
 
@@ -1084,10 +1094,20 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   }
 
   if (!ticket) {
+    // Only treat a genuine 404 as "not found" — any other failure (network,
+    // 5xx, timeout) gets the recoverable error card instead of a look-alike
+    // blank page (HR-06).
+    const isNotFound = loadError ? /^API 404\b/.test(loadError) : false;
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3">
-        <AlertTriangle size={32} strokeWidth={1.5} className="text-amber-400" />
-        <div className="text-sm text-gray-500">Ticket not found</div>
+      <div className="flex flex-col items-center justify-center h-full gap-3 p-6">
+        {loadError && !isNotFound ? (
+          <ErrorCard message="Couldn't load this ticket." onRetry={() => void loadTicket()} />
+        ) : (
+          <>
+            <AlertTriangle size={32} strokeWidth={1.5} className="text-amber-400" />
+            <div className="text-sm text-gray-500">Ticket not found</div>
+          </>
+        )}
         <button onClick={() => router.back()} className="text-blue-600 text-sm">← Go back</button>
       </div>
     );
