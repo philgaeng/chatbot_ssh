@@ -26,7 +26,7 @@ import os
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
@@ -437,6 +437,7 @@ def _add_event(
 )
 def create_ticket(
     payload: TicketCreate,
+    response: Response,
     db: Session = Depends(get_db),
     _: str = Depends(verify_api_key),
 ) -> TicketCreateResponse:
@@ -448,11 +449,30 @@ def create_ticket(
             created_by_user_id="system",
         )
     except DuplicateTicketError as exc:
-        logger.warning("Duplicate ticket request for grievance_id=%s", payload.grievance_id)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=exc.detail,
-        ) from exc
+        # HR-03: intake is idempotent — a webhook retry or a race for an already
+        # existing grievance is a no-op, not an error. Return the existing ticket with
+        # 200 (not 409) so the chatbot dispatcher treats it as success (it calls
+        # raise_for_status(), which only trips on 4xx/5xx).
+        db.rollback()
+        existing = db.execute(
+            select(Ticket).where(
+                Ticket.grievance_id == payload.grievance_id,
+                Ticket.is_deleted.is_(False),
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            logger.warning("Duplicate ticket request for grievance_id=%s", payload.grievance_id)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        logger.info(
+            "Idempotent ticket intake for grievance_id=%s → existing ticket_id=%s",
+            payload.grievance_id,
+            existing.ticket_id,
+        )
+        response.status_code = status.HTTP_200_OK
+        return existing
     except TicketIntakeError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -1129,6 +1149,16 @@ def perform_action(
         )
 
     elif action == "ESCALATE":
+        # HR-04: take a row lock on the ticket before mutating so the SLA watchdog
+        # (which selects candidates FOR UPDATE SKIP LOCKED) and any other concurrent
+        # writer cannot double-escalate. populate_existing refreshes the in-session
+        # instance with the freshly-locked row state. Lock is held until db.commit().
+        ticket = db.execute(
+            select(Ticket)
+            .where(Ticket.ticket_id == ticket.ticket_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one()
         if not _ticket_has_image_attachment(db, ticket):
             raise HTTPException(
                 status_code=422,

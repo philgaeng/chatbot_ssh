@@ -134,7 +134,14 @@ def _backfill_ticket_from_grievance(db: Session, g: dict) -> Optional[Ticket]:
             source="sync_backfill",
             created_by_user_id="system",
         )
-    except DuplicateTicketError:
+    except DuplicateTicketError as exc:
+        # HR-03: a ticket already exists for this grievance (webhook won the race, or a
+        # concurrent sync). Skip-and-continue — this is expected, not an error.
+        logger.info(
+            "grievance_sync: backfill skipped for %s — ticket %s already exists",
+            g.get("grievance_id"),
+            exc.ticket_id,
+        )
         return None
     except TicketIntakeError as exc:
         logger.warning(
