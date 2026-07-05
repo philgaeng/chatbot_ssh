@@ -64,9 +64,16 @@ def verify_api_key(x_api_key: str = Header(...)) -> str:
     """
     settings = get_settings()
     if not settings.ticketing_secret_key:
-        import warnings
-        warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev mode)", stacklevel=2)
-        return x_api_key
+        # Fail-closed (HR-01): only the explicit dev env may run without a shared
+        # secret. Anywhere else, refuse to serve rather than accept any API key.
+        if settings.is_dev:
+            import warnings
+            warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev mode)", stacklevel=2)
+            return x_api_key
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ticketing auth not configured (TICKETING_SECRET_KEY unset)",
+        )
     if x_api_key != settings.ticketing_secret_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -173,6 +180,14 @@ def _resolve_user_identity(
     settings = get_settings()
 
     if not settings.keycloak_issuer:
+        # Fail-closed (HR-01): the demo-super-admin bypass is dev-only. Outside dev a
+        # missing KEYCLOAK_ISSUER must refuse to serve, never authenticate everyone
+        # as super_admin. (Startup already blocks boot; this is defense in depth.)
+        if not settings.is_dev:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Ticketing auth not configured (KEYCLOAK_ISSUER unset)",
+            )
         org = (x_internal_organization_id or "").strip() or "DOR"
         uid = x_internal_user_id or BYPASS_DEFAULT_OFFICER
         return CurrentUser(
@@ -205,9 +220,13 @@ def _resolve_user_identity(
 
     if x_internal_user_id and settings.ticketing_secret_key:
         if x_api_key == settings.ticketing_secret_key:
+            # Least-privilege identity (HR-01): a header-injected caller gets NO roles
+            # by default — no more silent super_admin. Callers that need capability
+            # (the dev-bypass Next proxy) always send an explicit x-internal-role.
+            role_keys = [r.strip() for r in (x_internal_role or "").split(",") if r.strip()]
             return CurrentUser(
                 user_id=x_internal_user_id,
-                role_keys=(x_internal_role or "super_admin").split(","),
+                role_keys=role_keys,
                 organization_id="DOR",
                 keycloak_sub=x_internal_user_id,
             )

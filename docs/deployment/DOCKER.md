@@ -56,6 +56,26 @@ curl http://localhost:5002/health      # {"status":"ok"}
 curl "http://localhost:5002/api/v1/tickets?limit=5"
 ```
 
+## Fail-closed auth env (HR-01)
+
+Auth fails **closed**: outside explicit dev the services refuse to boot when their auth
+prerequisites are unset (a missing env var must never silently authenticate everyone as
+super_admin, nor disable the API-key check). Two switches, both default `production`:
+
+| Env var | Service | dev value | Non-dev requirement (or the service refuses to start) |
+|---|---|---|---|
+| `TICKETING_ENV` | `ticketing_api` / `ticketing_api_auth` | `dev` | `KEYCLOAK_ISSUER` **and** `TICKETING_SECRET_KEY` set |
+| `BACKEND_ENV` | `backend` (grievance API) | `dev` | `TICKETING_SECRET_KEY` **or** `MESSAGING_API_KEY` set |
+
+The local demo/bypass stack (`dcg` / `make wsl-demo-bypass`) runs `ticketing_api` (:5002)
+with `KEYCLOAK_ISSUER=""`, so it needs `TICKETING_ENV=dev`. This is set in **`env.local`**
+(read via `env_file` / `--env-file`) — see the `TICKETING_ENV=dev` / `BACKEND_ENV=dev`
+lines there. `docker-compose.override.yml` mirrors `BACKEND_ENV=dev` for the base
+`docker compose up` path. **Never** set `*_ENV=dev` in `docker-compose.grm.yml`, `aws`,
+or `prod` overlays — production must fail closed. See [`13_security.md`](13_security.md)
+"Fail-closed guarantees". If `ticketing_api` exits at boot with *"Refusing to start …
+auth config is unset"*, add `TICKETING_ENV=dev` to your `env.local`.
+
 ## Rebuild after code changes
 
 Rebuild only what changed; `--no-cache` only when `requirements*.txt` changed.

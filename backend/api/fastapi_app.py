@@ -46,8 +46,31 @@ from backend.api.routers import grievance, files, voice_grievance, gsheet, messa
 from backend.api.websocket_fastapi import emit_status_update_accessible, socketio_app
 
 
+def _assert_backend_auth_configured() -> None:
+    """Fail-closed startup guard (HR-01) for the grievance API key check.
+
+    Mirrors the ticketing service: outside explicit dev (BACKEND_ENV=dev) the backend
+    refuses to boot when no shared API key is configured, so PII-bearing grievance
+    endpoints can never run with authentication silently disabled.
+    """
+    if os.getenv("BACKEND_ENV", "production").strip().lower() == "dev":
+        return
+    has_key = any(
+        (os.environ.get(name, "") or "").strip()
+        for name in ("TICKETING_SECRET_KEY", "MESSAGING_API_KEY")
+    )
+    if not has_key:
+        raise RuntimeError(
+            "Refusing to start backend API: BACKEND_ENV is not 'dev' but no "
+            "TICKETING_SECRET_KEY / MESSAGING_API_KEY is configured — grievance "
+            "API-key auth would be disabled. Set a key, or BACKEND_ENV=dev for local dev."
+        )
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    # Fail-closed auth guard — must run before serving any request (HR-01).
+    _assert_backend_auth_configured()
     # Wire real Socket.IO emit for accessible (grievance suffix A) on POST /task-status.
     files.set_emit_status_update_accessible(emit_status_update_accessible)
     yield

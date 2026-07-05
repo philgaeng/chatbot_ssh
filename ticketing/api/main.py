@@ -37,8 +37,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _assert_auth_configured(settings) -> None:
+    """Fail-closed startup guard (HR-01).
+
+    Outside explicit dev (TICKETING_ENV=dev) the service refuses to boot when the
+    auth prerequisites are missing — a missing env var must never silently degrade
+    to the demo-super-admin / disabled-API-key fallbacks on a government PII system.
+    """
+    if settings.is_dev:
+        return
+    missing = []
+    if not settings.keycloak_issuer:
+        missing.append("KEYCLOAK_ISSUER")
+    if not settings.ticketing_secret_key:
+        missing.append("TICKETING_SECRET_KEY")
+    if missing:
+        raise RuntimeError(
+            f"Refusing to start: TICKETING_ENV={settings.ticketing_env!r} but "
+            f"required auth config is unset: {', '.join(missing)}. "
+            "Configure these, or set TICKETING_ENV=dev for the local bypass stack."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail-closed auth guard — must run before serving any request (HR-01).
+    _assert_auth_configured(get_settings())
     # Ensure the ticketing schema exists (idempotent)
     ensure_ticketing_schema()
     logger.info("GRM Ticketing Service started on port %s", get_settings().ticketing_port)

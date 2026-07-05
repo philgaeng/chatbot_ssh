@@ -24,6 +24,15 @@ class TicketingSettings(BaseSettings):
     # Canonical shared secret: chatbot ↔ ticketing + ticketing → chatbot backend.
     ticketing_secret_key: str = ""
 
+    # ── Environment gate — fail-closed auth (HR-01) ──
+    # dev | staging | production. Default **production**: the app refuses to boot
+    # (and per-request auth refuses to serve) when KEYCLOAK_ISSUER or
+    # TICKETING_SECRET_KEY are unset. Set TICKETING_ENV=dev ONLY for the local
+    # demo/bypass stack (docker-compose.override.yml / env.local) — never in the
+    # grm/aws/prod compose overlays. See docs/deployment/13_security.md
+    # "Fail-closed guarantees".
+    ticketing_env: str = "production"
+
     # ── Integration URLs ──
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
@@ -77,6 +86,11 @@ class TicketingSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def is_dev(self) -> bool:
+        """True only for the explicit local dev/bypass environment."""
+        return (self.ticketing_env or "").strip().lower() == "dev"
 
     @property
     def database_url(self) -> str:

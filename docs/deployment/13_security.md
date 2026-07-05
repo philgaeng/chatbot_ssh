@@ -30,6 +30,28 @@ This document is the **single index of security features** across chatbot, backe
 | **Demo-only bypass mode** | Local UI (`:3001`) | `NEXT_PUBLIC_BYPASS_AUTH=true`; must be disabled in production |
 | **OTP verification (chatbot intake)** | Complainant flow | Phone verification before grievance submission |
 
+### 2.1 Fail-closed guarantees (HR-01)
+
+Authentication fails **closed**: a missing env var can no longer silently disable auth
+(previously an unset `KEYCLOAK_ISSUER` authenticated every request as a demo super_admin,
+and an unset `TICKETING_SECRET_KEY` disabled the webhook/API-key check with only a log
+warning). Two environment switches gate this, both defaulting to `production`:
+`TICKETING_ENV` (ticketing API) and `BACKEND_ENV` (grievance/backend API). `dev` is the
+only value that permits the legacy bypass, and it is set solely in `env.local` /
+`docker-compose.override.yml` — never in the grm/aws/prod overlays.
+
+| Condition | dev (`*_ENV=dev`) | staging / production (default) |
+|---|---|---|
+| `KEYCLOAK_ISSUER` unset (ticketing) | demo super_admin bypass allowed | **App refuses to start** (`RuntimeError` at boot); per-request `503` as defense in depth |
+| `TICKETING_SECRET_KEY` unset (ticketing) | API-key check disabled (warns) | **App refuses to start**; `verify_api_key` returns `503` |
+| Backend grievance key list empty (`TICKETING_SECRET_KEY` + `MESSAGING_API_KEY`) | API-key check skipped | **Backend refuses to start**; `_ticketing_auth_check` returns `503` |
+| `x-internal-user-id` + valid `x-api-key`, no `x-internal-role` | least-privilege identity (**no roles**) — no default super_admin, any env | same |
+
+Startup guards live in `ticketing/api/main.py` (`_assert_auth_configured`) and
+`backend/api/fastapi_app.py` (`_assert_backend_auth_configured`); the per-request
+defenses live in `ticketing/api/dependencies.py` (`verify_api_key`,
+`_resolve_user_identity`) and `backend/api/routers/grievance.py` (`_ticketing_auth_check`).
+
 ---
 
 ## 3. Authorization and access control
