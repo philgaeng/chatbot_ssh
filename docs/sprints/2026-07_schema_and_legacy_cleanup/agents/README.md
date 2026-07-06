@@ -1,39 +1,41 @@
-# Agent runbooks — Schema & Legacy Cleanup
+# Agent runbooks — Canonical Cleanup
 
-One runbook per workstream; each is a self-contained brief for a single agent run.
+One runbook per workstream. **Land on `dev/hardening`** (this is core-codebase cleanup). **0 records → rebuild canonically, don't reconcile.**
 
-| Runbook | Ticket | Model | Branch |
+| Runbook | Ticket | Model | Order |
 |---|---|---|---|
-| [schema-truth.md](schema-truth.md) | CL-01 | **Opus** | `cleanup/cl-01-schema` — **run first** |
-| [legacy-channels.md](legacy-channels.md) | CL-02 | **Opus** | `cleanup/cl-02-channels` |
-| [demo-retire.md](demo-retire.md) | CL-03 | **Opus** | `cleanup/cl-03-demo` |
+| [config-canonical.md](config-canonical.md) | CL-04 | **Opus** | **first** — var scheme underpins CL-03 + CI |
+| [schema-truth.md](schema-truth.md) | CL-01 | **Opus** | unblocks CI; parallel to CL-04 |
+| [demo-retire.md](demo-retire.md) | CL-03 | **Opus** | after CL-04 |
+| [legacy-channels.md](legacy-channels.md) | CL-02 | **Opus** | any time |
 
 ## Model selection
 
-All-Opus, high reasoning effort. Nothing here is safe to economize on:
+All-Opus, high effort:
 
 | Ticket | Why Opus |
 |---|---|
-| CL-01 | Rewrites who owns the **live chatbot `public.*` schema** — a wrong idempotency guard or an unconditional drop is data loss on prod. Reconciling 20+ tables to an exact schema-diff is the hardest correctness task in the repo right now. |
-| CL-02 | "Just deletion," but the **naming trap** (accessible/voice names that are REST_webchat's live infra) makes a wrong delete a production outage on the complainant channel. Blast radius ≫ diff size. |
-| CL-03 | Auth + deployment consolidation touching chatbot intake, staging front door, and the dev/CI bypass — a misstep breaks intake or locks people out. |
+| CL-04 | Cross-cutting config rename touching every settings module + the **fail-closed auth security invariant** — a wrong guard re-expression re-opens the HR-01 hole. |
+| CL-01 | Rebuilds the canonical `public.*` schema; the app boots against it. Getting the canonical shape exactly right (schema-diff = 0) is the hardest correctness task here. |
+| CL-03 | Deployment/auth consolidation touching chatbot intake, staging front door, and the dev bypass. |
+| CL-02 | The accessible/voice **naming trap** — a wrong delete is a production outage on the complainant channel. |
 
-No Sonnet, no Haiku, no Fable.
+No Sonnet, Haiku, or Fable.
 
-## Best practices (carried from the devil's-advocate + hardening sprints)
+## Best practices (carried forward)
 
-- **Reconcile to reality, prove it with a diff.** CL-01's bar is an *empty* `pg_dump` schema-diff between fresh-from-migrations and the app's real schema — not "looks right." Write that gate first.
-- **Idempotent, data-preserving DDL.** `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` / shape-detection before any drop+recreate. Test against a **copy of the live DB**, not just an empty one.
-- **Never delete by name-match** (CL-02). Grep for a live caller first; the audit's "must stay" set is load-bearing.
-- **De-risk order** (CL-03): re-point the chatbot intake and verify it *before* deleting the old API service.
-- **Tests/verification are acceptance criteria**, in the same commits. Land behind the HR-05 CI gate.
-- **Durable content in `docs/` in the same PR;** update the spec/AUDIT status to as-built citing the migration/file that proves it.
+- **One convention per concept.** After each ticket, `grep` proves the old spelling is *gone*, not coexisting (e.g. `TICKETING_ENV` → 0 hits post-CL-04).
+- **Rebuild, don't reconcile** (0 records). CL-01 is a clean canonical baseline; still prove fresh migrate → seed → pytest works.
+- **Preserve security through the rename** (CL-04): the HR-01 fail-closed guarantee is behavior-identical; only the variable/mechanism is canonical. Keep the tests green on the new vars.
+- **Never delete by name-match** (CL-02); grep for a live caller first.
+- **De-risk order** (CL-03): re-point chatbot intake and verify *before* deleting the old API.
+- Tests/verification as acceptance criteria; update [`../PROGRESS.md`](../PROGRESS.md) each commit.
 
 ## Common rules (all agents)
 
-1. Read `CLAUDE.md` (esp. the three-stream migration policy + "change with care" service boundaries), [`../README.md`](../README.md), [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md), and your spec **before touching code**. Re-verify audit line numbers with grep first.
-2. Branch off the agreed base (`dev/hardening`, or `integration/seah-claude` once hardening merges). Never commit to `main`.
-3. CL-01 touches **`public.*`** — the live chatbot schema. Idempotent, reconcile-to-live, proven by schema-diff. Never edit the `ticketing`/`ops` streams.
-4. Deletions are preceded by grep re-confirmation; if a "safe to delete" item has a live caller, STOP and log it.
-5. Update [`../PROGRESS.md`](../PROGRESS.md) at every commit (status, checklist ticks, deviations).
-6. Commit messages: imperative, ticket ID first (e.g. `CL-01: make Alembic the single source of truth for public.*`).
+1. Read `CLAUDE.md` (migration policy + "change with care" boundaries), [`../README.md`](../README.md) (the canonical target table), [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md), and your spec **before touching code**. Re-verify audit line numbers with grep.
+2. Land on `dev/hardening`. Never `main`. Do NOT commit or push unless told — leave changes for orchestrator review (unless your runbook says otherwise).
+3. CL-01 = `migrations/public/` stream only. CL-04 must not weaken production security. Test on scratch DBs.
+4. Deletions preceded by grep re-confirmation; if a "safe to delete/rename" item has an unexpected live caller, STOP and log it.
+5. Update [`../PROGRESS.md`](../PROGRESS.md) at every commit.
+6. Commit messages: imperative, ticket ID first (e.g. `CL-04: collapse env-mode vars to a single APP_ENV`).

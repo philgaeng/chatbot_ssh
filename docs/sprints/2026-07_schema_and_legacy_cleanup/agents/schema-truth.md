@@ -1,31 +1,27 @@
-# Agent runbook — CL-01: Public schema single source of truth
+# Agent runbook — CL-01: Canonical public schema
 
-**Branch:** `cleanup/cl-01-schema` off the agreed base · **Model:** Opus (high effort — live chatbot schema, exact reconciliation) · **Spec:** [`../01-public-schema-source-of-truth-spec.md`](../01-public-schema-source-of-truth-spec.md) · Read [`README.md`](README.md) + [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md) §1 first. **Run first — unblocks the hardening CI.**
+**Branch:** land on `dev/hardening` · **Model:** Opus (high effort — the app boots against this schema) · **Spec:** [`../01-public-schema-source-of-truth-spec.md`](../01-public-schema-source-of-truth-spec.md) · Read [`README.md`](README.md) + [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md) §1 first. **Unblocks the hardening CI.**
 
-⚠️ **This rewrites who owns the live `public.*` chatbot schema. Every DDL statement is idempotent, reconciles TO the live shape, and is data-preserving. Test against a COPY of the live DB, never destructively against it.**
+**0 records → REBUILD, don't reconcile.** No data preservation, no idempotent-shape-detection. Define the canonical schema (the app's real shape) and build one clean baseline.
 
 ## Mission
 
-Make the Alembic `public` stream the single source of truth for `public.*` so a fresh-from-migrations DB is byte-identical to the running app's schema — which lets CI's `backend-tests` seed and finally run pytest. Kill the base_manager-vs-Alembic dual ownership.
+Make the Alembic `public` stream the single canonical source of truth for `public.*`, matching what the app runs, so a fresh-from-migrations DB is exactly the app schema — letting CI's `backend-tests` seed and run pytest. Delete the base_manager-vs-Alembic dual ownership.
 
 ## Steps
 
-1. **Build the acceptance gate FIRST** (spec §Acceptance gate). Capture canonical schema: `pg_dump --schema-only --schema=public` of the live `grievance_db` (:5432, user `nepal_grievance_admin`) → `schema_app.sql`. Write a normalizer (strip comments/ordering/whitespace) + a `diff` harness. Commit both. This defines "done."
-2. **Enumerate all app-startup DDL sources** to neutralize later: `base_manager.py`, `grievance_categories_catalog.py`, `config/database_tables.py`, `postgres_services.py`. And confirm the public head: `alembic -c migrations/public/alembic.ini heads`.
-3. **Author the reconciliation migration** (chain on head; safety header). Per AUDIT §1a/§1b/§1c and spec §Steps.2:
-   - `+13` app-only tables (`CREATE TABLE IF NOT EXISTS`, verbatim from app definitions) — incl. voice + `seah_contact_points`.
-   - Reconcile the 7 drifted tables to live shape (`ADD COLUMN IF NOT EXISTS`; guarded drops of migration-only extras). **`grievance_classification_taxonomy`:** shape-detect via `information_schema`; drop+recreate to `category_key` shape ONLY when the old `category_code` shape is present; else no-op. **`grievance_statuses`:** live UPPERCASE vocab.
-   - Drop the 7 dead tables (`DROP TABLE IF EXISTS … CASCADE`): `grievance_history`, `users`, `contact_info`, `resource_persons`, `grievance_reveal_sessions`, `grievance_sensitive_access_audit`, `grievance_vault_payloads`.
-   - **Never** touch `events` (Rasa). Real `downgrade()` (document what it can/can't invert).
-4. **Neutralize app-startup DDL:** remove the overlapping `CREATE/ALTER TABLE` from base_manager (+ other sources) for tables migrations now own; keep non-DDL seeding. Retire the `grievance_history` migrate-and-drop (table is being dropped).
-5. **Guarantee migrate-before-start** in every bring-up path (compose start order/entrypoints, Makefile, `docs/deployment/03_operations.md`).
-6. **Verify** (all in-container against scratch/copy DBs — the stack is up; DB container `nepal_chatbot_seah-db-1`, live DB `grievance_db` on :5432): schema-diff empty; reconciliation safe on a **copy of live** (row counts of kept tables unchanged, only the 7 drops); fresh empty DB → migrations → **seed succeeds** → `pytest tests/ticketing tests/orchestrator tests/actions` runs (record real results — this adjudicates the hardening sprint's "4 pre-existing failures" on a clean DB); `upgrade→downgrade→upgrade` clean.
-7. **CI:** add the schema-diff gate as a `backend-tests` step so drift can never silently return.
+1. **Capture canonical schema:** `pg_dump --schema-only --schema=public grievance_db` (live DB, :5432, user `nepal_grievance_admin`, READ ONLY) → normalize → commit `schema_app.sql` as the reference. This is the target (the app's real shape = base_manager, NOT the drifted `pub000`).
+2. **One canonical baseline migration** (`migrations/public/`): since 0 records / not-live, re-baseline — squash the drifted `pub000..pub009` into a single authoritative baseline (or one drop-and-recreate migration; document the choice). It creates every **live** table (AUDIT §1a + the reconciled §1b, all at the base_manager/live shape), **excludes** the 7 dead tables (§1c) and `events` (§1d), and uses the live **UPPERCASE** `grievance_statuses` vocab. Real downgrade. Don't touch `ticketing`/`ops` streams.
+3. **Delete app-startup DDL:** remove `CREATE/ALTER TABLE` from `base_manager.py`, `grievance_categories_catalog.py`, `config/database_tables.py`, `postgres_services.py`; keep only data-seeding (runs against a migrated DB); delete the `grievance_history` migrate-and-drop. No reintroducing `CREATE TABLE IF NOT EXISTS`.
+4. **Migrate-before-start** in every bring-up path (compose start order/entrypoints, Makefile, `03_operations.md`).
+5. **Verify** (scratch DBs; the stack is up — DB container `nepal_chatbot_seah-db-1`, live `grievance_db` :5432): empty DB → public→ticketing→ops migrations → **seed succeeds** (`import_locations_json` + `mock_tickets --reset`) → `pytest tests/ticketing tests/orchestrator tests/actions` runs — **record real pass/fail** and the verdict on the hardening "4 pre-existing failures" on a clean DB. Schema-diff: fresh-migration `pg_dump` == `schema_app.sql` (empty). `upgrade→downgrade→upgrade` clean.
+6. **Add the schema-diff gate to `.github/workflows/ci.yml`** (backend-tests) so drift can't return. (Can't run live Actions — no gh; just add the step, note pending.)
+
+## Coordinate with CL-04
+CL-04 renames env vars (`APP_ENV`) the CI/migration invocation reads. If CL-04 landed, use `APP_ENV`; else use current vars + note the follow-up. Schema work is independent of var names.
 
 ## Constraints
-- `migrations/public/` stream only. Idempotent, reconcile-to-live, data-preserving. Don't touch `ticketing`/`ops`/`events`.
-- The **empty schema-diff is the real bar** — if drift is deeper than AUDIT §1, extend the migration until the diff is empty.
-- No app behavior change beyond *where* tables are defined (+ the intentional `grievance_statuses` vocab fix and 7 drops).
+- `migrations/public/` only. Test on scratch DBs; read `grievance_db` only. Canonical shape = the app's real shape (base_manager wins over `pub000`). Extend the baseline until schema-diff is empty.
 
 ## Done means
-Schema-diff gate green; migration verified safe on a live-DB copy; CI seeds + runs pytest (results recorded); base_manager no longer owns public DDL; 7 dead tables dropped; PROGRESS updated; future-Rasa-removal note filed.
+Fresh migrate → seed → pytest works (results recorded); one canonical public baseline; base_manager owns no schema DDL; 7 dead tables + `events` excluded; schema-diff gate in CI; PROGRESS updated; future-Rasa note filed.

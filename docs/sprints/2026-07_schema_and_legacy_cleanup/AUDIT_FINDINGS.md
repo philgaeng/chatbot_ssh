@@ -103,3 +103,19 @@ A Google Apps Script (runs in Sheets, `.claudeignore:22`). Backend:
 **Keycloak readiness:** real path confirmed working (`docs/deployment/16_auth_keycloak.md` "as-built, Keycloak everywhere"; OIDC client, `keycloak_jwt.py`, `make keycloak-setup`, prod serves it exclusively).
 
 **Demo accounts:** `@grm.local` officers (`demo_officers.py`, `mock_tickets.py`) are **also seeded into real Keycloak** (`keycloak_setup.py:34,416`) — purging them from deployed envs is a separate data decision, not part of removing bypass code.
+
+---
+
+## 4. Config / env sprawl (canonicalization evidence)
+
+**Context that unlocks a clean rebuild:** prod is **not live — 0 real records**. Breaking changes (rename/drop env vars, collapse stacks, re-baseline the DB) are safe; no backward-compat or data migration needed.
+
+**Compose files (5):** `docker-compose.yml` (chatbot base), `docker-compose.grm.yml` (GRM/ticketing services — carries the demo/auth split), `docker-compose.override.yml` (only job: inject `BACKEND_ENV=dev`), `docker-compose.prod.yml`, `docker-compose.aws.yml`.
+**Env templates (3):** `env.local` (gitignored dev), `backend/utils/env.grm.example`, `channels/ticketing-ui/.env.local`.
+**Same concept, multiple spellings (the "mess"):**
+- **Env mode:** `TICKETING_ENV` (×5) + `BACKEND_ENV` (×8) + stray `ENVIRONMENT` (×2) — three names for one idea.
+- **Keycloak issuer:** `KEYCLOAK_ISSUER` (×10, backend) + `NEXT_PUBLIC_OIDC_ISSUER` (×10, frontend) — two hand-maintained names for one realm.
+- **Dev bypass:** a 4-variable tangle — `NEXT_PUBLIC_BYPASS_AUTH` (×23) + `KEYCLOAK_ISSUER=""` + `TICKETING_ENV=dev` + `BACKEND_ENV=dev`.
+- **Chatbot→ticketing:** `TICKETING_API_URL` (×16), pinned to the demo `:5002`.
+
+**Canonical target (CL-03 + CL-04):** one `APP_ENV` (`dev`/`staging`/`production`); one `AUTH_MODE` (`keycloak` default; `bypass` honored only when `APP_ENV=dev`); one `KEYCLOAK_ISSUER` (frontend `NEXT_PUBLIC_` value derived, not hand-kept); one deployed Keycloak stack; `docker-compose.yml` base + `grm` overlay (single stack) + `prod`/`aws` deploy overlays, **no** `override.yml`/demo split; one committed `.env.example`. Fail-closed security preserved (prod can never bypass).

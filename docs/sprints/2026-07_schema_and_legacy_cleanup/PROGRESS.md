@@ -1,56 +1,60 @@
-# Schema & Legacy Cleanup Sprint — Progress
+# Canonical Cleanup Sprint — Progress
 
-> Update at **every commit** on a sprint branch. Status: `todo` · `in_progress` · `blocked` · `review` · `done`.
-> Definition: [README.md](README.md) · Evidence: [AUDIT_FINDINGS.md](AUDIT_FINDINGS.md)
+> Update at **every commit**. Status: `todo` · `in_progress` · `blocked` · `review` · `done`.
+> Definition: [README.md](README.md) · Evidence: [AUDIT_FINDINGS.md](AUDIT_FINDINGS.md) · **0 records → rebuild, don't reconcile.**
 
 ## Ticket status
 
-| ID | Title | Status | Branch | Commits | Notes |
-|---|---|---|---|---|---|
-| CL-01 | Public schema single source of truth | todo | — | — | **First** — unblocks hardening CI (backend-tests seed step) |
-| CL-02 | Remove legacy channels (accessible + gsheet) | todo | — | — | Independent; tables stay |
-| CL-03 | Retire demo app / consolidate auth | todo | — | — | Re-point chatbot before deleting :5002 |
+| ID | Title | Status | Commits | Notes |
+|---|---|---|---|---|
+| CL-04 | Canonical config & env (`APP_ENV`/`AUTH_MODE`/issuer/`.env.example`) | todo | — | **First** — var scheme underpins CL-03 + CI |
+| CL-01 | Canonical `public.*` schema (single Alembic baseline) | todo | — | Unblocks CI backend-tests; independent of CL-04 |
+| CL-03 | Consolidate deployment to one Keycloak stack | todo | — | After CL-04; re-point chatbot before deleting :5002 |
+| CL-02 | Remove legacy channels (accessible + gsheet) | todo | — | Independent; tables stay |
 
 ## Acceptance checklists
 
-### CL-01 — Public schema truth
-- [ ] Schema-diff harness written (normalizer + committed canonical `schema_app.sql` baseline)
-- [ ] Reconciliation migration: +13 app-only tables, reconcile 7 drifted to live shape, drop 7 dead tables, exclude `events`
-- [ ] `grievance_classification_taxonomy` handled data-preservingly (drop+recreate only when old `category_code` shape present; live `category_key` untouched)
-- [ ] `grievance_statuses` standardized on live UPPERCASE vocab
-- [ ] base_manager (+ other app-startup DDL) no longer creates/alters these tables
-- [ ] Migrations guaranteed to run before app startup in every bring-up path
-- [ ] Safe on a **copy of live grievance_db** (no data loss; only the 7 drops); row counts of kept tables unchanged
-- [ ] Fresh CI path: migrations → **seed succeeds** → pytest runs; real pass/fail recorded (incl. the hardening "4 pre-existing failures" verdict on a clean DB)
-- [ ] Schema-diff gate added to CI; `upgrade→downgrade→upgrade` clean
+### CL-04 — Canonical config & env
+- [ ] `APP_ENV` in shared settings replaces `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT` (grep → 0 old hits)
+- [ ] `AUTH_MODE` (keycloak default; bypass only if `APP_ENV=dev`); HR-01 fail-closed guards re-expressed on it, behavior identical
+- [ ] Single `KEYCLOAK_ISSUER`; frontend `NEXT_PUBLIC_OIDC_ISSUER` + bypass flag derived (4-var tangle collapsed)
+- [ ] `docker-compose.override.yml` deleted; config from a single `.env`
+- [ ] One root `.env.example`; `env.local`/`env.grm.example`/`ticketing-ui/.env.local` removed
+- [ ] Makefile + CI env + docs on canonical vars
+- [ ] `test_fail_closed_auth.py` + `_host_env.py` updated & green; prod refuses bypass; dev bypass works
+
+### CL-01 — Canonical public schema
+- [ ] `schema_app.sql` canonical reference captured + normalizer committed
+- [ ] One canonical public baseline (re-baseline/squash the drifted `pub000..pub009`); creates the ~22 live tables at the app's real shape; excludes the 7 dead tables + `events`; `grievance_statuses` UPPERCASE vocab
+- [ ] App-startup DDL deleted from `base_manager.py` (+ `grievance_categories_catalog.py`, `database_tables.py`, `postgres_services.py`); only data-seeding remains
+- [ ] Migrate-before-start enforced in every bring-up path
+- [ ] Fresh empty DB → migrations → **seed succeeds → pytest runs**; real results recorded (verdict on the hardening "4 pre-existing failures" on a clean DB)
+- [ ] Schema-diff gate in CI; `upgrade→downgrade→upgrade` clean
+
+### CL-03 — Consolidate deployment
+- [ ] Chatbot `TICKETING_API_URL` re-pointed + intake round-trip verified (before deleting :5002)
+- [ ] Compose: `grm_ui`:3001 + `ticketing_api`:5002 deleted; `_auth` services promoted to canonical single ui/api; deployed sets `APP_ENV`/`AUTH_MODE=keycloak`
+- [ ] Staging nginx main domain → auth UI/API; wsl conf reconciled
+- [ ] Makefile services/ports/targets updated; `wsl-up`/`test-ticketing`/`wsl-seed` work
+- [ ] Dev bypass intact via `AUTH_MODE`; no deployed build bypasses
+- [ ] Docs on single stack; demo-data purge noted as pending
 
 ### CL-02 — Remove legacy channels
-- [ ] Exclusivity re-verified by grep (nothing in REST_webchat/ticketing/orchestrator imports the delete set)
-- [ ] Deleted: `channels/accessible/`, `channels/monitoring-gsheet/`, `voice_grievance.py`, `backend/services/accessible/`, `gsheet.py`, `gsheet_monitoring_api.py`, `backend/api/app.py`
-- [ ] `fastapi_app.py` un-wired (voice_grievance + gsheet routers gone; files.router + websocket + `/accessible-socket.io` mount KEPT)
+- [ ] Exclusivity re-verified by grep; deleted `channels/accessible/`, `channels/monitoring-gsheet/`, `voice_grievance.py`, `backend/services/accessible/`, `gsheet.py`, `gsheet_monitoring_api.py`, `backend/api/app.py`
+- [ ] `fastapi_app.py` un-wired (voice_grievance + gsheet routers gone; files.router + websocket + `/accessible-socket.io` KEPT)
 - [ ] nginx `/gsheet-get-grievances` removed; `/accessible-socket.io` + voice-chunk KEPT
-- [ ] `GSHEET_BEARER_TOKEN` + `.claudeignore` + docs cleaned
-- [ ] App boots clean; grep shows no live refs to removed modules
-- [ ] **REST_webchat voice/socket/upload verified still working** (record live vs pending-human)
-- [ ] DB tables `grievance_voice_recordings`/`grievance_transcriptions` NOT touched
-
-### CL-03 — Retire demo / consolidate auth
-- [ ] Chatbot `TICKETING_API_URL` re-pointed to consolidated API + intake round-trip verified (before deleting :5002)
-- [ ] Compose: `grm_ui`:3001 + `ticketing_api`:5002 removed; `_auth` services promoted to canonical, `profiles:[auth]` dropped
-- [ ] Staging nginx main domain → auth UI/API (mirrors prod); wsl conf reconciled
-- [ ] Makefile services/ports/targets updated; `wsl-up`/`test-ticketing`/`wsl-seed` work
-- [ ] Dev/CI bypass intact (`TICKETING_ENV=dev` local login works; `test_fail_closed_auth.py`/`_host_env.py` pass); no deployed build sets bypass
-- [ ] Docs updated to single-stack + dev-only bypass
-- [ ] Demo-data purge recorded as a pending data decision (not actioned)
+- [ ] `GSHEET_BEARER_TOKEN` + `.claudeignore` + docs cleaned (coordinate with CL-04's `.env.example`)
+- [ ] App boots clean; **REST_webchat voice/socket/upload verified intact**; voice DB tables untouched
 
 ## Deviations / findings log
 
 | Date | Ticket | Deviation / finding | Action |
 |---|---|---|---|
-| — | — | Rasa is legacy (owner-confirmed); `events` excluded from Alembic this sprint | Future ticket: full Rasa removal — file separately |
+| — | — | Rasa legacy; `events` excluded from Alembic this sprint | Future ticket: full Rasa removal |
+| — | — | 0 records confirmed → canonical rebuild (specs rewritten from reconcile→rebuild) | — |
 
 ## Sprint close checklist
-- [ ] All 3 tickets `done`; hardening CI green end-to-end (the real reason CL-01 exists)
-- [ ] Schema-diff gate protecting `public.*` in CI
+- [ ] All 4 tickets `done`; hardening CI green end-to-end
+- [ ] One convention per concept verified by grep (no old var/table/stack duplicates)
 - [ ] Future Rasa-removal ticket filed
 - [ ] Summary doc written; folder archived; sprints index updated
