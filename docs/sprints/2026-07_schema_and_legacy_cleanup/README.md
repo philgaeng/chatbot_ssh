@@ -5,20 +5,18 @@
 
 ## What this sprint does
 
-Remove the workarounds, fallbacks, and drift that accreted while the codebase was split across tools during the dev phase, and replace them with one canonical convention each:
+Remove the workarounds, fallbacks, and drift that accreted while the codebase was split across tools during the dev phase, and replace each with one canonical convention:
 
-- **Schema:** `public.*` becomes a single canonical Alembic baseline; the app-startup `CREATE TABLE` DDL (`base_manager.py`) is deleted; dead tables gone. (CL-01)
-- **Channels:** the two legacy frontends (`accessible`, `monitoring-gsheet`) and their exclusive backend are deleted; REST_webchat's live voice/socket infra stays. (CL-02)
-- **Deployment:** one Keycloak stack (retire the no-auth demo stack); chatbot intake re-pointed; staging front door on the auth UI. (CL-03)
-- **Config/env:** one `APP_ENV`, one `AUTH_MODE`, one `KEYCLOAK_ISSUER`, one `.env.example`, clean compose — replacing the `TICKETING_ENV`/`BACKEND_ENV`/`NEXT_PUBLIC_BYPASS_AUTH`/`override.yml` tangle. (CL-04)
+- **Schema (CL-01):** squash the drifted public migrations into **one** canonical Alembic baseline, delete the app-startup `CREATE TABLE` DDL, drop dead tables **and prune unused columns**.
+- **Channels (CL-02):** delete the two legacy frontends (`accessible`, `monitoring-gsheet`) + their exclusive backend; REST_webchat's live voice/socket infra stays.
+- **Config + deployment (CL-03):** one `APP_ENV`, one `AUTH_MODE`, one `KEYCLOAK_ISSUER`, one `.env.example`, **and** one Keycloak stack (retire the demo stack; re-point chatbot intake).
 
 ## Product-owner decisions (locked)
 
-1. **0 records → canonical rebuild**, not reconciliation. Breaking changes are fine.
-2. **SEAH vault trio dropped** (`grievance_reveal_sessions`, `grievance_sensitive_access_audit`, `grievance_vault_payloads`).
-3. **One deployed Keycloak stack**; chatbot intake re-pointed off the demo API.
-4. **Keep a single, clean dev/CI bypass** — one explicit `AUTH_MODE=bypass` honored only when `APP_ENV=dev`; deployed envs are always Keycloak and can never bypass (fail-closed preserved).
-5. **Rasa is legacy** — exclude `events` from Alembic now; file a future Rasa-removal ticket.
+1. **0 records → canonical rebuild**, not reconciliation.
+2. **Schema:** **squash** to one baseline **and prune unused columns/tables** (audit-justified). Dead tables incl. the **SEAH vault trio** dropped.
+3. **Auth:** **keep one clean dev-only bypass** — a single `AUTH_MODE=bypass` honored only when `APP_ENV=dev`; deployed is always Keycloak, can never bypass (HR-01 fail-closed preserved). Config + deployment are **one combined ticket** (CL-03).
+4. **Rasa is legacy** — exclude `events` from Alembic now; file a future Rasa-removal ticket.
 
 ## Canonical target (the end-state every ticket builds toward)
 
@@ -30,49 +28,50 @@ Remove the workarounds, fallbacks, and drift that accreted while the codebase wa
 | Deployed stack | demo (`:3001`/`:5002`) + auth (`:3002`/`:5003`) | one ui + one ticketing-api |
 | Compose | 5 files incl. `override.yml` + `grm.yml` demo split | base + single `grm` overlay + `prod`/`aws`; no override/demo split |
 | Env template | `env.local` + `env.grm.example` + `ticketing-ui/.env.local` | one committed `.env.example` |
-| `public.*` schema | dual-owned + drifted | one canonical Alembic baseline; no app-startup DDL |
+| `public.*` schema | dual-owned + drifted, unused columns | one squashed canonical baseline, used columns only |
 
 ## Tickets
 
 | ID | Title | Area | Effort | Spec |
 |---|---|---|---|---|
-| CL-01 | Canonical `public.*` schema (single Alembic baseline; drop base_manager DDL + dead tables) | migrations + backend | L | [01-public-schema-source-of-truth-spec.md](01-public-schema-source-of-truth-spec.md) |
+| CL-01 | Canonical `public.*` schema (squashed baseline + column prune; drop DDL + dead tables) | migrations + backend | L | [01-public-schema-source-of-truth-spec.md](01-public-schema-source-of-truth-spec.md) |
 | CL-02 | Remove legacy channels (`accessible` + `monitoring-gsheet`) + exclusive backend | backend + deploy | M | [02-remove-legacy-channels-spec.md](02-remove-legacy-channels-spec.md) |
-| CL-03 | Consolidate deployment to one Keycloak stack (compose/nginx/chatbot-intake) | deploy | M | [03-retire-demo-consolidate-auth-spec.md](03-retire-demo-consolidate-auth-spec.md) |
-| CL-04 | Canonical config & env (`APP_ENV`, `AUTH_MODE`, single issuer, one `.env.example`) | backend + ui + config | L | [04-canonical-config-and-env-spec.md](04-canonical-config-and-env-spec.md) |
+| CL-03 | Canonical config, env & deployment consolidation (`APP_ENV`/`AUTH_MODE`/issuer/`.env.example` + one Keycloak stack) | backend + ui + deploy | L | [03-canonical-config-and-deployment-spec.md](03-canonical-config-and-deployment-spec.md) |
 
 ## Execution order
 
+Two mostly-independent tracks + one anytime:
+
 ```
-CL-04 config/env   ← FIRST. The canonical APP_ENV/AUTH_MODE/issuer scheme underpins CL-03 (and CI).
-CL-01 schema       ← unblocks CI backend-tests; independent of CL-04 (do in parallel or right after).
-CL-03 deployment   ← after CL-04 (consumes APP_ENV/AUTH_MODE + single stack).
-CL-02 channels     ← independent; any time.
+CL-01 schema   ← unblocks CI backend-tests (the reason this sprint exists). Independent of the var names.
+CL-03 config+deploy ← the canonical var scheme + single stack. Touches auth/compose/nginx.
+CL-02 channels ← independent; any time.
 ```
 
-Rationale for CL-04 first: the compose/stack/nginx work in CL-03 and the CI env both depend on the canonical variable scheme, so lock that in first to avoid re-touching compose twice.
+CL-01 and CL-03 are largely independent (CL-01 uses `APP_ENV` if CL-03 landed first, else the current vars + a follow-up note). Sequence by priority: **CL-01 first if getting CI green is the priority**, **CL-03 first if locking the canonical config is**. They can also run in parallel with coordination on the shared CI file.
 
 ## Parallel-safety with other branches
 
-- Built on **`dev/hardening`** — this *is* the core-codebase cleanup, so it lands there (the schema/config are hardening concerns). CL-01 also finally makes hardening's CI green.
-- **`dev/organisation`** (org-chart) adds `ticketing.*` migrations — a different Alembic stream from CL-01's `public.*`, no head collision. CL-04's `APP_ENV` rename touches shared settings modules — coordinate if org work reads them.
+- Built on **`dev/hardening`** — this *is* the core-codebase cleanup, so it lands there (owner's call). CL-01 also finally makes hardening's CI green.
+- **`dev/organisation`** (org-chart) adds `ticketing.*` migrations — a different Alembic stream from CL-01's `public.*`, no head collision. CL-03's `APP_ENV` rename touches shared settings modules — coordinate if org work reads them.
+- **Branch size:** `dev/hardening` will carry 7 hardening + 3 cleanup tickets before merging. Plan a merge to `integration` once CL-01 makes CI green, rather than piling higher.
 
 ## Conventions (binding)
 
-- Branch/land on `dev/hardening` (owner's call — this is core hardening). Never `main`.
-- **0 records = rebuild, don't reconcile.** CL-01 is a clean canonical baseline, not an idempotent drift-patch. Still test that a fresh migrate → seed → pytest works.
-- **One convention per concept.** After a ticket, `grep` must show the old spelling gone (e.g. `TICKETING_ENV`/`BACKEND_ENV` → 0 hits after CL-04), not coexisting with the new one.
-- Deletions preceded by grep re-confirmation (the accessible/voice naming trap in AUDIT §2).
+- Land on `dev/hardening`. Never `main`.
+- **0 records = rebuild, don't reconcile.** Still prove a fresh migrate → seed → pytest works.
+- **One convention per concept.** After a ticket, `grep` must show the old spelling *gone* (e.g. `TICKETING_ENV` → 0 hits after CL-03), not coexisting.
+- **Prune only the provably-unused** (CL-01): when a column's usage is ambiguous (`SELECT *`, serializers, seed-by-position), keep it. The full test + smoke run is the safety net.
+- Deletions preceded by grep re-confirmation (the accessible/voice naming trap, AUDIT §2).
 - Tests/verification as acceptance criteria; update [`PROGRESS.md`](PROGRESS.md) at every commit.
 
 ## Model selection
 
-All-Opus — schema-critical (CL-01), live-channel deletion-safety (CL-02), deployment/auth-critical (CL-03), and cross-cutting config correctness with fail-closed security (CL-04). See [`agents/README.md`](agents/README.md). No Fable, no Haiku.
+All-Opus — schema-critical + column-prune correctness (CL-01), live-channel deletion-safety (CL-02), cross-cutting config with fail-closed security + deployment (CL-03). See [`agents/README.md`](agents/README.md). No Fable, no Haiku.
 
 ## Definition of done (sprint level)
 
-- [ ] CL-01: fresh empty DB → migrations → **seed succeeds → pytest runs**; base_manager owns no DDL; one canonical public baseline; dead tables gone; schema-diff gate in CI.
-- [ ] CL-04: `grep` shows one `APP_ENV`, one `AUTH_MODE`, one `KEYCLOAK_ISSUER`, one `.env.example`; the old spellings return zero hits; fail-closed preserved (prod refuses to bypass).
-- [ ] CL-03: one deployed Keycloak stack; chatbot intake re-pointed + verified; staging front door on the auth UI.
+- [ ] CL-01: fresh empty DB → migrations → **seed succeeds → pytest + smoke green**; one squashed baseline, used columns only, `prune_audit.md` committed; base_manager owns no DDL; self-consistency gate in CI.
+- [ ] CL-03: `grep` shows one `APP_ENV`/`AUTH_MODE`/`KEYCLOAK_ISSUER`/`.env.example` (old spellings → 0 hits); fail-closed preserved (prod refuses bypass); one deployed Keycloak stack; chatbot intake re-pointed + verified.
 - [ ] CL-02: both legacy channels + exclusive backend removed; REST_webchat voice/socket/upload verified intact.
 - [ ] Hardening CI green end-to-end; future Rasa-removal ticket filed.

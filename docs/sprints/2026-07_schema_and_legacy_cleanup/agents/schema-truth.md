@@ -1,27 +1,26 @@
-# Agent runbook — CL-01: Canonical public schema
+# Agent runbook — CL-01: Canonical public schema (squash + prune)
 
-**Branch:** land on `dev/hardening` · **Model:** Opus (high effort — the app boots against this schema) · **Spec:** [`../01-public-schema-source-of-truth-spec.md`](../01-public-schema-source-of-truth-spec.md) · Read [`README.md`](README.md) + [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md) §1 first. **Unblocks the hardening CI.**
+**Branch:** land on `dev/hardening` · **Model:** Opus (high effort — the app boots against this schema; wrong prune = runtime break) · **Spec:** [`../01-public-schema-source-of-truth-spec.md`](../01-public-schema-source-of-truth-spec.md) · Read [`README.md`](README.md) + [`../AUDIT_FINDINGS.md`](../AUDIT_FINDINGS.md) §1 first. **Unblocks the hardening CI.**
 
-**0 records → REBUILD, don't reconcile.** No data preservation, no idempotent-shape-detection. Define the canonical schema (the app's real shape) and build one clean baseline.
+**0 records → REBUILD.** Two moves: **squash** the drifted migrations into one baseline, and **prune** columns/tables nothing uses.
 
 ## Mission
-
-Make the Alembic `public` stream the single canonical source of truth for `public.*`, matching what the app runs, so a fresh-from-migrations DB is exactly the app schema — letting CI's `backend-tests` seed and run pytest. Delete the base_manager-vs-Alembic dual ownership.
+One canonical Alembic baseline that IS `public.*` — no dual ownership, no drift, no dead weight. Fresh DB migrates to it; app + full tests + seed run against it.
 
 ## Steps
+1. **Capture starting point:** `pg_dump --schema-only --schema=public grievance_db` (live :5432, user `nepal_grievance_admin`, READ ONLY).
+2. **Column-usage audit → prune list.** For each kept table (AUDIT §1a/§1b) grep every column name across `backend/`, `ticketing/`, `rasa_chatbot/`, `channels/REST_webchat/`, ORM models, seed scripts, raw SQL. Classify used/dead → commit `prune_audit.md` (each dropped column + evidence). **Ambiguous (`SELECT *`, `RETURNING *`, ORM reflection, serializers/`to_dict`, seed-by-position) ⇒ KEEP.** Exclude the 7 dead tables (§1c) + `events` (§1d) entirely.
+3. **One canonical baseline** (`migrations/public/`): delete the old `pub001..pub009`; author a single authoritative baseline (document whether you reuse `pub000` or a fresh revision); reset `alembic_version_public`. It creates each kept table with **used columns only**, app types, `grievance_statuses` UPPERCASE vocab. Real downgrade. Don't touch `ticketing`/`ops`.
+4. **Delete app-startup DDL** (`base_manager.py`, `grievance_categories_catalog.py`, `config/database_tables.py`, `postgres_services.py`): remove all `CREATE/ALTER TABLE`; keep only data-seeding; delete `grievance_history` migrate-and-drop. Remove code that reads/writes pruned columns (or, if it turns out live, keep the column — decide per case in the audit).
+5. **Migrate-before-start** in every bring-up path (compose/entrypoints/Makefile/`03_operations.md`).
+6. **Verify** (scratch DBs; stack up — DB `nepal_chatbot_seah-db-1`, live `grievance_db` :5432): empty DB → public→ticketing→ops → **seed succeeds → `pytest tests/ticketing tests/orchestrator tests/actions` runs → app smoke** (submit grievance → chatbot → ticket intake). Record real pass/fail + the "4 pre-existing failures" verdict. Self-consistency: fresh-migration `pg_dump` == committed baseline dump. `upgrade→downgrade→upgrade` clean.
+7. **CI self-consistency gate** in `.github/workflows/ci.yml`. (No gh → add the step, note verification pending.)
 
-1. **Capture canonical schema:** `pg_dump --schema-only --schema=public grievance_db` (live DB, :5432, user `nepal_grievance_admin`, READ ONLY) → normalize → commit `schema_app.sql` as the reference. This is the target (the app's real shape = base_manager, NOT the drifted `pub000`).
-2. **One canonical baseline migration** (`migrations/public/`): since 0 records / not-live, re-baseline — squash the drifted `pub000..pub009` into a single authoritative baseline (or one drop-and-recreate migration; document the choice). It creates every **live** table (AUDIT §1a + the reconciled §1b, all at the base_manager/live shape), **excludes** the 7 dead tables (§1c) and `events` (§1d), and uses the live **UPPERCASE** `grievance_statuses` vocab. Real downgrade. Don't touch `ticketing`/`ops` streams.
-3. **Delete app-startup DDL:** remove `CREATE/ALTER TABLE` from `base_manager.py`, `grievance_categories_catalog.py`, `config/database_tables.py`, `postgres_services.py`; keep only data-seeding (runs against a migrated DB); delete the `grievance_history` migrate-and-drop. No reintroducing `CREATE TABLE IF NOT EXISTS`.
-4. **Migrate-before-start** in every bring-up path (compose start order/entrypoints, Makefile, `03_operations.md`).
-5. **Verify** (scratch DBs; the stack is up — DB container `nepal_chatbot_seah-db-1`, live `grievance_db` :5432): empty DB → public→ticketing→ops migrations → **seed succeeds** (`import_locations_json` + `mock_tickets --reset`) → `pytest tests/ticketing tests/orchestrator tests/actions` runs — **record real pass/fail** and the verdict on the hardening "4 pre-existing failures" on a clean DB. Schema-diff: fresh-migration `pg_dump` == `schema_app.sql` (empty). `upgrade→downgrade→upgrade` clean.
-6. **Add the schema-diff gate to `.github/workflows/ci.yml`** (backend-tests) so drift can't return. (Can't run live Actions — no gh; just add the step, note pending.)
-
-## Coordinate with CL-04
-CL-04 renames env vars (`APP_ENV`) the CI/migration invocation reads. If CL-04 landed, use `APP_ENV`; else use current vars + note the follow-up. Schema work is independent of var names.
+## Coordinate with CL-03
+CL-03 renames env vars (`APP_ENV`). Use it if landed; else current vars + note follow-up. Schema is independent of var names.
 
 ## Constraints
-- `migrations/public/` only. Test on scratch DBs; read `grievance_db` only. Canonical shape = the app's real shape (base_manager wins over `pub000`). Extend the baseline until schema-diff is empty.
+- `migrations/public/` only. Scratch DBs; read `grievance_db` only. **Ambiguous column usage ⇒ keep.** A pruned column that breaks a test/smoke ⇒ restore it + fix the audit. Exclude the 7 dead tables + `events`.
 
 ## Done means
-Fresh migrate → seed → pytest works (results recorded); one canonical public baseline; base_manager owns no schema DDL; 7 dead tables + `events` excluded; schema-diff gate in CI; PROGRESS updated; future-Rasa note filed.
+One squashed baseline, used columns only; `prune_audit.md` committed; app-startup DDL gone; fresh migrate → seed → pytest → smoke green (recorded); self-consistency gate in CI; PROGRESS updated; future-Rasa note filed.
