@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.country import Location
 from ticketing.models.organization import Organization
-from ticketing.models.project import Project
+from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 from ticketing.seed.grm_roles import upsert_grm_roles
@@ -484,6 +484,57 @@ def seed_project(db: Session) -> None:
     db.flush()
 
 
+def seed_project_organizations(db: Session) -> None:
+    """
+    Ensure KL_ROAD's project_organizations rows carry the org_role that
+    resolve_ticket_organization() (ticketing/services/project_routing.py) looks
+    up for ticket-intake routing.
+
+    Migration e8d4b6a0f291 links KL_ROAD to DOR + ADB but leaves org_role NULL
+    (the column was added afterwards by a9c3e5f1d720, unbackfilled). Without an
+    "implementing_agency" org_role on the DOR row, resolve_ticket_organization()
+    returns None for every KL_ROAD ticket and intake fails with 422 ("No routing
+    organization for project=KL_ROAD"). Backfills existing NULL rows and creates
+    any missing link — safe to re-run.
+    """
+    from sqlalchemy import select
+
+    project = db.execute(
+        select(Project).where(Project.short_code == "KL_ROAD")
+    ).scalar_one_or_none()
+    if not project:
+        logger.warning("  ! project KL_ROAD not found — skipping project_organizations seed")
+        return
+
+    # DOR runs day-to-day implementation (routing target); ADB is the donor —
+    # matches ProjectOrganization's own docstring example and the
+    # construction_road project-type actor-role vocabulary (u3v5w7x9 migration).
+    desired_roles = {
+        ORG_DOR_ID: "implementing_agency",
+        ORG_ADB_ID: "donor",
+    }
+    for org_id, role in desired_roles.items():
+        existing = db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(ProjectOrganization(
+                project_id=project.project_id,
+                organization_id=org_id,
+                org_role=role,
+            ))
+            logger.info("  + project_organization: KL_ROAD + %s -> %s", org_id, role)
+        elif not existing.org_role:
+            existing.org_role = role
+            logger.info("  ~ project_organization: KL_ROAD + %s backfilled org_role=%s", org_id, role)
+        else:
+            logger.info("  = project_organization already set: KL_ROAD + %s -> %s", org_id, existing.org_role)
+    db.flush()
+
+
 def seed_standard(db: Session | None = None) -> None:
     """Run all standard seed steps inside a single transaction."""
     own_session = db is None
@@ -498,6 +549,7 @@ def seed_standard(db: Session | None = None) -> None:
         seed_standard_workflow(db)
         seed_workflow_assignment(db)
         seed_project(db)
+        seed_project_organizations(db)
         seed_settings(db)
         db.commit()
         logger.info("Standard seed complete.")
