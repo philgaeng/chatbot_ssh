@@ -27,10 +27,13 @@ git checkout main
 git pull --ff-only origin main
 docker compose build backend
 
-# 2) Initialize baseline chatbot tables if needed (safe on empty/dev DB)
+# 2) db_init = migrate-before-start: applies the public Alembic stream, THEN
+#    seeds reference/lookup data. The app no longer creates public.* tables at
+#    startup — the Alembic baseline (migrations/public) owns all public.* DDL (CL-01).
 docker compose --profile init run --rm db_init || true
 
-# 3) Apply migration streams
+# 3) Apply migration streams (public is idempotent here — db_init already ran it;
+#    ticketing + ops are separate streams). Always migrate before starting the app.
 docker compose run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 docker compose run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head
 docker compose run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
@@ -84,7 +87,7 @@ python -m alembic -c migrations/public/alembic.ini upgrade head
 Rollback notes:
 
 - Ticketing rollback uses ticketing revision IDs only.
-- Public rollback for the new contact/location work can return to `pub001_seah_reporter_category`.
+- The public stream is a **single squashed baseline** (`pub000_public_core_baseline`, CL-01). `downgrade base` drops every public.* table; there are no intermediate public revisions to roll back to. To rebuild an existing (non-prod, 0-record) DB onto the baseline, use `make reset_public_dev` (drops+recreates the public schema — including the `alembic_version_public` row — then re-migrates).
 
 Full stream-ownership policy: [`07_migrations_policy.md`](07_migrations_policy.md).
 

@@ -73,6 +73,22 @@ jobs:
           python -m alembic -c ticketing/migrations/alembic.ini upgrade head
           python -m alembic -c ops/migrations/alembic.ini upgrade head
 
+      # CL-01 self-consistency gate: the freshly-migrated public schema must
+      # equal the committed canonical baseline (migrations/public/expected_public_schema.sql).
+      # Guards against public.* drifting from its own baseline again. pg_dump is
+      # pinned to 15 (matches the postgres:15 service) via `docker run` so the
+      # dump text is stable regardless of the runner's client version.
+      # NOTE: real-CI verification pending (no gh access in the authoring
+      # environment); validated locally against scratch DBs.
+      - name: Public schema self-consistency gate
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: grievance_db_test
+        run: bash scripts/ci/check_public_schema_baseline.sh check
+
       - name: Seed KL Road locations + demo workflows
         # tests/ticketing/conftest.py and several `pytest.mark.integration` tests
         # (test_officer_assignment.py, test_project_routing.py, test_entity_codes.py)

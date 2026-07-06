@@ -983,173 +983,63 @@ class TableDbManager(BaseDatabaseManager):
             return False
 
     def recreate_all_tables(self) -> bool:
-        """Recreate all tables in the correct order"""
-        try:
-            with self.get_connection() as conn:
-                cur = conn.cursor()
-                # Drop tables in reverse order of dependency
-                self.migrations_logger.info("Dropping tables in reverse order...")
-                for table in reversed(self.ALL_TABLES):
-                    cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
-                
-                # Create tables and indexes
-                self._create_tables(cur)
-                self._create_indexes(cur)
-                conn.commit()
-                self.migrations_logger.info("All tables and indexes recreated successfully")
-                return True
-        except Exception as e:
-            self.migrations_logger.error(f"Error recreating all tables: {str(e)}")
-            return False
+        """Deprecated: public.* table DDL is owned by the Alembic public baseline
+        (migrations/public). Use ``make reset_public_dev`` to rebuild the schema.
+        This now only (re)seeds reference/lookup data and is idempotent."""
+        self.migrations_logger.warning(
+            "recreate_all_tables: public schema is Alembic-managed; re-seeding reference data only"
+        )
+        return self.init_db()
 
     def init_db(self):
+        """Seed reference/lookup data into the public schema.
+
+        Table DDL is owned by the Alembic public stream (migrations/public) and
+        MUST run before this (migrate-before-start) — see scripts/database/init.py.
+        Idempotent: safe to call on an already-seeded database.
+        """
         try:
             with self.get_connection() as conn:
                 cur = conn.cursor()
-                # Check if database is already initialized
-                cur.execute("SELECT to_regclass('grievances')")
-                if cur.fetchone()[0] is not None:
-                    self.migrations_logger.info("Database already initialized")
-                    return True
-                self._create_tables(cur)
-                self._create_indexes(cur)
+                self._seed_reference_data(cur)
                 conn.commit()
-                self.migrations_logger.info("Database initialization completed")
+                self.migrations_logger.info("Reference data seeding completed")
                 return True
         except Exception as e:
-            self.migrations_logger.error(f"Database initialization error: {str(e)}")
+            self.migrations_logger.error(f"Reference data seeding error: {str(e)}")
             return False
 
-    def recreate_db(self):
-        try:
-            with self.get_connection() as conn:
-                cur = conn.cursor()
-                # Drop tables in reverse order of dependency
-                self.migrations_logger.info("Dropping tables in reverse order...")
-                cur.execute("DROP TABLE IF EXISTS grievance_transcriptions CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievance_translations CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievance_voice_recordings CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievance_status_history CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievance_history CASCADE")
-                cur.execute("DROP TABLE IF EXISTS file_attachments CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievances CASCADE")
-                cur.execute("DROP TABLE IF EXISTS office_user CASCADE")
-                cur.execute("DROP TABLE IF EXISTS complainants CASCADE")
-                cur.execute("DROP TABLE IF EXISTS grievance_statuses CASCADE")
-                cur.execute("DROP TABLE IF EXISTS task_statuses CASCADE")
-                self._create_tables(cur)
-                self._create_indexes(cur)
-                conn.commit()
-                self.migrations_logger.info("All tables and indexes recreated successfully")
-            return True
-        except Exception as e:
-            self.migrations_logger.error(f"Error recreating database: {str(e)}")
-            return False
-
-    def _create_tables(self, cur):
-        # Status tables
-        self.migrations_logger.info("Creating/recreating grievance_statuses table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievance_statuses (
-                status_code TEXT PRIMARY KEY,
-                status_name_en TEXT NOT NULL,
-                status_name_ne TEXT NOT NULL,
-                description_en TEXT,
-                description_ne TEXT,
-                is_active BOOLEAN DEFAULT true,
-                sort_order INTEGER,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-         # Initialize default statuses if table is empty
+    def _seed_reference_data(self, cur):
+        """Insert reference/lookup rows. Table DDL lives in the Alembic public
+        baseline (migrations/public); this method never creates or alters tables.
+        Every insert is guarded / idempotent."""
+        # Grievance statuses (canonical UPPERCASE vocab)
         cur.execute("SELECT COUNT(*) FROM grievance_statuses")
         if cur.fetchone()[0] == 0:
-            self.migrations_logger.info("Initializing default grievance statuses...")
             statuses = [(v['code'], v['name_en'], v['name_ne'], v['description_en'], v['description_ne'], 0) for v in GRIEVANCE_STATUS_SEED_DATA]
             cur.executemany("INSERT INTO grievance_statuses (status_code, status_name_en, status_name_ne, description_en, description_ne, sort_order) VALUES (%s, %s, %s, %s, %s, %s)", statuses)
-            
-        
-        # Processing statuses table
-        self.migrations_logger.info("Creating/recreating processing_statuses table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS processing_statuses (
-                status_code TEXT PRIMARY KEY,
-                status_name TEXT NOT NULL,
-                description TEXT,
-                is_active BOOLEAN DEFAULT true,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Insert default processing statuses if not present
+
+        # Processing statuses
         cur.execute("SELECT COUNT(*) FROM processing_statuses")
         if cur.fetchone()[0] == 0:
-            self.migrations_logger.info("Initializing default processing statuses...")
             statuses = [(v['code'], v['name'], v['description']) for v in TRANSCRIPTION_PROCESSING_STATUS_SEED_DATA]
             cur.executemany("INSERT INTO processing_statuses (status_code, status_name, description) VALUES (%s, %s, %s)", statuses)
-        
-        
-        # Task statuses table
-        self.migrations_logger.info("Creating/recreating task_statuses table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS task_statuses (
-                task_status_code TEXT PRIMARY KEY,
-                task_status_name TEXT NOT NULL,
-                description TEXT,
-                is_active BOOLEAN DEFAULT true,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-      
-        
-        # Insert default statuses if not present
+
+        # Task statuses
         cur.execute("SELECT COUNT(*) FROM task_statuses")
         if cur.fetchone()[0] == 0:
-            self.migrations_logger.info("Initializing default task statuses...")
             statuses = [(v['code'], v['name'], v['description']) for v in TASK_STATUS_SEED_DATA]
-            cur.executemany(
-                "INSERT INTO task_statuses (task_status_code, task_status_name, description) VALUES (%s, %s, %s)",
-                statuses
-            )
+            cur.executemany("INSERT INTO task_statuses (task_status_code, task_status_name, description) VALUES (%s, %s, %s)", statuses)
 
-        # Grievance classification statuses table
-        self.migrations_logger.info("Creating/recreating grievance_classification_statuses table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievance_classification_statuses (
-                code VARCHAR(50) PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Insert default classification statuses if not present
+        # Grievance classification statuses
         cur.execute("SELECT COUNT(*) FROM grievance_classification_statuses")
         if cur.fetchone()[0] == 0:
-            self.migrations_logger.info("Initializing default grievance classification statuses...")
             statuses = [(v['code'], v['name'], v['description']) for v in GRIEVANCE_CLASSIFICATION_STATUS_SEED_DATA]
-            cur.executemany(
-                "INSERT INTO grievance_classification_statuses (code, name, description) VALUES (%s, %s, %s)",
-                statuses
-            )
+            cur.executemany("INSERT INTO grievance_classification_statuses (code, name, description) VALUES (%s, %s, %s)", statuses)
 
-        # Field types table
-        self.migrations_logger.info("Creating/recreating field_names table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS field_names (
-                field_name TEXT PRIMARY KEY,
-                description TEXT
-            )
-        """)
-        
-        # Insert default field types if not present
+        # Field names
         cur.execute("SELECT COUNT(*) FROM field_names")
         if cur.fetchone()[0] == 0:
-            self.migrations_logger.info("Initializing default field types...")
             cur.execute("""
                 INSERT INTO field_names (field_name, description) VALUES
                     ('grievance_description', 'Grievance details'),
@@ -1172,442 +1062,6 @@ class TableDbManager(BaseDatabaseManager):
                     ('grievance_claimed_amount', 'Grievance claimed amount')
             """)
 
-        # Reference CSV data (seed via dev-scripts/seed_reference_data.py)
-        self.migrations_logger.info("Creating reference_municipality_villages table...")
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reference_municipality_villages (
-                id SERIAL PRIMARY KEY,
-                municipality TEXT NOT NULL,
-                ward TEXT NOT NULL,
-                village TEXT NOT NULL,
-                CONSTRAINT uq_ref_mv UNIQUE (municipality, ward, village)
-            )
-            """
-        )
-        cur.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ref_mv_municipality ON reference_municipality_villages (municipality)"
-        )
-
-        self.migrations_logger.info("Creating reference_grm_office_in_charge table...")
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reference_grm_office_in_charge (
-                id SERIAL PRIMARY KEY,
-                office_id TEXT,
-                office_name TEXT,
-                office_address TEXT,
-                office_email TEXT,
-                office_pic_name TEXT,
-                office_phone TEXT,
-                district TEXT,
-                municipality TEXT
-            )
-            """
-        )
-        cur.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ref_grm_dist_mun ON reference_grm_office_in_charge (district, municipality)"
-        )
-
-        self.migrations_logger.info("Creating grievance_classification_taxonomy table...")
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS grievance_classification_taxonomy (
-                category_key TEXT PRIMARY KEY,
-                generic_grievance_name TEXT,
-                generic_grievance_name_ne TEXT,
-                short_description TEXT,
-                short_description_ne TEXT,
-                classification TEXT,
-                classification_ne TEXT,
-                description TEXT,
-                description_ne TEXT,
-                follow_up_question_description TEXT,
-                follow_up_question_description_ne TEXT,
-                follow_up_question_quantification TEXT,
-                follow_up_question_quantification_ne TEXT,
-                high_priority BOOLEAN DEFAULT FALSE
-            )
-            """
-        )
-
-        # Office management table
-        self.migrations_logger.info("Creating/recreating office_management table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS office_management (
-                office_id TEXT PRIMARY KEY,
-                office_name TEXT NOT NULL,
-                office_address TEXT,
-                office_email TEXT,
-                office_pic_name TEXT,
-                office_phone TEXT,
-                district TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Office municipality ward junction table
-        self.migrations_logger.info("Creating/recreating office_municipality_ward table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS office_municipality_ward (
-                id SERIAL PRIMARY KEY,
-                office_id TEXT NOT NULL,
-                municipality TEXT NOT NULL,
-                ward INTEGER NOT NULL,
-                village TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (office_id) REFERENCES office_management(office_id) ON DELETE CASCADE,
-                UNIQUE(office_id, municipality, ward, village)
-            )
-        """)
-        
-        # Users table
-        self.migrations_logger.info("Creating/recreating office_user table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS office_user (
-                id TEXT PRIMARY KEY,
-                us_unique_id TEXT UNIQUE,
-                user_name TEXT,
-                user_phone TEXT,
-                user_email TEXT,
-                user_office_id TEXT,
-                user_login TEXT,
-                user_password TEXT,
-                user_role TEXT,
-                user_status TEXT,
-                user_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                user_updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                user_last_login TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Complainant table
-        self.migrations_logger.info("Creating/recreating complainant table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS complainants (
-                complainant_id TEXT PRIMARY KEY,
-                complainant_unique_id TEXT UNIQUE,
-                complainant_full_name TEXT,
-                complainant_phone TEXT,
-                complainant_email TEXT,
-                complainant_province TEXT,
-                complainant_district TEXT,
-                complainant_municipality TEXT,
-                complainant_ward TEXT,
-                complainant_village TEXT,
-                complainant_address TEXT,
-                complainant_phone_hash TEXT,
-                complainant_email_hash TEXT,
-                complainant_full_name_hash TEXT,
-                complainant_phone_verified BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS contact_id TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS country_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_resolution_status TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_name TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_1_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_2_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_3_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_4_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_5_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS level_6_code TEXT")
-        cur.execute("ALTER TABLE complainants ADD COLUMN IF NOT EXISTS location_geo TEXT")
-
-        # Tasks table
-        self.migrations_logger.info("Creating/recreating tasks table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                task_id TEXT PRIMARY KEY,  -- This will store Celery's task ID
-                task_name TEXT NOT NULL,
-                task_status_code TEXT REFERENCES task_statuses(task_status_code),
-                started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP WITH TIME ZONE,
-                error_message TEXT,
-                result JSONB,  -- Store task results as JSONB
-                retry_count INTEGER DEFAULT 0,
-                retry_history JSONB DEFAULT '[]'::jsonb,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Main grievances table with language_code field
-        self.migrations_logger.info("Creating/recreating grievances table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievances (
-                grievance_id TEXT PRIMARY KEY,
-                complainant_id TEXT REFERENCES complainants(complainant_id),
-                grievance_categories TEXT,
-                grievance_categories_alternative TEXT,
-                follow_up_question TEXT,
-                grievance_summary TEXT,
-                grievance_sensitive_issue BOOLEAN DEFAULT FALSE,
-                grievance_high_priority BOOLEAN DEFAULT FALSE,
-                grievance_description TEXT,
-                grievance_claimed_amount DECIMAL,
-                grievance_location TEXT,
-                language_code TEXT DEFAULT 'ne',
-                grievance_timeline TEXT,
-                grievance_classification_status TEXT DEFAULT 'pending',
-                grievance_creation_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                grievance_modification_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                is_temporary BOOLEAN DEFAULT TRUE,
-                source TEXT DEFAULT 'bot'
-            )
-        """)
-
-        # Enhanced status history table (after grievances table is created)
-        self.migrations_logger.info("Creating/recreating grievance_status_history table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievance_status_history (
-                id SERIAL PRIMARY KEY,
-                grievance_id TEXT NOT NULL,
-                change_type TEXT NOT NULL CHECK (change_type IN ('status_change', 'field_update', 'complainant_update', 'system_update')),
-                status_code TEXT REFERENCES grievance_statuses(status_code),
-                field_changes JSONB,
-                assigned_to TEXT,
-                notes TEXT,
-                created_by TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (grievance_id) REFERENCES grievances(grievance_id),
-                CONSTRAINT status_or_fields_check CHECK (
-                    (change_type = 'status_change' AND status_code IS NOT NULL) OR
-                    (change_type IN ('field_update', 'complainant_update', 'system_update') AND field_changes IS NOT NULL)
-                )
-            )
-        """)
-                
-        # Legacy grievance_history table removed - functionality consolidated into grievance_status_history
-
-        # File attachments table
-        self.migrations_logger.info("Creating/recreating file_attachments table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS file_attachments (
-                id SERIAL PRIMARY KEY,
-                file_id UUID NOT NULL,
-                grievance_id TEXT NOT NULL REFERENCES grievances(grievance_id),
-                file_name TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                file_type TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                upload_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                client_metadata JSONB
-            )
-        """)
-        cur.execute(
-            "ALTER TABLE file_attachments ADD COLUMN IF NOT EXISTS client_metadata JSONB"
-        )
-
-        # Voice recording tables with language_code fields
-        self.migrations_logger.info("Creating/recreating grievance_voice_recordings table...")
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS grievance_voice_recordings (
-                recording_id TEXT PRIMARY KEY,
-                complainant_id TEXT REFERENCES complainants(complainant_id),
-                grievance_id TEXT REFERENCES grievances(grievance_id),
-                task_id TEXT,
-                file_path TEXT NOT NULL,
-                field_name TEXT NOT NULL,
-                duration_seconds INTEGER,
-                file_size INTEGER,
-                processing_status TEXT DEFAULT 'PROCESSING' REFERENCES processing_statuses(status_code),
-                language_code TEXT,
-                language_code_detect TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        self.migrations_logger.info("Creating/recreating grievance_transcriptions table...")
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS grievance_transcriptions (
-                transcription_id  TEXT PRIMARY KEY,  
-                recording_id TEXT REFERENCES grievance_voice_recordings(recording_id),
-                grievance_id TEXT REFERENCES grievances(grievance_id),
-                field_name TEXT NOT NULL,
-                automated_transcript TEXT,
-                verified_transcript TEXT,
-                verification_status TEXT DEFAULT 'FOR_VERIFICATION' REFERENCES processing_statuses(status_code),
-                confidence_score FLOAT,
-                verification_notes TEXT,
-                verified_by TEXT,
-                verified_at TIMESTAMP WITH TIME ZONE,
-                language_code TEXT,
-                language_code_detect TEXT,
-                task_id TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Translations table
-        self.migrations_logger.info("Creating/recreating grievance_translations table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS grievance_translations (
-                translation_id TEXT PRIMARY KEY, 
-                grievance_id TEXT REFERENCES grievances(grievance_id),
-                task_id TEXT,
-                grievance_description_en TEXT,
-                grievance_summary_en TEXT,
-                grievance_categories_en TEXT,
-                source_language TEXT NOT NULL DEFAULT 'ne',
-                translation_method TEXT NOT NULL,
-                confidence_score FLOAT,
-                verified_by TEXT,
-                verified_at TIMESTAMP WITH TIME ZONE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(grievance_id, translation_method)
-            )
-        """)
-
-        # Task entities junction table
-        self.migrations_logger.info("Creating/recreating task_entities table...")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS task_entities (
-                task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
-                entity_key TEXT NOT NULL CHECK (entity_key IN ('grievance_id', 'complainant_id', 'transcription_id', 'translation_id', 'recording_id', 'task_id', 'ticket_id')),
-                entity_id TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (task_id, entity_key, entity_id)
-            )
-        """)
-        
-        # Create indexes for entity relationships
-        self.migrations_logger.info("Creating task entity indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_task_entities_entity ON task_entities(entity_key, entity_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(task_status_code);
-            CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
-            CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at);
-        """)
-
-
-
-    def _create_indexes(self, cur):
-        # Task statuses indexes
-        self.migrations_logger.info("Creating/recreating task statuses indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_task_status_active ON task_statuses(is_active);
-        """)
-        
-        # Grievance classification statuses indexes
-        self.migrations_logger.info("Creating/recreating classification status indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_classification_status_code ON grievance_classification_statuses(code);
-        """)
-
-
-        # Office management indexes
-        self.migrations_logger.info("Creating/recreating office management indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_office_management_district ON office_management(district);
-            CREATE INDEX IF NOT EXISTS idx_office_management_name ON office_management(office_name);
-        """)
-        
-        # Office municipality ward indexes
-        self.migrations_logger.info("Creating/recreating office municipality ward indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_office ON office_municipality_ward(office_id);
-            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_municipality ON office_municipality_ward(municipality);
-            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_ward ON office_municipality_ward(ward);
-            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_village ON office_municipality_ward(village);
-            CREATE INDEX IF NOT EXISTS idx_office_municipality_ward_office_municipality ON office_municipality_ward(office_id, municipality);
-        """)
-        
-        # Users table indexes
-        self.migrations_logger.info("Creating/recreating user indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_complainant_phone ON complainants(complainant_phone);
-            CREATE INDEX IF NOT EXISTS idx_complainant_email ON complainants(complainant_email);
-            CREATE INDEX IF NOT EXISTS idx_complainant_unique_id ON complainants(complainant_unique_id);
-            CREATE INDEX IF NOT EXISTS idx_complainant_phone_hash ON complainants(complainant_phone_hash);
-            CREATE INDEX IF NOT EXISTS idx_complainants_contact_id ON complainants(contact_id);
-            CREATE INDEX IF NOT EXISTS idx_complainants_location_code ON complainants(location_code);
-        """)
-
-        # Grievances table indexes
-        self.migrations_logger.info("Creating/recreating grievances indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_grievance_complainant ON grievances(complainant_id);
-            CREATE INDEX IF NOT EXISTS idx_grievance_creation_date ON grievances(grievance_creation_date);
-            CREATE INDEX IF NOT EXISTS idx_grievance_modification_date ON grievances(grievance_modification_date);
-            CREATE INDEX IF NOT EXISTS idx_grievance_source ON grievances(source);
-            CREATE INDEX IF NOT EXISTS idx_grievance_temporary ON grievances(is_temporary);
-            CREATE INDEX IF NOT EXISTS idx_grievance_language ON grievances(language_code);
-            CREATE INDEX IF NOT EXISTS idx_grievance_timeline ON grievances(grievance_timeline);
-        """)
-
-        # Status tables indexes
-        self.migrations_logger.info("Creating/recreating status indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_status_active ON grievance_statuses(is_active);
-            CREATE INDEX IF NOT EXISTS idx_status_order ON grievance_statuses(sort_order);
-            CREATE INDEX IF NOT EXISTS idx_status_history_grievance ON grievance_status_history(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_status_history_status ON grievance_status_history(status_code);
-            CREATE INDEX IF NOT EXISTS idx_status_history_created ON grievance_status_history(created_at);
-            CREATE INDEX IF NOT EXISTS idx_status_history_assigned ON grievance_status_history(assigned_to);
-            -- Composite index for DISTINCT ON optimization
-            CREATE INDEX IF NOT EXISTS idx_status_history_grievance_created ON grievance_status_history(grievance_id, created_at DESC);
-        """)
-
-        # Enhanced status history indexes
-        self.migrations_logger.info("Creating/recreating enhanced status history indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON grievance_status_history(change_type);
-            CREATE INDEX IF NOT EXISTS idx_status_history_field_changes ON grievance_status_history USING GIN(field_changes);
-            CREATE INDEX IF NOT EXISTS idx_status_history_grievance_change_type ON grievance_status_history(grievance_id, change_type);
-        """)
-
-        # File attachments indexes
-        self.migrations_logger.info("Creating/recreating file attachment indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_file_attachments_grievance_id ON file_attachments(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file_id);
-            CREATE INDEX IF NOT EXISTS idx_file_attachments_upload_timestamp ON file_attachments(upload_timestamp);
-        """)
-
-        # Voice recordings indexes
-        self.migrations_logger.info("Creating/recreating voice recording indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_grievance_id ON grievance_voice_recordings(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_status ON grievance_voice_recordings(processing_status);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_type ON grievance_voice_recordings(field_name);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_created ON grievance_voice_recordings(created_at);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_language ON grievance_voice_recordings(language_code);
-            CREATE INDEX IF NOT EXISTS idx_voice_recordings_detected_language ON grievance_voice_recordings(language_code_detect);
-        """)
-
-        # Transcriptions indexes
-        self.migrations_logger.info("Creating/recreating transcription indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_recording_id ON grievance_transcriptions(recording_id);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_grievance_id ON grievance_transcriptions(grievance_id);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_status ON grievance_transcriptions(verification_status);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_created ON grievance_transcriptions(created_at);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_language ON grievance_transcriptions(language_code);
-            CREATE INDEX IF NOT EXISTS idx_transcriptions_detected_language ON grievance_transcriptions(language_code_detect);
-        """)
-        
-        # Translations indexes
-        self.migrations_logger.info("Creating/recreating translation indexes...")
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_translations_verified ON grievance_translations(verified_at);
-            CREATE INDEX IF NOT EXISTS idx_translations_method ON grievance_translations(translation_method);
-            CREATE INDEX IF NOT EXISTS idx_translations_source_language ON grievance_translations(source_language);
-            CREATE INDEX IF NOT EXISTS idx_translations_created ON grievance_translations(created_at);
-        """)
-        
     def get_field_names(self) -> List[str]:
         """Get all field names from the field_names table"""
         try:
@@ -1619,46 +1073,9 @@ class TableDbManager(BaseDatabaseManager):
             return []
 
     def ensure_projects_table(self) -> bool:
-        """Create projects catalog table for SEAH/project picker flows."""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS projects (
-                            project_uuid TEXT PRIMARY KEY,
-                            country TEXT NOT NULL DEFAULT 'Nepal',
-                            administrative_layer_level_1 TEXT,
-                            administrative_layer_level_2 TEXT,
-                            administrative_layer_level_3 TEXT,
-                            name_en TEXT NOT NULL,
-                            name_local TEXT,
-                            project_short_denomination TEXT,
-                            adb BOOLEAN DEFAULT TRUE,
-                            inactive_at TIMESTAMP,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    )
-                    cur.execute(
-                        """
-                        CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_short_denomination
-                        ON projects(project_short_denomination)
-                        """
-                    )
-                    cur.execute(
-                        """
-                        CREATE INDEX IF NOT EXISTS idx_projects_geo_active
-                        ON projects(country, administrative_layer_level_1, administrative_layer_level_2, inactive_at)
-                        """
-                    )
-                    conn.commit()
-            self.logger.info("projects table ensured")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to ensure projects table: {e}")
-            return False
+        """The projects table is created by the Alembic public baseline
+        (migrations/public); nothing to create at runtime."""
+        return True
 
     def seed_demo_project_kl_road(self) -> bool:
         """Seed demo project row for today's SEAH demo."""
@@ -1790,25 +1207,7 @@ class TableDbManager(BaseDatabaseManager):
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS seah_contact_points (
-                            seah_contact_point_id TEXT PRIMARY KEY,
-                            province TEXT,
-                            district TEXT,
-                            municipality TEXT,
-                            ward TEXT,
-                            project_uuid TEXT,
-                            seah_center_name TEXT NOT NULL,
-                            address TEXT,
-                            phone TEXT,
-                            opening_days TEXT,
-                            opening_hours TEXT,
-                            is_active BOOLEAN DEFAULT TRUE,
-                            sort_order INTEGER DEFAULT 0
-                        )
-                        """
-                    )
+                    # seah_contact_points table created by Alembic public baseline (migrations/public)
                     for i, row in enumerate(municipality_rows, start=1):
                         municipality = row["name"]
                         ward = row["ward"]
@@ -1856,158 +1255,6 @@ class TableDbManager(BaseDatabaseManager):
             return True
         except Exception as e:
             self.logger.error(f"Failed to seed Jhapa contact points: {e}")
-            return False
-
-    def migrate_grievance_timeline_column(self) -> bool:
-        """Add grievance_timeline column if it doesn't exist and populate it with calculated values"""
-        try:
-            self.logger.info("Starting grievance_timeline column migration...")
-            
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    # Check if column exists
-                    cur.execute("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'grievances' AND column_name = 'grievance_timeline'
-                    """)
-                    
-                    column_exists = cur.fetchone()
-                    
-                    if not column_exists:
-                        self.logger.info("Adding grievance_timeline column...")
-                        # Add the column
-                        cur.execute("""
-                            ALTER TABLE grievances 
-                            ADD COLUMN grievance_timeline TEXT
-                        """)
-                        self.logger.info("grievance_timeline column added successfully")
-                    
-                    # Populate grievance_timeline for existing records where it's NULL
-                    self.logger.info("Populating grievance_timeline for existing records...")
-                    cur.execute("""
-                        UPDATE grievances 
-                        SET grievance_timeline = TO_CHAR(grievance_creation_date + INTERVAL '15 days', 'YYYY-MM-DD')
-                        WHERE grievance_timeline IS NULL
-                    """)
-                    
-                    affected_rows = cur.rowcount
-                    self.logger.info(f"Updated {affected_rows} records with grievance_timeline")
-                    
-                    # Create index if it doesn't exist
-                    cur.execute("""
-                        CREATE INDEX IF NOT EXISTS idx_grievance_timeline 
-                        ON grievances(grievance_timeline)
-                    """)
-                    self.logger.info("grievance_timeline index created/verified")
-                    
-                    conn.commit()
-                    self.logger.info("grievance_timeline migration completed successfully")
-                    return True
-                    
-        except Exception as e:
-            self.logger.error(f"Error in grievance_timeline migration: {str(e)}")
-            return False
-
-    def migrate_to_enhanced_history_system(self) -> bool:
-        """
-        Migrate from old grievance_history table to enhanced grievance_status_history system
-        This method handles the transition and data migration
-        """
-        try:
-            self.logger.info("Starting migration to enhanced history system...")
-            
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    # Check if old table exists
-                    cur.execute("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables 
-                            WHERE table_name = 'grievance_history'
-                        )
-                    """)
-                    
-                    old_table_exists = cur.fetchone()[0]
-                    
-                    if old_table_exists:
-                        self.logger.info("Migrating data from grievance_history to grievance_status_history...")
-                        
-                        # Migrate existing data from old table to new enhanced table
-                        cur.execute("""
-                            INSERT INTO grievance_status_history (
-                                grievance_id, change_type, status_code, notes, created_by, created_at
-                            )
-                            SELECT 
-                                grievance_id,
-                                'status_change' as change_type,
-                                new_status as status_code,
-                                COALESCE(notes, 'Migrated from legacy history table') as notes,
-                                'system_migration' as created_by,
-                                created_at
-                            FROM grievance_history 
-                            WHERE new_status IS NOT NULL
-                            AND NOT EXISTS (
-                                SELECT 1 FROM grievance_status_history gsh 
-                                WHERE gsh.grievance_id = grievance_history.grievance_id 
-                                AND gsh.created_at = grievance_history.created_at
-                            )
-                        """)
-                        
-                        migrated_rows = cur.rowcount
-                        self.logger.info(f"Migrated {migrated_rows} status change records")
-                        
-                        # Drop the old table
-                        cur.execute("DROP TABLE IF EXISTS grievance_history CASCADE")
-                        self.logger.info("Dropped legacy grievance_history table")
-                    
-                    # Ensure the enhanced table has the new columns
-                    cur.execute("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'grievance_status_history' AND column_name = 'change_type'
-                    """)
-                    
-                    if not cur.fetchone():
-                        self.logger.info("Adding enhanced columns to grievance_status_history...")
-                        
-                        # Add new columns to existing table
-                        cur.execute("""
-                            ALTER TABLE grievance_status_history 
-                            ADD COLUMN IF NOT EXISTS change_type TEXT DEFAULT 'status_change',
-                            ADD COLUMN IF NOT EXISTS field_changes JSONB
-                        """)
-                        
-                        # Add constraint
-                        cur.execute("""
-                            ALTER TABLE grievance_status_history 
-                            ADD CONSTRAINT status_or_fields_check CHECK (
-                                (change_type = 'status_change' AND status_code IS NOT NULL) OR
-                                (change_type IN ('field_update', 'complainant_update', 'system_update') AND field_changes IS NOT NULL)
-                            )
-                        """)
-                        
-                        # Update existing records to have change_type
-                        cur.execute("""
-                            UPDATE grievance_status_history 
-                            SET change_type = 'status_change' 
-                            WHERE change_type IS NULL
-                        """)
-                        
-                        self.logger.info("Enhanced columns added successfully")
-                    
-                    # Create new indexes
-                    cur.execute("""
-                        CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON grievance_status_history(change_type);
-                        CREATE INDEX IF NOT EXISTS idx_status_history_field_changes ON grievance_status_history USING GIN(field_changes);
-                        CREATE INDEX IF NOT EXISTS idx_status_history_grievance_change_type ON grievance_status_history(grievance_id, change_type);
-                    """)
-                    
-                    conn.commit()
-                    self.logger.info("Migration to enhanced history system completed successfully")
-                    return True
-                    
-        except Exception as e:
-            self.logger.error(f"Error in enhanced history system migration: {str(e)}")
             return False
 
     def update_null_status_to_submitted(self) -> bool:
