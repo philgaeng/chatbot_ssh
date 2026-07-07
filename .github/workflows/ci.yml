@@ -36,6 +36,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # Read by backend/config/constants.py (DB_CONFIG), ticketing/config/settings.py
       # (TicketingSettings) and ops/config.py (OpsSettings) — all three streams and the
@@ -50,6 +59,17 @@ jobs:
       TICKETING_SECRET_KEY: ci-test-secret
       # Not read by any code yet (HR-01 not landed) — harmless to set now, see spec §1.
       TICKETING_ENV: dev
+      # Redis (backend app / celery import requires REDIS_HOST — task_queue/config.py).
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      # Dummy SMTP so EmailClient.__init__ (messaging.py) resolves a profile instead of
+      # raising "SMTP is not configured"; orchestrator flow tests mock the actual send.
+      SMTP_SERVER: localhost
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ci
+      SMTP_PASSWORD: ci
+      SMTP_FROM: ci@example.com
     steps:
       - uses: actions/checkout@v4
 
