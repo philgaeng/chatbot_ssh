@@ -20,6 +20,7 @@ from ticketing.services.admin_access import (
     require_settings_write,
     workflow_track_from_type,
 )
+from ticketing.services.role_scope import validate_step_roles
 from ticketing.api.schemas.workflow import (
     SaveAsTemplateBody,
     StepReorderRequest,
@@ -340,6 +341,17 @@ def publish_workflow(
             status_code=422,
             detail=f"Cannot publish: steps missing assigned role: {', '.join(missing)}",
         )
+    # SH-2: every step's role references must exist and match the workflow track —
+    # publish is the full-workflow gate that also catches legacy/wrong-track bindings.
+    for s in active_steps:
+        validate_step_roles(
+            db,
+            workflow_type=wf.workflow_type,
+            assigned_role_key=s.assigned_role_key,
+            supervisor_role=s.supervisor_role,
+            informed_roles=s.informed_roles,
+            observer_roles=s.observer_roles,
+        )
     wf.status = "published"
     wf.version = (wf.version or 0) + 1
     wf.updated_by_user_id = current_user.user_id
@@ -462,6 +474,16 @@ def add_step(
     wf = _load_workflow(workflow_id, db, current_user)
     _require_workflow_write(current_user, wf.workflow_type)
 
+    # SH-2: role references must exist and match the workflow track.
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=payload.assigned_role_key,
+        supervisor_role=payload.supervisor_role,
+        informed_roles=payload.informed_roles,
+        observer_roles=payload.observer_roles,
+    )
+
     # Append at the end
     max_order = db.execute(
         select(WorkflowStep.step_order)
@@ -507,6 +529,18 @@ def update_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     fields_set = payload.model_fields_set
+
+    # SH-2: validate any role field being SET here (existing refs untouched by this
+    # PATCH aren't re-checked — publish gates the whole workflow).
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=payload.assigned_role_key if "assigned_role_key" in fields_set else None,
+        supervisor_role=payload.supervisor_role if "supervisor_role" in fields_set else None,
+        informed_roles=payload.informed_roles if "informed_roles" in fields_set else None,
+        observer_roles=payload.observer_roles if "observer_roles" in fields_set else None,
+    )
+
     if "display_name" in fields_set:
         step.display_name = payload.display_name
     if "step_key" in fields_set:

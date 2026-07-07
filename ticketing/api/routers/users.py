@@ -50,6 +50,7 @@ from ticketing.services.admin_access import (
     is_super_admin,
     require_settings_write,
 )
+from ticketing.services.role_scope import role_scope_matches_track
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -140,11 +141,8 @@ def list_roles(
         stmt = stmt.where(Role.role_kind == "operational")
     roles = db.execute(stmt).scalars().all()
     if workflow_track:
-        wt = workflow_track.lower()
-        if wt == "standard":
-            roles = [r for r in roles if r.workflow_scope in ("Standard", "Both", None)]
-        elif wt == "seah":
-            roles = [r for r in roles if r.workflow_scope in ("SEAH", "Both", None)]
+        # SH-2: single-sourced role↔track predicate (was inlined here and in 3 other places).
+        roles = [r for r in roles if role_scope_matches_track(r.workflow_scope, workflow_track)]
     return [_role_to_response(db, r) for r in roles]
 
 
