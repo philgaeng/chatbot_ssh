@@ -13,6 +13,10 @@
 
 `PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `DOCKER.md` tells you how to run it. This file has the locked architecture.
 
+## 🐳 BUILD & RUN ONLY WITH DOCKER (non-negotiable)
+
+**Always build and run this stack with Docker Compose — never on the host.** Every service (chatbot, orchestrator, backend, ticketing_api, celery, ops, db, redis, keycloak, grm_ui) is built and started through the Compose stacks — `make wsl-up` / `docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml build|up` (see `docs/deployment/DOCKER.md`). **Do not** `pip install`, `npm run build`, `uvicorn …`, `redis-server`, or run migrations/seeds natively to build or serve. Native runs cause port/version/schema drift (e.g. a stray host `redis-server` on :6379, a mismatched host Python, an unmigrated DB). Host CLIs are for **reading/inspection only**; anything that builds an image, starts a service, or mutates the DB goes through Docker.
+
 ## ⚠️ SUPERSEDED BY AS-BUILT SPECS (July 2026)
 
 The May 10, 2026 demo shipped; parts of the locked plan below were superseded during the build. Where this file and the as-built specs disagree, **the specs win**:
