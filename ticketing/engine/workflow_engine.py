@@ -659,7 +659,9 @@ def auto_assign_officer(
         ).all()
     )
 
-    return min(candidates, key=lambda uid: active_counts.get(uid, 0))
+    # Least-loaded wins; ties broken deterministically by user_id so the choice
+    # never depends on undefined Postgres row order (would be flaky otherwise).
+    return min(candidates, key=lambda uid: (active_counts.get(uid, 0), uid))
 
 
 def auto_assign_for_workflow_step(

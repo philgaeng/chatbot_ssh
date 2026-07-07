@@ -46,6 +46,7 @@ from ticketing.services.admin_access import (
     SettingsAction,
     can_assign_project_workflow,
     require_settings_write,
+    require_track_for_mutation,
 )
 from ticketing.services import project_workflows as pw_svc
 from ticketing.models.base import get_db
@@ -745,8 +746,12 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new project. Country admin (any track) or super_admin."""
+    """Create a new project. Standard-track country admin or super_admin."""
     require_settings_write(current_user, SettingsAction.CREATE_PROJECT)
+    # Creating a project is a standard-track structural action: a SEAH-only
+    # country_admin is unauthorized and must get 403 here, before body/country/
+    # go-live validation can turn the request into a 422.
+    require_track_for_mutation(current_user, "standard")
 
     # Validate country exists
     if not db.get(Country, body.country_code):
