@@ -270,9 +270,10 @@ def list_organizations(
 def create_organization(
     body: OrganizationCreate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new organization. Admin only."""
+    """Create a new organization. Standard-track country admin or super_admin (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     name_clean = body.name.strip()
     if not name_clean:
         raise HTTPException(status_code=400, detail="Name is required")
@@ -311,9 +312,10 @@ def update_organization(
     organization_id: str,
     body: OrganizationUpdate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Update organization name, country, or active status. Admin only."""
+    """Update organization name, country, or active status. Standard-track country admin or super_admin (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -339,8 +341,10 @@ def update_organization(
 def delete_organization(
     organization_id: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
+    """Delete an organization. Standard-track country admin or super_admin (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")

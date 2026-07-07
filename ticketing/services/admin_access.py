@@ -53,6 +53,7 @@ class SettingsAction(str, Enum):
     PLATFORM_SETTINGS = "platform_settings"
     CREATE_PROJECT = "create_project"
     MANAGE_STRUCTURE = "manage_structure"
+    MANAGE_ORG_STRUCTURE = "manage_org_structure"
     MANAGE_SEAH_SETTINGS = "manage_seah_settings"
     MANAGE_WORKFLOWS = "manage_workflows"
     CREATE_OPERATIONAL_ROLE = "create_operational_role"
@@ -216,11 +217,27 @@ def can_create_project(user: CurrentUser) -> bool:
     return is_country_admin(user)
 
 
-def can_manage_structure(user: CurrentUser, *, track: str = "standard") -> bool:
-    """Country admins manage project structure same as super_admin on Settings → Projects."""
+def can_manage_structure(user: CurrentUser, *, track: str | None = None) -> bool:
+    """Project-structure management flag (Settings → Projects) — **track-agnostic**:
+    any country_admin (standard or SEAH) manages their projects' structure, same as
+    super_admin. Org-tree / org-CRUD is the narrower, standard-track-only action
+    :func:`can_manage_org_structure` / ``MANAGE_ORG_STRUCTURE`` (doc 16 §7) — do not
+    use this flag to gate org editing.
+    """
     if is_super_admin(user):
         return True
     return is_country_admin(user)
+
+
+def can_manage_org_structure(user: CurrentUser) -> bool:
+    """Org tree / org CRUD / CSV import — **standard-track** country admin or super_admin
+    (doc 16 §7). A SEAH-only ``country_admin`` and any ``project_admin`` are refused:
+    the org chart is one shared structure owned by the standard track. This is the fix
+    for OC-06 F3 (blanket ``require_admin`` let project_admin mutate global orgs) and F4
+    (structure gate was track-blind)."""
+    if is_super_admin(user):
+        return True
+    return is_country_admin(user, "standard")
 
 
 def can_manage_seah_settings(user: CurrentUser) -> bool:
@@ -304,6 +321,14 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
             raise HTTPException(
                 status_code=403,
                 detail="requires country_admin track=standard",
+            )
+        return
+
+    if action == SettingsAction.MANAGE_ORG_STRUCTURE:
+        if not can_manage_org_structure(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Org tree editing requires country_admin (standard track) or super_admin",
             )
         return
 
