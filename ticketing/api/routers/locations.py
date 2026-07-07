@@ -256,6 +256,7 @@ def list_organizations(
     country: str | None = Query(None),
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
     """List all organizations."""
     stmt = select(Organization).order_by(Organization.organization_id)
@@ -278,6 +279,8 @@ def create_organization(
     name_clean = body.name.strip()
     if not name_clean:
         raise HTTPException(status_code=400, detail="Name is required")
+    if body.country_code and not db.get(Country, body.country_code):  # SH-4 (OC-06 F18)
+        raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
 
     raw = body.organization_id.strip() if body.organization_id else ""
     if raw:
@@ -323,6 +326,8 @@ def update_organization(
     if body.name is not None:
         org.name = body.name.strip()
     if body.country_code is not None:
+        if body.country_code and not db.get(Country, body.country_code):  # SH-4 (OC-06 F18)
+            raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
         org.country_code = body.country_code or None
     if body.is_active is not None:
         org.is_active = body.is_active
@@ -399,6 +404,19 @@ def delete_organization(
         raise HTTPException(
             status_code=409,
             detail=f"Cannot delete: {pkg_count} package actor assignment(s) use this organization.",
+        )
+
+    # SH-4 (OC-06 F7): project actor links were NOT guarded (unlike package links), so a
+    # delete cascade-orphaned the ProjectOrganization row silently. Guard it symmetrically.
+    proj_count = db.scalar(
+        select(func.count())
+        .select_from(ProjectOrganization)
+        .where(ProjectOrganization.organization_id == organization_id)
+    ) or 0
+    if proj_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {proj_count} project actor assignment(s) use this organization.",
         )
 
     db.delete(org)
