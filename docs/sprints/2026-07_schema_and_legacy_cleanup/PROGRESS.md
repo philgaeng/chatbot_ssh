@@ -7,7 +7,7 @@
 
 | ID | Title | Status | Commits | Notes |
 |---|---|---|---|---|
-| CL-01 | Canonical `public.*` schema (squash + prune) | review | uncommitted (working tree) | Single squashed `pub000` baseline; 7 dead tables dropped + `events` excluded; 0 columns pruned (all ambiguous→kept, see `prune_audit.md`). Fresh migrate→seed→smoke green; non-integration pytest **195 passed / 0 failed**; 19 failures all pre-existing `@integration` ticketing-seed gaps (read `ticketing.*` only). |
+| CL-01 | Canonical `public.*` schema (squash + prune) | **done** | `48ce08ae` + seed `ae9096a3` + fixes `3cd31a61` | Squashed `pub000` baseline; 7 dead tables + `events` out; app-startup DDL gone. Non-integration pytest **195/0 green**. CI gates `-m "not integration"`; the `@integration` seed↔test mismatch is tracked in [`followups/integration-seed-reconciliation.md`](followups/integration-seed-reconciliation.md). |
 | CL-02 | Remove legacy channels (accessible + gsheet) | todo | — | Independent; voice tables stay |
 | CL-03 | Canonical config, env & deployment (one stack) | todo | — | Re-point chatbot before deleting :5002; preserves HR-01 fail-closed |
 
