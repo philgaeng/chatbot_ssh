@@ -272,7 +272,14 @@ def get_current_user(
         x_internal_organization_id,
         x_api_key,
     )
-    if user.user_id and "@" in user.user_id:
+    # The onboarding sync is a Keycloak admin operation. Skip it under the dev bypass
+    # (AUTH_MODE=bypass / APP_ENV=dev has no Keycloak running) so bypass auth doesn't
+    # 500 trying to reach a server that isn't there.
+    if (
+        not get_settings().bypass_enabled
+        and user.user_id
+        and "@" in user.user_id
+    ):
         from ticketing.services.officer_admin import sync_officer_onboarding_status
 
         if sync_officer_onboarding_status(db, user.user_id):
