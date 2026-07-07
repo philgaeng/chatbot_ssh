@@ -54,6 +54,7 @@ from ticketing.models.country import Country, Location, LocationLevelDef, Locati
 from ticketing.models.organization import Organization
 from ticketing.utils.organization_identifier import (
     allocate_unique_organization_id,
+    ascii_alnum,
     suggested_organization_id,
 )
 from ticketing.models.officer_scope import OfficerScope
@@ -280,7 +281,7 @@ def create_organization(
 
     raw = body.organization_id.strip() if body.organization_id else ""
     if raw:
-        org_id = "".join(c for c in raw.upper() if c.isalnum() or c == "_")
+        org_id = ascii_alnum(raw.upper(), keep_underscore=True)  # SH-6: ASCII-only ids
         if not org_id:
             raise HTTPException(status_code=400, detail="Invalid organization_id")
         if db.get(Organization, org_id):
