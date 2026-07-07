@@ -79,14 +79,22 @@ def _email_hint(user_id: str) -> str | None:
 # ── Roles ─────────────────────────────────────────────────────────────────────
 
 def _role_usage_counts(db: Session, role_key: str) -> tuple[int, int]:
-    steps = db.scalar(
-        select(func.count())
-        .select_from(WorkflowStep)
-        .where(
-            WorkflowStep.assigned_role_key == role_key,
-            WorkflowStep.is_deleted.is_(False),
-        )
-    ) or 0
+    # SH-5 (OC-06 F15): a role is "used" by a step if it appears in ANY tier — assigned,
+    # supervisor, informed, or observer. The guard previously counted only
+    # assigned_role_key, so a role held only as supervisor/informed/observer could be
+    # deleted, orphaning those references. Steps are a small set — evaluate the tiers in
+    # Python to avoid dialect-specific JSON containment on informed/observer lists.
+    active_steps = db.execute(
+        select(WorkflowStep).where(WorkflowStep.is_deleted.is_(False))
+    ).scalars().all()
+    steps = sum(
+        1
+        for s in active_steps
+        if s.assigned_role_key == role_key
+        or s.supervisor_role == role_key
+        or role_key in (s.informed_roles or [])
+        or role_key in (s.observer_roles or [])
+    )
     role_row = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
     officers = 0
     if role_row:
