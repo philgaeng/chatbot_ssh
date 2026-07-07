@@ -64,12 +64,12 @@ Start at [`00_services_index.md`](services/00_services_index.md); endpoint matri
 | Document | Service |
 |---|---|
 | [`02_grievance_service.md`](services/02_grievance_service.md) | Grievance API (statuses, detail, PII broker) |
-| [`03_voice_grievance_service.md`](services/03_voice_grievance_service.md) | Voice intake (accessible + webchat voice notes) |
+| [`03_voice_grievance_service.md`](services/03_voice_grievance_service.md) | Voice intake — webchat voice notes (accessible channel retired, CL-02) |
 | [`04_file_processing_service.md`](services/04_file_processing_service.md) | Uploads, image compression policy, archived attachments |
 | [`05_messaging_service.md`](services/05_messaging_service.md) | SMS (DOIT/SNS) + email contract |
 | [`06_llm_service.md`](services/06_llm_service.md) | Backend LLM utilities (Whisper, classification, detection) |
 | [`07_task_queue_service.md`](services/07_task_queue_service.md) | Chatbot Celery app and task registry |
-| [`08_gsheet_monitoring_service.md`](services/08_gsheet_monitoring_service.md) | Google Sheet monitoring feed |
+| [`08_gsheet_monitoring_service.md`](services/08_gsheet_monitoring_service.md) | Google Sheet monitoring feed (RETIRED, CL-02) |
 | [`09_grm_integration_service.md`](services/09_grm_integration_service.md) | Legacy MySQL GRM sync (dormant) |
 | [`10_database_service.md`](services/10_database_service.md) | `db_manager` abstraction layer |
 | [`11_health_and_monitoring_service.md`](services/11_health_and_monitoring_service.md) | `ops/` monitor: health checks, watchdog, backups, daily report |

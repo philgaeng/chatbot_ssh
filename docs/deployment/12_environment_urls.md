@@ -80,7 +80,6 @@ nginx_location_prefixes:
   files_api: /files/
   file_status: /file-status/
   task_status: /task-status/
-  gsheet_get_grievances: /gsheet-get-grievances
 
 environments:
 

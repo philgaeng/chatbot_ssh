@@ -22,9 +22,9 @@ Canonical spec: [`../services/05_messaging_service.md`](../services/05_messaging
 
 All callers go through the Messaging API (`POST /api/messaging/send-sms|send-email`, `x-api-key`) — see [`04_backend.md`](04_backend.md) §3. There is **no Twilio** integration.
 
-## 3. Google Sheets monitoring
+## 3. Google Sheets monitoring — RETIRED (CL-02, July 2026)
 
-Read-only monitoring dashboard fed by `GET /gsheet-get-grievances` on the backend (bearer token `GSHEET_BEARER_TOKEN`), rendered by an Apps Script sheet with office-scoped filtering. Spec: [`../services/08_gsheet_monitoring_service.md`](../services/08_gsheet_monitoring_service.md). For local dev, expose the backend with `ngrok http 5001` and point the sheet at the ngrok URL.
+The read-only Apps Script monitoring dashboard (`channels/monitoring-gsheet/`) and its backend feed (`GET /gsheet-get-grievances`, `GSHEET_BEARER_TOKEN`) were removed. The endpoint was already dead (no `db_manager.gsheet.get_grievances_for_gsheet` implementation). Monitoring is now served by the ticketing UI. Historical spec: [`../services/08_gsheet_monitoring_service.md`](../services/08_gsheet_monitoring_service.md).
 
 ## 4. Legacy MySQL GRM sync (dormant)
 

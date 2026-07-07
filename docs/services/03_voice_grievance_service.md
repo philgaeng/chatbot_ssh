@@ -1,5 +1,18 @@
 # Voice Grievance Service Spec
 
+> **RETIRED (CL-02, July 2026).** The accessible voice channel (`channels/accessible/`)
+> and its exclusive backend — the `voice_grievance.py` router
+> (`/accessible-file-upload`, `/submit-grievance`, `/grievance-status/{id}`) and the
+> `backend/services/accessible/` helpers/orchestration — were removed. This spec is kept
+> for historical reference only.
+>
+> **Still live:** the webchat voice-note path is unrelated shared infrastructure and
+> remains — chunked upload via `/upload-voice-chunk` + `/upload-voice-complete`
+> (`backend/api/routers/files.py`), the `transcribe_audio_file_task` / Whisper service,
+> and the `grievance_voice_recordings` / `grievance_transcriptions` tables. The
+> `/accessible-socket.io` Socket.IO mount is REST_webchat status infra, not part of this
+> retired channel.
+
 ## 1) Scope
 
 Accessible-channel voice grievance ingestion and processing service.

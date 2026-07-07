@@ -72,8 +72,7 @@ nepal_chatbot/
 │   └── seed/                 # Demo data seeders
 ├── channels/
 │   ├── ticketing-ui/         # Officer dashboard (Next.js 16, TypeScript, Tailwind v4)
-│   ├── webchat/              # Complainant web chat interface
-│   └── accessible/           # Accessible (voice) interface
+│   └── webchat/              # Complainant web chat interface (incl. voice notes)
 ├── rasa_chatbot/             # Rasa NLU + stories + domain
 ├── migrations/               # Alembic for public.* schema (chatbot tables)
 ├── docs/                     # Documentation (see docs/README.md)

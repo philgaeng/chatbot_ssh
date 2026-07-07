@@ -42,7 +42,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from backend.api.routers import grievance, files, voice_grievance, gsheet, messaging
+from backend.api.routers import grievance, files, messaging
 from backend.api.websocket_fastapi import emit_status_update_accessible, socketio_app
 
 
@@ -132,9 +132,6 @@ def health():
 app.include_router(grievance.router)
 # File server: same paths as Flask FileServerAPI (no prefix)
 app.include_router(files.router)
-# Voice and gsheet: no prefix (paths are /accessible-file-upload, etc., and /gsheet-get-grievances)
-app.include_router(voice_grievance.router)
-app.include_router(gsheet.router)
 # Messaging API: /api/messaging/*
 app.include_router(messaging.router)
 

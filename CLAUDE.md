@@ -71,10 +71,8 @@ backend/orchestrator/      → stable (chatbot state machine)
 backend/api/               → stable (grievance/file/messaging APIs)
 backend/services/          → stable (shared service layer)
 backend/task_queue/        → stable (chatbot Celery: llm/default/file queues)
-channels/accessible/       → stable
 channels/webchat/          → stable
 channels/REST_webchat/     → stable
-channels/monitoring-gsheet/→ stable
 rasa_chatbot/              → stable
 scripts/                   → stable (ops/db scripts — add new under scripts/ops or scripts/database)
 deployment/                → stable (nginx/certbot/keycloak config)

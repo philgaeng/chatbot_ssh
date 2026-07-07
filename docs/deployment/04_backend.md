@@ -51,13 +51,7 @@ All routers are included without a prefix; paths below are the real URL paths. S
 
 Auth: `x-api-key` header. Callers: ticketing (SMS fallback, quarterly reports), Celery tasks, chatbot actions via `backend/clients/messaging_api.py`. Spec: [`../services/05_messaging_service.md`](../services/05_messaging_service.md). **No Twilio anywhere.**
 
-### `backend/api/routers/voice_grievance.py`
-
-`POST /accessible-file-upload` · `POST /submit-grievance` · `GET /grievance-status/{grievance_id}` — accessible/voice channel (see [`../services/03_voice_grievance_service.md`](../services/03_voice_grievance_service.md)).
-
-### `backend/api/routers/gsheet.py`
-
-`GET /gsheet-get-grievances` — bearer-token-gated feed for the Google Sheets monitoring dashboard ([`../services/08_gsheet_monitoring_service.md`](../services/08_gsheet_monitoring_service.md)).
+> The accessible-voice router (`voice_grievance.py` — `/accessible-file-upload` · `/submit-grievance` · `/grievance-status/{id}`) and the gsheet feed (`gsheet.py` — `/gsheet-get-grievances`) were removed with the legacy channels (CL-02, July 2026). Webchat voice notes still upload through the file server router (`/upload-voice-chunk`, `/upload-voice-complete`).
 
 Plus app-level `GET /health`.
 
