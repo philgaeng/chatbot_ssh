@@ -20,8 +20,9 @@ from ticketing.config.settings import get_settings
 from ticketing.models.admin_audit_log import AdminAuditLog
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.officer_scope import OfficerScope
+from ticketing.models.organization import Organization
 from ticketing.models.package import ProjectPackage
-from ticketing.models.project import Project
+from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.user import Role, UserRole
 from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
 class JurisdictionInput(BaseModel):
@@ -86,6 +87,25 @@ def validate_jurisdiction(
     ).scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {data.role_key}")
+
+    # SH-3 (OC-06 F6/O4): the invite/add-scope paths never checked that the org exists
+    # or is a participant on the scoped project — so an out-of-jurisdiction or non-existent
+    # org could be bound as an enforcement scope. Close both here (covers both callers).
+    if not db.get(Organization, org_id):
+        raise HTTPException(status_code=422, detail=f"Organization '{org_id}' not found")
+
+    if data.project_id:
+        linked = db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == data.project_id,
+                ProjectOrganization.organization_id == org_id,
+            )
+        ).first()
+        if not linked:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Organization '{org_id}' is not linked to project '{data.project_id}'",
+            )
 
     # organization_id is the officer's employer (contractor, CSC, etc.) — not rewritten
     # to the project implementing agency; auto-assign matches role + package/project only.

@@ -81,11 +81,15 @@ class TestInviteOrgResolution:
             select(Project).where(Project.project_id == KL_ROAD_PROJECT_ID)
         ).scalar_one()
 
+        # SH-3: the officer's employer org must be a participant on the project
+        # (project_organizations). ADB is a seeded KL_ROAD participant that is NOT the
+        # implementing agency (DOR) — so this still proves the employer org is kept,
+        # not rewritten to the implementing agency.
         juris = JurisdictionInput(
-            organization_id="NP_DC",
+            organization_id="ADB",
             role_key=ROLE_L1,
             project_id=project.project_id,
             location_code="P1_MOR",
         )
         validate_jurisdiction(db, juris, require_jurisdiction=True)
-        assert juris.organization_id == "NP_DC"
+        assert juris.organization_id == "ADB"
