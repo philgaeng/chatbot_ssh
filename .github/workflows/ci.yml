@@ -110,7 +110,7 @@ jobs:
         # re-enable in docs/sprints/2026-07_schema_and_legacy_cleanup/followups/
         # integration-seed-reconciliation.md. Non-integration suite is green (195/0).
         run: |
-          pytest tests/ticketing tests/orchestrator tests/actions -q --maxfail=20 --strict-markers -m "not integration"
+          PYTHONPATH=. python -m pytest tests/ticketing tests/orchestrator tests/actions -q --maxfail=20 --strict-markers -m "not integration"
 
   ui-checks:
     runs-on: ubuntu-latest
