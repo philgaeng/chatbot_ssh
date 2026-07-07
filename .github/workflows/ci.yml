@@ -55,10 +55,12 @@ jobs:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: grievance_db_test
       # Dev bypass (no live Keycloak in CI) — matches tests/ticketing/_host_env.py default.
+      # APP_ENV=dev + AUTH_MODE=bypass is the single-flag scheme the fail-closed guards
+      # key on (CL-03); KEYCLOAK_ISSUER empty is fine because bypass ignores it.
       KEYCLOAK_ISSUER: ""
       TICKETING_SECRET_KEY: ci-test-secret
-      # Not read by any code yet (HR-01 not landed) — harmless to set now, see spec §1.
-      TICKETING_ENV: dev
+      APP_ENV: dev
+      AUTH_MODE: bypass
       # Redis (backend app / celery import requires REDIS_HOST — task_queue/config.py).
       REDIS_HOST: localhost
       REDIS_PORT: "6379"

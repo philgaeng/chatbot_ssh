@@ -30,14 +30,20 @@ from ticketing.api.dependencies import (
 from ticketing.config.settings import TicketingSettings
 
 
-def _settings(*, env: str, issuer: str = "", secret: str = "") -> TicketingSettings:
-    """Build a real settings instance with the three auth-relevant fields pinned.
+def _settings(
+    *, env: str, issuer: str = "", secret: str = "", auth_mode: str | None = None
+) -> TicketingSettings:
+    """Build a real settings instance with the auth-relevant fields pinned.
 
     Explicit kwargs take priority over env / env_file in pydantic-settings, so the
-    result is deterministic regardless of the container's environment.
+    result is deterministic regardless of the container's environment. auth_mode
+    defaults to the real-world pairing (dev→bypass, everything else→keycloak).
     """
+    if auth_mode is None:
+        auth_mode = "bypass" if env == "dev" else "keycloak"
     return TicketingSettings(
-        ticketing_env=env,
+        app_env=env,
+        auth_mode=auth_mode,
         keycloak_issuer=issuer,
         ticketing_secret_key=secret,
     )
@@ -147,7 +153,8 @@ def test_backend_grievance_auth_rejects_empty_key_list_in_production(monkeypatch
 
     monkeypatch.delenv("TICKETING_SECRET_KEY", raising=False)
     monkeypatch.delenv("MESSAGING_API_KEY", raising=False)
-    monkeypatch.setenv("BACKEND_ENV", "production")
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_MODE", "keycloak")
 
     # Per-request check rejects (503) rather than silently skipping.
     with pytest.raises(HTTPException) as exc:
@@ -158,7 +165,8 @@ def test_backend_grievance_auth_rejects_empty_key_list_in_production(monkeypatch
     with pytest.raises(RuntimeError):
         _assert_backend_auth_configured()
 
-    # dev keeps the local convenience: no keys required.
-    monkeypatch.setenv("BACKEND_ENV", "dev")
+    # dev bypass keeps the local convenience: no keys required.
+    monkeypatch.setenv("APP_ENV", "dev")
+    monkeypatch.setenv("AUTH_MODE", "bypass")
     assert _ticketing_auth_check(x_api_key=None) is None
     assert _assert_backend_auth_configured() is None

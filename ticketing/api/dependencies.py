@@ -64,11 +64,12 @@ def verify_api_key(x_api_key: str = Header(...)) -> str:
     """
     settings = get_settings()
     if not settings.ticketing_secret_key:
-        # Fail-closed (HR-01): only the explicit dev env may run without a shared
-        # secret. Anywhere else, refuse to serve rather than accept any API key.
-        if settings.is_dev:
+        # Fail-closed (HR-01): only the explicit dev bypass (APP_ENV=dev AUTH_MODE=bypass)
+        # may run without a shared secret. Anywhere else, refuse to serve rather than
+        # accept any API key.
+        if settings.bypass_enabled:
             import warnings
-            warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev mode)", stacklevel=2)
+            warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev bypass)", stacklevel=2)
             return x_api_key
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -179,15 +180,9 @@ def _resolve_user_identity(
     """Resolve officer identity from JWT, dev bypass, or trusted internal headers."""
     settings = get_settings()
 
-    if not settings.keycloak_issuer:
-        # Fail-closed (HR-01): the demo-super-admin bypass is dev-only. Outside dev a
-        # missing KEYCLOAK_ISSUER must refuse to serve, never authenticate everyone
-        # as super_admin. (Startup already blocks boot; this is defense in depth.)
-        if not settings.is_dev:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Ticketing auth not configured (KEYCLOAK_ISSUER unset)",
-            )
+    if settings.bypass_enabled:
+        # Dev bypass (APP_ENV=dev AUTH_MODE=bypass): resolve the mock super-admin, or
+        # the roster officer injected by the Next proxy via x-internal-* headers.
         org = (x_internal_organization_id or "").strip() or "DOR"
         uid = x_internal_user_id or BYPASS_DEFAULT_OFFICER
         return CurrentUser(
@@ -195,6 +190,15 @@ def _resolve_user_identity(
             role_keys=(x_internal_role or "super_admin").split(","),
             organization_id=org,
             keycloak_sub=uid,
+        )
+
+    if not settings.keycloak_issuer:
+        # Fail-closed (HR-01): keycloak mode with no issuer must refuse to serve,
+        # never authenticate everyone as super_admin. (Startup already blocks boot;
+        # this is defense in depth.)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ticketing auth not configured (KEYCLOAK_ISSUER unset)",
         )
 
     # Prefer JWT when the browser sent one — stale demo bypass cookies must not

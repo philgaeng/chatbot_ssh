@@ -85,13 +85,16 @@ def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> No
     }
     if not valid:
         # Fail-closed (HR-01): an empty key list must NOT silently skip the check.
-        # Only the explicit dev env (BACKEND_ENV=dev) may run without a shared key.
-        if os.environ.get("BACKEND_ENV", "production").strip().lower() == "dev":
+        # Only the dev bypass (APP_ENV=dev AUTH_MODE=bypass) may run without a key.
+        if (
+            os.environ.get("APP_ENV", "production").strip().lower() == "dev"
+            and os.environ.get("AUTH_MODE", "keycloak").strip().lower() == "bypass"
+        ):
             return
         raise HTTPException(
             status_code=503,
             detail="Grievance API key auth not configured "
-            "(set TICKETING_SECRET_KEY/MESSAGING_API_KEY, or BACKEND_ENV=dev for local dev)",
+            "(set TICKETING_SECRET_KEY/MESSAGING_API_KEY, or APP_ENV=dev AUTH_MODE=bypass for local dev)",
         )
     if not x_api_key or x_api_key not in valid:
         raise HTTPException(status_code=401, detail="Invalid API key")

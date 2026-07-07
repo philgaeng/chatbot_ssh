@@ -124,7 +124,7 @@ environments:
     label: "AWS staging (aligned with webchat_rest_compose_aws.conf)"
     public:
       base_url: "https://nepal-gms-chatbot.facets-ai.com"
-      server_name: "nepal-gms-chatbot.facets-ai.com"   # + grm-auth.nepal-gms-chatbot.facets-ai.com (auth UI)
+      server_name: "nepal-gms-chatbot.facets-ai.com"   # + grm-auth.nepal-gms-chatbot.facets-ai.com (Keycloak issuer host)
     tls:
       terminated_at: alb
     nginx:
@@ -141,6 +141,7 @@ environments:
     notes:
       - "Docker Compose: use service names, e.g. http://orchestrator:8000"
       - "Nginx aliases: /ticketing/ -> grm_ui:3001 and /ticketing-mobile/ -> backend:5001"
+      - "Single officer UI/API in Keycloak mode (AUTH_MODE=keycloak) — main domain serves the real login, not a demo/bypass stack (mirrors prod; CL-03: :3002/:5003 retired)"
 
   prod_dor:
     label: "Nepal DOR production (webchat_rest_compose_prod.tls.conf, docker-compose.prod.yml)"
@@ -158,10 +159,10 @@ environments:
     upstreams:
       orchestrator: "http://orchestrator:8000"
       fastapi_backend: "http://backend:5001"
-      ticketing_ui_auth: "http://grm_ui_auth:3001"
-      ticketing_api_auth: "http://ticketing_api_auth:5003"
+      ticketing_ui: "http://grm_ui:3001"
+      ticketing_api: "http://ticketing_api:5002"
       keycloak: "http://keycloak:8080"   # proxied at /keycloak (KC_HTTP_RELATIVE_PATH=/keycloak)
     notes:
-      - "Reached via Sophos VPN only; auth UI serves the main host (demo grm_ui disabled)"
+      - "Reached via Sophos VPN only; the single grm_ui serves the main host in Keycloak mode (AUTH_MODE=keycloak) — no demo/bypass stack (CL-03: :3002/:5003 retired)"
       - "KC_HOSTNAME_URL=https://grm-chatbot.dor.gov.np/keycloak"
 ```

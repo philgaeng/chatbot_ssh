@@ -17,11 +17,9 @@ Convenience: define `alias dcg='docker compose --env-file env.local -f docker-co
 | `nginx` | 8080 | REST webchat + API proxy (WSL; 80/443 with aws/prod overlays) |
 | `orchestrator` | 8000 | Conversation API (`POST /message`) |
 | `backend` | 5001 | Grievance/files/messaging API |
-| `ticketing_api` | 5002 | Ticketing API — demo/bypass |
-| `grm_ui` | 3001 | Officer UI — demo/bypass |
-| `ticketing_api_auth` *(auth)* | 5003 | Ticketing API — Keycloak JWT |
-| `grm_ui_auth` *(auth)* | 3002 | Officer UI — real OIDC |
-| `keycloak` *(auth)* | 18080 (`KEYCLOAK_HOST_PORT`) | OIDC provider admin UI |
+| `ticketing_api` | 5002 | Ticketing API (single consolidated instance) — auth behaviour set by `AUTH_MODE` |
+| `grm_ui` | 3001 | Officer UI (single consolidated instance) — auth behaviour set by `AUTH_MODE` |
+| `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | OIDC provider admin UI |
 | `db` | 5433 (`POSTGRES_HOST_PORT`) | Postgres `app_db` (containers use `db:5432`) |
 | `redis` | — | Broker/result backend (internal) |
 | `celery_llm` / `celery_default` / `celery_file` / `grm_celery` / `grm_celery_beat` / `ops` | — | Workers / scheduler / monitor |
@@ -31,12 +29,16 @@ Convenience: define `alias dcg='docker compose --env-file env.local -f docker-co
 Prefer the Makefile wrappers (`make help` for the full list):
 
 ```bash
-make wsl-up            # chatbot + GRM demo :3001 + auth :3002
-make wsl-demo-bypass   # GRM demo only (:3001/:5002, no Keycloak)
-make wsl-auth          # auth stack only (:3002/:5003, Keycloak :18080)
+make wsl-up            # chatbot + single GRM stack (:3001 UI / :5002 API, dev bypass)
+make wsl-demo-bypass   # GRM only (:3001/:5002, APP_ENV=dev AUTH_MODE=bypass, no Keycloak)
+make wsl-auth          # add Keycloak :18080 (set AUTH_MODE=keycloak + KEYCLOAK_ISSUER in env.local, rebuild)
 make wsl-chatbot       # chatbot base stack only
 make wsl-down          # stop everything (incl. auth profile)
 ```
+
+`AUTH_MODE` (in `env.local`) selects the auth behaviour of the single `ticketing_api`/`grm_ui`
+pair — there is no separate `_auth` stack. Keycloak is profile-gated (`profiles: [auth]`), so
+only `--profile auth` / `make wsl-auth` starts it.
 
 Raw compose:
 
@@ -60,21 +62,28 @@ curl "http://localhost:5002/api/v1/tickets?limit=5"
 
 Auth fails **closed**: outside explicit dev the services refuse to boot when their auth
 prerequisites are unset (a missing env var must never silently authenticate everyone as
-super_admin, nor disable the API-key check). Two switches, both default `production`:
+super_admin, nor disable the API-key check). Two canonical flags (CL-03), both defaulting
+to the safe value:
 
-| Env var | Service | dev value | Non-dev requirement (or the service refuses to start) |
-|---|---|---|---|
-| `TICKETING_ENV` | `ticketing_api` / `ticketing_api_auth` | `dev` | `KEYCLOAK_ISSUER` **and** `TICKETING_SECRET_KEY` set |
-| `BACKEND_ENV` | `backend` (grievance API) | `dev` | `TICKETING_SECRET_KEY` **or** `MESSAGING_API_KEY` set |
+| Env var | Values (default) | Effect |
+|---|---|---|
+| `APP_ENV` | `dev` \| `staging` \| `production` (**`production`**) | Only `dev` may permit the auth bypass; replaces the old `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT` |
+| `AUTH_MODE` | `keycloak` \| `bypass` (**`keycloak`**) | `bypass` honoured **only** when `APP_ENV=dev`; otherwise Keycloak JWT is enforced |
 
-The local demo/bypass stack (`dcg` / `make wsl-demo-bypass`) runs `ticketing_api` (:5002)
-with `KEYCLOAK_ISSUER=""`, so it needs `TICKETING_ENV=dev`. This is set in **`env.local`**
-(read via `env_file` / `--env-file`) — see the `TICKETING_ENV=dev` / `BACKEND_ENV=dev`
-lines there. `docker-compose.override.yml` mirrors `BACKEND_ENV=dev` for the base
-`docker compose up` path. **Never** set `*_ENV=dev` in `docker-compose.grm.yml`, `aws`,
+Bypass requires **both** `APP_ENV=dev` **and** `AUTH_MODE=bypass`. In any other combination
+(and always under `staging`/`production`), `ticketing_api` refuses to start unless
+`KEYCLOAK_ISSUER` **and** `TICKETING_SECRET_KEY` are set (RuntimeError at boot; per-request
+`503` as defense in depth), and the `backend` grievance API refuses to start without an
+API-key configured.
+
+The local dev stack (`dcg` / `make wsl-demo-bypass` / `make wsl-up`) sets
+`APP_ENV=dev AUTH_MODE=bypass` in **`env.local`** (read via `env_file` / `--env-file`) —
+copy the root [`.env.example`](../../.env.example) to `env.local` and fill it in. There is
+no `docker-compose.override.yml` any more; dev-ness comes from `env.local`, not an override
+file. **Never** set `APP_ENV=dev` / `AUTH_MODE=bypass` in `docker-compose.grm.yml`, `aws`,
 or `prod` overlays — production must fail closed. See [`13_security.md`](13_security.md)
 "Fail-closed guarantees". If `ticketing_api` exits at boot with *"Refusing to start …
-auth config is unset"*, add `TICKETING_ENV=dev` to your `env.local`.
+auth config is unset"*, set `APP_ENV=dev AUTH_MODE=bypass` in your `env.local`.
 
 ## Rebuild after code changes
 
@@ -131,16 +140,16 @@ dcg exec grm_celery celery -A ticketing.tasks.celery_app.celery_app inspect acti
 
 ## UI build args (Next.js — baked at build time)
 
-`NEXT_PUBLIC_*` vars are compiled into the bundle; changing them requires rebuilding `grm_ui`/`grm_ui_auth`. Actual args (see `channels/ticketing-ui/Dockerfile` + `docker-compose.grm.yml`):
+`NEXT_PUBLIC_*` vars are compiled into the bundle; changing them requires rebuilding the single `grm_ui`. They are **derived** from the canonical `AUTH_MODE` / `KEYCLOAK_ISSUER` at build time (compose build args) — there is no separate hand-kept frontend issuer var and no `NEXT_PUBLIC_BYPASS_AUTH`. Actual args (see `channels/ticketing-ui/Dockerfile` + `docker-compose.grm.yml`):
 
-| Build arg | `grm_ui` (:3001) | `grm_ui_auth` (:3002) |
+| Build arg | Source | Effect |
 |---|---|---|
-| `NEXT_PUBLIC_BYPASS_AUTH` | `"true"` (forced) | `"false"` |
-| `NEXT_PUBLIC_OIDC_ISSUER` | `""` | `${NEXT_PUBLIC_OIDC_ISSUER:-http://localhost:18080/realms/grm}` |
-| `NEXT_PUBLIC_OIDC_CLIENT_ID` | `ticketing-ui` | `${NEXT_PUBLIC_OIDC_CLIENT_ID:-ticketing-ui}` |
-| `NEXT_PUBLIC_REDIRECT_SIGN_IN` / `_OUT` | `""` | from `env.local` |
+| `NEXT_PUBLIC_AUTH_MODE` | `${AUTH_MODE:-keycloak}` | Mirrors `AUTH_MODE`; read via `channels/ticketing-ui/lib/auth/runtime-config.ts` |
+| `NEXT_PUBLIC_OIDC_ISSUER` | `${KEYCLOAK_ISSUER:-}` | Derived from `KEYCLOAK_ISSUER` (empty under dev bypass) |
+| `NEXT_PUBLIC_OIDC_CLIENT_ID` | `${KEYCLOAK_CLIENT_ID:-ticketing-ui}` | OIDC public client |
+| `NEXT_PUBLIC_REDIRECT_SIGN_IN` / `_OUT` | from `env.local` | Post-login/logout redirects |
 
-There are **no Cognito vars** anymore. `TICKETING_API_URL` is a server-side **runtime** env (Next.js rewrites proxy all API calls — the browser only ever talks to :3001/:3002), so it does *not* require a rebuild.
+There are **no Cognito vars** anymore. `TICKETING_API_URL` is a server-side **runtime** env (Next.js rewrites proxy all API calls — the browser only ever talks to :3001), so it does *not* require a rebuild.
 
 ## Tests
 

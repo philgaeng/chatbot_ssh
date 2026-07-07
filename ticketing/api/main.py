@@ -40,11 +40,12 @@ logger = logging.getLogger(__name__)
 def _assert_auth_configured(settings) -> None:
     """Fail-closed startup guard (HR-01).
 
-    Outside explicit dev (TICKETING_ENV=dev) the service refuses to boot when the
-    auth prerequisites are missing — a missing env var must never silently degrade
-    to the demo-super-admin / disabled-API-key fallbacks on a government PII system.
+    Unless the dev bypass is explicitly enabled (APP_ENV=dev AND AUTH_MODE=bypass)
+    the service refuses to boot when the auth prerequisites are missing — a missing
+    env var must never silently degrade to the demo-super-admin / disabled-API-key
+    fallbacks on a government PII system. Production can never bypass.
     """
-    if settings.is_dev:
+    if settings.bypass_enabled:
         return
     missing = []
     if not settings.keycloak_issuer:
@@ -53,9 +54,9 @@ def _assert_auth_configured(settings) -> None:
         missing.append("TICKETING_SECRET_KEY")
     if missing:
         raise RuntimeError(
-            f"Refusing to start: TICKETING_ENV={settings.ticketing_env!r} but "
-            f"required auth config is unset: {', '.join(missing)}. "
-            "Configure these, or set TICKETING_ENV=dev for the local bypass stack."
+            f"Refusing to start: APP_ENV={settings.app_env!r} AUTH_MODE={settings.auth_mode!r} "
+            f"but required auth config is unset: {', '.join(missing)}. "
+            "Configure these, or set APP_ENV=dev AUTH_MODE=bypass for the local bypass stack."
         )
 
 
@@ -76,7 +77,8 @@ app = FastAPI(
         "Grievance Redress Mechanism Ticketing System\n"
         "ADB Nepal KL Road Project (Loan 52097-003)\n\n"
         "**Inbound** (chatbot → ticketing): `POST /api/v1/tickets` requires `x-api-key` header.\n"
-        "**Officer UI** endpoints: proto uses mock auth; production requires Cognito JWT."
+        "**Officer UI** endpoints: dev bypass (APP_ENV=dev AUTH_MODE=bypass) uses a mock "
+        "super-admin; deployed envs require a Keycloak JWT (AUTH_MODE=keycloak)."
     ),
     version="1.0.0",
     lifespan=lifespan,

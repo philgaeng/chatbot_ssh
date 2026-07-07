@@ -27,7 +27,7 @@ This document is the **single index of security features** across chatbot, backe
 | **Officer onboarding lifecycle** | `ticketing.officer_onboarding` | `invited` → `active` via Keycloak webhook |
 | **Keycloak webhook auth** | `POST /api/v1/webhooks/keycloak` | Header `X-Keycloak-Webhook-Secret` = `KEYCLOAK_WEBHOOK_SECRET` |
 | **Service-to-service API keys** | Messaging, ticketing webhook | `x-api-key` / `X-Ticketing-Secret` |
-| **Demo-only bypass mode** | Local UI (`:3001`) | `NEXT_PUBLIC_BYPASS_AUTH=true`; must be disabled in production |
+| **Dev-only bypass mode** | Local UI + API (`:3001`/`:5002`) | `AUTH_MODE=bypass`, honoured **only** when `APP_ENV=dev`; production can never bypass |
 | **OTP verification (chatbot intake)** | Complainant flow | Phone verification before grievance submission |
 
 ### 2.1 Fail-closed guarantees (HR-01)
@@ -35,12 +35,14 @@ This document is the **single index of security features** across chatbot, backe
 Authentication fails **closed**: a missing env var can no longer silently disable auth
 (previously an unset `KEYCLOAK_ISSUER` authenticated every request as a demo super_admin,
 and an unset `TICKETING_SECRET_KEY` disabled the webhook/API-key check with only a log
-warning). Two environment switches gate this, both defaulting to `production`:
-`TICKETING_ENV` (ticketing API) and `BACKEND_ENV` (grievance/backend API). `dev` is the
-only value that permits the legacy bypass, and it is set solely in `env.local` /
-`docker-compose.override.yml` — never in the grm/aws/prod overlays.
+warning). After CL-03 two canonical flags gate this, both defaulting to the safe value:
+`APP_ENV` ∈ `dev`/`staging`/`production` (default **`production`**) and `AUTH_MODE` ∈
+`keycloak`/`bypass` (default **`keycloak`**). The bypass is permitted **only** when
+`APP_ENV=dev` **and** `AUTH_MODE=bypass`; production can never bypass. These are set solely
+in `env.local` — never in the grm/aws/prod overlays (there is no `docker-compose.override.yml`
+any more). `APP_ENV` replaces the old `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT`.
 
-| Condition | dev (`*_ENV=dev`) | staging / production (default) |
+| Condition | dev bypass (`APP_ENV=dev` **and** `AUTH_MODE=bypass`) | staging / production (default) |
 |---|---|---|
 | `KEYCLOAK_ISSUER` unset (ticketing) | demo super_admin bypass allowed | **App refuses to start** (`RuntimeError` at boot); per-request `503` as defense in depth |
 | `TICKETING_SECRET_KEY` unset (ticketing) | API-key check disabled (warns) | **App refuses to start**; `verify_api_key` returns `503` |
@@ -168,7 +170,7 @@ Policy detail: [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md).
 | Feature | Where | Notes |
 |---|---|---|
 | **TLS termination** | Nginx / production domains | HTTPS for chatbot + GRM endpoints |
-| **Separate auth stack in production** | `docker-compose.grm.yml` | `grm_ui_auth` + `ticketing_api_auth` |
+| **Keycloak enforced in production** | `docker-compose.grm.yml` (`--profile auth`) | Single `grm_ui` + `ticketing_api` run with `AUTH_MODE=keycloak` |
 | **Environment separation** | staging vs production URLs | Independent deployment targets |
 | **Backup encryption (ops requirement)** | Operations runbook | Required in production checklist |
 | **Least-privilege DB roles (ops target)** | Deployment/operations | App roles scoped to required schemas |
@@ -207,8 +209,8 @@ References: [10_production_server_spec.md](10_production_server_spec.md), [03_op
 
 Use before staging/production promotion:
 
-- [ ] `NEXT_PUBLIC_BYPASS_AUTH` is **false** in production UI builds
-- [ ] `KEYCLOAK_ISSUER` and auth containers enabled
+- [ ] `APP_ENV=production` (or `staging`) and `AUTH_MODE=keycloak` — never `bypass` in deployed UI/API builds
+- [ ] `KEYCLOAK_ISSUER` set and Keycloak brought up with `--profile auth`
 - [ ] `TICKETING_SECRET_KEY`, `MESSAGING_API_KEY`, `KEYCLOAK_WEBHOOK_SECRET` set and rotated
 - [ ] `DB_ENCRYPTION_KEY` set and backed up securely
 - [ ] TLS certificates valid on public domains

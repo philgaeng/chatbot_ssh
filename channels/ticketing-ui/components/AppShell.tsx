@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 import type { OfficerRosterEntry } from "@/lib/api";
 import { getBadge } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -150,7 +151,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex flex-col w-56 bg-slate-800 text-slate-100 shrink-0">
         <div className="px-5 pt-6 pb-4 border-b border-slate-700">
           <div className="text-lg font-bold tracking-tight">GRM Ticketing</div>
-          {process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true" && (
+          {!AUTH_BYPASS && (
             <div className="text-xs text-slate-300 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
           )}
         </div>
@@ -210,7 +211,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 getBadge().then((b) => setUnseenCount(b.unseen_count)).catch(() => {});
               }}
             />
-            {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
+            {AUTH_BYPASS ? (
               <BypassRoleSwitcher />
             ) : (
               <UserMenu />

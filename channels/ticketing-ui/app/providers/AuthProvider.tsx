@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { AUTH_BYPASS, OIDC_ISSUER, OIDC_CLIENT_ID } from "@/lib/auth/runtime-config";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
@@ -167,7 +168,7 @@ function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
 }
 
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const bypass = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+  const bypass = AUTH_BYPASS;
   const searchParams = useSearchParams();
 
   const [isAuthenticated, setIsAuthenticated] = useState(bypass);
@@ -202,8 +203,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 
   const client = !bypass
     ? new OIDCAuthClient(
-        process.env.NEXT_PUBLIC_OIDC_ISSUER ?? "",
-        process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "",
+        OIDC_ISSUER,
+        OIDC_CLIENT_ID,
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
           : (process.env.NEXT_PUBLIC_REDIRECT_SIGN_IN ?? ""),

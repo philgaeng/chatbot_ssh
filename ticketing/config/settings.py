@@ -24,14 +24,19 @@ class TicketingSettings(BaseSettings):
     # Canonical shared secret: chatbot ↔ ticketing + ticketing → chatbot backend.
     ticketing_secret_key: str = ""
 
-    # ── Environment gate — fail-closed auth (HR-01) ──
-    # dev | staging | production. Default **production**: the app refuses to boot
-    # (and per-request auth refuses to serve) when KEYCLOAK_ISSUER or
-    # TICKETING_SECRET_KEY are unset. Set TICKETING_ENV=dev ONLY for the local
-    # demo/bypass stack (docker-compose.override.yml / env.local) — never in the
-    # grm/aws/prod compose overlays. See docs/deployment/13_security.md
+    # ── Environment + auth mode — fail-closed auth (HR-01) ──
+    # APP_ENV ∈ dev | staging | production. Default **production**.
+    # AUTH_MODE ∈ keycloak | bypass. Default **keycloak**.
+    #
+    # The dev bypass is honoured ONLY when APP_ENV=dev AND AUTH_MODE=bypass
+    # (`bypass_enabled`). In every other case the app refuses to boot (and
+    # per-request auth refuses to serve) when KEYCLOAK_ISSUER or
+    # TICKETING_SECRET_KEY are unset — production can never bypass. Set
+    # APP_ENV=dev + AUTH_MODE=bypass ONLY for the local dev stack (env.local) —
+    # never in the grm/aws/prod compose overlays. See docs/deployment/13_security.md
     # "Fail-closed guarantees".
-    ticketing_env: str = "production"
+    app_env: str = "production"
+    auth_mode: str = "keycloak"
 
     # ── Integration URLs ──
     backend_grievance_base_url: str = "http://localhost:5001"
@@ -89,8 +94,18 @@ class TicketingSettings(BaseSettings):
 
     @property
     def is_dev(self) -> bool:
-        """True only for the explicit local dev/bypass environment."""
-        return (self.ticketing_env or "").strip().lower() == "dev"
+        """True only for the explicit local dev environment (APP_ENV=dev)."""
+        return (self.app_env or "").strip().lower() == "dev"
+
+    @property
+    def bypass_enabled(self) -> bool:
+        """Dev auth bypass — honoured ONLY when APP_ENV=dev AND AUTH_MODE=bypass.
+
+        This is the single flag the fail-closed guards key on (HR-01). Production
+        can never bypass: APP_ENV!=dev forces the keycloak/secret requirement even
+        if AUTH_MODE=bypass is (mis)set.
+        """
+        return self.is_dev and (self.auth_mode or "").strip().lower() == "bypass"
 
     @property
     def database_url(self) -> str:

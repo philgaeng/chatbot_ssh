@@ -72,23 +72,23 @@ make seed_seah_providers                  # SEAH support centres (public.seah_se
 | Command | What comes up |
 |---|---|
 | `make wsl-chatbot` | Chatbot only — webchat at http://localhost:8080/ |
-| `make wsl-demo-bypass` (alias `wsl-ticketing`) | GRM demo: UI :3001 → `ticketing_api` :5002, **no Keycloak** (mock super-admin) |
-| `make wsl-auth` | GRM auth stack: UI :3002 → `ticketing_api_auth` :5003, Keycloak :18080 (`--profile auth`) |
-| `make wsl-up` | Everything: chatbot + demo :3001 + auth :3002 |
+| `make wsl-demo-bypass` (alias `wsl-ticketing`) | GRM single stack, dev bypass: UI :3001 → `ticketing_api` :5002, **no Keycloak** (mock super-admin) |
+| `make wsl-up` | Everything: chatbot + GRM single stack (dev bypass) |
+| `make wsl-auth` | Add Keycloak :18080 (`--profile auth`); for real OIDC set `AUTH_MODE=keycloak` + `KEYCLOAK_ISSUER` in `env.local` and rebuild — same UI :3001 / `ticketing_api` :5002 |
 | `make wsl-down` | Stop all (base + GRM + auth profile) |
 
-Raw compose equivalents (what the Makefile wraps):
+Auth mode is a config flag (`AUTH_MODE`), not a duplicate service — dev bypass and real Keycloak use the **same** `grm_ui` (:3001) + `ticketing_api` (:5002). Raw compose equivalents (what the Makefile wraps):
 
 ```bash
-docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml up -d                  # chatbot + GRM demo
-docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml --profile auth up -d   # + Keycloak/auth
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml up -d                  # chatbot + GRM (dev bypass)
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml --profile auth up -d   # + Keycloak
 ```
 
 ### Keycloak realm bootstrap (once, after `wsl-auth` and Keycloak is healthy)
 
 ```bash
 make keycloak-setup
-# = docker compose ... exec -T ticketing_api_auth python -m ticketing.auth.keycloak_setup
+# = docker compose ... exec -T ticketing_api python -m ticketing.auth.keycloak_setup
 ```
 
 Idempotent: creates the `grm` realm, clients, mappers, realm SMTP, demo officers. Details: [`16_auth_keycloak.md`](16_auth_keycloak.md).
@@ -118,7 +118,7 @@ docker compose ps                                   # all healthy
 curl http://localhost:5001/health                   # backend
 curl http://localhost:8000/health                   # orchestrator
 curl http://localhost:5002/health                   # ticketing_api (with GRM overlay)
-# Webchat: http://localhost:8080/   Officer UI: http://localhost:3001 (demo) / :3002 (auth)
+# Webchat: http://localhost:8080/   Officer UI: http://localhost:3001
 # Keycloak admin: http://localhost:18080 (auth profile)
 make check_grm_ports                                # asserts grm_ui :3001 + ticketing_api :5002
 make test-ticketing                                 # pytest inside ticketing_api container

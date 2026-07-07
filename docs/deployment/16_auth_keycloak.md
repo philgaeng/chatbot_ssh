@@ -15,14 +15,27 @@ Keycloak 26 (`quay.io/keycloak/keycloak:26.0.7`) runs as the `keycloak` compose 
 | JWT validation | `ticketing/auth/keycloak_jwt.py` — JWKS fetched via Docker DNS, cached 5 min |
 | Setup script | `python -m ticketing.auth.keycloak_setup` (**idempotent**: realm, clients, mappers, token lifespans, realm SMTP, login theme, demo officers). Run via `make keycloak-setup` |
 | Login theme | `deployment/keycloak/themes/grm/` (mounted read-only into the container) |
-| Webhook | Keycloak HTTP event-listener → `POST /api/v1/webhooks/keycloak` on the ticketing API, header `X-Keycloak-Webhook-Secret: $KEYCLOAK_WEBHOOK_SECRET` |
+| Webhook | Keycloak HTTP event-listener → `POST /api/v1/webhooks/keycloak` on the ticketing API (`http://ticketing_api:5002/api/v1/webhooks/keycloak`), header `X-Keycloak-Webhook-Secret: $KEYCLOAK_WEBHOOK_SECRET` |
 
-### Two API/UI instances (dev)
+### One API + one UI, mode driven by `AUTH_MODE` (CL-03)
 
-| Instance | Ports | Auth |
-|---|---|---|
-| `ticketing_api` + `grm_ui` | 5002 / 3001 | **Bypass** — `KEYCLOAK_ISSUER` empty → backend returns mock super-admin; UI built with `NEXT_PUBLIC_BYPASS_AUTH=true` |
-| `ticketing_api_auth` + `grm_ui_auth` (profile `auth`) | 5003 / 3002 | **Real Keycloak JWT** — Keycloak admin UI at `http://localhost:18080` (`admin` / `$KEYCLOAK_ADMIN_PASSWORD`) |
+There is exactly **one** ticketing API and **one** officer UI; their auth behaviour is
+selected by `AUTH_MODE` — not by running a second `_auth` instance. The old
+`ticketing_api_auth` (:5003) / `grm_ui_auth` (:3002) demo-vs-auth split is **gone**; ports
+5003 and 3002 no longer exist.
+
+| Instance | Port (host = internal) | `AUTH_MODE=bypass` (dev only) | `AUTH_MODE=keycloak` (default) |
+|---|---|---|---|
+| `ticketing_api` | 5002 | Backend returns a mock super-admin — honoured **only** when `APP_ENV=dev` | Real Keycloak JWT validated against JWKS |
+| `grm_ui` | 3001 | UI built with `NEXT_PUBLIC_AUTH_MODE=bypass` → "Continue to demo queue" | UI built with `NEXT_PUBLIC_AUTH_MODE=keycloak` + derived `NEXT_PUBLIC_OIDC_ISSUER` → email+password login |
+
+`AUTH_MODE=keycloak` is the default; bypass is honoured **only** when `APP_ENV=dev`
+(production can never bypass — see [`13_security.md`](13_security.md) §2.1). Keycloak is the
+only profile-gated service (`profiles: [auth]`) — `make wsl-auth` / `--profile auth` bring
+it up; the admin UI is at `http://localhost:18080` (`admin` / `$KEYCLOAK_ADMIN_PASSWORD`).
+The frontend resolves its mode through a single module,
+`channels/ticketing-ui/lib/auth/runtime-config.ts` (reads `NEXT_PUBLIC_AUTH_MODE`, which
+mirrors `AUTH_MODE`).
 
 ### Hostname patterns (the `iss`-claim trap)
 
@@ -33,8 +46,12 @@ The browser-facing issuer URL is baked into tokens' `iss` claim and **must match
 
 ## 2. Quick start (local auth stack)
 
+Real Keycloak locally: set `AUTH_MODE=keycloak` **and** `KEYCLOAK_ISSUER` in `env.local`
+first (dev defaults to `AUTH_MODE=bypass`), then rebuild via `make wsl-auth` — it brings up
+Keycloak (`--profile auth`) alongside the single `ticketing_api` (:5002) / `grm_ui` (:3001).
+
 ```bash
-make wsl-auth            # keycloak :18080 + ticketing_api_auth :5003 + grm_ui_auth :3002
+make wsl-auth            # keycloak :18080 + ticketing_api :5002 + grm_ui :3001 (AUTH_MODE=keycloak)
 make wsl-keycloak-ps     # wait until healthy (~60-90 s first boot)
 make keycloak-setup      # bootstrap grm realm (idempotent; needs SMTP_* in env.local for invites)
 
@@ -45,10 +62,11 @@ curl -s http://localhost:18080/realms/grm/.well-known/openid-configuration | pyt
 TOKEN=$(curl -s -X POST http://localhost:18080/realms/grm/protocol/openid-connect/token \
   -d "client_id=ticketing-ui&grant_type=password&username=admin@grm.local&password=GrmDemo2026!" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl http://localhost:5003/api/v1/tickets -H "Authorization: Bearer $TOKEN" | head -c 300
+curl http://localhost:5002/api/v1/tickets -H "Authorization: Bearer $TOKEN" | head -c 300
 ```
 
-Dev bypass (no Keycloak): leave `KEYCLOAK_ISSUER` empty and use the :3001/:5002 stack — the compose defaults.
+Dev bypass (no Keycloak): keep `APP_ENV=dev AUTH_MODE=bypass` in `env.local` (the compose
+defaults) and run `make wsl-up` — the same single :3001/:5002 stack, no Keycloak container.
 
 ## 3. Officer invite flow (as-built)
 
@@ -64,7 +82,7 @@ Env for invites:
 ```env
 SMTP_SERVER=... SMTP_PORT=587 SMTP_USERNAME=... SMTP_PASSWORD=... SMTP_FROM=... SMTP_FROM_DISPLAY=GRM Ticketing
 KEYCLOAK_INVITE_CLIENT_ID=ticketing-ui
-KEYCLOAK_INVITE_REDIRECT_URI=https://grm-chatbot.dor.gov.np/login   # dev: http://localhost:3002/login
+KEYCLOAK_INVITE_REDIRECT_URI=https://grm-chatbot.dor.gov.np/login   # dev: http://localhost:3001/login
 ```
 
 Notes: `$` in SMTP passwords must be `$$` in `env.local` (Compose escaping). The realm shares the same SMTP relay as the Messaging API ([`../services/05_messaging_service.md`](../services/05_messaging_service.md)). On DOR prod the Keycloak JVM runs with `-Djava.net.preferIPv4Stack=true` (no IPv6 route to the mail provider). After theme changes: `docker compose ... --profile auth up -d --force-recreate keycloak`.
@@ -95,5 +113,5 @@ Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_off
 | Discovery doc returns `http://` URLs behind TLS | `KC_PROXY_HEADERS=xforwarded` missing |
 | Invite link → "Invalid email address" | Keycloak user has `email=null` — use resend-invite (repairs the record) |
 | Invite lands on login page before password set | Theme regression: `info.ftl` preferring `pageRedirectUri` (see §3) |
-| Officer stuck at "Invited" after setting password | Webhook not delivered — check event-listener config + `KEYCLOAK_WEBHOOK_SECRET`, `docker compose logs ticketing_api_auth` |
+| Officer stuck at "Invited" after setting password | Webhook not delivered — check event-listener config + `KEYCLOAK_WEBHOOK_SECRET`, `docker compose logs ticketing_api` |
 | Keycloak unhealthy | Health endpoint is on management port 9000 (`/health/ready`), prefixed by `KC_HTTP_RELATIVE_PATH`; first boot can take 90 s |

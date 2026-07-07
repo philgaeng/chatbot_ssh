@@ -159,7 +159,7 @@ def get_grm_config_summary() -> Dict[str, Any]:
     }
 
 ############################
-# ENVIRONMENT VALIDATION
+# GRM ENV VAR VALIDATION
 ############################
 
 def validate_grm_environment() -> Dict[str, Any]:

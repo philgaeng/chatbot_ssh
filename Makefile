@@ -61,7 +61,8 @@ DOCKER_COMPOSE = docker compose --env-file env.local
 COMPOSE_WSL = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.grm.yml
 COMPOSE_WSL_AUTH = $(COMPOSE_WSL) --profile auth
 COMPOSE_AWS = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml
-# Production officer UI at grm-auth.* uses grm_ui_auth (:3002), not demo grm_ui (:3001).
+# Deployed envs run Keycloak — bring it up via the auth profile (the single grm_ui/
+# ticketing_api are always-on; only keycloak is profile-gated).
 COMPOSE_AWS_AUTH = $(COMPOSE_AWS) --profile auth
 
 # Remote hosts (AWS + prod) use the same compose overlay on the server.
@@ -72,16 +73,18 @@ REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
 
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 # ops = platform monitor (broker-independent APScheduler); ships with the GRM stack.
+# Single stack (CL-03): one ticketing_api (:5002) + one grm_ui (:3001).
 TICKETING_SERVICES := db redis ticketing_api grm_celery grm_celery_beat grm_ui ops
-AUTH_SERVICES := keycloak ticketing_api_auth grm_ui_auth
-# Typical GRM release on EC2: officer UI + ticketing APIs + chatbot messaging (SMTP) + ops monitor.
+# Keycloak is the only profile-gated service (needed only when AUTH_MODE=keycloak).
+AUTH_SERVICES := keycloak
+# Typical GRM release on EC2: officer UI + ticketing API + chatbot messaging (SMTP) + ops monitor.
 # Override: make aws-deploy AWS_DEPLOY_SERVICES='...'
-# Build order matters: Python/API images first (ops is a Python image), Next.js UIs last (sequential loop below).
-AWS_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat ops grm_ui_auth grm_ui
+# Build order matters: Python/API images first (ops is a Python image), Next.js UI last (sequential loop below).
+AWS_DEPLOY_SERVICES ?= ticketing_api backend celery_default grm_celery grm_celery_beat ops grm_ui
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
-AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui grm_ui_auth nginx
-PROD_DEPLOY_SERVICES ?= ticketing_api ticketing_api_auth backend celery_default grm_celery grm_celery_beat ops grm_ui_auth
-PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui_auth nginx
+AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui nginx
+PROD_DEPLOY_SERVICES ?= ticketing_api backend celery_default grm_celery grm_celery_beat ops grm_ui
+PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui nginx
 
 # SEAH service provider directory (chatbot outro — public.seah_service_providers).
 # Data-only import; schema via migrate_public (pub009). Commit the CSV after refreshing from xlsx.
@@ -142,31 +145,27 @@ set -e; \
 endef
 
 define REMOTE_VERIFY_GRM_PORTS_PROD
-ui_auth_port="$$(docker compose --env-file env.local \
+ui_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  -f docker-compose.prod.yml --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+  -f docker-compose.prod.yml --profile auth port grm_ui 3001 2>/dev/null || true)" && \
 api_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  -f docker-compose.prod.yml port ticketing_api 5002 2>/dev/null || true)" && \
-case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
+  -f docker-compose.prod.yml --profile auth port ticketing_api 5002 2>/dev/null || true)" && \
+case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
 case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
-echo "$(1) OK: grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port (no demo grm_ui on prod)"
+echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
 endef
 
 define REMOTE_VERIFY_GRM_PORTS
 ui_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  port grm_ui 3001 2>/dev/null || true)" && \
-ui_auth_port="$$(docker compose --env-file env.local \
-  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
+  --profile auth port grm_ui 3001 2>/dev/null || true)" && \
 api_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  port ticketing_api 5002 2>/dev/null || true)" && \
+  --profile auth port ticketing_api 5002 2>/dev/null || true)" && \
 case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
-case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
 case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
-echo "$(1) OK: grm_ui=$$ui_port grm_ui_auth=$$ui_auth_port ticketing_api=$$api_port"
+echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
 endef
 
 define REMOTE_DEPLOY_LIGHT
@@ -182,9 +181,9 @@ set -e; \
 	$(REMOTE_COMPOSE) up -d nginx && \
 	ui_auth_port="$$(docker compose --env-file env.local \
 	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-	  --profile auth port grm_ui_auth 3001 2>/dev/null || true)" && \
-	case "$$ui_auth_port" in *":3002") ;; *) echo "ERROR: grm_ui_auth not on host :3002 (actual: $$ui_auth_port)"; exit 1;; esac; \
-	echo "$(3) OK: grm_ui_auth=$$ui_auth_port nginx=restarted"
+	  --profile auth port grm_ui 3001 2>/dev/null || true)" && \
+	case "$$ui_auth_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_auth_port)"; exit 1;; esac; \
+	echo "$(3) OK: grm_ui=$$ui_auth_port nginx=restarted"
 endef
 
 define REMOTE_DEPLOY_FULL
@@ -231,9 +230,9 @@ endef
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
 	@echo "WSL (local Docker):"
-	@echo "  make wsl-up           chatbot + GRM :3001 demo bypass + :3002 Keycloak auth"
-	@echo "  make wsl-demo-bypass  GRM demo only — :3001 UI, :5002 API (no Keycloak)"
-	@echo "  make wsl-auth         GRM auth only — :3002 UI, :5003 API, Keycloak :18080"
+	@echo "  make wsl-up           chatbot + GRM single stack — :3001 UI, :5002 API (dev bypass)"
+	@echo "  make wsl-demo-bypass  GRM only — :3001 UI, :5002 API (dev bypass, no Keycloak)"
+	@echo "  make wsl-auth         add Keycloak :18080 (set AUTH_MODE=keycloak + KEYCLOAK_ISSUER in env.local, rebuild)"
 	@echo "  make wsl-chatbot      chatbot only (db, redis, backend, orchestrator, celery, nginx)"
 	@echo "  make wsl-ticketing    alias for wsl-demo-bypass"
 	@echo "  make wsl-nginx        recreate nginx after editing deployment/nginx/*.conf"
@@ -269,23 +268,23 @@ help:
 	@echo "  make test-ticketing-host pytest on WSL host (needs dev-grm-deps + db :5433)"
 	@echo "  make dev-grm-deps   pip install -r requirements.grm.txt (host conda env)"
 	@echo "  make wsl-keycloak-ps  show Keycloak container status (after wsl-auth)"
-	@echo "  make wsl-auth-ps      show Keycloak + grm_ui_auth + ticketing_api_auth"
+	@echo "  make wsl-auth-ps      show Keycloak + grm_ui + ticketing_api"
 	@echo "  make keycloak-setup   bootstrap GRM realm (once, after Keycloak is healthy)"
 
 # ── WSL ────────────────────────────────────────────────────────────────────────
-# Full stack: chatbot + GRM demo (:3001) + GRM auth (:3002). REST webchat: http://localhost:8080/
+# Full local stack: chatbot + single GRM stack (dev bypass). REST webchat: http://localhost:8080/
+# Uses env.local APP_ENV=dev AUTH_MODE=bypass — no Keycloak. For real OIDC use wsl-auth.
 wsl-up:
-	$(COMPOSE_WSL_AUTH) up -d --build
+	$(COMPOSE_WSL) up -d --build
 	@echo ""
-	@echo "GRM demo (bypass): http://localhost:3001  → ticketing_api :5002"
-	@echo "GRM auth (OIDC):   http://localhost:3002  → ticketing_api_auth :5003"
-	@echo "Keycloak admin:    http://localhost:18080"
+	@echo "GRM (dev bypass): http://localhost:3001  → ticketing_api :5002"
+	@echo "For real OIDC: set AUTH_MODE=keycloak + KEYCLOAK_ISSUER in env.local, then make wsl-auth"
 
-# Demo bypass only — :3001 UI + :5002 API (no Keycloak / :3002).
+# GRM single stack only — :3001 UI + :5002 API (dev bypass, no Keycloak).
 wsl-demo-bypass:
 	$(COMPOSE_WSL) up -d --build $(TICKETING_SERVICES)
 	@echo ""
-	@echo "GRM demo (bypass): http://localhost:3001  → ticketing_api :5002"
+	@echo "GRM (dev bypass): http://localhost:3001  → ticketing_api :5002"
 
 wsl-chatbot:
 	$(DOCKER_COMPOSE) -f docker-compose.yml up -d --build $(CHATBOT_SERVICES)
@@ -304,9 +303,9 @@ wsl-down:
 	$(COMPOSE_WSL_AUTH) down $(COMPOSE_DOWN_FLAGS)
 
 # ── AWS ────────────────────────────────────────────────────────────────────────
-# On the EC2 host (already in repo directory). Chatbot + GRM + TLS overlay.
+# On the EC2 host (already in repo directory). Chatbot + GRM + Keycloak (auth profile).
 aws-up:
-	$(COMPOSE_AWS) up -d --build
+	$(COMPOSE_AWS_AUTH) up -d --build
 
 # Remote deploy: pull main, migrations, rebuild selected services (default GRM UI/API + messaging backend).
 aws-deploy:
@@ -418,23 +417,26 @@ reset_public_dev:
 	$(MAKE) migrate_ticketing
 	$(MAKE) wsl-up
 
-# ── Optional stacks / one-shot setup ───────────────────────────────────────────
-# Auth stack only — :3002 UI, :5003 API, Keycloak :18080 (starts db/redis via depends_on).
+# ── Optional: real Keycloak auth (local) ──────────────────────────────────────
+# Brings up Keycloak :18080 and rebuilds the single grm_ui/ticketing_api under the
+# auth profile. For a REAL-auth build, first set in env.local:
+#   AUTH_MODE=keycloak  KEYCLOAK_ISSUER=http://localhost:18080/realms/grm
+# (otherwise the UI/API rebuild in dev-bypass mode). :3001 UI, :5002 API.
 wsl-auth:
-	$(COMPOSE_WSL_AUTH) up -d --build $(AUTH_SERVICES)
+	$(COMPOSE_WSL_AUTH) up -d --build $(AUTH_SERVICES) ticketing_api grm_ui
 	@echo ""
-	@echo "GRM auth (OIDC): http://localhost:3002  → ticketing_api_auth :5003"
+	@echo "GRM (OIDC): http://localhost:3001  → ticketing_api :5002"
 	@echo "Keycloak admin:  http://localhost:18080"
 
-# Auth stack status (requires `make wsl-auth` first).
+# Keycloak status (requires `make wsl-auth` first).
 wsl-keycloak-ps:
 	$(COMPOSE_WSL_AUTH) ps keycloak
 
 wsl-auth-ps:
-	$(COMPOSE_WSL_AUTH) ps keycloak grm_ui_auth ticketing_api_auth
+	$(COMPOSE_WSL_AUTH) ps keycloak grm_ui ticketing_api
 
 keycloak-setup compose_keycloak_setup:
-	$(COMPOSE_WSL_AUTH) exec -T ticketing_api_auth python -m ticketing.auth.keycloak_setup
+	$(COMPOSE_WSL_AUTH) exec -T ticketing_api python -m ticketing.auth.keycloak_setup
 
 # GRM demo tickets in ticketing.* (idempotent with --reset).
 wsl-seed:

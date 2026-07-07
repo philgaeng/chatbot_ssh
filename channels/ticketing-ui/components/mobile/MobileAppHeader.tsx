@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 import { getBadge } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
 import { UserMenu } from "@/components/UserMenu";
@@ -61,7 +62,7 @@ export function MobileAppHeader({
   const pathname = usePathname();
   const { isAuthenticated, canSeeSeah } = useAuth();
   const [unseenCount, setUnseenCount] = useState(0);
-  const bypass = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+  const bypass = AUTH_BYPASS;
 
   useEffect(() => {
     if (!isAuthenticated) return;

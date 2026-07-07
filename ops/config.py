@@ -15,6 +15,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class OpsSettings(BaseSettings):
+    # ── Environment (canonical APP_ENV, shared with backend + ticketing) ──
+    # dev | staging | production (default production). is_dev gates dev-only behaviour.
+    app_env: str = "production"
+
     # ── Database (scoped ops_app role — see ops migration ops001) ──
     postgres_host: str = "db"
     postgres_port: int = 5432
@@ -83,6 +87,11 @@ class OpsSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def is_dev(self) -> bool:
+        """True only for the explicit local dev environment (APP_ENV=dev)."""
+        return (self.app_env or "").strip().lower() == "dev"
 
     @property
     def healthchecks_ping_url(self) -> str:

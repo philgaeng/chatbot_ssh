@@ -26,14 +26,14 @@ All Celery workers share one app: `backend.task_queue.celery_app`.
 
 | Service | Port (host) | Role |
 |---|---|---|
-| `ticketing_api` | 5002 | Ticketing FastAPI (`ticketing.api.main:app`) — demo/bypass instance (no Keycloak JWT) |
-| `grm_ui` | 3001 | Officer UI (Next.js), `BYPASS_AUTH=true`, proxies to `ticketing_api:5002` |
+| `ticketing_api` | 5002 | Ticketing FastAPI (`ticketing.api.main:app`) — the **single** consolidated API; auth behaviour set by `AUTH_MODE` (`keycloak` default / `bypass` only when `APP_ENV=dev`) |
+| `grm_ui` | 3001 | Officer UI (Next.js) — the **single** consolidated UI; auth mode baked from `AUTH_MODE`/`KEYCLOAK_ISSUER` at build time; proxies to `ticketing_api:5002` |
 | `grm_celery` | — | GRM Celery worker, queues `grm_ticketing,grm_geocode` (SLA watchdog, escalation, grievance sync, notifications, archiving) |
 | `grm_celery_beat` | — | GRM periodic scheduler (SLA watchdog, sync, heartbeat, archiving) |
 | `ops` | — | Platform monitor (`python -m ops.scheduler`, APScheduler, broker-independent). Spec: [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) |
-| `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | Keycloak 26 OIDC provider; state in `keycloak` schema of `app_db`. See [`16_auth_keycloak.md`](16_auth_keycloak.md) |
-| `ticketing_api_auth` *(profile `auth`)* | 5003 | Second ticketing API instance with real Keycloak JWT validation |
-| `grm_ui_auth` *(profile `auth`)* | 3002 | Officer UI built with real OIDC config (`BYPASS_AUTH=false`) |
+| `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | Keycloak 26 OIDC provider (the only profile-gated service); state in `keycloak` schema of `app_db`. See [`16_auth_keycloak.md`](16_auth_keycloak.md) |
+
+The old demo-vs-auth split (`ticketing_api_auth`:5003 / `grm_ui_auth`:3002) is **gone** (CL-03): one `ticketing_api` (:5002) and one `grm_ui` (:3001), their auth behaviour driven by `AUTH_MODE` + `KEYCLOAK_ISSUER`.
 
 GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the chatbot Celery app, same Redis broker.
 
@@ -42,8 +42,9 @@ GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the ch
 | File | Adds |
 |---|---|
 | `docker-compose.aws.yml` | nginx on host `80/443`, TLS conf `deployment/nginx/webchat_rest_compose_aws.conf` (`nepal-gms-chatbot.facets-ai.com` + `grm-auth.` subdomain), certbot mounts |
-| `docker-compose.prod.yml` | Nepal DOR prod (`grm-chatbot.dor.gov.np`): TLS conf `webchat_rest_compose_prod.tls.conf`, single-host Keycloak at `/keycloak` path, demo `grm_ui` disabled (moved to `demo` profile), IPv4-preferred SMTP for Keycloak |
-| `docker-compose.override.yml` | Local dev conveniences |
+| `docker-compose.prod.yml` | Nepal DOR prod (`grm-chatbot.dor.gov.np`): TLS conf `webchat_rest_compose_prod.tls.conf`, single-host Keycloak at `/keycloak` path, IPv4-preferred SMTP for Keycloak |
+
+There is no `docker-compose.override.yml` any more (CL-03): dev-ness comes from `env.local` (`APP_ENV=dev AUTH_MODE=bypass`), not an override file. The compose set is `docker-compose.yml` (base) + `docker-compose.grm.yml` (single GRM stack) + `docker-compose.aws.yml` / `docker-compose.prod.yml` (deploy overlays). Deploys bring Keycloak up with `--profile auth`.
 
 ## 2. Request / data flows
 
@@ -67,9 +68,9 @@ Browser ── /rest-webchat/ (static) ──► nginx
 ### Officer UI → ticketing API → Keycloak
 
 ```
-Browser ──► grm_ui(_auth) :3001/:3002 (Next.js; server-side proxy via rewrites)
-                 │                          ▲ OIDC login (browser → Keycloak issuer URL)
-                 └──► ticketing_api(_auth) :5002/:5003 ──► JWT validated against Keycloak JWKS
+Browser ──► grm_ui :3001 (Next.js; server-side proxy via rewrites)
+                 │                     ▲ OIDC login (browser → Keycloak issuer URL, when AUTH_MODE=keycloak)
+                 └──► ticketing_api :5002 ──► JWT validated against Keycloak JWKS
                             │
                             ├──► GET /api/grievance/{id}   (backend:5001 — PII on demand)
                             ├──► POST /message             (orchestrator:8000 — officer reply to complainant)

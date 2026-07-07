@@ -48,6 +48,8 @@ def configure_host_test_env() -> None:
         "POSTGRES_HOST",
         "TICKETING_SECRET_KEY",
         "KEYCLOAK_ISSUER",
+        "APP_ENV",
+        "AUTH_MODE",
     ):
         if key in env_local and key not in os.environ:
             os.environ[key] = env_local[key]
@@ -63,7 +65,9 @@ def configure_host_test_env() -> None:
     os.environ.setdefault("POSTGRES_USER", "user")
     os.environ.setdefault("POSTGRES_PASSWORD", "password")
     os.environ.setdefault("POSTGRES_DB", "app_db")
-    # Dev bypass for API tests that import the FastAPI app
+    # Dev bypass for API tests that import the FastAPI app (APP_ENV=dev AUTH_MODE=bypass).
+    os.environ.setdefault("APP_ENV", "dev")
+    os.environ.setdefault("AUTH_MODE", "bypass")
     os.environ.setdefault("KEYCLOAK_ISSUER", "")
 
     try:

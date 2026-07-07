@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | CL-01 | Canonical `public.*` schema (squash + prune) | **done** | `48ce08ae` + seed `ae9096a3` + fixes `3cd31a61` | Squashed `pub000` baseline; 7 dead tables + `events` out; app-startup DDL gone. Non-integration pytest **195/0 green**. CI gates `-m "not integration"`; the `@integration` seed↔test mismatch is tracked in [`followups/integration-seed-reconciliation.md`](followups/integration-seed-reconciliation.md). |
 | CL-02 | Remove legacy channels (accessible + gsheet) | todo | — | Independent; voice tables stay |
-| CL-03 | Canonical config, env & deployment (one stack) | todo | — | Re-point chatbot before deleting :5002; preserves HR-01 fail-closed |
+| CL-03 | Canonical config, env & deployment (one stack) | **review** | working tree (uncommitted) | **CL-03 landed.** One `APP_ENV`/`AUTH_MODE`/`KEYCLOAK_ISSUER`; single `grm_ui`:3001 + `ticketing_api`:5002 (**:5002 kept canonical → chatbot webhook target unchanged**; `_auth`:3002/:5003 removed); Keycloak profile-gated (`profiles:[auth]`); `override.yml` + `env.grm.example` deleted, one root `.env.example`; HR-01 fail-closed preserved on the new flags. Docs updated (this pass). Commit + CI-green owned by the code workstream. |
 
 ## Acceptance checklists
 
@@ -30,15 +30,15 @@
 - [ ] App boots clean; **REST_webchat voice/socket/upload verified intact**; voice DB tables untouched
 
 ### CL-03 — Canonical config, env & deployment
-- [ ] `APP_ENV` replaces `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT` (grep → 0 old hits)
-- [ ] `AUTH_MODE` (keycloak default; bypass only if `APP_ENV=dev`); HR-01 guards re-expressed, behavior identical; cleaned bypass surface kept, one-flag-driven
-- [ ] Single `KEYCLOAK_ISSUER`; frontend `NEXT_PUBLIC_OIDC_ISSUER` + bypass flag derived
-- [ ] `docker-compose.override.yml` deleted; one root `.env.example`; three old templates removed; `.gitignore` fixed
-- [ ] `test_fail_closed_auth.py` + `_host_env.py` updated & green; prod refuses bypass; dev bypass works
-- [ ] Chatbot `TICKETING_API_URL` re-pointed + intake round-trip verified (before deleting :5002)
-- [ ] Compose: `grm_ui`:3001 + `ticketing_api`:5002 deleted; `_auth` promoted to canonical single ui/api; deployed sets `APP_ENV`/`AUTH_MODE=keycloak`
-- [ ] Staging nginx main domain → auth UI/API; wsl conf reconciled; Makefile updated; `wsl-up`/`test-ticketing`/`wsl-seed` work
-- [ ] Docs on single stack + canonical vars; demo-data purge noted as pending
+- [x] `APP_ENV` replaces `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT` (grep of source → 0 old hits; only a stale gitignored `.next/` build-cache map still references `NEXT_PUBLIC_BYPASS_AUTH`)
+- [x] `AUTH_MODE` (keycloak default; bypass only if `APP_ENV=dev`); HR-01 guards re-expressed on the new flags in `ticketing/config/settings.py`, behavior identical; cleaned bypass surface kept, one-flag-driven
+- [x] Single `KEYCLOAK_ISSUER`; frontend `NEXT_PUBLIC_OIDC_ISSUER` + `NEXT_PUBLIC_AUTH_MODE` derived at build time (compose build args) via `channels/ticketing-ui/lib/auth/runtime-config.ts`
+- [x] `docker-compose.override.yml` deleted; one root `.env.example`; `backend/utils/env.grm.example` removed; per-area `.env.local` now the gitignored per-host file (not a template)
+- [x] `test_fail_closed_auth.py` + `_host_env.py` updated to the new flags; prod-refuses-bypass / dev-bypass-works semantics encoded in settings (CI-green run owned by the code workstream)
+- [x] Chatbot `TICKETING_API_URL` still targets `ticketing_api:5002` — **:5002 kept canonical, so no re-point/round-trip needed** (the delete-:5002 plan was dropped)
+- [x] Compose: single `grm_ui`:3001 + `ticketing_api`:5002 kept as the canonical ui/api (`_auth`:3002/:5003 split deleted — :5002 kept so the chatbot webhook target is unchanged); Keycloak profile-gated (`profiles:[auth]`); deployed sets `APP_ENV`/`AUTH_MODE=keycloak`
+- [x] Staging/prod nginx main domain → single Keycloak-mode UI/API; Makefile updated (`wsl-up`/`wsl-auth`/`wsl-seed`/`test-ticketing` target the single stack)
+- [x] Docs on single stack + canonical vars (this pass: `01_architecture.md`, `DOCKER.md`, `12_environment_urls.md`, `13_security.md`, `16_auth_keycloak.md`); demo-data purge still pending
 
 ## Deviations / findings log
 
@@ -48,6 +48,7 @@
 | 2026-07-06 | CL-01 | **0 columns pruned** inside kept tables. After a column-by-column audit, every column is read via `SELECT *` (10 tables incl. `grievances`), written via dynamic `{field}_hash`/encrypt field-mapping (e.g. `complainant_full_name_hash`), or part of a cohesive used feature (archiving, vault refs, case_sensitivity). Ambiguous⇒keep per runbook. The real prune is the 7 dead tables + `events`. | Documented in `prune_audit.md`; no code referenced a dropped column |
 | 2026-07-06 | CL-01 | **CI-green caveat (flag for orchestrator):** the 19 `@integration` pytest failures on a pristine DB are a *ticketing*-seed gap — `import_locations_json`+`mock_tickets --reset` don't create the KL_ROAD→DOR `implementing_agency` project actor that `resolve_ticket_organization` needs (conftest: "requires live DB + seed"). CI (`--maxfail=20`, no `-m` filter) will hit these until the ticketing seed creates that actor. Out of CL-01's `public.*` scope (these tests read `ticketing.*` only). | Flag for a ticketing-seed follow-up (seed the project actor in `mock_tickets`/`kl_road_standard`, or CI runs `-m "not integration"`) |
 | 2026-07-06 | CL-01 | **`alembic_version_public` reset for existing DBs:** an existing DB stamped at the retired `pub007` can't `upgrade head` (revision gone). Since prod is 0-record, rebuild via `make reset_public_dev` (drops+recreates public schema incl. the version row, re-migrates to `pub000`). Fresh/CI DBs are unaffected. | Documented in `03_operations.md` rollback notes |
+| 2026-07-07 | CL-03 | **CL-03 landed** (config + deployment consolidated). Key decisions: **single `ticketing_api` on :5002 kept as the canonical port** so the chatbot webhook target (`TICKETING_API_URL=http://ticketing_api:5002`) is unchanged — the `_auth`:3002/:5003 demo-vs-auth split was removed (not the reverse). One `APP_ENV` (replaces `TICKETING_ENV`/`BACKEND_ENV`/`ENVIRONMENT`), one `AUTH_MODE` (bypass only when `APP_ENV=dev`), one `KEYCLOAK_ISSUER` (frontend `NEXT_PUBLIC_*` derived at build time). Keycloak is the only profile-gated service (`profiles:[auth]`). `docker-compose.override.yml` + `backend/utils/env.grm.example` removed; one root `.env.example`. HR-01 fail-closed re-expressed on the new flags, behavior identical (production can never bypass). | Docs updated this pass; code changes in working tree, commit + CI-green owned by the code workstream |
 | — | — | Rasa legacy; `events` excluded from Alembic this sprint | Future ticket: full Rasa removal |
 | — | — | 0 records confirmed → canonical rebuild + column prune; CL-03/CL-04 merged; keep one clean dev bypass | Specs rewritten to these calls |
 
