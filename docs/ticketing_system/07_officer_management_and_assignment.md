@@ -7,12 +7,12 @@
 
 ## 1. Goal
 
-Enable **`project_admin`** and **`country_admin`** (see [11_roles_and_permissions.md](11_roles_and_permissions.md)) to **invite, edit, and remove** **operational officers** from Settings → Officers (and project **Staffing**), scoped to **organization**, **project**, **package**, and/or **location**, so tickets are **always assigned to case handlers** (not platform admins) via auto-assign and controlled manual reassignment.
+Enable **`project_admin`** and **`org_admin`** (see [11_roles_and_permissions.md](11_roles_and_permissions.md)) to **invite, edit, and remove** **operational officers** from Settings → Officers (and project **Staffing**), scoped to **organization**, **project**, **package**, and/or **location**, so tickets are **always assigned to case handlers** (not platform admins) via auto-assign and controlled manual reassignment.
 
 | Who invites operational officers | Scope |
 |----------------------------------|-------|
 | `project_admin` | Assigned project(s); typically their organization on that project |
-| `country_admin` | Any project in country (e.g. ADB observers at country scope) |
+| `org_admin` | Any project in country (e.g. ADB observers at country scope) |
 | `super_admin` | Global |
 
 ---

@@ -17,9 +17,9 @@ Until now the only place to record "this person is the SDE of Ilam Division Offi
 
 | Layer | Holds | Size | Owner |
 |---|---|---|---|
-| **Org chart** — org units + position types | Ministry structure, position titles, reporting rules, office territories | Large (government-shaped) | `country_admin` (standard track), CSV import |
+| **Org chart** — org units + position types | Ministry structure, position titles, reporting rules, office territories | Large (government-shaped) | `org_admin` (standard track), CSV import |
 | **Roles** — behavior catalog | Permissions + workflow step bindings | Small (~10–15, unchanged) | As per doc 11 |
-| **Matrix** — position type → role | `default_role_key` on each position type | One row per position type | `country_admin` (standard track) |
+| **Matrix** — position type → role | `default_role_key` on each position type | One row per position type | `org_admin` (standard track) |
 
 `user_roles` + `officer_scopes` remain the **enforcement truth**. Positions are descriptive and *generate* those rows at invite time; they never replace them.
 
@@ -30,9 +30,12 @@ Until now the only place to record "this person is the SDE of Ilam Division Offi
 | New column | Notes |
 |---|---|
 | `parent_organization_id` | Self-FK, nullable. Existing flat orgs become roots. |
-| `unit_type` | `ministry` \| `department` \| `directorate` \| `provincial_office` \| `division_office` \| `company` \| `development_partner` |
+| **`org_category`** | `government` \| `local_government` \| `donor` \| `third_party`. **NOT NULL on roots; inherited from root** (children take their root's category — enforce/backfill in the migration). The coarse **actor type** that gates root creation (§7) and defines a "root" in the forest admin model (doc 11 §2). |
+| `unit_type` | `ministry` \| `department` \| `directorate` \| `provincial_office` \| `division_office` \| `company` \| `development_partner` \| `province_assembly` \| `municipality` — the fine-grained sub-type. |
 | `territory_location_code` | Optional — e.g. Jhapa Division Road Office covers Jhapa district |
 | `territory_includes_children` | Boolean, same semantics as `officer_scopes.includes_children` |
+
+**`org_category` vs `unit_type` (independent columns, not derived).** Set `org_category` explicitly at the root — a `company` is usually a `third_party` contractor but could rarely be donor-adjacent, so don't derive it. Typical alignment: `development_partner` ⇒ `donor`; `company` ⇒ `third_party`; `ministry`/`department`/`directorate`/`provincial_office`/`division_office` ⇒ `government`; `province_assembly`/`municipality` ⇒ `local_government`. `org_category` is **inherited from root** (authoritative); `unit_type` is per-node. Validation should **warn (not block)** on an off-pattern pairing — e.g. a `division_office` unit under a `third_party` root — so a typo surfaces without forbidding a legitimate edge case.
 
 One tree; "officer belongs to DoR" becomes a subtree check. Existing `officer_scopes` / `tickets.organization_id` FKs unchanged. Territory makes an office **routable** (§5.2, invite pre-fill).
 
@@ -49,6 +52,7 @@ One tree; "officer belongs to DoR" becomes a subtree check. Existing `officer_sc
 | **`default_role_key`** | **The matrix** — FK-by-key into `ticketing.roles` |
 | `visibility_mode` | `none` \| `direct_reports` \| `subtree` — supervisor visibility depth (§5.3) |
 | `workflow_track` | `standard` \| `seah` \| `both` — catalog filtering only |
+| **`owner_organization_id`** | String(64), **nullable** (`NULL` = global / super-owned). **Org-scoped catalog** (doc 11 §3.3): a position type is available at its owning org node + `descendant_org_ids` only. Set to the author's scope node on create — same rule as `ticketing.roles` / `workflow_definitions`. |
 
 ~20–50 rows expected. Not individual seats: the system is not an HRIS; a "seat" is simply an officer holding a type at a unit.
 
@@ -103,14 +107,16 @@ Chart is **shared for directory purposes** — SEAH officers may hold positions.
 
 ## 7. Ownership & permissions
 
-| Action | `project_admin` | `country_admin` (standard) | `country_admin` (seah) | `super_admin` |
+| Action | `project_admin` | `org_admin` (standard) | `org_admin` (seah) | `super_admin` |
 |---|---|---|---|---|
-| Edit org tree / CSV import | ❌ | ✅ | ❌ | ✅ |
-| Create/edit position types + matrix | ❌ | ✅ | ❌ (may propose SEAH-track types — TBD) | ✅ |
+| **Create a new *institutional* root** (`government`/`local_government`/`donor`) | ❌ | ❌ | ❌ | ✅ **only** |
+| Create a **`third_party`** root (contractor) | ✅ own project | ✅ own subtree | ❌ | ✅ |
+| Edit org tree / CSV import (build out within a subtree) | ❌ | ✅ own subtree | ❌ | ✅ |
+| Create/edit position types + matrix (org-scoped, doc 11 §3.3) | ❌ | ✅ own subtree | ❌ (may propose SEAH-track types — TBD) | ✅ global |
 | Assign positions when inviting/staffing | ✅ own scope | ✅ | ✅ SEAH officers | ✅ |
 | Override role/scope vs matrix default | ✅ | ✅ | ✅ | ✅ |
 
-Follows the locations pattern, but at **country tier**, not platform.
+Follows the locations pattern; admin authority is **org-subtree scoped, any depth** (doc 11 §2), not platform. `org_category` (§3.1) is what gates who may create each kind of **root**: institutional roots are `super_admin`-only; `third_party` roots are delegable. (**`officer_admin`**, the 4th tier — not a column above — does only the "Assign positions when inviting/staffing" row within its scope; it authors nothing.)
 
 ## 8. Migration / cleanup
 
@@ -126,8 +132,8 @@ Existing per-position custom roles (created by the setup officer) should be unwo
 | Method | Path | Access |
 |---|---|---|
 | `GET/POST/PATCH` | `/api/v1/organizations` (+ `parent_organization_id`, `unit_type`, territory) | Existing router, extended |
-| `POST` | `/api/v1/organizations/import` | Org tree CSV, `country_admin` standard |
-| `GET/POST/PATCH/DELETE` | `/api/v1/position-types` | `country_admin` standard / `super_admin` |
+| `POST` | `/api/v1/organizations/import` | Org tree CSV, `org_admin` standard |
+| `GET/POST/PATCH/DELETE` | `/api/v1/position-types` | `org_admin` standard / `super_admin` |
 | `GET/POST/DELETE` | `/api/v1/users/{id}/positions` | Invite/Manage modal |
 | `GET` | `/api/v1/users/{id}/supervisor` | Resolver (override → derived → step fallback) |
 

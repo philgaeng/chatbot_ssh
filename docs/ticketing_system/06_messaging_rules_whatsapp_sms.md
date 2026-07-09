@@ -88,7 +88,7 @@ Country managers configure officer SMS **per project** under Settings → **Proj
 
 ### 5.1 Who configures
 
-| Action | `super_admin` | `country_admin` | `project_admin` |
+| Action | `super_admin` | `org_admin` | `project_admin` |
 |--------|---------------|-----------------|-----------------|
 | View Messaging section | ✅ | ✅ | ✅ read-only |
 | Edit Messaging | ✅ | ✅ (country scope) | ❌ |
@@ -246,7 +246,7 @@ Use `notify_officer_assignment.delay(...)` after DB commit.
 | Method | Path | Notes |
 |--------|------|-------|
 | `GET` | `/api/v1/projects/{id}/messaging` | Return `officer_messaging` + computed `max_levels` |
-| `PATCH` | `/api/v1/projects/{id}/messaging` | `country_admin` / `super_admin`; validate levels ⊆ 1…max_levels |
+| `PATCH` | `/api/v1/projects/{id}/messaging` | `org_admin` / `super_admin`; validate levels ⊆ 1…max_levels |
 
 Optional: include `officer_messaging` on `GET /projects/{id}` response for fewer round-trips.
 

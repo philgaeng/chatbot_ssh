@@ -20,7 +20,7 @@ A **project** is the routing hub for a financed infrastructure intervention (e.g
 
 ### Who edits what (admin matrix)
 
-| Action | `country_admin` `track=standard` | `country_admin` `track=seah` | `project_admin` |
+| Action | `org_admin` `track=standard` | `org_admin` `track=seah` | `project_admin` |
 |--------|-------------------------------|------------------------------|-----------------|
 | Create **project** | ✅ country | ✅ country | ❌ |
 | Create **package** | ✅ country | ❌ | ❌ |

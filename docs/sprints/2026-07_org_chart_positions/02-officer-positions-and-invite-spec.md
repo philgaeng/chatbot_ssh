@@ -71,7 +71,7 @@ Implement as a pure service function (`resolve_supervisor(user_id, position_cont
 - [ ] `default_role_key` edit does not mutate existing holders' `user_roles` (re-assert from OC-02, now with a real holder).
 - [ ] Transfer: ending a position sets `is_active=false`, adds the new one; **existing `user_roles`/`officer_scopes` are untouched until an explicit refresh** (assert no silent re-scope).
 - [ ] Supervisor resolver: override wins; derived (same_unit + parent_unit) resolves the right holder; no holder → `null` (caller falls back to `supervisor_role`); tie-break deterministic.
-- [ ] **Authz matrix**: `POST/DELETE /users/{id}/positions` — `project_admin` ✅ within own scope only, `country_admin` ✅, `super_admin` ✅, cross-scope `project_admin` ❌, operational roles ❌, unauthenticated ❌.
+- [ ] **Authz matrix**: `POST/DELETE /users/{id}/positions` — `project_admin` ✅ within own scope only, `org_admin` ✅, `super_admin` ✅, cross-scope `project_admin` ❌, operational roles ❌, unauthenticated ❌.
 - [ ] `validate_jurisdiction` still rejects an out-of-jurisdiction position assignment (the guard wasn't bypassed).
 
 ## Manual verification

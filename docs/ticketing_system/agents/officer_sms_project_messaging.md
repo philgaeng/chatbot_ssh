@@ -89,7 +89,7 @@ Execute **all** steps below in one session. Do not commit unless the user asks.
 6. **`ticketing/api/routers/locations.py`** (projects router) or new `project_messaging.py` router:
    - `GET /api/v1/projects/{project_id}/messaging`
    - `PATCH /api/v1/projects/{project_id}/messaging`
-   - Auth: `require_country_admin_or_super` (match project PATCH patterns in `ticketing/services/admin_access.py`)
+   - Auth: `require_org_admin_or_super` (match project PATCH patterns in `ticketing/services/admin_access.py`)
    - On PATCH: if `sms_enabled` and `sms_levels` empty, allow (means master on but no levels — no sends) OR normalize; document behaviour in code comment.
 
 7. Register router in `ticketing/api/main.py` if new file.

@@ -219,7 +219,7 @@ Full contract in [12_workflows_configuration.md](12_workflows_configuration.md) 
 | `GET/PATCH` | `/users/me/preferences`, `/users/me/profile` | Own preferences / profile |
 | `GET` | `/users/me/session`, `/users/me/admin-context`, `/users/me/badge`, `/users/me/notifications`, `/users/me/tasks` | Session, admin ladder context, badge count, notifications, own tasks |
 | `GET/POST/PATCH/DELETE` | `/roles…` | Roles catalog CRUD; `GET /roles/archetypes` for the role wizard |
-| `GET/POST/DELETE` | `/admin-scopes…` | Admin ladder (`country_admin` / `project_admin`); `POST /admin-scopes/{id}/send-invite` |
+| `GET/POST/DELETE` | `/admin-scopes…` | Admin ladder (`org_admin` / `project_admin`); `POST /admin-scopes/{id}/send-invite` |
 
 ### Settings
 

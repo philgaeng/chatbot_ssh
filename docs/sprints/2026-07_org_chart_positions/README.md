@@ -17,8 +17,18 @@ The feature creates **new admin endpoints on a government PII system** (`/positi
 | OC-02 | `ticketing.position_types` + position→role matrix + `/position-types` CRUD | ticketing schema + API | M | [01-org-tree-and-positions-spec.md](01-org-tree-and-positions-spec.md) §2 |
 | OC-03 | `ticketing.officer_positions` + invite pre-fill + supervisor resolver | ticketing API + services | L | [02-officer-positions-and-invite-spec.md](02-officer-positions-and-invite-spec.md) |
 | OC-04 | Chart-driven behaviors (visibility, assignment ranking, escalation-notify) + SEAH leak-proofing | ticketing engine | L | [03-chart-behaviors-and-seah-spec.md](03-chart-behaviors-and-seah-spec.md) |
-| OC-05 | Portal: org-tree editor, position-type editor, invite pre-fill UI, display surfaces | ticketing-ui | L | [04-portal-org-chart-ui-spec.md](04-portal-org-chart-ui-spec.md) |
-| OC-06 | Admin-setup UX/UI evaluation (org → officers → workflow → projects) | design/eval doc | M | [05-admin-setup-ux-evaluation.md](05-admin-setup-ux-evaluation.md) |
+| OC-05 | Portal org-chart UI — **superseded**: paused and folded into the Settings rebuild (Handover B · RB-4) after the OC-06 pivot | ticketing-ui | L | [04-portal-org-chart-ui-spec.md](04-portal-org-chart-ui-spec.md) (historical) |
+| OC-06 | Admin-setup UX/UI evaluation (org → officers → workflow → projects) — **done**, published `ui/03_admin_setup_flow_evaluation.md` | design/eval doc | M | [05-admin-setup-ux-evaluation.md](05-admin-setup-ux-evaluation.md) |
+
+## ▶ Current state — design DONE, build launching
+
+OC-06 ([published report](../../ticketing_system/ui/03_admin_setup_flow_evaluation.md)) triggered a full Settings redesign. The **design phase is complete** — 5 independent devil's-advocate review rounds took it from a 48% baseline to **84% completeness / 74% ease-of-use**, all design blockers closed.
+
+- **▶ [BUILD-HANDOVER.md](BUILD-HANDOVER.md) — the single entry point to build.** Read this first: locked decisions, the two-phase plan (SH-1..7 + OC-01..04 backend; RB-1..4 frontend), sequencing, and DoD.
+- **Design artifacts (live, the build consumes these):** [DESIGN-settings-redesign.md](DESIGN-settings-redesign.md) (source of record) · [settings-wireframes.html](settings-wireframes.html) (13 frames) · [settings-state-atlas.html](settings-state-atlas.html) (14 surfaces) · [DESIGN-REVIEW.md](DESIGN-REVIEW.md) (the 5-round scores).
+- **Design-phase handovers — ARCHIVED** (history; superseded by BUILD-HANDOVER): [A — UX brief](archive/HANDOVER-A-settings-ux-redesign-brief.md) · [B — hardening & rebuild plan (full ticket bodies)](archive/HANDOVER-B-settings-hardening-and-rebuild-plan.md) · [C — admin-model finalize & cleanup](archive/HANDOVER-C-admin-model-finalize-and-cleanup.md).
+
+Net: **OC-01..04 (backend) proceed**; **OC-05 (UI) folded into RB-4**; **SH-1..7 hardening + admin-scope** start now; **RB-1..4 frontend rebuild is unblocked** (the design gate is met).
 
 ## Execution order & workstreams
 

@@ -54,7 +54,7 @@ HR-02's matrix covers the core per-ticket endpoints × 6 personas. The class fix
 
 Extend `tests/ticketing/test_ticket_access_matrix.py` (or add `test_authz_matrix_extended.py`):
 1. **All action types** × personas on `POST /tickets/{id}/actions` (ACKNOWLEDGE, ESCALATE, RESOLVE, NOTE, FIELD_REPORT, GRC_CONVENE, REASSIGNMENT_REQUESTED — from `VALID_ACTIONS`).
-2. **Admin-surface endpoints** × admin ladder (super_admin / country_admin / project_admin / non-admin): representative endpoints from `users.py` (invite, roles CRUD, admin-scopes), `workflows.py` (publish, step edit), `locations.py` (project create/edit), `settings.py`, `reports.py` (query, share create). Assert against the documented matrix in `docs/ticketing_system/11_roles_and_permissions.md` §access — where code and spec disagree, **fail the test and log the discrepancy** in PROGRESS (don't codify the bug).
+2. **Admin-surface endpoints** × admin ladder (super_admin / org_admin / project_admin / non-admin): representative endpoints from `users.py` (invite, roles CRUD, admin-scopes), `workflows.py` (publish, step edit), `locations.py` (project create/edit), `settings.py`, `reports.py` (query, share create). Assert against the documented matrix in `docs/ticketing_system/11_roles_and_permissions.md` §access — where code and spec disagree, **fail the test and log the discrepancy** in PROGRESS (don't codify the bug).
 3. **Unauthenticated** sweep: every router's endpoints return 401/403 with no token (walk `app.routes`, skip the known-public set: scan, public_report, public_closure, webhooks with their own secret, health).
 
 ### Tests (acceptance)

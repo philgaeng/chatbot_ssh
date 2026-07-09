@@ -84,7 +84,7 @@ Maps (org, project_code, location, priority) → workflow. **Not configured in U
 
 ## 3. Who can create workflows and assign them
 
-| Action | `super_admin` | `country_admin` `track=standard` | `country_admin` `track=seah` |
+| Action | `super_admin` | `org_admin` `track=standard` | `org_admin` `track=seah` |
 |--------|---------------|----------------------------------|------------------------------|
 | Create / edit / publish workflows | ✅ all tracks | ✅ `standard` workflows | ✅ `seah` workflows |
 | Assign `safeguards` / `hazards` / `ca` on project | ✅ | ✅ | ❌ |
@@ -119,7 +119,7 @@ draft → publish → (in use on projects) → archive
 
 | Action | API | Rules |
 |--------|-----|-------|
-| Create | `POST /workflows` | Optional `clone_from_id`; `super_admin` or `country_admin` (matching track) |
+| Create | `POST /workflows` | Optional `clone_from_id`; `super_admin` or `org_admin` (matching track) |
 | Edit metadata | `PATCH /workflows/{id}` | Draft or published |
 | Add/edit/reorder steps | `POST/PATCH/DELETE/POST reorder` | Delete blocked if tickets on step |
 | Publish | `POST /workflows/{id}/publish` | Increments version; every step needs `assigned_role_key` |
@@ -224,7 +224,7 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 
 ## 12. Acceptance criteria
 
-1. `super_admin` and scoped `country_admin` can create, publish, and assign workflows on their track.
+1. `super_admin` and scoped `org_admin` can create, publish, and assign workflows on their track.
 2. A project can link **at least three** standard streams (safeguards, hazards, CA) plus SEAH.
 3. Each step binds exactly one `assigned_role_key`; different streams may use different roles on the same project.
 4. Ticket intake selects the correct workflow from slot inference or explicit `workflow_slot`.

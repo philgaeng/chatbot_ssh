@@ -11,7 +11,7 @@ Ship the voice-note intake, chatbot UX polish, portal usability round (TP-01…1
 - **Chatbot P1** (CB-03/04/05/07): close-button consolidation (standard = Close session, SEAH = Close browser), "file another grievance", attachment copy rewrite, 3-message post-submit sequence + grievance-filed banner.
 - **Chatbot P2** (CB-01/06/08/09): voice-note intake (45s cap, multi-clip, status banner), map-pin location (`complainants.location_geo`), EXIF consent metadata, dust fast path expanded to **Road Hazard** (6 subtypes, preset taxonomy keys, deterministic classification `LLM_skipped`).
 - **Portal P1** (TP-01…15): audio player, acknowledge-with-grievance thread card, call report, report share links (internal + public token), export-all XLSX, dashboard label clarity, command simplification + image gate + escalation form, supervisor-only assign + reassignment reason codes, friendly validation errors, **classification status model (Option B)** + hybrid read model/sync + officer validation gate (TP-14), complainant PII display/edit — standard decrypted, SEAH masked (TP-15).
-- **Roles & permissions** (RP-01…11): `admin_scopes` table, 3 admin keys (`super_admin`/`country_admin`/`project_admin`), `workflow_track` on scopes, roles CRUD + archetypes, Settings visibility matrix.
+- **Roles & permissions** (RP-01…11): `admin_scopes` table, 4 admin keys (`super_admin`/`org_admin`/`project_admin`/`officer_admin`), `workflow_track` on scopes, roles CRUD + archetypes, Settings visibility matrix.
 - **Infra add-ons**: server-side image compression (libvips/HEIF, 1280px/q80, EXIF strip), resolved-case archiving & retention job.
 
 ## Where the durable content lives now

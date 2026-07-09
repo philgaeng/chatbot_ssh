@@ -8,7 +8,7 @@ Evaluate the whole setup journey a Government of Nepal admin actually walks — 
 
 ## Steps
 
-1. **Stand up the stack** (`docs/deployment/DOCKER.md`, bypass-auth mode) with seeded data. Confirm you can switch admin personas: `super_admin`, `country_admin` (standard), `country_admin` (seah), `project_admin`.
+1. **Stand up the stack** (`docs/deployment/DOCKER.md`, bypass-auth mode) with seeded data. Confirm you can switch admin personas: `super_admin`, `org_admin` (standard), `org_admin` (seah), `project_admin`.
 2. **Cold-start walk.** As each persona, do a full setup: build an org (tree if OC-01 merged, else flat), invite/staff officers with role+scope, configure a workflow + role bindings, create and go-live a project. Screenshot every screen and every dead-end. Live the clicks — do not evaluate from source alone.
 3. **Map the journey** end-to-end: every screen, required field, inter-tab navigation jump, and every point where the admin must carry a value from a previous tab in their head (org id, role key, location code). Mark those hand-offs — they are the usual failure points for non-technical users.
 4. **Score each journey** on discoverability, guidance/empty-states, error prevention (can they create an orphaned/invalid state?), reversibility, and Nepali readiness. Ground every finding in `file:line` or a screenshot.
