@@ -94,8 +94,8 @@ Officer's **Watching** tab additionally includes tickets assigned to their repor
 ### 5.4 Prefer-own-office assignment (ranking tweak)
 In `auto_assign_officer`, among scope-matched candidates: rank officers whose org unit **territory covers the ticket location** first, then least-loaded. A preference, not a filter — the province fallback ([07 §4.4](07_officer_management_and_assignment.md)) still applies.
 
-### 5.5 Supervisor advised on escalation (notification only)
-When a ticket escalates off officer X's step, X's resolved supervisor is notified (in-app; channel matrix per [12 §9](12_workflows_configuration.md)). This reuses the existing `supervisor_role` tier: the reporting line is a person-specific resolver for that tier, with `supervisor_role` as fallback.
+### 5.5 Supervisor: advised on escalation + reassignment on failure
+The supervisor is the **per-`(project, step)` resolver** ([DECISION 2026-07-10](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md) §5) — the project-tree manager, **not** an org-tree reporting line. When a ticket escalates off a step, that step's resolved supervisor is notified (in-app; channel matrix per [12 §9](12_workflows_configuration.md)), falling back to the `supervisor_role` pool. The **same** supervisor is the **reassignment authority** when `auto_assign_officer` fails at a step (park + notify + reassign). Default supervisor = the next step's Handler pool; explicit override per project; **no `parent_organization_id` walk**. (This is distinct from §5.3, which is org-hierarchy *oversight* visibility for admins.)
 
 ## 6. SEAH rules
 
@@ -103,6 +103,7 @@ Chart is **shared for directory purposes** — SEAH officers may hold positions.
 
 - Supervisor visibility (§5.3) **never** surfaces `is_seah` tickets through reporting lines.
 - Escalation supervisor notification (§5.5) is **suppressed** on SEAH tickets unless the supervisor independently holds a SEAH role.
+- Donor "informed on final escalation" ([DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) is **suppressed** on the SEAH track — donor roles are not SEAH roles, so donor staff receive **nothing** on a SEAH case.
 - SEAH ticket visibility remains exactly as [11 §9](11_roles_and_permissions.md).
 
 ## 7. Ownership & permissions

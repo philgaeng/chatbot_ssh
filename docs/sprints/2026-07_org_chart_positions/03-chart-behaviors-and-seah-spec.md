@@ -31,12 +31,18 @@ An officer's **Watching** tab additionally includes tickets assigned to their re
 
 In `auto_assign_officer` (`ticketing/engine/workflow_engine.py:622-662`, the `min(candidates, ...)` at :662): among scope-matched candidates, **rank first** the officers whose org-unit territory covers the ticket location (`territory_location_code` matches, honoring `territory_includes_children`), **then** least-loaded. A *preference within the already-filtered candidate set*, never a filter — the province fallback ([07 §4.4](../../ticketing_system/07_officer_management_and_assignment.md)) still applies. Do not change `_scope_candidates` (the filter); only the ordering key.
 
-## 5.5 Supervisor advised on escalation (notification only — **SEAH-sensitive**)
+## 5.5 Supervisor: advised on escalation + reassignment on failure (**SEAH-sensitive**)
 
-When a ticket escalates off officer X's step, notify X's resolved supervisor (in-app; channel matrix per [12 §9](../../ticketing_system/12_workflows_configuration.md)). This reuses the existing `supervisor_role` tier: the resolved reporting-line person is a **person-specific resolver for that tier**, with `supervisor_role` as fallback (OC-03's resolver returning `null`).
+The supervisor here is the **per-`(project, step)` resolver** from [OC-03 §3](02-officer-positions-and-invite-spec.md) / [DECISION §5](DECISION-project-participants-and-supervision.md) — the project-tree manager, **not** an org-tree reporting line. Two behaviors use it:
 
-- **SEAH leak-proof:** on a SEAH ticket, this notification is **suppressed unless the supervisor independently holds a SEAH role** (doc 16 §6). The suppression is unconditional and tested — a non-SEAH supervisor of a SEAH officer must receive **nothing** that reveals the escalation.
-- This is a notification side effect only. It must **not** change who the ticket is assigned to, the escalation target, or any visibility. Hook it where escalation already emits notifications (do not re-open the HR-04-hardened `run_sla_check` transaction structure — emit the notify after the escalation commits, same as existing notifications).
+- **Advised on escalation (notify only):** when a ticket escalates off officer X's step, notify the resolved supervisor of that step (in-app; channel matrix per [12 §9](../../ticketing_system/12_workflows_configuration.md)); fall back to the `supervisor_role` pool when the resolver returns `null`. Side effect only — must **not** change assignment, the escalation target, or visibility.
+- **Reassignment on assignment failure:** when `auto_assign_officer` finds **no OIC** at step N (or the OIC is unavailable), **park** the ticket and notify **step N's supervisor**, who holds the **reassign** capability (Cases). Safety net against an orphaned ticket — distinct from SLA escalation, which targets the **next** step's Handler pool (doc 16 §83).
+- **SEAH leak-proof:** on a SEAH ticket, the escalation notification is **suppressed unless the supervisor independently holds a SEAH role** (doc 16 §6) — a non-SEAH supervisor of a SEAH officer must receive **nothing** that reveals the escalation. Unconditional and tested.
+- Hook where escalation already emits notifications (emit **after** the escalation commits; do not re-open the HR-04-hardened `run_sla_check` transaction).
+
+## 5.6 Donor informed on final escalation (**SEAH-sensitive** — [DECISION §3](DECISION-project-participants-and-supervision.md))
+
+When a project includes a donor org, its project-scoped roles (`donor-consultant` / `donor-national` / `donor-hq`) sit in the **last step's "Kept informed" cast**; on **standard-track** escalation into that final step they are notified (cast-derived, §4.5). **SEAH suppression:** donor roles are not SEAH roles, so on the **SEAH track** every donor tier receives **nothing** at the final step. Tested as a leak assertion (payload content) alongside a positive standard-track test. Go-live **blocks** if a donor is present but no donor role is in the last-step informed cast.
 
 ## Interaction with the hardening sprint
 

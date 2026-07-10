@@ -182,13 +182,13 @@ These are cross-cutting and belong to the IA, not one screen:
 
 ### 2.4 Org identity vs hierarchy vs project participation (the contractor question)
 
-Three distinct concepts the schema **already separates** — and the UI must not conflate them (the first wireframe draft wrongly nested a contractor *under* the ministry):
+Three distinct concepts the schema **already separates** — and the UI must not conflate them (the first wireframe draft wrongly nested a contractor *under* the ministry). **Project participation was simplified 2026-07-10 ([DECISION](DECISION-project-participants-and-supervision.md)): no actor-role catalog — one defaulted implementing agency + optional donors; go-live gates on staffing; supervisor is a per-`(project, step)` reassignment authority, not an org-tree line.**
 
 | Concept | Table | Owner | Editing surface |
 |---|---|---|---|
 | **Identity** — an org exists | `organizations` (id, name, `display_name_ne`, country) | whoever needs it (see authz below) | Organisation ▸ Org tree · or inline at Projects ▸ Actors |
 | **Reporting hierarchy** — the GoN chain | `organizations.parent_organization_id` (doc 16) | `org_admin` (standard) | Organisation ▸ Org tree (reporting-line group) |
-| **Project participation** — org acts in a project as a party | `project_organizations` + `project_actor_roles` (`main_contractor`, `implementing_agency`, `donor`, …) | `project_admin` (standard), own scope | Projects ▸ Actors |
+| **Project participation** — org's tie to a project | **`projects.implementing_agency_org_id`** (one, defaulted to the owning ministry) + **`project_donors`** (0..n) — *the per-project actor-role catalog is **removed**, [DECISION 2026-07-10](DECISION-project-participants-and-supervision.md)* | `project_admin` (standard), own scope | Projects ▸ staffing |
 
 **The tree is a forest, not one tree.** `parent_organization_id` is nullable. The government reporting line is one *rooted* subtree (Ministry → Department → Division Offices); **contractors and development partners are their own roots** (`parent = null`), never nested under a ministry — and **each root can itself be a multi-level subtree**. This:
 - keeps the "belongs to DoR" subtree check (doc 16 §3.1) honest — a contractor isn't swept into the ministry;
@@ -332,7 +332,7 @@ The wireframes are visual, the tree above is by-component, §4 is by-interaction
 | **02** Organisation — org tree | `org/OrgTree`, `OrgTreeNode`, `OrgEditor`, `OrgCsvImport`; `lib/orgTree.ts` | §4.2 | 02 | Organisation ▸ Org tree | **OC-01** (tree + CSV + descendant CTE); dedup soft-flag **SH-4** |
 | **03** Officers — invite-as-result | `officers/InviteOfficer`, `InviteOutcomeCard`, `InviteAdjustDisclosure`, `OverrideBadge`; `ProvenanceHint` | §4.1 | 03 | Organisation ▸ Officers (also Projects ▸ staffing) | **OC-03** (position→role/scope pre-fill + resolver); invite validation **SH-3** |
 | **04** Workflows & roles — guided flow | `workflows/WorkflowsRolesFlow`, `StepEditor`, `StepRoleBinder`, `StepCast` | §4.3 (+ §4.4) | 04 | Workflows & roles | step→role validation **SH-2**; valid-only + org-scoped picker **SH-7** |
-| **05** Projects — staffing & go-live | `projects/ProjectsTab`, `ProjectActorSection`, `ProjectStaffingSection`, `ProjectGoLiveDetail` | §4.1 (invite delegate); §2.4 (actor create) | 05 | Projects | contractor-create dedup **SH-4**; staffing invite **OC-03** |
+| **05** Projects — staffing & go-live | `projects/ProjectsTab`, `ProjectStaffingSection`, `ProjectGoLiveDetail` (no actor-role section — [DECISION](DECISION-project-participants-and-supervision.md)) | §4.1 (invite delegate); **DECISION** (IA field + donor + supervisor) | 05 | Projects | staffing invite **OC-03**; go-live on staffing + donor guardrail (**doc 13**); contractor-create dedup **SH-4** |
 | **06** Position types — review holders | `org/PositionTypesPanel`, `PositionTypeEditor`, `ReviewHoldersModal` | D3; doc 16 §3.2 | 06 | Organisation ▸ Position types | **OC-02** (position_types + matrix + `owner_organization_id`) |
 | **07** Platform — Admin access | `platform/AdminAccessPanel`; `lib/adminScope.ts` | §2.5 (admin ladder + attenuated) | 07 | Platform ▸ Admin access | **SH-7** (4 role keys + `org_category` gating + attenuated delegation) |
 | **08** Roles & permissions | `workflows/RoleCatalog`, `RoleEditor`; `RoleLabel`, `SeverityBadge` | §4.4 | 08 | Workflows & roles ▸ Roles | roles model (existing); owning-level chips **SH-7**; delete guard **SH-5** |

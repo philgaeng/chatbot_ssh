@@ -47,15 +47,18 @@ Officer invite: `POST /users/invite` → `ticketing/api/routers/users.py:1249-13
 - `POST /api/v1/users/{id}/positions` — add a position (also generates/refreshes role+scope through the existing helpers, honoring overrides).
 - `DELETE /api/v1/users/{id}/positions/{opid}` — end a position (`is_active=false`); does **not** auto-delete the `user_roles`/`officer_scopes` (prompt to refresh is UI — a dangling role after a transfer is an admin decision, doc 16 §4).
 
-## 3. Supervisor resolver
+## 3. Supervisor resolver — the per-step, project-scoped reassignment authority
 
-`GET /api/v1/users/{id}/supervisor` — resolution order (doc 16 §3.3, §5.5), first match wins:
+> **Revised model — see [`DECISION-project-participants-and-supervision.md`](DECISION-project-participants-and-supervision.md) §5.** The supervisor is the OIC's manager **in the project tree** (matrix), filled **per `(project, step)`** — the authority notified + empowered to **reassign** when assignment fails. It is **not** derived from the org forest, and it is **not** the next-step OIC (that is the escalation target).
 
-1. `officer_positions.reports_to_user_id` **override** (if set and the target is active).
-2. **Derived**: the active holder of `reports_to_position_key` at the same unit if `reports_to_locus = same_unit`, else at the `parent_organization_id` unit. If multiple holders, document the tie-break (lowest `created_at`) and log it.
-3. **Fallback**: none at the person level — callers fall back to the workflow step's `supervisor_role` tier (this resolver returns `null` and the caller uses the role pool). Do **not** invent a supervisor.
+`resolve_supervisor(step, project) -> user_id | pool | None` — first match wins, **project-scoped, no org-tree walk**:
 
-Implement as a pure service function (`resolve_supervisor(user_id, position_context) -> user_id | None`) reused by OC-04's escalation-notify and visibility — one resolver, no duplication.
+1. **Explicit** per-`(project, step)` supervisor — a specific officer **or** a role pool (set in project staffing).
+2. **Default = the next step's Handler (`assigned_role_key`) pool** on the same project — shown with provenance in setup ("Supervisor: L2 handler pool — change"), overridable to a person or a different pool.
+3. **Top step** (no next step): **explicit is required** (no default) — typically GRC chair / project admin.
+4. Else `null` → caller falls back to the step's `supervisor_role` tier pool. Do **not** invent a supervisor and **never** walk `parent_organization_id`.
+
+Implement as one pure service function reused by OC-04's escalation-**notify**, visibility, and the **assignment-failure reassignment** path — one resolver, no duplication. The position-level `reports_to_user_id` / `reports_to_position_key` are **administrative/HR only** now and do **not** feed grievance supervision.
 
 ## Constraints
 
