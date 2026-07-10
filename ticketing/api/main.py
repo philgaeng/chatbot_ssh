@@ -21,6 +21,7 @@ from ticketing.api.routers import settings as settings_router
 from ticketing.api.routers import reports
 from ticketing.api.routers import locations as locations_router
 from ticketing.api.routers import project_types as project_types_router
+from ticketing.api.routers import position_types as position_types_router
 from ticketing.api.routers import tasks as tasks_router
 from ticketing.api.routers import viewers as viewers_router
 from ticketing.api.routers import scan as scan_router
@@ -114,6 +115,7 @@ app.include_router(settings_router.router,  prefix="/api/v1", tags=["Settings"])
 app.include_router(reports.router,          prefix="/api/v1", tags=["Reports"])
 app.include_router(locations_router.router, prefix="/api/v1", tags=["Locations & Projects"])
 app.include_router(project_types_router.router, prefix="/api/v1", tags=["Project types"])
+app.include_router(position_types_router.router, prefix="/api/v1", tags=["Position types"])
 app.include_router(tasks_router.router,     prefix="/api/v1", tags=["Tasks"])
 app.include_router(viewers_router.router,   prefix="/api/v1", tags=["Viewers"])
 app.include_router(scan_router.router,      prefix="/api/v1", tags=["QR Tokens"])

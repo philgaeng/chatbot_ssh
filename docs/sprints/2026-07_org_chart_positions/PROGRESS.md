@@ -10,7 +10,7 @@
 | OC-06 | Admin-setup UX/UI evaluation | ux-evaluation | done | dev/hardening (docs only) | — | Published `ui/03_admin_setup_flow_evaluation.md`; 2 blockers + 15 majors triaged below |
 | SH-1..6 | Backend hardening (authz/validation/data-integrity) | hardening | done | dev/organisation | `8e55e65a` `27b4cf63` `96e77868` `313afc2a` `92054b36` `a9d76e3e` `290711d9` | 6/6 landed; **SH-4 dedup finder still outstanding** (only lifecycle guards + email/address migration done). Per-SHA→ticket map in [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 Status column |
 | OC-01 | Org tree on `organizations` + CSV import | backend-org-tree | done | dev/organisation | `1ba1831d` | **DB-validated in Docker:** migration up→down→up clean, **48/48 tests green** (OC-01 27 + org regression 21). Sole head `m3o5q7s9`. Gates SH-7/OC-02+/RB-4 |
-| OC-02 | `position_types` + matrix + `/position-types` | backend-org-tree | todo | — | — | Chains after OC-01 migration; `owner_organization_id` column (org-scoped catalog) |
+| OC-02 | `position_types` + matrix + `/position-types` | backend-org-tree | done | dev/organisation | _pending_ | **DB-validated in Docker:** migration `o5q7s9u1` up/down/up clean, **12/12 tests green**, 5 DoR position types seeded. `owner_organization_id` = first org-scoped-catalog column (SH-7 extends + filters) |
 | OC-03 | `officer_positions` + invite pre-fill + supervisor resolver | backend-positions | todo | — | — | Needs OC-01/02 tables; routes through SH-3 validated helpers |
 | OC-04 | Chart behaviors + SEAH leak-proofing | backend-positions | todo | — | — | Rebase on HR-04; needs OC-03 |
 | SH-7 | Hierarchical admin scope (4 role keys + `org_category` gating + attenuated delegation + org-scoped catalog) | hardening | todo | — | — | Needs OC-01 `descendant_org_ids`; retires `country_admin`, adds `officer_admin` role key (≠ existing `services/officer_admin.py` onboarding module) — [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 |
@@ -25,8 +25,8 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 |---|---|---|---|
 | `k1m3o5q7` | SH-4 org email/address | `h2j4l6n8` | SH-4 dedup-finder groundwork |
 | `m3o5q7s9` | OC-01 org columns | `k1m3o5q7` | **Applied + verified 2026-07-10** — up→down→up clean on the Docker `db`; sole head; DOR/ADB backfilled then categorized (gov/donor) |
-| — | OC-02 position_types | **`m3o5q7s9`** | Chain on OC-01's head above |
-| — | OC-03 officer_positions | (OC-02 rev) | — |
+| `o5q7s9u1` | OC-02 position_types | `m3o5q7s9` | **Applied + verified 2026-07-10** — up→down→up clean; single head; 5 DoR position types seeded |
+| — | OC-03 officer_positions | **`o5q7s9u1`** | Chain on OC-02's head above |
 
 ## Acceptance checklists
 
@@ -51,13 +51,13 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 - [x] **Manual:** `alembic upgrade→downgrade→upgrade` clean on Docker `db`; existing orgs (DOR/ADB) still resolve; integration test rows self-clean
 
 ### OC-02 — Position types + matrix
-- [ ] Migration + model for `position_types` (all columns incl. `display_name_ne`)
-- [ ] `/position-types` CRUD; `position_key` immutable; delete guard on in-use types
-- [ ] Matrix validation (`default_role_key`, `allowed_unit_types`, `reports_to_position_key`)
-- [ ] `default_role_key` edit does not re-sync holders (no side effect)
-- [ ] **Authz matrix** green; SEAH-track authoring open-question logged
-- [ ] `tests/ticketing/test_position_types.py` green
-- [ ] Seed ~5 real DoR position types committed
+- [x] Migration `o5q7s9u1` + `PositionType` model (all cols incl. `display_name_ne` + `owner_organization_id`); UUID PK is Python-side `String(36)` (house style, not `gen_random_uuid()`)
+- [x] `/position-types` CRUD; `position_key` immutable (omitted from update schema); delete guard on in-use (self-ref `reports_to_position_key`; **holder guard is an OC-03 `# INTEGRATION POINT`** since `officer_positions` doesn't exist yet)
+- [x] Matrix validation: `default_role_key` exists + track-compatible (reuses SH-2 `role_scope_matches_track`), `allowed_unit_types` ⊆ UNIT_TYPES, `reports_to_position_key` exists + no self-ref, `owner_organization_id` exists
+- [x] `default_role_key` edit does not re-sync holders (no side effect; commented — OC-03 adds "review holders")
+- [x] **Authz matrix** green (MANAGE_ORG_STRUCTURE); **SEAH-track authoring open-question logged** (doc 16 §7 "org_admin seah may propose — TBD")
+- [x] `tests/ticketing/test_position_types.py` green — **12/12 in Docker** (6 pure + 6 integration)
+- [x] Seed ~5 real DoR position types committed (`ticketing/seed/position_types.py`, wired into `seed_standard`; 2 titles share 1 role — the matrix demonstrated)
 
 ### OC-03 — Officer positions + invite pre-fill
 - [ ] Migration + model for `officer_positions`
@@ -92,6 +92,7 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 
 | Date | Ticket | Deviation / adjacent finding | Action |
 |---|---|---|---|
+| 2026-07-10 | OC-02 | **Position types built + DB-validated in Docker** (migration `o5q7s9u1` on `m3o5q7s9`; up→down→up clean; 12/12 tests; 5 DoR positions seeded). **Decisions:** (a) UUID PK is **Python-side `String(36)` `default=_uuid`**, not `gen_random_uuid()` — recon found that's the house style (the CLAUDE.md "gen_random_uuid" note is aspirational; only seed SQL uses it); (b) `owner_organization_id` is the **first org-scoped-catalog column** — roles/workflow_definitions don't have one yet, so OC-02 only *stores/validates* it (FK→organizations SET NULL); **SH-7 owns the availability filter** (available at node + descendants) and extends the column to roles/workflows; (c) delete guard currently blocks only on `reports_to_position_key` self-refs — **holder count is an `# INTEGRATION POINT (OC-03)`** because `officer_positions` doesn't exist yet (409 shape pre-shaped with a `holders_count` slot); (d) `default_role_key` track-compat reuses SH-2 `role_scope_matches_track`, with a `both`-track position requiring a role usable on both (`Both`/unscoped). **Open question logged:** SEAH-track position-type authoring (doc 16 §7 "org_admin seah may propose — TBD") — currently standard-track/super only. | OC-03 chains on `o5q7s9u1`, wires holder guard + invite pre-fill; SH-7 adds the org-scoped-catalog availability filter |
 | 2026-07-10 | OC-01 | **DB-validated in Docker.** Rebuilt `ticketing_api` with the working tree; `alembic upgrade head` applied `k1m3o5q7`+`m3o5q7s9`, `downgrade -1` dropped all 6 tree cols, re-`upgrade` restored them (up→down→up clean). Columns/CHECKs/FKs confirmed on `ticketing.organizations`; DOR/ADB backfilled to `government`. **48/48 tests green** (OC-01 27 + org regression 21). **Two fixes during validation:** (1) recursive-CTE array type mismatch — cast `organization_id::text` in `subtree`/`ancestors` (Postgres unifies `varchar(64)[]` base vs `varchar[]` recursive); (2) corrected the KL Road seed + dev DB so **ADB = `donor`/`development_partner`, DOR = `government`/`department`** (was blanket-backfilled `government`). | Ready to commit; OC-02 chains on `m3o5q7s9` |
 | 2026-07-10 | OC-01 | **Org tree built — code complete + pure tests green (uncommitted; migration not yet DB-applied — host lacks docker).** Migration `m3o5q7s9` (sole head on `k1m3o5q7`) adds the 6 tree columns. Router: `tree`/`root_id` list, create/patch tree placement + reparent cycle-guard + subtree category cascade, child-delete 409 guard, `POST /organizations/import`. Services: `org_tree.py` (path-guarded CTEs) + `org_import_core.py` (pure planner). **Decisions:** (a) `org_category` **denormalized NOT NULL on every node** (= root's category) for cheap subtree reads — reparent cascades it; existing seeded ADB is backfilled `'government'` (mislabelled) → correct via `PATCH .../ADB {org_category:'donor'}`; (b) create **defaults an omitted root's category to `government`** so the SH-6 charset test (root, no category) stays green; (c) **incidentally mapped SH-4's `email`/`address` onto the `Organization` model** to remove the model↔DB autogenerate-drift landmine before OC-02 (hand-written migration, so no drop emitted). **Pending Docker:** `alembic up/down/up` + 9 integration tests (`test_org_tree.py -m integration`). **SH-7 handoff:** per-`org_category` root-creation gating left as `# INTEGRATION POINT (SH-7)` in `create_organization`. | Chain OC-02 on `m3o5q7s9`; run DB validation under Docker before commit; SH-7 adds attenuated root-creation gating |
 | 2026-07-07 | OC-06 | **F1 (blocker):** Devanagari org name un-creatable from UI (ASCII-only client id lock); server accepts it and mints `NP_सव` **[live]** | New-ticket: org id charset policy + manual-id entry; relevant to OC-01/05 org UI |

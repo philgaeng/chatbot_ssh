@@ -28,6 +28,7 @@ from ticketing.models.organization import Organization
 from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.seed.position_types import seed_position_types
 from ticketing.seed.grm_roles import upsert_grm_roles
 
 logger = logging.getLogger(__name__)
@@ -550,6 +551,7 @@ def seed_standard(db: Session | None = None) -> None:
         seed_organizations(db)
         seed_locations(db)
         seed_roles(db)
+        seed_position_types(db)  # OC-02: after roles (matrix refs) + orgs (owner)
         seed_standard_workflow(db)
         seed_workflow_assignment(db)
         seed_project(db)

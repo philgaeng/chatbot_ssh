@@ -1,6 +1,7 @@
 from .base import Base
 from .country import Country, LocationLevelDef, Location, LocationTranslation
 from .organization import Organization
+from .position_type import PositionType
 from .user import Role, UserRole
 from .admin_scope import AdminScope
 from .officer_onboarding import OfficerOnboarding
@@ -26,6 +27,7 @@ __all__ = [
     "Location",
     "LocationTranslation",
     "Organization",
+    "PositionType",
     "Role",
     "UserRole",
     "AdminScope",
