@@ -24,7 +24,7 @@ The feature creates **new admin endpoints on a government PII system** (`/positi
 
 OC-06 ([published report](../../ticketing_system/ui/03_admin_setup_flow_evaluation.md)) triggered a full Settings redesign. The **design phase is complete** — 5 independent devil's-advocate review rounds took it from a 48% baseline to **84% completeness / 74% ease-of-use**, all design blockers closed.
 
-- **▶ [BUILD-HANDOVER.md](BUILD-HANDOVER.md) — the single entry point to build.** Read this first: locked decisions, the two-phase plan (SH-1..7 + OC-01..04 backend; RB-1..4 frontend), sequencing, and DoD.
+- **▶ [BUILD-HANDOVER.md](agents/BUILD-HANDOVER.md) — the single entry point to build.** Read this first: locked decisions, the two-phase plan (SH-1..7 + OC-01..04 backend; RB-1..4 frontend), sequencing, and DoD.
 - **Design artifacts (live, the build consumes these):** [DESIGN-settings-redesign.md](DESIGN-settings-redesign.md) (source of record) · [settings-wireframes.html](settings-wireframes.html) (13 frames) · [settings-state-atlas.html](settings-state-atlas.html) (14 surfaces) · [DESIGN-REVIEW.md](DESIGN-REVIEW.md) (the 5-round scores).
 - **Design-phase handovers — ARCHIVED** (history; superseded by BUILD-HANDOVER): [A — UX brief](archive/HANDOVER-A-settings-ux-redesign-brief.md) · [B — hardening & rebuild plan (full ticket bodies)](archive/HANDOVER-B-settings-hardening-and-rebuild-plan.md) · [C — admin-model finalize & cleanup](archive/HANDOVER-C-admin-model-finalize-and-cleanup.md).
 
@@ -56,13 +56,15 @@ Everything else is disjoint: hardening's auth (`dependencies.py`, new `ticket_ac
 
 ## Conventions (binding for all agents)
 
-- Branch per workstream off `integration/seah-claude`: `orgchart/oc-01-02-tree`, `orgchart/oc-03-04-positions`, `orgchart/oc-05-portal`, `orgchart/oc-06-ux-eval`.
+> **Standing rule — keep PROGRESS current.** Update [`PROGRESS.md`](PROGRESS.md) at **every commit**: ticket status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is **incomplete**. This rule holds across the whole sprint — this README, [`agents/README.md`](agents/README.md), [`agents/BUILD-HANDOVER.md`](agents/BUILD-HANDOVER.md), and every spec.
+
+- Branch per workstream off `dev/organisation` (the active sprint branch, off `integration/seah-claude`) — e.g. `orgchart/oc-01-02-tree`, `orgchart/oc-03-04-positions`, `orgchart/oc-05-portal`, `orgchart/oc-06-ux-eval`.
 - **Never touch `main`.** See CLAUDE.md git workflow.
 - Every ticket ships **with its tests in the same commit** — including an **authz matrix** for every new endpoint and **SEAH-leak tests** for every reporting-line behavior. These are acceptance criteria.
 - Migrations: ticketing stream only (`ticketing/migrations/`), safety header required, real `downgrade()`, chained deliberately on the live head (coordinate with HR-03).
 - New UI = new `components/settings/*` components. **Do not add inline code to `app/settings/page.tsx`** beyond tab wiring.
 - Nepali display names (`display_name_ne`) are **translator-gated** exactly like SEAH copy — never invent Nepali text; mark rows for the translator.
-- Update [`PROGRESS.md`](PROGRESS.md) at every commit (status + checklist ticks + deviations).
+- **Update [`PROGRESS.md`](PROGRESS.md) at every commit** (status, checklist ticks, deviations, migration-head table) — the standing rule above, enforced sprint-wide.
 
 ## Model selection
 

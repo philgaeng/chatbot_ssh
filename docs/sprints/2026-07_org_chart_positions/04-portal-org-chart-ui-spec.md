@@ -1,5 +1,7 @@
 # OC-05 — Portal: org-chart & positions UI
 
+> **Standing rule — keep [`PROGRESS.md`](PROGRESS.md) current.** Update it at **every commit** for this ticket: status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is incomplete. (Same rule in the sprint [README](README.md), [agents/README](agents/README.md), and [agents/BUILD-HANDOVER](agents/BUILD-HANDOVER.md).)
+
 > Workstream: portal · Branch `orgchart/oc-05-portal` · **After** OC-01..04 land **and after** hardening HR-06 (shared file).
 > Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md) §5.1, §5.2, §4. Grounded by the OC-06 UX evaluation ([05-admin-setup-ux-evaluation.md](05-admin-setup-ux-evaluation.md)) — read it first.
 > **Hard rule from the review:** do not grow the 4,717-line god-file. All new UI is new `components/settings/*` components; the only edit to `app/settings/page.tsx` is tab wiring.

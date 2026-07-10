@@ -1,6 +1,6 @@
 # Handover B — Settings hardening & rebuild plan
 
-> **⚠ ARCHIVED (design phase) — superseded by [../BUILD-HANDOVER.md](../BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
+> **⚠ ARCHIVED (design phase) — superseded by [../agents/BUILD-HANDOVER.md](../agents/BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
 
 > **Owner:** engineering track (implementing agents) · **Companion to** [Handover A](HANDOVER-A-settings-ux-redesign-brief.md) (the UX brief).
 > **Grounded by:** [`docs/ticketing_system/ui/03_admin_setup_flow_evaluation.md`](../../../ticketing_system/ui/03_admin_setup_flow_evaluation.md) (OC-06) — every ticket below cites an OC-06 finding + `file:line` evidence.

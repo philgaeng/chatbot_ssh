@@ -1,5 +1,7 @@
 # OC-04 — Chart-driven behaviors + SEAH leak-proofing
 
+> **Standing rule — keep [`PROGRESS.md`](PROGRESS.md) current.** Update it at **every commit** for this ticket: status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is incomplete. (Same rule in the sprint [README](README.md), [agents/README](agents/README.md), and [agents/BUILD-HANDOVER](agents/BUILD-HANDOVER.md).)
+
 > Workstream: backend-positions (part 2) · Branch `orgchart/oc-03-04-positions` · After OC-03.
 > Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md) §5 (behaviors) and **§6 (SEAH rules)**. Re-locate line numbers first.
 > **Security-critical.** Three of these four behaviors surface tickets or notifications *through reporting lines*. Each is a potential SEAH-existence leak — the class the July 2026 review flagged as door-sized holes in the SEAH wall. SEAH-leak tests are acceptance criteria, written **before** the feature.

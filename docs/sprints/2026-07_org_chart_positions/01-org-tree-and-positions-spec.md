@@ -1,5 +1,7 @@
 # OC-01 / OC-02 — Org tree + position types & matrix
 
+> **Standing rule — keep [`PROGRESS.md`](PROGRESS.md) current.** Update it at **every commit** for this ticket: status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is incomplete. (Same rule in the sprint [README](README.md), [agents/README](agents/README.md), and [agents/BUILD-HANDOVER](agents/BUILD-HANDOVER.md).)
+
 > Workstream: backend-org-tree · Branch `orgchart/oc-01-02-tree` · Additive (no behavior change to existing orgs).
 > Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md) §3.1, §3.2, §9. Re-locate all line numbers with grep before editing.
 > **Migration coordination:** both tickets add a ticketing revision. Chain them in order (OC-01 then OC-02) on the live `alembic heads`, *after* hardening HR-03 if it has landed. See sprint README § Parallel-safety.

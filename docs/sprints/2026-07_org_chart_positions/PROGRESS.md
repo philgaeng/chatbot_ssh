@@ -1,6 +1,6 @@
 # Org Chart & Positions Sprint — Progress
 
-> Update at **every commit** on a sprint branch. Status values: `todo` · `in_progress` · `blocked` · `review` · `done`.
+> **Standing rule: update this file at every commit** — ticket status, checklist ticks, deviations, and the migration-head table. A commit that changes sprint state without a matching update here is **incomplete**. (Restated in [README.md](README.md), [agents/README.md](agents/README.md), [agents/BUILD-HANDOVER.md](agents/BUILD-HANDOVER.md), and every spec.) Status values: `todo` · `in_progress` · `blocked` · `review` · `done`.
 > Sprint definition: [README.md](README.md) · Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md)
 
 ## Ticket status
@@ -8,13 +8,14 @@
 | ID | Title | Workstream | Status | Branch | Commits | Notes |
 |---|---|---|---|---|---|---|
 | OC-06 | Admin-setup UX/UI evaluation | ux-evaluation | done | dev/hardening (docs only) | — | Published `ui/03_admin_setup_flow_evaluation.md`; 2 blockers + 15 majors triaged below |
-| OC-01 | Org tree on `organizations` + CSV import | backend-org-tree | todo | — | — | Migration serializes after HR-03 |
-| OC-02 | `position_types` + matrix + `/position-types` | backend-org-tree | todo | — | — | Chains after OC-01 migration |
-| OC-03 | `officer_positions` + invite pre-fill + supervisor resolver | backend-positions | todo | — | — | Needs OC-01/02 tables |
+| SH-1..6 | Backend hardening (authz/validation/data-integrity) | hardening | done | dev/organisation | `8e55e65a` `27b4cf63` `96e77868` `313afc2a` `92054b36` `a9d76e3e` `290711d9` | 6/6 landed; **SH-4 dedup finder still outstanding** (only lifecycle guards + email/address migration done). Per-SHA→ticket map in [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 Status column |
+| OC-01 | Org tree on `organizations` + CSV import | backend-org-tree | ▶ next | — | — | **The unblocker** (gates SH-7, OC-02+, RB-4). Serialize migration on the live head — see "Migration head coordination" below |
+| OC-02 | `position_types` + matrix + `/position-types` | backend-org-tree | todo | — | — | Chains after OC-01 migration; `owner_organization_id` column (org-scoped catalog) |
+| OC-03 | `officer_positions` + invite pre-fill + supervisor resolver | backend-positions | todo | — | — | Needs OC-01/02 tables; routes through SH-3 validated helpers |
 | OC-04 | Chart behaviors + SEAH leak-proofing | backend-positions | todo | — | — | Rebase on HR-04; needs OC-03 |
-| OC-05 | Portal org-chart UI | portal | superseded | — | — | **Folded into the Settings rebuild** (Handover B · RB-4) after OC-06 pivot; original spec kept as historical |
-| SH-1..6 | Backend hardening (authz/validation/data-integrity) | hardening | todo | — | — | From OC-06; **start now**, UX-independent — see [Handover B](archive/HANDOVER-B-settings-hardening-and-rebuild-plan.md) Part 1 |
-| RB-1..4 | Settings frontend rebuild (incl. former OC-05) | portal | blocked | — | — | **Gated on [Handover A](archive/HANDOVER-A-settings-ux-redesign-brief.md)** UX brief; see Handover B Part 2 |
+| SH-7 | Hierarchical admin scope (4 role keys + `org_category` gating + attenuated delegation + org-scoped catalog) | hardening | todo | — | — | Needs OC-01 `descendant_org_ids`; retires `country_admin`, adds `officer_admin` role key (≠ existing `services/officer_admin.py` onboarding module) — [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 |
+| OC-05 | Portal org-chart UI | portal | superseded | — | — | **Folded into the Settings rebuild** ([BUILD-HANDOVER](agents/BUILD-HANDOVER.md) · RB-4) after OC-06 pivot; original spec kept as historical |
+| RB-1..4 | Settings frontend rebuild (incl. former OC-05) | portal | todo | — | — | **Design gate met** (design phase done at 84/74) — see [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 Phase 2; RB-1 i18n scaffolding can start early |
 
 ## Migration head coordination (critical)
 
@@ -22,8 +23,8 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 
 | Revision | Ticket | Chained on (`down_revision`) | Notes |
 |---|---|---|---|
-| — | HR-03 (hardening) | `g0h2i4j6` | Watch: whichever lands first is the new head |
-| — | OC-01 org columns | (record actual) | After HR-03 if landed, else on `g0h2i4j6` + coordinate rebase |
+| `k1m3o5q7` | SH-4 org email/address | `h2j4l6n8` | **Current single head (2026-07-10)** — verified sole head across 17 revisions; SH-4 dedup-finder groundwork |
+| — | OC-01 org columns | **`k1m3o5q7`** | Chain on the live head above; confirm `alembic heads` shows exactly one head before **and** after |
 | — | OC-02 position_types | (OC-01 rev) | — |
 | — | OC-03 officer_positions | (OC-02 rev) | — |
 
@@ -115,7 +116,8 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 | 2026-07-08 | Handover A | **Re-score round 4 + design phase declared done (80% / 73%, from 48% baseline).** Admin model coheres across doc 11 §2 / DESIGN §2.5 / Frame 07 / atlas. **Decision — org-scoped catalog:** a role/workflow/position-type is available at its owning org **level and below** (kills proliferation from any-depth authoring). Remaining = cleanup (doc 11 §4–§11 not propagated; `org_category` no data home; 2 residual slugs) + 5 build-time items. | Execution handed off → **[`HANDOVER-C-admin-model-finalize-and-cleanup.md`](archive/HANDOVER-C-admin-model-finalize-and-cleanup.md)**; scores in [`DESIGN-REVIEW.md`](DESIGN-REVIEW.md) round-4 |
 | 2026-07-08 | Handover A | **Admin model finalized + doc 11 updated (resolves the round-2/3 blocker):** 4-tier strict-subset ladder — **super_admin / org_admin (subtree, any depth; authors catalog) / project_admin (contractors + staffing) / officer_admin (invite only)**; `country_admin` retired → `org_admin`. **`org_category` actor types** (government / local_government / donor / third_party) give "root" a concrete definition; new institutional root = super-only, third_party delegable. **doc 11 §2 rewritten** (was the stale LOCKED spec that "conflicted") + §3–§8 bridging note. | doc 11 §2; DESIGN §2.5/§2.4/§4.4 + decision log; Frame 07 + atlas s6; Handover B **SH-7** (4 keys + org_category + attenuation); [`DESIGN-REVIEW.md`](DESIGN-REVIEW.md) round-4 |
 | 2026-07-08 | Handover A | **Round-3 fix pass — all round-2 findings closed:** §2.5 split into root-tier (catalog owner) vs sub-tier (blocker fixed); workflow **levels add/remove/reorder** (Frame 04 pin 53); **de-slugged** Frame 07 + atlas mock UI (org_admin/project_admin/super_admin → labels, "matrix"/"attenuated"/"whitelist" gone); atlas +4 surfaces (**14 total**) for Frames 10–13; **merge + in-flight-ticket** semantics (pins 54–55, §7.F); **SEAH invisibility corrected** (case existence only; people appear — doc 16 §6); minors (locked-perms cue, SEAH-filter gate, dual-hat, "Next:" strip). | Wireframes **13 frames / pins 1–56**; atlas 14 surfaces; [`DESIGN-REVIEW.md`](DESIGN-REVIEW.md) round-3 table; re-score = next optional checkpoint |
-| 2026-07-10 | Handover A/B/C | **Design phase closed → build launched.** Consolidated the three design-phase handovers into a single build entry point and archived the originals: created **[`BUILD-HANDOVER.md`](BUILD-HANDOVER.md)** (read order, locked decisions, two-phase plan SH-1..7 + OC-01..04 + RB-1..4, sequencing, DoD); moved HANDOVER-A/B/C into [`archive/`](archive/) with ARCHIVED banners → BUILD-HANDOVER; reconciled every inbound/outbound link (README §"Current state", DESIGN/DESIGN-REVIEW/PROGRESS repointed; grep-verified no dead links repo-wide). | Design at **84/74** (from 48 baseline); next work is the build off `integration/seah-claude` per BUILD-HANDOVER §2 |
+| 2026-07-10 | Build launch | **Status reconciled to git before handoff.** Verified **SH-1..SH-6 committed** on `dev/organisation` (`8e55e65a`..`290711d9`); **SH-4 dedup finder still outstanding** (only guards + `k1m3o5q7` email/address migration landed); OC-01/SH-7/OC-02..04/RB-1..4 not started (`officer_admin` code hits = existing onboarding module, not the role key). Live Alembic head = **`k1m3o5q7`** (sole head, 17 revs) → OC-01 chains there. Added a Status column to BUILD-HANDOVER §2, a "start here → OC-01" pointer, and **default-Opus + parallel-subagents** run guidance; base branch synced `integration/seah-claude` → `dev/organisation`. | Ticket table + migration-head table above updated; [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2/§4 synced |
+| 2026-07-10 | Handover A/B/C | **Design phase closed → build launched.** Consolidated the three design-phase handovers into a single build entry point and archived the originals: created **[`BUILD-HANDOVER.md`](agents/BUILD-HANDOVER.md)** (read order, locked decisions, two-phase plan SH-1..7 + OC-01..04 + RB-1..4, sequencing, DoD); moved HANDOVER-A/B/C into [`archive/`](archive/) with ARCHIVED banners → BUILD-HANDOVER; reconciled every inbound/outbound link (README §"Current state", DESIGN/DESIGN-REVIEW/PROGRESS repointed; grep-verified no dead links repo-wide). | Design at **84/74** (from 48 baseline); next work is the build off `integration/seah-claude` per BUILD-HANDOVER §2 |
 
 ## Sprint close checklist
 - [ ] All 6 tickets `done`, CI green on integration branch

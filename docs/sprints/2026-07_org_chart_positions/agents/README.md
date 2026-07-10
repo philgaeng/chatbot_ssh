@@ -2,8 +2,11 @@
 
 One runbook per workstream; each is a self-contained brief for a single agent run. Give the agent the runbook plus repo access — it should not need anything else.
 
+> **Standing rule — keep PROGRESS current.** Update [`../PROGRESS.md`](../PROGRESS.md) at **every commit**: ticket status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is **incomplete**. This rule holds across the whole sprint — [`../README.md`](../README.md), this file, [`BUILD-HANDOVER.md`](BUILD-HANDOVER.md), and every spec. (Restated as Common rule #6 below.)
+
 | Runbook | Tickets | Model | Branch |
 |---|---|---|---|
+| [**BUILD-HANDOVER.md**](BUILD-HANDOVER.md) | **the build launch** — SH-4-finder, OC-01..04, SH-7, RB-1..4 | **Opus** | per-workstream off `dev/organisation` — **start here** |
 | [ux-evaluation.md](ux-evaluation.md) | OC-06 | **Opus** | `orgchart/oc-06-ux-eval` — **run first** (doc only) |
 | [backend-org-tree.md](backend-org-tree.md) | OC-01, OC-02 | **Opus** | `orgchart/oc-01-02-tree` |
 | [backend-positions.md](backend-positions.md) | OC-03, OC-04 | **Opus** | `orgchart/oc-03-04-positions` — after tree lands |
@@ -41,9 +44,9 @@ Pick by **difficulty and blast radius, not diff size** (same rubric as the harde
 ## Common rules (all agents)
 
 1. Read `CLAUDE.md` (git workflow, schema ownership, service-boundary care), [`../README.md`](../README.md) (esp. the parallel-safety seams with the hardening sprint), your ticket spec(s), and **doc 16** before touching anything. Spec/doc line numbers are July-2026 snapshots — re-locate with grep first.
-2. Branch off `integration/seah-claude`. Never commit to `main`.
+2. Branch off `dev/organisation` (the active sprint branch, off `integration/seah-claude`). Never commit to `main`.
 3. Tests (incl. authz matrix + SEAH-leak cases) are acceptance criteria — ship them with the code. CI must be green before `done`.
 4. Smallest diff that satisfies the spec. Adjacent findings → [`../PROGRESS.md`](../PROGRESS.md) Deviations, not your diff.
 5. Migrations: ticketing stream only, safety header, real `downgrade()`, chained on the live head — **record the revision + `down_revision` in the PROGRESS head table** and coordinate with HR-03.
-6. Update [`../PROGRESS.md`](../PROGRESS.md) (status, checklist ticks, deviations) at every commit; execute your spec's manual verification and record results.
+6. **Update [`../PROGRESS.md`](../PROGRESS.md) at every commit** (status, checklist ticks, deviations, and the migration-head table) — the standing rule at the top of this file; a commit that changes sprint state without a PROGRESS update is incomplete. Execute your spec's manual verification and record results.
 7. Commit messages: imperative, ticket ID first (e.g. `OC-03: pre-fill officer role and scope from selected position`).

@@ -1,6 +1,6 @@
 # Handover C — Admin model finalize, spec cleanup & org-scoped catalog
 
-> **⚠ ARCHIVED (design phase) — superseded by [../BUILD-HANDOVER.md](../BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
+> **⚠ ARCHIVED (design phase) — superseded by [../agents/BUILD-HANDOVER.md](../agents/BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
 
 > **For:** the agent picking this up next. **Prereq reading:** this file, then [`DESIGN-settings-redesign.md`](../DESIGN-settings-redesign.md) §2.4/§2.5, [`DESIGN-REVIEW.md`](../DESIGN-REVIEW.md), and [`docs/ticketing_system/11_roles_and_permissions.md`](../../../ticketing_system/11_roles_and_permissions.md) §1–§2.
 > **State on handoff:** the Settings redesign design is **done at ~80% completeness / 73% ease-of-use** (up from a 48% baseline, over four independent devil's-advocate re-scores — history in DESIGN-REVIEW). The admin model is **finalized and locked** (below). What remains is (1) propagating the model through the rest of doc 11, (2) implementing the org-scoped-catalog decision, (3) a couple of residual copy fixes, and (4) five build-time items → RB/Handover-B tickets. **No design decisions are open** — this is execution.

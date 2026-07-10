@@ -322,6 +322,26 @@ lib/
 
 **This is the signal Part 2 can start.** When this tree is approved, RB-2 (demolition) has a target and RB-3/RB-4 have components to build.
 
+### 3.1 Frame → build traceability (the cross-walk for RB agents)
+
+The wireframes are visual, the tree above is by-component, §4 is by-interaction, the atlas is by-state, and the data lives in the OC/SH tickets — a build agent otherwise assembles this map itself, per frame. This index is that map: for each of the 13 wireframe frames, the primary §3 components, the §4/spec section that governs it, its atlas state surface, its place in the IA, and the backend ticket that owns its data. **RB-0 (BUILD-HANDOVER §2) consumes this** to emit a just-in-time per-frame build sheet grounded in the real API. Routes are illustrative (tab ▸ sub-nav); the concrete Next.js route is RB-2's call. **Atlas 00 = shared vocabulary, applies to every frame.**
+
+| Frame | Primary §3 components | §4 / spec | Atlas | Surface (tab ▸ sub-nav) | Data owner (ticket) |
+|---|---|---|---|---|---|
+| **01** Setup & go-live landing | `overview/SetupOverview`, `GoLiveSpine` | §2.3 + §7.A (first-run spine); D6 | 01 | `/settings` landing | RB-3 composes existing project/workflow/staffing status (no new endpoint) |
+| **02** Organisation — org tree | `org/OrgTree`, `OrgTreeNode`, `OrgEditor`, `OrgCsvImport`; `lib/orgTree.ts` | §4.2 | 02 | Organisation ▸ Org tree | **OC-01** (tree + CSV + descendant CTE); dedup soft-flag **SH-4** |
+| **03** Officers — invite-as-result | `officers/InviteOfficer`, `InviteOutcomeCard`, `InviteAdjustDisclosure`, `OverrideBadge`; `ProvenanceHint` | §4.1 | 03 | Organisation ▸ Officers (also Projects ▸ staffing) | **OC-03** (position→role/scope pre-fill + resolver); invite validation **SH-3** |
+| **04** Workflows & roles — guided flow | `workflows/WorkflowsRolesFlow`, `StepEditor`, `StepRoleBinder`, `StepCast` | §4.3 (+ §4.4) | 04 | Workflows & roles | step→role validation **SH-2**; valid-only + org-scoped picker **SH-7** |
+| **05** Projects — staffing & go-live | `projects/ProjectsTab`, `ProjectActorSection`, `ProjectStaffingSection`, `ProjectGoLiveDetail` | §4.1 (invite delegate); §2.4 (actor create) | 05 | Projects | contractor-create dedup **SH-4**; staffing invite **OC-03** |
+| **06** Position types — review holders | `org/PositionTypesPanel`, `PositionTypeEditor`, `ReviewHoldersModal` | D3; doc 16 §3.2 | 06 | Organisation ▸ Position types | **OC-02** (position_types + matrix + `owner_organization_id`) |
+| **07** Platform — Admin access | `platform/AdminAccessPanel`; `lib/adminScope.ts` | §2.5 (admin ladder + attenuated) | 07 | Platform ▸ Admin access | **SH-7** (4 role keys + `org_category` gating + attenuated delegation) |
+| **08** Roles & permissions | `workflows/RoleCatalog`, `RoleEditor`; `RoleLabel`, `SeverityBadge` | §4.4 | 08 | Workflows & roles ▸ Roles | roles model (existing); owning-level chips **SH-7**; delete guard **SH-5** |
+| **09** Notifications | `workflows/NotificationRules` | §4.5 | 09 | Workflows & roles ▸ Notifications | `settings.notification_rules` (existing); derived from cast §4.3 |
+| **10** Create a project (+ workflow link) | `projects/ProjectEditor`, `ProjectsTab` | §7.B (B1) | 10 | Projects ▸ New project | project create (existing); country-validation **SH-4 / B1** |
+| **11** Officers — directory & lifecycle | `officers/OfficersDirectory`, `OfficerManageModal`, `OfficerScopeTable` | §7.F (lifecycle) | 11 | Organisation ▸ Officers | **OC-03** (transfer/dual-hat); dual-hat invite collision → RB-4 |
+| **12** Org lifecycle ⋯ + tree at scale | `org/OrgTree` (⋯ menu), `OrgEditor` | §4.2 + §7.F (merge/in-flight) | 12 | Organisation ▸ Org tree (⋯) | **OC-01** (tree) + **SH-4** (delete/merge guards) |
+| **13** SEAH — setup & invisibility | cross-cut: `StepCast` (track), `OfficersDirectory` filter, `OrgTree` visibility | doc 16 §6; §7.F | 13 | Workflows (SEAH track) + Organisation (directory) | **OC-04** (inline SEAH predicates, leak-proofing) |
+
 ---
 
 ## 4. Interaction specs for the three hard patterns (deliverable 4)

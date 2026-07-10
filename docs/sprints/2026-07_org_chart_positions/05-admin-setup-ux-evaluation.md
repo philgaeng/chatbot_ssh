@@ -1,5 +1,7 @@
 # OC-06 — Admin-setup UX/UI evaluation (org → officers → workflow → projects)
 
+> **Standing rule — keep [`PROGRESS.md`](PROGRESS.md) current.** Update it at **every commit** for this ticket: status, checklist ticks, deviations, and (for schema work) the migration-head table. A commit that changes sprint state without a matching PROGRESS update is incomplete. (Same rule in the sprint [README](README.md), [agents/README](agents/README.md), and [agents/BUILD-HANDOVER](agents/BUILD-HANDOVER.md).)
+
 > Workstream: ux-evaluation · Branch `orgchart/oc-06-ux-eval` · **Runs FIRST** — its findings shape OC-05 and may reprioritize OC-01..04.
 > This is a **doc-and-analysis deliverable**, not a code change. Output: a published evaluation report under `docs/ticketing_system/ui/` plus a triaged findings list.
 > Requested explicitly by the sprint owner: evaluate *the whole UX/UI flow of setting up organizations, officers, workflows, and projects* — end to end, as a real government setup admin would experience it.

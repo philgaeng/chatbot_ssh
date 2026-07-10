@@ -1,6 +1,6 @@
 # Handover A — Settings redesign: UX/UI brief
 
-> **⚠ ARCHIVED (design phase) — superseded by [../BUILD-HANDOVER.md](../BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
+> **⚠ ARCHIVED (design phase) — superseded by [../agents/BUILD-HANDOVER.md](../agents/BUILD-HANDOVER.md)** (the build entry point). Kept for history; the plan is carried forward there.
 
 > **Owner:** design track (intended for a **cowork** session) · **Locks first** — the frontend rebuild ([Handover B](HANDOVER-B-settings-hardening-and-rebuild-plan.md) Part 2) implements whatever this brief produces.
 > **Status:** brief ready for design · produces: a full UX/UI redesign of the admin Settings surface **with wireframes**.
