@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|---|
 | OC-06 | Admin-setup UX/UI evaluation | ux-evaluation | done | dev/hardening (docs only) | — | Published `ui/03_admin_setup_flow_evaluation.md`; 2 blockers + 15 majors triaged below |
 | SH-1..6 | Backend hardening (authz/validation/data-integrity) | hardening | done | dev/organisation | `8e55e65a` `27b4cf63` `96e77868` `313afc2a` `92054b36` `a9d76e3e` `290711d9` | 6/6 landed; **SH-4 dedup finder still outstanding** (only lifecycle guards + email/address migration done). Per-SHA→ticket map in [BUILD-HANDOVER](agents/BUILD-HANDOVER.md) §2 Status column |
-| OC-01 | Org tree on `organizations` + CSV import | backend-org-tree | ▶ next | — | — | **The unblocker** (gates SH-7, OC-02+, RB-4). Serialize migration on the live head — see "Migration head coordination" below |
+| OC-01 | Org tree on `organizations` + CSV import | backend-org-tree | done | dev/organisation | _pending_ | **DB-validated in Docker:** migration up→down→up clean, **48/48 tests green** (OC-01 27 + org regression 21). Sole head `m3o5q7s9`. Gates SH-7/OC-02+/RB-4 |
 | OC-02 | `position_types` + matrix + `/position-types` | backend-org-tree | todo | — | — | Chains after OC-01 migration; `owner_organization_id` column (org-scoped catalog) |
 | OC-03 | `officer_positions` + invite pre-fill + supervisor resolver | backend-positions | todo | — | — | Needs OC-01/02 tables; routes through SH-3 validated helpers |
 | OC-04 | Chart behaviors + SEAH leak-proofing | backend-positions | todo | — | — | Rebase on HR-04; needs OC-03 |
@@ -23,9 +23,9 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 
 | Revision | Ticket | Chained on (`down_revision`) | Notes |
 |---|---|---|---|
-| `k1m3o5q7` | SH-4 org email/address | `h2j4l6n8` | **Current single head (2026-07-10)** — verified sole head across 17 revisions; SH-4 dedup-finder groundwork |
-| — | OC-01 org columns | **`k1m3o5q7`** | Chain on the live head above; confirm `alembic heads` shows exactly one head before **and** after |
-| — | OC-02 position_types | (OC-01 rev) | — |
+| `k1m3o5q7` | SH-4 org email/address | `h2j4l6n8` | SH-4 dedup-finder groundwork |
+| `m3o5q7s9` | OC-01 org columns | `k1m3o5q7` | **Applied + verified 2026-07-10** — up→down→up clean on the Docker `db`; sole head; DOR/ADB backfilled then categorized (gov/donor) |
+| — | OC-02 position_types | **`m3o5q7s9`** | Chain on OC-01's head above |
 | — | OC-03 officer_positions | (OC-02 rev) | — |
 
 ## Acceptance checklists
@@ -41,14 +41,14 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 - [x] Report published at `docs/ticketing_system/ui/03_admin_setup_flow_evaluation.md`; blockers/majors triaged below
 
 ### OC-01 — Org tree
-- [ ] Migration: `parent_organization_id` self-FK, `unit_type`, `territory_location_code`, `territory_includes_children`, `display_name_ne`; backfill + real downgrade + safety header
-- [ ] Model columns + self-relationship; `descendant_org_ids` CTE helper with cycle guard
-- [ ] Router: new fields on GET/POST/PATCH; `tree=true` + `root_id` filter; cycle/unit_type/territory validation
-- [ ] unit_type validation permits **independent roots** (`company`/`development_partner`) and **`company`→`company` nesting** (contractor subtrees); reporting-line nesting rules unchanged (design §2.4)
-- [ ] `POST /organizations/import` CSV: whole-file validate → single-transaction insert → idempotent upsert
-- [ ] Gated at country tier (reuse `admin_access`); **authz matrix** green
-- [ ] `tests/ticketing/test_org_tree.py` green (incl. authz matrix + CSV all-or-nothing)
-- [ ] Manual: upgrade→downgrade→upgrade clean; existing orgs still resolve on tickets
+- [x] Migration `m3o5q7s9`: `parent_organization_id` self-FK (SET NULL), **`org_category`** (NOT NULL + CHECK, backfilled), `unit_type` (CHECK), `territory_location_code` (FK→locations), `territory_includes_children`, `display_name_ne`; backfill + real `downgrade()` + safety header. *(authored; DB apply pending Docker)*
+- [x] Model columns + self-relationship; `descendant_org_ids`/`ancestor_org_ids` CTE helper (path-array cycle guard) + `would_create_cycle` — `ticketing/services/org_tree.py`
+- [x] Router: new fields on GET/POST/PATCH; `tree=true` + `root_id` filter; cycle/unit_type/territory validation + reparent category-cascade + child-delete 409 guard
+- [x] unit_type validation permits **independent roots** (`company`/`development_partner`) and **`company`→`company` nesting**; reporting-line nesting unchanged; off-pattern category/unit **warns, not blocks** (design §2.4, doc 16 §3.1)
+- [x] `POST /organizations/import` CSV: whole-file validate → single-transaction parents-first insert → idempotent upsert (`ticketing/seed/org_import_core.py`, pure planner)
+- [x] Gated at country tier (reuse `admin_access` `MANAGE_ORG_STRUCTURE`); **authz matrix** green (pure gate test)
+- [x] `tests/ticketing/test_org_tree.py` **green in Docker (27/27: 18 pure + 9 integration)** — create/patch/reparent/subtree/child-delete/CSV all-or-nothing + idempotency + authz; org regression (authz/lifecycle/charset) also green → **48/48 total**
+- [x] **Manual:** `alembic upgrade→downgrade→upgrade` clean on Docker `db`; existing orgs (DOR/ADB) still resolve; integration test rows self-clean
 
 ### OC-02 — Position types + matrix
 - [ ] Migration + model for `position_types` (all columns incl. `display_name_ne`)
@@ -92,6 +92,8 @@ Record the actual head each migration chains onto, to keep the ticketing Alembic
 
 | Date | Ticket | Deviation / adjacent finding | Action |
 |---|---|---|---|
+| 2026-07-10 | OC-01 | **DB-validated in Docker.** Rebuilt `ticketing_api` with the working tree; `alembic upgrade head` applied `k1m3o5q7`+`m3o5q7s9`, `downgrade -1` dropped all 6 tree cols, re-`upgrade` restored them (up→down→up clean). Columns/CHECKs/FKs confirmed on `ticketing.organizations`; DOR/ADB backfilled to `government`. **48/48 tests green** (OC-01 27 + org regression 21). **Two fixes during validation:** (1) recursive-CTE array type mismatch — cast `organization_id::text` in `subtree`/`ancestors` (Postgres unifies `varchar(64)[]` base vs `varchar[]` recursive); (2) corrected the KL Road seed + dev DB so **ADB = `donor`/`development_partner`, DOR = `government`/`department`** (was blanket-backfilled `government`). | Ready to commit; OC-02 chains on `m3o5q7s9` |
+| 2026-07-10 | OC-01 | **Org tree built — code complete + pure tests green (uncommitted; migration not yet DB-applied — host lacks docker).** Migration `m3o5q7s9` (sole head on `k1m3o5q7`) adds the 6 tree columns. Router: `tree`/`root_id` list, create/patch tree placement + reparent cycle-guard + subtree category cascade, child-delete 409 guard, `POST /organizations/import`. Services: `org_tree.py` (path-guarded CTEs) + `org_import_core.py` (pure planner). **Decisions:** (a) `org_category` **denormalized NOT NULL on every node** (= root's category) for cheap subtree reads — reparent cascades it; existing seeded ADB is backfilled `'government'` (mislabelled) → correct via `PATCH .../ADB {org_category:'donor'}`; (b) create **defaults an omitted root's category to `government`** so the SH-6 charset test (root, no category) stays green; (c) **incidentally mapped SH-4's `email`/`address` onto the `Organization` model** to remove the model↔DB autogenerate-drift landmine before OC-02 (hand-written migration, so no drop emitted). **Pending Docker:** `alembic up/down/up` + 9 integration tests (`test_org_tree.py -m integration`). **SH-7 handoff:** per-`org_category` root-creation gating left as `# INTEGRATION POINT (SH-7)` in `create_organization`. | Chain OC-02 on `m3o5q7s9`; run DB validation under Docker before commit; SH-7 adds attenuated root-creation gating |
 | 2026-07-07 | OC-06 | **F1 (blocker):** Devanagari org name un-creatable from UI (ASCII-only client id lock); server accepts it and mints `NP_सव` **[live]** | New-ticket: org id charset policy + manual-id entry; relevant to OC-01/05 org UI |
 | 2026-07-07 | OC-06 | **F2 (blocker):** step→role binding has zero server-side referential/track validation; publish only checks empty; wrong-track defaults persist silently | New-ticket: validate `assigned_role_key`+tier roles on write/publish — the enforcement truth positions feed |
 | 2026-07-07 | OC-06 | **F3 (major, security):** blanket `require_admin`; `MANAGE_PROJECT`/`INVITE_OFFICERS`/`can_manage_structure` defined-but-unwired; UI gating cosmetic. **[live]** project_admin created a global org (201), 403'd only on project create | New-ticket: wire scoped gates. OC-01/OC-03 must not inherit the blanket gate |

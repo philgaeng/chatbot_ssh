@@ -36,7 +36,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import CurrentUser, get_authenticated_user, require_admin, require_super_admin
@@ -52,6 +52,12 @@ from ticketing.services import project_workflows as pw_svc
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
+from ticketing.services.org_tree import (
+    ORG_CATEGORIES,
+    UNIT_TYPES,
+    descendant_org_ids,
+    would_create_cycle,
+)
 from ticketing.utils.organization_identifier import (
     allocate_unique_organization_id,
     ascii_alnum,
@@ -226,6 +232,13 @@ class OrganizationResponse(BaseModel):
     country_code: str | None
     is_active: bool
     default_language: str = "ne"
+    # Org tree (OC-01, doc 16 §3.1)
+    parent_organization_id: str | None = None
+    org_category: str
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool = False
+    display_name_ne: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -242,6 +255,14 @@ class OrganizationCreate(BaseModel):
     country_code: str | None = None
     is_active: bool = True
     default_language: str = "ne"
+    # Org tree (OC-01). parent NULL = root. org_category is required-ish for roots
+    # (defaults to 'government' if omitted) and always inherited from parent for children.
+    parent_organization_id: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool = False
+    display_name_ne: str | None = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -249,22 +270,73 @@ class OrganizationUpdate(BaseModel):
     country_code: str | None = None
     is_active: bool | None = None
     default_language: str | None = None
+    # Org tree (OC-01). Field-presence (model_fields_set) distinguishes "unset" from an
+    # explicit null (e.g. detach-to-root), so these are only applied when supplied.
+    parent_organization_id: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool | None = None
+    display_name_ne: str | None = None
+
+
+def _order_for_tree(orgs: list[Organization]) -> list[Organization]:
+    """Depth-first order (each parent immediately before its children) for tree rendering.
+
+    A node whose parent is outside the returned set (a true root, or the root of a
+    ``root_id`` subtree) is treated as a top-level node.
+    """
+    by_id = {o.organization_id: o for o in orgs}
+    children: dict[str, list[Organization]] = {}
+    roots: list[Organization] = []
+    for o in orgs:
+        p = o.parent_organization_id
+        if p and p in by_id:
+            children.setdefault(p, []).append(o)
+        else:
+            roots.append(o)
+
+    ordered: list[Organization] = []
+
+    def _walk(node: Organization) -> None:
+        ordered.append(node)
+        for child in sorted(children.get(node.organization_id, []), key=lambda x: x.organization_id):
+            _walk(child)
+
+    for root in sorted(roots, key=lambda x: x.organization_id):
+        _walk(root)
+    return ordered
 
 
 @router.get("/organizations", response_model=list[OrganizationResponse])
 def list_organizations(
     country: str | None = Query(None),
     active_only: bool = Query(True),
+    root_id: str | None = Query(
+        None, description="Restrict to this organization and its descendants (subtree)."
+    ),
+    tree: bool = Query(
+        False, description="Order parents-before-children (depth-first) for tree rendering."
+    ),
     db: Session = Depends(get_db),
     _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
-    """List all organizations."""
-    stmt = select(Organization).order_by(Organization.organization_id)
+    """List organizations. ``root_id`` filters to a subtree; ``tree`` orders for rendering."""
+    stmt = select(Organization)
     if country:
         stmt = stmt.where(Organization.country_code == country)
     if active_only:
         stmt = stmt.where(Organization.is_active.is_(True))
-    return db.execute(stmt).scalars().all()
+    if root_id:
+        subtree = descendant_org_ids(db, root_id, include_self=True)
+        if not subtree:
+            return []
+        stmt = stmt.where(Organization.organization_id.in_(subtree))
+    stmt = stmt.order_by(Organization.organization_id)
+    orgs = list(db.execute(stmt).scalars().all())
+    if tree:
+        orgs = _order_for_tree(orgs)
+    return orgs
 
 
 @router.post("/organizations", response_model=OrganizationResponse, status_code=201,
@@ -281,6 +353,45 @@ def create_organization(
         raise HTTPException(status_code=400, detail="Name is required")
     if body.country_code and not db.get(Country, body.country_code):  # SH-4 (OC-06 F18)
         raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
+
+    # ── Org tree (OC-01, doc 16 §3.1) ─────────────────────────────────────────
+    if body.unit_type and body.unit_type not in UNIT_TYPES:
+        raise HTTPException(status_code=422, detail=f"Invalid unit_type '{body.unit_type}'")
+
+    parent: Organization | None = None
+    if body.parent_organization_id:
+        parent = db.get(Organization, body.parent_organization_id)
+        if parent is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Parent organization '{body.parent_organization_id}' not found",
+            )
+
+    if parent is not None:
+        # Children inherit the root's category (authoritative). An explicit, mismatched
+        # category is a mistake — reject it rather than silently ignore.
+        org_category = parent.org_category
+        if body.org_category and body.org_category != org_category:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"org_category '{body.org_category}' conflicts with inherited "
+                    f"'{org_category}' — children inherit the root's category"
+                ),
+            )
+    else:
+        # Root. org_category defaults to 'government' when omitted (matches the model /
+        # migration backfill). INTEGRATION POINT (SH-7): institutional-root creation
+        # (government/local_government/donor) becomes super_admin-only; third_party delegable.
+        org_category = body.org_category or "government"
+        if org_category not in ORG_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid org_category '{org_category}'")
+
+    if body.territory_location_code and not db.get(Location, body.territory_location_code):
+        raise HTTPException(
+            status_code=422,
+            detail=f"territory_location_code '{body.territory_location_code}' not found",
+        )
 
     raw = body.organization_id.strip() if body.organization_id else ""
     if raw:
@@ -303,6 +414,12 @@ def create_organization(
         country_code=body.country_code or None,
         is_active=body.is_active,
         default_language=body.default_language,
+        parent_organization_id=parent.organization_id if parent else None,
+        org_category=org_category,
+        unit_type=body.unit_type,
+        territory_location_code=body.territory_location_code,
+        territory_includes_children=body.territory_includes_children,
+        display_name_ne=body.display_name_ne,
     )
     db.add(org)
     db.commit()
@@ -318,11 +435,12 @@ def update_organization(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Update organization name, country, or active status. Standard-track country admin or super_admin (doc 16 §7)."""
+    """Update organization fields incl. tree placement. Standard-track admin / super (doc 16 §7)."""
     require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    fields = body.model_fields_set
     if body.name is not None:
         org.name = body.name.strip()
     if body.country_code is not None:
@@ -333,6 +451,75 @@ def update_organization(
         org.is_active = body.is_active
     if body.default_language is not None:
         org.default_language = body.default_language
+
+    # ── Org tree (OC-01, doc 16 §3.1) ─────────────────────────────────────────
+    if "unit_type" in fields:
+        if body.unit_type and body.unit_type not in UNIT_TYPES:
+            raise HTTPException(status_code=422, detail=f"Invalid unit_type '{body.unit_type}'")
+        org.unit_type = body.unit_type
+    if "territory_location_code" in fields:
+        if body.territory_location_code and not db.get(Location, body.territory_location_code):
+            raise HTTPException(
+                status_code=422,
+                detail=f"territory_location_code '{body.territory_location_code}' not found",
+            )
+        org.territory_location_code = body.territory_location_code
+    if "territory_includes_children" in fields and body.territory_includes_children is not None:
+        org.territory_includes_children = body.territory_includes_children
+    if "display_name_ne" in fields:
+        org.display_name_ne = body.display_name_ne
+
+    # Category is inherited from the root, so it moves with the parent. Compute the new
+    # category (if any) and cascade it to the whole subtree.
+    new_category: str | None = None
+    cascade = False
+    if "parent_organization_id" in fields:
+        new_parent_id = body.parent_organization_id or None
+        if new_parent_id:
+            parent = db.get(Organization, new_parent_id)
+            if parent is None:
+                raise HTTPException(
+                    status_code=422, detail=f"Parent organization '{new_parent_id}' not found"
+                )
+            if would_create_cycle(db, organization_id, new_parent_id):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Reparenting would create a cycle (a node cannot report to its own descendant)",
+                )
+            org.parent_organization_id = new_parent_id
+            new_category = parent.org_category
+        else:
+            # Detach to root — keep the current category unless a new one is supplied.
+            org.parent_organization_id = None
+            new_category = body.org_category or org.org_category
+            if new_category not in ORG_CATEGORIES:
+                raise HTTPException(status_code=422, detail=f"Invalid org_category '{new_category}'")
+        org.org_category = new_category
+        cascade = True
+    elif "org_category" in fields and body.org_category is not None:
+        # Directly settable only on a root; children inherit.
+        if org.parent_organization_id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="A child organization inherits its category from the root; set it on the root.",
+            )
+        if body.org_category not in ORG_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid org_category '{body.org_category}'")
+        if body.org_category != org.org_category:
+            org.org_category = body.org_category
+            new_category = body.org_category
+            cascade = True
+
+    if cascade and new_category is not None:
+        db.flush()  # make org's own change visible before walking its subtree
+        descendants = descendant_org_ids(db, organization_id, include_self=False)
+        if descendants:
+            db.execute(
+                update(Organization)
+                .where(Organization.organization_id.in_(descendants))
+                .values(org_category=new_category, updated_at=_now())
+            )
+
     org.updated_at = _now()
     db.commit()
     db.refresh(org)
@@ -354,6 +541,20 @@ def delete_organization(
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    # OC-01: block deleting a parent — the self-FK is ON DELETE SET NULL, which would
+    # silently orphan the subtree (turn children into roots). Reparent/remove them first.
+    child_count = db.scalar(
+        select(func.count())
+        .select_from(Organization)
+        .where(Organization.parent_organization_id == organization_id)
+    ) or 0
+    if child_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {child_count} child organization(s) report to this org. "
+            f"Reassign or delete them first.",
+        )
 
     ticket_count = db.scalar(
         select(func.count()).select_from(Ticket).where(Ticket.organization_id == organization_id)
@@ -421,6 +622,104 @@ def delete_organization(
 
     db.delete(org)
     db.commit()
+
+
+# ── Organization tree CSV import (OC-01, doc 16 §9) ──────────────────────────────
+
+class OrgImportResult(BaseModel):
+    organizations_upserted: int
+    dry_run: bool
+    errors: list[str] = []
+
+
+@router.get(
+    "/organizations/import/template.csv",
+    response_class=PlainTextResponse,
+    summary="Download blank CSV template for org tree import (admin)",
+)
+def download_org_csv_template(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Blank org-tree CSV template. Columns: organization_id, name, parent_organization_id,
+    org_category, unit_type, country_code, territory_location_code,
+    territory_includes_children, display_name_ne."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
+    from ticketing.seed.org_import_core import CSV_TEMPLATE
+    return PlainTextResponse(
+        content=CSV_TEMPLATE,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="organization_template.csv"'},
+    )
+
+
+@router.post(
+    "/organizations/import",
+    response_model=OrgImportResult,
+    status_code=200,
+    summary="Import an org tree from CSV (admin) — whole-file validate, single transaction",
+)
+async def import_organizations(
+    file: UploadFile = File(..., description="CSV org-tree file"),
+    dry_run: bool = Form(False, description="Validate + parse only — do not write to DB"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Upsert an org tree from CSV. Standard-track admin or super_admin (doc 16 §7).
+
+    All-or-nothing: the entire file is validated first (required fields, domains, parent
+    resolution, cycles, category inheritance). On any error nothing is written and the
+    errors are returned; otherwise rows are upserted parents-first in a single transaction
+    (idempotent — re-importing updates existing rows by ``organization_id``).
+    """
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
+    from ticketing.seed.org_import_core import parse_org_csv, plan_import, upsert_organizations
+
+    raw = await file.read()
+    try:
+        rows = parse_org_csv(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"File parse error: {exc}")
+    if not rows:
+        raise HTTPException(status_code=422, detail="No organization rows found in file")
+
+    # DB-shaped checks: external parents' categories (for inheritance), countries, territories.
+    in_file_ids = {r.organization_id for r in rows if r.organization_id}
+    external_cats: dict[str, str] = {}
+    for pid in sorted(
+        {r.parent_organization_id for r in rows if r.parent_organization_id and r.parent_organization_id not in in_file_ids}
+    ):
+        parent = db.get(Organization, pid)
+        if parent is not None:
+            external_cats[pid] = parent.org_category
+        # A missing external parent is reported by plan_import ("not found").
+
+    db_errors: list[str] = []
+    for cc in sorted({r.country_code for r in rows if r.country_code}):
+        if not db.get(Country, cc):
+            db_errors.append(f"country_code '{cc}' not found")
+    for lc in sorted({r.territory_location_code for r in rows if r.territory_location_code}):
+        if not db.get(Location, lc):
+            db_errors.append(f"territory_location_code '{lc}' not found")
+
+    plan = plan_import(rows, external_org_categories=external_cats)
+    all_errors = plan.errors + db_errors
+    if all_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Import rejected — nothing written", "errors": all_errors},
+        )
+
+    if dry_run:
+        return OrgImportResult(organizations_upserted=len(plan.ordered_rows), dry_run=True)
+
+    try:
+        count = upsert_organizations(plan.ordered_rows, plan.resolved_categories, db)
+        db.commit()
+    except Exception as exc:  # pragma: no cover - defensive
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB write failed: {exc}") from exc
+
+    return OrgImportResult(organizations_upserted=count, dry_run=False)
 
 
 # ── Countries ─────────────────────────────────────────────────────────────────

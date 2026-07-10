@@ -75,12 +75,16 @@ def seed_organizations(db: Session) -> None:
             name="Department of Roads (DOR)",
             country_code="NP",
             is_active=True,
+            org_category="government",  # OC-01 doc 16 §3.1
+            unit_type="department",
         ),
         Organization(
             organization_id=ORG_ADB_ID,
             name="Asian Development Bank (ADB)",
             country_code="NP",
             is_active=True,
+            org_category="donor",  # OC-01: ADB is a development partner, not government
+            unit_type="development_partner",
         ),
     ]
     for org in orgs:
