@@ -44,7 +44,9 @@ from ticketing.constants.entity_codes import EntityCodeError, validate_entity_co
 from ticketing.services import entity_codes as entity_codes_svc
 from ticketing.services.admin_access import (
     SettingsAction,
+    can_admin_org,
     can_assign_project_workflow,
+    is_super_admin,
     require_settings_write,
     require_track_for_mutation,
 )
@@ -53,6 +55,7 @@ from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
 from ticketing.services.org_tree import (
+    INSTITUTIONAL_CATEGORIES,
     ORG_CATEGORIES,
     UNIT_TYPES,
     descendant_org_ids,
@@ -395,11 +398,29 @@ def create_organization(
             )
     else:
         # Root. org_category defaults to 'government' when omitted (matches the model /
-        # migration backfill). INTEGRATION POINT (SH-7): institutional-root creation
-        # (government/local_government/donor) becomes super_admin-only; third_party delegable.
+        # migration backfill).
         org_category = body.org_category or "government"
         if org_category not in ORG_CATEGORIES:
             raise HTTPException(status_code=422, detail=f"Invalid org_category '{org_category}'")
+
+    # SH-7 §S3: org_category root-creation gating + sub-unit subtree enforcement (doc 11 §2).
+    if not is_super_admin(current_user):
+        if parent is None:
+            if org_category in INSTITUTIONAL_CATEGORIES:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only super_admin can create a new government / local_government / "
+                        "donor root organization"
+                    ),
+                )
+            # A third_party root (contractor) is delegable to a standard org_admin, which
+            # the MANAGE_ORG_STRUCTURE gate above already confirmed.
+        elif not can_admin_org(db, current_user, parent.organization_id, "standard"):
+            raise HTTPException(
+                status_code=403,
+                detail="Your org_admin scope does not cover this parent organization",
+            )
 
     if body.territory_location_code and not db.get(Location, body.territory_location_code):
         raise HTTPException(
@@ -564,6 +585,13 @@ def update_organization(
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    # SH-7 §S3: an org_admin may only edit within its own subtree.
+    if not is_super_admin(current_user) and not can_admin_org(
+        db, current_user, organization_id, "standard"
+    ):
+        raise HTTPException(
+            status_code=403, detail="Your org_admin scope does not cover this organization"
+        )
     fields = body.model_fields_set
     if body.name is not None:
         org.name = body.name.strip()
@@ -615,6 +643,14 @@ def update_organization(
                     status_code=422,
                     detail="Reparenting would create a cycle (a node cannot report to its own descendant)",
                 )
+            # SH-7 §S3: the destination parent must also be within the admin's subtree.
+            if not is_super_admin(current_user) and not can_admin_org(
+                db, current_user, new_parent_id, "standard"
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your org_admin scope does not cover the destination parent",
+                )
             org.parent_organization_id = new_parent_id
             new_category = parent.org_category
         else:
@@ -665,11 +701,18 @@ def delete_organization(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
-    """Delete an organization. Standard-track country admin or super_admin (doc 16 §7)."""
+    """Delete an organization. Standard-track org_admin (own subtree) or super_admin (doc 16 §7)."""
     require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    # SH-7 §S3: an org_admin may only delete within its own subtree.
+    if not is_super_admin(current_user) and not can_admin_org(
+        db, current_user, organization_id, "standard"
+    ):
+        raise HTTPException(
+            status_code=403, detail="Your org_admin scope does not cover this organization"
+        )
 
     # OC-01: block deleting a parent — the self-FK is ON DELETE SET NULL, which would
     # silently orphan the subtree (turn children into roots). Reparent/remove them first.

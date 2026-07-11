@@ -45,8 +45,12 @@ from ticketing.services.admin_access import (
     ADMIN_ROLE_KEYS,
     SettingsAction,
     admin_context_payload,
+    apply_catalog_scope,
+    can_admin_org,
     can_create_operational_role,
+    catalog_owner_for,
     is_org_admin,
+    is_project_admin,
     is_super_admin,
     require_settings_write,
 )
@@ -140,13 +144,15 @@ def list_roles(
     kind: str = "operational",
     workflow_track: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_authenticated_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[RoleResponse]:
     stmt = select(Role).order_by(Role.role_key)
     if kind == "admin":
         stmt = stmt.where(Role.role_kind == "admin")
     elif kind == "operational":
         stmt = stmt.where(Role.role_kind == "operational")
+    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+    stmt = apply_catalog_scope(stmt, db, current_user, Role.owner_organization_id)
     roles = db.execute(stmt).scalars().all()
     if workflow_track:
         # SH-2: single-sourced role↔track predicate (was inlined here and in 3 other places).
@@ -193,6 +199,8 @@ def create_role(
         permissions=perms,
         role_kind="operational",
         role_origin="custom",
+        # SH-7 §S5: stamp the author's scope node (NULL = global for super / country-wide).
+        owner_organization_id=catalog_owner_for(current_user, track),
     )
     db.add(role)
     db.commit()
@@ -384,11 +392,28 @@ def create_admin_scope(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # SH-7 §S4 — attenuated delegation: an appointer may only grant a scope within its own
+    # subtree + track, and never a tier above its own (doc 11 §2.2/§2.3/§2.3b).
     if body.role_key == "org_admin":
+        if not (body.organization_id or body.country_code):
+            raise HTTPException(
+                status_code=422,
+                detail="organization_id (subtree node) or country_code required for org_admin",
+            )
         if not current_user.is_super_admin:
-            raise HTTPException(status_code=403, detail="Only super_admin may appoint org_admin")
-        if not body.country_code:
-            raise HTTPException(status_code=422, detail="country_code required for org_admin")
+            # A higher org_admin may appoint a lower one, but only inside its own subtree
+            # + track. Country-wide (org-less) org_admins remain super_admin-only.
+            if not body.organization_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only super_admin may appoint a country-wide org_admin; set an organization_id within your subtree",
+                )
+            for track in tracks:
+                if not can_admin_org(db, current_user, body.organization_id, track):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You may only appoint org_admin within your own subtree and track",
+                    )
     elif body.role_key == "project_admin":
         if len(tracks) != 1:
             raise HTTPException(
@@ -402,6 +427,39 @@ def create_admin_scope(
             )
         if not body.project_id:
             raise HTTPException(status_code=422, detail="project_id required for project_admin")
+    elif body.role_key == "officer_admin":
+        if len(tracks) != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="officer_admin requires exactly one workflow_track",
+            )
+        track = tracks[0]
+        if not body.organization_id and not body.project_id:
+            raise HTTPException(
+                status_code=422,
+                detail="organization_id (subtree) or project_id required for officer_admin",
+            )
+        appointer_ok = (
+            current_user.is_super_admin
+            or is_org_admin(current_user, track)  # type: ignore[arg-type]
+            or is_project_admin(current_user, body.project_id, track)  # type: ignore[arg-type]
+        )
+        if not appointer_ok:
+            raise HTTPException(
+                status_code=403,
+                detail="org_admin, project_admin (own project), or super_admin required to appoint officer_admin",
+            )
+        # An org_admin appointer must keep the officer_admin's org scope inside its subtree.
+        if (
+            not current_user.is_super_admin
+            and body.organization_id
+            and is_org_admin(current_user, track)  # type: ignore[arg-type]
+            and not can_admin_org(db, current_user, body.organization_id, track)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="officer_admin org scope must be within your subtree",
+            )
     else:
         raise HTTPException(status_code=422, detail="Invalid role_key")
 

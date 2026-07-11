@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session, selectinload
 from ticketing.api.dependencies import get_db, get_authenticated_user, CurrentUser
 from ticketing.services.admin_access import (
     SettingsAction,
+    apply_catalog_scope,
     can_mutate_workflow,
+    catalog_owner_for,
     require_settings_write,
     workflow_track_from_type,
 )
@@ -128,6 +130,8 @@ def list_workflows(
         q = q.where(WorkflowDefinition.status == status)
     if is_template is not None:
         q = q.where(WorkflowDefinition.is_template == is_template)
+    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+    q = apply_catalog_scope(q, db, current_user, WorkflowDefinition.owner_organization_id)
 
     workflows = db.execute(q.order_by(WorkflowDefinition.display_name)).scalars().all()
     return WorkflowListResponse(
@@ -242,6 +246,11 @@ def create_workflow(
         version=1,
         is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
+        # SH-7 §S5: templates stay global (NULL); a scoped org_admin owns its custom workflows.
+        owner_organization_id=(
+            None if payload.is_template
+            else catalog_owner_for(current_user, workflow_track_from_type(normalized_type))
+        ),
     )
     db.add(wf)
 

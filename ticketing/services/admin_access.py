@@ -223,6 +223,77 @@ def admin_country_codes(user: CurrentUser) -> list[str]:
     })
 
 
+def admin_org_scope_ids(db: Session, user: CurrentUser, track: str | None = None) -> set[str] | None:
+    """The org ids an ``org_admin`` administers on ``track`` — each scope node + its
+    descendants (``descendant_org_ids``, cycle-guarded), unioned (doc 11 §2.2 subtree reach).
+
+    Returns ``None`` = **unbounded** (super_admin, or a legacy ``org_admin`` scope whose
+    ``organization_id`` is NULL — the country-wide bridge, SH-7 §2). An empty set means the
+    user is not an org_admin on this track and reaches no org.
+    """
+    if is_super_admin(user):
+        return None
+    from ticketing.services.org_tree import descendant_org_ids
+
+    ids: set[str] = set()
+    for s in getattr(user, "admin_scopes", []) or []:
+        if s.role_key != "org_admin":
+            continue
+        if track is not None and s.workflow_track != track:
+            continue
+        if s.organization_id is None:
+            return None  # country-wide org_admin — administers the whole tree on this track
+        ids |= descendant_org_ids(db, s.organization_id, include_self=True)
+    return ids
+
+
+def can_admin_org(db: Session, user: CurrentUser, org_id: str, track: str | None = None) -> bool:
+    """True if ``user`` may administer org node ``org_id`` (its subtree) on ``track``.
+
+    super_admin always; an unbounded (NULL-org) org_admin on the track always; otherwise
+    ``org_id`` must fall inside the union of the user's org_admin subtrees.
+    """
+    if is_super_admin(user):
+        return True
+    reach = admin_org_scope_ids(db, user, track)
+    if reach is None:
+        return is_org_admin(user, track)
+    return org_id in reach
+
+
+def catalog_owner_for(user: CurrentUser, track: str | None = None) -> str | None:
+    """The ``owner_organization_id`` to stamp on a catalog item (role / workflow /
+    position type) authored by ``user`` (doc 11 §3.3).
+
+    ``None`` (= global) for super_admin or a country-wide (NULL-org) org_admin; otherwise
+    the org node of the author's first matching org_admin scope. An item is then available
+    at that node + descendants only.
+    """
+    if is_super_admin(user):
+        return None
+    for s in getattr(user, "admin_scopes", []) or []:
+        if s.role_key == "org_admin" and (track is None or s.workflow_track == track):
+            if s.organization_id:
+                return s.organization_id
+    return None
+
+
+def apply_catalog_scope(stmt, db: Session, user: CurrentUser, owner_col):
+    """Filter a catalog SELECT to items visible to ``user`` (doc 11 §3.3): global
+    (``owner IS NULL``) + items owned by an org in the user's admin subtree.
+
+    Unbounded viewers (super_admin, country-wide org_admin) and non-admins (no admin
+    scopes) see everything — the filter only narrows a *scoped* org_admin.
+    """
+    scopes = getattr(user, "admin_scopes", []) or []
+    if is_super_admin(user) or not scopes:
+        return stmt
+    reach = admin_org_scope_ids(db, user)
+    if reach is None:  # country-wide org_admin — sees all
+        return stmt
+    return stmt.where((owner_col.is_(None)) | (owner_col.in_(reach)))
+
+
 def can_access_platform_settings(user: CurrentUser) -> bool:
     return is_super_admin(user)
 

@@ -26,7 +26,12 @@ from ticketing.models.base import get_db
 from ticketing.models.organization import UNIT_TYPES, Organization
 from ticketing.models.position_type import PositionType
 from ticketing.models.user import Role
-from ticketing.services.admin_access import SettingsAction, require_settings_write
+from ticketing.services.admin_access import (
+    SettingsAction,
+    apply_catalog_scope,
+    catalog_owner_for,
+    require_settings_write,
+)
 from ticketing.services.role_scope import role_scope_matches_track
 
 router = APIRouter()
@@ -159,6 +164,8 @@ def list_position_types(
         stmt = stmt.where(PositionType.workflow_track.in_([workflow_track, "both"]))
     if owner_organization_id:
         stmt = stmt.where(PositionType.owner_organization_id == owner_organization_id)
+    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+    stmt = apply_catalog_scope(stmt, db, _user, PositionType.owner_organization_id)
     return db.execute(stmt).scalars().all()
 
 
@@ -183,13 +190,17 @@ def create_position_type(
     if db.execute(select(PositionType).where(PositionType.position_key == key)).scalar_one_or_none():
         raise HTTPException(status_code=409, detail=f"position_key already exists: {key}")
 
+    # SH-7 §S5: org-scoped catalog — explicit owner wins; otherwise stamp the author's
+    # scope node (NULL = global for super_admin / country-wide org_admin).
+    owner_org = body.owner_organization_id or catalog_owner_for(current_user, body.workflow_track)
+
     _validate_matrix(
         db,
         default_role_key=body.default_role_key,
         workflow_track=body.workflow_track,
         reports_to_position_key=body.reports_to_position_key,
         allowed_unit_types=body.allowed_unit_types,
-        owner_organization_id=body.owner_organization_id,
+        owner_organization_id=owner_org,
         self_position_key=key,
     )
 
@@ -203,7 +214,7 @@ def create_position_type(
         default_role_key=body.default_role_key,
         visibility_mode=body.visibility_mode,
         workflow_track=body.workflow_track,
-        owner_organization_id=body.owner_organization_id,
+        owner_organization_id=owner_org,
     )
     db.add(pt)
     db.commit()
