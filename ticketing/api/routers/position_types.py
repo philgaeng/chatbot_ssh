@@ -299,12 +299,22 @@ def delete_position_type(
         .select_from(PositionType)
         .where(PositionType.reports_to_position_key == pt.position_key)
     ) or 0
-    # INTEGRATION POINT (OC-03): once officer_positions exists, also count active holders
-    # here and add a "holders_count" key to the 409 detail (keep this response shape).
-    if reports_count:
+    # OC-03: block if any officer holds this position type (active or historical).
+    from ticketing.models.officer_position import OfficerPosition
+
+    holders_count = db.scalar(
+        select(func.count())
+        .select_from(OfficerPosition)
+        .where(OfficerPosition.position_type_id == pt.position_type_id)
+    ) or 0
+    if reports_count or holders_count:
         raise HTTPException(
             status_code=409,
-            detail={"message": "Position type is in use", "reports_count": reports_count},
+            detail={
+                "message": "Position type is in use",
+                "reports_count": reports_count,
+                "holders_count": holders_count,
+            },
         )
 
     db.delete(pt)
