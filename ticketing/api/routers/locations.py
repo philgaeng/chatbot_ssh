@@ -58,6 +58,10 @@ from ticketing.services.org_tree import (
     descendant_org_ids,
     would_create_cycle,
 )
+from ticketing.services.org_dedup import (
+    OrgRecord,
+    find_duplicate_candidates,
+)
 from ticketing.utils.organization_identifier import (
     allocate_unique_organization_id,
     ascii_alnum,
@@ -239,6 +243,9 @@ class OrganizationResponse(BaseModel):
     territory_location_code: str | None = None
     territory_includes_children: bool = False
     display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). Non-PII org contact fields.
+    email: str | None = None
+    address: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -263,6 +270,9 @@ class OrganizationCreate(BaseModel):
     territory_location_code: str | None = None
     territory_includes_children: bool = False
     display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). Populated so the fuzzy finder can match on them.
+    email: str | None = Field(default=None, max_length=255)
+    address: str | None = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -278,6 +288,10 @@ class OrganizationUpdate(BaseModel):
     territory_location_code: str | None = None
     territory_includes_children: bool | None = None
     display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). model_fields_set distinguishes unset from an
+    # explicit null (clear the field), so these apply only when supplied.
+    email: str | None = Field(default=None, max_length=255)
+    address: str | None = None
 
 
 def _order_for_tree(orgs: list[Organization]) -> list[Organization]:
@@ -420,11 +434,121 @@ def create_organization(
         territory_location_code=body.territory_location_code,
         territory_includes_children=body.territory_includes_children,
         display_name_ne=body.display_name_ne,
+        email=(body.email or "").strip() or None,
+        address=(body.address or "").strip() or None,
     )
     db.add(org)
     db.commit()
     db.refresh(org)
     return org
+
+
+# ── Duplicate-candidate finder (SH-4, design §2.4) ───────────────────────────────
+
+class DuplicateCheckRequest(BaseModel):
+    """Proposed org to fuzzy-match against the registry (a preview — no write)."""
+    name: str
+    email: str | None = None
+    address: str | None = None
+    country_code: str | None = None
+    # On update, exclude the org being edited so it never matches itself.
+    exclude_organization_id: str | None = None
+    limit: int = Field(8, ge=1, le=50)
+
+
+class DuplicateCandidateItem(BaseModel):
+    organization_id: str
+    name: str
+    score: float
+    reasons: list[str]
+    name_score: float
+    email_domain_match: bool
+    address_score: float
+    # Display context for the soft-flag row ("Possible duplicate: … (contractor, Jhapa)").
+    country_code: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+
+
+@router.post(
+    "/organizations/duplicate-candidates",
+    response_model=list[DuplicateCandidateItem],
+    summary="Fuzzy duplicate-candidate finder for an org (soft flag — never blocks create)",
+)
+def find_organization_duplicate_candidates(
+    body: DuplicateCheckRequest,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Return likely-duplicate organizations for a proposed ``{name, email, address}``.
+
+    This is a **soft-flag preview** (SH-4, design §2.4): the UI shows "Possible duplicate:
+    {org} · Use existing / Create anyway". It **never** blocks creation — creation stays on
+    ``POST /organizations`` and is unaffected by this result. Matching (pure logic in
+    ``ticketing/services/org_dedup.py``) uses distinctive name tokens (generic-word
+    stoplist), corporate email domain (free providers ignored), and fuzzy address.
+
+    Read/preview only, so it requires just an authenticated user — not the
+    ``MANAGE_ORG_STRUCTURE`` write gate that ``POST/PATCH/DELETE /organizations`` carry.
+    """
+    name = (body.name or "").strip()
+    if not name:
+        return []
+
+    # DB-level pre-filter to bound the scan (the matcher itself is country-agnostic):
+    # compare within the same country plus country-less orgs (e.g. ADB). With no country
+    # supplied, scan everything.
+    stmt = select(Organization)
+    if body.country_code:
+        stmt = stmt.where(
+            or_(
+                Organization.country_code == body.country_code,
+                Organization.country_code.is_(None),
+            )
+        )
+    orgs = list(db.execute(stmt).scalars().all())
+    by_id = {o.organization_id: o for o in orgs}
+
+    proposed = OrgRecord(
+        name=name,
+        email=body.email,
+        address=body.address,
+        country_code=body.country_code,
+    )
+    existing = [
+        OrgRecord(
+            name=o.name,
+            organization_id=o.organization_id,
+            email=o.email,
+            address=o.address,
+            country_code=o.country_code,
+        )
+        for o in orgs
+    ]
+    candidates = find_duplicate_candidates(
+        proposed,
+        existing,
+        exclude_id=body.exclude_organization_id,
+        limit=body.limit,
+    )
+    out: list[DuplicateCandidateItem] = []
+    for c in candidates:
+        org = by_id.get(c.organization_id)
+        out.append(
+            DuplicateCandidateItem(
+                organization_id=c.organization_id,
+                name=c.name,
+                score=c.score,
+                reasons=c.reasons,
+                name_score=c.name_score,
+                email_domain_match=c.email_domain_match,
+                address_score=c.address_score,
+                country_code=org.country_code if org else None,
+                org_category=org.org_category if org else None,
+                unit_type=org.unit_type if org else None,
+            )
+        )
+    return out
 
 
 @router.patch("/organizations/{organization_id}", response_model=OrganizationResponse,
@@ -468,6 +592,11 @@ def update_organization(
         org.territory_includes_children = body.territory_includes_children
     if "display_name_ne" in fields:
         org.display_name_ne = body.display_name_ne
+    # Duplicate-candidate signals (SH-4) — apply only when supplied; "" clears to NULL.
+    if "email" in fields:
+        org.email = (body.email or "").strip() or None
+    if "address" in fields:
+        org.address = (body.address or "").strip() or None
 
     # Category is inherited from the root, so it moves with the parent. Compute the new
     # category (if any) and cascade it to the whole subtree.
