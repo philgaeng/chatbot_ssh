@@ -61,8 +61,15 @@ class Role(Base):
     permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
     # admin | operational — split catalog vs admin ladder
     role_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="operational")
-    # system (seed/TOR) | custom (country_admin created)
+    # system (seed/TOR) | custom (org_admin created)
     role_origin: Mapped[str] = mapped_column(String(16), nullable=False, default="system")
+    # Org-scoped catalog (doc 11 §3.3, SH-7): available at this org node + descendants;
+    # NULL = global (super-owned / system-seeded). Mirrors position_types.owner_organization_id.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

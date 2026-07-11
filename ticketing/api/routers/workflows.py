@@ -2,7 +2,7 @@
 Workflow management endpoints — full CRUD for the no-code workflow editor.
 
 Read endpoints: any authenticated officer
-Mutating endpoints: matrix-aware admin (country_admin by track, super_admin)
+Mutating endpoints: matrix-aware admin (org_admin by track, super_admin)
 SEAH workflows: additionally gated by can_see_seah
 """
 import re

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 WorkflowTrack = Literal["standard", "seah"]
 
-ADMIN_ROLE_KEYS = frozenset({"super_admin", "country_admin", "project_admin"})
+ADMIN_ROLE_KEYS = frozenset({"super_admin", "org_admin", "project_admin", "officer_admin"})
 
 
 @dataclass(frozen=True)
@@ -155,10 +155,26 @@ def is_super_admin(user: CurrentUser) -> bool:
     return "super_admin" in user.role_keys
 
 
-def is_country_admin(user: CurrentUser, track: WorkflowTrack | None = None) -> bool:
+def is_org_admin(user: CurrentUser, track: WorkflowTrack | None = None) -> bool:
+    """True if the user holds an org_admin admin-scope (optionally on ``track``).
+
+    Pure tier predicate (role_key + track). Whether the org_admin covers a *specific*
+    org node is the DB-aware subtree check :func:`admin_org_scope_ids` / :func:`can_admin_org`.
+    """
     scopes = getattr(user, "admin_scopes", []) or []
     for s in scopes:
-        if s.role_key != "country_admin":
+        if s.role_key != "org_admin":
+            continue
+        if track is None or s.workflow_track == track:
+            return True
+    return False
+
+
+def is_officer_admin(user: CurrentUser, track: WorkflowTrack | None = None) -> bool:
+    """True if the user holds an officer_admin admin-scope (the narrowest tier — doc 11 §2.3b)."""
+    scopes = getattr(user, "admin_scopes", []) or []
+    for s in scopes:
+        if s.role_key != "officer_admin":
             continue
         if track is None or s.workflow_track == track:
             return True
@@ -203,7 +219,7 @@ def admin_country_codes(user: CurrentUser) -> list[str]:
     return sorted({
         s.country_code
         for s in getattr(user, "admin_scopes", []) or []
-        if s.role_key == "country_admin" and s.country_code
+        if s.role_key == "org_admin" and s.country_code
     })
 
 
@@ -214,36 +230,36 @@ def can_access_platform_settings(user: CurrentUser) -> bool:
 def can_create_project(user: CurrentUser) -> bool:
     if is_super_admin(user):
         return True
-    return is_country_admin(user)
+    return is_org_admin(user)
 
 
 def can_manage_structure(user: CurrentUser, *, track: str | None = None) -> bool:
     """Project-structure management flag (Settings → Projects) — **track-agnostic**:
-    any country_admin (standard or SEAH) manages their projects' structure, same as
+    any org_admin (standard or SEAH) manages their projects' structure, same as
     super_admin. Org-tree / org-CRUD is the narrower, standard-track-only action
     :func:`can_manage_org_structure` / ``MANAGE_ORG_STRUCTURE`` (doc 16 §7) — do not
     use this flag to gate org editing.
     """
     if is_super_admin(user):
         return True
-    return is_country_admin(user)
+    return is_org_admin(user)
 
 
 def can_manage_org_structure(user: CurrentUser) -> bool:
     """Org tree / org CRUD / CSV import — **standard-track** country admin or super_admin
-    (doc 16 §7). A SEAH-only ``country_admin`` and any ``project_admin`` are refused:
+    (doc 16 §7). A SEAH-only ``org_admin`` and any ``project_admin`` are refused:
     the org chart is one shared structure owned by the standard track. This is the fix
     for OC-06 F3 (blanket ``require_admin`` let project_admin mutate global orgs) and F4
     (structure gate was track-blind)."""
     if is_super_admin(user):
         return True
-    return is_country_admin(user, "standard")
+    return is_org_admin(user, "standard")
 
 
 def can_manage_seah_settings(user: CurrentUser) -> bool:
     if is_super_admin(user):
         return True
-    return is_country_admin(user, "seah")
+    return is_org_admin(user, "seah")
 
 
 def can_create_operational_role(user: CurrentUser, *, track: str) -> bool:
@@ -252,7 +268,7 @@ def can_create_operational_role(user: CurrentUser, *, track: str) -> bool:
     t = _normalize_track(track)
     if t is None:
         return False
-    return is_country_admin(user, t)
+    return is_org_admin(user, t)
 
 
 def can_see_seah_extended(user: CurrentUser) -> bool:
@@ -312,7 +328,7 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
         if not can_create_project(user):
             raise HTTPException(
                 status_code=403,
-                detail="requires country_admin or super_admin",
+                detail="requires org_admin or super_admin",
             )
         return
 
@@ -320,7 +336,7 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
         if not can_manage_structure(user, track=track or "standard"):
             raise HTTPException(
                 status_code=403,
-                detail="requires country_admin track=standard",
+                detail="requires org_admin track=standard",
             )
         return
 
@@ -328,37 +344,43 @@ def require_settings_write(user: CurrentUser, action: SettingsAction, *, track: 
         if not can_manage_org_structure(user):
             raise HTTPException(
                 status_code=403,
-                detail="Org tree editing requires country_admin (standard track) or super_admin",
+                detail="Org tree editing requires org_admin (standard track) or super_admin",
             )
         return
 
     if action == SettingsAction.MANAGE_SEAH_SETTINGS:
         if not can_manage_seah_settings(user):
-            raise HTTPException(status_code=403, detail="SEAH country admin or super admin required")
+            raise HTTPException(status_code=403, detail="SEAH org admin or super admin required")
         return
 
     if action == SettingsAction.CREATE_OPERATIONAL_ROLE:
         if not can_create_operational_role(user, track=track or "standard"):
-            raise HTTPException(status_code=403, detail="Country admin required to create operational roles")
+            raise HTTPException(status_code=403, detail="Org admin required to create operational roles")
         return
 
     if action == SettingsAction.MANAGE_WORKFLOWS:
         if is_super_admin(user):
             return
         t = _normalize_track(track)
-        if t and is_country_admin(user, t):
+        if t and is_org_admin(user, t):
             return
         raise HTTPException(status_code=403, detail="Workflow admin access required for this track")
 
     if action == SettingsAction.INVITE_OFFICERS:
-        if is_super_admin(user) or is_country_admin(user) or is_project_admin(user):
+        # officer_admin is the narrowest tier — invite/modify/revoke officers only (doc 11 §2.3b).
+        if (
+            is_super_admin(user)
+            or is_org_admin(user)
+            or is_project_admin(user)
+            or is_officer_admin(user)
+        ):
             return
         if is_any_admin(user):
             return
         raise HTTPException(status_code=403, detail="Admin access required to invite officers")
 
     if action == SettingsAction.MANAGE_PROJECT:
-        if is_super_admin(user) or is_country_admin(user) or is_project_admin(user):
+        if is_super_admin(user) or is_org_admin(user) or is_project_admin(user):
             return
         raise HTTPException(status_code=403, detail="Project admin access required")
 
@@ -371,7 +393,7 @@ def can_mutate_workflow(user: CurrentUser, workflow_type: str) -> bool:
     track = workflow_track_from_type(workflow_type)
     if is_super_admin(user):
         return True
-    return is_country_admin(user, track)
+    return is_org_admin(user, track)
 
 
 def can_assign_project_workflow(user: CurrentUser, workflow_type: str) -> bool:
@@ -379,14 +401,14 @@ def can_assign_project_workflow(user: CurrentUser, workflow_type: str) -> bool:
     if is_super_admin(user):
         return True
     track: WorkflowTrack = workflow_track_from_type(workflow_type)
-    return is_country_admin(user, track)
+    return is_org_admin(user, track)
 
 
 def admin_context_payload(user: CurrentUser) -> dict:
     scopes = getattr(user, "admin_scopes", []) or []
     return {
         "is_super_admin": is_super_admin(user),
-        "is_country_admin": any(s.role_key == "country_admin" for s in scopes),
+        "is_org_admin": any(s.role_key == "org_admin" for s in scopes),
         "is_project_admin": any(s.role_key == "project_admin" for s in scopes),
         "admin_workflow_tracks": sorted(admin_workflow_tracks(user)),
         "admin_project_ids": admin_project_ids(user),

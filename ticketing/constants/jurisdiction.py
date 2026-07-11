@@ -17,7 +17,7 @@ VALID_JURISDICTION_MODES = frozenset({JURISDICTION_FIELD, JURISDICTION_COUNTRY, 
 # Default when ticketing.roles.jurisdiction_mode is null (seed backfill uses these).
 ROLE_JURISDICTION_DEFAULTS: dict[str, str] = {
     "super_admin": JURISDICTION_GLOBAL,
-    "country_admin": JURISDICTION_COUNTRY,
+    "org_admin": JURISDICTION_COUNTRY,
     "local_admin": JURISDICTION_FIELD,
     "adb_national_project_director": JURISDICTION_COUNTRY,
     "country_l1_fallback": JURISDICTION_COUNTRY,

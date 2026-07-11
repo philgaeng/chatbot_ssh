@@ -205,14 +205,14 @@ def seed_mock_officers(db: Session) -> None:
 
 
 def seed_admin_scopes(db: Session) -> None:
-    """Scoped admin assignments for demo matrix (country_admin / project_admin)."""
+    """Scoped admin assignments for demo matrix (org_admin / project_admin)."""
     from sqlalchemy import select
 
     from ticketing.models.admin_scope import AdminScope
 
     specs = [
-        (OFFICER_COUNTRY_ADMIN_STD, "country_admin", "NP", None, "standard", OFFICER_ADMIN),
-        (OFFICER_COUNTRY_ADMIN_SEAH, "country_admin", "NP", None, "seah", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_STD, "org_admin", "NP", None, "standard", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_SEAH, "org_admin", "NP", None, "seah", OFFICER_ADMIN),
         (OFFICER_PROJECT_ADMIN, "project_admin", None, "KL_ROAD", "standard", OFFICER_COUNTRY_ADMIN_STD),
     ]
     for user_id, role_key, country, project_id, track, created_by in specs:

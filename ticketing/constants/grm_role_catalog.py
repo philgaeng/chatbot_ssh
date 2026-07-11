@@ -34,13 +34,16 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "permissions": ["*"],
     },
     {
-        "role_key": "country_admin",
-        "display_name": "Country Administrator",
+        "role_key": "org_admin",
+        "display_name": "Organization Administrator",
         "workflow_scope": "Both",
         "jurisdiction_mode": "country",
         "role_kind": "admin",
         "role_origin": "system",
-        "description": "Country-tier admin — workflow track is set on admin_scopes assignment.",
+        "description": (
+            "Org-subtree admin (any depth) — authors the catalog; workflow track is set "
+            "on the admin_scopes assignment (doc 11 §2.2)."
+        ),
         "permissions": [
             "tickets:read",
             "projects:manage",
@@ -62,6 +65,22 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
             "officers:assign",
             "notifications:configure",
             "settings:project",
+            "users:invite",
+        ],
+    },
+    {
+        "role_key": "officer_admin",
+        "display_name": "Officer Administrator",
+        "workflow_scope": "Both",
+        "jurisdiction_mode": "field",
+        "role_kind": "admin",
+        "role_origin": "system",
+        "description": (
+            "Narrowest admin — invite / modify / revoke officers only, within scope "
+            "(doc 11 §2.3b); track is set on the admin_scopes assignment."
+        ),
+        "permissions": [
+            "tickets:read",
             "users:invite",
         ],
     },

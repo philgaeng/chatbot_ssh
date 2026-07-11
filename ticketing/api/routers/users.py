@@ -46,7 +46,7 @@ from ticketing.services.admin_access import (
     SettingsAction,
     admin_context_payload,
     can_create_operational_role,
-    is_country_admin,
+    is_org_admin,
     is_super_admin,
     require_settings_write,
 )
@@ -372,7 +372,7 @@ def list_admin_scopes(
     "/admin-scopes",
     response_model=AdminScopeResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Appoint country_admin or project_admin",
+    summary="Appoint org_admin or project_admin",
 )
 def create_admin_scope(
     body: AdminScopeCreate,
@@ -384,21 +384,21 @@ def create_admin_scope(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if body.role_key == "country_admin":
+    if body.role_key == "org_admin":
         if not current_user.is_super_admin:
-            raise HTTPException(status_code=403, detail="Only super_admin may appoint country_admin")
+            raise HTTPException(status_code=403, detail="Only super_admin may appoint org_admin")
         if not body.country_code:
-            raise HTTPException(status_code=422, detail="country_code required for country_admin")
+            raise HTTPException(status_code=422, detail="country_code required for org_admin")
     elif body.role_key == "project_admin":
         if len(tracks) != 1:
             raise HTTPException(
                 status_code=422,
                 detail="project_admin requires exactly one workflow_track",
             )
-        if not (current_user.is_super_admin or is_country_admin(current_user, tracks[0])):  # type: ignore[arg-type]
+        if not (current_user.is_super_admin or is_org_admin(current_user, tracks[0])):  # type: ignore[arg-type]
             raise HTTPException(
                 status_code=403,
-                detail="country_admin (matching track) or super_admin required",
+                detail="org_admin (matching track) or super_admin required",
             )
         if not body.project_id:
             raise HTTPException(status_code=422, detail="project_id required for project_admin")
@@ -423,7 +423,7 @@ def create_admin_scope(
             AdminScope.role_key == body.role_key,
             AdminScope.workflow_track == track,
         )
-        if body.role_key == "country_admin":
+        if body.role_key == "org_admin":
             dup_stmt = dup_stmt.where(AdminScope.country_code == body.country_code)
         else:
             dup_stmt = dup_stmt.where(AdminScope.project_id == project_ref)
@@ -502,10 +502,10 @@ def send_admin_scope_invite(
     scope = db.get(AdminScope, admin_scope_id)
     if not scope:
         raise HTTPException(status_code=404, detail="Admin scope not found")
-    if scope.role_key == "country_admin" and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="Only super_admin may manage country_admin")
+    if scope.role_key == "org_admin" and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only super_admin may manage org_admin")
     if scope.role_key == "project_admin" and not (
-        current_user.is_super_admin or is_country_admin(current_user, scope.workflow_track)  # type: ignore[arg-type]
+        current_user.is_super_admin or is_org_admin(current_user, scope.workflow_track)  # type: ignore[arg-type]
     ):
         raise HTTPException(status_code=403, detail="Insufficient permissions for this admin scope")
 

@@ -15,7 +15,7 @@ OFFICER_ADMIN = "admin@grm.local"
 OFFICER_COUNTRY_ADMIN_STD = "country-admin@grm.local"
 OFFICER_COUNTRY_ADMIN_SEAH = "country-admin-seah@grm.local"
 OFFICER_PROJECT_ADMIN = "project-admin@grm.local"
-# Deprecated alias — migrated to country_admin
+# Deprecated alias — migrated to org_admin
 OFFICER_LOCAL_ADMIN = OFFICER_COUNTRY_ADMIN_STD
 OFFICER_SITE_L1 = "l1-officer@grm.local"
 OFFICER_SITE_L1_2 = "l1-officer-2@grm.local"
@@ -71,11 +71,11 @@ DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
         OFFICER_ADMIN, "GRM", "Admin", "super_admin", "DOR",
     ),
     DemoOfficerSpec(
-        OFFICER_COUNTRY_ADMIN_STD, "Country", "Admin Standard", "country_admin", "DOR",
+        OFFICER_COUNTRY_ADMIN_STD, "Country", "Admin Standard", "org_admin", "DOR",
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_COUNTRY_ADMIN_SEAH, "Country", "Admin SEAH", "country_admin", "DOR",
+        OFFICER_COUNTRY_ADMIN_SEAH, "Country", "Admin SEAH", "org_admin", "DOR",
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(

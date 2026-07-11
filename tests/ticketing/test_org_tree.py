@@ -34,7 +34,7 @@ from ticketing.services.org_tree import (
 # Personas (plain objects — no DB)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _scope(role_key="country_admin", track="standard", project_id=None, user_id="a@grm.local"):
+def _scope(role_key="org_admin", track="standard", project_id=None, user_id="a@grm.local"):
     return AdminScopeRow(
         admin_scope_id=str(uuid.uuid4()),
         user_id=user_id,

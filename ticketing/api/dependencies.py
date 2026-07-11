@@ -7,7 +7,7 @@ Auth:
       • Resolve identity (Keycloak JWT, dev bypass, or internal x-api-key header)
       • Always load ticketing.admin_scopes for the user (country/project admin matrix)
       • Sync Keycloak onboarding status when user_id is an email
-  - require_admin / require_super_admin / require_country_admin: use get_authenticated_user
+  - require_admin / require_super_admin / require_org_admin: use get_authenticated_user
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from ticketing.services.admin_access import (
     can_see_seah_extended,
     can_view_archived,
     is_any_admin,
-    is_country_admin,
+    is_org_admin,
     is_project_admin,
     is_super_admin,
     load_admin_scopes,
@@ -136,8 +136,8 @@ class CurrentUser:
     def is_super_admin(self) -> bool:
         return is_super_admin(self)
 
-    def is_country_admin(self, track: Literal["standard", "seah"] | None = None) -> bool:
-        return is_country_admin(self, track)
+    def is_org_admin(self, track: Literal["standard", "seah"] | None = None) -> bool:
+        return is_org_admin(self, track)
 
     def is_project_admin(
         self,
@@ -313,13 +313,13 @@ def require_super_admin(current_user: CurrentUser = Depends(get_authenticated_us
     return current_user
 
 
-def require_country_admin(
+def require_org_admin(
     track: Literal["standard", "seah"] | None = None,
 ):
     def _dep(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:
         if current_user.is_super_admin:
             return current_user
-        if current_user.is_country_admin(track):
+        if current_user.is_org_admin(track):
             return current_user
         detail = "Country admin required"
         if track:

@@ -1200,7 +1200,7 @@ def create_project(
     """Create a new project. Standard-track country admin or super_admin."""
     require_settings_write(current_user, SettingsAction.CREATE_PROJECT)
     # Creating a project is a standard-track structural action: a SEAH-only
-    # country_admin is unauthorized and must get 403 here, before body/country/
+    # org_admin is unauthorized and must get 403 here, before body/country/
     # go-live validation can turn the request into a 422.
     require_track_for_mutation(current_user, "standard")
 
@@ -1618,7 +1618,7 @@ def replace_project_actor_roles(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.project_type_key and not (
-        admin.is_super_admin or admin.is_country_admin()
+        admin.is_super_admin or admin.is_org_admin()
     ):
         raise HTTPException(
             status_code=403,

@@ -1,7 +1,7 @@
 """SH-1 — org CRUD authz (OC-06 F3/F4).
 
 Org create/update/delete are **standard-track** structural actions (doc 16 §7):
-super_admin or a standard-track country_admin only. A SEAH-only country_admin and
+super_admin or a standard-track org_admin only. A SEAH-only org_admin and
 any project_admin (who previously passed the blanket ``require_admin``) are refused.
 
 The gate matrix is tested at the enforcement-function level (no app/DB, runs in CI);
@@ -24,7 +24,7 @@ from ticketing.services.admin_access import (
 )
 
 
-def _scope(role_key="country_admin", track="standard", project_id=None, user_id="a@grm.local"):
+def _scope(role_key="org_admin", track="standard", project_id=None, user_id="a@grm.local"):
     return AdminScopeRow(
         admin_scope_id=str(uuid.uuid4()),
         user_id=user_id,

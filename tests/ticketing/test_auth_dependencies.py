@@ -1,4 +1,4 @@
-"""Ensure admin_scopes are always loaded and country_admin can manage officers."""
+"""Ensure admin_scopes are always loaded and org_admin can manage officers."""
 from __future__ import annotations
 
 import uuid
@@ -27,7 +27,7 @@ def _scope_row(**kwargs) -> AdminScopeRow:
     base = dict(
         admin_scope_id=str(uuid.uuid4()),
         user_id=kwargs.get("user_id", "admin@grm.local"),
-        role_key="country_admin",
+        role_key="org_admin",
         country_code="NP",
         project_id=None,
         organization_id=None,
@@ -38,7 +38,7 @@ def _scope_row(**kwargs) -> AdminScopeRow:
     return AdminScopeRow(**base)
 
 
-def test_enrich_user_grants_country_admin_is_admin():
+def test_enrich_user_grants_org_admin_is_admin():
     bare = CurrentUser(user_id="c@grm.local", role_keys=["pd_piu_safeguards_focal"])
     assert not is_any_admin(bare)
 
@@ -58,18 +58,18 @@ def test_enrich_user_grants_country_admin_is_admin():
         db.close()
 
 
-def test_country_admin_can_get_and_post_scopes():
+def test_org_admin_can_get_and_post_scopes():
     db = SessionLocal()
     try:
         target = "scope.target@grm.local"
-        country_admin = "country-admin@grm.local"
+        org_admin = "country-admin@grm.local"
 
         def override_user():
             return CurrentUser(
-                user_id=country_admin,
+                user_id=org_admin,
                 role_keys=["pd_piu_safeguards_focal"],
                 organization_id="DOR",
-                admin_scopes=[_scope_row(user_id=country_admin)],
+                admin_scopes=[_scope_row(user_id=org_admin)],
             )
 
         def override_db():

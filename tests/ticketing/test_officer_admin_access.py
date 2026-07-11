@@ -18,7 +18,7 @@ def _scope_row(**kwargs) -> AdminScopeRow:
     base = dict(
         admin_scope_id=str(uuid.uuid4()),
         user_id=kwargs.get("user_id", "admin@grm.local"),
-        role_key="country_admin",
+        role_key="org_admin",
         country_code="NP",
         project_id=None,
         organization_id=None,
@@ -42,7 +42,7 @@ def test_is_admin_requires_loaded_admin_scopes():
     assert is_any_admin(scoped)
 
 
-def test_country_admin_can_list_other_officer_scopes():
+def test_org_admin_can_list_other_officer_scopes():
     db = SessionLocal()
     try:
         target = "officer.target@grm.local"
