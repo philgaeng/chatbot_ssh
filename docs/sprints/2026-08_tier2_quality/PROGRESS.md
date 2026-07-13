@@ -32,14 +32,20 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 
 ## Acceptance checklists
 
-### H2-02 — Router split
-- [ ] `routers/tickets/` package; URL surface identical (route-snapshot test)
-- [ ] `perform_action` branches → `engine/ticket_actions.py` (typed exceptions, no HTTP in engine)
-- [ ] Workflow helpers moved to engine; `_add_event` unified in `engine/events.py` (single definition)
+### H2-02 — Router split  *(in progress — invariant + passes 1–2 landed, all green at 396 passed / 5 skipped)*
+- [x] **Invariant**: route-surface snapshot pin (`tests/ticketing/test_route_snapshot.py` + `route_snapshot.txt`, 174 routes via `app.openapi()`) committed on the pre-refactor tree — `799615cf`
+- [x] **Pass 1**: `_add_event` unified in `engine/events.py` (single definition; both former sites import it; orphaned `_id`/`_case_sensitivity`/`uuid` removed from escalation.py) — `b8c5ae31`
+- [x] **Pass 2**: workflow helpers moved — `_find_supervisor_user_id` → `engine/workflow_engine.py`; `_validate_step_assignee` → engine predicate `is_step_assignee_eligible` (router keeps the 422); `_next_step` was dead in the router → deleted — `817128d4`
+- [ ] **Pass 3**: `perform_action` branches → `engine/ticket_actions.py` (typed exceptions/result object, no HTTP in engine)
+- [ ] **Pass 4**: `routers/tickets/` package; URL surface identical (snapshot green)
 - [ ] In-function imports eliminated in the new modules
 - [ ] Full suite + HR-02 matrix green **unchanged**
 - [ ] `test_ticket_actions_unit.py` — direct engine calls, one per action
 - [ ] Manual UI click-through identical
+
+**Deviations (H2-02):**
+- `_next_step` in the router was dead code (no caller; `services/supervisor.py` keeps its own copy) → deleted rather than moved. `_first_step` is likewise unused but left untouched (not in the ticket's named scope).
+- `_validate_step_assignee` moved as a **bool predicate** (`is_step_assignee_eligible`) rather than a typed-exception raiser — simpler for a single validator, keeps HTTP out of the engine; the 422 + message stays at the router call site (behavior-identical).
 
 ### H2-03 — Authz matrix extension
 - [ ] All action types × personas
