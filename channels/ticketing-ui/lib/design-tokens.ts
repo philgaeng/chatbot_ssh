@@ -151,3 +151,28 @@ export const SLA_DOT: Record<string, string> = {
   ok:       "bg-green-400",
   none:     "bg-gray-300",
 } as const;
+
+// ── Org-role badge colors (replaces the banned-hue ORG_ROLE_COLORS in page.tsx) ─
+//
+// F24: page.tsx hard-coded purple/indigo/orange/teal (all eliminated hues). This maps
+// each legacy org_role onto the constrained palette. The org actor-role catalog itself is
+// being retired (doc 13 / DECISION 2026-07-10) — implementing_agency + donor are the two
+// that persist; the rest are legacy expand-phase values kept muted.
+const ORG_ROLE_BADGE_FALLBACK = "bg-gray-100 text-gray-600 border-gray-200";
+
+export const ORG_ROLE_BADGE: Record<string, string> = {
+  implementing_agency:    "bg-blue-100 text-blue-700 border-blue-200",    // the routing/reporting anchor
+  donor:                  "bg-violet-100 text-violet-700 border-violet-200", // distinctive (funder)
+  executing_agency:       "bg-blue-50 text-blue-700 border-blue-200",
+  project_owner:          "bg-slate-100 text-slate-700 border-slate-200",
+  main_contractor:        "bg-amber-100 text-amber-700 border-amber-200",
+  subcontractor_t1:       "bg-amber-50 text-amber-700 border-amber-200",
+  subcontractor_t2:       "bg-amber-50 text-amber-600 border-amber-200",
+  supervision_consultant: "bg-green-50 text-green-700 border-green-200",
+  specialized_consultant: "bg-green-100 text-green-700 border-green-200",
+} as const;
+
+export function orgRoleBadge(role: string | null | undefined): string {
+  if (!role) return ORG_ROLE_BADGE_FALLBACK;
+  return ORG_ROLE_BADGE[role] ?? ORG_ROLE_BADGE_FALLBACK;
+}

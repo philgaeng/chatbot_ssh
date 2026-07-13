@@ -469,7 +469,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
               type="checkbox"
               checked={inclChildren}
               onChange={(e) => setInclChildren(e.target.checked)}
-              className="accent-purple-500"
+              className="accent-blue-600"
             />
             include sub-locations
           </label>

@@ -109,6 +109,8 @@ import { OrgCreateModal } from "@/components/settings/OrgCreateModal";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { LocationSearch } from "@/components/LocationSearch";
 import { JURISDICTION_MODE_LABELS, type JurisdictionMode } from "@/lib/jurisdiction";
+import { roleInTrack, roleMatchesFilter, type TrackFilter } from "@/lib/trackFilter";
+import { orgRoleBadge } from "@/lib/design-tokens";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
@@ -276,18 +278,8 @@ const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: "platform",          label: "Settings" },
 ];
 
-// Color classes for org role badges (keyed by role.key)
-const ORG_ROLE_COLORS: Record<string, string> = {
-  project_owner:           "bg-slate-100 text-slate-700 border-slate-200",
-  donor:                   "bg-blue-100 text-blue-700 border-blue-200",
-  executing_agency:        "bg-purple-100 text-purple-700 border-purple-200",
-  implementing_agency:     "bg-indigo-100 text-indigo-700 border-indigo-200",
-  main_contractor:         "bg-orange-100 text-orange-700 border-orange-200",
-  subcontractor_t1:        "bg-amber-100 text-amber-700 border-amber-200",
-  subcontractor_t2:        "bg-amber-100 text-amber-600 border-amber-200",
-  supervision_consultant:  "bg-teal-100 text-teal-700 border-teal-200",
-  specialized_consultant:  "bg-green-100 text-green-700 border-green-200",
-};
+// Org-role badge colors now live in lib/design-tokens.ts (orgRoleBadge) — the banned-hue
+// map that used to be here (purple/indigo/orange/teal) is gone (RB-2 §7.C, F24).
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
@@ -405,17 +397,14 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
 }) {
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
   const [creating, setCreating] = useState(false);
-  const [trackFilter, setTrackFilter] = useState<"all" | "standard" | "seah">("all");
+  const [trackFilter, setTrackFilter] = useState<TrackFilter>("all");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { adminWorkflowTracks } = useAuth();
   const defaultTrack = adminWorkflowTracks.includes("seah") && !adminWorkflowTracks.includes("standard")
     ? "seah" as const : "standard" as const;
 
-  const filtered = catalog.filter((r) => {
-    if (trackFilter === "standard") return r.workflow === "Standard" || r.workflow === "Both";
-    if (trackFilter === "seah") return r.workflow === "SEAH" || r.workflow === "Both";
-    return true;
-  });
+  // Track filter is single-sourced in lib/trackFilter.ts (RB-2 structural rule 1).
+  const filtered = catalog.filter((r) => roleMatchesFilter(r.workflow, trackFilter));
 
   async function handleRemoveRole(r: RoleEntry) {
     if (!confirm(`Remove role "${r.label}" (${r.key}) from the catalog?`)) return;
@@ -433,7 +422,7 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
     w === "SEAH"
       ? "bg-red-100 text-red-700"
       : w === "Both"
-      ? "bg-purple-100 text-purple-700"
+      ? "bg-violet-100 text-violet-700"
       : "bg-blue-100 text-blue-700";
 
   return (
@@ -937,9 +926,9 @@ function StepForm({
           <label className="text-xs font-medium text-gray-500 block mb-1">Informed roles — auto-added when ticket enters this step</label>
           <div className="flex flex-wrap gap-1 mb-1">
             {informedRoles.map(r => (
-              <span key={r} className="flex items-center gap-1 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-2 py-0.5 rounded">
+              <span key={r} className="flex items-center gap-1 text-xs bg-violet-50 border border-violet-200 text-violet-700 px-2 py-0.5 rounded">
                 {r}
-                <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-purple-300 hover:text-red-500 leading-none">×</button>
+                <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-violet-300 hover:text-red-500 leading-none">×</button>
               </span>
             ))}
           </div>
@@ -987,7 +976,7 @@ function StepForm({
           <button
             type="button"
             onClick={() => setInformedPii(!informedPii)}
-            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${informedPii ? "bg-purple-600" : "bg-gray-200"}`}
+            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${informedPii ? "bg-violet-600" : "bg-gray-200"}`}
           >
             <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${informedPii ? "translate-x-4" : "translate-x-0"}`} />
           </button>
@@ -1976,10 +1965,7 @@ function WorkflowsTab({
     if (!editing) return [];
     const wfType = workflowTrackOf(editing);
     return roleCatalog
-      .filter((r) => {
-        if (wfType === "seah") return r.workflow === "SEAH" || r.workflow === "Both";
-        return r.workflow === "Standard" || r.workflow === "Both";
-      })
+      .filter((r) => roleInTrack(r.workflow, wfType))
       .map((r) => ({ key: r.key, label: r.label, origin: r.role_origin }));
   }, [roleCatalog, editing]);
 
@@ -2343,9 +2329,7 @@ function OrgEditor({
                 {linkedProjects.map((proj) => {
                   const link = proj.organizations.find((o) => o.organization_id === org.organization_id);
                   const roleDef = orgRoles.find((r) => r.key === link?.org_role);
-                  const roleColor = link?.org_role
-                    ? (ORG_ROLE_COLORS[link.org_role] ?? "bg-gray-100 text-gray-600 border-gray-200")
-                    : "";
+                  const roleColor = link?.org_role ? orgRoleBadge(link.org_role) : "";
                   const contractorPkgs = packagesByProject[proj.project_id] ?? [];
                   return (
                     <React.Fragment key={proj.project_id}>
@@ -2378,7 +2362,7 @@ function OrgEditor({
                       {/* Package contractor context (read-only) */}
                       {contractorPkgs.length > 0 && (
                         <tr
-                          className="bg-orange-50/60 cursor-pointer"
+                          className="bg-amber-50/60 cursor-pointer"
                           onClick={() => onNavigateToProject(proj.project_id)}
                         >
                           <td colSpan={3} className="px-4 pb-2.5 pt-1">
@@ -2388,7 +2372,7 @@ function OrgEditor({
                                 <span
                                   key={pkg.package_id}
                                   title={pkg.name}
-                                  className="text-xs font-mono bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded"
+                                  className="text-xs font-mono bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded"
                                 >
                                   {pkg.package_code}
                                 </span>
@@ -3505,7 +3489,7 @@ function ProjectEditor({
                 {p.organizations.map((po) => {
                   const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
                   const roleDef = projectActorRoles.find((r) => r.key === po.org_role);
-                  const roleColor = po.org_role ? (ORG_ROLE_COLORS[po.org_role] ?? "bg-gray-100 text-gray-600 border-gray-200") : "";
+                  const roleColor = po.org_role ? orgRoleBadge(po.org_role) : "";
                   return (
                     <tr key={po.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
                       <td className="px-3 py-2.5 font-medium text-gray-800">{orgName}</td>
