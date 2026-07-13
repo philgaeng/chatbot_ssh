@@ -157,12 +157,21 @@ def _apply_step_tier_roles(
     Called on both ticket creation (first step) and escalation (new step).
     Scoped to the ticket's org / location / project.
     """
+    from ticketing.models.user import DONOR_ROLES
     from ticketing.models.workflow import WorkflowStep as _Step
 
     if not isinstance(step, _Step):
         return
 
+    # SEAH leak-proof (doc 13 §3 / OC-04 §5.6): donor tiers are never cast on a SEAH
+    # ticket — a donor must receive nothing that reveals a SEAH case. The donor
+    # last-step-informed guardrail applies to the standard track's final step only.
+    def _seah_suppressed(role_key: str) -> bool:
+        return bool(ticket.is_seah) and role_key in DONOR_ROLES
+
     for role_key in (step.informed_roles or []):
+        if _seah_suppressed(role_key):
+            continue
         candidates = _scope_candidates(
             role_key=role_key,
             organization_id=ticket.organization_id,
@@ -174,6 +183,8 @@ def _apply_step_tier_roles(
             _ensure_viewer(db, ticket.ticket_id, uid, "informed", "system")
 
     for role_key in (step.observer_roles or []):
+        if _seah_suppressed(role_key):
+            continue
         candidates = _scope_candidates(
             role_key=role_key,
             organization_id=ticket.organization_id,

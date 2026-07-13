@@ -34,6 +34,9 @@ ROLE_KEYS = [
     "adb_national_project_director",
     "adb_hq_safeguards",
     "adb_hq_project",
+    "donor_consultant",
+    "donor_national",
+    "donor_hq",
     "seah_national_officer",
     "seah_hq_officer",
     "adb_hq_exec",
@@ -41,6 +44,11 @@ ROLE_KEYS = [
 
 # SEAH-only roles — tickets with is_seah=True are only visible to these roles
 SEAH_ROLES = {"seah_national_officer", "seah_hq_officer"}
+
+# Donor observer/informed tier (doc 13 / DECISION 2026-07-10 §3). Generalizes the legacy
+# adb_* observers. These are NOT SEAH roles: on the SEAH track every donor tier is
+# suppressed at the final step (a donor must receive nothing that reveals a SEAH case).
+DONOR_ROLES = {"donor_consultant", "donor_national", "donor_hq"}
 
 # Roles that can see both standard and SEAH
 BOTH_WORKFLOWS_ROLES = {"super_admin", "adb_hq_exec"}

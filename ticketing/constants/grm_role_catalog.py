@@ -187,6 +187,42 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "description": "Observer — project oversight.",
         "permissions": ["tickets:read", "reports:read"],
     },
+    # Donor observer/informed tier (doc 13 / DECISION 2026-07-10 §3). Generalizes the
+    # legacy adb_* observers. Kept informed on the STANDARD track's final step only —
+    # never cast on a SEAH case (ticketing.models.user.DONOR_ROLES).
+    {
+        "role_key": "donor_consultant",
+        "display_name": "Donor — Consultant",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor-side consultant — read-only oversight; kept informed on final "
+            "escalation of standard cases for the funded project."
+        ),
+        "permissions": ["tickets:read", "reports:read"],
+    },
+    {
+        "role_key": "donor_national",
+        "display_name": "Donor — National Officer",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor national officer — read-only oversight; kept informed on final "
+            "escalation of standard cases for the funded project."
+        ),
+        "permissions": ["tickets:read", "reports:read"],
+    },
+    {
+        "role_key": "donor_hq",
+        "display_name": "Donor — HQ",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor HQ officer — read-only oversight; kept informed on final escalation "
+            "of standard cases for the funded project."
+        ),
+        "permissions": ["tickets:read", "reports:read"],
+    },
     {
         "role_key": "seah_national_officer",
         "display_name": "SEAH National Officer",

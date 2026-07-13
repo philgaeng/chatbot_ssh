@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.country import Location
 from ticketing.models.organization import Organization
-from ticketing.models.project import Project, ProjectOrganization
+from ticketing.models.project import Project, ProjectDonor, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
 from ticketing.seed.position_types import seed_position_types
@@ -94,7 +94,15 @@ def seed_organizations(db: Session) -> None:
             db.add(org)
             logger.info("  + organization: %s", org.organization_id)
         else:
-            logger.info("  = organization already exists: %s", org.organization_id)
+            # org_category / unit_type are authoritative actor-type fields (doc 16 §3.1) —
+            # correct them on re-seed. An earlier backfill mislabeled ADB as 'government';
+            # the donor guardrail + implementing-agency validation depend on ADB='donor'.
+            if existing.org_category != org.org_category:
+                existing.org_category = org.org_category
+                logger.info("  ~ organization %s: org_category -> %s", org.organization_id, org.org_category)
+            if existing.unit_type != org.unit_type:
+                existing.unit_type = org.unit_type
+                logger.info("  ~ organization %s: unit_type -> %s", org.organization_id, org.unit_type)
     db.flush()
 
 
@@ -219,7 +227,10 @@ def seed_standard_workflow(db: Session) -> None:
             display_name="Level 4 – Legal Institutions",
             assigned_role_key="adb_hq_safeguards",
             supervisor_role=None,            # no supervisor at L4
-            informed_roles=[],
+            # Donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6): ADB is a donor
+            # on KL Road, so the final standard step keeps a donor tier in the informed
+            # cast → donor staff are notified on final escalation. SEAH-suppressed.
+            informed_roles=["donor_national"],
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -537,6 +548,22 @@ def seed_project_organizations(db: Session) -> None:
             logger.info("  ~ project_organization: KL_ROAD + %s backfilled org_role=%s", org_id, role)
         else:
             logger.info("  = project_organization already set: KL_ROAD + %s -> %s", org_id, existing.org_role)
+
+    # doc 13 / DECISION 2026-07-10: the participant model is now thin typed fields, not an
+    # org_role layer. DOR (government) is the implementing agency; ADB is a donor. These
+    # coexist with the legacy org_role links above during the expand phase.
+    if project.implementing_agency_org_id != ORG_DOR_ID:
+        project.implementing_agency_org_id = ORG_DOR_ID
+        logger.info("  ~ project KL_ROAD: implementing_agency_org_id -> %s", ORG_DOR_ID)
+    donor_exists = db.execute(
+        select(ProjectDonor).where(
+            ProjectDonor.project_id == project.project_id,
+            ProjectDonor.organization_id == ORG_ADB_ID,
+        )
+    ).scalar_one_or_none()
+    if donor_exists is None:
+        db.add(ProjectDonor(project_id=project.project_id, organization_id=ORG_ADB_ID))
+        logger.info("  + project_donor: KL_ROAD + %s", ORG_ADB_ID)
     db.flush()
 
 

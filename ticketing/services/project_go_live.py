@@ -155,6 +155,51 @@ def _project_org_has_role(project: Project, role_key: str) -> bool:
     return any(po.org_role == role_key for po in project.organizations)
 
 
+def _standard_level_gaps(
+    db: Session,
+    *,
+    project: Project,
+    packages: list[ProjectPackage],
+) -> list[str]:
+    """Standard-workflow levels with no scoped officer (DECISION §7 staffing gate).
+
+    A level is covered when its handler role has a project-wide scope, OR every active
+    package has it, OR (step 1 only) the country L1 fallback is scoped. Mirrors the C1/C2
+    coverage predicates so the demo's project-wide staffing keeps it green.
+    """
+    if not project.standard_workflow_id:
+        return []
+    steps = list(
+        db.execute(
+            select(WorkflowStep)
+            .where(WorkflowStep.workflow_id == project.standard_workflow_id)
+            .order_by(WorkflowStep.step_order)
+        ).scalars().all()
+    )
+    gaps: list[str] = []
+    for step in steps:
+        role = step.assigned_role_key
+        if not role:
+            continue
+        if _has_officer_on_project_wide(db, project=project, grm_role_key=role):
+            continue
+        if step.step_order == 1 and _has_officer_on_project_wide(
+            db, project=project, grm_role_key=COUNTRY_L1_FALLBACK_ROLE
+        ):
+            continue
+        pkg_gaps = _packages_missing_role(
+            db,
+            project=project,
+            packages=packages,
+            grm_role_key=role,
+            project_wide_covers=False,
+        )
+        if packages and not pkg_gaps:
+            continue
+        gaps.append(f"L{step.step_order} ({role})")
+    return gaps
+
+
 def _package_has_role(db: Session, package_id: str, role_key: str) -> bool:
     row = db.execute(
         select(PackageOrganization.organization_id).where(
@@ -236,9 +281,17 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             )
         )
 
-    # A3 Implementing agency (block for activation)
-    routing_role = (pt.routing_org_role if pt else "implementing_agency")
-    has_ia = _project_org_has_role(project, routing_role)
+    # A3 Implementing agency (block for activation). doc 13 / DECISION §2: read the
+    # dedicated implementing_agency_org_id field (back-compat fallback to the legacy
+    # org_role='implementing_agency' link). Defaulted → effectively always satisfied.
+    from ticketing.services.donor_guardrail import (
+        donor_informed_ok,
+        implementing_agency_org_id,
+        last_standard_step,
+        project_donor_org_ids,
+    )
+
+    has_ia = implementing_agency_org_id(db, project) is not None
     checks.append(
         GoLiveCheck(
             id="A3",
@@ -246,12 +299,43 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             group="routing",
             severity="block",
             status="pass" if has_ia else "fail",
-            message=f"Assign an organization to role '{routing_role}'"
+            message="Set the implementing agency (the accountable government agency)"
             if not has_ia
             else "Implementing agency assigned",
             section="actors",
         )
     )
+
+    # A5 Donor last-step-informed guardrail (block; doc 13 §3 / OC-04 §5.6). When a project
+    # includes a donor, the final standard-track step's "Kept informed" cast must contain
+    # ≥1 donor role, so donor staff are notified on final escalation. SEAH-suppressed by
+    # design — this gate governs the standard track only.
+    donor_ids = project_donor_org_ids(db, project.project_id)
+    if donor_ids:
+        a5_ok = donor_informed_ok(db, project)
+        last_step = last_standard_step(db, project)
+        checks.append(
+            GoLiveCheck(
+                id="A5",
+                label="Donor notified on escalation",
+                group="routing",
+                severity="block",
+                status="pass" if a5_ok else "fail",
+                message=(
+                    "Donor kept informed at the final standard step"
+                    if a5_ok
+                    else (
+                        "Add a donor role (donor_national / donor_hq / donor_consultant) to "
+                        + (
+                            f"the final step's Kept-informed cast (L{last_step.step_order})"
+                            if last_step
+                            else "the standard workflow's final step"
+                        )
+                    )
+                ),
+                section="actors",
+            )
+        )
 
     # B1 Required project actor slots
     if pt:
@@ -426,6 +510,28 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             )
         )
 
+    # C5 Every standard workflow level is staffed (block; DECISION §7). Stricter than
+    # C1/C2 (which cover L1/L2 only) — go-live blocks if any escalation level has no
+    # officer who could handle a ticket parked there.
+    level_gaps = _standard_level_gaps(db, project=project, packages=packages)
+    if project.standard_workflow_id:
+        c5_ok = not level_gaps
+        checks.append(
+            GoLiveCheck(
+                id="C5",
+                label="All levels staffed",
+                group="officers",
+                severity="block",
+                status="pass" if c5_ok else "fail",
+                message=(
+                    "Every standard workflow level has an officer"
+                    if c5_ok
+                    else f"Unstaffed levels: {', '.join(level_gaps[:5])}"
+                ),
+                section="staffing",
+            )
+        )
+
     # D1 Project locations
     d1_ok = len(project.locations) > 0
     checks.append(
@@ -521,7 +627,12 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         )
     )
 
-    can_activate = not any(c.id == "A3" and c.status == "fail" for c in checks)
+    # Activation blocks on any block-severity check that failed (A3 implementing agency,
+    # A5 donor guardrail, C5 all-levels-staffed). Intake blocks on C1 (L1 staffed).
+    _ACTIVATION_BLOCK_IDS = {"A3", "A5", "C5"}
+    can_activate = not any(
+        c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
+    )
     can_accept = not any(c.id == "C1" and c.status == "fail" for c in checks)
 
     return GoLiveReport(checks=checks, can_activate=can_activate, can_accept_tickets=can_accept)
@@ -530,9 +641,12 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
 def activation_block_message(report: GoLiveReport) -> str | None:
     if report.can_activate:
         return None
-    for c in report.checks:
-        if c.id == "A3" and c.status == "fail":
-            return c.message
+    blocking = [
+        c for c in report.checks
+        if c.id in {"A3", "A5", "C5"} and c.status == "fail"
+    ]
+    if blocking:
+        return "; ".join(c.message for c in blocking)
     return "Project cannot be activated until go-live requirements are met."
 
 

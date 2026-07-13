@@ -24,6 +24,9 @@ ROLE_JURISDICTION_DEFAULTS: dict[str, str] = {
     "adb_hq_safeguards": JURISDICTION_COUNTRY,
     "adb_hq_project": JURISDICTION_COUNTRY,
     "adb_hq_exec": JURISDICTION_COUNTRY,
+    "donor_consultant": JURISDICTION_COUNTRY,
+    "donor_national": JURISDICTION_COUNTRY,
+    "donor_hq": JURISDICTION_COUNTRY,
 }
 
 

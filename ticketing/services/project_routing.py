@@ -251,11 +251,21 @@ def resolve_ticket_organization(
     if not project:
         return None
 
+    return _project_routing_org(db, project)
+
+
+def _project_routing_org(db: Session, project: Project) -> Optional[str]:
+    """Project-wide routing anchor: the implementing agency (doc 13 / DECISION §2).
+
+    Prefers ``projects.implementing_agency_org_id``; falls back to the legacy
+    ``org_role``/``routing_org_role`` lookup for projects created before the field existed.
+    """
+    if project.implementing_agency_org_id:
+        return project.implementing_agency_org_id
     role = routing_org_role_for_project(db, project)
     return _org_for_role_on_project(project, role)
 
 
 def routing_org_id_for_loaded_project(db: Session, project: Project) -> Optional[str]:
     """Go-live helper when project.organizations is already eager-loaded."""
-    role = routing_org_role_for_project(db, project)
-    return _org_for_role_on_project(project, role)
+    return _project_routing_org(db, project)

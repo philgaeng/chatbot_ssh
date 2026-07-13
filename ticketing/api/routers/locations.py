@@ -79,6 +79,7 @@ from ticketing.api.schemas.project_messaging import (
     ProjectMessagingResponse,
 )
 from ticketing.services import officer_messaging as msg_svc
+from ticketing.services import donor_guardrail as donor_guardrail_svc
 from ticketing.services import project_go_live as go_live_svc
 from ticketing.services import project_types as types_svc
 from ticketing.models.ticket import Ticket
@@ -133,6 +134,8 @@ class ProjectCreate(BaseModel):
         None,
         description="Archetype to instantiate (e.g. construction_road). Defaults workflows and actor roles.",
     )
+    # doc 13 / DECISION 2026-07-10 §2: the accountable government agency (routing anchor).
+    implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
     @classmethod
@@ -150,6 +153,8 @@ class ProjectUpdate(BaseModel):
     is_active: bool | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+    # doc 13 / DECISION 2026-07-10 §2: the accountable government agency (routing anchor).
+    implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
     @classmethod
@@ -204,6 +209,8 @@ class ProjectResponse(BaseModel):
     project_type_key: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+    implementing_agency_org_id: str | None = None
+    donor_org_ids: list[str] = []
     workflow_slots: list[ProjectWorkflowItem] = []
     officer_messaging: dict[str, Any] | None = None
     created_at: datetime
@@ -1186,6 +1193,8 @@ def _project_to_response(p: Project, db: Session) -> dict:
         "project_type_key": p.project_type_key,
         "standard_workflow_id": p.standard_workflow_id,
         "seah_workflow_id": p.seah_workflow_id,
+        "implementing_agency_org_id": p.implementing_agency_org_id,
+        "donor_org_ids": [d.organization_id for d in (p.donors or [])],
         "workflow_slots": slots,
         "officer_messaging": p.officer_messaging or msg_svc.default_officer_messaging(),
         "created_at":    p.created_at,
@@ -1273,6 +1282,13 @@ def create_project(
         created_at=now,
         updated_at=now,
     )
+    if body.implementing_agency_org_id:
+        try:
+            donor_guardrail_svc.validate_implementing_agency(db, body.implementing_agency_org_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        project.implementing_agency_org_id = body.implementing_agency_org_id
+
     db.add(project)
     db.flush()
 
@@ -1440,6 +1456,16 @@ def update_project(
             raise HTTPException(status_code=422, detail=msg) from exc
     if body.description is not None:
         p.description = body.description
+    if "implementing_agency_org_id" in body.model_fields_set:
+        if body.implementing_agency_org_id:
+            try:
+                donor_guardrail_svc.validate_implementing_agency(
+                    db, body.implementing_agency_org_id
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        p.implementing_agency_org_id = body.implementing_agency_org_id
+        db.flush()
     if body.is_active is not None:
         if body.is_active and not p.is_active:
             report = go_live_svc.evaluate_go_live(db, project_id)
